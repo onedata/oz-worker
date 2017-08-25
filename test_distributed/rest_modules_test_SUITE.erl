@@ -159,6 +159,11 @@
     }
 ).
 
+-define(MAP_GROUP_TEST_AUTH, test_auth).
+-define(MAP_GROUP_TEST_AUTH_BIN, atom_to_binary(?MAP_GROUP_TEST_AUTH, latin1)).
+-define(MAP_GROUP_TEST_AUTH_MODULE, test_auth_module).
+-define(MAPPED_GROUP, <<"mapped_group1">>).
+
 %% API
 -export([all/0, groups/0, init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2]).
 
@@ -174,7 +179,9 @@
     provider_check_ip_test/1,
     provider_check_port_test/1,
     support_space_test/1,
-    get_unsupported_space_info_test/1
+    get_unsupported_space_info_test/1,
+    map_group_fail_test/1,
+    map_group_test/1
 ]).
 
 % user_rest_module_test_group
@@ -316,7 +323,9 @@ groups() ->
                 provider_check_port_test,
                 support_space_test,
                 get_unsupported_space_info_test,
-                group_invitation_test
+                group_invitation_test,
+                map_group_fail_test,
+                map_group_test
             ]
         },
         {
@@ -586,6 +595,16 @@ get_unsupported_space_info_test(Config) ->
     SID = create_space_for_user(Config, ?SPACE_NAME1, UserReqParams),
     ?assertMatch({request_error, ?NOT_FOUND}, get_space_info_by_provider(SID, ProviderReqParams)),
     ?assertMatch({request_error, ?NOT_FOUND}, get_space_info_by_provider(SID, ParamsWithOtherAddress)).
+
+map_group_fail_test(Config) ->
+    ProviderReqParams = ?config(providerReqParams, Config),
+    ?assertMatch({request_error, 400}, map_group(<<"github">>, <<"abc">>, ProviderReqParams)).
+
+map_group_test(Config) ->
+    ProviderReqParams = ?config(providerReqParams, Config),
+    MappedGroupHash = idp_group_mapping:group_spec_to_db_id(?MAPPED_GROUP),
+    ?assertMatch(MappedGroupHash,
+        map_group(?MAP_GROUP_TEST_AUTH_BIN, <<"group1">>, ProviderReqParams)).
 
 %% user_rest_module_test_group========================================
 
@@ -1955,6 +1974,23 @@ init_per_testcase(register_provider_and_two_users, Config) ->
         {userReqParams2, UserReqParams2}
         | DefaultConfig
     ];
+init_per_testcase(map_group_test, Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_new(Nodes, auth_config),
+    ok = test_utils:mock_expect(Nodes, auth_config, has_group_mapping_enabled, fun(_) ->
+        true
+    end),
+    ok = test_utils:mock_expect(Nodes, auth_config, get_auth_providers, fun() ->
+        [?MAP_GROUP_TEST_AUTH | meck:passthrough([])]
+    end),
+    ok = test_utils:mock_expect(Nodes, auth_config, get_provider_module, fun(_) ->
+        ?MAP_GROUP_TEST_AUTH_MODULE
+    end),
+    ok = test_utils:mock_new(Nodes, ?MAP_GROUP_TEST_AUTH_MODULE, [passthrough, non_strict]),
+    ok = test_utils:mock_expect(Nodes, ?MAP_GROUP_TEST_AUTH_MODULE, normalized_membership_spec, fun(_) ->
+        ?MAPPED_GROUP
+    end),
+    init_per_testcase(default, Config);
 init_per_testcase(_Default, Config) ->
     %% this default init function is for tests
     %% than need registered provider and user
@@ -1968,7 +2004,11 @@ init_per_testcase(_Default, Config) ->
         {userReqParams, UserReqParams}
         | NewConfig
     ].
-
+end_per_testcase(map_group_test, Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_unload(Nodes, auth_config),
+    test_utils:mock_unload(Nodes, ?MAP_GROUP_TEST_AUTH_MODULE),
+    end_per_testcase(default, Config);
 end_per_testcase(_, Config) ->
     {KeyFile, CSRFile, CertFile} = ?config(cert_files, Config),
     oz_test_utils:delete_all_entities(Config),
@@ -2034,8 +2074,10 @@ get_response_body(Response) ->
 %% Keylist is list of atoms
 get_body_val(KeyList, Response) ->
     case check_status(Response) of
-        {bad_response_code, Code} -> {request_error, Code};
-        _ -> JSONOutput = json_utils:decode(get_response_body(Response)),
+        {bad_response_code, Code} ->
+            {request_error, Code};
+        _ ->
+            JSONOutput = json_utils:decode(get_response_body(Response)),
             [proplists:get_value(atom_to_binary(Key, latin1), JSONOutput) || Key <- KeyList]
     end.
 
@@ -2203,6 +2245,19 @@ support_space(Token, Size, {RestAddress, Headers, Options}) ->
         {<<"size">>, Size}
     ]),
     do_request(RestAddress ++ "/provider/spaces/support", Headers, post, Body, Options).
+
+map_group(Idp, GroupId, {RestAddress, Headers, Options}) ->
+    Body = json_utils:encode([
+        {<<"idp">>, Idp},
+        {<<"groupId">>, GroupId}
+    ]),
+    Response = do_request(RestAddress ++ "/provider/test/map_group", Headers, post, Body, Options),
+    case get_body_val([groupId], Response) of
+        Error = {request_error, _} ->
+            Error;
+        [MappedGroupId] ->
+            MappedGroupId
+    end.
 
 %% User functions =========================================================
 

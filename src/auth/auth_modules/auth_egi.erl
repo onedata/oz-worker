@@ -21,7 +21,7 @@
 
 %% API
 -export([get_redirect_url/1, validate_login/0, get_user_info/1]).
--export([normalized_membership_specs/1]).
+-export([normalized_membership_specs/1, normalized_membership_spec/1]).
 
 %%%===================================================================
 %%% API functions
@@ -64,6 +64,34 @@ get_user_info(AccessToken) ->
     ).
 
 
+normalized_membership_spec(<<"urn:mace:egi.eu:", Group/binary>>) ->
+    % Strip out the prefix standard for EGI
+
+    [GroupStructureEncoded, Vo] = binary:split(Group, <<"@">>),
+    % EGI can provide groups both from egi.eu and elixir-europe.org VOs
+    VoId = case Vo of
+        <<"egi.eu">> ->
+            <<"egi.eu">>;
+        <<"vo.elixir-europe.org">> ->
+            % Unified id with groups from ELIXIR SAML
+            <<"elixir">>
+    end,
+    % Replace plus sings with spaces
+    GroupStructure = binary:replace(GroupStructureEncoded, <<"+">>, <<" ">>, [global]),
+    GroupTokensAll = binary:split(GroupStructure, <<":">>, [global]),
+    GroupTokens = lists:sublist(GroupTokensAll, length(GroupTokensAll) - 1),
+    MemberSpec = case lists:last(GroupTokensAll) of
+        <<"member">> -> <<"user:member">>;
+        <<"manager">> -> <<"user:manager">>;
+        <<"admin">> -> <<"user:admin">>;
+        <<"chair">> -> <<"user:admin">>;
+        _ -> <<"user:member">>
+    end,
+    MappedTokens = [<<"tm:", T/binary>> || T <- GroupTokens],
+    MappedTokensWithMemberSpec = MappedTokens ++ [MemberSpec],
+    SpecWithoutVo = str_utils:join_binary(MappedTokensWithMemberSpec, <<"/">>),
+    <<"vo:", VoId/binary, "/", SpecWithoutVo/binary>>.
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns a list of strings that represent user's group memberships for given
@@ -78,31 +106,4 @@ get_user_info(AccessToken) ->
     [idp_group_mapping:membership_spec()].
 normalized_membership_specs(Props) ->
     Groups = proplists:get_value(<<"edu_person_entitlements">>, Props, []),
-    lists:map(
-        % Strip out the prefix standard for EGI
-        fun(<<"urn:mace:egi.eu:", Group/binary>>) ->
-            [GroupStructureEncoded, Vo] = binary:split(Group, <<"@">>),
-            % EGI can provide groups both from egi.eu and elixir-europe.org VOs
-            VoId = case Vo of
-                <<"egi.eu">> ->
-                    <<"egi.eu">>;
-                <<"vo.elixir-europe.org">> ->
-                    % Unified id with groups from ELIXIR SAML
-                    <<"elixir">>
-            end,
-            % Replace plus sings with spaces
-            GroupStructure = binary:replace(GroupStructureEncoded, <<"+">>, <<" ">>, [global]),
-            GroupTokensAll = binary:split(GroupStructure, <<":">>, [global]),
-            GroupTokens = lists:sublist(GroupTokensAll, length(GroupTokensAll) - 1),
-            MemberSpec = case lists:last(GroupTokensAll) of
-                <<"member">> -> <<"user:member">>;
-                <<"manager">> -> <<"user:manager">>;
-                <<"admin">> -> <<"user:admin">>;
-                <<"chair">> -> <<"user:admin">>;
-                _ -> <<"user:member">>
-            end,
-            MappedTokens = [<<"tm:", T/binary>> || T <- GroupTokens],
-            MappedTokensWithMemberSpec = MappedTokens ++ [MemberSpec],
-            SpecWithoutVo = str_utils:join_binary(MappedTokensWithMemberSpec, <<"/">>),
-            <<"vo:", VoId/binary, "/", SpecWithoutVo/binary>>
-        end, Groups).
+    lists:map(fun normalized_membership_spec/1, Groups).

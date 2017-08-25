@@ -25,7 +25,7 @@
 eff_users | {eff_user, od_user:id()} |
 eff_groups | {eff_group, od_group:id()} |
 spaces | {space, od_space:id()} |
-check_my_ports | {check_my_ip, cowboy_req:req()}.
+check_my_ports | {check_my_ip, cowboy_req:req()} | map_group.
 
 -export_type([resource/0]).
 
@@ -127,7 +127,14 @@ create(_, undefined, check_my_ports, Data) ->
         test_connection(Data)
     catch _:_ ->
         ?ERROR_INTERNAL_SERVER_ERROR
-    end.
+    end;
+
+create(_, undefined, map_group, Data) ->
+    ProviderId = maps:get(<<"idp">>, Data),
+    GroupId = maps:get(<<"groupId">>, Data),
+    GroupSpec = auth_utils:normalize_membership_spec(
+        binary_to_atom(ProviderId, latin1), GroupId),
+    {ok, idp_group_mapping:group_spec_to_db_id(GroupSpec)}.
 
 
 %%--------------------------------------------------------------------
@@ -288,6 +295,9 @@ authorize(create, undefined, entity_dev, _) ->
 authorize(create, ProvId, support, ?PROVIDER(ProvId)) ->
     true;
 
+authorize(create, _ProvId, map_group, _) ->
+    true;
+
 
 authorize(get, undefined, {check_my_ip, _}, _) ->
     true;
@@ -407,6 +417,14 @@ validate(create, support) -> #{
     }
 };
 validate(create, check_my_ports) -> #{
+};
+validate(create, map_group) -> #{
+    required => #{
+        <<"idp">> => {binary, {exists, fun(Idp) ->
+                auth_utils:has_group_mapping_enabled(binary_to_atom(Idp, latin1))
+            end}},
+        <<"groupId">> => {binary, non_empty}
+    }
 };
 validate(update, entity) -> #{
     at_least_one => #{
