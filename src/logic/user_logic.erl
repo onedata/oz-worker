@@ -1114,7 +1114,10 @@ change_user_password(Login, OldPassword, NewPassword) ->
         <<"content-type">> => <<"application/json">>
     },
     URL = get_onepanel_rest_user_url(Login),
-    Body = json_utils:encode([{<<"password">>, NewPassword}]),
+    Body = json_utils:encode_map(#{
+        <<"currentPassword">> => OldPassword,
+        <<"newPassword">> => NewPassword
+    }),
     case http_client:patch(URL, Headers, Body, [insecure]) of
         {ok, 204, _, _} ->
             ok;

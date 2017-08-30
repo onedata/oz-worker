@@ -501,7 +501,7 @@ end_per_testcase(merge_groups_in_linked_accounts_test, Config) ->
 end_per_testcase(_, _) ->
     ok.
 
-end_per_suite(Config) ->
+end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
