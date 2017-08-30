@@ -555,6 +555,12 @@ authorize(create, _GroupId, {user, _UserId}, ?USER(UserId)) ->
 authorize(create, _GroupId, {child, _ChildId}, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_GROUPS_ADD_MEMBERS);
 
+authorize(create, _GroupId, invite_user_token, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?GROUP_INVITE_USER);
+
+authorize(create, _GroupId, invite_group_token, ?USER(UserId)) ->
+    auth_by_privilege(UserId, ?GROUP_INVITE_GROUP);
+
 authorize(get, undefined, list, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_GROUPS_LIST);
 
