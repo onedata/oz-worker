@@ -15,7 +15,7 @@
 -include("tokens.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% Atoms representing types of valid tokens.
@@ -101,7 +101,7 @@ create(Issuer, TokenType, {ResourceType, ResourceId}) ->
     TokenData = #token{secret = Secret, issuer = Issuer,
         resource = ResourceType, resource_id = ResourceId},
 
-    {ok, Identifier} = token:save(#document{value = TokenData}),
+    {ok, #document{key = Identifier}} = token:save(#document{value = TokenData}),
 
     % @todo expiration time
     M1 = macaroon:create("onezone", Secret, Identifier),

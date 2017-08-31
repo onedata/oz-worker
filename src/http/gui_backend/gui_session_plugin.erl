@@ -17,7 +17,7 @@
 
 -include_lib("gui/include/gui.hrl").
 -include_lib("ctool/include/logging.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 
 
@@ -58,12 +58,10 @@ cleanup() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_session(UserId :: term(), CustomArgs :: [term()]) ->
-    {ok, SessionId :: binary()} | {error, term()}.
+    {ok, SessId :: binary()} | {error, term()}.
 create_session(UserId, _CustomArgs) ->
-    SessId = datastore_utils:gen_uuid(),
-    Sess = #session{user_id = UserId},
-    case session:create(#document{key = SessId, value = Sess}) of
-        {ok, SessId} ->
+    case session:create(#document{value = #session{user_id = UserId}}) of
+        {ok, #document{key = SessId}} ->
             {ok, SessId};
         {error, Reason} ->
             {error, Reason}

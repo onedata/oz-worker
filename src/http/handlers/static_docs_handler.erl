@@ -12,7 +12,7 @@
 %%%-------------------------------------------------------------------
 -module(static_docs_handler).
 
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("hackney/include/hackney_lib.hrl").

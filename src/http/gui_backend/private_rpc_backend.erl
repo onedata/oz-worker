@@ -16,7 +16,7 @@
 
 -include("rest.hrl").
 -include("errors.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API

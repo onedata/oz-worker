@@ -13,7 +13,7 @@
 -include("registered_names.hrl").
 -include("subscriptions_test_utils.hrl").
 -include("subscriptions/subscriptions.hrl").
--include_lib("datastore/oz_datastore_models_def.hrl").
+-include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 
 %% API
@@ -35,12 +35,12 @@ call_worker(Node, Req) ->
 %%%===================================================================
 
 save(Node, Id, Value) ->
-    ?assertMatch({ok, Id}, rpc:call(Node, element(1, Value), save,
+    ?assertMatch({ok, _}, rpc:call(Node, element(1, Value), save,
         [#document{key = Id, value = Value}])).
 
 delete_all(Node, Documents) ->
     lists:foreach(fun(#document{key = Key, value = Value}) ->
-        subscriptions_test_utils:delete_document(Node, element(1, Value), Key)
+        delete_document(Node, element(1, Value), Key)
     end, Documents).
 
 list(Node, Model) ->
@@ -56,8 +56,8 @@ delete_document(Node, Model, Id) ->
 get_rev(Node, Model, Id) ->
     Result = rpc:call(Node, Model, get, [Id]),
     ?assertMatch({ok, _}, Result),
-    {ok, #document{rev = Rev}} = Result,
-    Rev.
+    {ok, #document{revs = Revs}} = Result,
+    Revs.
 
 create_provider(Config, Name, Spaces) ->
     create_provider(Config, Name, Spaces, [<<"127.0.0.1">>]).
@@ -71,8 +71,10 @@ create_provider(Config, Name, Spaces, URLs) ->
         <<"csr">> => CSR
     },
     {ok, {Id, _}} = oz_test_utils:create_provider(Config, Params),
-    {ok, Id} = oz_test_utils:call_oz(
-        Config, od_provider, update, [Id, #{spaces => Spaces}]
+    {ok, _} = oz_test_utils:call_oz(
+        Config, od_provider, update, [Id, fun(Provider = #od_provider{}) ->
+            {ok, Provider#od_provider{spaces = Spaces}}
+        end]
     ),
     Id.
 
@@ -97,7 +99,7 @@ create_spaces(SIds, UIds, GIds, Node) ->
             groups = Groups,
             users = Users
         },
-        subscriptions_test_utils:save(Node, SId, Space),
+        save(Node, SId, Space),
         {SId, Space}
     end, lists:zip(SIds, lists:seq(1, length(SIds)))).
 
@@ -107,7 +109,7 @@ create_users(UIds, GIds, Node) ->
             name = list_to_binary("u" ++ integer_to_list(N)),
             groups = GIds
         },
-        subscriptions_test_utils:save(Node, UId, User),
+        save(Node, UId, User),
         {UId, User}
     end, lists:zip(UIds, lists:seq(1, length(UIds)))).
 
@@ -119,7 +121,7 @@ create_groups(GIds, UIds, SIds, Node) ->
             users = Users,
             spaces = SIds
         },
-        subscriptions_test_utils:save(Node, GId, Group),
+        save(Node, GId, Group),
         {GId, Group}
     end, lists:zip(GIds, lists:seq(1, length(GIds)))).
 
@@ -455,9 +457,10 @@ id(Id) ->
     ?ID(list_to_atom(Id)).
 
 empty_cache(Node) ->
-    subscriptions_test_utils:update_document(Node, subscriptions_state, ?SUBSCRIPTIONS_STATE_KEY, #{
-        cache => gb_trees:empty()
-    }).
+    update_document(Node, subscriptions_state, ?SUBSCRIPTIONS_STATE_KEY, fun
+        (State = #subscriptions_state{}) ->
+            {ok, State#subscriptions_state{cache = gb_trees:empty()}}
+    end).
 
 undefined_to_binary(Value) ->
     case Value of

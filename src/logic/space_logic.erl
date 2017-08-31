@@ -13,7 +13,7 @@
 -module(space_logic).
 -author("Lukasz Opiola").
 
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(PLUGIN, space_logic_plugin).
@@ -522,7 +522,8 @@ remove_group(Client, SpaceId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec exists(SpaceId :: od_space:id()) -> boolean().
 exists(SpaceId) ->
-    od_space:exists(SpaceId).
+    {ok, Exists} = od_space:exists(SpaceId),
+    Exists.
 
 
 %%--------------------------------------------------------------------

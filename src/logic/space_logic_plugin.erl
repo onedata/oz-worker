@@ -17,7 +17,7 @@
 -include("errors.hrl").
 -include("tokens.hrl").
 -include("entity_logic.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
@@ -101,7 +101,9 @@ create(Client, SpaceId, {deprecated_create_share, ShareId}, Data) ->
     end;
 
 create(Client, _, entity, #{<<"name">> := Name}) ->
-    {ok, SpaceId} = od_space:create(#document{value = #od_space{name = Name}}),
+    {ok, #document{key = SpaceId}} = od_space:create(#document{
+        value = #od_space{name = Name}
+    }),
     case Client of
         ?USER(UserId) ->
             entity_graph:add_relation(
@@ -255,7 +257,9 @@ get(_, _SpaceId, #od_space{}, {provider, ProviderId}) ->
 -spec update(EntityId :: entity_logic:entity_id(), Resource :: resource(),
     entity_logic:data()) -> entity_logic:result().
 update(SpaceId, entity, #{<<"name">> := NewName}) ->
-    {ok, _} = od_space:update(SpaceId, #{name => NewName}),
+    {ok, _} = od_space:update(SpaceId, fun(Space = #od_space{}) ->
+        {ok, Space#od_space{name = NewName}}
+    end),
     % TODO VFS-2999 This is needed to trigger subscriptions update of user
     % docs, which include space aliases. Should be removed when aliases are
     % reworked.

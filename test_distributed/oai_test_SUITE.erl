@@ -14,7 +14,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include("oai_test_SUITE.hrl").
 -include("http/handlers/oai.hrl").
@@ -907,7 +907,9 @@ list_metadata_formats_no_format_error_test_base(Config, Method) ->
     % conditions because entity logic won't accept undefined metadata,
     % but check if returned OAI error in such case is correct).
     ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_handle, update, [
-        Identifier, #{metadata => undefined}]
+        Identifier, fun(Handle = #od_handle{}) ->
+            {ok, Handle#od_handle{metadata = undefined}}
+        end]
     )),
 
     Args = [{<<"identifier">>, oai_identifier(Identifier)}],

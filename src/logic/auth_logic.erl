@@ -16,8 +16,8 @@
 -include("gui/common.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
--include("datastore/oz_datastore_models_def.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("hackney/include/hackney_lib.hrl").
 
 -define(STATE_TOKEN, state_token).
@@ -98,7 +98,9 @@ authenticate_user(Identifier) ->
     {ok, RedirectionUri :: binary()}.
 get_redirection_uri(UserId, ProviderId) ->
     Token = gen_token(UserId, ProviderId),
-    {ok, _} = od_user:update(UserId, #{chosen_provider => ProviderId}),
+    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
+        {ok, User#od_user{chosen_provider = ProviderId}}
+    end),
     {ok, ProviderURL} = provider_logic:get_url(ProviderId),
     URL = str_utils:format_bin("~s~s?code=~s", [
         ProviderURL, ?provider_auth_endpoint, Token
@@ -113,9 +115,10 @@ get_redirection_uri(UserId, ProviderId) ->
 gen_token(UserId) ->
     Secret = generate_secret(),
     Caveats = [],%["method = GET", "rootResource in spaces,user"],
-    {ok, IdentifierBinary} = onedata_auth:save(#document{value = #onedata_auth{
-        secret = Secret, user_id = UserId}}),
-    Identifier = binary_to_list(IdentifierBinary),
+    {ok, Doc} = onedata_auth:save(#document{value = #onedata_auth{
+        secret = Secret, user_id = UserId
+    }}),
+    Identifier = binary_to_list(Doc#document.key),
     M = create_macaroon(Secret, str_utils:to_binary(Identifier), Caveats),
     {ok, Token} = token_utils:serialize62(M),
     Token.
@@ -128,16 +131,18 @@ gen_token(UserId) ->
 gen_token(UserId, _ProviderId) ->
     Secret = generate_secret(),
     Location = ?MACAROONS_LOCATION,
-    {ok, IdentifierBinary} = onedata_auth:save(#document{value = #onedata_auth{
-        secret = Secret, user_id = UserId}}),
-    Identifier = binary_to_list(IdentifierBinary),
+    {ok, Doc} = onedata_auth:save(#document{value = #onedata_auth{
+        secret = Secret, user_id = UserId
+    }}),
+    Identifier = binary_to_list(Doc#document.key),
     %% @todo: VFS-1869
     M = create_macaroon(Secret, str_utils:to_binary(Identifier), []),
 
     CaveatKey = generate_secret(),
-    {ok, CaveatIdBinary} = onedata_auth:save(#document{value = #onedata_auth{
-        secret = CaveatKey, user_id = UserId}}),
-    CaveatId = binary_to_list(CaveatIdBinary),
+    {ok, CaveatDoc} = onedata_auth:save(#document{value = #onedata_auth{
+        secret = CaveatKey, user_id = UserId
+    }}),
+    CaveatId = binary_to_list(CaveatDoc#document.key),
     M2 = macaroon:add_third_party_caveat(M, Location, CaveatKey, CaveatId),
     {ok, Token} = token_utils:serialize62(M2),
     Token.
@@ -183,7 +188,7 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, _Method, _RootResource)
 %%--------------------------------------------------------------------
 -spec invalidate_user_tokens(UserId :: od_user:id()) -> ok.
 invalidate_user_tokens(UserId) ->
-    {ok, AuthDocs} = onedata_auth:get_auth_by_user_id(UserId),
+    {ok, AuthDocs} = onedata_auth:get_by_user_id(UserId),
     lists:foreach(
         fun(#document{key = AuthId}) ->
             invalidate_token(AuthId)

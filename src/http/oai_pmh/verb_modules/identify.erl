@@ -13,7 +13,7 @@
 
 -include("http/handlers/oai.hrl").
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 
 -behaviour(oai_verb_behaviour).
 
@@ -90,7 +90,7 @@ get_response(<<"protocolVersion">>, _Args) ->
 get_response(<<"earliestDatestamp">>, _Args) ->
     case get_earliest_datestamp() of
         none -> <<"Repository is empty">>;
-        Datestamp ->oai_utils:datetime_to_oai_datestamp(Datestamp)
+        Datestamp -> oai_utils:datetime_to_oai_datestamp(Datestamp)
     end;
 get_response(<<"deletedRecord">>, _Args) ->
     <<"no">>;

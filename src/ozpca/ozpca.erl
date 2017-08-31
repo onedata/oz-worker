@@ -238,7 +238,7 @@ delegate(Fun, Args) ->
 
 %%--------------------------------------------------------------------
 %% @private @doc
-%% Generates a certificate for Global Registry's interfaces.
+%% Generates a certificate for onezone's interfaces.
 %% @end
 %%--------------------------------------------------------------------
 -spec generate_oz_cert(KeyFile :: string(), CertFile :: string(),
@@ -249,7 +249,7 @@ generate_oz_cert(KeyFile, CertFile, CaDir, Domain) ->
     ReqConfigFile = req_config_file(TmpDir, #dn{commonName = Domain}),
     CaConfigFile = ca_config_file(TmpDir, CaDir),
 
-    ?info("Creating a CSR for the Global Registry interfaces..."),
+    ?info("Creating a CSR for the onezone interfaces..."),
 
     RequestOutput = os:cmd(["openssl req",
         " -config ", ReqConfigFile,
@@ -258,7 +258,7 @@ generate_oz_cert(KeyFile, CertFile, CaDir, Domain) ->
         " -out ", CSRFile]),
 
     ?info("~s", [RequestOutput]),
-    ?info("Signing the Global Resistry interfaces CSR..."),
+    ?info("Signing the onezone interfaces CSR..."),
 
     SigningOutput = os:cmd(["openssl ca",
         " -config ", CaConfigFile,

@@ -16,7 +16,7 @@
 -include("errors.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(PLUGIN, user_logic_plugin).
@@ -126,7 +126,7 @@ create(UserInfo, ProposedUserId) ->
         case od_user:create(#document{key = ProposedUserId, value = UserInfo}) of
             {error, already_exists} ->
                 ?ERROR_BAD_VALUE_ID_OCCUPIED(<<"userId">>);
-            {ok, UserId} ->
+            {ok, #document{key = UserId}} ->
                 setup_user(UserId, UserInfo),
                 {ok, UserId}
         end
@@ -833,7 +833,8 @@ leave_handle(Client, UserId, HandleId) ->
 %%--------------------------------------------------------------------
 -spec exists(UserId :: od_user:id()) -> boolean().
 exists(UserId) ->
-    od_user:exists(UserId).
+    {ok, Exists} = od_user:exists(UserId),
+    Exists.
 
 
 %%--------------------------------------------------------------------
@@ -897,7 +898,7 @@ has_eff_provider(#od_user{eff_providers = EffProviders}, ProviderId) ->
 %%--------------------------------------------------------------------
 -spec idp_uid_to_system_uid(IdPId :: atom(), IdPUserId :: binary()) -> od_user:id().
 idp_uid_to_system_uid(IdPId, IdPUserId) ->
-    datastore_utils2:gen_key(<<"">>, str_utils:format_bin("~p:~s", [IdPId, IdPUserId])).
+    datastore_utils:gen_key(<<"">>, str_utils:format_bin("~p:~s", [IdPId, IdPUserId])).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -981,11 +982,13 @@ merge_linked_account_unsafe(UserId, LinkedAccount) ->
     % Coalesce user groups
     idp_group_mapping:coalesce_groups(IdP, UserId, OldGroups, NewGroups),
     % Return updated user info
-    {ok, _} = od_user:update(UserId, #{
-        name => NewName,
-        email_list => NewEmails,
-        linked_accounts => NewLinkedAccs
-    }),
+    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
+        {ok, User#od_user{
+            name = NewName,
+            email_list = NewEmails,
+            linked_accounts = NewLinkedAccs
+        }}
+    end),
     ok.
 
 
@@ -1052,7 +1055,7 @@ authenticate_by_basic_credentials(Login, Password) ->
             UserId = onepanel_uid_to_system_uid(OnepanelUserId),
             UserRole = proplists:get_value(<<"userRole">>, Props),
             {UserDocument, FirstLogin} = case od_user:get(UserId) of
-                {error, {not_found, od_user}} ->
+                {error, not_found} ->
                     UserRecord = #od_user{
                         name = Login,
                         login = Login,
@@ -1072,7 +1075,7 @@ authenticate_by_basic_credentials(Login, Password) ->
                             login = Login,
                             basic_auth_enabled = true
                         }},
-                    {ok, UserId} = od_user:save(NewDoc),
+                    {ok, _} = od_user:save(NewDoc),
                     {NewDoc, false}
             end,
             % Check if user's role entitles him to belong to any groups
@@ -1211,7 +1214,9 @@ setup_user(UserId, UserInfo) ->
                     <<Name/binary, "'s space">>
             end,
             {ok, SpaceId} = space_logic:create(?USER(UserId), SpaceName),
-            od_user:update(UserId, #{default_space => SpaceId});
+            od_user:update(UserId, fun(User = #od_user{}) ->
+                {ok, User#od_user{default_space = SpaceId}}
+            end);
         _ ->
             ok
     end,

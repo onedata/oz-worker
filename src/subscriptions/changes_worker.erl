@@ -19,7 +19,7 @@
 
 -include("registered_names.hrl").
 -include("subscriptions/subscriptions.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% worker_plugin_behaviour callbacks
@@ -36,7 +36,7 @@
 %% Handles changes & dispatches them to be processed.
 %% @end
 %%--------------------------------------------------------------------
--spec change_callback({ok, stream_ended | [datastore:document()]}) -> ok.
+-spec change_callback({ok, stream_ended | [datastore:doc()]}) -> ok.
 change_callback({error, _, _}) ->
     ok;
 change_callback({ok, end_of_stream}) ->

@@ -13,7 +13,7 @@
 
 -include("http/handlers/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 
 -behaviour(oai_verb_behaviour).
 

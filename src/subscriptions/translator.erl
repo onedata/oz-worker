@@ -13,7 +13,7 @@
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/utils/utils.hrl").
@@ -31,7 +31,7 @@
 %%% Those structures are serializable to json.
 %%% @end
 %%%-------------------------------------------------------------------
--spec as_msg(Seq :: subscriptions:seq(), Doc :: datastore:document(),
+-spec as_msg(Seq :: subscriptions:seq(), Doc :: datastore:doc(),
     Ignore :: boolean()) -> term().
 as_msg(Seq, Doc = #document{value = Value}, false) ->
     get_msg(Seq, Doc, element(1, Value));
@@ -65,7 +65,7 @@ get_ignore_msg(Seq) ->
 %%% Those structures are serializable to json and provide details from documents.
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_msg(Seq :: subscriptions:seq(), Doc :: datastore:document(),
+-spec get_msg(Seq :: subscriptions:seq(), Doc :: datastore:doc(),
     Model :: subscriptions:model()) -> term().
 
 get_msg(Seq, Doc = #document{deleted = true, key = Id}, Model) ->
@@ -277,7 +277,7 @@ get_msg(_Seq, _Doc, _Model) ->
 %%% Those structures are serializable to json and provide details from documents.
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_public_msg(Seq :: subscriptions:seq(), Doc :: datastore:document(),
+-spec get_public_msg(Seq :: subscriptions:seq(), Doc :: datastore:doc(),
     Model :: subscriptions:model()) -> term().
 
 get_public_msg(Seq, Doc, od_user = Model) ->
@@ -318,8 +318,8 @@ get_public_msg(Seq, Doc, od_provider = Model) ->
         {public_only, true}
     ]}].
 
--spec revs_prop(Doc :: datastore:document()) -> term().
-revs_prop(#document{rev = Revs}) when is_list(Revs) ->
+-spec revs_prop(Doc :: datastore:doc()) -> term().
+revs_prop(#document{revs = Revs}) when is_list(Revs) ->
     {ok, MaxSize} = application:get_env(?APP_NAME, subscriptions_sent_revisions_limit),
     Size = min(MaxSize, length(Revs)),
     {revs, lists:sublist(Revs, Size)}.

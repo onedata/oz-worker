@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Michal Zmuda
-%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -11,36 +11,197 @@
 %%%-------------------------------------------------------------------
 -module(od_user).
 -author("Michal Zmuda").
--behaviour(model_behaviour).
 
--include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
--include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
-
--type doc() :: datastore:document().
--type info() :: #od_user{}.
--type id() :: binary().
--export_type([doc/0, info/0, id/0]).
-
--type name() :: binary().
--export_type([name/0]).
-
-%% model_behaviour callbacks
--export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
-    model_init/0, 'after'/5, before/4]).
--export([record_struct/1, record_upgrade/2]).
+-include("datastore/oz_datastore_models.hrl").
 
 %% API
+-export([create/1, save/1, get/1, exists/1, update/2, delete/1, list/0]).
 -export([get_by_criterion/1]).
 -export([to_string/1]).
 
+%% datastore_model callbacks
+-export([get_prehooks/0]).
+-export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
+
+-type id() :: binary().
+-type record() :: #od_user{}.
+-type doc() :: datastore_doc:doc(record()).
+-type diff() :: datastore_doc:diff(record()).
+-export_type([id/0, record/0]).
+
+-type name() :: binary().
+-type criterion() :: {linked_account, {ProviderId :: atom(), UserId :: binary()}} |
+                     {email, binary()} |
+                     {alias, binary()}.
+-export_type([name/0]).
+
+-define(CTX, #{
+    model => ?MODULE,
+    fold_enabled => true,
+    sync_enabled => true
+}).
+
+%%%===================================================================
+%%% API
+%%%===================================================================
+
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns structure of the record in specified version.
+%% Creates user.
 %% @end
 %%--------------------------------------------------------------------
--spec record_struct(datastore_json:record_version()) -> datastore_json:record_struct().
-record_struct(1) ->
+-spec create(doc()) -> {ok, doc()} | {error, term()}.
+create(Doc) ->
+    datastore_model:create(?CTX, Doc).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Saves user.
+%% @end
+%%--------------------------------------------------------------------
+-spec save(doc()) -> {ok, doc()} | {error, term()}.
+save(Doc) ->
+    datastore_model:save(?CTX, Doc).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns user by ID.
+%% @end
+%%--------------------------------------------------------------------
+-spec get(id()) -> {ok, doc()} | {error, term()}.
+get(UserId) ->
+    datastore_model:get(?CTX, UserId).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Checks whether user given by ID exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(id()) -> {ok, boolean()} | {error, term()}.
+exists(UserId) ->
+    datastore_model:exists(?CTX, UserId).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates user by ID.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
+update(UserId, Diff) ->
+    datastore_model:update(?CTX, UserId, Diff).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes user by ID.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(id()) -> ok | {error, term()}.
+delete(UserId) ->
+    datastore_model:delete(?CTX, UserId).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns list of all users.
+%% @end
+%%--------------------------------------------------------------------
+-spec list() -> {ok, [doc()]} | {error, term()}.
+list() ->
+    datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Gets first user matching given criterion.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_by_criterion(criterion()) -> {ok, doc()} | {error, term()}.
+get_by_criterion({email, Value}) ->
+    Fun = fun(Doc = #document{value = #od_user{email_list = EmailList}}, Acc) ->
+        case lists:member(Value, EmailList) of
+            true -> {stop, [Doc | Acc]};
+            false -> {ok, Acc}
+        end
+    end,
+    case datastore_model:fold(?CTX, Fun, []) of
+        {ok, []} ->
+            {error, not_found};
+        {ok, [Doc | _]} ->
+            {ok, Doc}
+    end;
+get_by_criterion({alias, Value}) ->
+    Fun = fun(Doc = #document{value = #od_user{alias = Alias}}, Acc) ->
+        case Alias of
+            Value -> {stop, [Doc | Acc]};
+            _ -> {ok, Acc}
+        end
+    end,
+    case datastore_model:fold(?CTX, Fun, []) of
+        {ok, []} ->
+            {error, not_found};
+        {ok, [Doc | _]} ->
+            {ok, Doc}
+    end;
+get_by_criterion({linked_account, {ProviderID, UserID}}) ->
+    Fun = fun(Doc = #document{value = #od_user{linked_accounts = Accounts}}, Acc) ->
+        Found = lists:any(fun
+            (#linked_account{provider_id = PID, user_id = UID}) ->
+                case {PID, UID} of
+                    {ProviderID, UserID} -> true;
+                    _ -> false
+                end;
+            (_) -> false
+        end, Accounts),
+        case Found of
+            true -> {stop, [Doc | Acc]};
+            _ -> {ok, Acc}
+        end
+    end,
+    case datastore_model:fold(?CTX, Fun, []) of
+        {ok, []} ->
+            {error, not_found};
+        {ok, [Doc | _]} ->
+            {ok, Doc}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the user with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_string(UserId :: id()) -> binary().
+to_string(UserId) ->
+    <<"user:", UserId/binary>>.
+
+%%%===================================================================
+%%% datastore_model callbacks
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns list of callbacks which will be called before each operation
+%% on datastore model.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_prehooks() -> [datastore_hooks:prehook()].
+get_prehooks() ->
+    record_location_hooks:get_prehooks().
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns model's record version.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_record_version() -> datastore_model:record_version().
+get_record_version() ->
+    4.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns model's record structure in provided version.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_record_struct(datastore_model:record_version()) ->
+    datastore_model:record_struct().
+get_record_struct(1) ->
     {record, [
         {name, string},
         {login, string},
@@ -73,7 +234,7 @@ record_struct(1) ->
         {eff_handles, [string]},
         {top_down_dirty, boolean}
     ]};
-record_struct(2) ->
+get_record_struct(2) ->
     {record, [
         {name, string},
         {login, string},
@@ -105,8 +266,8 @@ record_struct(2) ->
         {eff_handles, #{string => [{atom, string}]}},
         {top_down_dirty, boolean}
     ]};
-record_struct(3) ->
-    {record, Struct} = record_struct(2),
+get_record_struct(3) ->
+    {record, Struct} = get_record_struct(2),
     LinkedAccStruct = {linked_accounts, [{record, [
         {provider_id, atom},
         {user_id, string},
@@ -115,8 +276,8 @@ record_struct(3) ->
         {email_list, [string]}
     ]}]},
     {record, lists:keyreplace(connected_accounts, 1, Struct, LinkedAccStruct)};
-record_struct(4) ->
-    {record, Struct} = record_struct(3),
+get_record_struct(4) ->
+    {record, Struct} = get_record_struct(3),
     LinkedAccStruct = {linked_accounts, [{record, [
         {provider_id, atom},
         {user_id, string},
@@ -127,212 +288,14 @@ record_struct(4) ->
     ]}]},
     {record, lists:keyreplace(linked_accounts, 1, Struct, LinkedAccStruct)}.
 
-%%%===================================================================
-%%% model_behaviour callbacks
-%%%===================================================================
-
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link model_behaviour} callback save/1.
+%% Upgrades model's record from provided version to the next one.
 %% @end
 %%--------------------------------------------------------------------
--spec save(datastore:document()) ->
-    {ok, datastore:ext_key()} | datastore:generic_error().
-save(Document) ->
-    model:execute_with_default_context(?MODULE, save, [Document]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback update/2.
-%% @end
-%%--------------------------------------------------------------------
--spec update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
-    {ok, datastore:ext_key()} | datastore:update_error().
-update(Key, Diff) ->
-    model:execute_with_default_context(?MODULE, update, [Key, Diff]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback create/1.
-%% @end
-%%--------------------------------------------------------------------
--spec create(datastore:document()) ->
-    {ok, datastore:ext_key()} | datastore:create_error().
-create(Document) ->
-    model:execute_with_default_context(?MODULE, create, [Document]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback get/1.
-%% @end
-%%--------------------------------------------------------------------
--spec get(datastore:ext_key()) -> {ok, datastore:document()} | datastore:get_error().
-get(Key) ->
-    model:execute_with_default_context(?MODULE, get, [Key]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all records.
-%% @end
-%%--------------------------------------------------------------------
--spec list() -> {ok, [datastore:document()]} | datastore:generic_error() | no_return().
-list() ->
-    model:execute_with_default_context(?MODULE, list, [?GET_ALL, []]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback delete/1.
-%% @end
-%%--------------------------------------------------------------------
--spec delete(datastore:ext_key()) -> ok | datastore:generic_error().
-delete(Key) ->
-    model:execute_with_default_context(?MODULE, delete, [Key]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback exists/1.
-%% @end
-%%--------------------------------------------------------------------
--spec exists(datastore:ext_key()) -> datastore:exists_return().
-exists(Key) ->
-    ?RESPONSE(model:execute_with_default_context(?MODULE, exists, [Key])).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback model_init/0.
-%% @end
-%%--------------------------------------------------------------------
--spec model_init() -> model_behaviour:model_config().
-model_init() ->
-    Hooks = record_location_hooks:get_hooks(),
-    Config = ?MODEL_CONFIG(od_user_bucket, Hooks, ?GLOBALLY_CACHED_LEVEL),
-    Config#model_config{
-        version = 4,
-        list_enabled = {true, return_errors},
-        sync_enabled = true
-    }.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback 'after'/5.
-%% @end
-%%--------------------------------------------------------------------
--spec 'after'(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
-    Level :: datastore:store_level(), Context :: term(),
-    ReturnValue :: term()) -> ok.
-'after'(ModelName, Method, _Level, Context, ReturnValue) ->
-    record_location_hooks:handle_after(ModelName, Method, Context, ReturnValue).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback before/4.
-%% @end
-%%--------------------------------------------------------------------
--spec before(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
-    Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
-before(ModelName, Method, _Level, Context) ->
-    record_location_hooks:handle_before(ModelName, Method, Context).
-
-%%%===================================================================
-%%% API
-%%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc 
-%% Gets first user matching given criterion.
-%% todo: change implementation to something fast (connected with VFS-1498)
-%% @end
-%%--------------------------------------------------------------------
-
--spec get_by_criterion(Criterion :: {linked_account, {ProviderID :: atom(), UserID :: binary()}} |
-{email, binary()} | {alias, binary()}) ->
-    {ok, #document{}} | {error, any()}.
-
-get_by_criterion({email, Value}) ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #od_user{email_list = EmailList}} = Doc, Acc) ->
-            case lists:member(Value, EmailList) of
-                true -> {abort, [Doc | Acc]};
-                false -> {next, Acc}
-            end;
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    case model:execute_with_default_context(?MODULE, list, [Filter, []]) of
-        {ok, []} ->
-            {error, {not_found, od_user}};
-        {ok, [Result | _]} ->
-            {ok, Result}
-    end;
-
-
-get_by_criterion({alias, Value}) ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #od_user{alias = Alias}} = Doc, Acc) ->
-            case Alias of
-                Value -> {abort, [Doc | Acc]};
-                _ -> {next, Acc}
-            end;
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    case model:execute_with_default_context(?MODULE, list, [Filter, []]) of
-        {ok, []} ->
-            {error, {not_found, od_user}};
-        {ok, [Result | _]} ->
-            {ok, Result}
-    end;
-
-get_by_criterion({linked_account, {ProviderID, UserID}}) ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #od_user{linked_accounts = Accounts}} = Doc, Acc) ->
-            Found = lists:any(fun
-                (#linked_account{provider_id = PID, user_id = UID}) ->
-                    case {PID, UID} of
-                        {ProviderID, UserID} -> true;
-                        _ -> false
-                    end;
-                (_) -> false
-            end, Accounts),
-            case Found of
-                true -> {abort, [Doc | Acc]};
-                _ -> {next, Acc}
-            end;
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    case model:execute_with_default_context(?MODULE, list, [Filter, []]) of
-        {ok, []} ->
-            {error, {not_found, od_user}};
-        {ok, [Result | _]} ->
-            {ok, Result}
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns readable string representing the user with given id.
-%% @end
-%%--------------------------------------------------------------------
--spec to_string(UserId :: id()) -> binary().
-to_string(UserId) ->
-    <<"user:", UserId/binary>>.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Upgrades record from specified version.
-%% @end
-%%--------------------------------------------------------------------
--spec record_upgrade(datastore_json:record_version(), tuple()) ->
-    {datastore_json:record_version(), tuple()}.
-record_upgrade(1, User) ->
+-spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
+    {datastore_model:record_version(), datastore_model:record()}.
+upgrade_record(1, User) ->
     {od_user,
         Name,
         Login,
@@ -394,7 +357,7 @@ record_upgrade(1, User) ->
 
         true
     }};
-record_upgrade(2, User) ->
+upgrade_record(2, User) ->
     {od_user,
         Name,
         Login,
@@ -462,7 +425,7 @@ record_upgrade(2, User) ->
 
         top_down_dirty = TopDownDirty
     }};
-record_upgrade(3, User) ->
+upgrade_record(3, User) ->
     {od_user,
         Name,
         Login,

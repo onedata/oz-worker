@@ -15,7 +15,7 @@
 -behaviour(worker_plugin_behaviour).
 
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% worker_plugin_behaviour callbacks
@@ -275,22 +275,22 @@ ignore_all(Seqs) ->
 %% provider, that he shouldn't expect update with given sequence number.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_change(Seq :: subscriptions:seq(), Doc :: datastore:document(),
+-spec handle_change(Seq :: subscriptions:seq(), Doc :: datastore:doc(),
     Model :: atom()) -> ok.
 handle_change(Seq, Doc, Model) ->
     handle_change([{Seq, Doc, Model}]).
 
--spec handle_change([{Seq :: subscriptions:seq(), Doc :: datastore:document(),
+-spec handle_change([{Seq :: subscriptions:seq(), Doc :: datastore:doc(),
     Model :: atom()}]) -> ok.
 handle_change(Updates) ->
-    {Supported, NotSupported} = lists:partition(fun({_Seq, Doc, Model}) ->
+    {Supported, NotSupported} = lists:partition(fun({_Seq, _Doc, Model}) ->
         lists:member(Model, subscriptions:supported_models())
     end, Updates),
     ignore_all([S || {S, _, _} <- NotSupported]),
     handle_change_filtered(Supported).
 
 
--spec handle_change_filtered([{Seq :: subscriptions:seq(), Doc :: datastore:document(),
+-spec handle_change_filtered([{Seq :: subscriptions:seq(), Doc :: datastore:doc(),
     Model :: atom()}]) -> ok.
 handle_change_filtered(Updates) ->
     UpdatesWithProviders = utils:pmap(fun({Seq, Doc, Model}) ->

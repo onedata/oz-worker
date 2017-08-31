@@ -13,7 +13,7 @@
 -author("Lukasz Opiola").
 
 -include_lib("ctool/include/logging.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("hackney/include/hackney_lib.hrl").
 
 -export([init/3, handle/2, terminate/3]).

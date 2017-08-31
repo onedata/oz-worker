@@ -13,7 +13,7 @@
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([providers/2]).
@@ -23,7 +23,7 @@
 %% Returns providers eligible for receiving given update.
 %% @end
 %%--------------------------------------------------------------------
--spec providers(Doc :: datastore:document(), Model :: subscriptions:model())
+-spec providers(Doc :: datastore:doc(), Model :: subscriptions:model())
         -> [ProviderId :: binary()].
 providers(Doc, od_space) ->
     #document{value = #od_space{

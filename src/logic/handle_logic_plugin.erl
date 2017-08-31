@@ -16,7 +16,7 @@
 
 -include("errors.hrl").
 -include("entity_logic.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
@@ -98,7 +98,7 @@ create(Client, _, entity, Data) ->
         public_handle = PublicHandle,
         metadata = Metadata
     }},
-    {ok, HandleId} = od_handle:create(Handle),
+    {ok, #document{key = HandleId}} = od_handle:create(Handle),
     entity_graph:add_relation(
         od_handle, HandleId,
         od_handle_service, HandleServiceId
@@ -219,10 +219,12 @@ get(_, _HandleId, #od_handle{eff_groups = Groups}, {eff_group_privileges, GroupI
 -spec update(EntityId :: entity_logic:entity_id(), Resource :: resource(),
     entity_logic:data()) -> entity_logic:result().
 update(HandleId, entity, #{<<"metadata">> := NewMetadata}) ->
-    {ok, _} = od_handle:update(HandleId, #{
-        metadata => NewMetadata,
-        timestamp => od_handle:actual_timestamp()
-    }),
+    {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
+        {ok, Handle#od_handle{
+            metadata = NewMetadata,
+            timestamp = od_handle:actual_timestamp()
+        }}
+    end),
     handle_proxy:modify_handle(HandleId, NewMetadata),
     ok;
 

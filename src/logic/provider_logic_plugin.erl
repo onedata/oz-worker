@@ -17,7 +17,7 @@
 -include("errors.hrl").
 -include("tokens.hrl").
 -include("entity_logic.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
@@ -75,7 +75,7 @@ create(_, _, entity, Data) ->
     Latitude = maps:get(<<"latitude">>, Data, 0.0),
     Longitude = maps:get(<<"longitude">>, Data, 0.0),
 
-    ProviderId = datastore_utils:gen_uuid(),
+    ProviderId = datastore_utils:gen_key(),
     case worker_proxy:call(ozpca_worker, {sign_provider_req, ProviderId, CSR}) of
         {error, bad_csr} ->
             ?ERROR_BAD_DATA(<<"csr">>);

@@ -6,13 +6,14 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% This file contains location service tests.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(location_test_SUITE).
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
@@ -44,7 +45,7 @@ all() -> ?ALL([
 
 restarts_port_after_failure(Config) ->
     %% given
-    [Node1, Node2, Node3 | _] = Nodes = ?config(oz_worker_nodes, Config),
+    [Node1, Node2 | _] = Nodes = ?config(oz_worker_nodes, Config),
     Host1 = get_hostname(Node1),
     Host2 = get_hostname(Node2),
     ID1 = ?ID('id1'),
@@ -137,8 +138,8 @@ location_of_records_are_set_upon_creation(Config) ->
 create(Node, Record) ->
     Result = rpc:call(Node, element(1, Record), create, [#document{value = Record}]),
     ?assertMatch({ok, _}, Result),
-    {ok, ID1} = Result,
-    ID1.
+    {ok, #document{key = ID}} = Result,
+    ID.
 
 claim(Node, ID) ->
     rpc:call(Node, locations, claim, [test, ID]).

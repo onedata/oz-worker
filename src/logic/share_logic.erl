@@ -13,7 +13,7 @@
 -module(share_logic).
 -author("Lukasz Opiola").
 
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(PLUGIN, share_logic_plugin).
@@ -141,7 +141,8 @@ delete(Client, ShareId) ->
 %%--------------------------------------------------------------------
 -spec exists(ShareId :: od_share:id()) -> boolean().
 exists(ShareId) ->
-    od_share:exists(ShareId).
+    {ok, Exists} = od_share:exists(ShareId),
+    Exists.
 
 
 %%--------------------------------------------------------------------

@@ -6,13 +6,14 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
+%%% This file contains identity service tests.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(identity_test_SUITE).
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").

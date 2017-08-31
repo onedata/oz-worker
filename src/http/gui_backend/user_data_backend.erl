@@ -16,7 +16,7 @@
 
 
 -include("errors.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([init/0, terminate/0]).
@@ -129,17 +129,18 @@ update_record(<<"user">>, UserId, [{<<"alias">>, NewAlias}]) ->
                 "Please choose other alias.">>)
     end;
 update_record(<<"user">>, UserId, Data) ->
-    {DiffKey, DiffValue} = case Data of
-        [{<<"defaultSpaceId">>, DefaultSpace}] ->
-            {default_space, DefaultSpace};
-        [{<<"defaultProviderId">>, DefaultProvider}] ->
-            {default_provider, DefaultProvider}
-    end,
-    DiffValueOrUndefined = case DiffValue of
-        null -> undefined;
-        _ -> DiffValue
-    end,
-    {ok, _} = od_user:update(UserId, #{DiffKey => DiffValueOrUndefined}),
+    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
+        case Data of
+            [{<<"defaultSpaceId">>, null}] ->
+                {ok, User#od_user{default_space = undefined}};
+            [{<<"defaultSpaceId">>, DefaultSpace}] ->
+                {ok, User#od_user{default_space = DefaultSpace}};
+            [{<<"defaultProviderId">>, null}] ->
+                {ok, User#od_user{default_provider = undefined}};
+            [{<<"defaultProviderId">>, DefaultProvider}] ->
+                {ok, User#od_user{default_provider = DefaultProvider}}
+        end
+    end),
     ok.
 
 

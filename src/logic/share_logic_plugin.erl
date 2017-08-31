@@ -16,7 +16,7 @@
 
 -include("errors.hrl").
 -include("entity_logic.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
@@ -68,7 +68,7 @@ create(_Client, _, entity, Data) ->
         public_url = share_logic:share_id_to_public_url(ShareId)
     }},
     case od_share:create(Share) of
-        {ok, ShareId} ->
+        {ok, _} ->
             entity_graph:add_relation(
                 od_share, ShareId,
                 od_space, SpaceId
@@ -113,7 +113,9 @@ get(_, _ShareId, #od_share{} = Share, data) ->
 -spec update(EntityId :: entity_logic:entity_id(), Resource :: resource(),
     entity_logic:data()) -> entity_logic:result().
 update(ShareId, entity, #{<<"name">> := NewName}) ->
-    {ok, _} = od_share:update(ShareId, #{name => NewName}),
+    {ok, _} = od_share:update(ShareId, fun(Share = #od_share{}) ->
+        {ok, Share#od_share{name = NewName}}
+    end),
     ok.
 
 

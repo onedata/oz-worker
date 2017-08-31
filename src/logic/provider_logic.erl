@@ -14,7 +14,7 @@
 -author("Lukasz Opiola").
 
 -include("entity_logic.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("hackney/include/hackney_lib.hrl").
 
@@ -335,7 +335,8 @@ check_my_ip(Client, CowboyReq) ->
 %%--------------------------------------------------------------------
 -spec exists(ProviderId :: od_provider:id()) -> boolean().
 exists(ProviderId) ->
-    od_provider:exists(ProviderId).
+    {ok, Exists} = od_provider:exists(ProviderId),
+    Exists.
 
 
 %%--------------------------------------------------------------------

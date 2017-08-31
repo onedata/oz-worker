@@ -14,7 +14,7 @@
 -include("entity_logic.hrl").
 -include("http/handlers/oai.hrl").
 -include("http/handlers/oai_errors.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 
 %% API
 -export([datetime_to_oai_datestamp/1, oai_datestamp_to_datetime/1,

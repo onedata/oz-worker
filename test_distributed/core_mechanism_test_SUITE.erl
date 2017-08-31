@@ -12,76 +12,22 @@
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
+-include("datastore/oz_datastore_models.hrl").
+-include_lib("kernel/src/inet_dns.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
--include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("kernel/src/inet_dns.hrl").
--include_lib("cluster_worker/include/modules/datastore/datastore_common_internal.hrl").
--include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
 -include_lib("cluster_worker/include/global_definitions.hrl").
-
--define(TIMEOUT, timer:minutes(5)).
--define(call_store(N, F, A), ?call(N, datastore, F, A)).
--define(call_store(N, Model, F, A), ?call(N,
-    model, execute_with_default_context, [Model, F, A])).
--define(call_store(N, Model, F, A, Override), ?call(N,
-    model, execute_with_default_context, [Model, F, A, Override])).
--define(call_disk(N, Model, F, A), ?call(N,
-    model, execute_with_default_context, [Model, F, A, [{level, ?DIRECT_DISK_LEVEL}]])).
--define(call(N, M, F, A), ?call(N, M, F, A, ?TIMEOUT)).
--define(call(N, M, F, A, T), rpc:call(N, M, F, A, T)).
 
 %% API
 -export([all/0]).
--export([dns_get_all_ips_test/1, test_models/1]).
+-export([dns_get_all_ips_test/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
 
-all() -> ?ALL([dns_get_all_ips_test, test_models]).
-
-test_models(Config) ->
-    [Worker | _] = Workers = ?config(oz_worker_nodes, Config),
-    Models = ?call(Worker, datastore_config, models, []),
-
-    lists:foreach(fun(Worker) ->
-        test_utils:set_env(Worker, ?CLUSTER_WORKER_APP_NAME, cache_to_disk_delay_ms, timer:seconds(1)),
-%%        test_utils:set_env(Worker, ?CLUSTER_WORKER_APP_NAME, cache_to_disk_force_delay_ms, timer:seconds(2)),
-        % TODO - change to 2 seconds
-        test_utils:set_env(Worker, ?CLUSTER_WORKER_APP_NAME, cache_to_disk_force_delay_ms, timer:seconds(1)),
-        test_utils:set_env(Worker, ?CLUSTER_WORKER_APP_NAME, datastore_pool_queue_flush_delay, 1000)
-    end, Workers),
-
-    lists:foreach(fun(ModelName) ->
-%%        ct:print("Module ~p", [ModelName]),
-
-        #model_config{store_level = SL} = MC = ?call(Worker, ModelName, model_init, []),
-        Cache = case SL of
-            ?GLOBALLY_CACHED_LEVEL -> true;
-            ?LOCALLY_CACHED_LEVEL -> true;
-            _ -> false
-        end,
-
-        Key = list_to_binary("key_tm_" ++ atom_to_list(ModelName)),
-        Doc =  #document{
-            key = Key,
-            value = MC#model_config.defaults
-        },
-        ?assertMatch({ok, _}, ?call_store(Worker, ModelName, save, [Doc])),
-        ?assertMatch({ok, _}, ?call_store(Worker, ModelName, get, [Key])),
-
-%%        ct:print("Module ok ~p", [ModelName]),
-
-        case Cache of
-            true ->
-                ?assertMatch({ok, _, _}, ?call_disk(Worker, ModelName, get, [Key]), 10);
-%%                ct:print("Module caching ok ~p", [ModelName]);
-            _ ->
-                ok
-        end
-    end, Models).
+all() -> ?ALL([dns_get_all_ips_test]).
 
 dns_get_all_ips_test(Config) ->
     [Node1, Node2] = ?config(oz_worker_nodes, Config),
