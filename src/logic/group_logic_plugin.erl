@@ -697,6 +697,11 @@ validate(create, {child, _ChildId}) -> #{
         <<"privileges">> => {list_of_atoms, privileges:group_privileges()}
     }
 };
+validate(create, invite_user_token) -> #{
+};
+validate(create, invite_group_token) -> #{
+};
+
 validate(update, entity) -> #{
     at_least_one => #{
         <<"name">> => {binary, non_empty},
