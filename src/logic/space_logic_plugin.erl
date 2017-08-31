@@ -510,7 +510,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
 
         {?USER(ClientUserId), ?THROUGH_GROUP(GroupId)} ->
             % Groups's membership in this space is checked in 'exists'
-            group_logic:has_eff_user(GroupId, ClientUserId);
+            group_logic:has_eff_privilege(GroupId, ClientUserId, ?GROUP_VIEW);
 
         {?PROVIDER(ProviderId), ?THROUGH_PROVIDER(ProviderId)} ->
             % Provider's support in this space is checked in 'exists'

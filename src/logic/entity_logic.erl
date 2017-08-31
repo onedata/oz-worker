@@ -60,8 +60,7 @@ list_of_binaries | integer | float | json | token.
 {not_exists, fun((entity_id()) -> boolean())} |
 {relation_exists, atom(), binary(), atom(), binary(), fun((entity_id()) -> boolean())} |
 token_logic:token_type() | % Compatible only with 'token' type validator
-alias |  % Compatible only with 'binary' type validator
-{entity_exists, ReadableIdentifier :: binary(), fun((entity_id()) -> boolean())}.
+alias.  % Compatible only with 'binary' type validator
 
 % The 'aspect' key word allows to validate the data provided in aspect
 % identifier.

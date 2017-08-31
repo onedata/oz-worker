@@ -561,11 +561,11 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this group is checked in 'exists'
-            true;
+            group_logic:has_eff_privilege(Group, UserId, ?GROUP_VIEW);
 
-        {?USER(_UserId), ?THROUGH_GROUP(_ChildGroupId)} ->
+        {?USER(UserId), ?THROUGH_GROUP(ChildGroupId)} ->
             % Child group's membership in this group is checked in 'exists'
-            true;
+            group_logic:has_eff_user(ChildGroupId, UserId);
 
         {?PROVIDER(ProviderId), ?THROUGH_PROVIDER(ProviderId)} ->
             % Group's membership in provider is checked in 'exists'

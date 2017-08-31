@@ -250,7 +250,7 @@ add_group(Client, HServiceId, GroupId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
         client = Client,
-        gri = #gri{type = od_handle, id = HServiceId, aspect = {group, GroupId}},
+        gri = #gri{type = od_handle_service, id = HServiceId, aspect = {group, GroupId}},
         data = Data
     })).
 

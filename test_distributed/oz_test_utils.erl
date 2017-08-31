@@ -11,7 +11,9 @@
 %%%-------------------------------------------------------------------
 -module(oz_test_utils).
 
+-include("registered_names.hrl").
 -include("entity_logic.hrl").
+-include("graph_sync/oz_graph_sync.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 
@@ -43,6 +45,7 @@
 ]).
 -export([
     create_group/3,
+    does_group_exist/2,
     get_group/2,
     get_group_oz_privileges/2,
     get_group_eff_oz_privileges/2,
@@ -51,12 +54,21 @@
     delete_group/2,
 
     add_user_to_group/3,
+    group_set_user_privileges/5,
     add_group_to_group/3,
     group_remove_user/3,
+    group_remove_group/3,
     group_leave_space/3,
+    group_leave_handle_service/3,
+    group_invite_group_token/3,
 
     get_group_user_privileges/3,
-    get_group_eff_user_privileges/3
+    get_group_eff_user_privileges/3,
+
+    get_group_subgroup_privileges/3,
+    group_set_group_privileges/5,
+
+    create_space_for_group/3
 ]).
 -export([
     create_space/3,
@@ -72,7 +84,9 @@
     space_invite_user_token/3,
     space_invite_group_token/3,
     space_invite_provider_token/3,
-    space_has_effective_user/3
+    space_has_effective_user/3,
+
+    space_remove_group/3
 ]).
 -export([
     create_share/6,
@@ -92,6 +106,7 @@
 -export([
     create_handle_service/5, create_handle_service/3,
     list_handle_services/1,
+    get_handle_service/2,
     delete_handle_service/2,
     add_user_to_handle_service/3,
     add_group_to_handle_service/3
@@ -117,6 +132,16 @@
     generate_provider_cert_files/0,
     mock_handle_proxy/1,
     unmock_handle_proxy/1
+]).
+
+% Convenience functions for gs
+-export([
+    create_session/3,
+    get_cacerts/1,
+    get_rest_port/1,
+    get_gs_ws_url/1,
+    get_gs_supported_proto_verions/1,
+    decode_gri/2
 ]).
 
 %%%===================================================================
@@ -383,10 +408,23 @@ user_leave_space(Config, UserId, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_group(Config :: term(), Client :: entity_logic:client(),
-    Name :: od_group:name()) -> {ok, Id :: binary()}.
-create_group(Config, Client, Name) ->
+    NameOrData :: od_group:name() | #{}) -> {ok, Id :: binary()}.
+create_group(Config, Client, NameOrData) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, create, [Client, Name]
+        Config, group_logic, create, [Client, NameOrData]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Check if group exists in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec does_group_exist(Config :: term(),
+    GroupId :: od_group:id()) -> boolean().
+does_group_exist(Config, GroupId) ->
+    ?assertMatch(_, call_oz(
+        Config, group_logic, exists, [GroupId]
     )).
 
 
@@ -506,6 +544,19 @@ group_remove_user(Config, GroupId, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Removes child group from a group from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_remove_group(Config :: term(), GroupId :: od_group:id(),
+    ChildGroupId :: od_group:id()) -> ok.
+group_remove_group(Config, GroupId, ChildGroupId) ->
+    ?assertMatch(ok, call_oz(
+        Config, group_logic, remove_group, [?ROOT, GroupId, ChildGroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Leaves space as a group.
 %% @end
 %%--------------------------------------------------------------------
@@ -514,6 +565,20 @@ group_remove_user(Config, GroupId, UserId) ->
 group_leave_space(Config, GroupId, SpaceId) ->
     ?assertMatch(ok, call_oz(
         Config, group_logic, leave_space, [?ROOT, GroupId, SpaceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves handle service as a group.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_leave_handle_service(Config :: term(), GroupId :: od_group:id(),
+    HandleServiceId :: od_handle_service:id()) -> ok.
+group_leave_handle_service(Config, GroupId, HandleServiceId) ->
+    ?assertMatch(ok, call_oz(
+        Config, group_logic, leave_handle_service,
+        [?ROOT, GroupId, HandleServiceId]
     )).
 
 
@@ -540,6 +605,19 @@ get_group_user_privileges(Config, GroupId, UserId) ->
 get_group_eff_user_privileges(Config, GroupId, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, group_logic, get_eff_user_privileges, [
         ?ROOT, GroupId, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns privileges of a subgroup in given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_group_subgroup_privileges(Config :: term(), GroupId :: od_group:id(),
+    UserId :: od_group:id()) -> {ok, [privileges:oz_privilege()]}.
+get_group_subgroup_privileges(Config, GroupId, ChildGroupId) ->
+    ?assertMatch({ok, _}, call_oz(Config, group_logic, get_child_privileges, [
+        ?ROOT, GroupId, ChildGroupId
     ])).
 
 
@@ -906,6 +984,19 @@ list_handle_services(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves handle service data from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_service(Config :: term(),
+    HandleServiceId :: od_handle_service:id()) -> {ok, #od_handle_service{}}.
+get_handle_service(Config, HandleServiceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_service_logic, get, [?ROOT, HandleServiceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Deletes given handle_service from onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -1250,3 +1341,161 @@ mock_handle_proxy(Config) ->
 unmock_handle_proxy(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_unload(Nodes, handle_proxy_client).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges for group's user.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_set_user_privileges(Config :: term(), GroupId :: od_group:id(),
+    UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:group_privilege()]) -> ok.
+group_set_user_privileges(Config, GroupId, UserId, Operation, Privs) ->
+    ?assertMatch(ok, call_oz(Config, group_logic, update_user_privileges, [
+        ?ROOT, GroupId, UserId, Operation, Privs
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges for subgroup.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_set_group_privileges(Config :: term(), GroupId :: od_group:id(),
+    ChildGroupId :: od_group:id(), Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:group_privilege()]) -> ok.
+group_set_group_privileges(Config, GroupId, ChildGroupId, Operation, Privs) ->
+    ?assertMatch(ok, call_oz(Config, group_logic, update_child_privileges, [
+        ?ROOT, GroupId, ChildGroupId, Operation, Privs
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a space in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_space_for_group(Config :: term(), GroupId :: od_group:id(),
+    NameOrData :: od_space:name() | #{}) -> {ok, od_space:id()}.
+create_space_for_group(Config, GroupId, NameOrData) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, create_space, [?ROOT, GroupId, NameOrData]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes group from space in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_remove_group(Config :: term(), SpaceId :: od_space:id(),
+    GroupId :: od_group:id()) -> ok.
+space_remove_group(Config, SpaceId, GroupId) ->
+    ?assertMatch(ok, call_oz(
+        Config, space_logic, remove_group, [?ROOT, SpaceId, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a group invite token to given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_invite_group_token(Config :: term(),
+    Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, macaroon:macaroon()}.
+group_invite_group_token(Config, Client, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, create_group_invite_token, [Client, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a session for user.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_session(Config :: term(),
+    UserId :: term(), CustomArgs :: [term()]) ->
+    {ok, SessId :: binary()}.
+create_session(Config, UserId, CustomArgs) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, gui_session_plugin, create_session, [UserId, CustomArgs]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get cacerts.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_cacerts(Config :: term()) -> {ok, CaCerts :: [binary()]}.
+get_cacerts(Config) ->
+    GetCertsFun =
+        fun() ->
+            {ok, ZoneCADir} = application:get_env(?APP_NAME, ozpca_dir),
+            {ok, ZoneCaCertPem} = file:read_file(ozpca:cacert_path(ZoneCADir)),
+            {ok, CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
+            {ok, CaCertPems} = file_utils:read_files({dir, CaCertsDir}),
+            CaCerts = lists:map(
+                fun cert_decoder:pem_to_der/1, [ZoneCaCertPem | CaCertPems]
+            ),
+            {ok, CaCerts}
+        end,
+
+    ?assertMatch({ok, _}, call_oz(
+        Config, erlang, apply, [GetCertsFun, []]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get REST listener port.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_rest_port(Config :: term()) -> Port :: integer().
+get_rest_port(Config) ->
+    ?assertMatch(_, call_oz(Config, rest_listener, port, [])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get graph sync ws url.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_gs_ws_url(Config :: term()) -> binary().
+get_gs_ws_url(Config) ->
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    NodeIP = test_utils:get_docker_ip(Node),
+    GsPort = get_rest_port(Config),
+    str_utils:format_bin(
+        "wss://~s:~B/~s",
+        [NodeIP, GsPort, string:strip(?GRAPH_SYNC_WS_PATH, both, $/)]
+    ).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get supported graph sync protocol versions.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_gs_supported_proto_verions(Config :: term()) ->
+    SupportedVersions :: [integer()].
+get_gs_supported_proto_verions(Config) ->
+    ?assertMatch(_, call_oz(
+        Config, gs_protocol, supported_versions, [])
+    ).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get supported graph sync protocol versions.
+%% @end
+%%--------------------------------------------------------------------
+-spec decode_gri(Config :: term(),
+    EncodedGri :: binary()) -> Gri :: #gri{}.
+decode_gri(Config, EncodedGri) ->
+    ?assertMatch(#gri{}, call_oz(
+        Config, gs_protocol, string_to_gri, [EncodedGri])
+    ).

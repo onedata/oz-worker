@@ -419,6 +419,10 @@ group_routes() -> [
         b_gri = #b_gri{type = od_group, id = ?BINDING(pid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
+    {<<"/groups/:id/parents/:pid">>, #rest_req{
+        method = delete,
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {parent, ?BINDING(pid)}}
+    }},
     {<<"/groups/:id/effective_parents">>, #rest_req{
         method = get,
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_parents}
