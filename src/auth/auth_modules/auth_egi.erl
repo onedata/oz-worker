@@ -63,7 +63,13 @@ get_user_info(AccessToken) ->
         ?PROVIDER_ID, access_token_in_url, AccessToken
     ).
 
-
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a string that represent user's group membership for given
+%% IdP.
+%% @end
+%%--------------------------------------------------------------------
+-spec normalized_membership_spec(binary()) -> idp_group_mapping:membership_spec().
 normalized_membership_spec(<<"urn:mace:egi.eu:", Group/binary>>) ->
     % Strip out the prefix standard for EGI
 
