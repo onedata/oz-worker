@@ -48,6 +48,10 @@ response(create, _ProvId, support, {ok, SpaceId}) ->
     rest_handler:created_reply([<<"provider/spaces/">>, SpaceId]);
 response(create, _ProvId, check_my_ports, {ok, Body}) ->
     rest_handler:ok_body_reply(Body);
+response(create, _ProvId, map_group, {ok, GroupId}) ->
+    rest_handler:ok_body_reply(#{
+        <<"groupId">> => GroupId
+    });
 
 response(get, undefined, list, {ok, ProviderIds}) ->
     rest_handler:ok_body_reply(#{<<"providers">> => ProviderIds});

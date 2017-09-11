@@ -710,6 +710,9 @@ provider_routes() ->
         }},
         {<<"/provider/test/check_my_ports">>, R#rest_req{
             method = post, entity_id = undefined, resource = check_my_ports
+        }},
+        {<<"/provider/test/map_group">>, R#rest_req{
+            method = post, entity_id = undefined, resource = map_group
         }}
     ].
 

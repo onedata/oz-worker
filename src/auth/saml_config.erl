@@ -23,7 +23,8 @@
     get_idp_config/1,
     has_group_mapping_enabled/1,
     get_super_group/1,
-    normalize_membership_specs/2
+    normalize_membership_specs/2,
+    normalize_membership_spec/2
 ]).
 
 %%%===================================================================
@@ -125,6 +126,17 @@ get_super_group(IdPId) ->
     GroupMappingConfig = maps:get(group_mapping, IdPConfig, #{}),
     maps:get(super_group, GroupMappingConfig, undefined).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Normalizes group membership spec for given IdP.
+%% @end
+%%--------------------------------------------------------------------
+-spec normalize_membership_spec(IdPId :: atom(), Groups :: binary()) ->
+    idp_group_mapping:membership_spec().
+normalize_membership_spec(elixir, Group) ->
+    normalize_elixir_membership_spec(Group);
+normalize_membership_spec(_, Group) ->
+    Group.
 
 % TODO move this to a configurable plugin during auth system refactoring
 %%--------------------------------------------------------------------
@@ -135,14 +147,7 @@ get_super_group(IdPId) ->
 -spec normalize_membership_specs(IdPId :: atom(), Groups :: [binary()]) ->
     [idp_group_mapping:membership_spec()].
 normalize_membership_specs(elixir, Groups) ->
-    lists:map(
-        fun(Group) ->
-            [VO | Rest] = binary:split(Group, <<":">>, [global]),
-            MappedTokens = [<<"vo:", VO/binary>>] ++
-                [<<"tm:", Gr/binary>> || Gr <- Rest] ++
-                [<<"user:member">>],
-            str_utils:join_binary(MappedTokens, <<"/">>)
-        end, Groups);
+    lists:map(fun normalize_elixir_membership_spec/1, Groups);
 normalize_membership_specs(_, Groups) ->
     Groups.
 
@@ -163,3 +168,18 @@ get_config() ->
     {ok, SAMLConfigFile} = application:get_env(?APP_NAME, saml_config_file),
     {ok, [SAMLConfig]} = file:consult(SAMLConfigFile),
     SAMLConfig.
+
+%%-------------------------------------------------------------------
+%% @private
+%% @doc
+%% Normalizes group membership specs for Elixir.
+%% @end
+%%-------------------------------------------------------------------
+-spec normalize_elixir_membership_spec(binary()) ->
+    idp_group_mapping:membership_spec().
+normalize_elixir_membership_spec(Group) ->
+    [VO | Rest] = binary:split(Group, <<":">>, [global]),
+    MappedTokens = [<<"vo:", VO/binary>>] ++
+        [<<"tm:", Gr/binary>> || Gr <- Rest] ++
+        [<<"user:member">>],
+    str_utils:join_binary(MappedTokens, <<"/">>).
