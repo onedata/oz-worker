@@ -23,7 +23,8 @@
 -export([load_auth_config/0, get_auth_config/1, get_auth_providers/0]).
 -export([get_provider_module/1, get_provider_app_id/1, get_provider_app_secret/1]).
 -export([get_providers_with_auth_delegation/0]).
--export([get_group_mapping_config/1, has_group_mapping_enabled/1, get_super_group/1]).
+-export([get_group_mapping_config/1, has_group_mapping_enabled/1, get_super_group/1,
+    normalize_membership_spec/2]).
 
 
 %%%===================================================================
@@ -168,3 +169,14 @@ has_group_mapping_enabled(ProviderId) ->
     undefined | idp_group_mapping:group_spec().
 get_super_group(ProviderId) ->
     proplists:get_value(super_group, get_group_mapping_config(ProviderId), undefined).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Normalizes group membership specs for given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec normalize_membership_spec(ProviderId :: atom(), GroupId :: binary()) ->
+    idp_group_mapping:membership_spec().
+normalize_membership_spec(ProviderId, GroupId) ->
+    HandlerModule = ?MODULE:get_provider_module(ProviderId),
+    HandlerModule:normalized_membership_spec(GroupId).

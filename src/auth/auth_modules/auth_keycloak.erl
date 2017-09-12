@@ -20,7 +20,7 @@
 
 %% API
 -export([get_redirect_url/1, validate_login/0, get_user_info/1]).
--export([normalized_membership_specs/1]).
+-export([normalized_membership_specs/1, normalized_membership_spec/1]).
 
 %%%===================================================================
 %%% API functions
@@ -62,6 +62,24 @@ get_user_info(AccessToken) ->
         ?PROVIDER_ID, access_token_in_header, AccessToken
     ).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a string that represents user's group membership for given
+%% IdP. They are strings complying with specification in idp_group_mapping
+%% module. Returned values will be used to compute a diff in memberships
+%% every time a user logs in, so he can be added to / removed from
+%% certain groups. Because of this, the same values coming from IdP must always
+%% be mapped to the same specs.
+%% @end
+%%--------------------------------------------------------------------
+-spec normalized_membership_spec(Group :: binary()) ->
+    idp_group_mapping:membership_spec().
+normalized_membership_spec(Group) ->
+    VoId = vo_id(),
+    GroupTokens = binary:split(Group, <<"/">>, [global]),
+    MappedTokens = [<<"tm:", T/binary>> || T <- GroupTokens],
+    GroupSpec = str_utils:join_binary(MappedTokens, <<"/">>),
+    <<"vo:", VoId/binary, "/", GroupSpec/binary, "/user:member">>.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -83,14 +101,7 @@ normalized_membership_specs(Props) ->
         fun(Role) ->
             <<"vo:", VoId/binary, "/rl:", Role/binary, "/user:member">>
         end, Roles),
-    NormalizedGroups = lists:map(
-        % Remove leading slash
-        fun(<<"/", Group/binary>>) ->
-            GroupTokens = binary:split(Group, <<"/">>, [global]),
-            MappedTokens = [<<"tm:", T/binary>> || T <- GroupTokens],
-            GroupSpec = str_utils:join_binary(MappedTokens, <<"/">>),
-            <<"vo:", VoId/binary, "/", GroupSpec/binary, "/user:member">>
-        end, Groups),
+    NormalizedGroups = lists:map(fun normalized_membership_spec/1, Groups),
     NormalizedRoles ++ NormalizedGroups.
 
 

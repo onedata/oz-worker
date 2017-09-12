@@ -19,7 +19,8 @@
 
 %% API
 % Convenience functions
--export([local_auth_endpoint/0, get_value_binary/2, extract_emails/1]).
+-export([local_auth_endpoint/0, get_value_binary/2, extract_emails/1,
+    has_group_mapping_enabled/1, normalize_membership_spec/2]).
 
 % Authentication flow handling
 -export([
@@ -273,6 +274,34 @@ validate_saml_login() ->
             {error, ?error_auth_server_error}
     end.
 
+%%-------------------------------------------------------------------
+%% @doc
+%% WRITEME
+%% @end
+%%-------------------------------------------------------------------
+-spec normalize_membership_spec(ProviderId :: atom(), GroupIds :: binary()) ->
+    idp_group_mapping:membership_spec().
+normalize_membership_spec(ProviderId, GroupId) ->
+    case lists:member(ProviderId, auth_config:get_auth_providers()) of
+        true -> auth_config:normalize_membership_spec(ProviderId, GroupId);
+        false -> saml_config:normalize_membership_spec(ProviderId, GroupId)
+    end.
+
+%%-------------------------------------------------------------------
+%% @doc
+%% Returns whether given provider has group mapping enabled.
+%% @end
+%%-------------------------------------------------------------------
+-spec has_group_mapping_enabled(ProviderId :: atom()) -> boolean().
+has_group_mapping_enabled(ProviderId) ->
+    case lists:member(ProviderId, auth_config:get_auth_providers()) of
+        true -> auth_config:has_group_mapping_enabled(ProviderId);
+        false -> saml_config:has_group_mapping_enabled(ProviderId)
+    end.
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @private
