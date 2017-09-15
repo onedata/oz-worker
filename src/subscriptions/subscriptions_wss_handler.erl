@@ -16,7 +16,7 @@
 
 -include("registered_names.hrl").
 -include("subscriptions/subscriptions.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% Cowboy WebSocket handler callbacks

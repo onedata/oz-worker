@@ -17,7 +17,7 @@
 -include("errors.hrl").
 -include("tokens.hrl").
 -include("entity_logic.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
@@ -99,7 +99,7 @@ create(_Client, ParentGroupId, {deprecated_child_privileges, ChildGroupId}, Data
 create(Client, _, entity, Data) ->
     Name = maps:get(<<"name">>, Data),
     Type = maps:get(<<"type">>, Data, role),
-    {ok, GroupId} = od_group:create(
+    {ok, #document{key = GroupId}} = od_group:create(
         #document{value = #od_group{name = Name, type = Type}}
     ),
     case Client of

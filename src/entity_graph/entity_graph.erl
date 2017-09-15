@@ -52,7 +52,7 @@
 -author("Lukasz Opiola").
 
 -include_lib("ctool/include/logging.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include("errors.hrl").
 
 -define(ENTITY_GRAPH_LOCK, entity_graph).
@@ -135,8 +135,8 @@ init_state() ->
         case entity_graph_state:get(?STATE_KEY) of
             {ok, #document{value = #entity_graph_state{}}} ->
                 ok;
-            {error, {not_found, entity_graph_state}} ->
-                {ok, ?STATE_KEY} = entity_graph_state:create(
+            {error, not_found} ->
+                {ok, _} = entity_graph_state:create(
                     #document{key = ?STATE_KEY, value = #entity_graph_state{}}
                 ),
                 verify_state_of_all_entities(),
@@ -768,7 +768,7 @@ refresh_entity(Direction, EntityType, EntityId) ->
     case EntityType:get(EntityId) of
         {ok, #document{value = Entity}} ->
             refresh_entity(Direction, EntityType, EntityId, Entity);
-        {error, {not_found, EntityType}} ->
+        {error, not_found} ->
             % The entity no longer exists - remove it from the dirty queue.
             update_state(Direction, false, EntityType, EntityId, 0),
             ok

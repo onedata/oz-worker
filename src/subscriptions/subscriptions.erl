@@ -13,7 +13,7 @@
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([bucket/0, supported_models/0]).
@@ -55,56 +55,56 @@ supported_models() -> [
 %% Adds connection to the working provider.
 %% @end
 %%--------------------------------------------------------------------
--spec add_connection(ProviderID :: binary(), Connection :: pid()) -> ok.
-add_connection(ProviderID, Connection) ->
-    {ok, ProviderID} = provider_subscription:create_or_update(#document{
-        key = ProviderID,
-        value = #provider_subscription{
-            provider = ProviderID,
-            connections = [Connection]
-        }
-    }, fun(Subscription) ->
+-spec add_connection(ProviderId :: binary(), Connection :: pid()) -> ok.
+add_connection(ProviderId, Connection) ->
+    Diff = fun(Subscription) ->
         Extended = [Connection | Subscription#provider_subscription.connections],
         {ok, Subscription#provider_subscription{connections = Extended}}
-    end), ok.
+    end,
+    Default = #provider_subscription{
+        provider = ProviderId,
+        connections = [Connection]
+    },
+    {ok, _} = provider_subscription:update(ProviderId, Diff, Default),
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Removes connection from provider connections.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_connection(ProviderID :: binary(), Connection :: pid()) -> ok.
-remove_connection(ProviderID, Connection) ->
-    {ok, _} = provider_subscription:create_or_update(#document{
-        key = ProviderID,
-        value = #provider_subscription{
-            provider = ProviderID,
-            connections = []
-        }
-    }, fun(Subscription) ->
+-spec remove_connection(ProviderId :: binary(), Connection :: pid()) -> ok.
+remove_connection(ProviderId, Connection) ->
+    Diff = fun(Subscription) ->
         Connections = Subscription#provider_subscription.connections,
         Filtered = [E || E <- Connections, E =/= Connection],
         {ok, Subscription#provider_subscription{connections = Filtered}}
-    end), ok.
+    end,
+    Default = #provider_subscription{
+        provider = ProviderId,
+        connections = []
+    },
+    {ok, _} = provider_subscription:update(ProviderId, Diff, Default),
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Fetches subscription of the provider with given ID
 %% @end
 %%--------------------------------------------------------------------
--spec get_doc(ProviderID :: binary()) ->
-    {ok, datastore:document()} | {error, Reason :: term()}.
-get_doc(ProviderID) ->
-    provider_subscription:get(ProviderID).
+-spec get_doc(ProviderId :: binary()) ->
+    {ok, datastore:doc()} | {error, Reason :: term()}.
+get_doc(ProviderId) ->
+    provider_subscription:get(ProviderId).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Fetches all existing subscription docs.
 %% @end
 %%--------------------------------------------------------------------
--spec all() -> [datastore:document()].
+-spec all() -> [datastore:doc()].
 all() ->
-    {ok, Subscriptions} = provider_subscription:all(),
+    {ok, Subscriptions} = provider_subscription:list(),
     Subscriptions.
 
 %%--------------------------------------------------------------------
@@ -113,13 +113,13 @@ all() ->
 %% Returns user IDs added by this operation.
 %% @end
 %%--------------------------------------------------------------------
--spec update_users(ProviderID :: binary(), UserIDs :: [binary()])
+-spec update_users(ProviderId :: binary(), UserIDs :: [binary()])
         -> NewUserIDs :: [binary()].
-update_users(ProviderID, Users) ->
+update_users(ProviderId, Users) ->
     {ok, #document{value = #provider_subscription{users = Current}}} =
-        provider_subscription:get(ProviderID),
+        provider_subscription:get(ProviderId),
 
-    {ok, _} = provider_subscription:update(ProviderID, fun(Subscription) ->
+    {ok, _} = provider_subscription:update(ProviderId, fun(Subscription) ->
         {ok, Subscription#provider_subscription{users = ordsets:from_list(Users)}}
     end),
 
@@ -132,20 +132,22 @@ update_users(ProviderID, Users) ->
 %% (according to the provider) and sequence numbers he didn't receive.
 %% @end
 %%--------------------------------------------------------------------
--spec update_missing_seq(ProviderID :: binary(), ResumeAt :: seq(),
+-spec update_missing_seq(ProviderId :: binary(), ResumeAt :: seq(),
     Missing :: [seq()]) -> ok.
 
-update_missing_seq(ProviderID, ResumeAt, Missing) ->
-    {ok, _} = provider_subscription:create_or_update(#document{
-        key = ProviderID,
-        value = #provider_subscription{
+update_missing_seq(ProviderId, ResumeAt, Missing) ->
+    Diff = fun(Subscription) ->
+        {ok, Subscription#provider_subscription{
             missing = Missing,
             resume_at = ResumeAt
-        }
-    }, fun(Subscription) -> {ok, Subscription#provider_subscription{
+        }}
+    end,
+    Default = #provider_subscription{
         missing = Missing,
         resume_at = ResumeAt
-    }} end), ok.
+    },
+    {ok, _} = provider_subscription:update(ProviderId, Diff, Default),
+    ok.
 
 
 %%--------------------------------------------------------------------
@@ -169,9 +171,9 @@ seen(Subscription, Seq) ->
 %% Checks if provider has an alive connection.
 %% @end
 %%--------------------------------------------------------------------
--spec any_connection_active(ProviderID :: binary()) -> boolean().
-any_connection_active(ProviderID) ->
-    case subscriptions:get_doc(ProviderID) of
+-spec any_connection_active(ProviderId :: binary()) -> boolean().
+any_connection_active(ProviderId) ->
+    case subscriptions:get_doc(ProviderId) of
         {ok, #document{value = #provider_subscription{connections = PidList}}} ->
             lists:any(fun(Pid) ->
                 node(Pid) =:= node() andalso process_info(Pid) =/= undefined

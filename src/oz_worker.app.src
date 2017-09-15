@@ -33,6 +33,6 @@
         web_client,
         cowboy
     ]},
-    {mod, {oz_worker_app, []}},
+    {mod, {cluster_worker_app, []}},
     {env, []}
 ]}.

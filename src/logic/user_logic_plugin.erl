@@ -17,7 +17,7 @@
 -include("errors.hrl").
 -include("tokens.hrl").
 -include("entity_logic.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/utils/utils.hrl").
@@ -76,7 +76,9 @@ get_entity(UserId) ->
     entity_logic:data()) -> entity_logic:result().
 % TODO VFS-2918
 create(_Client, UserId, {deprecated_default_space, UserId}, #{<<"spaceId">> := SpaceId}) ->
-    {ok, _} = od_user:update(UserId, #{default_space => SpaceId}),
+    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
+        {ok, User#od_user{default_space = SpaceId}}
+    end),
     ok;
 
 create(_Client, _UserId, authorize, Data) ->
@@ -99,7 +101,9 @@ create(_Client, UserId, {default_space, UserId}, Data) ->
     SpaceId = maps:get(<<"spaceId">>, Data),
     case user_logic:has_eff_space(UserId, SpaceId) of
         true ->
-            {ok, _} = od_user:update(UserId, #{default_space => SpaceId}),
+            {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
+                {ok, User#od_user{default_space = SpaceId}}
+            end),
             ok;
         false ->
             ?ERROR_RELATION_DOES_NOT_EXIST(od_user, UserId, od_space, SpaceId)
@@ -116,7 +120,9 @@ create(_Client, UserId, {default_provider, UserId}, Data) ->
     ProviderId = maps:get(<<"providerId">>, Data),
     case user_logic:has_eff_provider(UserId, ProviderId) of
         true ->
-            {ok, _} = od_user:update(UserId, #{default_provider => ProviderId}),
+            {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
+                {ok, User#od_user{default_provider = ProviderId}}
+            end),
             ok;
         false ->
             ?ERROR_RELATION_DOES_NOT_EXIST(od_user, UserId, od_provider, ProviderId)
@@ -327,13 +333,15 @@ delete(UserId, {client_token, TokenId}) ->
     {ok, Macaroon} = token_utils:deserialize(TokenId),
     Identifier = macaroon:identifier(Macaroon),
     onedata_auth:delete(Identifier),
-    {ok, _} = od_user:update(UserId, fun(#od_user{client_tokens = Tokens} = User) ->
+    {ok, _} = od_user:update(UserId, fun(User = #od_user{client_tokens = Tokens}) ->
         {ok, User#od_user{client_tokens = Tokens -- [TokenId]}}
     end),
     ok;
 
 delete(UserId, {default_space, UserId}) ->
-    {ok, _} = od_user:update(UserId, #{default_space => undefined}),
+    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
+        {ok, User#od_user{default_space = undefined}}
+    end),
     ok;
 
 delete(UserId, {space_alias, SpaceId}) ->
@@ -343,7 +351,9 @@ delete(UserId, {space_alias, SpaceId}) ->
     ok;
 
 delete(UserId, {default_provider, UserId}) ->
-    {ok, _} = od_user:update(UserId, #{default_provider => undefined}),
+    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
+        {ok, User#od_user{default_provider = undefined}}
+    end),
     ok;
 
 delete(UserId, {group, GroupId}) ->

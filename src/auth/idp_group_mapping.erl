@@ -15,7 +15,7 @@
 -module(idp_group_mapping).
 
 -include("auth_common.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 
@@ -96,7 +96,7 @@ coalesce_groups(IdP, UserId, OldGroups, NewGroups) ->
 %%--------------------------------------------------------------------
 -spec group_spec_to_db_id(group_spec()) -> binary().
 group_spec_to_db_id(GroupSpec) ->
-    datastore_utils2:gen_key(<<"">>, GroupSpec).
+    datastore_utils:gen_key(<<"">>, GroupSpec).
 
 %%%===================================================================
 %%% Internal functions
@@ -166,11 +166,9 @@ ensure_group_structure(GroupSpecTokens, Depth, SuperGroupSpec) ->
     GroupId = group_spec_to_db_id(GroupSpec),
     SubgroupId = lists:nth(Depth, GroupSpecTokens),
     <<GroupTypeStr:2/binary, ":", GroupName/binary>> = SubgroupId,
-    {ok, GroupId} = od_group:create_or_update(#document{
-        key = GroupId, value = #od_group{
-            name = GroupName, type = str_to_type(GroupTypeStr)
-        }
-    }, #{}),
+    {ok, _} = od_group:update(GroupId, fun(Group) -> {ok, Group} end, #od_group{
+        name = GroupName, type = str_to_type(GroupTypeStr)
+    }),
     case Depth > 1 of
         true ->
             % If the current group is the super group, it should be added with

@@ -16,7 +16,7 @@
 -include("errors.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -type method() :: get | post | put | patch | delete.

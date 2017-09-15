@@ -9,11 +9,11 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
--ifndef(GR_DATASTORE_MODELS_HRL).
--define(GR_DATASTORE_MODELS_HRL, 1).
+-ifndef(OZ_DATASTORE_MODELS_HRL).
+-define(OZ_DATASTORE_MODELS_HRL, 1).
 
 -include("entity_logic.hrl").
--include_lib("cluster_worker/include/modules/datastore/datastore_models_def.hrl").
+-include_lib("cluster_worker/include/modules/datastore/datastore_models.hrl").
 
 
 %%%===================================================================

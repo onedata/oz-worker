@@ -16,7 +16,7 @@
 
 -include("entity_logic.hrl").
 -include("errors.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
@@ -93,7 +93,7 @@ create(Client, _, entity, Data) ->
         proxy_endpoint = ProxyEndpoint,
         service_properties = ServiceProperties
     }},
-    {ok, HServiceId} = od_handle_service:create(HandleService),
+    {ok, #document{key = HServiceId}} = od_handle_service:create(HandleService),
     case Client of
         ?USER(UserId) ->
             entity_graph:add_relation(

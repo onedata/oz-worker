@@ -12,7 +12,7 @@
 
 -include("subscriptions_test_utils.hrl").
 -include("subscriptions/subscriptions.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").

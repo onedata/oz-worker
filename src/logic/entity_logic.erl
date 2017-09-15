@@ -21,7 +21,7 @@
 
 -include("entity_logic.hrl").
 -include("errors.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([create/5, get/4, update/5, delete/4]).

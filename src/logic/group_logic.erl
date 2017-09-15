@@ -14,7 +14,7 @@
 -author("Lukasz Opiola").
 
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(PLUGIN, group_logic_plugin).
@@ -905,7 +905,8 @@ remove_group(Client, GroupId, ChildGroupId) ->
 %%--------------------------------------------------------------------
 -spec exists(GroupId :: od_group:id()) -> boolean().
 exists(GroupId) ->
-    od_group:exists(GroupId).
+    {ok, Exists} = od_group:exists(GroupId),
+    Exists.
 
 
 %%--------------------------------------------------------------------
@@ -969,11 +970,11 @@ create_predefined_groups() ->
     Privileges :: [privileges:oz_privilege()]) -> ok | error.
 create_predefined_group(GroupId, Name, Privileges) ->
     case od_group:exists(GroupId) of
-        true ->
+        {ok, true} ->
             ?info("Predefined group '~s' already exists, "
             "skipping.", [Name]),
             ok;
-        false ->
+        {ok, false} ->
             NewGroup = #document{
                 key = GroupId,
                 value = #od_group{
@@ -981,7 +982,7 @@ create_predefined_group(GroupId, Name, Privileges) ->
                     type = role
                 }},
             case od_group:create(NewGroup) of
-                {ok, GroupId} ->
+                {ok, _} ->
                     ok = update_oz_privileges(?ROOT, GroupId, set, Privileges),
                     ?info("Created predefined group '~s'", [Name]),
                     ok;

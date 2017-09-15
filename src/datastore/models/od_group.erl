@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Michal Zmuda
-%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -11,36 +11,150 @@
 %%%-------------------------------------------------------------------
 -module(od_group).
 -author("Michal Zmuda").
--behaviour(model_behaviour).
 
--include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
--include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
+-include("datastore/oz_datastore_models.hrl").
 
--type doc() :: datastore:document().
--type info() :: #od_group{}.
+%% API
+-export([create/1, save/1, get/1, exists/1, update/2, update/3, delete/1]).
+-export([list/0]).
+-export([to_string/1]).
+
+%% datastore_model callbacks
+-export([get_prehooks/0]).
+-export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
+
 -type id() :: binary().
--export_type([doc/0, info/0, id/0]).
+-type record() :: #od_group{}.
+-type doc() :: datastore_doc:doc(record()).
+-type diff() :: datastore_doc:diff(record()).
+-export_type([id/0, record/0]).
 
 -type name() :: binary().
 -type type() :: organization | unit | team | role.
 -export_type([name/0, type/0]).
 
-%% model_behaviour callbacks
--export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
-    model_init/0, 'after'/5, before/4, create_or_update/2]).
--export([record_struct/1, record_upgrade/2]).
--export([to_string/1]).
+-define(CTX, #{
+    model => ?MODULE,
+    fold_enabled => true,
+    sync_enabled => true
+}).
 
--define(USER_MODULE, od_user).
+%%%===================================================================
+%%% API
+%%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns structure of the record in specified version.
+%% Creates group.
 %% @end
 %%--------------------------------------------------------------------
--spec record_struct(datastore_json:record_version()) -> datastore_json:record_struct().
-record_struct(1) ->
+-spec create(doc()) -> {ok, doc()} | {error, term()}.
+create(Doc) ->
+    datastore_model:create(?CTX, Doc).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Saves group.
+%% @end
+%%--------------------------------------------------------------------
+-spec save(doc()) -> {ok, doc()} | {error, term()}.
+save(Doc) ->
+    datastore_model:save(?CTX, Doc).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns group by ID.
+%% @end
+%%--------------------------------------------------------------------
+-spec get(id()) -> {ok, doc()} | {error, term()}.
+get(GroupId) ->
+    datastore_model:get(?CTX, GroupId).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Checks whether group given by ID exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(id()) -> {ok, boolean()} | {error, term()}.
+exists(GroupId) ->
+    datastore_model:exists(?CTX, GroupId).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates group by ID.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
+update(GroupId, Diff) ->
+    datastore_model:update(?CTX, GroupId, Diff).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates group by ID or creates default one.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(id(), diff(), record()) -> {ok, doc()} | {error, term()}.
+update(GroupId, Diff, Default) ->
+    datastore_model:update(?CTX, GroupId, Diff, Default).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes group by ID.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(id()) -> ok | {error, term()}.
+delete(GroupId) ->
+    datastore_model:delete(?CTX, GroupId).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns list of all groups.
+%% @end
+%%--------------------------------------------------------------------
+-spec list() -> {ok, [doc()]} | {error, term()}.
+list() ->
+    datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the group with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_string(GroupId :: id()) -> binary().
+to_string(GroupId) ->
+    <<"group:", GroupId/binary>>.
+
+%%%===================================================================
+%%% datastore_model callbacks
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns list of callbacks which will be called before each operation
+%% on datastore model.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_prehooks() -> [datastore_hooks:prehook()].
+get_prehooks() ->
+    record_location_hooks:get_prehooks().
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns model's record version.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_record_version() -> datastore_model:record_version().
+get_record_version() ->
+    2.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns model's record structure in provided version.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_record_struct(datastore_model:record_version()) ->
+    datastore_model:record_struct().
+get_record_struct(1) ->
     {record, [
         {name, string},
         {type, atom},
@@ -63,7 +177,7 @@ record_struct(1) ->
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
     ]};
-record_struct(2) ->
+get_record_struct(2) ->
     {record, [
         {name, string},
         {type, atom},
@@ -86,145 +200,14 @@ record_struct(2) ->
         {bottom_up_dirty, boolean}
     ]}.
 
-%%%===================================================================
-%%% model_behaviour callbacks
-%%%===================================================================
-
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link model_behaviour} callback save/1.
+%% Upgrades model's record from provided version to the next one.
 %% @end
 %%--------------------------------------------------------------------
--spec save(datastore:document()) ->
-    {ok, datastore:ext_key()} | datastore:generic_error().
-save(Document) ->
-    model:execute_with_default_context(?MODULE, save, [Document]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback update/2.
-%% @end
-%%--------------------------------------------------------------------
--spec update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
-    {ok, datastore:ext_key()} | datastore:update_error().
-update(Key, Diff) ->
-    model:execute_with_default_context(?MODULE, update, [Key, Diff]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback create/1.
-%% @end
-%%--------------------------------------------------------------------
--spec create(datastore:document()) ->
-    {ok, datastore:ext_key()} | datastore:create_error().
-create(Document) ->
-    model:execute_with_default_context(?MODULE, create, [Document]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback get/1.
-%% @end
-%%--------------------------------------------------------------------
--spec get(datastore:ext_key()) -> {ok, datastore:document()} | datastore:get_error().
-get(Key) ->
-    model:execute_with_default_context(?MODULE, get, [Key]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all records.
-%% @end
-%%--------------------------------------------------------------------
--spec list() -> {ok, [datastore:document()]} | datastore:generic_error() | no_return().
-list() ->
-    model:execute_with_default_context(?MODULE, list, [?GET_ALL, []]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback delete/1.
-%% @end
-%%--------------------------------------------------------------------
--spec delete(datastore:ext_key()) -> ok | datastore:generic_error().
-delete(Key) ->
-    model:execute_with_default_context(?MODULE, delete, [Key]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback exists/1.
-%% @end
-%%--------------------------------------------------------------------
--spec exists(datastore:ext_key()) -> datastore:exists_return().
-exists(Key) ->
-    ?RESPONSE(model:execute_with_default_context(?MODULE, exists, [Key])).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback model_init/0.
-%% @end
-%%--------------------------------------------------------------------
--spec model_init() -> model_behaviour:model_config().
-model_init() ->
-    UserHooks = [{?USER_MODULE, save}, {?USER_MODULE, update}, {?USER_MODULE, create},
-        {?USER_MODULE, create_or_opdate}],
-    Hooks = [{?MODULE, save}, {?MODULE, update}, {?MODULE, create}, {?MODULE, create_or_opdate}],
-    Config = ?MODEL_CONFIG(od_group_bucket, Hooks ++ UserHooks, ?GLOBALLY_CACHED_LEVEL),
-    Config#model_config{
-        version = 2,
-        list_enabled = {true, return_errors},
-        sync_enabled = true
-    }.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback 'after'/5.
-%% @end
-%%--------------------------------------------------------------------
--spec 'after'(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
-    Level :: datastore:store_level(), Context :: term(),
-    ReturnValue :: term()) -> ok.
-'after'(_ModelName, _Method, _Level, _Context, _ReturnValue) ->
-    ok.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback before/4.
-%% @end
-%%--------------------------------------------------------------------
--spec before(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
-    Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
-before(_ModelName, _Method, _Level, _Context) ->
-    ok.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates document with using ID from document. If such object does not exist,
-%% it initialises the object with the document.
-%% @end
-%%--------------------------------------------------------------------
--spec create_or_update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
-    {ok, datastore:ext_key()} | datastore:generic_error().
-create_or_update(Doc, Diff) ->
-    model:execute_with_default_context(?MODULE, create_or_update, [Doc, Diff]).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns readable string representing the group with given id.
-%% @end
-%%--------------------------------------------------------------------
--spec to_string(GroupId :: id()) -> binary().
-to_string(GroupId) ->
-    <<"group:", GroupId/binary>>.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Upgrades record from specified version.
-%% @end
-%%--------------------------------------------------------------------
--spec record_upgrade(datastore_json:record_version(), tuple()) ->
-    {datastore_json:record_version(), tuple()}.
-record_upgrade(1, Group) ->
+-spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
+    {datastore_model:record_version(), datastore_model:record()}.
+upgrade_record(1, Group) ->
     {
         od_group,
         Name,

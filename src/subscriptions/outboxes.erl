@@ -16,7 +16,7 @@
 
 -include("registered_names.hrl").
 -include("subscriptions/subscriptions.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([push/2, put/3]).
@@ -31,9 +31,7 @@
     ID :: term(),
     PushFun :: fun((ID1 :: term(), Buffer :: [term()]) -> ok).
 push(ID, PushFun) ->
-    outbox:create_or_update(#document{key = ID, value = #outbox{
-        buffer = [], timer = undefined, timer_expires = undefined
-    }}, fun(Outbox = #outbox{buffer = Buffer, timer = TRef}) ->
+    outbox:update(ID, fun(Outbox = #outbox{buffer = Buffer, timer = TRef}) ->
         case TRef of undefined -> ok; _ -> timer:cancel(TRef) end,
         try
             PushFun(ID, Buffer)
@@ -42,7 +40,8 @@ push(ID, PushFun) ->
             "Batch: ~p", [Type, Message, Buffer])
         end,
         {ok, Outbox#outbox{buffer = [], timer = undefined}}
-    end), ok.
+    end, #outbox{buffer = [], timer = undefined, timer_expires = undefined}),
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -60,9 +59,7 @@ put(ID, PushFun, Messages) ->
     TimerExpires = Now + TimerTTL,
 
     TRef = setup_timer(ID, PushFun),
-    {ok, _} = outbox:create_or_update(#document{key = ID, value = #outbox{
-        buffer = Messages, timer = TRef, timer_expires = TimerExpires
-    }}, fun
+    {ok, _} = outbox:update(ID, fun
         (Outbox = #outbox{buffer = Buffer, timer = OldTimer, timer_expires =
         % timer expires after twice the ttl
         OldExpires}) when OldTimer =:= undefined; OldExpires < (Now - TimerTTL) ->
@@ -71,8 +68,11 @@ put(ID, PushFun, Messages) ->
         (Outbox = #outbox{buffer = Buffer}) ->
             timer:cancel(TRef),
             {ok, Outbox#outbox{buffer = Messages ++ Buffer}};
-        (_Outbox) -> ?warning("Unexpected document ~p", [_Outbox])
-    end), ok.
+        (Outbox) ->
+            ?warning("Unexpected document ~p", [Outbox]),
+            {ok, Outbox}
+    end, #outbox{buffer = Messages, timer = TRef, timer_expires = TimerExpires}),
+    ok.
 
 %%%===================================================================
 %%% Internal functions

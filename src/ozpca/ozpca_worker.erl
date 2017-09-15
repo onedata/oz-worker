@@ -17,7 +17,7 @@
 -author("Michal Zmuda").
 
 -include_lib("ctool/include/logging.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 
 -define(KEY, <<"current_state">>).
 
@@ -57,7 +57,7 @@ handle(ping) ->
 handle(healthcheck) ->
     case call_dedicated_node(fun() -> pong end, ping) of
         pong -> ok;
-        {error, _Reason} -> {error, _Reason}
+        {error, Reason} -> {error, Reason}
     end;
 
 handle({verify_provider, PeerCert} = Req) ->
@@ -135,9 +135,9 @@ call_dedicated_node(Fun, Req) ->
             Fun();
         {ok, DedicatedNode} ->
             worker_proxy:call({?MODULE, DedicatedNode}, Req);
-        {error, _Reason} ->
-            ?error_stacktrace("Cannot process CA request ~p due to error ~p", [Req, _Reason]),
-            {error, _Reason}
+        {error, Reason} ->
+            ?error("Cannot process CA request ~p due to error ~p", [Req, Reason]),
+            {error, Reason}
     end.
 
 
@@ -150,20 +150,19 @@ call_dedicated_node(Fun, Req) ->
 -spec get_dedicated_node() -> {ok, node()} | {error, Reason :: term()}.
 get_dedicated_node() ->
     case ozpca_state:get(?KEY) of
-        {ok, #document{value = #ozpca_state{dedicated_node = {ok, _Node}}}} ->
-            {ok, _Node};
+        {ok, #document{value = #ozpca_state{dedicated_node = {ok, Node}}}} ->
+            {ok, Node};
         _ ->
             SelectResult = select_dedicated_node(),
-            ozpca_state:create_or_update(#document{
-                key = ?KEY,
-                value = #ozpca_state{dedicated_node = SelectResult}
-            }, fun
+            {ok, #document{value = #ozpca_state{
+                dedicated_node = GetResult
+            }}} = ozpca_state:update(?KEY, fun
                 (State = #ozpca_state{dedicated_node = {error, _}}) ->
                     {ok, State#ozpca_state{dedicated_node = SelectResult}};
-                (State = #ozpca_state{dedicated_node = {ok, _Node}}) ->
+                (State = #ozpca_state{dedicated_node = {ok, _}}) ->
                     {ok, State}
-            end),
-            SelectResult
+            end, #ozpca_state{dedicated_node = SelectResult}),
+            GetResult
     end.
 
 %%--------------------------------------------------------------------

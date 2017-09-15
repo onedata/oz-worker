@@ -12,7 +12,7 @@
 
 -include_lib("kernel/src/inet_dns.hrl").
 -include_lib("ctool/include/logging.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include_lib("hackney/include/hackney_lib.hrl").
 
@@ -516,9 +516,9 @@ get_redirection_point_by_alias(Alias) ->
                 catch _:_ ->
                     {ok, NewChosenProv} =
                         provider_logic:choose_provider_for_user(UserId),
-                    {ok, _} = od_user:update(UserId, #{
-                        chosen_provider => NewChosenProv
-                    }),
+                    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
+                        {ok, User#od_user{chosen_provider = NewChosenProv}}
+                    end),
                     {ok, #od_provider{
                         redirection_point = RedPoint2
                     }} = provider_logic:get(?ROOT, NewChosenProv),

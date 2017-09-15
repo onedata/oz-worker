@@ -11,7 +11,7 @@
 %%%-------------------------------------------------------------------
 -module(auth_utils).
 
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include("auth_common.hrl").
 -include("gui/common.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -421,12 +421,12 @@ saml_assertions_to_linked_account(IdPId, IdP, Attributes) ->
 %%--------------------------------------------------------------------
 -spec get_user_by_linked_account(#linked_account{}) -> {ok, #document{}} | {error, not_found}.
 get_user_by_linked_account(LinkedAccount) ->
-    #linked_account{provider_id = ProviderId, user_id = LinkedUserId} = LinkedAccount,
-    case od_user:get_by_criterion({linked_account, {ProviderId, LinkedUserId}}) of
+    #linked_account{provider_id = ProviderId, user_id = UserId} = LinkedAccount,
+    case od_user:get_by_criterion({linked_account, {ProviderId, UserId}}) of
         {ok, #document{} = Doc} ->
             {ok, Doc};
-        {error, {not_found, od_user}} ->
-            {error, not_found}
+        {error, Reason} ->
+            {error, Reason}
     end.
 
 

@@ -12,7 +12,7 @@
 -author("Tomasz Lichon").
 
 -ifdef(TEST).
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %%%===================================================================

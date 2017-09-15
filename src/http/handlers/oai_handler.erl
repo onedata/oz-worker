@@ -149,8 +149,8 @@ handle_request(QueryString, Req) ->
     end,
 
     RequestElement = case Response of
-        #oai_error{code=badVerb} -> generate_request_element(Req);
-        #oai_error{code=badArgument} -> generate_request_element(Req);
+        #oai_error{code = badVerb} -> generate_request_element(Req);
+        #oai_error{code = badArgument} -> generate_request_element(Req);
         _ -> generate_request_element(QueryString, Req)
     end,
 
@@ -193,8 +193,8 @@ generate_response(Verb, Args) ->
 generate_required_response_elements(Module, Args) ->
     lists:flatmap(fun(ElementName) ->
         case Module:get_response(ElementName, Args) of
-            Elements when is_list(Elements)->
-                [ {ElementName, Element} || Element <- Elements ];
+            Elements when is_list(Elements) ->
+                [{ElementName, Element} || Element <- Elements];
             Element -> oai_utils:ensure_list({ElementName, Element})
         end
     end, Module:required_response_elements()).
@@ -214,8 +214,8 @@ generate_optional_response_elements(Module, Args) ->
         try Module:get_response(ElementName, Args) of
             <<"">> -> [];
             [] -> [];
-            Elements when is_list(Elements)->
-                [ {ElementName, Element} || Element <- Elements ];
+            Elements when is_list(Elements) ->
+                [{ElementName, Element} || Element <- Elements];
             Element -> oai_utils:ensure_list({ElementName, Element})
         catch _:_ -> []
         end
@@ -264,7 +264,7 @@ generate_request_element(ParsedArgs, Req) ->
     {Path, Req2} = cowboy_req:path(Req),
     {URL, _Req3} = cowboy_req:host_url(Req2),
     BaseURL = <<URL/binary, Path/binary>>,
-    {request, BaseURL,  ParsedArgs}.
+    {request, BaseURL, ParsedArgs}.
 
 
 

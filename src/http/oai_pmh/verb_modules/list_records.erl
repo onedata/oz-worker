@@ -13,7 +13,7 @@
 
 -include("http/handlers/oai.hrl").
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 
 %% API
 -export([required_arguments/0, optional_arguments/0, exclusive_arguments/0,

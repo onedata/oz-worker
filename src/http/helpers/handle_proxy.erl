@@ -12,7 +12,7 @@
 -module(handle_proxy).
 -author("Tomasz Lichon").
 
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 
 -type public_url() :: binary().

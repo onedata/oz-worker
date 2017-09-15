@@ -13,7 +13,7 @@
 -module(handle_service_logic).
 -author("Lukasz Opiola").
 
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(PLUGIN, handle_service_logic_plugin).
@@ -456,7 +456,8 @@ remove_group(Client, HServiceId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec exists(HServiceId :: od_handle_service:id()) -> boolean().
 exists(HServiceId) ->
-    od_handle_service:exists(HServiceId).
+    {ok, Exists} =od_handle_service:exists(HServiceId),
+    Exists.
 
 
 %%--------------------------------------------------------------------

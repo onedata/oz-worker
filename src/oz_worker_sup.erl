@@ -51,13 +51,6 @@ start_link() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec init(Args :: term()) ->
-    {ok, {SupFlags :: supervisor:sup_flags(), [ChildSpec :: supervisor:child_spec()]}}.
+    {ok, {supervisor:sup_flags(), [supervisor:child_spec()]}}.
 init([]) ->
-    {ok, {#{strategy => one_for_one, intensity => 1000, period => 3600}, [
-        cluster_worker_specs:main_worker_sup_spec()
-    ]}}.
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
+    {ok, {#{strategy => one_for_one, intensity => 1000, period => 3600}, []}}.

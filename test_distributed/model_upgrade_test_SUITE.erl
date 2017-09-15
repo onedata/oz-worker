@@ -12,7 +12,7 @@
 -module(model_upgrade_test_SUITE).
 -author("Lukasz Opiola").
 
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -52,19 +52,19 @@ user_upgrade_test(Config) ->
     UserRecordVer1 = user_record_1(),
 
     {Version2, UserRecordVer2} = oz_test_utils:call_oz(
-        Config, od_user, record_upgrade, [1, UserRecordVer1]
+        Config, od_user, upgrade_record, [1, UserRecordVer1]
     ),
     ?assertEqual(2, Version2),
     ?assertEqual(UserRecordVer2, user_record_2()),
 
     {Version3, UserRecordVer3} = oz_test_utils:call_oz(
-        Config, od_user, record_upgrade, [2, UserRecordVer2]
+        Config, od_user, upgrade_record, [2, UserRecordVer2]
     ),
     ?assertEqual(3, Version3),
     ?assertEqual(UserRecordVer3, user_record_3()),
 
     {Version4, UserRecordVer4} = oz_test_utils:call_oz(
-        Config, od_user, record_upgrade, [3, UserRecordVer3]
+        Config, od_user, upgrade_record, [3, UserRecordVer3]
     ),
     ?assertEqual(4, Version4),
     ?assertEqual(UserRecordVer4, user_record_4()).
@@ -73,7 +73,7 @@ user_upgrade_test(Config) ->
 group_upgrade_test(Config) ->
     OldGroupRecord = old_group_record(),
     {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, od_group, record_upgrade, [1, OldGroupRecord]
+        Config, od_group, upgrade_record, [1, OldGroupRecord]
     ),
     ?assertEqual(2, NewVersion),
     ?assertEqual(NewRecord, new_group_record()).
@@ -82,7 +82,7 @@ group_upgrade_test(Config) ->
 space_upgrade_test(Config) ->
     OldSpaceRecord = old_space_record(),
     {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, od_space, record_upgrade, [1, OldSpaceRecord]
+        Config, od_space, upgrade_record, [1, OldSpaceRecord]
     ),
     ?assertEqual(2, NewVersion),
     ?assertEqual(NewRecord, new_space_record()).
@@ -91,7 +91,7 @@ space_upgrade_test(Config) ->
 share_upgrade_test(Config) ->
     OldShareRecord = old_share_record(),
     {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, od_share, record_upgrade, [1, OldShareRecord]
+        Config, od_share, upgrade_record, [1, OldShareRecord]
     ),
     ?assertEqual(2, NewVersion),
     ?assertEqual(NewRecord, new_share_record()).
@@ -100,7 +100,7 @@ share_upgrade_test(Config) ->
 provider_upgrade_test(Config) ->
     OldProviderRecord = old_provider_record(),
     {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, od_provider, record_upgrade, [1, OldProviderRecord]
+        Config, od_provider, upgrade_record, [1, OldProviderRecord]
     ),
     ?assertEqual(2, NewVersion),
     ?assertEqual(NewRecord, new_provider_record()).
@@ -109,7 +109,7 @@ provider_upgrade_test(Config) ->
 handle_service_upgrade_test(Config) ->
     OldHandleServiceRecord = old_handle_service_record(),
     {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, od_handle_service, record_upgrade, [1, OldHandleServiceRecord]
+        Config, od_handle_service, upgrade_record, [1, OldHandleServiceRecord]
     ),
     ?assertEqual(2, NewVersion),
     ?assertEqual(NewRecord, new_handle_service_record()).
@@ -118,7 +118,7 @@ handle_service_upgrade_test(Config) ->
 handle_upgrade_test(Config) ->
     OldHandleRecord = old_handle_record(),
     {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, od_handle, record_upgrade, [1, OldHandleRecord]
+        Config, od_handle, upgrade_record, [1, OldHandleRecord]
     ),
     ?assertEqual(2, NewVersion),
     ?assertEqual(NewRecord, new_handle_record()).

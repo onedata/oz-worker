@@ -14,7 +14,7 @@
 
 -include("registered_names.hrl").
 -include("subscriptions/subscriptions.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([put/3, newest_seq/0, oldest_seq/0, ensure_initialised/0, query/1]).
@@ -30,7 +30,7 @@ ensure_initialised() ->
         key = ?SUBSCRIPTIONS_STATE_KEY,
         value = #subscriptions_state{cache = gb_trees:empty()}
     })) of
-        {ok, ?SUBSCRIPTIONS_STATE_KEY} -> ok;
+        {ok, _} -> ok;
         {error, already_exists} -> ?info("State already exists")
     end.
 
@@ -40,7 +40,7 @@ ensure_initialised() ->
 %% Cache size limit is guaranteed.
 %% @end
 %%--------------------------------------------------------------------
--spec put(Seq :: subscriptions:seq(), Doc :: datastore:document(),
+-spec put(Seq :: subscriptions:seq(), Doc :: datastore:doc(),
     Model :: subscriptions:model()) -> ok.
 put(Seq, Doc, Model) ->
     {ok, _} = subscriptions_state:update(?SUBSCRIPTIONS_STATE_KEY, fun(State) ->
@@ -66,7 +66,7 @@ put(Seq, Doc, Model) ->
 %%--------------------------------------------------------------------
 -spec query(Seqs :: ordsets:ordset(subscriptions:seq())) -> {Hits, Misses} when
     Hits :: [{Seq :: subscriptions:seq(),
-        {Doc :: datastore:document(), Model :: subscriptions:model()}}],
+        {Doc :: datastore:doc(), Model :: subscriptions:model()}}],
     Misses :: [subscriptions:seq()].
 query(Seqs) ->
     Cache = get_cache(),
@@ -135,6 +135,6 @@ get_cache() ->
     case subscriptions_state:get(?SUBSCRIPTIONS_STATE_KEY) of
         {ok, #document{value = #subscriptions_state{cache = Cache}}} ->
             Cache;
-        {error, {not_found, subscriptions_state}} ->
+        {error, not_found} ->
             gb_trees:empty()
     end.

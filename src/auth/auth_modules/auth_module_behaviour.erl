@@ -11,7 +11,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 -module(auth_module_behaviour).
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include("auth_common.hrl").
 
 %%--------------------------------------------------------------------

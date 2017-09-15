@@ -21,7 +21,7 @@
 -include("gui/common.hrl").
 -include("auth_common.hrl").
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("gui/include/gui.hrl").
 -include_lib("ctool/include/logging.hrl").
 

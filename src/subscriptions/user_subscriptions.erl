@@ -12,9 +12,7 @@
 -module(user_subscriptions).
 -author("Michal Zmuda").
 
--include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
--include_lib("cluster_worker/include/modules/datastore/datastore_common_internal.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([updates/2]).
@@ -27,7 +25,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec updates(ProviderID :: binary(), NewUserIDs :: [binary()]) ->
-    [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}].
+    [{Seq :: -1, Doc :: datastore:doc(), Model :: atom()}].
 updates(ProviderID, NewUserIDs) ->
     UserChanges = get_users(ProviderID, NewUserIDs),
     GroupChanges = get_groups(ProviderID, UserChanges),
@@ -56,7 +54,7 @@ updates(ProviderID, NewUserIDs) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_users(ProviderID :: binary(), NewUserIDs :: [binary()]) ->
-    [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}].
+    [{Seq :: -1, Doc :: datastore:doc(), Model :: atom()}].
 get_users(ProviderID, NewUserIDs) ->
     lists:filtermap(fun(UserID) ->
         case get_with_revs(od_user, UserID) of
@@ -73,8 +71,8 @@ get_users(ProviderID, NewUserIDs) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_spaces(ProviderID :: binary(),
-    UserChanges :: [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}]) ->
-    [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
+    UserChanges :: [{Seq :: -1, Doc :: datastore:doc(), Model :: atom()}]) ->
+    [{Seq1 :: -1, Doc1 :: datastore:doc(), Model1 :: atom()}].
 get_spaces(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
         #document{value = #od_user{spaces = Spaces, eff_spaces = EffSpaces}} = UserDoc,
@@ -95,8 +93,8 @@ get_spaces(ProviderID, UserChanges) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_groups(ProviderID :: binary(),
-    UserChanges :: [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}]) ->
-    [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
+    UserChanges :: [{Seq :: -1, Doc :: datastore:doc(), Model :: atom()}]) ->
+    [{Seq1 :: -1, Doc1 :: datastore:doc(), Model1 :: atom()}].
 get_groups(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
         #document{value = #od_user{groups = Groups, eff_groups = EffGroups}} = UserDoc,
@@ -127,8 +125,8 @@ get_groups(ProviderID, UserChanges) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_shares(ProviderID :: binary(),
-    SpaceChanges :: [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}]) ->
-    [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
+    SpaceChanges :: [{Seq :: -1, Doc :: datastore:doc(), Model :: atom()}]) ->
+    [{Seq1 :: -1, Doc1 :: datastore:doc(), Model1 :: atom()}].
 get_shares(ProviderID, SpaceChanges) ->
     lists:flatmap(fun({_, SpaceDoc, _}) ->
         #document{value = #od_space{shares = Shares}} = SpaceDoc,
@@ -148,8 +146,8 @@ get_shares(ProviderID, SpaceChanges) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_handle_services(ProviderID :: binary(),
-    UserChanges :: [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}]) ->
-    [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
+    UserChanges :: [{Seq :: -1, Doc :: datastore:doc(), Model :: atom()}]) ->
+    [{Seq1 :: -1, Doc1 :: datastore:doc(), Model1 :: atom()}].
 get_handle_services(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
         #document{value = #od_user{
@@ -173,8 +171,8 @@ get_handle_services(ProviderID, UserChanges) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_handles(ProviderID :: binary(),
-    UserChanges :: [{Seq :: -1, Doc :: datastore:document(), Model :: atom()}]) ->
-    [{Seq1 :: -1, Doc1 :: datastore:document(), Model1 :: atom()}].
+    UserChanges :: [{Seq :: -1, Doc :: datastore:doc(), Model :: atom()}]) ->
+    [{Seq1 :: -1, Doc1 :: datastore:doc(), Model1 :: atom()}].
 get_handles(ProviderID, UserChanges) ->
     lists:flatmap(fun({_, UserDoc, _}) ->
         #document{value = #od_user{
@@ -199,7 +197,7 @@ get_handles(ProviderID, UserChanges) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_with_revs(Model :: atom(), Key :: binary()) ->
-    {ok, datastore:document()} | {error, Reason :: binary()}.
+    {ok, datastore:doc()} | {error, Reason :: binary()}.
 get_with_revs(Model, Key) ->
     % With datastore 2, always use the last rev, which is in the document
     % by default.

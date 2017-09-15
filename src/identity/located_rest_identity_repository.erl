@@ -17,7 +17,7 @@
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("public_key/include/public_key.hrl").
--include_lib("datastore/oz_datastore_models_def.hrl").
+-include_lib("datastore/oz_datastore_models.hrl").
 
 -define(LS_NAMESPACE, identity_location).
 
@@ -53,7 +53,7 @@ get(ID) ->
     case owned_identity:get(ID) of
         {ok, #document{value = #owned_identity{encoded_public_key = Encoded}}} ->
             {ok, Encoded};
-        {error, {not_found, _}} ->
+        {error, not_found} ->
             get_public_key_by_location(ID);
         {error, Reason} ->
             {error, {datastore_failed, Reason}}
@@ -92,7 +92,7 @@ get_public_key_by_location(ID) ->
 get_public_key_via_rest(OzDomain, ID) ->
     {ok, RESTAPIPrefixStr} = application:get_env(?APP_NAME, rest_api_prefix),
     {ok, RestPort} = application:get_env(?APP_NAME, rest_port),
-    URL = str_utils:format("https://~s:~B~s/publickey/~s", [
+    URL = str_utils:format_bin("https://~s:~B~s/publickey/~s", [
         OzDomain, RestPort, RESTAPIPrefixStr, http_utils:url_encode(ID)]),
     {ok, 200, _, Body} = http_client:get(URL, #{}, <<>>, [insecure]),
     proplists:get_value(<<"publicKey">>, json_utils:decode(Body)).

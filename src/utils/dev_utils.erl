@@ -51,7 +51,7 @@
 -module(dev_utils).
 
 -include("entity_logic.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
@@ -236,9 +236,10 @@ create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUId, Opti
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec create_user_with_uuid(User :: #od_user{}, UUId :: binary()) -> {ok, UserId :: binary()}.
-create_user_with_uuid(User, UUId) ->
-    {ok, _} = od_user:save(#document{key = UUId, value = User}).
+-spec create_user_with_uuid(User :: #od_user{}, UserId :: binary()) -> {ok, UserId :: binary()}.
+create_user_with_uuid(User, UserId) ->
+    {ok, _} = od_user:save(#document{key = UserId, value = User}),
+    {ok, UserId}.
 
 
 %%--------------------------------------------------------------------
@@ -248,9 +249,9 @@ create_user_with_uuid(User, UUId) ->
 %%--------------------------------------------------------------------
 -spec create_group_with_uuid(UserId :: binary(), Name :: binary(), UUId :: binary()) ->
     {ok, GroupId :: binary()}.
-create_group_with_uuid(UserId, Name, UUId) ->
-    {ok, GroupId} = od_group:save(
-        #document{key = UUId, value = #od_group{name = Name}}
+create_group_with_uuid(UserId, Name, GroupId) ->
+    {ok, _} = od_group:save(
+        #document{key = GroupId, value = #od_group{name = Name}}
     ),
     {ok, UserId} = group_logic:add_user(
         ?ROOT, GroupId, UserId, privileges:group_admin()
@@ -289,11 +290,11 @@ create_space_with_uuid({provider, ProviderId}, Name, Token, Support, UUId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_space_with_provider({od_user | od_group, Id :: binary()}, Name :: binary(),
-    Support :: #{Provider :: binary() => ProvidedSize :: pos_integer()}, UUId :: binary()) ->
+    Support :: #{Provider :: binary() => ProvidedSize :: pos_integer()}, SpaceId :: binary()) ->
     {ok, SpaceId :: binary()}.
-create_space_with_provider({MemberType, MemberId}, Name, Supports, UUId) ->
-    {ok, SpaceId} = od_space:save(
-        #document{key = UUId, value = #od_space{name = Name}}
+create_space_with_provider({MemberType, MemberId}, Name, Supports, SpaceId) ->
+    {ok, _} = od_space:save(
+        #document{key = SpaceId, value = #od_space{name = Name}}
     ),
     AddFun = case MemberType of
         od_user -> add_user;
