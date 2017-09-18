@@ -4,6 +4,18 @@
 CHANGELOG
 ---------
 
+### 17.06.1
+
+* VFS-3455 Updating GUI ref
+* VFS-3594 Add missing validation rules for group token creation operations
+* VFS-3594 Fix a validation error during group token creation via POST and an error during user password change
+* VFS-3567 Store missing documents in datastore cache
+* VFS-3449 add endpoint for mapping groups
+* VFS-3556 Update esaml reference to support AES-CBC-256 encryption in SAML
+* VFS-3512 Update oz-gui-default reference
+* VFS-3473 Add support for HTTP-POST binding in SAML
+
+
 ### 17.06.0-rc2
 
 * Releasing new version 17.06.0-rc2
