@@ -4,7 +4,7 @@
 CHANGELOG
 ---------
 
-### 17.06.1
+### 17.06.0-rc3
 
 * VFS-3455 Updating GUI ref
 * VFS-3594 Add missing validation rules for group token creation operations
