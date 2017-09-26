@@ -54,6 +54,7 @@ od_handle_service | od_handle | oz_privileges.
 list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
+fun((term()) -> boolean()) |
 {not_lower_than, integer()} | {not_greater_than, integer()} |
 {between, integer(), integer()} |
 [term()] | % A list of accepted values

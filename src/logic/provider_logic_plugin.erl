@@ -61,6 +61,7 @@ operation_supported(create, support, private) -> true;
 operation_supported(create, check_my_ports, private) -> true;
 operation_supported(create, map_idp_group, private) -> true;
 operation_supported(create, verify_provider_identity, private) -> true;
+operation_supported(create, {dns_txt_record, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
 
@@ -80,6 +81,7 @@ operation_supported(update, domain_config, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {space, _}, private) -> true;
+operation_supported(delete, {dns_txt_record, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -184,6 +186,16 @@ create(Req = #el_req{gri = #gri{aspect = check_my_ports}}) ->
         {ok, {data, test_connection(Req#el_req.data)}}
     catch _:_ ->
         ?ERROR_INTERNAL_SERVER_ERROR
+    end;
+
+create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}, data = Data}) ->
+    case fetch_entity(ProviderId) of
+        {ok, #od_provider{subdomain_delegation = true}} ->
+            #{<<"content">> := Content} = Data,
+            ok = dns_state:set_txt_record(ProviderId, RecordName, Content);
+        {ok, #od_provider{subdomain_delegation = false}} ->
+            ?ERROR_SUBDOMAIN_DELEGATION_DISABLED;
+        Error -> Error
     end;
 
 create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
@@ -344,7 +356,10 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
     entity_graph:remove_relation(
         od_space, SpaceId, od_provider, ProviderId
-    ).
+    );
+
+delete(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}}) ->
+    ok = dns_state:remove_txt_record(ProviderId, RecordName).
 
 
 %%--------------------------------------------------------------------
@@ -397,6 +412,9 @@ authorize(#el_req{operation = create, gri = #gri{aspect = instance_dev}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, _) ->
+    auth_by_self(Req);
+
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
     auth_by_self(Req);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = {check_my_ip, _}}}, _) ->
@@ -473,6 +491,9 @@ authorize(Req = #el_req{operation = update, gri = #gri{aspect = {space, _}}}, _)
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, _) ->
     auth_by_self(Req) orelse
         user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_PROVIDERS_DELETE);
+
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
+    auth_by_self(Req);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, _) ->
     auth_by_self(Req);
@@ -552,6 +573,19 @@ validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     required => #{
         <<"token">> => {token, ?SPACE_SUPPORT_TOKEN},
         <<"size">> => {integer, {not_lower_than, get_min_support_size()}}
+    }
+};
+
+validate(#el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}) -> #{
+    required => #{
+        % reimplement nonempty binary check as normal validators
+        % do not accept {aspect, _} tuple
+        {aspect, <<"recordName">>} => {any, fun
+            ({dns_txt_record, <<>>}) -> false;
+            ({dns_txt_record, Name}) when is_binary(Name) -> true;
+            (_) -> false
+        end},
+        <<"content">> => {binary, non_empty}
     }
 };
 

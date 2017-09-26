@@ -291,7 +291,8 @@
 -record(dns_state, {
     subdomain_to_provider = #{} :: #{dns_state:subdomain() => od_provider:id()},
     provider_to_subdomain = #{} :: #{od_provider:id() => dns_state:subdomain()},
-    provider_to_ips = #{} :: #{od_provider:id() => [inet:ipv4_address()]}
+    provider_to_ips = #{} :: #{od_provider:id() => [inet:ipv4_address()]},
+    provider_to_txt_records = #{} :: #{od_provider:id() => [{binary(), binary()}]}
 }).
 
 -record(entity_graph_state, {

@@ -44,7 +44,9 @@
 ]).
 -export([
     update_domain_config/3,
-    get_domain_config/2
+    get_domain_config/2,
+    set_dns_txt_record/4,
+    remove_dns_txt_record/3
 ]).
 -export([
     check_my_ports/2,
@@ -277,6 +279,36 @@ update_domain_config(Client, ProviderId, Data) ->
         gri = #gri{type = od_provider, id = ProviderId, aspect = domain_config},
         data = Data}).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets txt record for provider's subdomain
+%% @end
+%%--------------------------------------------------------------------
+-spec set_dns_txt_record(Client :: entity_logic:client(),
+    ProviderId :: od_provider:id(), Name :: binary(), Content :: binary()) ->
+    ok | {error, term()}.
+set_dns_txt_record(Client, ProviderId, Name, Content) ->
+    entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {dns_txt_record, Name}},
+        data = #{<<"content">> => Content}
+    }).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Remove txt record for provider's subdomain
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_dns_txt_record(Client :: entity_logic:client(),
+    ProviderId :: od_provider:id(), Name :: binary()) ->
+    ok | {error, term()}.
+remove_dns_txt_record(Client, ProviderId, Name) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {dns_txt_record, Name}}
+    }).
 
 %%--------------------------------------------------------------------
 %% @doc
