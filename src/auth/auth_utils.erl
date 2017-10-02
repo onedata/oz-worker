@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% @copyright (C) 2014 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -18,6 +18,15 @@
 -include_lib("esaml/include/esaml.hrl").
 
 %% API
+
+% Authenticating based on various credentials
+-export([
+    authorize_by_oauth_provider/1,
+    authorize_by_macaroons/2,
+    authorize_by_provider_certs/1,
+    authorize_by_basic_auth/1
+]).
+
 % Convenience functions
 -export([local_auth_endpoint/0, get_value_binary/2, extract_emails/1,
     has_group_mapping_enabled/1, normalize_membership_spec/2]).
@@ -35,9 +44,127 @@
     acquire_user_by_external_access_token/2
 ]).
 
+
 %%%===================================================================
 %%% API functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Tries to authenticate client by provided token, if its prefix matches
+%% any of the configured oauth providers supporting authority delegation.
+%% {true, Client} - client was authorized
+%% false - this method cannot verify authorization, other methods should be tried
+%% {error, term()} - authorization invalid
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_oauth_provider(AccessToken :: binary()) ->
+    {true, #client{}} | false | {error, term()}.
+authorize_by_oauth_provider(AccessToken) ->
+    AuthDelegationProviders = auth_config:get_providers_with_auth_delegation(),
+    MatchingProviders = lists:dropwhile(
+        fun({_ProvId, TokenPrefix}) ->
+            % If prefix matches, return false:
+            % dropwhile will stop and return the rest
+            % of the list with matched provider at the beginning
+            not bin_starts_with(AccessToken, TokenPrefix)
+        end, AuthDelegationProviders),
+    case MatchingProviders of
+        [] ->
+            false;
+        [{ProviderId, TokPrefix} | _] ->
+            Len = byte_size(TokPrefix),
+            <<TokPrefix:Len/binary, AccessTokenNoPrefix/binary>> = AccessToken,
+            case auth_utils:acquire_user_by_external_access_token(
+                ProviderId, AccessTokenNoPrefix
+            ) of
+                {error, bad_access_token} ->
+                    {error, {bad_access_token, ProviderId}};
+                {_, #document{key = UserId}} ->
+                    {true, #client{type = user, id = UserId}}
+            end
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Tries to authenticate client by macaroons.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_macaroons(Macaroon :: binary() | macaroon:macaroon(),
+    DischargeMacaroons :: binary() | [macaroon:macaroon()]) ->
+    {true, #client{}} | {error, term()}.
+authorize_by_macaroons(Macaroon, DischargeMacaroons) when is_binary(Macaroon) ->
+    case token_utils:deserialize(Macaroon) of
+        {ok, DeserializedMacaroon} ->
+            authorize_by_macaroons(DeserializedMacaroon, DischargeMacaroons);
+        {error, _} ->
+            {error, bad_macaroon}
+    end;
+authorize_by_macaroons(Macaroon, <<"">>) ->
+    authorize_by_macaroons(Macaroon, []);
+authorize_by_macaroons(Macaroon, [Bin | _] = DischMacaroons) when is_binary(Bin) ->
+    try
+        DeserializedDischMacaroons = [
+            begin {ok, DM} = token_utils:deserialize(S), DM end || S <- DischMacaroons
+        ],
+        authorize_by_macaroons(Macaroon, DeserializedDischMacaroons)
+    catch
+        _:_ ->
+            {error, bad_macaroon}
+    end;
+authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
+    %% @todo: VFS-1869
+    %% Pass empty string as providerId because we do
+    %% not expect the macaroon to have provider caveat
+    %% (it is an authorization code for client).
+    case auth_logic:validate_token(<<>>, Macaroon,
+        DischargeMacaroons, <<"">>, undefined) of
+        {ok, UserId} ->
+            Client = #client{type = user, id = UserId},
+            {true, Client};
+        {error, _} = Error ->
+            Error
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Tries to authenticate client by provider certs.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_provider_certs(PeerCertDer :: public_key:der_encoded()) ->
+    {true, #client{}} | {error, bad_cert}.
+authorize_by_provider_certs(PeerCert) ->
+    case worker_proxy:call(ozpca_worker, {verify_provider, PeerCert}) of
+        {ok, ProviderId} ->
+            Client = #client{type = provider, id = ProviderId},
+            {true, Client};
+        {error, {bad_cert, Reason}} ->
+            ?warning("Attempted authentication with "
+            "bad peer certificate: ~p", [Reason]),
+            {error, bad_cert}
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Tries to authenticate client by provider certs.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_basic_auth(UserPasswdB64 :: binary()) ->
+    {true, #client{}} | {error, bad_cert}.
+authorize_by_basic_auth(UserPasswdB64) ->
+    UserPasswd = base64:decode(UserPasswdB64),
+    [User, Passwd] = binary:split(UserPasswd, <<":">>),
+    case user_logic:authenticate_by_basic_credentials(User, Passwd) of
+        {ok, #document{key = UserId}, _} ->
+            Client = #client{type = user, id = UserId},
+            {true, Client};
+        _ ->
+            {error, bad_credentials}
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -472,3 +599,16 @@ acquire_user_by_external_access_token(ProviderId, AccessToken) ->
         {error, bad_access_token} ->
             {error, bad_access_token}
     end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Checks if given binary starts with given prefix.
+%% @end
+%%--------------------------------------------------------------------
+-spec bin_starts_with(Subject :: binary(), Prefix :: binary()) -> boolean().
+bin_starts_with(Subject, Prefix) ->
+    FirstChars = binary:part(Subject, 0, byte_size(Prefix)),
+    FirstChars =:= Prefix.
+

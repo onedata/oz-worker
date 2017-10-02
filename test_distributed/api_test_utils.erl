@@ -14,9 +14,9 @@
 -include("api_test_utils.hrl").
 -include("rest.hrl").
 -include("entity_logic.hrl").
--include("errors.hrl").
 -include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("cluster_worker/include/api_errors.hrl").
 
 %% API
 -export([run_tests/2]).

@@ -33,13 +33,11 @@ get_models() -> [
     od_provider,
     od_handle_service,
     od_handle,
+    gs_server_state,
     owned_identity,
     onedata_auth,
     session,
     token,
     entity_graph_state,
-    outbox,
-    provider_subscription,
-    subscriptions_state,
     ozpca_state
 ].

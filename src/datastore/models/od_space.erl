@@ -17,6 +17,7 @@
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, delete/1, list/0]).
 -export([to_string/1]).
+-export([entity_logic_plugin/0]).
 
 %% datastore_model callbacks
 -export([get_prehooks/0]).
@@ -112,6 +113,15 @@ list() ->
 -spec to_string(SpaceId :: id()) -> binary().
 to_string(SpaceId) ->
     <<"space:", SpaceId/binary>>.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the entity logic plugin module that handles model logic.
+%% @end
+%%--------------------------------------------------------------------
+-spec entity_logic_plugin() -> module().
+entity_logic_plugin() ->
+    space_logic_plugin.
 
 %%%===================================================================
 %%% datastore_model callbacks

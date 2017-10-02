@@ -20,34 +20,34 @@
 -author("Lukasz Opiola").
 
 -include("entity_logic.hrl").
--include("errors.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("cluster_worker/include/api_errors.hrl").
 
--export([create/5, get/4, update/5, delete/4]).
--export([client_to_string/1]).
-
+% Some of the types are just aliases for types from gs_protocol, this is
+% for better readability of logic modules.
+-type req() :: #el_req{}.
 -type client() :: #client{}.
 -type el_plugin() :: module().
--type operation() :: create | get | update | delete.
+-type operation() :: gs_protocol:operation().
 -type entity_id() :: undefined | od_user:id() | od_group:id() | od_space:id() |
 od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id().
--type entity_type() :: od_user | od_group | od_space |
-od_share | od_provider | od_handle_service | od_handle | oz_privileges.
+-type entity_type() :: od_user | od_group | od_space | od_share | od_provider |
+od_handle_service | od_handle | oz_privileges | owned_identity.
 -type entity() :: undefined | #od_user{} | #od_group{} | #od_space{} |
 #od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}.
--type resource() :: atom() | {atom(), term()}.
--type data() :: maps:map() | binary().
--type result() :: ok | {ok, term()} | {error, Reason :: term()}.
-
--type existence_verificator() :: true | false |
-{internal, fun((entity()) -> boolean())} |
-{external, fun(() -> boolean())}.
-
--type authorization_verificator() :: true | false |
-{data_dependent, fun((data()) -> boolean())} |
-{internal, fun((entity()) -> boolean())} |
-{external, fun(() -> boolean())}.
+-type aspect() :: gs_protocol:aspect().
+-type scope() :: gs_protocol:scope().
+-type data() :: gs_protocol:data().
+-type gri() :: gs_protocol:gri().
+-type auth_hint() :: gs_protocol:auth_hint().
+-type error() :: {error, Reason :: term()}.
+-type create_result() :: ok | {ok, {data, term()} | {fetched, gri(), term()} |
+{not_fetched, gri()} | {not_fetched, gri(), auth_hint()}} | error().
+-type get_result() :: {ok, term()} | error().
+-type delete_result() :: ok | error().
+-type update_result() :: ok | error().
+-type result() :: create_result() | get_result() | update_result() | delete_result().
 
 -type type_validator() :: any | atom | list_of_atoms | binary |
 list_of_binaries | integer | float | json | token.
@@ -58,16 +58,17 @@ list_of_binaries | integer | float | json | token.
 [term()] | % A list of accepted values
 {exists, fun((entity_id()) -> boolean())} |
 {not_exists, fun((entity_id()) -> boolean())} |
+{relation_exists, atom(), binary(), atom(), binary(), fun((entity_id()) -> boolean())} |
 token_logic:token_type() | % Compatible only with 'token' type validator
 alias |  % Compatible only with 'binary' type validator
-{resource_exists, ReadableIdentifier :: binary(), fun((entity_id()) -> boolean())}.
+{entity_exists, ReadableIdentifier :: binary(), fun((entity_id()) -> boolean())}.
 
-% The 'resource' key word allows to validate the data provided in resource
+% The 'aspect' key word allows to validate the data provided in aspect
 % identifier.
 -type validity_verificator() :: #{
-required => #{Key :: binary() | resource => {type_validator(), value_validator()}},
-at_least_one => #{Key :: binary() | resource => {type_validator(), value_validator()}},
-optional => #{Key :: binary() | resource => {type_validator(), value_validator()}}
+required => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_validator()}},
+at_least_one => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_validator()}},
+optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_validator()}}
 }.
 
 -export_type([
@@ -77,26 +78,33 @@ optional => #{Key :: binary() | resource => {type_validator(), value_validator()
     entity_id/0,
     entity_type/0,
     entity/0,
-    resource/0,
+    aspect/0,
+    scope/0,
+    gri/0,
     data/0,
+    auth_hint/0,
+    create_result/0,
+    get_result/0,
+    update_result/0,
+    delete_result/0,
+    error/0,
     result/0,
-    existence_verificator/0,
-    authorization_verificator/0,
     type_validator/0,
     value_validator/0,
     validity_verificator/0
 ]).
 
-% Internal record containing the request data.
--record(request, {
-    client = #client{} :: client(),
-    el_plugin = undefined :: el_plugin(),
-    entity_id = undefined :: entity_id(),
-    entity = undefined :: entity(),
-    operation = create :: operation(),
-    resource = undefined :: resource(),
-    data = #{} :: data()
+% Internal record containing the request data and state.
+-record(state, {
+    req = #el_req{} :: req(),
+    plugin = undefined :: el_plugin(),
+    entity = undefined :: entity()
 }).
+
+-export([handle/1, handle/2]).
+-export([is_authorized/2]).
+-export([client_to_string/1]).
+
 
 %%%===================================================================
 %%% API
@@ -104,56 +112,59 @@ optional => #{Key :: binary() | resource => {type_validator(), value_validator()
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a resource using provided entity logic module.
+%% Handles an entity logic request expressed by a #el_req{} record.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: client(), ELPlugin :: el_plugin(),
-    EntityId :: entity_id(), Resource :: resource(), Data :: data()) ->
-    result().
-create(Client, ELPlugin, EntityId, Resource, Data) ->
-    handle_errors(fun create_internal/5, [
-        Client, ELPlugin, EntityId, Resource, Data
-    ]).
+-spec handle(req()) -> result().
+handle(ElReq) ->
+    handle(ElReq, undefined).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves a resource using provided entity logic module.
+%% Handles an entity logic request expressed by a #el_req{} record. Entity can
+%% be provided if it was prefetched.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: client(), ELPlugin :: el_plugin(),
-    EntityId :: entity_id(), Resource :: resource()) -> result().
-get(Client, ELPlugin, EntityId, Resource) ->
-    handle_errors(fun get_internal/4, [
-        Client, ELPlugin, EntityId, Resource
-    ]).
+-spec handle(req(), Entity :: entity()) -> result().
+handle(#el_req{gri = #gri{type = EntityType}} = ElReq, Entity) ->
+    try
+        ElPlugin = EntityType:entity_logic_plugin(),
+        handle_unsafe(#state{
+            req = ElReq, plugin = ElPlugin, entity = Entity
+        })
+    catch
+        throw:Error ->
+            Error;
+        Type:Message ->
+            ?error_stacktrace("Unexpected error in entity_logic - ~p:~p", [
+                Type, Message
+            ]),
+            ?ERROR_INTERNAL_SERVER_ERROR
+    end.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates a resource using provided entity logic module.
+%% Return if given client is authorized to perform given request, as specified
+%% in the #el_req{} record. Entity can be provided if it was prefetched.
 %% @end
 %%--------------------------------------------------------------------
--spec update(Client :: client(), ELPlugin :: el_plugin(),
-    EntityId :: entity_id(), Resource :: resource(), Data :: data()) ->
-    result().
-update(Client, ELPlugin, EntityId, Resource, Data) ->
-    handle_errors(fun update_internal/5, [
-        Client, ELPlugin, EntityId, Resource, Data
-    ]).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Deletes a resource using provided entity logic module.
-%% @end
-%%--------------------------------------------------------------------
--spec delete(Client :: client(), ELPlugin :: el_plugin(),
-    EntityId :: entity_id(), Resource :: resource()) -> result().
-delete(Client, ELPlugin, EntityId, Resource) ->
-    handle_errors(fun delete_internal/4, [
-        Client, ELPlugin, EntityId, Resource
-    ]).
+-spec is_authorized(req(), entity()) -> boolean().
+is_authorized(#el_req{gri = #gri{type = EntityType}} = ElReq, Entity) ->
+    try
+        ElPlugin = EntityType:entity_logic_plugin(),
+        % Existence must be checked too, as sometimes authorization depends
+        % on that.
+        ensure_authorized(
+            ensure_exists(#state{
+                req = ElReq, plugin = ElPlugin, entity = Entity
+            })),
+        true
+    catch
+        _:_ ->
+            false
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -173,126 +184,68 @@ client_to_string(?PROVIDER(PId)) -> str_utils:format("provider:~s", [PId]).
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
-%% Wraps implementations of create/get/update/delete and handles all
-%% errors uniformly.
+%% Handles an entity logic request based on operation,
+%% should be wrapped in a try-catch.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_errors(Function :: fun(), Args :: [term()]) -> result().
-handle_errors(Function, Args) ->
-    try
-        erlang:apply(Function, Args)
-    catch
-        throw:Error ->
-            Error;
-        Type:Message ->
-            ?error_stacktrace("Unexpected error in entity_logic - ~p:~p", [
-                Type, Message
+-spec handle_unsafe(#state{}) -> result().
+handle_unsafe(State = #state{req = Req = #el_req{operation = create}}) ->
+    Result = call_create(
+        ensure_valid(
+            ensure_authorized(
+                fetch_entity(
+                    ensure_operation_supported(
+                        State))))),
+    case {Result, Req} of
+        {{ok, _}, #el_req{gri = #gri{aspect = instance}, client = Cl}} ->
+            % If an entity instance is created, log an information about it
+            % (it's a significant operation and this information might be useful).
+            {EntType, EntId} = case Result of
+                {ok, {fetched, #gri{type = Type, id = Id}, _}} -> {Type, Id};
+                {ok, {not_fetched, #gri{type = Type, id = Id}}} -> {Type, Id};
+                {ok, {not_fetched, #gri{type = Type, id = Id}, _}} -> {Type, Id}
+            end,
+            ?info("~s has been created by client: ~s", [
+                EntType:to_string(EntId),
+                client_to_string(Cl)
             ]),
-            ?ERROR_INTERNAL_SERVER_ERROR
-    end.
+            Result;
+        _ ->
+            Result
+    end;
 
+handle_unsafe(State = #state{req = #el_req{operation = get}}) ->
+    call_get(
+        ensure_authorized(
+            ensure_exists(
+                fetch_entity(
+                    ensure_operation_supported(
+                        State)))));
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Creates a resource using provided entity logic module.
-%% Must be evaluated inside handle_errors function.
-%% @end
-%%--------------------------------------------------------------------
--spec create_internal(Client :: client(), ELPlugin :: el_plugin(),
-    EntityId :: entity_id(), Resource :: resource(), Data :: data()) ->
-    result().
-create_internal(Client, ELPlugin, EntityId, Resource, Data) ->
-    Request = #request{
-        client = Client,
-        el_plugin = ELPlugin,
-        entity_id = EntityId,
-        operation = create,
-        data = Data,
-        resource = Resource
-    },
-    call_create(
-        check_validity(
-            check_authorization(
-                check_existence_of_entity(Request)))).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Retrieves a resource using provided entity logic module.
-%% Must be evaluated inside handle_errors function.
-%% @end
-%%--------------------------------------------------------------------
--spec get_internal(Client :: client(), ELPlugin :: el_plugin(),
-    EntityId :: entity_id(), Resource :: resource()) -> result().
-get_internal(Client, ELPlugin, EntityId, Resource) ->
-    Request = #request{
-        client = Client,
-        el_plugin = ELPlugin,
-        entity_id = EntityId,
-        operation = get,
-        resource = Resource
-    },
-    call_get_resource(
-        check_authorization(
-            check_existence(Request))).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Updates a resource using provided entity logic module.
-%% Must be evaluated inside handle_errors function.
-%% @end
-%%--------------------------------------------------------------------
--spec update_internal(Client :: client(), ELPlugin :: el_plugin(),
-    EntityId :: entity_id(), Resource :: resource(), Data :: data()) ->
-    result().
-update_internal(Client, ELPlugin, EntityId, Resource, Data) ->
-    Request = #request{
-        client = Client,
-        el_plugin = ELPlugin,
-        entity_id = EntityId,
-        operation = update,
-        resource = Resource,
-        data = Data
-    },
+handle_unsafe(State = #state{req = #el_req{operation = update}}) ->
     call_update(
-        check_validity(
-            check_authorization(
-                check_existence(Request)))).
+        ensure_valid(
+            ensure_authorized(
+                ensure_exists(
+                    fetch_entity(
+                        ensure_operation_supported(
+                            State))))));
 
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Deletes a resource using provided entity logic module.
-%% Must be evaluated inside handle_errors function.
-%% @end
-%%--------------------------------------------------------------------
--spec delete_internal(Client :: client(), ELPlugin :: el_plugin(),
-    EntityId :: entity_id(), Resource :: resource()) -> result().
-delete_internal(Client, ELPlugin, EntityId, Resource) ->
-    Request = #request{
-        client = Client,
-        el_plugin = ELPlugin,
-        entity_id = EntityId,
-        operation = delete,
-        resource = Resource
-    },
+handle_unsafe(State = #state{req = Req = #el_req{operation = delete}}) ->
     Result = call_delete(
-        check_authorization(
-            check_existence(Request))),
-    case {Result, Resource} of
-        {ok, entity} ->
-            % If an entity is deleted, log an information about it
-            % (it's a serious operation and this information might be useful).
+        ensure_authorized(
+            ensure_exists(
+                fetch_entity(
+                    ensure_operation_supported(
+                        State))))),
+    case {Result, Req} of
+        {ok, #el_req{gri = #gri{type = Type, id = Id, aspect = instance}, client = Cl}} ->
+            % If an entity instance is deleted, log an information about it
+            % (it's a significant operation and this information might be useful).
             ?info("~s has been deleted by client: ~s", [
-                ELPlugin:entity_to_string(EntityId),
-                client_to_string(Client)
+                Type:to_string(Id),
+                client_to_string(Cl)
             ]),
             ok;
         _ ->
@@ -303,16 +256,20 @@ delete_internal(Client, ELPlugin, EntityId, Resource) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Retrieves the entity specified in request by calling back
-%% proper entity logic plugin.
+%% Retrieves the entity specified in request by calling back proper entity
+%% logic plugin. Does nothing if the entity is prefetched, or GRI of the
+%% request is not related to any entity.
 %% @end
 %%--------------------------------------------------------------------
--spec call_get_entity(Request :: #request{}) -> entity().
-call_get_entity(Request) ->
-    #request{el_plugin = ELPlugin, entity_id = EntityId} = Request,
-    case ELPlugin:get_entity(EntityId) of
+-spec fetch_entity(State :: #state{}) -> #state{}.
+fetch_entity(State = #state{entity = Entity}) when Entity /= undefined ->
+    State;
+fetch_entity(State = #state{req = #el_req{gri = #gri{id = undefined}}}) ->
+    State;
+fetch_entity(St = #state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}) ->
+    case Plugin:fetch_entity(Id) of
         {ok, Entity} ->
-            Entity;
+            St#state{entity = Entity};
         ?ERROR_NOT_FOUND ->
             throw(?ERROR_NOT_FOUND)
     end.
@@ -321,234 +278,95 @@ call_get_entity(Request) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Retrieves a resource specified in request by calling back
+%% Creates an aspect of entity specified in request by calling back
 %% proper entity logic plugin.
 %% @end
 %%--------------------------------------------------------------------
--spec call_get_resource(Request :: #request{}) -> {ok, term()}.
-call_get_resource(Request) ->
-    #request{
-        client = Client,
-        el_plugin = ELPlugin,
-        entity_id = EntityId,
-        entity = Entity,
-        resource = Resource
-    } = Request,
-    % Entity might be already prefetched, reuse it if possible.
-    Result = case {EntityId, Entity, Resource} of
-        {undefined, _, _} ->
-            % EntityId is not defined, do not fetch entity.
-            ELPlugin:get(Client, undefined, undefined, Resource);
-        {_EntityId, undefined, entity} ->
-            % EntityId is defined and asking for entity -> entity resource.
-            % The Entity was not fetched yet, fetch and return it.
-            {ok, call_get_entity(Request)};
-        {_EntityId, Entity, entity} ->
-            % EntityId is defined and asking for entity -> entity resource.
-            % The Entity is already fetched, return it.
-            {ok, Entity};
-        {_EntityId, undefined, _} ->
-            % EntityId is defined and some resource -> internal resource.
-            % The Entity is already fetched, reuse it.
-            FetchedEntity = call_get_entity(Request),
-            ELPlugin:get(Client, EntityId, FetchedEntity, Resource);
-        {_EntityId, Entity, _} ->
-            % EntityId is defined and some resource -> internal resource.
-            % The Entity was not fetched yet, fetch and use it.
-            ELPlugin:get(Client, EntityId, Entity, Resource)
+-spec call_create(State :: #state{}) -> create_result().
+call_create(#state{req = ElReq, plugin = Plugin}) ->
+    Plugin:create(ElReq).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Retrieves an aspect specified in request by calling back
+%% proper entity logic plugin.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_get(State :: #state{}) -> get_result().
+call_get(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
+    Plugin:get(ElReq, Entity).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates an aspect of entity specified in request by calling back
+%% proper entity logic plugin.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_update(State :: #state{}) -> update_result().
+call_update(#state{req = ElReq, plugin = Plugin}) ->
+    Plugin:update(ElReq).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Deletes an aspect of entity specified in request by calling back
+%% proper entity logic plugin.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_delete(State :: #state{}) -> delete_result().
+call_delete(#state{req = ElReq, plugin = Plugin}) ->
+    Plugin:delete(ElReq).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Ensures requested operation is supported by calling back
+%% proper entity logic plugin, throws a proper error of not.
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_operation_supported(#state{}) -> #state{}.
+ensure_operation_supported(State = #state{req = Req, plugin = Plugin}) ->
+    Result = try
+        #el_req{operation = Op, gri = #gri{aspect = Asp, scope = Scp}} = Req,
+        Plugin:operation_supported(Op, Asp, Scp)
+    catch _:_ ->
+        % No need for log here, 'operation_supported' may crash depending on
+        % what the request contains and this is expected.
+        false
     end,
     case Result of
-        {ok, _} ->
-            Result;
-        ?ERROR_NOT_FOUND ->
-            throw(?ERROR_NOT_FOUND)
+        true -> State;
+        false -> throw(?ERROR_NOT_SUPPORTED)
     end.
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Creates a resource specified in request by calling back
-%% proper entity logic plugin.
+%% Ensures aspect of entity specified in request exists, throws on error.
 %% @end
 %%--------------------------------------------------------------------
--spec call_create(Request :: #request{}) -> result().
-call_create(Request) ->
-    #request{
-        client = Client,
-        el_plugin = ELPlugin,
-        entity_id = EntityId,
-        resource = Resource,
-        data = Data
-    } = Request,
-    ELPlugin:create(Client, EntityId, Resource, Data).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Updates a resource specified in request by calling back
-%% proper entity logic plugin.
-%% @end
-%%--------------------------------------------------------------------
--spec call_update(Request :: #request{}) -> result().
-call_update(Request) ->
-    #request{
-        el_plugin = ELPlugin,
-        entity_id = EntityId,
-        resource = Resource,
-        data = Data
-    } = Request,
-    ELPlugin:update(EntityId, Resource, Data).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Deletes a resource specified in request by calling back
-%% proper entity logic plugin.
-%% @end
-%%--------------------------------------------------------------------
--spec call_delete(Request :: #request{}) -> result().
-call_delete(Request) ->
-    #request{
-        el_plugin = ELPlugin,
-        entity_id = EntityId,
-        resource = Resource
-    } = Request,
-    ELPlugin:delete(EntityId, Resource).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Calls back entity logic plugin to retrieve the list of
-%% existence verificators for given resource.
-%% @end
-%%--------------------------------------------------------------------
--spec call_exists(Request :: #request{}) -> [existence_verificator()].
-call_exists(Request) ->
-    #request{
-        resource = Resource,
-        el_plugin = ELPlugin
-    } = Request,
-    % Call the plugin to obtain auth verification procedures
-    case ELPlugin:exists(Resource) of
-        List when is_list(List) ->
-            List;
-        Item ->
-            [Item]
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Calls back entity logic plugin to retrieve the list of
-%% authorization verificators for given resource.
-%% @end
-%%--------------------------------------------------------------------
--spec call_authorize(Request :: #request{}) -> [authorization_verificator()].
-call_authorize(#request{client = ?ROOT}) ->
-    % Root client type is allowed to do everything
-    [true];
-call_authorize(Request) ->
-    #request{
-        client = Client,
-        entity_id = EntityId,
-        operation = Operation,
-        resource = Resource,
-        el_plugin = ELPlugin
-    } = Request,
-    % Call the plugin to obtain auth verification procedures
-    try ELPlugin:authorize(Operation, EntityId, Resource, Client) of
-        List when is_list(List) ->
-            List;
-        Item ->
-            [Item]
-    catch
-        throw:Error ->
-            throw(Error);
-        Type:Message ->
-            ?error_stacktrace("Cannot get authorization rules - ~p:~p~n"
-            "Plugin: ~p~n"
-            "Client: ~p~n"
-            "Operation: ~p~n"
-            "EntityId: ~p~n"
-            "Resource: ~p~n", [
-                Type, Message, ELPlugin, Client, Operation, EntityId, Resource
-            ]),
-            [false]
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Calls back entity logic plugin to retrieve the list of
-%% validity verificators for given resource.
-%% @end
-%%--------------------------------------------------------------------
--spec call_validate(Request :: #request{}) -> validity_verificator().
-call_validate(Request) ->
-    #request{
-        operation = Operation,
-        resource = Resource,
-        el_plugin = ELPlugin
-    } = Request,
-    ELPlugin:validate(Operation, Resource).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Ensures entity specified in request exists, throws on error.
-%% @end
-%%--------------------------------------------------------------------
--spec check_existence_of_entity(Request :: #request{}) -> #request{}.
-check_existence_of_entity(#request{entity_id = undefined} = Request) ->
-    % Undefined entity always exists (resource is not correlated with any entity).
-    Request;
-check_existence_of_entity(#request{entity = undefined} = Request) ->
-    % This will throw NOT_FOUND if the entity cannot be retrieved.
-    Request#request{entity = call_get_entity(Request)}.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Ensures resource specified in request exists, throws on error.
-%% @end
-%%--------------------------------------------------------------------
--spec check_existence(Request :: #request{}) -> #request{}.
-check_existence(#request{entity_id = undefined} = Request) ->
-    % Resources where entity id is undefined always exist.
-    Request;
-check_existence(Request) ->
-    Verificators = call_exists(Request),
-    check_existence(Verificators, Request).
-check_existence([], _) ->
-    throw(?ERROR_NOT_FOUND);
-check_existence([true | _], Request) ->
-    Request;
-check_existence([false | _], _) ->
-    throw(?ERROR_NOT_FOUND);
-check_existence([{external, Fun} | Tail], Request) ->
-    case Fun() of
-        true ->
-            Request;
-        false ->
-            check_existence(Tail, Request)
-    end;
-check_existence([{internal, _} | _] = List, #request{entity = undefined} = Req) ->
-    Entity = call_get_entity(Req),
-    check_existence(List, Req#request{entity = Entity});
-check_existence([{internal, Fun} | Tail], #request{entity = Entity} = Req) ->
-    case Fun(Entity) of
-        true ->
-            Req;
-        false ->
-            check_existence(Tail, Req)
+-spec ensure_exists(State :: #state{}) -> #state{}.
+ensure_exists(#state{req = #el_req{gri = #gri{id = undefined}}} = State) ->
+    % Aspects where entity id is undefined always exist.
+    State;
+ensure_exists(State = #state{req = ElReq, plugin = Plugin, entity = Entity}) ->
+    Result = try
+        Plugin:exists(ElReq, Entity)
+    catch _:_ ->
+        % No need for log here, 'exists' may crash depending on what the
+        % request contains and this is expected.
+        false
+    end,
+    case Result of
+        true -> State;
+        false -> throw(?ERROR_NOT_FOUND)
     end.
 
 
@@ -559,63 +377,32 @@ check_existence([{internal, Fun} | Tail], #request{entity = Entity} = Req) ->
 %% throws on error.
 %% @end
 %%--------------------------------------------------------------------
--spec check_authorization(Request :: #request{}) -> #request{}.
-check_authorization(#request{client = Client} = Request) ->
+-spec ensure_authorized(State :: #state{}) -> #state{}.
+ensure_authorized(State = #state{req = #el_req{client = ?ROOT}}) ->
+    % Root client is authorized to do everything (that client is only available
+    % internally).
+    State;
+ensure_authorized(State = #state{req = ElReq, plugin = Plugin, entity = Entity}) ->
     Result = try
-        Verificators = call_authorize(Request),
-        check_authorization(Verificators, Request)
-    catch
-        throw:Error ->
-            throw(Error);
-        Type:Message ->
-            ?error_stacktrace("Error in entity_logic:check_authorization - ~p:~p", [
-                Type, Message
-            ]),
-            false
+        Plugin:authorize(ElReq, Entity)
+    catch _:_ ->
+        % No need for log here, 'authorize' may crash depending on what the
+        % request contains and this is expected.
+        false
     end,
     case Result of
+        true ->
+            State;
         false ->
-            case Client of
+            case ElReq#el_req.client of
                 ?NOBODY ->
                     % The client was not authenticated -> unauthorized
                     throw(?ERROR_UNAUTHORIZED);
                 _ ->
                     % The client was authenticated but cannot access the
-                    % resource -> forbidden
+                    % aspect -> forbidden
                     throw(?ERROR_FORBIDDEN)
-            end;
-        NewRequest ->
-            NewRequest
-    end.
-check_authorization([], _) ->
-    false;
-check_authorization([true | _], Request) ->
-    Request;
-check_authorization([false | _], _) ->
-    false;
-check_authorization([{data_dependent, Fun} | Tail], #request{data = Data} = Req) ->
-    case Fun(Data) of
-        true ->
-            Req;
-        false ->
-            check_authorization(Tail, Req)
-    end;
-check_authorization([{external, Fun} | Tail], Request) ->
-    case Fun() of
-        true ->
-            Request;
-        false ->
-            check_authorization(Tail, Request)
-    end;
-check_authorization([{internal, _} | _] = List, #request{entity = undefined} = Req) ->
-    Entity = call_get_entity(Req),
-    check_authorization(List, Req#request{entity = Entity});
-check_authorization([{internal, Fun} | Tail], #request{entity = Entity} = Req) ->
-    case Fun(Entity) of
-        true ->
-            Req;
-        false ->
-            check_authorization(Tail, Req)
+            end
     end.
 
 
@@ -625,17 +412,21 @@ check_authorization([{internal, Fun} | Tail], #request{entity = Entity} = Req) -
 %% Ensures data specified in request is valid, throws on error.
 %% @end
 %%--------------------------------------------------------------------
--spec check_validity(Request :: #request{}) -> #request{}.
-check_validity(#request{data = Data, resource = Resource} = Request) ->
-    ValidatorsMap = call_validate(Request),
-    % Get all types of validators validators
+-spec ensure_valid(State :: #state{}) -> #state{}.
+ensure_valid(State) ->
+    #state{
+        req = #el_req{gri = #gri{aspect = Aspect}, data = Data} = Req,
+        plugin = Plugin
+    } = State,
+    ValidatorsMap = Plugin:validate(Req),
+    % Get all types of validators
     Required = maps:get(required, ValidatorsMap, #{}),
     Optional = maps:get(optional, ValidatorsMap, #{}),
     AtLeastOne = maps:get(at_least_one, ValidatorsMap, #{}),
-    % Artificially add 'resource' key to Data to simplify validation code.
-    % This key word allows to verify if data provided in resource identifier
+    % Artificially add 'aspect' key to Data to simplify validation code.
+    % This key word allows to verify if data provided in aspect identifier
     % is valid.
-    DataWithResource = Data#{resource => Resource},
+    DataWithAspect = Data#{aspect => Aspect},
     % Start with required parameters. Transform the data if needed, fail when
     % any key is missing or cannot be validated.
     Data2 = lists:foldl(
@@ -646,7 +437,7 @@ check_validity(#request{data = Data, resource = Resource} = Request) ->
                 {true, NewData} ->
                     NewData
             end
-        end, DataWithResource, maps:keys(Required)),
+        end, DataWithAspect, maps:keys(Required)),
     % Now, optional parameters. Transform the data if needed, fail when
     % any of the keys exists in the data but cannot be validated.
     Data3 = lists:foldl(
@@ -678,40 +469,62 @@ check_validity(#request{data = Data, resource = Resource} = Request) ->
         {_, false} ->
             throw(?ERROR_MISSING_AT_LEAST_ONE_VALUE(maps:keys(AtLeastOne)))
     end,
-    % Remove 'resource' key from data as it is no longer needed
-    Request#request{data = maps:remove(resource, Data4)}.
+    % Remove 'aspect' key from data as it is no longer needed
+    State#state{req = Req#el_req{data = maps:remove(aspect, Data4)}}.
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% Performs simple value conversion (if possible) and checks the type and value
-%% of value for Key in Data.
+%% of value for Key in Data. Takes into consideration special keys which are
+%% in form {aspect, binary()}, that allows to validate data in aspect.
+%% Data map must include 'aspect' key, that holds the aspect.
 %% @end
 %%--------------------------------------------------------------------
 -spec transform_and_check_value(Key :: binary(), Data :: data(),
-    Validator :: {type_validator(), value_validator()}) ->
+    Validator :: #{type_validator() => value_validator()}) ->
     {true, NewData :: data()} | false.
+transform_and_check_value({aspect, Key}, Data, Validator) ->
+    {TypeRule, ValueRule} = maps:get({aspect, Key}, Validator),
+    Value = maps:get(aspect, Data),
+    NewValue = transform_and_check_value(TypeRule, ValueRule, Key, Value),
+    {true, Data#{aspect => NewValue}};
 transform_and_check_value(Key, Data, Validator) ->
     case maps:get(Key, Data, undefined) of
         undefined ->
             false;
         Value ->
             {TypeRule, ValueRule} = maps:get(Key, Validator),
-            try
-                NewValue = check_type(TypeRule, Key, Value),
-                check_value(TypeRule, ValueRule, Key, NewValue),
-                {true, Data#{Key => NewValue}}
-            catch
-                throw:Error ->
-                    throw(Error);
-                Type:Message ->
-                    ?error_stacktrace(
-                        "Error in entity_logic:transform_and_check_value - ~p:~p",
-                        [Type, Message]
-                    ),
-                    throw(?ERROR_BAD_DATA(Key))
-            end
+            NewValue = transform_and_check_value(TypeRule, ValueRule, Key, Value),
+            {true, Data#{Key => NewValue}}
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Performs simple value conversion (if possible) and checks the type and value
+%% of value.
+%% @end
+%%--------------------------------------------------------------------
+-spec transform_and_check_value(TypeRule :: type_validator(),
+    ValueRule :: value_validator(), Key :: binary(), Value :: term()) ->
+    {true, NewData :: data()} | false.
+transform_and_check_value(TypeRule, ValueRule, Key, Value) ->
+    try
+        NewValue = check_type(TypeRule, Key, Value),
+        check_value(TypeRule, ValueRule, Key, NewValue),
+        NewValue
+    catch
+        throw:Error ->
+            throw(Error);
+        Type:Message ->
+            ?error_stacktrace(
+                "Error in entity_logic:transform_and_check_value - ~p:~p",
+                [Type, Message]
+            ),
+            throw(?ERROR_BAD_DATA(Key))
     end.
 
 
@@ -757,7 +570,7 @@ check_type(binary, _Key, Atom) when is_atom(Atom) ->
     atom_to_binary(Atom, utf8);
 check_type(binary, Key, _) ->
     throw(?ERROR_BAD_VALUE_BINARY(Key));
-check_type(list_of_binaries, Key, Values)  ->
+check_type(list_of_binaries, Key, Values) ->
     try
         lists:map(
             fun(Value) ->
@@ -861,7 +674,7 @@ check_value(_, {between, Low, High}, Key, Value) ->
         true ->
             ok;
         false ->
-            throw(?ERROR_BAD_VALUE_NOT_BETWEEN(Key, Low, High))
+            throw(?ERROR_BAD_VALUE_NOT_IN_RANGE(Key, Low, High))
     end;
 check_value(_, AllowedVals, Key, Vals) when is_list(AllowedVals) andalso is_list(Vals) ->
     case ordsets:subtract(ordsets:from_list(Vals), ordsets:from_list(AllowedVals)) of
@@ -905,6 +718,13 @@ check_value(_, {not_exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1)
         false ->
             throw(?ERROR_BAD_VALUE_ID_OCCUPIED(Key))
     end;
+check_value(_, {relation_exists, ChType, ChId, ParType, ParId, VerifyFun}, _Key, Val) when is_function(VerifyFun, 1) ->
+    case VerifyFun(Val) of
+        true ->
+            ok;
+        false ->
+            throw(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId))
+    end;
 check_value(token, TokenType, Key, Macaroon) ->
     case token_logic:validate(Macaroon, TokenType) of
         ok ->
@@ -929,16 +749,8 @@ check_value(_, alias, Key, Value) ->
             throw(?ERROR_BAD_VALUE_ALIAS(Key));
         {_, true} -> ok
     end;
-check_value(_, {resource_exists, ReadableIdentifier, VerifyFun}, _Key, Val) when is_function(VerifyFun, 1) ->
-    case VerifyFun(Val) of
-        true ->
-            ok;
-        false ->
-            throw(?ERROR_RESOURCE_DOES_NOT_EXIST(ReadableIdentifier))
-    end;
 check_value(TypeRule, ValueRule, Key, _) ->
     ?error("Unknown {type, value} rule: {~p, ~p} for key: ~p", [
         TypeRule, ValueRule, Key
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
-

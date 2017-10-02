@@ -6,26 +6,22 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-
+%%% This module implements entity logic plugin behaviour and handles
+%%% entity logic operations corresponding to owned_identity model.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(identity_logic_plugin).
 -author("Lukasz Opiola").
 
--include("errors.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("cluster_worker/include/api_errors.hrl").
 
--type resource() :: {provider, od_provider:id()} | {publickey, Id :: binary()}.
-
--export_type([resource/0]).
-
-
--export([get_entity/1, create/4, get/4, update/3, delete/2]).
--export([exists/1, authorize/4, validate/2]).
--export([entity_to_string/1]).
+-export([fetch_entity/1, operation_supported/3]).
+-export([create/1, get/2, update/1, delete/1]).
+-export([exists/2, authorize/2, validate/1]).
 
 %%%===================================================================
 %%% API
@@ -37,21 +33,34 @@
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_entity(EntityId :: entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | {error, Reason :: term()}.
-get_entity(_) ->
+-spec fetch_entity(entity_logic:entity_id()) ->
+    {ok, entity_logic:entity()} | entity_logic:error().
+fetch_entity(_) ->
     ?ERROR_NOT_FOUND.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a resource based on EntityId, Resource identifier and Data.
+%% Determines if given operation is supported based on operation, aspect and
+%% scope (entity type is known based on the plugin itself).
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: entity_logic:client(),
-    EntityId :: entity_logic:entity_id(), Resource :: resource(),
-    entity_logic:data()) -> entity_logic:result().
-create(_Client, undefined, {provider, Id}, Data) ->
+-spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
+    entity_logic:scope()) -> boolean().
+operation_supported(create, {provider, _}, private) -> true;
+operation_supported(get, {publickey, _}, private) -> true;
+operation_supported(update, {publickey, _}, private) -> true;
+
+operation_supported(_, _, _) -> false.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a resource (aspect of entity) based on entity logic request.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(entity_logic:req()) -> entity_logic:create_result().
+create(#el_req{gri = #gri{aspect = {provider, Id}}, data = Data}) ->
     EncodedPublicKey = maps:get(<<"publicKey">>, Data),
     URLs = maps:get(<<"urls">>, Data),
     RedirectionPoint = maps:get(<<"redirectionPoint">>, Data),
@@ -68,24 +77,23 @@ create(_Client, undefined, {provider, Id}, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves a resource based on EntityId and Resource identifier.
+%% Retrieves a resource (aspect of entity) based on entity logic request and
+%% prefetched entity.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: entity_logic:client(), EntityId :: entity_logic:entity_id(),
-    Entity :: entity_logic:entity(), Resource :: resource()) ->
-    entity_logic:result().
-get(_, undefined, undefined, {publickey, Id}) ->
+-spec get(entity_logic:req(), entity_logic:entity()) ->
+    entity_logic:get_result().
+get(#el_req{gri = #gri{aspect = {publickey, Id}}}, _) ->
     plugins:apply(identity_repository, get, [Id]).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates a resource based on EntityId, Resource identifier and Data.
+%% Updates a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
--spec update(EntityId :: entity_logic:entity_id(), Resource :: resource(),
-    entity_logic:data()) -> entity_logic:result().
-update(undefined, {publickey, Id}, #{<<"publicKey">> := EncodedPublicKey}) ->
+-spec update(entity_logic:req()) -> entity_logic:update_result().
+update(#el_req{gri = #gri{aspect = {publickey, Id}}, data = #{<<"publicKey">> := EncodedPublicKey}}) ->
     case plugins:apply(identity_repository, publish, [Id, EncodedPublicKey]) of
         ok ->
             ok;
@@ -97,100 +105,73 @@ update(undefined, {publickey, Id}, #{<<"publicKey">> := EncodedPublicKey}) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes a resource based on EntityId and Resource identifier.
+%% Deletes a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(EntityId :: entity_logic:entity_id(), Resource :: resource()) ->
-    entity_logic:result().
-delete(_, _) ->
+-spec delete(entity_logic:req()) -> entity_logic:delete_result().
+delete(_) ->
     ?ERROR_NOT_IMPLEMENTED.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns existence verificators for given Resource identifier.
-%% Existence verificators can be internal, which means they operate on the
-%% entity to which the resource corresponds, or external - independent of
-%% the entity. If there are multiple verificators, they will be checked in
-%% sequence until one of them returns true.
-%% Implicit verificators 'true' | 'false' immediately stop the verification
-%% process with given result.
+%% Determines if given resource (aspect of entity) exists, based on entity
+%% logic request and prefetched entity.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(Resource :: resource()) ->
-    entity_logic:existence_verificator()|
-    [entity_logic:existence_verificator()].
-exists({publickey, Id}) ->
-    {external, fun() ->
-        case plugins:apply(identity_repository, get, [Id]) of
-            {error, _} -> false;
-            {ok, _} -> true
-        end
-    end}.
+-spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
+exists(#el_req{gri = #gri{aspect = {publickey, Id}}}, _) ->
+    case plugins:apply(identity_repository, get, [Id]) of
+        {error, _} -> false;
+        {ok, _} -> true
+    end.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns existence verificators for given Resource identifier.
-%% Existence verificators can be internal, which means they operate on the
-%% entity to which the resource corresponds, or external - independent of
-%% the entity. If there are multiple verificators, they will be checked in
-%% sequence until one of them returns true.
-%% Implicit verificators 'true' | 'false' immediately stop the verification
-%% process with given result.
+%% Determines if requesting client is authorized to perform given operation,
+%% based on entity logic request and prefetched entity.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize(Operation :: entity_logic:operation(),
-    EntityId :: entity_logic:entity_id(), Resource :: resource(),
-    Client :: entity_logic:client()) ->
-    entity_logic:authorization_verificator() |
-    [authorization_verificator:existence_verificator()].
-authorize(create, undefined, {provider, _Id}, _Client) ->
+-spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
+authorize(#el_req{operation = create, gri = #gri{aspect = {provider, _}}}, _) ->
     true;
 
-authorize(get, undefined, {publickey, _Id}, _Client) ->
+authorize(#el_req{operation = get, gri = #gri{aspect = {publickey, _}}}, _) ->
     true;
 
-authorize(update, undefined, {publickey, Id}, ?PROVIDER(ProviderId)) ->
-    Id =:= ProviderId;
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = {publickey, Id}}}, _) ->
+    case Req#el_req.client of
+        ?PROVIDER(ProviderId) ->
+            Id =:= ProviderId;
+        _ ->
+            false
+    end;
 
-authorize(delete, undefined, _, _Client) ->
+authorize(#el_req{operation = delete}, _) ->
     false.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns validity verificators for given Operation and Resource identifier.
+%% Returns validity verificators for given request.
 %% Returns a map with 'required', 'optional' and 'at_least_one' keys.
 %% Under each of them, there is a map:
 %%      Key => {type_verificator, value_verificator}
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(Operation :: entity_logic:operation(),
-    Resource :: resource()) ->
-    entity_logic:validity_verificator().
-validate(create, {provider, _Id}) -> #{
+-spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+validate(#el_req{operation = create, gri = #gri{aspect = {provider, _}}}) -> #{
     required => #{
         <<"publicKey">> => {binary, non_empty},
         <<"urls">> => {list_of_binaries, non_empty},
         <<"redirectionPoint">> => {binary, non_empty}
     }
 };
-validate(update, {publickey, _Id}) -> #{
+
+validate(#el_req{operation = update, gri = #gri{aspect = {publickey, _}}}) -> #{
     required => #{
         <<"publicKey">> => {binary, non_empty}
     }
 }.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns readable string representing the entity with given id.
-%% @end
-%%--------------------------------------------------------------------
--spec entity_to_string(EntityId :: entity_logic:entity_id()) -> binary().
-entity_to_string(Id) ->
-    <<"identity:", Id/binary>>.
-
-

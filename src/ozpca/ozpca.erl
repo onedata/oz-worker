@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Konrad Zemek
-%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% @copyright (C) 2014 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -27,7 +27,7 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
     code_change/3]).
 
--define(REQUEST_TIMEOUT, timer:seconds(10)).
+-define(INTERNAL_REQUEST_TIMEOUT, timer:seconds(10)).
 -define(CRL_REGENERATION_PERIOD, timer:hours(1)).
 -define(CACERT_FILE, "cacert.pem").
 -define(CAKEY_FILE, filename:join("private", "cakey.pem")).
@@ -232,7 +232,7 @@ delegate(Fun, Args) ->
     gen_server:cast(?MODULE, {execute, Ref, self(), Fun, Args}),
     receive
         {Ref, Response} -> Response
-    after ?REQUEST_TIMEOUT ->
+    after ?INTERNAL_REQUEST_TIMEOUT ->
         error(ca_loop_not_responding)
     end.
 

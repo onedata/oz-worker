@@ -188,7 +188,6 @@ merge_groups_in_linked_accounts_test(Config) ->
     {ok, UserId} = oz_test_utils:call_oz(
         Config, user_logic, create_user_by_linked_account, [FirstLinkedAcc]
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(has_linked_accounts(Config, UserId, [FirstLinkedAcc])),
     ?assertEqual({ok, []}, oz_test_utils:get_user_groups(Config, UserId)),
     ?assertEqual({ok, []}, oz_test_utils:get_user_eff_groups(Config, UserId)),
@@ -200,7 +199,6 @@ merge_groups_in_linked_accounts_test(Config) ->
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, SecondLinkedAcc]
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(has_linked_accounts(Config, UserId, [SecondLinkedAcc])),
     ?assert(has_group(
         Config, UserId,
@@ -217,7 +215,6 @@ merge_groups_in_linked_accounts_test(Config) ->
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, FirstLinkedAcc]
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assertEqual({ok, []}, oz_test_utils:get_user_groups(Config, UserId)),
     ?assertEqual({ok, []}, oz_test_utils:get_user_eff_groups(Config, UserId)),
 
@@ -229,7 +226,6 @@ merge_groups_in_linked_accounts_test(Config) ->
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, ThirdLinkedAcc]
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(has_linked_accounts(Config, UserId, [ThirdLinkedAcc])),
     ?assertNot(has_group(
         Config, UserId,
@@ -289,7 +285,6 @@ merge_groups_in_linked_accounts_test(Config) ->
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, FourthLinkedAcc]
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(has_linked_accounts(Config, UserId, [FourthLinkedAcc])),
     ?assertNot(has_group(
         Config, UserId,
@@ -350,7 +345,6 @@ merge_groups_in_linked_accounts_test(Config) ->
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, FifthLinkedAcc]
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(has_linked_accounts(Config, UserId, [FourthLinkedAcc, FifthLinkedAcc])),
     % Because the user belongs to the super group, he should have admin
     % rights (effective) in all the groups, beside the admin group (his privs
@@ -393,7 +387,6 @@ merge_groups_in_linked_accounts_test(Config) ->
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, SixthLinkedAcc]
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(has_linked_accounts(Config, UserId, [FourthLinkedAcc, SixthLinkedAcc])),
     % Now, the user should lose admin privs to all groups
     ?assertNot(has_group(
@@ -435,7 +428,6 @@ merge_groups_in_linked_accounts_test(Config) ->
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, SeventhLinkedAcc]
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(has_linked_accounts(Config, UserId, [FourthLinkedAcc, SeventhLinkedAcc])),
     % Now, the user should lose admin privs to all groups
     ?assertNot(has_group(

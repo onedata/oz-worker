@@ -14,24 +14,16 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("errors.hrl").
 -include("tokens.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("cluster_worker/include/api_errors.hrl").
 
--type resource() :: entity | entity_dev | list | support |
-eff_users | {eff_user, od_user:id()} |
-eff_groups | {eff_group, od_group:id()} |
-spaces | {space, od_space:id()} |
-check_my_ports | {check_my_ip, cowboy_req:req()} | map_group.
-
--export_type([resource/0]).
-
--export([get_entity/1, create/4, get/4, update/3, delete/2]).
--export([exists/1, authorize/4, validate/2]).
--export([entity_to_string/1]).
+-export([fetch_entity/1, operation_supported/3]).
+-export([create/1, get/2, update/1, delete/1]).
+-export([exists/2, authorize/2, validate/1]).
 
 %%%===================================================================
 %%% API
@@ -43,9 +35,9 @@ check_my_ports | {check_my_ip, cowboy_req:req()} | map_group.
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_entity(EntityId :: entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | {error, Reason :: term()}.
-get_entity(ProviderId) ->
+-spec fetch_entity(entity_logic:entity_id()) ->
+    {ok, entity_logic:entity()} | entity_logic:error().
+fetch_entity(ProviderId) ->
     case od_provider:get(ProviderId) of
         {ok, #document{value = Provider}} ->
             {ok, Provider};
@@ -56,13 +48,45 @@ get_entity(ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a resource based on EntityId, Resource identifier and Data.
+%% Determines if given operation is supported based on operation, aspect and
+%% scope (entity type is known based on the plugin itself).
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: entity_logic:client(),
-    EntityId :: entity_logic:entity_id(), Resource :: resource(),
-    entity_logic:data()) -> entity_logic:result().
-create(_, _, entity, Data) ->
+-spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
+    entity_logic:scope()) -> boolean().
+operation_supported(create, instance, private) -> true;
+operation_supported(create, instance_dev, private) -> true;
+operation_supported(create, support, private) -> true;
+operation_supported(create, check_my_ports, private) -> true;
+operation_supported(create, map_group, private) -> true;
+
+operation_supported(get, list, private) -> true;
+
+operation_supported(get, instance, private) -> true;
+operation_supported(get, instance, protected) -> true;
+
+operation_supported(get, eff_users, private) -> true;
+operation_supported(get, eff_groups, private) -> true;
+operation_supported(get, spaces, private) -> true;
+operation_supported(get, {check_my_ip, _}, private) -> true;
+
+operation_supported(update, instance, private) -> true;
+operation_supported(update, {space, _}, private) -> true;
+
+operation_supported(delete, instance, private) -> true;
+operation_supported(delete, {space, _}, private) -> true;
+
+operation_supported(_, _, _) -> false.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a resource (aspect of entity) based on entity logic request.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(entity_logic:req()) -> entity_logic:create_result().
+create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
+    Data = Req#el_req.data,
     Name = case maps:get(<<"name">>, Data, undefined) of
         undefined ->
             maps:get(<<"clientName">>, Data);
@@ -84,10 +108,11 @@ create(_, _, entity, Data) ->
                 redirection_point = RedirectionPoint, serial = Serial,
                 latitude = Latitude, longitude = Longitude},
             od_provider:create(#document{key = ProviderId, value = Provider}),
-            {ok, {ProviderId, ProviderCertPem}}
+            {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, ProviderCertPem}}}
     end;
 
-create(_, _, entity_dev, Data) ->
+create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) ->
+    Data = Req#el_req.data,
     Name = case maps:get(<<"name">>, Data, undefined) of
         undefined ->
             maps:get(<<"clientName">>, Data);
@@ -110,45 +135,49 @@ create(_, _, entity_dev, Data) ->
                 redirection_point = RedirectionPoint, serial = Serial,
                 latitude = Latitude, longitude = Longitude},
             od_provider:create(#document{key = ProviderId, value = Provider}),
-            {ok, {ProviderId, ProviderCertPem}}
+            {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, ProviderCertPem}}}
     end;
 
-create(_, ProviderId, support, Data) ->
+create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     SupportSize = maps:get(<<"size">>, Data),
     Macaroon = maps:get(<<"token">>, Data),
     {ok, {od_space, SpaceId}} = token_logic:consume(Macaroon),
     entity_graph:add_relation(
         od_space, SpaceId, od_provider, ProviderId, SupportSize
     ),
-    {ok, SpaceId};
+    NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
+    {ok, {not_fetched, NewGRI}};
 
-create(_, undefined, check_my_ports, Data) ->
+create(Req = #el_req{gri = #gri{aspect = check_my_ports}}) ->
     try
-        test_connection(Data)
+        {ok, {data, test_connection(Req#el_req.data)}}
     catch _:_ ->
         ?ERROR_INTERNAL_SERVER_ERROR
     end;
 
-create(_, undefined, map_group, Data) ->
+create(#el_req{gri = #gri{aspect = map_group}, data = Data}) ->
     ProviderId = maps:get(<<"idp">>, Data),
     GroupId = maps:get(<<"groupId">>, Data),
     GroupSpec = auth_utils:normalize_membership_spec(
         binary_to_atom(ProviderId, latin1), GroupId),
-    {ok, idp_group_mapping:group_spec_to_db_id(GroupSpec)}.
+    {ok, {data, idp_group_mapping:group_spec_to_db_id(GroupSpec)}}.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves a resource based on EntityId and Resource identifier.
+%% Retrieves a resource (aspect of entity) based on entity logic request and
+%% prefetched entity.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: entity_logic:client(), EntityId :: entity_logic:entity_id(),
-    Entity :: entity_logic:entity(), Resource :: resource()) ->
-    entity_logic:result().
-get(_, undefined, undefined, list) ->
+-spec get(entity_logic:req(), entity_logic:entity()) ->
+    entity_logic:get_result().
+get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, ProviderDocs} = od_provider:list(),
     {ok, [ProviderId || #document{key = ProviderId} <- ProviderDocs]};
-get(_, _ProviderId, #od_provider{} = Provider, data) ->
+
+get(#el_req{gri = #gri{aspect = instance, scope = private}}, Provider) ->
+    {ok, Provider};
+get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Provider) ->
     #od_provider{
         name = Name, urls = Urls, redirection_point = RedirectionPoint,
         latitude = Latitude, longitude = Longitude
@@ -160,34 +189,26 @@ get(_, _ProviderId, #od_provider{} = Provider, data) ->
         % TODO VFS-2918
         <<"clientName">> => Name
     }};
-get(_, _ProviderId, #od_provider{spaces = Spaces}, spaces) ->
-    {ok, maps:keys(Spaces)};
-get(_, _ProviderId, #od_provider{}, {space, SpaceId}) ->
-    {ok, Space} = ?throw_on_failure(space_logic_plugin:get_entity(SpaceId)),
-    space_logic_plugin:get(?ROOT, SpaceId, Space, data);
-get(_, _ProviderId, #od_provider{eff_users = EffUsers}, eff_users) ->
-    {ok, maps:keys(EffUsers)};
-get(_, _ProviderId, #od_provider{}, {eff_user, UserId}) ->
-    {ok, User} = ?throw_on_failure(user_logic_plugin:get_entity(UserId)),
-    user_logic_plugin:get(?ROOT, UserId, User, data);
-get(_, _ProviderId, #od_provider{eff_groups = EffGroups}, eff_groups) ->
-    {ok, maps:keys(EffGroups)};
-get(_, _ProviderId, #od_provider{}, {eff_group, GroupId}) ->
-    {ok, Group} = ?throw_on_failure(group_logic_plugin:get_entity(GroupId)),
-    group_logic_plugin:get(?ROOT, GroupId, Group, data);
-get(_, undefined, undefined, {check_my_ip, Req}) ->
-    {{Ip, _Port}, _} = cowboy_req:peer(Req),
-    {ok, list_to_binary(inet_parse:ntoa(Ip))}.
+
+get(#el_req{gri = #gri{aspect = eff_users}}, Provider) ->
+    {ok, maps:keys(Provider#od_provider.eff_users)};
+get(#el_req{gri = #gri{aspect = eff_groups}}, Provider) ->
+    {ok, maps:keys(Provider#od_provider.eff_groups)};
+
+get(#el_req{gri = #gri{aspect = spaces}}, Provider) ->
+    {ok, maps:keys(Provider#od_provider.spaces)};
+
+get(#el_req{gri = #gri{aspect = {check_my_ip, ClientIP}}}, _) ->
+    {ok, ClientIP}.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates a resource based on EntityId, Resource identifier and Data.
+%% Updates a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
--spec update(EntityId :: entity_logic:entity_id(), Resource :: resource(),
-    entity_logic:data()) -> entity_logic:result().
-update(ProviderId, entity, Data) ->
+-spec update(entity_logic:req()) -> entity_logic:update_result().
+update(#el_req{gri = #gri{id = ProviderId, aspect = instance}, data = Data}) ->
     {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
         #od_provider{
             name = Name, urls = URLs, redirection_point = RedPoint,
@@ -204,8 +225,8 @@ update(ProviderId, entity, Data) ->
     end),
     ok;
 
-update(ProviderId, {space, SpaceId}, Data) ->
-    NewSupportSize = maps:get(<<"size">>, Data),
+update(Req = #el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
+    NewSupportSize = maps:get(<<"size">>, Req#el_req.data),
     entity_graph:update_relation(
         od_space, SpaceId, od_provider, ProviderId, NewSupportSize
     ).
@@ -213,15 +234,14 @@ update(ProviderId, {space, SpaceId}, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes a resource based on EntityId and Resource identifier.
+%% Deletes a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(EntityId :: entity_logic:entity_id(), Resource :: resource()) ->
-    entity_logic:result().
-delete(ProviderId, entity) ->
+-spec delete(entity_logic:req()) -> entity_logic:delete_result().
+delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     entity_graph:delete_with_relations(od_provider, ProviderId);
 
-delete(ProviderId, {space, SpaceId}) ->
+delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
     entity_graph:remove_relation(
         od_space, SpaceId, od_provider, ProviderId
     ).
@@ -229,155 +249,134 @@ delete(ProviderId, {space, SpaceId}) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns existence verificators for given Resource identifier.
-%% Existence verificators can be internal, which means they operate on the
-%% entity to which the resource corresponds, or external - independent of
-%% the entity. If there are multiple verificators, they will be checked in
-%% sequence until one of them returns true.
-%% Implicit verificators 'true' | 'false' immediately stop the verification
-%% process with given result.
+%% Determines if given resource (aspect of entity) exists, based on entity
+%% logic request and prefetched entity.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(Resource :: resource()) ->
-    entity_logic:existence_verificator()|
-    [entity_logic:existence_verificator()].
-exists({space, SpaceId}) ->
-    % No matter the resource, return true if it belongs to a provider
-    {internal, fun(#od_provider{spaces = Spaces}) ->
-        maps:is_key(SpaceId, Spaces)
-    end};
+-spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
+exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Provider) ->
+    case Req#el_req.auth_hint of
+        ?THROUGH_USER(UserId) ->
+            provider_logic:has_eff_user(Provider, UserId);
+        ?THROUGH_GROUP(GroupId) ->
+            provider_logic:has_eff_group(Provider, GroupId);
+        ?THROUGH_SPACE(SpaceId) ->
+            provider_logic:supports_space(Provider, SpaceId);
+        undefined ->
+            true
+    end;
 
-exists({eff_user, UserId}) ->
-    % No matter the resource, return true if it belongs to a provider
-    {internal, fun(#od_provider{eff_users = EffUsers}) ->
-        maps:is_key(UserId, EffUsers)
-    end};
+exists(#el_req{gri = #gri{aspect = {space, SpaceId}}}, Provider) ->
+    maps:is_key(SpaceId, Provider#od_provider.spaces);
 
-exists({eff_group, GroupId}) ->
-    % No matter the resource, return true if it belongs to a provider
-    {internal, fun(#od_provider{eff_groups = EffGroups}) ->
-        maps:is_key(GroupId, EffGroups)
-    end};
-
-exists(_) ->
-    {internal, fun(#od_provider{}) ->
-        % If the provider with ProviderId can be found, it exists. If not, the
-        % verification will fail before this function is called.
-        true
-    end}.
+% All other aspects exist if provider record exists.
+exists(#el_req{gri = #gri{id = Id}}, #od_provider{}) ->
+    Id =/= undefined.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns existence verificators for given Resource identifier.
-%% Existence verificators can be internal, which means they operate on the
-%% entity to which the resource corresponds, or external - independent of
-%% the entity. If there are multiple verificators, they will be checked in
-%% sequence until one of them returns true.
-%% Implicit verificators 'true' | 'false' immediately stop the verification
-%% process with given result.
+%% Determines if requesting client is authorized to perform given operation,
+%% based on entity logic request and prefetched entity.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize(Operation :: entity_logic:operation(),
-    EntityId :: entity_logic:entity_id(), Resource :: resource(),
-    Client :: entity_logic:client()) ->
-    entity_logic:authorization_verificator() |
-    [authorization_verificator:existence_verificator()].
-authorize(create, undefined, check_my_ports, _) ->
+-spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
+authorize(#el_req{operation = create, gri = #gri{aspect = check_my_ports}}, _) ->
     true;
 
-authorize(create, undefined, entity, _) ->
+authorize(#el_req{operation = create, gri = #gri{aspect = map_group}}, _) ->
     true;
 
-authorize(create, undefined, entity_dev, _) ->
+authorize(#el_req{operation = create, gri = #gri{aspect = instance}}, _) ->
     true;
 
-authorize(create, ProvId, support, ?PROVIDER(ProvId)) ->
+authorize(#el_req{operation = create, gri = #gri{aspect = instance_dev}}, _) ->
     true;
 
-authorize(create, _ProvId, map_group, _) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, _) ->
+    auth_by_self(Req);
+
+authorize(#el_req{operation = get, gri = #gri{aspect = {check_my_ip, _}}}, _) ->
     true;
 
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = list}}, _) ->
+    user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_PROVIDERS_LIST);
 
-authorize(get, undefined, {check_my_ip, _}, _) ->
-    true;
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, _) ->
+    auth_by_self(Req);
 
-authorize(get, _ProvId, entity, ?USER(UserId)) ->
-    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST);
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}, Provider) ->
+    case {Req#el_req.client, Req#el_req.auth_hint} of
+        {?USER(UserId), ?THROUGH_USER(UserId)} ->
+            % User's membership in this provider is checked in 'exists'
+            true;
 
-authorize(get, ProvId, entity, ?PROVIDER(ProvId)) ->
-    true;
+        {?USER(UserId), ?THROUGH_GROUP(GroupId)} ->
+            % Groups's membership in this provider is checked in 'exists'
+            group_logic:has_eff_user(GroupId, UserId);
 
-authorize(get, _ProvId, data, ?PROVIDER) ->
-    % Any provider can get data about other providers
-    true;
+        {?PROVIDER(_ProvId), ?THROUGH_SPACE(_SpaceId)} ->
+            % Space's support by this provider is checked in 'exists'
+            true;
 
-authorize(get, _ProvId, data, ?USER(UserId)) -> [
-    auth_by_membership(UserId),
-    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST)
-];
+        {?USER(UserId), ?THROUGH_SPACE(SpaceId)} ->
+            % Space's support by this provider is checked in 'exists'
+            user_logic:has_eff_space(UserId, SpaceId) orelse
+                user_logic_plugin:auth_by_oz_privilege(UserId, ?OZ_SPACES_LIST_PROVIDERS);
 
-authorize(get, undefined, list, ?USER(UserId)) ->
-    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST);
+        {?PROVIDER(_), _} ->
+            % Providers are allowed to view each other's protected data
+            true;
 
-authorize(get, _ProvId, eff_users, ?USER(UserId)) ->
-    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_USERS);
+        {?USER(UserId), _} ->
+            auth_by_membership(UserId, Provider) orelse
+                user_logic_plugin:auth_by_oz_privilege(UserId, ?OZ_PROVIDERS_LIST);
 
-authorize(get, _ProvId, {eff_user, _}, ?USER(UserId)) ->
-    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_USERS);
+        _ ->
+            % Access to private data also allows access to protected data
+            authorize(Req#el_req{gri = #gri{scope = private}}, Provider)
+    end;
 
-authorize(get, _ProvId, eff_groups, ?USER(UserId)) ->
-    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_GROUPS);
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_users}}, _) ->
+    auth_by_self(Req) orelse
+        user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_PROVIDERS_LIST_USERS);
 
-authorize(get, _ProvId, {eff_group, _}, ?USER(UserId)) ->
-    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_GROUPS);
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_groups}}, _) ->
+    auth_by_self(Req) orelse
+        user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_PROVIDERS_LIST_GROUPS);
 
-authorize(get, ProvId, spaces, ?PROVIDER(ProvId)) ->
-    true;
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = spaces}}, _) ->
+    auth_by_self(Req) orelse
+        user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_PROVIDERS_LIST_SPACES);
 
-authorize(get, _ProvId, spaces, ?USER(UserId)) ->
-    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_SPACES);
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, _) ->
+    auth_by_self(Req);
 
-authorize(get, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
-    true;
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = {space, _}}}, _) ->
+    auth_by_self(Req);
 
-authorize(get, _ProvId, {space, _}, ?USER(UserId)) ->
-    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_LIST_SPACES);
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, _) ->
+    auth_by_self(Req) orelse
+        user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_PROVIDERS_DELETE);
 
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, _) ->
+    auth_by_self(Req);
 
-authorize(update, ProvId, entity, ?PROVIDER(ProvId)) ->
-    true;
-
-authorize(update, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
-    true;
-
-
-authorize(delete, ProvId, entity, ?PROVIDER(ProvId)) ->
-    true;
-
-authorize(delete, _ProvId, entity, ?USER(UserId)) ->
-    user_logic:has_eff_oz_privilege(UserId, ?OZ_PROVIDERS_DELETE);
-
-authorize(delete, ProvId, {space, _}, ?PROVIDER(ProvId)) ->
-    true;
-
-authorize(_, _, _, _) ->
+authorize(_, _) ->
     false.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns validity verificators for given Operation and Resource identifier.
+%% Returns validity verificators for given request.
 %% Returns a map with 'required', 'optional' and 'at_least_one' keys.
 %% Under each of them, there is a map:
 %%      Key => {type_verificator, value_verificator}
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(Operation :: entity_logic:operation(),
-    Resource :: resource()) ->
-    entity_logic:validity_verificator().
-validate(create, entity) -> #{
+-spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"urls">> => {list_of_binaries, non_empty},
         <<"redirectionPoint">> => {binary, non_empty},
@@ -393,7 +392,8 @@ validate(create, entity) -> #{
         <<"clientName">> => {binary, non_empty}
     }
 };
-validate(create, entity_dev) -> #{
+
+validate(#el_req{operation = create, gri = #gri{aspect = instance_dev}}) -> #{
     required => #{
         <<"urls">> => {list_of_binaries, non_empty},
         <<"redirectionPoint">> => {binary, non_empty},
@@ -410,23 +410,27 @@ validate(create, entity_dev) -> #{
         <<"clientName">> => {binary, non_empty}
     }
 };
-validate(create, support) -> #{
+
+validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     required => #{
         <<"token">> => {token, ?SPACE_SUPPORT_TOKEN},
         <<"size">> => {integer, {not_lower_than, get_min_support_size()}}
     }
 };
-validate(create, check_my_ports) -> #{
+
+validate(#el_req{operation = create, gri = #gri{aspect = check_my_ports}}) -> #{
 };
-validate(create, map_group) -> #{
+
+validate(#el_req{operation = create, gri = #gri{aspect = map_group}}) -> #{
     required => #{
         <<"idp">> => {binary, {exists, fun(Idp) ->
-                auth_utils:has_group_mapping_enabled(binary_to_atom(Idp, latin1))
-            end}},
+            auth_utils:has_group_mapping_enabled(binary_to_atom(Idp, utf8))
+        end}},
         <<"groupId">> => {binary, non_empty}
     }
 };
-validate(update, entity) -> #{
+
+validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, non_empty},
         <<"clientName">> => {binary, non_empty},
@@ -436,21 +440,12 @@ validate(update, entity) -> #{
         <<"longitude">> => {float, {between, -180, 180}}
     }
 };
-validate(update, {space, _SpaceId}) -> #{
+
+validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
     required => #{
         <<"size">> => {integer, {not_lower_than, get_min_support_size()}}
     }
 }.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns readable string representing the entity with given id.
-%% @end
-%%--------------------------------------------------------------------
--spec entity_to_string(EntityId :: entity_logic:entity_id()) -> binary().
-entity_to_string(SpaceId) ->
-    od_provider:to_string(SpaceId).
 
 
 %%%===================================================================
@@ -460,16 +455,27 @@ entity_to_string(SpaceId) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns authorization verificator that checks if given user is an
-%% effective user of the provider represented by entity.
+%% Returns if given user is supported by the provider represented by entity.
+%% ProviderId is either given explicitly or derived from entity logic request.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_membership(UserId :: od_user:id()) ->
-    entity_logic:authorization_verificator().
-auth_by_membership(UserId) ->
-    {internal, fun(#od_provider{eff_users = EffUsers}) ->
-        maps:is_key(UserId, EffUsers)
-    end}.
+-spec auth_by_membership(od_user:id(), od_provider:info()) ->
+    boolean().
+auth_by_membership(UserId, #od_provider{eff_users = EffUsers}) ->
+    maps:is_key(UserId, EffUsers).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns true if request client is the same as provider id in GRI.
+%% @end
+%%--------------------------------------------------------------------
+-spec auth_by_self(entity_logic:req()) -> boolean().
+auth_by_self(#el_req{client = ?PROVIDER(ProvId), gri = #gri{id = ProvId}}) ->
+    true;
+auth_by_self(_) ->
+    false.
 
 
 %%--------------------------------------------------------------------
@@ -480,7 +486,7 @@ auth_by_membership(UserId) ->
 %% @equiv test_connection/2
 %%--------------------------------------------------------------------
 -spec test_connection(#{ServiceName :: binary() => Url :: binary()}) ->
-    {ok, #{ServiceName :: binary() => Status :: ok | error}}.
+    #{ServiceName :: binary() => Status :: ok | error}.
 test_connection(Map) ->
     test_connection(maps:to_list(Map), #{}).
 
@@ -492,10 +498,9 @@ test_connection(Map) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec test_connection([{ServiceName :: binary(), Url :: binary()}], Result) ->
-    {ok, Result}
-    when Result :: #{Url :: binary() => Status :: ok | error}.
+    Result when Result :: #{Url :: binary() => Status :: ok | error}.
 test_connection([], Acc) ->
-    {ok, Acc};
+    Acc;
 test_connection([{<<"undefined">>, <<Url/binary>>} | Rest], Acc) ->
     ConnStatus = case http_client:get(Url, #{}, <<>>, [insecure]) of
         {ok, 200, _, _} ->

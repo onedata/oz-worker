@@ -25,7 +25,7 @@
 ]).
 -export([
     get/2,
-    get_data/2,
+    get_protected_data/2,
     list/1
 ]).
 -export([
@@ -43,17 +43,20 @@
     revoke_support/3
 ]).
 -export([
-    check_my_ports/2,
-    check_my_ip/2
+    check_my_ports/2
 ]).
 -export([
     exists/1,
-    has_eff_user/2
+    has_eff_user/2,
+    has_eff_group/2,
+    supports_space/2
 ]).
 -export([
+    set_online/2,
+    is_online/1,
+    mark_all_providers_as_offline/0,
     get_url/1,
-    choose_provider_for_user/1,
-    is_provider_connected/1
+    choose_provider_for_user/1
 ]).
 
 %%%===================================================================
@@ -109,7 +112,18 @@ create(Client, Name, URLs, RedirectionPoint, CSR, Latitude, Longitude) ->
 -spec create(Client :: entity_logic:client(), Data :: #{}) ->
     {ok, od_provider:id()} | {error, term()}.
 create(Client, Data) ->
-    entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
+    Res = entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_provider, id = undefined, aspect = instance},
+        data = Data
+    }),
+    case Res of
+        Error = {error, _} ->
+            Error;
+        {ok, {fetched, #gri{id = ProviderId}, {_, Certificate}}} ->
+            {ok, {ProviderId, Certificate}}
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -124,7 +138,18 @@ create(Client, Data) ->
 -spec create_dev(Client :: entity_logic:client(), Data :: #{}) ->
     {ok, od_provider:id()} | {error, term()}.
 create_dev(Client, Data) ->
-    entity_logic:create(Client, ?PLUGIN, undefined, entity_dev, Data).
+    Res = entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_provider, id = undefined, aspect = instance_dev},
+        data = Data
+    }),
+    case Res of
+        Error = {error, _} ->
+            Error;
+        {ok, {fetched, #gri{id = ProviderId}, {_, Certificate}}} ->
+            {ok, {ProviderId, Certificate}}
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -135,18 +160,26 @@ create_dev(Client, Data) ->
 -spec get(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
     {ok, #od_provider{}} | {error, term()}.
 get(Client, ProviderId) ->
-    entity_logic:get(Client, ?PLUGIN, ProviderId, entity).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = instance}
+    }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves information about a provider record from database.
+%% Retrieves protected provider data from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
-    {ok, #{}} | {error, term()}.
-get_data(Client, ProviderId) ->
-    entity_logic:get(Client, ?PLUGIN, ProviderId, data).
+-spec get_protected_data(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+    {ok, maps:map()} | {error, term()}.
+get_protected_data(Client, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -157,7 +190,11 @@ get_data(Client, ProviderId) ->
 -spec list(Client :: entity_logic:client()) ->
     {ok, [od_provider:id()]} | {error, term()}.
 list(Client) ->
-    entity_logic:get(Client, ?PLUGIN, undefined, list).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = undefined, aspect = list}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -169,7 +206,12 @@ list(Client) ->
 -spec update(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
     Data :: #{}) -> ok | {error, term()}.
 update(Client, ProviderId, Data) ->
-    entity_logic:update(Client, ?PLUGIN, ProviderId, entity, Data).
+    entity_logic:handle(#el_req{
+        operation = update,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = instance},
+        data = Data
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -180,7 +222,11 @@ update(Client, ProviderId, Data) ->
 -spec delete(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
     ok | {error, term()}.
 delete(Client, ProviderId) ->
-    entity_logic:delete(Client, ?PLUGIN, ProviderId, entity).
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = instance}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -206,7 +252,12 @@ support_space(Client, ProviderId, Token, SupportSize) ->
 -spec support_space(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
     Data :: #{}) -> {ok, od_space:id()} | {error, term()}.
 support_space(Client, ProviderId, Data) ->
-    entity_logic:create(Client, ?PLUGIN, ProviderId, support, Data).
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = support},
+        data = Data
+    })).
 
 
 %%--------------------------------------------------------------------
@@ -217,7 +268,11 @@ support_space(Client, ProviderId, Data) ->
 -spec get_eff_users(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
 get_eff_users(Client, ProviderId) ->
-    entity_logic:get(Client, ?PLUGIN, ProviderId, eff_users).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = eff_users}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -229,7 +284,12 @@ get_eff_users(Client, ProviderId) ->
 -spec get_eff_user(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
     UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
 get_eff_user(Client, ProviderId, UserId) ->
-    entity_logic:get(Client, ?PLUGIN, ProviderId, {eff_user, UserId}).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_user, id = UserId, aspect = instance, scope = protected},
+        auth_hint = ?THROUGH_PROVIDER(ProviderId)
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -240,7 +300,11 @@ get_eff_user(Client, ProviderId, UserId) ->
 -spec get_eff_groups(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
 get_eff_groups(Client, ProviderId) ->
-    entity_logic:get(Client, ?PLUGIN, ProviderId, eff_groups).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = eff_groups}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -252,7 +316,12 @@ get_eff_groups(Client, ProviderId) ->
 -spec get_eff_group(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
     GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
 get_eff_group(Client, ProviderId, GroupId) ->
-    entity_logic:get(Client, ?PLUGIN, ProviderId, {eff_group, GroupId}).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_group, id = GroupId, aspect = instance, scope = protected},
+        auth_hint = ?THROUGH_PROVIDER(ProviderId)
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -263,7 +332,11 @@ get_eff_group(Client, ProviderId, GroupId) ->
 -spec get_spaces(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
     {ok, [od_space:id()]} | {error, term()}.
 get_spaces(Client, ProviderId) ->
-    entity_logic:get(Client, ?PLUGIN, ProviderId, spaces).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = spaces}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -274,7 +347,12 @@ get_spaces(Client, ProviderId) ->
 -spec get_space(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
     SpaceId :: od_space:id()) -> {ok, #{}} | {error, term()}.
 get_space(Client, ProviderId, SpaceId) ->
-    entity_logic:get(Client, ?PLUGIN, ProviderId, {space, SpaceId}).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
+        auth_hint = ?THROUGH_PROVIDER(ProviderId)
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -291,7 +369,12 @@ update_support_size(Client, ProviderId, SpaceId, SupSize) when is_integer(SupSiz
         <<"size">> => SupSize
     });
 update_support_size(Client, ProviderId, SpaceId, Data) ->
-    entity_logic:update(Client, ?PLUGIN, ProviderId, {space, SpaceId}, Data).
+    entity_logic:handle(#el_req{
+        operation = update,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {space, SpaceId}},
+        data = Data
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -302,7 +385,11 @@ update_support_size(Client, ProviderId, SpaceId, Data) ->
 -spec revoke_support(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
     SpaceId :: od_space:id()) -> ok | {error, term()}.
 revoke_support(Client, ProviderId, SpaceId) ->
-    entity_logic:delete(Client, ?PLUGIN, ProviderId, {space, SpaceId}).
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {space, SpaceId}}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -314,18 +401,12 @@ revoke_support(Client, ProviderId, SpaceId) ->
 -spec check_my_ports(Client :: entity_logic:client(), Data :: #{}) ->
     ok | {error, term()}.
 check_my_ports(Client, Data) ->
-    entity_logic:create(Client, ?PLUGIN, undefined, check_my_ports, Data).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves the IP of requesting client based on cowboy req.
-%% @end
-%%--------------------------------------------------------------------
--spec check_my_ip(Client :: entity_logic:client(),
-    CowboyReq :: cowboy_req:req()) -> {ok, IP :: binary()} | {error, term()}.
-check_my_ip(Client, CowboyReq) ->
-    entity_logic:get(Client, ?PLUGIN, undefined, {check_my_ip, CowboyReq}).
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_provider, id = undefined, aspect = check_my_ports},
+        data = Data
+    })).
 
 
 %%--------------------------------------------------------------------
@@ -355,6 +436,83 @@ has_eff_user(ProviderId, UserId) when is_binary(ProviderId) ->
     end;
 has_eff_user(#od_provider{eff_users = EffUsers}, UserId) ->
     maps:is_key(UserId, EffUsers).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified group is an effective group in given
+%% provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_group(ProviderOrId :: od_provider:id() | #od_provider{},
+    GroupId :: od_group:id()) -> boolean().
+has_eff_group(ProviderId, GroupId) when is_binary(ProviderId) ->
+    case od_provider:get(ProviderId) of
+        {ok, #document{value = Provider}} ->
+            has_eff_group(Provider, GroupId);
+        _ ->
+            false
+    end;
+has_eff_group(#od_provider{eff_groups = EffGroups}, GroupId) ->
+    maps:is_key(GroupId, EffGroups).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified space is supported by given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec supports_space(ProviderOrId :: od_provider:id() | #od_provider{},
+    SpaceId :: od_space:id()) -> boolean().
+supports_space(ProviderId, SpaceId) when is_binary(ProviderId) ->
+    case od_provider:get(ProviderId) of
+        {ok, #document{value = Provider}} ->
+            supports_space(Provider, SpaceId);
+        _ ->
+            false
+    end;
+supports_space(#od_provider{spaces = Spaces}, SpaceId) ->
+    maps:is_key(SpaceId, Spaces).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets "online" status of given provider to true/false.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_online(ProviderId :: od_provider:id(), Flag :: boolean()) -> ok.
+set_online(ProviderId, Flag) ->
+    {ok, _} = od_provider:update(ProviderId, fun(Provider = #od_provider{}) ->
+        {ok, Provider#od_provider{online = Flag}}
+    end),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns if given provider is online (connected to OZ).
+%% @end
+%%--------------------------------------------------------------------
+-spec is_online(ProviderId :: od_provider:id()) -> boolean().
+is_online(ProviderId) ->
+    {ok, #od_provider{online = Online}} = get(?ROOT, ProviderId),
+    Online.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Marks all providers as offline - needed at startup to correct possible
+%% mistakes in provider statuses - in case OZ crashed and connections were not
+%% closed cleanly.
+%% @end
+%%--------------------------------------------------------------------
+-spec mark_all_providers_as_offline() -> ok.
+mark_all_providers_as_offline() ->
+    {ok, ProviderIds} = list(?ROOT),
+    lists:foreach(
+        fun(ProviderId) ->
+            set_online(ProviderId, false)
+        end, ProviderIds).
 
 
 %%--------------------------------------------------------------------
@@ -413,13 +571,3 @@ choose_provider_for_user(UserId) ->
                     {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIds) + 1), ProviderIds)}
             end
     end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Checks if given provider (by Id) is alive and responding.
-%% @end
-%%--------------------------------------------------------------------
--spec is_provider_connected(ProviderId :: od_provider:id()) -> boolean().
-is_provider_connected(ProviderId) ->
-    subscriptions:any_connection_active(ProviderId).

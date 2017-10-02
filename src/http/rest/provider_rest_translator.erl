@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -14,12 +14,8 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
--include("errors.hrl").
--include("datastore/oz_datastore_models.hrl").
--include("registered_names.hrl").
--include_lib("ctool/include/logging.hrl").
 
--export([response/4]).
+-export([create_response/3, get_response/2]).
 
 %%%===================================================================
 %%% API
@@ -27,53 +23,61 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates given entity logic result into REST response
+%% Translates given entity logic CREATE result into REST response
+%% expressed by #rest_resp{} record. GRI holds the #gri{} od the request,
+%% new GRI holds the #gri{} of new aspect that was created.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
+    Result :: {data, term()} | {fetched, entity_logic:gri(), term()} |
+    {not_fetched, entity_logic:gri()} |
+    {not_fetched, entity_logic:gri(), entity_logic:auth_hint()}) -> #rest_resp{}.
+create_response(#gri{id = undefined, aspect = instance}, _, {fetched, #gri{id = ProvId}, {_, Certificate}}) ->
+    rest_translator:ok_body_reply(#{
+        <<"providerId">> => ProvId,
+        <<"certificate">> => Certificate
+    });
+
+create_response(#gri{id = undefined, aspect = instance_dev}, _, {fetched, #gri{id = ProvId}, {_, Certificate}}) ->
+    rest_translator:ok_body_reply(#{
+        <<"providerId">> => ProvId,
+        <<"certificate">> => Certificate
+    });
+
+create_response(#gri{aspect = support}, _, {not_fetched, #gri{id = SpaceId}}) ->
+    rest_translator:created_reply([<<"provider">>, <<"spaces">>, SpaceId]);
+
+create_response(#gri{aspect = check_my_ports}, _, {data, Body}) ->
+    rest_translator:ok_body_reply(Body);
+
+create_response(#gri{aspect = map_group}, _, {data, GroupId}) ->
+    rest_translator:ok_body_reply(#{
+        <<"groupId">> => GroupId
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Translates given entity logic GET result into REST response
 %% expressed by #rest_resp{} record.
 %% @end
 %%--------------------------------------------------------------------
--spec response(Operation :: entity_logic:operation(),
-    EntityId :: entity_logic:entity_id(), Resource :: entity_logic:resource(),
-    Result :: entity_logic:result()) -> #rest_resp{}.
-response(create, undefined, entity, {ok, {ProvId, Certificate}}) ->
-    rest_handler:ok_body_reply(#{
-        <<"providerId">> => ProvId,
-        <<"certificate">> => Certificate
-    });
-response(create, undefined, entity_dev, {ok, {ProvId, Certificate}}) ->
-    rest_handler:ok_body_reply(#{
-        <<"providerId">> => ProvId,
-        <<"certificate">> => Certificate
-    });
-response(create, _ProvId, support, {ok, SpaceId}) ->
-    rest_handler:created_reply([<<"provider/spaces/">>, SpaceId]);
-response(create, _ProvId, check_my_ports, {ok, Body}) ->
-    rest_handler:ok_body_reply(Body);
-response(create, _ProvId, map_group, {ok, GroupId}) ->
-    rest_handler:ok_body_reply(#{
-        <<"groupId">> => GroupId
-    });
+-spec get_response(entity_logic:gri(), entity_logic:get_result()) ->
+    #rest_resp{}.
+get_response(#gri{id = undefined, aspect = list}, Providers) ->
+    rest_translator:ok_body_reply(#{<<"providers">> => Providers});
 
-response(get, undefined, list, {ok, ProviderIds}) ->
-    rest_handler:ok_body_reply(#{<<"providers">> => ProviderIds});
-response(get, EntityId, data, {ok, ProviderData}) ->
-    rest_handler:ok_body_reply(ProviderData#{<<"providerId">> => EntityId});
-response(get, _ProvId, eff_users, {ok, UserIds}) ->
-    rest_handler:ok_body_reply(#{<<"users">> => UserIds});
-response(get, _ProvId, {eff_user, UserId}, {ok, UserData}) ->
-    user_rest_translator:response(get, UserId, data, {ok, UserData});
-response(get, _ProvId, eff_groups, {ok, GroupIds}) ->
-    rest_handler:ok_body_reply(#{<<"groups">> => GroupIds});
-response(get, _ProvId, {eff_group, GroupId}, {ok, GroupData}) ->
-    group_rest_translator:response(get, GroupId, data, {ok, GroupData});
-response(get, _ProvId, spaces, {ok, SpaceIds}) ->
-    rest_handler:ok_body_reply(#{<<"spaces">> => SpaceIds});
-response(get, _ProvId, {space, SpaceId}, {ok, SpaceData}) ->
-    space_rest_translator:response(get, SpaceId, data, {ok, SpaceData});
-response(get, _ProvId, {check_my_ip, _}, {ok, IP}) ->
-    rest_handler:ok_body_reply(IP);
+get_response(#gri{id = ProviderId, aspect = instance, scope = protected}, ProviderData) ->
+    rest_translator:ok_body_reply(ProviderData#{<<"providerId">> => ProviderId});
 
-response(update, _ProvId, _, ok) ->
-    rest_handler:updated_reply();
+get_response(#gri{aspect = eff_users}, UserIds) ->
+    rest_translator:ok_body_reply(#{<<"users">> => UserIds});
 
-response(delete, _ProvId, _, ok) ->
-    rest_handler:deleted_reply().
+get_response(#gri{aspect = eff_groups}, GroupIds) ->
+    rest_translator:ok_body_reply(#{<<"groups">> => GroupIds});
+
+get_response(#gri{aspect = spaces}, SpaceIds) ->
+    rest_translator:ok_body_reply(#{<<"spaces">> => SpaceIds});
+
+get_response(#gri{aspect = {check_my_ip, _}}, IP) ->
+    rest_translator:ok_body_reply(IP).

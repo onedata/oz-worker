@@ -559,7 +559,6 @@ set_privileges_test(Config) ->
     oz_test_utils:set_user_oz_privileges(
         Config, User1, set, [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES]
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % First try some wrong perms
     ?assert(check_set_privileges(Config, 400, {user, User1}, User1, od_user,
         [inexistent, permissions])),
@@ -598,7 +597,6 @@ modify_space_members_test(Config) ->
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % TestUser will be used to test the privileges
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
     % AddedUser will be added to spaces and removed by TestUser
@@ -625,7 +623,6 @@ modify_space_members_test(Config) ->
     % Give him the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user,
         [?OZ_SPACES_ADD_MEMBERS])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_add_member_to_space(Config, 201, {user, TestUser}, AddedUser,
         od_user, TestSpace)),
     ?assert(check_add_member_to_space(Config, 201, {user, TestUser}, AddedGroup,
@@ -637,7 +634,6 @@ modify_space_members_test(Config) ->
         od_group, TestSpace)),
     % Revoke the privileges and make sure he cannot
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_add_member_to_space(Config, 403, {user, TestUser}, AddedUser,
         od_user, TestSpace)),
     ?assert(check_add_member_to_space(Config, 403, {user, TestUser}, AddedGroup,
@@ -650,14 +646,12 @@ modify_space_members_test(Config) ->
     % Give him the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user,
         [?OZ_SPACES_REMOVE_MEMBERS])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_remove_member_from_space(Config, 202, {user, TestUser}, AddedUser,
         od_user, TestSpace)),
     ?assert(check_remove_member_from_space(Config, 202, {user, TestUser}, AddedGroup,
         od_group, TestSpace)),
     % Revoke the privileges and make sure he cannot
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_remove_member_from_space(Config, 404, {user, TestUser}, AddedUser,
         od_user, TestSpace)),
     ?assert(check_remove_member_from_space(Config, 404, {user, TestUser}, AddedGroup,
@@ -677,14 +671,12 @@ modify_space_members_test(Config) ->
     % Give the privileges to his group and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group,
         [?OZ_SPACES_ADD_MEMBERS])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_add_member_to_space(Config, 201, {user, TestUser}, AddedUser,
         od_user, TestSpace)),
     ?assert(check_add_member_to_space(Config, 201, {user, TestUser}, AddedGroup,
         od_group, TestSpace)),
     % Revoke the privileges and make sure he cannot
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_add_member_to_space(Config, 403, {user, TestUser}, AddedUser,
         od_user, TestSpace)),
     ?assert(check_add_member_to_space(Config, 403, {user, TestUser}, AddedGroup,
@@ -697,14 +689,12 @@ modify_space_members_test(Config) ->
     % Give him the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group,
         [?OZ_SPACES_REMOVE_MEMBERS])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_remove_member_from_space(Config, 202, {user, TestUser},
         AddedUser, od_user, TestSpace)),
     ?assert(check_remove_member_from_space(Config, 202, {user, TestUser},
         AddedGroup, od_group, TestSpace)),
     % Revoke the privileges and make sure he cannot
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_remove_member_from_space(Config, 404, {user, TestUser},
         AddedUser, od_user, TestSpace)),
     ?assert(check_remove_member_from_space(Config, 404, {user, TestUser},
@@ -725,14 +715,12 @@ modify_space_members_test(Config) ->
     % Give the privileges to his group and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group,
         [?OZ_SPACES_ADD_MEMBERS])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_add_member_to_space(Config, 201, {user, TestUser}, AddedUser,
         od_user, TestSpace)),
     ?assert(check_add_member_to_space(Config, 201, {user, TestUser}, AddedGroup,
         od_group, TestSpace)),
     % Revoke the privileges and make sure he cannot
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_add_member_to_space(Config, 403, {user, TestUser}, AddedUser,
         od_user, TestSpace)),
     ?assert(check_add_member_to_space(Config, 403, {user, TestUser}, AddedGroup,
@@ -745,14 +733,12 @@ modify_space_members_test(Config) ->
     % Give him the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group,
         [?OZ_SPACES_REMOVE_MEMBERS])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_remove_member_from_space(Config, 202, {user, TestUser},
         AddedUser, od_user, TestSpace)),
     ?assert(check_remove_member_from_space(Config, 202, {user, TestUser},
         AddedGroup, od_group, TestSpace)),
     % Revoke the privileges and make sure he cannot
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_remove_member_from_space(Config, 404, {user, TestUser},
         AddedUser, od_user, TestSpace)),
     ?assert(check_remove_member_from_space(Config, 404, {user, TestUser},
@@ -768,7 +754,6 @@ list_users_test(Config) ->
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{name = <<"adm">>}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{name = <<"tu">>}),
 
@@ -797,7 +782,6 @@ list_users_test(Config) ->
     % Lets grant privileges to the user
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user,
         [?OZ_USERS_LIST])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Now he should be able to list users
     ?assert(check_list_users(Config, 200, {user, TestUser}, ExpectedUserIds)),
     [
@@ -807,7 +791,6 @@ list_users_test(Config) ->
     ],
     % Revoke the privileges again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % He should no longer be able to list users
     ?assert(check_list_users(Config, 403, {user, TestUser}, undefined)),
     [
@@ -833,7 +816,6 @@ list_users_test(Config) ->
     % list users
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group,
         [?OZ_USERS_LIST])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_users(Config, 200, {user, TestUser}, ExpectedUserIds)),
     [
         ?assert(check_get_user_data(
@@ -842,7 +824,6 @@ list_users_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_users(Config, 403, {user, TestUser}, undefined)),
     [
         ?assert(check_get_user_data(
@@ -867,7 +848,6 @@ list_users_test(Config) ->
     % list users
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group,
         [?OZ_USERS_LIST])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_users(Config, 200, {user, TestUser}, ExpectedUserIds)),
     [
         ?assert(check_get_user_data(
@@ -876,7 +856,6 @@ list_users_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_users(Config, 403, {user, TestUser}, undefined)),
     [
         ?assert(check_get_user_data(
@@ -920,7 +899,6 @@ list_groups_test(Config) ->
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -938,7 +916,6 @@ list_groups_test(Config) ->
     % Lets grant privileges to the user
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user,
         [?OZ_GROUPS_LIST])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Now he should be able to list groups
     ?assert(check_list_groups(Config, 200, {user, TestUser}, ExpectedGroupIds)),
     [
@@ -948,7 +925,6 @@ list_groups_test(Config) ->
     ],
     % Revoke the privileges again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % He should no longer be able to list groups
     ?assert(check_list_groups(Config, 403, {user, TestUser}, undefined)),
     [
@@ -978,7 +954,6 @@ list_groups_test(Config) ->
     % list groups
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group,
         [?OZ_GROUPS_LIST])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_groups(Config, 200, {user, TestUser}, ExpectedGroupIds2)),
     [
         ?assert(check_get_group_data(
@@ -987,7 +962,6 @@ list_groups_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_groups(Config, 403, {user, TestUser}, undefined)),
     [
         ?assert(check_get_group_data(
@@ -1018,7 +992,6 @@ list_groups_test(Config) ->
     % list groups
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group,
         [?OZ_GROUPS_LIST])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_groups(Config, 200, {user, TestUser}, ExpectedGroupIds3)),
     [
         ?assert(check_get_group_data(
@@ -1027,7 +1000,6 @@ list_groups_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_groups(Config, 403, {user, TestUser}, undefined)),
     [
         ?assert(check_get_group_data(
@@ -1063,7 +1035,6 @@ list_spaces_test(Config) ->
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -1081,7 +1052,6 @@ list_spaces_test(Config) ->
     % Lets grant privileges to the user
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user,
         [?OZ_SPACES_LIST])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Now he should be able to list spaces
     ?assert(check_list_spaces(Config, 200, {user, TestUser}, ExpectedSpaceIds)),
     [
@@ -1091,7 +1061,6 @@ list_spaces_test(Config) ->
     ],
     % Revoke the privileges again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % He should no longer be able to list spaces
     ?assert(check_list_spaces(Config, 403, {user, TestUser}, undefined)),
     [
@@ -1117,7 +1086,6 @@ list_spaces_test(Config) ->
     % list spaces
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group,
         [?OZ_SPACES_LIST])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_spaces(Config, 200, {user, TestUser}, ExpectedSpaceIds)),
     [
         ?assert(check_get_space_data(
@@ -1126,7 +1094,6 @@ list_spaces_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_spaces(Config, 403, {user, TestUser}, undefined)),
     [
         ?assert(check_get_space_data(
@@ -1151,7 +1118,6 @@ list_spaces_test(Config) ->
     % list spaces
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group,
         [?OZ_SPACES_LIST])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_spaces(Config, 200, {user, TestUser}, ExpectedSpaceIds)),
     [
         ?assert(check_get_space_data(
@@ -1160,7 +1126,6 @@ list_spaces_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_spaces(Config, 403, {user, TestUser}, undefined)),
     [
         ?assert(check_get_space_data(
@@ -1186,7 +1151,6 @@ list_providers_of_space_test(Config) ->
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -1204,7 +1168,6 @@ list_providers_of_space_test(Config) ->
     % Lets grant privileges to the user
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user,
         [?OZ_SPACES_LIST_PROVIDERS])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Now he should be able to list providers of space
     ?assert(check_list_providers_of_space(Config, 200, {user, TestUser}, Space1,
         ExpectedProviderIds)),
@@ -1215,7 +1178,6 @@ list_providers_of_space_test(Config) ->
     ],
     % Revoke the privileges again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % He should no longer be able to list providers of space
     ?assert(check_list_providers_of_space(Config, 403, {user, TestUser}, Space1, undefined)),
     [
@@ -1241,7 +1203,6 @@ list_providers_of_space_test(Config) ->
     % list providers of space
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group,
         [?OZ_SPACES_LIST_PROVIDERS])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_providers_of_space(Config, 200, {user, TestUser}, Space1,
         ExpectedProviderIds)),
     [
@@ -1251,7 +1212,6 @@ list_providers_of_space_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_providers_of_space(Config, 403, {user, TestUser}, Space1,
         undefined)),
     [
@@ -1277,7 +1237,6 @@ list_providers_of_space_test(Config) ->
     % list providers of space
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group,
         [?OZ_SPACES_LIST_PROVIDERS])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_providers_of_space(Config, 200, {user, TestUser}, Space1,
         ExpectedProviderIds)),
     [
@@ -1287,7 +1246,6 @@ list_providers_of_space_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_providers_of_space(Config, 403, {user, TestUser}, Space1,
         undefined)),
     [
@@ -1310,7 +1268,6 @@ list_providers_test(Config) ->
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -1328,7 +1285,6 @@ list_providers_test(Config) ->
     % Lets grant privileges to the user
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user,
         [?OZ_PROVIDERS_LIST])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Now he should be able to list providers
     ?assert(check_list_providers(Config, 200, {user, TestUser}, ExpectedProviderIds)),
     [
@@ -1338,7 +1294,6 @@ list_providers_test(Config) ->
     ],
     % Revoke the privileges again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % He should no longer be able to list providers
     ?assert(check_list_providers(Config, 403, {user, TestUser}, undefined)),
     [
@@ -1364,7 +1319,6 @@ list_providers_test(Config) ->
     % list providers
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group,
         [?OZ_PROVIDERS_LIST])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_providers(Config, 200, {user, TestUser}, ExpectedProviderIds)),
     [
         ?assert(check_get_provider_data(
@@ -1373,7 +1327,6 @@ list_providers_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_providers(Config, 403, {user, TestUser}, undefined)),
     [
         ?assert(check_get_provider_data(
@@ -1398,7 +1351,6 @@ list_providers_test(Config) ->
     % list providers
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group,
         [?OZ_PROVIDERS_LIST])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_providers(Config, 200, {user, TestUser}, ExpectedProviderIds)),
     [
         ?assert(check_get_provider_data(
@@ -1407,7 +1359,6 @@ list_providers_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_providers(Config, 403, {user, TestUser}, undefined)),
     [
         ?assert(check_get_provider_data(
@@ -1448,7 +1399,6 @@ list_eff_users_of_provider_test(Config) ->
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -1466,7 +1416,6 @@ list_eff_users_of_provider_test(Config) ->
     % Lets grant privileges to the user
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user,
         [?OZ_PROVIDERS_LIST_USERS])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Now he should be able to list users of provider
     ?assert(check_list_eff_users_of_provider(Config, 200, {user, TestUser}, Provider,
         ExpectedUserIds)),
@@ -1477,7 +1426,6 @@ list_eff_users_of_provider_test(Config) ->
     ],
     % Revoke the privileges again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % He should no longer be able to list users of provider
     ?assert(check_list_eff_users_of_provider(Config, 403, {user, TestUser}, Provider, undefined)),
     [
@@ -1503,7 +1451,6 @@ list_eff_users_of_provider_test(Config) ->
     % list users of provider
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group,
         [?OZ_PROVIDERS_LIST_USERS])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_eff_users_of_provider(Config, 200, {user, TestUser}, Provider,
         ExpectedUserIds)),
     [
@@ -1513,7 +1460,6 @@ list_eff_users_of_provider_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_eff_users_of_provider(Config, 403, {user, TestUser}, Provider,
         undefined)),
     [
@@ -1539,7 +1485,6 @@ list_eff_users_of_provider_test(Config) ->
     % list users of provider
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group,
         [?OZ_PROVIDERS_LIST_USERS])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_eff_users_of_provider(Config, 200, {user, TestUser}, Provider,
         ExpectedUserIds)),
     [
@@ -1549,7 +1494,6 @@ list_eff_users_of_provider_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_eff_users_of_provider(Config, 403, {user, TestUser}, Provider,
         undefined)),
     [
@@ -1616,7 +1560,6 @@ list_eff_groups_of_provider_test(Config) ->
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -1634,9 +1577,7 @@ list_eff_groups_of_provider_test(Config) ->
     % Lets grant privileges to the user
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user,
         [?OZ_PROVIDERS_LIST_GROUPS])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Now he should be able to list groups of provider
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_eff_groups_of_provider(Config, 200, {user, TestUser}, Provider,
         ExpectedGroupIds)),
     [
@@ -1646,7 +1587,6 @@ list_eff_groups_of_provider_test(Config) ->
     ],
     % Revoke the privileges again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % He should no longer be able to list groups of provider
     ?assert(check_list_eff_groups_of_provider(Config, 403, {user, TestUser}, Provider, undefined)),
     [
@@ -1672,7 +1612,6 @@ list_eff_groups_of_provider_test(Config) ->
     % list groups of provider
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group,
         [?OZ_PROVIDERS_LIST_GROUPS])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_eff_groups_of_provider(Config, 200, {user, TestUser}, Provider,
         ExpectedGroupIds)),
     [
@@ -1682,7 +1621,6 @@ list_eff_groups_of_provider_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_eff_groups_of_provider(Config, 403, {user, TestUser}, Provider,
         undefined)),
     [
@@ -1708,7 +1646,6 @@ list_eff_groups_of_provider_test(Config) ->
     % list groups of provider
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group,
         [?OZ_PROVIDERS_LIST_GROUPS])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_eff_groups_of_provider(Config, 200, {user, TestUser}, Provider,
         ExpectedGroupIds)),
     [
@@ -1718,7 +1655,6 @@ list_eff_groups_of_provider_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_eff_groups_of_provider(Config, 403, {user, TestUser}, Provider,
         undefined)),
     [
@@ -1752,7 +1688,6 @@ list_spaces_of_provider_test(Config) ->
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -1770,7 +1705,6 @@ list_spaces_of_provider_test(Config) ->
     % Lets grant privileges to the user
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user,
         [?OZ_PROVIDERS_LIST_SPACES])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Now he should be able to list spaces of provider
     ?assert(check_list_spaces_of_provider(Config,
         200, {user, TestUser}, Provider, ExpectedSpaceIds
@@ -1782,7 +1716,6 @@ list_spaces_of_provider_test(Config) ->
     ],
     % Revoke the privileges again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestUser, od_user, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % He should no longer be able to list spaces of provider
     ?assert(check_list_spaces_of_provider(Config, 403, {user, TestUser}, Provider, undefined)),
     [
@@ -1808,7 +1741,6 @@ list_spaces_of_provider_test(Config) ->
     % list spaces of provider
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group,
         [?OZ_PROVIDERS_LIST_SPACES])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_spaces_of_provider(Config, 200, {user, TestUser}, Provider,
         ExpectedSpaceIds)),
     [
@@ -1818,7 +1750,6 @@ list_spaces_of_provider_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TestGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_spaces_of_provider(Config, 403, {user, TestUser}, Provider,
         undefined)),
     [
@@ -1844,7 +1775,6 @@ list_spaces_of_provider_test(Config) ->
     % list spaces of provider
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group,
         [?OZ_PROVIDERS_LIST_SPACES])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_spaces_of_provider(Config, 200, {user, TestUser}, Provider,
         ExpectedSpaceIds)),
     [
@@ -1854,7 +1784,6 @@ list_spaces_of_provider_test(Config) ->
     ],
     % Revoke the privileges and check again
     ?assert(check_set_privileges(Config, 204, {user, Admin}, TopGroup, od_group, [])),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_list_spaces_of_provider(Config, 403, {user, TestUser}, Provider,
         undefined)),
     [

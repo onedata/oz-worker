@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @author Michal Zmuda
+%%% @author Lukasz Opiola
 %%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
@@ -10,7 +10,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 -module(od_group).
--author("Michal Zmuda").
+-author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
 
@@ -18,6 +18,7 @@
 -export([create/1, save/1, get/1, exists/1, update/2, update/3, delete/1]).
 -export([list/0]).
 -export([to_string/1]).
+-export([entity_logic_plugin/0]).
 
 %% datastore_model callbacks
 -export([get_prehooks/0]).
@@ -123,6 +124,15 @@ list() ->
 -spec to_string(GroupId :: id()) -> binary().
 to_string(GroupId) ->
     <<"group:", GroupId/binary>>.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the entity logic plugin module that handles model logic.
+%% @end
+%%--------------------------------------------------------------------
+-spec entity_logic_plugin() -> module().
+entity_logic_plugin() ->
+    group_logic_plugin.
 
 %%%===================================================================
 %%% datastore_model callbacks

@@ -14,10 +14,10 @@
 -author("Lukasz Opiola").
 -behaviour(data_backend_behaviour).
 
--include("errors.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("cluster_worker/include/api_errors.hrl").
 
 %% data_backend_behaviour callbacks
 -export([init/0, terminate/0]).

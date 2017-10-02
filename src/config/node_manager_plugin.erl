@@ -60,7 +60,6 @@ db_nodes() ->
 -spec listeners() -> Listeners :: [atom()].
 listeners() -> [
     oz_redirector_listener,
-    subscriptions_wss_listener,
     rest_listener,
     gui_listener |
         node_manager:cluster_worker_listeners() -- [redirector_listener]
@@ -74,12 +73,13 @@ listeners() -> [
 -spec modules_with_args() -> Models :: [{atom(), [any()]}].
 modules_with_args() ->
     Base = [
-        {singleton, changes_worker, []},
         {singleton, ozpca_worker, [
             {supervisor_flags, ozpca_worker:supervisor_flags()},
             {supervisor_children_spec, [ozpca_worker:supervisor_children_spec()]}
         ]},
-        {subscriptions_worker, []}
+        {gs_worker, [
+            {supervisor_flags, gs_worker:supervisor_flags()}
+        ]}
     ],
     case application:get_env(?APP_NAME, location_service_enabled) of
         {ok, false} -> Base;
@@ -124,6 +124,8 @@ after_init([]) ->
             {ok, true} ->
                 identity_publisher_worker:start_refreshing()
         end,
+
+        provider_logic:mark_all_providers_as_offline(),
 
         entity_graph:init_state(),
 

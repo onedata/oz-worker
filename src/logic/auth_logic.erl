@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Konrad Zemek
-%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% @copyright (C) 2014 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -63,11 +63,8 @@ stop() ->
 %%--------------------------------------------------------------------
 -spec authenticate_user(Identifier :: binary()) -> {ok, Token :: binary()} | {error, any()}.
 authenticate_user(Identifier) ->
-    % @todo really authenticate; we're just pretending
     case onedata_auth:get(Identifier) of
-        {ok, #document{value = #onedata_auth{secret = Secret, user_id = UserId}}} ->
-            % @todo yeah, that seems like a very authenticated UserId
-            UserId = UserId,
+        {ok, #document{value = #onedata_auth{secret = Secret}}} ->
 
             {ok, ExpirationSecs} = application:get_env(?APP_NAME,
                 authentication_macaroon_expiration_seconds),

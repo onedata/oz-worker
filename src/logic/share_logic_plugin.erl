@@ -14,19 +14,15 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("errors.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("cluster_worker/include/api_errors.hrl").
 
--type resource() :: entity | data | list.
-
--export_type([resource/0]).
-
--export([get_entity/1, create/4, get/4, update/3, delete/2]).
--export([exists/1, authorize/4, validate/2]).
--export([entity_to_string/1]).
+-export([fetch_entity/1, operation_supported/3]).
+-export([create/1, get/2, update/1, delete/1]).
+-export([exists/2, authorize/2, validate/1]).
 
 %%%===================================================================
 %%% API
@@ -38,9 +34,9 @@
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_entity(EntityId :: entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | {error, Reason :: term()}.
-get_entity(ShareId) ->
+-spec fetch_entity(entity_logic:entity_id()) ->
+    {ok, entity_logic:entity()} | entity_logic:error().
+fetch_entity(ShareId) ->
     case od_share:get(ShareId) of
         {ok, #document{value = Share}} ->
             {ok, Share};
@@ -51,17 +47,37 @@ get_entity(ShareId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a resource based on EntityId, Resource identifier and Data.
+%% Determines if given operation is supported based on operation, aspect and
+%% scope (entity type is known based on the plugin itself).
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: entity_logic:client(),
-    EntityId :: entity_logic:entity_id(), Resource :: resource(),
-    entity_logic:data()) -> entity_logic:result().
-create(_Client, _, entity, Data) ->
-    ShareId = maps:get(<<"shareId">>, Data),
-    Name = maps:get(<<"name">>, Data),
-    SpaceId = maps:get(<<"spaceId">>, Data),
-    RootFileId = maps:get(<<"rootFileId">>, Data),
+-spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
+    entity_logic:scope()) -> boolean().
+operation_supported(create, instance, private) -> true;
+
+operation_supported(get, list, private) -> true;
+
+operation_supported(get, instance, private) -> true;
+operation_supported(get, instance, public) -> true;
+
+operation_supported(update, instance, private) -> true;
+
+operation_supported(delete, instance, private) -> true;
+
+operation_supported(_, _, _) -> false.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a resource (aspect of entity) based on entity logic request.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(entity_logic:req()) -> entity_logic:create_result().
+create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
+    ShareId = maps:get(<<"shareId">>, Req#el_req.data),
+    Name = maps:get(<<"name">>, Req#el_req.data),
+    SpaceId = maps:get(<<"spaceId">>, Req#el_req.data),
+    RootFileId = maps:get(<<"rootFileId">>, Req#el_req.data),
     Share = #document{key = ShareId, value = #od_share{
         name = Name,
         root_file = RootFileId,
@@ -73,7 +89,9 @@ create(_Client, _, entity, Data) ->
                 od_share, ShareId,
                 od_space, SpaceId
             ),
-            {ok, ShareId};
+            % Share has been modified by adding relation, so it will need to be
+            % fetched again.
+            {ok, {not_fetched, GRI#gri{id = ShareId}}};
         _ ->
             % This can potentially happen if a share with given share id
             % has been created between data verification and create
@@ -83,36 +101,37 @@ create(_Client, _, entity, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves a resource based on EntityId and Resource identifier.
+%% Retrieves a resource (aspect of entity) based on entity logic request and
+%% prefetched entity.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: entity_logic:client(), EntityId :: entity_logic:entity_id(),
-    Entity :: entity_logic:entity(), Resource :: resource()) ->
-    entity_logic:result().
-get(_, undefined, undefined, list) ->
+-spec get(entity_logic:req(), entity_logic:entity()) ->
+    entity_logic:get_result().
+get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, ShareDocs} = od_share:list(),
     {ok, [ShareId || #document{key = ShareId} <- ShareDocs]};
 
-get(_, _ShareId, #od_share{} = Share, data) ->
+get(#el_req{gri = #gri{aspect = instance, scope = private}}, Share) ->
+    {ok, Share};
+get(#el_req{gri = #gri{aspect = instance, scope = public}}, Share) ->
     #od_share{
-        name = Name, public_url = PublicUrl, space = SpaceId,
+        name = Name, public_url = PublicUrl,
         root_file = RootFileId, handle = HandleId
     } = Share,
     {ok, #{
         <<"name">> => Name, <<"publicUrl">> => PublicUrl,
-        <<"spaceId">> => SpaceId, <<"rootFileId">> => RootFileId,
-        <<"handleId">> => HandleId
+        <<"rootFileId">> => RootFileId, <<"handleId">> => HandleId
     }}.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates a resource based on EntityId, Resource identifier and Data.
+%% Updates a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
--spec update(EntityId :: entity_logic:entity_id(), Resource :: resource(),
-    entity_logic:data()) -> entity_logic:result().
-update(ShareId, entity, #{<<"name">> := NewName}) ->
+-spec update(entity_logic:req()) -> entity_logic:update_result().
+update(#el_req{gri = #gri{id = ShareId, aspect = instance}, data = Data}) ->
+    NewName = maps:get(<<"name">>, Data),
     {ok, _} = od_share:update(ShareId, fun(Share = #od_share{}) ->
         {ok, Share#od_share{name = NewName}}
     end),
@@ -121,102 +140,85 @@ update(ShareId, entity, #{<<"name">> := NewName}) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes a resource based on EntityId and Resource identifier.
+%% Deletes a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(EntityId :: entity_logic:entity_id(), Resource :: resource()) ->
-    entity_logic:result().
-delete(ShareId, entity) ->
+-spec delete(entity_logic:req()) -> entity_logic:delete_result().
+delete(#el_req{gri = #gri{id = ShareId, aspect = instance}}) ->
     entity_graph:delete_with_relations(od_share, ShareId).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns existence verificators for given Resource identifier.
-%% Existence verificators can be internal, which means they operate on the
-%% entity to which the resource corresponds, or external - independent of
-%% the entity. If there are multiple verificators, they will be checked in
-%% sequence until one of them returns true.
-%% Implicit verificators 'true' | 'false' immediately stop the verification
-%% process with given result.
+%% Determines if given resource (aspect of entity) exists, based on entity
+%% logic request and prefetched entity.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(Resource :: resource()) ->
-    entity_logic:existence_verificator()|
-    [entity_logic:existence_verificator()].
-exists(_) ->
-    % No matter the resource, return true if it belongs to a share
-    {internal, fun(#od_share{}) ->
-        % If the share with ShareId can be found, it exists. If not, the
-        % verification will fail before this function is called.
-        true
-    end}.
+-spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
+exists(Req = #el_req{gri = #gri{aspect = instance, scope = private}}, Share) ->
+    case Req#el_req.auth_hint of
+        ?THROUGH_SPACE(SpaceId) ->
+            Share#od_share.space =:= SpaceId;
+        undefined ->
+            true
+    end;
+
+exists(#el_req{gri = #gri{id = Id}}, #od_share{}) ->
+    % All aspects exist if share record exists.
+    Id =/= undefined.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns existence verificators for given Resource identifier.
-%% Existence verificators can be internal, which means they operate on the
-%% entity to which the resource corresponds, or external - independent of
-%% the entity. If there are multiple verificators, they will be checked in
-%% sequence until one of them returns true.
-%% Implicit verificators 'true' | 'false' immediately stop the verification
-%% process with given result.
+%% Determines if requesting client is authorized to perform given operation,
+%% based on entity logic request and prefetched entity.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize(Operation :: entity_logic:operation(),
-    EntityId :: entity_logic:entity_id(), Resource :: resource(),
-    Client :: entity_logic:client()) ->
-    entity_logic:authorization_verificator() |
-    [authorization_verificator:existence_verificator()].
-authorize(create, undefined, entity, ?USER(UserId)) ->
-    {data_dependent, fun(Data) ->
-        SpaceId = maps:get(<<"spaceId">>, Data, <<"">>),
-        space_logic:has_eff_privilege(
-            SpaceId, UserId, ?SPACE_MANAGE_SHARES
-        )
-    end};
+-spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) ->
+    SpaceId = maps:get(<<"spaceId">>, Req#el_req.data, <<"">>),
+    auth_by_space_privilege(Req, SpaceId, ?SPACE_MANAGE_SHARES);
 
-authorize(get, _ShareId, list, ?USER(UserId)) ->
-    auth_by_oz_privilege(UserId, ?OZ_SHARES_LIST);
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = list}}, _) ->
+    user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_SHARES_LIST);
 
-authorize(get, _ShareId, entity, ?USER(UserId)) -> [
-    auth_by_space_membership(UserId),
-    auth_by_oz_privilege(UserId, ?OZ_SHARES_LIST)
-];
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Share) ->
+    case Req#el_req.client of
+        ?USER(UserId) ->
+            % In case of auth_hint = ?THROUGH_SPACE(SpaceId),
+            % share's membership in space is checked in 'exists'.
+            auth_by_space_membership(UserId, Share) orelse
+                user_logic_plugin:auth_by_oz_privilege(UserId, ?OZ_SHARES_LIST);
 
-authorize(get, _ShareId, data, ?USER(UserId)) -> [
-    auth_by_space_membership(UserId),
-    auth_by_oz_privilege(UserId, ?OZ_SHARES_LIST)
-];
+        ?PROVIDER(ProviderId) ->
+            auth_by_space_support(ProviderId, Share)
 
-authorize(get, _ShareId, data, ?PROVIDER(ProviderId)) -> [
-    auth_by_space_support(ProviderId)
-];
+    end;
 
-authorize(update, _ShareId, entity, ?USER(UserId)) ->
-    auth_by_space_privilege(UserId, ?SPACE_MANAGE_SHARES);
+authorize(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}}, _) ->
+    true;
 
-authorize(delete, _ShareId, entity, ?USER(UserId)) ->
-    auth_by_space_privilege(UserId, ?SPACE_MANAGE_SHARES);
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, Share) ->
+    auth_by_space_privilege(Req, Share, ?SPACE_MANAGE_SHARES);
 
-authorize(_, _, _, _) ->
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, Share) ->
+    auth_by_space_privilege(Req, Share, ?SPACE_MANAGE_SHARES);
+
+authorize(_, _) ->
     false.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns validity verificators for given Operation and Resource identifier.
+%% Returns validity verificators for given request.
 %% Returns a map with 'required', 'optional' and 'at_least_one' keys.
 %% Under each of them, there is a map:
 %%      Key => {type_verificator, value_verificator}
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(Operation :: entity_logic:operation(),
-    Resource :: resource()) ->
-    entity_logic:validity_verificator().
-validate(create, entity) -> #{
+-spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"shareId">> => {binary, {not_exists, fun(Value) ->
             not share_logic:exists(Value)
@@ -228,21 +230,12 @@ validate(create, entity) -> #{
         end}}
     }
 };
-validate(update, entity) -> #{
+
+validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"name">> => {binary, non_empty}
     }
 }.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns readable string representing the entity with given id.
-%% @end
-%%--------------------------------------------------------------------
--spec entity_to_string(EntityId :: entity_logic:entity_id()) -> binary().
-entity_to_string(ShareId) ->
-    od_share:to_string(ShareId).
 
 
 %%%===================================================================
@@ -252,63 +245,49 @@ entity_to_string(ShareId) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns authorization verificator that checks if given user belongs
-%% to the space represented by entity.
+%% Returns if given user belongs to the space to which this share belongs.
+%% UserId and SpaceId is either given explicitly or derived from request and
+%% share record. Clients of type other than user are discarded.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_space_membership(UserId :: od_user:id()) ->
-    entity_logic:authorization_verificator().
-auth_by_space_membership(UserId) ->
-    {internal, fun(#od_share{space = SpaceId}) ->
-        space_logic:has_eff_user(SpaceId, UserId)
-    end}.
+-spec auth_by_space_membership(od_user:id(), od_share:info() | od_space:id()) ->
+    boolean().
+auth_by_space_membership(UserId, Share = #od_share{}) ->
+    auth_by_space_membership(UserId, Share#od_share.space);
+auth_by_space_membership(UserId, SpaceId) ->
+    space_logic:has_eff_user(SpaceId, UserId).
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns authorization verificator that checks if given provider supports
-%% the space to which share represented by entity belongs.
+%% Returns if given user has specific effective privilege in space to which this
+%% share belongs. UserId and SpaceId is either given explicitly or derived from
+%% request or share record. Clients of type other than user are discarded.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_space_support(ProviderId :: od_provider:id()) ->
-    entity_logic:authorization_verificator().
-auth_by_space_support(ProviderId) ->
-    {internal, fun(#od_share{space = SpaceId}) ->
-        space_logic:has_provider(SpaceId, ProviderId)
-    end}.
+-spec auth_by_space_privilege(entity_logic:req() | od_user:id(),
+    od_share:info() | od_space:id(), privileges:space_privilege()) ->
+    boolean().
+auth_by_space_privilege(#el_req{client = ?USER(UserId)}, Share, Privilege) ->
+    auth_by_space_privilege(UserId, Share, Privilege);
+auth_by_space_privilege(#el_req{client = _OtherClient}, _Share, _Privilege) ->
+    false;
+auth_by_space_privilege(UserId, Share = #od_share{}, Privilege) ->
+    auth_by_space_privilege(UserId, Share#od_share.space, Privilege);
+auth_by_space_privilege(UserId, SpaceId, Privilege) ->
+    space_logic:has_eff_privilege(SpaceId, UserId, Privilege).
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns authorization verificator that checks if given user has specific
-%% effective privilege in the space to which the share represented by the entity
-%% belongs.
+%% Returns if given provider supports the space to which share represented
+%% by entity belongs.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_space_privilege(UserId :: od_user:id(),
-    Privilege :: privileges:space_privilege()) ->
-    entity_logic:authorization_verificator().
-auth_by_space_privilege(UserId, Privilege) ->
-    {internal, fun(#od_share{space = SpaceId}) ->
-        space_logic:has_eff_privilege(SpaceId, UserId, Privilege)
-    end}.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Returns authorization verificator that checks if given user has specified
-%% effective oz privilege.
-%% @end
-%%--------------------------------------------------------------------
--spec auth_by_oz_privilege(UserId :: od_user:id(),
-    Privilege :: privileges:oz_privilege()) ->
-    entity_logic:authorization_verificator().
-auth_by_oz_privilege(UserId, Privilege) ->
-    {external, fun() ->
-        user_logic:has_eff_oz_privilege(UserId, Privilege)
-    end}.
-
+-spec auth_by_space_support(od_provider:id(), od_share:info()) ->
+    boolean().
+auth_by_space_support(ProviderId, Share) ->
+    space_logic:has_provider(Share#od_share.space, ProviderId).
 

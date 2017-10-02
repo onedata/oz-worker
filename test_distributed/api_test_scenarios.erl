@@ -14,9 +14,9 @@
 -include("api_test_utils.hrl").
 -include("rest.hrl").
 -include("entity_logic.hrl").
--include("errors.hrl").
 -include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("cluster_worker/include/api_errors.hrl").
 
 -export([run_scenario/2]).
 -export([get_relations/4]).
@@ -79,7 +79,6 @@ get_relations(Config, ListApiTestSpec, GetApiTestSpecGenerator, CreateRelationFu
         NewAccMap = AccMap#{
             ExcludeOrInclude => maps:merge(maps:get(ExcludeOrInclude, AccMap), Map)
         },
-        oz_test_utils:ensure_eff_graph_up_to_date(Config),
         assert(api_test_utils:run_tests(
             Config, ExpectRelations(maps:keys(maps:get(include, NewAccMap))))
         ),

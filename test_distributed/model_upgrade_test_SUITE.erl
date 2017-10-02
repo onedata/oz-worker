@@ -98,12 +98,19 @@ share_upgrade_test(Config) ->
 
 
 provider_upgrade_test(Config) ->
-    OldProviderRecord = old_provider_record(),
-    {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, od_provider, upgrade_record, [1, OldProviderRecord]
+    ProviderRecordVer1 = provider_record_1(),
+
+    {Version2, ProviderRecordVer2} = oz_test_utils:call_oz(
+        Config, od_provider, upgrade_record, [1, ProviderRecordVer1]
     ),
-    ?assertEqual(2, NewVersion),
-    ?assertEqual(NewRecord, new_provider_record()).
+    ?assertEqual(2, Version2),
+    ?assertEqual(ProviderRecordVer2, provider_record_2()),
+
+    {Version3, ProviderRecordVer3} = oz_test_utils:call_oz(
+        Config, od_provider, upgrade_record, [2, ProviderRecordVer2]
+    ),
+    ?assertEqual(3, Version3),
+    ?assertEqual(ProviderRecordVer3, provider_record_3()).
 
 
 handle_service_upgrade_test(Config) ->
@@ -455,7 +462,7 @@ new_share_record() -> #od_share{
     root_file = <<"root_file_id">>
 }.
 
-old_provider_record() -> {od_provider,
+provider_record_1() -> {od_provider,
     <<"name">>,
     <<"redirection_point">>,
     [<<"url1.com">>, <<"url2.com">>, <<"url3.com">>],
@@ -468,13 +475,38 @@ old_provider_record() -> {od_provider,
     false  % bottom_up_dirty
 }.
 
-new_provider_record() -> #od_provider{
+provider_record_2() -> {od_provider,
+    <<"name">>,
+    <<"redirection_point">>,
+    [<<"url1.com">>, <<"url2.com">>, <<"url3.com">>],
+    <<"cert_serial">>,
+    -93.2341, % latitude
+    17,       % longitude
+
+    #{
+        % During provider doc translation, extra information is added - support
+        % sizes. However, it is not possible to gather this information because
+        % during update there is no information about document id in context.
+        <<"space1">> => 0,
+        <<"space2">> => 0,
+        <<"space3">> => 0,
+        <<"space4">> => 0
+    },
+
+    #{},
+    #{},
+
+    true
+}.
+
+provider_record_3() -> #od_provider{
     name = <<"name">>,
     redirection_point = <<"redirection_point">>,
     urls = [<<"url1.com">>, <<"url2.com">>, <<"url3.com">>],
     serial = <<"cert_serial">>,
     latitude = -93.2341,
     longitude = 17,
+    online = false,
 
     spaces = #{
         % During provider doc translation, extra information is added - support

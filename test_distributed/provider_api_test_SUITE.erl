@@ -13,7 +13,6 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
--include("errors.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -22,6 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
+-include_lib("cluster_worker/include/api_errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -140,15 +140,15 @@ create_test(Config) ->
                 {<<"csr">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"csr">>)},
                 {<<"csr">>, <<"wrong-csr">>, ?ERROR_BAD_DATA(<<"csr">>)},
                 {<<"latitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"latitude">>)},
-                {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, 90.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, 1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, 90.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
                 {<<"longitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"longitude">>)},
-                {<<"longitude">>, -1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)}
+                {<<"longitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)}
             ]
         }
     },
@@ -184,7 +184,6 @@ get_test(Config) ->
         ?OZ_PROVIDERS_LIST
     ]),
 
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ExpBody = #{
         <<"name">> => ExpName,
@@ -203,7 +202,9 @@ get_test(Config) ->
                 {provider, P2, KeyFile2, CertFile2}
             ],
             unauthorized = [nobody],
-            forbidden = [{user, NonAdmin}]
+            forbidden = [
+                {user, NonAdmin}
+            ]
         },
         rest_spec = #rest_spec{
             method = get,
@@ -214,15 +215,48 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             operation = get,
             module = provider_logic,
-            function = get_data,
+            function = get_protected_data,
             args = [client, P1],
             expected_result = ?OK_MAP(ExpBody)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % Provider 2 was not able to get data of provider 1, but if they support a
+    % common space, it should gain access.
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, <<"space">>),
+    {ok, Macaroon1} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S1),
+    {ok, Macaroon2} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S1),
+    {ok, S1} = oz_test_utils:support_space(
+        Config, ?PROVIDER(P1), P1, Macaroon1,
+        oz_test_utils:minimum_support_size(Config)
+    ),
+    {ok, S1} = oz_test_utils:support_space(
+        Config, ?PROVIDER(P2), P2, Macaroon2,
+        oz_test_utils:minimum_support_size(Config)
+    ),
+    ApiTestSpec2 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {provider, P1, KeyFile1, CertFile1},
+                {provider, P2, KeyFile2, CertFile2}
+            ],
+            unauthorized = [nobody],
+            forbidden = [{user, NonAdmin}]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/spaces/">>, S1, <<"/providers/">>, P1],
+            expected_code = ?HTTP_200_OK,
+            expected_body = ExpBody#{<<"providerId">> => P1}
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+
     % Provider should be also able to retrieve this info using another path,
     % without id (id is deduced from authorization)
-    ApiTestSpec2 = #api_test_spec{
+    ApiTestSpec3 = #api_test_spec{
         client_spec = #client_spec{
             correct = [{provider, P1, KeyFile1, CertFile1}]
         },
@@ -233,7 +267,7 @@ get_test(Config) ->
             expected_body = ExpBody#{<<"providerId">> => P1}
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
 
 
 list_test(Config) ->
@@ -255,7 +289,6 @@ list_test(Config) ->
         ?OZ_PROVIDERS_LIST
     ]),
 
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -329,15 +362,15 @@ update_test(Config) ->
                 {<<"redirectionPoint">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"redirectionPoint">>)},
                 {<<"redirectionPoint">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"redirectionPoint">>)},
                 {<<"latitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"latitude">>)},
-                {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, 90.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
-                {<<"latitude">>, 1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, 90.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
+                {<<"latitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
                 {<<"longitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"longitude">>)},
-                {<<"longitude">>, -1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_BETWEEN(<<"longitude">>, -180, 180)}
+                {<<"longitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)}
             ]
         }
     },
@@ -382,7 +415,6 @@ delete_test(Config) ->
     oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_DELETE
     ]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     % Create one provider per every correct client to check all of them (REST)
     {ok, {P3, _KeyFile3, _CertFile3}} = oz_test_utils:create_provider_and_certs(
@@ -498,7 +530,10 @@ delete_test(Config) ->
 
 
 get_eff_users_test(Config) ->
-    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
         Config, <<"P1">>
     ),
     % Create two users, grant one of them the privilege to list users.
@@ -510,9 +545,13 @@ get_eff_users_test(Config) ->
 
     ListApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, {user, Admin}],
+            correct = [
+                root,
+                {user, Admin},
+                {provider, P1, KeyFile1, CertFile1}
+            ],
             unauthorized = [nobody],
-            forbidden = [{provider, P1, KeyFile, CertFile}, {user, NonAdmin}]
+            forbidden = [{provider, P2, KeyFile2, CertFile2}, {user, NonAdmin}]
         },
         rest_spec = #rest_spec{
             method = get,
@@ -532,17 +571,28 @@ get_eff_users_test(Config) ->
         ClientSpec = case ExcludeOrInclude of
             include ->
                 #client_spec{
-                    correct = [root, {user, Admin}],
+                    correct = [
+                        root,
+                        {user, Admin},
+                        {provider, P1, KeyFile1, CertFile1}
+                    ],
                     unauthorized = [nobody],
-                    forbidden = [{provider, P1, KeyFile, CertFile}, {user, NonAdmin}]
+                    forbidden = [
+                        {user, NonAdmin},
+                        {provider, P2, KeyFile2, CertFile2}
+                    ]
                 };
             exclude ->
                 % All clients should receive 404 when asking for non-existent
                 % resource.
                 #client_spec{
                     correct = [
-                        root, {user, Admin}, nobody,
-                        {provider, P1, KeyFile, CertFile}, {user, NonAdmin}
+                        root,
+                        {user, Admin},
+                        {user, NonAdmin},
+                        nobody,
+                        {provider, P1, KeyFile1, CertFile1},
+                        {provider, P2, KeyFile2, CertFile2}
                     ]
                 }
         end,
@@ -654,7 +704,10 @@ get_eff_users_test(Config) ->
 
 
 get_eff_groups_test(Config) ->
-    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
         Config, <<"P1">>
     ),
     % Create two users, grant one of them the privilege to list groups.
@@ -663,13 +716,16 @@ get_eff_groups_test(Config) ->
     oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST_GROUPS
     ]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ListApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, {user, Admin}],
+            correct = [
+                root,
+                {user, Admin},
+                {provider, P1, KeyFile1, CertFile1}
+            ],
             unauthorized = [nobody],
-            forbidden = [{provider, P1, KeyFile, CertFile}, {user, NonAdmin}]
+            forbidden = [{provider, P2, KeyFile2, CertFile2}, {user, NonAdmin}]
         },
         rest_spec = #rest_spec{
             method = get,
@@ -689,10 +745,14 @@ get_eff_groups_test(Config) ->
         ClientSpec = case ExcludeOrInclude of
             include ->
                 #client_spec{
-                    correct = [root, {user, Admin}],
+                    correct = [
+                        root,
+                        {user, Admin},
+                        {provider, P1, KeyFile1, CertFile1}
+                    ],
                     unauthorized = [nobody],
                     forbidden = [
-                        {provider, P1, KeyFile, CertFile},
+                        {provider, P2, KeyFile2, CertFile2},
                         {user, NonAdmin}
                     ]
                 };
@@ -701,8 +761,12 @@ get_eff_groups_test(Config) ->
                 % resource.
                 #client_spec{
                     correct = [
-                        nobody, root, {user, Admin},
-                        {provider, P1, KeyFile, CertFile}, {user, NonAdmin}
+                        root,
+                        {user, Admin},
+                        {user, NonAdmin},
+                        nobody,
+                        {provider, P1, KeyFile1, CertFile1},
+                        {provider, P2, KeyFile2, CertFile2}
                     ]
                 }
         end,
@@ -802,7 +866,6 @@ get_spaces_test(Config) ->
     oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST_SPACES
     ]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ListApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -966,7 +1029,6 @@ support_space_test(Config) ->
     ),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), <<"S1">>),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, BadMacaroon1} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
     {ok, BadTokenType1} = token_logic:serialize(BadMacaroon1),
 
@@ -1024,7 +1086,6 @@ support_space_test(Config) ->
                     {ok, Space} = oz_test_utils:create_space(
                         Config, ?USER(U1), <<"space">>
                     ),
-                    oz_test_utils:ensure_eff_graph_up_to_date(Config),
                     {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
                         Config, ?USER(U1), Space
                     ),
@@ -1076,7 +1137,6 @@ support_space_test(Config) ->
                     {ok, Space} = oz_test_utils:create_space(
                         Config, ?USER(U1), <<"space">>
                     ),
-                    oz_test_utils:ensure_eff_graph_up_to_date(Config),
                     {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
                         Config, ?USER(U1), Space
                     ),
@@ -1098,7 +1158,6 @@ update_support_size_test(Config) ->
     {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(Config, <<"P2">>),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), <<"space">>),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
         Config, ?USER(U1), S1
     ),
@@ -1168,9 +1227,7 @@ revoke_support_test(Config) ->
         Config, <<"P2">>
     ),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), <<"space">>),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
         Config, ?USER(U1), S1
     ),

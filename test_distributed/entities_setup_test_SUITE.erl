@@ -201,7 +201,6 @@ automatic_space_membership_via_global_group_test(Config) ->
     {ok, UserId} = oz_test_utils:create_user(
         Config, #od_user{name = <<"User with automatic space membership">>}
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, #od_user{
         eff_spaces = EffSpaces
     }} = oz_test_utils:get_user(Config, UserId),
@@ -216,7 +215,6 @@ automatic_space_membership_via_global_group_test(Config) ->
     {ok, UserIdWithoutAccess} = oz_test_utils:create_user(
         Config, #od_user{name = <<"User with NO membership">>}
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, #od_user{
         eff_spaces = ShouldNotContainTheOpenSpace
     }} = oz_test_utils:get_user(Config, UserIdWithoutAccess),
@@ -229,7 +227,6 @@ automatic_space_membership_via_global_group_test(Config) ->
     ok = oz_test_utils:group_remove_user(
         Config, <<"all_users_group">>, UserId
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, #od_user{
         eff_spaces = ShouldNoLongerContainTheOpenSpace
     }} = oz_test_utils:get_user(Config, UserId),

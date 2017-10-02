@@ -36,11 +36,11 @@
 }).
 
 %%%===================================================================
-%%% Records synchronized via subscriptions
+%%% Records synchronized via Graph Sync
 %%%===================================================================
 
 % Records starting with prefix od_ are special records that represent entities
-% in the system and are synchronized to providers via subscriptions.
+% in the system and are synchronized to providers via Graph Sync.
 % The entities can have various relations between them, especially effective
 % membership is possible via groups and nested groups.
 % The effective relations are calculated top-down,
@@ -204,6 +204,7 @@
     serial :: undefined | binary(),
     latitude = 0.0 :: float(),
     longitude = 0.0 :: float(),
+    online = false :: boolean(),
 
     % Direct relations to other entities
     spaces = #{} :: entity_graph:relation_with_attrs(od_space:id(), Size :: pos_integer()),
@@ -290,25 +291,9 @@
     top_down_dirty = [] :: [{Priority :: integer(), EntityType :: atom(), EntityId :: binary()}]
 }).
 
-% Describes state of batch.
--record(outbox, {
-    timer_expires :: undefined | pos_integer(),
-    timer :: undefined | timer:tref(),
-    buffer :: undefined | [term()]
-}).
-
-% Stores data used to provide subscription updates
--record(subscriptions_state, {
-    cache :: undefined | gb_trees:tree()
-}).
-
-% Stores state of provider subscription
--record(provider_subscription, {
-    connections = [] :: [pid()],
-    provider :: undefined | binary(),
-    resume_at = 1 :: subscriptions:seq(),
-    missing = [] :: [subscriptions:seq()],
-    users = [] :: [binary()]
+%% Model that holds the last processed seq for Graph Sync server.
+-record(gs_server_state, {
+    seq = 1 :: couchbase_changes:seq()
 }).
 
 % Info about identities, which are owned by this OZ

@@ -154,7 +154,7 @@ provider_record(ProviderId, UserId) ->
     Spaces = maps:keys(SpacesWithSupports),
 
     #{host := Host} = url_utils:parse(RedPoint),
-    Status = case provider_logic:is_provider_connected(ProviderId) of
+    Status = case provider_logic:is_online(ProviderId) of
         true ->
             <<"online">>;
         false ->
@@ -194,7 +194,7 @@ provider_record(ProviderId, UserId) ->
 %% @doc
 %% Asynchronously tries to connect to a provider via HTTP and pushes the
 %% information whether it was successful to client. This is used when
-%% subscriptions channel report no connection, but the provider might still be
+%% Graph Sync channel report no connection, but the provider might still be
 %% online.
 %% @end
 %%--------------------------------------------------------------------

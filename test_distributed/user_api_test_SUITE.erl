@@ -13,7 +13,6 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
--include("errors.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -22,6 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
+-include_lib("cluster_worker/include/api_errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -248,7 +248,6 @@ get_test(Config) ->
     oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_USERS_LIST
     ]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     % TODO VFS-2918
 %%    ExpectedBody = #{
@@ -261,7 +260,7 @@ get_test(Config) ->
         <<"name">> => ExpName,
         <<"login">> => ExpLogin,
         <<"alias">> => ExpAlias,
-        <<"connectedAccounts">> => [],
+        <<"linkedAccounts">> => [],
         <<"emailList">> => ExpEmailList
     },
     ApiTestSpec = #api_test_spec{
@@ -283,7 +282,7 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             operation = get,
             module = user_logic,
-            function = get_data,
+            function = get_protected_data,
             args = [client, User],
             expected_result = ?OK_MAP(ExpectedBody)
         }
@@ -314,7 +313,6 @@ list_test(Config) ->
     oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_USERS_LIST
     ]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Create a provider, which should not have privileges to list users.
     {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
         Config, <<"P1">>
@@ -380,7 +378,6 @@ get_oz_privileges_test(Config) ->
     oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_VIEW_PRIVILEGES
     ]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     % A new user should not be able to view his oz_privileges
@@ -448,7 +445,6 @@ get_oz_privileges_test(Config) ->
     ])),
     % Also, check path dedicated for user that presents auth
     oz_test_utils:set_user_oz_privileges(Config, User, set, [?OZ_VIEW_PRIVILEGES]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ApiTestSpecForUser = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
             correct = [{user, User}]
@@ -472,7 +468,6 @@ get_eff_oz_privileges_test(Config) ->
     oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_VIEW_PRIVILEGES
     ]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     % A new user should not be able to view his eff_oz_privileges
@@ -571,8 +566,7 @@ get_eff_oz_privileges_test(Config) ->
                 oz_test_utils:set_group_oz_privileges(
                     Config, TopGroup, Operation, maps:get(4, Parts)
                 )
-        end,
-        oz_test_utils:ensure_eff_graph_up_to_date(Config)
+        end
     end,
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, InitialPrivs, []
@@ -582,7 +576,6 @@ get_eff_oz_privileges_test(Config) ->
     oz_test_utils:set_group_oz_privileges(Config, BottomGroup, set, []),
     oz_test_utils:set_group_oz_privileges(Config, MiddleGroup, set, []),
     oz_test_utils:set_group_oz_privileges(Config, TopGroup, set, []),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ApiTestSpecForUser = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
             correct = [{user, User}]
@@ -625,7 +618,6 @@ get_default_space_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
     % Set a default space for user
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(User), <<"sp">>),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     oz_test_utils:set_user_default_space(Config, User, Space),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         rest_spec = RestSpec#rest_spec{
@@ -719,7 +711,6 @@ get_default_provider_test(Config) ->
         Config, ?PROVIDER(Provider), Provider,
         Macaroon, oz_test_utils:minimum_support_size(Config)
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     oz_test_utils:set_user_default_provider(Config, User, Provider),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         rest_spec = RestSpec#rest_spec{

@@ -141,7 +141,7 @@ delete_record(<<"group">>, _Id) ->
     proplists:proplist().
 group_record(Client, GroupId) ->
     UserId = gui_session:get_user_id(),
-    {ok, #{<<"name">> := Name}} = group_logic:get_data(Client, GroupId),
+    {ok, #od_group{name = Name}} = group_logic:get(Client, GroupId),
     [
         {<<"id">>, GroupId},
         {<<"name">>, Name},

@@ -11,8 +11,6 @@
 -author("Lukasz Opiola").
 
 -include("registered_names.hrl").
--include("subscriptions_test_utils.hrl").
--include("subscriptions/subscriptions.hrl").
 -include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
@@ -153,6 +151,17 @@ check_rest_call(Config, ArgsMap) ->
                     {keyfile, KeyFile}, {certfile, CertFile}
                 ]} | ReqOpts]
         end,
+
+%%        %% Useful for debug
+%%        ct:print("[Req]: ~n"
+%%        "   ReqMethod: ~p~n"
+%%        "   URL: ~p~n"
+%%        "   HeadersPlusAuth: ~p~n"
+%%        "   ReqBody: ~p~n"
+%%        "   Opts: ~p~n", [
+%%            ReqMethod, URL, HeadersPlusAuth, ReqBody, [{pool, false}, insecure | ReqOptsPlusAuth]
+%%        ]),
+
         % Add insecure option - we do not want the OZ server cert to be checked.
         {ok, RespCode, RespHeaders, RespBody} = http_client:request(
             ReqMethod,

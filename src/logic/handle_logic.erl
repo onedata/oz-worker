@@ -23,8 +23,7 @@
 ]).
 -export([
     get/2,
-    get_data/2,
-    get_public_data/2,
+    get_protected_data/2,
     list/1
 ]).
 -export([
@@ -54,8 +53,9 @@
 ]).
 -export([
     exists/1,
-    user_has_eff_privilege/3,
-    group_has_eff_privilege/3
+    has_eff_privilege/3,
+    has_eff_user/2,
+    has_eff_group/2
 ]).
 
 %%%===================================================================
@@ -89,7 +89,17 @@ create(Client, HServiceId, ResourceType, ResourceId, Metadata) ->
 -spec create(Client :: entity_logic:client(), Data :: #{}) ->
     {ok, od_handle:id()} | {error, term()}.
 create(Client, Data) ->
-    entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
+    AuthHint = case Client of
+        ?USER(UserId) -> ?AS_USER(UserId);
+        _ -> undefined
+    end,
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_handle, id = undefined, aspect = instance},
+        data = Data,
+        auth_hint = AuthHint
+    })).
 
 
 %%--------------------------------------------------------------------
@@ -100,30 +110,26 @@ create(Client, Data) ->
 -spec get(Client :: entity_logic:client(), HandleId :: od_handle:id()) ->
     {ok, #od_handle{}} | {error, term()}.
 get(Client, HandleId) ->
-    entity_logic:get(Client, ?PLUGIN, HandleId, entity).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = instance}
+    }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves information about a handle record from database.
+%% Retrieves protected handle data from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(Client :: entity_logic:client(), HandleId :: od_handle:id()) ->
-    {ok, #{}} | {error, term()}.
-get_data(Client, HServiceId) ->
-    entity_logic:get(Client, ?PLUGIN, HServiceId, data).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves public information (available without any authorization)
-%% about a handle record from database.
-%% @end
-%%--------------------------------------------------------------------
--spec get_public_data(Client :: entity_logic:client(), HandleId :: od_handle:id()) ->
-    {ok, #{}} | {error, term()}.
-get_public_data(Client, HServiceId) ->
-    entity_logic:get(Client, ?PLUGIN, HServiceId, public_data).
+-spec get_protected_data(Client :: entity_logic:client(), HandleId :: od_handle:id()) ->
+    {ok, maps:map()} | {error, term()}.
+get_protected_data(Client, HandleId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = instance, scope = protected}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -134,7 +140,11 @@ get_public_data(Client, HServiceId) ->
 -spec list(Client :: entity_logic:client()) ->
     {ok, [od_handle:id()]} | {error, term()}.
 list(Client) ->
-    entity_logic:get(Client, ?PLUGIN, undefined, list).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_handle, id = undefined, aspect = list}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -150,7 +160,12 @@ list(Client) ->
 update(Client, HandleId, Metadata) when is_binary(Metadata) ->
     update(Client, HandleId, #{<<"metadata">> => Metadata});
 update(Client, HandleId, Data) ->
-    entity_logic:update(Client, ?PLUGIN, HandleId, entity, Data).
+    entity_logic:handle(#el_req{
+        operation = update,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = instance},
+        data = Data
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -161,7 +176,11 @@ update(Client, HandleId, Data) ->
 -spec delete(Client :: entity_logic:client(), HandleId :: od_handle:id()) ->
     ok | {error, term()}.
 delete(Client, HandleId) ->
-    entity_logic:delete(Client, ?PLUGIN, HandleId, entity).
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = instance}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -193,7 +212,12 @@ add_user(Client, HandleId, UserId, Privileges) when is_list(Privileges) ->
         <<"privileges">> => Privileges
     });
 add_user(Client, HandleId, UserId, Data) ->
-    entity_logic:create(Client, ?PLUGIN, HandleId, {user, UserId}, Data).
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = {user, UserId}},
+        data = Data
+    })).
 
 
 %%--------------------------------------------------------------------
@@ -225,7 +249,12 @@ add_group(Client, HandleId, GroupId, Privileges) when is_list(Privileges) ->
         <<"privileges">> => Privileges
     });
 add_group(Client, HandleId, GroupId, Data) ->
-    entity_logic:create(Client, ?PLUGIN, HandleId, {group, GroupId}, Data).
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = {group, GroupId}},
+        data = Data
+    })).
 
 
 %%--------------------------------------------------------------------
@@ -236,7 +265,11 @@ add_group(Client, HandleId, GroupId, Data) ->
 -spec get_users(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
 get_users(Client, HandleId) ->
-    entity_logic:get(Client, ?PLUGIN, HandleId, users).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = users}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -247,7 +280,11 @@ get_users(Client, HandleId) ->
 -spec get_eff_users(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
 get_eff_users(Client, HandleId) ->
-    entity_logic:get(Client, ?PLUGIN, HandleId, eff_users).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = eff_users}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -258,7 +295,12 @@ get_eff_users(Client, HandleId) ->
 -spec get_user(Client :: entity_logic:client(), HandleId :: od_handle:id(),
     UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
 get_user(Client, HandleId, UserId) ->
-    entity_logic:get(Client, ?PLUGIN, HandleId, {user, UserId}).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
+        auth_hint = ?THROUGH_HANDLE(HandleId)
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -270,7 +312,12 @@ get_user(Client, HandleId, UserId) ->
 -spec get_eff_user(Client :: entity_logic:client(), HandleId :: od_handle:id(),
     UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
 get_eff_user(Client, HandleId, UserId) ->
-    entity_logic:get(Client, ?PLUGIN, HandleId, {eff_user, UserId}).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
+        auth_hint = ?THROUGH_HANDLE(HandleId)
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -281,7 +328,11 @@ get_eff_user(Client, HandleId, UserId) ->
 -spec get_user_privileges(Client :: entity_logic:client(), HandleId :: od_handle:id(),
     UserId :: od_user:id()) -> {ok, [privileges:handle_privileges()]} | {error, term()}.
 get_user_privileges(Client, HandleId, UserId) ->
-    entity_logic:get(Client, ?PLUGIN, HandleId, {user_privileges, UserId}).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = {user_privileges, UserId}}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -293,7 +344,11 @@ get_user_privileges(Client, HandleId, UserId) ->
 -spec get_eff_user_privileges(Client :: entity_logic:client(), HandleId :: od_handle:id(),
     UserId :: od_user:id()) -> {ok, [privileges:handle_privileges()]} | {error, term()}.
 get_eff_user_privileges(Client, HandleId, UserId) ->
-    entity_logic:get(Client, ?PLUGIN, HandleId, {eff_user_privileges, UserId}).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = {eff_user_privileges, UserId}}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -304,7 +359,11 @@ get_eff_user_privileges(Client, HandleId, UserId) ->
 -spec get_groups(Client :: entity_logic:client(), HandleId :: od_handle:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
 get_groups(Client, HandleId) ->
-    entity_logic:get(Client, ?PLUGIN, HandleId, groups).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = groups}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -315,7 +374,11 @@ get_groups(Client, HandleId) ->
 -spec get_eff_groups(Client :: entity_logic:client(), HandleId :: od_handle:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
 get_eff_groups(Client, HandleId) ->
-    entity_logic:get(Client, ?PLUGIN, HandleId, eff_groups).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = eff_groups}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -326,7 +389,12 @@ get_eff_groups(Client, HandleId) ->
 -spec get_group(Client :: entity_logic:client(), HandleId :: od_handle:id(),
     GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
 get_group(Client, HandleId, GroupId) ->
-    entity_logic:get(Client, ?PLUGIN, HandleId, {group, GroupId}).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
+        auth_hint = ?THROUGH_HANDLE(HandleId)
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -338,7 +406,12 @@ get_group(Client, HandleId, GroupId) ->
 -spec get_eff_group(Client :: entity_logic:client(), HandleId :: od_handle:id(),
     GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
 get_eff_group(Client, HandleId, GroupId) ->
-    entity_logic:get(Client, ?PLUGIN, HandleId, {eff_group, GroupId}).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
+        auth_hint = ?THROUGH_HANDLE(HandleId)
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -349,7 +422,11 @@ get_eff_group(Client, HandleId, GroupId) ->
 -spec get_group_privileges(Client :: entity_logic:client(), HandleId :: od_handle:id(),
     GroupId :: od_group:id()) -> {ok, [privileges:handle_privileges()]} | {error, term()}.
 get_group_privileges(Client, HandleId, GroupId) ->
-    entity_logic:get(Client, ?PLUGIN, HandleId, {group_privileges, GroupId}).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = {group_privileges, GroupId}}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -361,7 +438,11 @@ get_group_privileges(Client, HandleId, GroupId) ->
 -spec get_eff_group_privileges(Client :: entity_logic:client(), HandleId :: od_handle:id(),
     GroupId :: od_group:id()) -> {ok, [privileges:handle_privileges()]} | {error, term()}.
 get_eff_group_privileges(Client, HandleId, GroupId) ->
-    entity_logic:get(Client, ?PLUGIN, HandleId, {eff_group_privileges, GroupId}).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = {eff_group_privileges, GroupId}}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -389,7 +470,12 @@ update_user_privileges(Client, HandleId, UserId, Operation, Privs) when is_list(
 -spec update_user_privileges(Client :: entity_logic:client(), HandleId :: od_handle:id(),
     UserId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
 update_user_privileges(Client, HandleId, UserId, Data) ->
-    entity_logic:update(Client, ?PLUGIN, HandleId, {user_privileges, UserId}, Data).
+    entity_logic:handle(#el_req{
+        operation = update,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect =  {user_privileges, UserId}},
+        data = Data
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -417,7 +503,12 @@ update_group_privileges(Client, HandleId, GroupId, Operation, Privs) when is_lis
 -spec update_group_privileges(Client :: entity_logic:client(), HandleId :: od_handle:id(),
     GroupId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
 update_group_privileges(Client, HandleId, GroupId, Data) ->
-    entity_logic:update(Client, ?PLUGIN, HandleId, {group_privileges, GroupId}, Data).
+    entity_logic:handle(#el_req{
+        operation = update,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = {group_privileges, GroupId}},
+        data = Data
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -428,7 +519,11 @@ update_group_privileges(Client, HandleId, GroupId, Data) ->
 -spec remove_user(Client :: entity_logic:client(), HandleId :: od_handle:id(),
     UserId :: od_user:id()) -> ok | {error, term()}.
 remove_user(Client, HandleId, UserId) ->
-    entity_logic:delete(Client, ?PLUGIN, HandleId, {user, UserId}).
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = {user, UserId}}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -439,7 +534,11 @@ remove_user(Client, HandleId, UserId) ->
 -spec remove_group(Client :: entity_logic:client(), HandleId :: od_handle:id(),
     GroupId :: od_group:id()) -> ok | {error, term()}.
 remove_group(Client, HandleId, GroupId) ->
-    entity_logic:delete(Client, ?PLUGIN, HandleId, {group, GroupId}).
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_handle, id = HandleId, aspect = {group, GroupId}}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -459,38 +558,55 @@ exists(HandleId) ->
 %% effective privilege in given handle.
 %% @end
 %%--------------------------------------------------------------------
--spec user_has_eff_privilege(HandleOrId :: od_handle:id() | #od_handle{},
+-spec has_eff_privilege(HandleOrId :: od_handle:id() | #od_handle{},
     UserId :: od_user:id(), Privilege :: privileges:handle_privileges()) ->
     boolean().
-user_has_eff_privilege(HandleId, UserId, Privilege) when is_binary(HandleId) ->
+has_eff_privilege(HandleId, UserId, Privilege) when is_binary(HandleId) ->
     case od_handle:get(HandleId) of
         {ok, #document{value = Handle}} ->
-            user_has_eff_privilege(Handle, UserId, Privilege);
+            has_eff_privilege(Handle, UserId, Privilege);
         _ ->
             false
     end;
-user_has_eff_privilege(#od_handle{eff_users = UsersPrivileges}, UserId, Privilege) ->
+has_eff_privilege(#od_handle{eff_users = UsersPrivileges}, UserId, Privilege) ->
     {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, {[], []}),
     lists:member(Privilege, UserPrivileges).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying whether specified effective group has specified
-%% effective privilege in given handle.
+%% Predicate saying whether specified user is an effective user in given handle.
 %% @end
 %%--------------------------------------------------------------------
--spec group_has_eff_privilege(HandleOrId :: od_handle:id() | #od_handle{},
-    GroupId :: od_group:id(), Privilege :: privileges:handle_privileges()) ->
-    boolean().
-group_has_eff_privilege(HandleId, GroupId, Privilege) when is_binary(HandleId) ->
+-spec has_eff_user(HandleOrId :: od_handle:id() | #od_handle{},
+    UserId :: od_user:id()) -> boolean().
+has_eff_user(HandleId, UserId) when is_binary(HandleId) ->
     case od_handle:get(HandleId) of
         {ok, #document{value = Handle}} ->
-            group_has_eff_privilege(Handle, GroupId, Privilege);
+            has_eff_user(Handle, UserId);
         _ ->
             false
     end;
-group_has_eff_privilege(#od_handle{eff_groups = GroupsPrivileges}, GroupId, Privilege) ->
-    {GroupPrivileges, _} = maps:get(GroupId, GroupsPrivileges, {[], []}),
-    lists:member(Privilege, GroupPrivileges).
+has_eff_user(#od_handle{eff_users = EffUsers}, UserId) ->
+    maps:is_key(UserId, EffUsers).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified group is an effective group in given
+%% handle.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_group(HandleOrId :: od_handle:id() | #od_handle{},
+    GroupId :: od_group:id()) -> boolean().
+has_eff_group(HandleId, GroupId) when is_binary(HandleId) ->
+    case od_handle:get(HandleId) of
+        {ok, #document{value = Handle}} ->
+            has_eff_group(Handle, GroupId);
+        _ ->
+            false
+    end;
+has_eff_group(#od_handle{eff_groups = EffGroups}, GroupId) ->
+    maps:is_key(GroupId, EffGroups).
+
 
