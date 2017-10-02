@@ -23,7 +23,7 @@
 ]).
 -export([
     get/2,
-    get_data/2,
+    get_public_data/2,
     list/1
 ]).
 -export([
@@ -71,7 +71,12 @@ create(Client, ShareId, Name, RootFileId, SpaceId) ->
 -spec create(Client :: entity_logic:client(), Data :: #{}) ->
     {ok, od_share:id()} | {error, term()}.
 create(Client, Data) ->
-    entity_logic:create(Client, ?PLUGIN, undefined, entity, Data).
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_share, id = undefined, aspect = instance},
+        data = Data
+    })).
 
 
 %%--------------------------------------------------------------------
@@ -82,18 +87,26 @@ create(Client, Data) ->
 -spec get(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
     {ok, #od_share{}} | {error, term()}.
 get(Client, ShareId) ->
-    entity_logic:get(Client, ?PLUGIN, ShareId, entity).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_share, id = ShareId, aspect = instance}
+    }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves information about a share record from database.
+%% Retrieves public share data from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_data(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
-    {ok, #{}} | {error, term()}.
-get_data(Client, ShareId) ->
-    entity_logic:get(Client, ?PLUGIN, ShareId, data).
+-spec get_public_data(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
+    {ok, maps:map()} | {error, term()}.
+get_public_data(Client, ShareId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_share, id = ShareId, aspect = instance, scope = public}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -104,7 +117,11 @@ get_data(Client, ShareId) ->
 -spec list(Client :: entity_logic:client()) ->
     {ok, [od_share:id()]} | {error, term()}.
 list(Client) ->
-    entity_logic:get(Client, ?PLUGIN, undefined, list).
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_share, id = undefined, aspect = list}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -120,7 +137,12 @@ list(Client) ->
 update(Client, ShareId, NewName) when is_binary(NewName) ->
     update(Client, ShareId, #{<<"name">> => NewName});
 update(Client, ShareId, Data) ->
-    entity_logic:update(Client, ?PLUGIN, ShareId, entity, Data).
+    entity_logic:handle(#el_req{
+        operation = update,
+        client = Client,
+        gri = #gri{type = od_share, id = ShareId, aspect = instance},
+        data = Data
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -131,7 +153,11 @@ update(Client, ShareId, Data) ->
 -spec delete(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
     ok | {error, term()}.
 delete(Client, ShareId) ->
-    entity_logic:delete(Client, ?PLUGIN, ShareId, entity).
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_share, id = ShareId, aspect = instance}
+    }).
 
 
 %%--------------------------------------------------------------------
@@ -171,7 +197,7 @@ share_id_to_redirect_url(ShareId) ->
     % Prefer online providers
     {Online, Offline} = lists:partition(
         fun(ProviderId) ->
-            subscriptions:any_connection_active(ProviderId)
+            provider_logic:is_online(ProviderId)
         end, maps:keys(Providers)),
     % But if there are none, choose one of inactive
     Choice = case length(Online) of

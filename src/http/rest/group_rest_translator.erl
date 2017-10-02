@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -14,12 +14,11 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
--include("errors.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([response/4]).
+-export([create_response/3, get_response/2]).
 
 %%%===================================================================
 %%% API
@@ -27,190 +26,147 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates given entity logic result into REST response
-%% expressed by #rest_resp{} record.
+%% Translates given entity logic CREATE result into REST response
+%% expressed by #rest_resp{} record. GRI holds the #gri{} od the request,
+%% new GRI holds the #gri{} of new aspect that was created.
 %% @end
 %%--------------------------------------------------------------------
--spec response(Operation :: entity_logic:operation(),
-    EntityId :: entity_logic:entity_id(), Resource :: entity_logic:resource(),
-    Result :: entity_logic:result()) -> #rest_resp{}.
-% TODO VFS-2918
-response(create, _GroupId, {deprecated_user_privileges, _UserId}, ok) ->
-    rest_handler:ok_no_content_reply();
-% TODO VFS-2918
-response(create, _GroupId, {deprecated_child_privileges, _ChildGroupId}, ok) ->
-    rest_handler:ok_no_content_reply();
+-spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
+    Result :: {data, term()} | {fetched, entity_logic:gri(), term()} |
+    {not_fetched, entity_logic:gri()} |
+    {not_fetched, entity_logic:gri(), entity_logic:auth_hint()}) -> #rest_resp{}.
+create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched, #gri{id = GroupId}}) ->
+    LocationTokens = case AuthHint of
+        ?AS_USER(_UserId) ->
+            % TODO VFS-2918
+%%        [<<"user">>, <<"groups">>, GroupId]
+            [<<"groups">>, GroupId];
+        ?AS_GROUP(GroupId) ->
+            [<<"groups">>, GroupId, <<"parents">>, GroupId];
+        _ ->
+            [<<"groups">>, GroupId]
+    end,
+    rest_translator:created_reply(LocationTokens);
+% TODO VFS-2918 Responses should be the same
+%%    create_response(#gri{aspect = join}, AuthHint, #gri{id = GroupId}, Data);
 
-response(create, undefined, entity, {ok, GroupId}) ->
-    rest_handler:created_reply([<<"groups">>, GroupId]);
-
-response(create, _GroupId, invite_user_token, {ok, Macaroon}) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
-    rest_handler:ok_body_reply(#{<<"token">> => Token});
-
-response(create, _GroupId, invite_group_token, {ok, Macaroon}) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
-    rest_handler:ok_body_reply(#{<<"token">> => Token});
-
-response(create, GroupId, create_space, {ok, SpaceId}) ->
-    rest_handler:created_reply(
-        [<<"groups">>, GroupId, <<"spaces">>, SpaceId]
-    );
-
-response(create, GroupId, create_handle_service, {ok, HServiceId}) ->
-    rest_handler:created_reply(
-        [<<"groups">>, GroupId, <<"handle_services">>, HServiceId]
-    );
-
-response(create, GroupId, create_handle, {ok, HandleId}) ->
-    rest_handler:created_reply(
-        [<<"groups">>, GroupId, <<"handles">>, HandleId]
-    );
-
-response(create, GroupId, join_group, {ok, ParentGroupId}) ->
-    rest_handler:created_reply(
-        % TODO VFS-2918
+create_response(#gri{aspect = join}, AuthHint, {not_fetched, #gri{id = ParentGroupId}}) ->
+    LocationTokens = case AuthHint of
+        ?AS_USER(_UserId) ->
+            [<<"user">>, <<"groups">>, ParentGroupId];
+        ?AS_GROUP(GroupId) ->
+            % TODO VFS-2918
 %%        [<<"groups">>, GroupId, <<"parents">>, ParentGroupId]
-        [<<"groups">>, GroupId, <<"nested">>, ParentGroupId]
-    );
+            [<<"groups">>, GroupId, <<"nested">>, ParentGroupId];
+        _ ->
+            [<<"groups">>, ParentGroupId]
+    end,
+    rest_translator:created_reply(LocationTokens);
 
-response(create, GroupId, join_space, {ok, SpaceId}) ->
-    rest_handler:created_reply(
-        [<<"groups">>, GroupId, <<"spaces">>, SpaceId]
-    );
+create_response(#gri{aspect = invite_user_token}, _, {data, Macaroon}) ->
+    {ok, Token} = token_utils:serialize62(Macaroon),
+    rest_translator:ok_body_reply(#{<<"token">> => Token});
 
-response(create, GroupId, {user, UserId}, {ok, UserId}) ->
-    rest_handler:created_reply(
+create_response(#gri{aspect = invite_group_token}, _, {data, Macaroon}) ->
+    {ok, Token} = token_utils:serialize62(Macaroon),
+    rest_translator:ok_body_reply(#{<<"token">> => Token});
+
+create_response(#gri{id = GroupId, aspect = {user, UserId}}, _, {not_fetched, #gri{id = UserId}, _}) ->
+    rest_translator:created_reply(
         [<<"groups">>, GroupId, <<"users">>, UserId]
     );
 
-response(create, GroupId, {child, ChildGroupId}, {ok, ChildGroupId}) ->
-    rest_handler:created_reply(
-        [<<"groups">>, GroupId, <<"children">>, ChildGroupId]
-    );
+create_response(#gri{id = GroupId, aspect = {child, ChGrId}}, _, {not_fetched, #gri{id = ChGrId}, _}) ->
+    rest_translator:created_reply(
+        [<<"groups">>, GroupId, <<"children">>, ChGrId]
+    ).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Translates given entity logic GET result into REST response
+%% expressed by #rest_resp{} record.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_response(entity_logic:gri(), entity_logic:get_result()) ->
+    #rest_resp{}.
 % TODO VFS-2918
-response(get, _GroupId, deprecated_invite_user_token, {ok, Macaroon}) ->
+get_response(#gri{aspect = deprecated_invite_user_token}, Macaroon) ->
     {ok, Token} = token_utils:serialize62(Macaroon),
-    rest_handler:ok_body_reply(#{<<"token">> => Token});
+    rest_translator:ok_body_reply(#{<<"token">> => Token});
 % TODO VFS-2918
-response(get, _GroupId, deprecated_invite_group_token, {ok, Macaroon}) ->
+get_response(#gri{aspect = deprecated_invite_group_token}, Macaroon) ->
     {ok, Token} = token_utils:serialize62(Macaroon),
-    rest_handler:ok_body_reply(#{<<"token">> => Token});
+    rest_translator:ok_body_reply(#{<<"token">> => Token});
+
+get_response(#gri{id = undefined, aspect = list}, Groups) ->
+    rest_translator:ok_body_reply(#{<<"groups">> => Groups});
+
+get_response(#gri{id = GroupId, aspect = instance, scope = _}, GroupData) ->
+    % scope can be protected or shared
+    rest_translator:ok_body_reply(GroupData#{<<"groupId">> => GroupId});
+
+get_response(#gri{aspect = oz_privileges}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
+
+get_response(#gri{aspect = eff_oz_privileges}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
+
+get_response(#gri{aspect = users}, Users) ->
+    rest_translator:ok_body_reply(#{<<"users">> => Users});
+
+get_response(#gri{aspect = eff_users}, Users) ->
+    rest_translator:ok_body_reply(#{<<"users">> => Users});
+
+get_response(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
+
+get_response(#gri{aspect = {eff_user_privileges, _UserId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
+
+get_response(#gri{aspect = parents}, Parents) ->
+% TODO VFS-2918
+%%    rest_translator:ok_body_reply(#{<<"parents">> => Parents});
+    rest_translator:ok_body_reply(#{<<"parent_groups">> => Parents});
+
+get_response(#gri{aspect = eff_parents}, Parents) ->
+    rest_translator:ok_body_reply(#{<<"parents">> => Parents});
 
 
-response(get, GroupId, data, {ok, GroupData}) ->
-    rest_handler:ok_body_reply(GroupData#{<<"groupId">> => GroupId});
+get_response(#gri{aspect = children}, Children) ->
+% TODO VFS-2918
+%%    rest_translator:ok_body_reply(#{<<"children">> => Children});
+    rest_translator:ok_body_reply(#{<<"nested_groups">> => Children});
+
+get_response(#gri{aspect = eff_children}, Children) ->
+    rest_translator:ok_body_reply(#{<<"children">> => Children});
+
+get_response(#gri{aspect = {child_privileges, _ChildId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
+
+get_response(#gri{aspect = {eff_child_privileges, _ChildId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
+
+get_response(#gri{aspect = spaces}, Spaces) ->
+    rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
+
+get_response(#gri{aspect = eff_spaces}, Spaces) ->
+    rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
+
+get_response(#gri{aspect = eff_providers}, Providers) ->
+    rest_translator:ok_body_reply(#{<<"providers">> => Providers});
 
 
-response(get, undefined, list, {ok, Groups}) ->
-    rest_handler:ok_body_reply(#{<<"groups">> => Groups});
+get_response(#gri{aspect = handle_services}, HServices) ->
+    rest_translator:ok_body_reply(#{<<"handle_services">> => HServices});
 
-response(get, _GroupId, oz_privileges, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
-
-response(get, _GroupId, eff_oz_privileges, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
-
-response(get, _GroupId, users, {ok, Users}) ->
-    rest_handler:ok_body_reply(#{<<"users">> => Users});
-
-response(get, _GroupId, eff_users, {ok, Users}) ->
-    rest_handler:ok_body_reply(#{<<"users">> => Users});
-
-response(get, _GroupId, {user, UserId}, {ok, User}) ->
-    user_rest_translator:response(get, UserId, data, {ok, User});
-
-response(get, _GroupId, {eff_user, UserId}, {ok, User}) ->
-    user_rest_translator:response(get, UserId, data, {ok, User});
-
-response(get, _GroupId, {user_privileges, _UserId}, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
-
-response(get, _GroupId, {eff_user_privileges, _UserId}, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
-
-response(get, _GroupId, parents, {ok, Parents}) ->
-    % TODO VFS-2918
-%%    rest_handler:ok_body_reply(#{<<"parents">> => Parents});
-    rest_handler:ok_body_reply(#{<<"parent_groups">> => Parents});
-
-response(get, _GroupId, eff_parents, {ok, Parents}) ->
-    rest_handler:ok_body_reply(#{<<"parents">> => Parents});
-
-response(get, _GroupId, {parent, ParentId}, {ok, Parent}) ->
-    response(get, ParentId, data, {ok, Parent});
-
-response(get, _GroupId, {eff_parent, ParentId}, {ok, Parent}) ->
-    response(get, ParentId, data, {ok, Parent});
-
-response(get, _GroupId, children, {ok, Parents}) ->
-    % TODO VFS-2918
-%%    rest_handler:ok_body_reply(#{<<"children">> => Parents});
-    rest_handler:ok_body_reply(#{<<"nested_groups">> => Parents});
-
-response(get, _GroupId, eff_children, {ok, Parents}) ->
-    rest_handler:ok_body_reply(#{<<"children">> => Parents});
-
-response(get, _GroupId, {child, ChildId}, {ok, Child}) ->
-    response(get, ChildId, data, {ok, Child});
-
-response(get, _GroupId, {eff_child, ChildId}, {ok, Child}) ->
-    response(get, ChildId, data, {ok, Child});
-
-response(get, _GroupId, {child_privileges, _ChildId}, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
-
-response(get, _GroupId, {eff_child_privileges, _ChildId}, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
-
-response(get, _GroupId, spaces, {ok, Spaces}) ->
-    rest_handler:ok_body_reply(#{<<"spaces">> => Spaces});
-
-response(get, _GroupId, eff_spaces, {ok, Spaces}) ->
-    rest_handler:ok_body_reply(#{<<"spaces">> => Spaces});
-
-response(get, _GroupId, {space, SpaceId}, {ok, Space}) ->
-    space_rest_translator:response(get, SpaceId, data, {ok, Space});
-
-response(get, _GroupId, {eff_space, SpaceId}, {ok, Space}) ->
-    space_rest_translator:response(get, SpaceId, data, {ok, Space});
-
-response(get, _GroupId, eff_providers, {ok, Providers}) ->
-    rest_handler:ok_body_reply(#{<<"providers">> => Providers});
-
-response(get, _GroupId, {eff_provider, ProviderId}, {ok, Provider}) ->
-    provider_rest_translator:response(get, ProviderId, data, {ok, Provider});
-
-response(get, _GroupId, handle_services, {ok, HServices}) ->
-    rest_handler:ok_body_reply(#{<<"handle_services">> => HServices});
-
-response(get, _GroupId, eff_handle_services, {ok, HServices}) ->
-    rest_handler:ok_body_reply(#{<<"handle_services">> => HServices});
-
-response(get, _GroupId, {handle_service, HServiceId}, {ok, HService}) ->
-    handle_service_rest_translator:response(get, HServiceId, data, {ok, HService});
-
-response(get, _GroupId, {eff_handle_service, HServiceId}, {ok, HService}) ->
-    handle_service_rest_translator:response(get, HServiceId, data, {ok, HService});
-
-response(get, _GroupId, handles, {ok, Handles}) ->
-    rest_handler:ok_body_reply(#{<<"handles">> => Handles});
-
-response(get, _GroupId, eff_handles, {ok, Handles}) ->
-    rest_handler:ok_body_reply(#{<<"handles">> => Handles});
-
-response(get, _GroupId, {handle, HandleId}, {ok, Handle}) ->
-    handle_rest_translator:response(get, HandleId, data, {ok, Handle});
-
-response(get, _GroupId, {eff_handle, HandleId}, {ok, Handle}) ->
-    handle_rest_translator:response(get, HandleId, data, {ok, Handle});
+get_response(#gri{aspect = eff_handle_services}, HServices) ->
+    rest_translator:ok_body_reply(#{<<"handle_services">> => HServices});
 
 
-response(update, _GroupId, _, ok) ->
-    rest_handler:updated_reply();
+get_response(#gri{aspect = handles}, Handles) ->
+    rest_translator:ok_body_reply(#{<<"handles">> => Handles});
 
+get_response(#gri{aspect = eff_handles}, Handles) ->
+    rest_translator:ok_body_reply(#{<<"handles">> => Handles}).
 
-response(delete, _GroupId, _, ok) ->
-    rest_handler:deleted_reply().

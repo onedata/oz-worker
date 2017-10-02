@@ -438,7 +438,6 @@ identify_test_base(Config, Method) ->
 
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
     ),
@@ -505,7 +504,6 @@ get_record_test_base(Config, Method) ->
 
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
     ),
@@ -878,7 +876,6 @@ id_not_existing_test_base(Config, Method) ->
 cannot_disseminate_format_test_base(Config, Method) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
     ),
@@ -897,7 +894,6 @@ no_set_hierarchy_test_base(Config, Method) ->
 list_metadata_formats_no_format_error_test_base(Config, Method) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
     ),
@@ -1204,7 +1200,6 @@ create_spaces(Config, SpacesNames, Client) ->
         {ok, SpaceId} = oz_test_utils:create_space(Config, Client, SpaceName),
         SpaceId
     end, SpacesNames),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     Result.
 
 create_shares(Config, SpaceIds) ->
@@ -1256,11 +1251,9 @@ create_handle_service(Config, User) ->
     ok = oz_test_utils:set_user_oz_privileges(Config, User, grant, [
         ?OZ_HANDLE_SERVICES_CREATE
     ]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     {ok, HSId} = oz_test_utils:create_handle_service(Config, ?USER(User),
         ?DOI_NAME, ?PROXY_ENDPOINT, ?DOI_SERVICE_PROPERTIES
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     HSId.
 
 create_handle_with_mocked_timestamp(Config, User, HandleServiceId, ResourceId, Metadata, Timestamp) ->

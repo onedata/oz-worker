@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -12,10 +12,10 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
--include("errors.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("cluster_worker/include/api_errors.hrl").
 
 -export([response/1]).
 
@@ -57,6 +57,9 @@ translate(?ERROR_INTERNAL_SERVER_ERROR) ->
     ?HTTP_500_INTERNAL_SERVER_ERROR;
 
 translate(?ERROR_NOT_IMPLEMENTED) ->
+    ?HTTP_501_NOT_IMPLEMENTED;
+
+translate(?ERROR_NOT_SUPPORTED) ->
     ?HTTP_501_NOT_IMPLEMENTED;
 
 translate(?ERROR_UNAUTHORIZED) ->
@@ -140,7 +143,7 @@ translate(?ERROR_BAD_VALUE_TOO_HIGH(Key, Threshold)) ->
     {?HTTP_400_BAD_REQUEST,
         {<<"Bad value: provided \"~s\" must not exceed ~B">>, [Key, Threshold]}
     };
-translate(?ERROR_BAD_VALUE_NOT_BETWEEN(Key, Low, High)) ->
+translate(?ERROR_BAD_VALUE_NOT_IN_RANGE(Key, Low, High)) ->
     {?HTTP_400_BAD_REQUEST,
         {<<"Bad value: provided \"~s\" must be between <~B, ~B>">>, [Key, Low, High]}
     };
@@ -188,6 +191,11 @@ translate(?ERROR_BAD_VALUE_ALIAS_WRONG_PREFIX(Key)) ->
         <<"Bad value: provided \"~s\" cannot start with '~s'">>,
         [Key, ?NO_ALIAS_UUID_PREFIX]
     }};
+translate(?ERROR_ALIAS_OCCUPIED(Key)) ->
+    {?HTTP_400_BAD_REQUEST, {
+        <<"Provided \"~s\" is already occupied, please choose other one.">>,
+        [Key]
+    }};
 translate(?ERROR_BAD_VALUE_IDENTIFIER(Key)) ->
     {?HTTP_400_BAD_REQUEST, {
         <<"Bad value: provided \"~s\" is not a valid identifier.">>, [Key]
@@ -213,14 +221,6 @@ translate(?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId)) ->
         RelationToString,
         ParType:to_string(ParId)
     ]}};
-translate(?ERROR_ALIAS_OCCUPIED) ->
-    {?HTTP_400_BAD_REQUEST,
-        <<"Provided alias is already occupied, please choose other alias.">>
-    };
-translate(?ERROR_RESOURCE_DOES_NOT_EXIST(ReadableIdentifier)) ->
-    {?HTTP_400_BAD_REQUEST,
-        {<<"Bad value: ~s provided in path does not exist">>, [ReadableIdentifier]}
-    };
 translate(?ERROR_CANNOT_DELETE_ENTITY(EntityType, EntityId)) ->
     {?HTTP_500_INTERNAL_SERVER_ERROR, {
         <<"Cannot delete ~s, failed to delete some dependent relations">>,

@@ -546,7 +546,8 @@ get_supported_space_info_test(Config) ->
     %% assertMatch has problem with nested brackets below
     [SID_test2, SpaceName_test2, [{ProviderId_test2, SpaceSize_test2}]]
         = get_space_info_by_provider(SID, ParamsWithOtherAddress),
-    ?assertMatch([SID_test2, SpaceName_test2, ProviderId_test2, SpaceSize_test2], Expected).
+    ?assertMatch([SID_test2, SpaceName_test2, ProviderId_test2, SpaceSize_test2], Expected),
+    ok.
 
 unsupport_space_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
@@ -817,7 +818,6 @@ get_group_info_by_user_test(Config) ->
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
     GID1 = create_group_for_user(Config, ?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, UserReqParams)),
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, UserParamsOtherAddress)).
@@ -838,10 +838,10 @@ get_ancestor_group_info_by_user_test(Config) ->
 
     Token = get_group_invitation_group_token(GID2, User2ReqParams),
     ?assertMatch(GID2, join_group_to_group(Token, GID1, User1ReqParams)),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ?assertMatch([GID2, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_eff_group_info_by_user(GID2, User1ReqParams)),
-    ?assertMatch([GID2, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_eff_group_info_by_user(GID2, User1ParamsOtherAddress)).
+    ?assertMatch([GID2, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_eff_group_info_by_user(GID2, User1ParamsOtherAddress)),
+    ok.
 
 % This test is disabled as currently we do not remove a group when last member leaves.
 last_user_leaves_group_test(Config) ->
@@ -850,7 +850,6 @@ last_user_leaves_group_test(Config) ->
     UserParamsOtherAddress = update_req_params(UserReqParams, OtherRestAddress, address),
 
     GID1 = create_group_for_user(Config, ?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ?assertMatch(ok, check_status(user_leaves_group(GID1, UserReqParams))),
     ?assertMatch(false, is_included([GID1], get_user_groups(UserReqParams))),
@@ -869,7 +868,6 @@ non_last_user_leaves_group_test(Config) ->
     GID1 = create_group_for_user(Config, ?GROUP_NAME1, ?GROUP_TYPE1, User1ReqParams),
     InvitationToken = get_group_invitation_token(GID1, User1ReqParams),
     join_user_to_group(Config, InvitationToken, User2ReqParams),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     User1ParamsOtherAddress = update_req_params(User1ReqParams, OtherRestAddress, address),
     User2ParamsOtherAddress = update_req_params(User2ReqParams, OtherRestAddress, address),
@@ -896,7 +894,6 @@ group_invitation_test(Config) ->
 
     %% check if GID returned for user2 is the same as GID1
     ?assertMatch(GID1, join_user_to_group(Config, InvitationToken, User2ParamsOtherAddress)),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, User2ReqParams)),
     ?assertMatch([GID1, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info_by_user(GID1, User2ParamsOtherAddress)),
     ?assertMatch(true, is_included([UserId1, UserId2], get_group_users(GID1, User1ReqParams))),
@@ -912,7 +909,8 @@ create_group_test(Config) ->
     GID = create_group(Config, ?GROUP_NAME1, ?GROUP_TYPE1, UserReqParams),
 
     ?assertMatch([GID, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info(GID, UserReqParams)),
-    ?assertMatch([GID, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info(GID, UserParamsOtherAddress)).
+    ?assertMatch([GID, ?GROUP_NAME1, ?GROUP_TYPE1_BIN], get_group_info(GID, UserParamsOtherAddress)),
+    ok.
 
 update_group_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -923,7 +921,8 @@ update_group_test(Config) ->
 
     ?assertMatch(ok, check_status(update_group(GID, ?GROUP_NAME2, ?GROUP_TYPE2, UserParamsOtherAddress))),
     ?assertMatch([GID, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_group_info(GID, UserReqParams)),
-    ?assertMatch([GID, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_group_info(GID, UserParamsOtherAddress)).
+    ?assertMatch([GID, ?GROUP_NAME2, ?GROUP_TYPE2_BIN], get_group_info(GID, UserParamsOtherAddress)),
+    ok.
 
 delete_group_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
@@ -934,7 +933,8 @@ delete_group_test(Config) ->
 
     ?assertMatch(ok, check_status(delete_group(GID, UserParamsOtherAddress))),
     ?assertMatch({request_error, ?NOT_FOUND}, get_group_info(GID, UserReqParams)),
-    ?assertMatch({request_error, ?NOT_FOUND}, get_group_info(GID, UserParamsOtherAddress)).
+    ?assertMatch({request_error, ?NOT_FOUND}, get_group_info(GID, UserParamsOtherAddress)),
+    ok.
 
 invite_user_to_group_test(Config) ->
     ProviderId = ?config(providerId, Config),
@@ -1010,7 +1010,8 @@ delete_user_from_group_test(Config) ->
 
     GID = create_group(Config, ?GROUP_NAME1, ?GROUP_TYPE1, User1ParamsOtherAddress),
 
-    ?assertMatch(ok, check_status(delete_user_from_group(GID, UserId1, User1ReqParams))).
+    ?assertMatch(ok, check_status(delete_user_from_group(GID, UserId1, User1ReqParams))),
+    ok.
 
 delete_group_from_group_test(Config) ->
     ProviderId = ?config(providerId, Config),
@@ -1050,7 +1051,8 @@ get_group_privileges_test(Config) ->
 
     %% check other user privileges
     ?assertMatch(true, are_privileges_included(?GROUP_VIEW, get_group_privileges_of_user(GID, UserId2, User1ReqParams))),
-    ?assertMatch(true, are_privileges_included(?GROUP_VIEW, get_group_privileges_of_user(GID, UserId2, User1ParamsOtherAddress))).
+    ?assertMatch(true, are_privileges_included(?GROUP_VIEW, get_group_privileges_of_user(GID, UserId2, User1ParamsOtherAddress))),
+    ok.
 
 get_nested_group_privileges_test(Config) ->
     ProviderId = ?config(providerId, Config),
@@ -1094,7 +1096,8 @@ set_group_privileges_test(Config) ->
     % ?GROUP_DELETE test must be checked last because it removes the
     % group entirely (and other tests need the group to exist)
     PrvlgsToCheck = ?GROUP_PRIVILEGES -- [?GROUP_DELETE] ++ [?GROUP_DELETE],
-    group_privileges_check(PrvlgsToCheck, Config, Users, GID, SID).
+    group_privileges_check(PrvlgsToCheck, Config, Users, GID, SID),
+    ok.
 
 set_nested_group_privileges_test(Config) ->
     ProviderId = ?config(providerId, Config),
@@ -1325,6 +1328,7 @@ get_info_of_provider_supporting_space_test(Config) ->
     SID = create_space_and_get_support(Config, ?SPACE_NAME1, UserReqParams, ?SPACE_SIZE1, ProviderReqParams),
 
     Expected = [?CLIENT_NAME1, ProviderId, ?URLS1, ?REDIRECTION_POINT1],
+    ?assertMatch(Expected, get_supporting_provider_info(SID, ProviderId, ProviderReqParams)),
     ?assertMatch(Expected, get_supporting_provider_info(SID, ProviderId, UserReqParams)),
     ?assertMatch(Expected, get_supporting_provider_info(SID, ProviderId, UserParamsOtherAddress)).
 
@@ -1413,7 +1417,6 @@ list_services_test(Config) ->
     DoiId = add_handle_service(Config, ?DOI_SERVICE, UserId, UserReqParams),
     PidId = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
     oz_test_utils:set_user_oz_privileges(Config, UserId, grant, [?OZ_HANDLE_SERVICES_LIST]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     Services = list_handle_service(UserReqParams),
 
@@ -1489,7 +1492,6 @@ delete_user_from_service_test(Config) ->
     201 = add_user_to_handle_service(Id, UserId2, UserReqParams),
 
     Result = delete_user_from_handle_service(Id, UserId, UserReqParams),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ?assertEqual(202, Result),
     ?assertEqual({request_error, ?FORBIDDEN}, list_users_of_handle_service(Id, UserReqParams)),
@@ -1536,7 +1538,6 @@ get_user_privileges_for_service_test(Config) ->
     UserReqParams = ?config(userReqParams, Config),
     UserId = ?config(userId, Config),
     Id = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     Privileges = get_user_privileges_for_handle_service(Id, UserId, UserReqParams),
 
@@ -1558,7 +1559,6 @@ set_user_privileges_for_service_test(Config) ->
     ]},
 
     Result = set_user_privileges_for_handle_service(Id, UserId, Privileges, UserReqParams),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ?assertEqual(204, Result),
     ?assertEqual(Privileges, get_user_privileges_for_handle_service(Id, UserId, UserReqParams)).
@@ -1569,7 +1569,6 @@ get_group_privileges_for_service_test(Config) ->
     Id = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
     GroupId = create_group(Config, <<"test_group">>, <<"organization">>, UserReqParams),
     201 = add_group_to_handle_service(Id, GroupId, UserReqParams),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     Privileges = get_group_privileges_for_handle_service(Id, GroupId, UserReqParams),
 
@@ -1591,7 +1590,6 @@ set_group_privileges_for_service_test(Config) ->
     ]},
 
     Result = set_group_privileges_for_handle_service(Id, GroupId, Privileges, UserReqParams),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ?assertEqual(204, Result),
     ?assertEqual(Privileges, get_group_privileges_for_handle_service(Id, GroupId, UserReqParams)).
@@ -1632,7 +1630,6 @@ list_handles_test(Config) ->
     Id1 = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
     Id2 = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_2), UserReqParams),
     oz_test_utils:set_user_oz_privileges(Config, UserId, grant, [?OZ_HANDLES_LIST]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     Handles = list_handle(UserReqParams),
 
     #{<<"handles">> := HandlesList} =
@@ -1733,7 +1730,6 @@ delete_user_from_handle_test(Config) ->
     201 = add_user_to_handle(HId, UserId2, UserReqParams),
 
     Result = delete_user_from_handle(HId, UserId, UserReqParams),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
 
     ?assertEqual(202, Result),
     ?assertEqual({request_error, ?FORBIDDEN}, list_users_of_handle(HId, UserReqParams)),
@@ -2316,7 +2312,6 @@ create_space_for_user(Config, SpaceName, {RestAddress, Headers, Options}) ->
     ]),
     Response = do_request(RestAddress ++ "/user/spaces", Headers, post, Body, Options),
     % Make sure that user's privileges are synchronized
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     get_header_val(<<"spaces">>, Response).
 
 set_default_space_for_user(SID, {RestAddress, Headers, Options}) ->
@@ -2343,7 +2338,6 @@ create_group_for_user(Config, GroupName, GroupType, {RestAddress, Headers, Optio
     ]),
     Response = do_request(RestAddress ++ "/user/groups", Headers, post, Body, Options),
     % Make sure that user's privileges are synchronized
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     get_header_val(<<"groups">>, Response).
 
 get_user_groups({RestAddress, Headers, Options}) ->
@@ -2376,7 +2370,6 @@ join_user_to_group(Config, Token, {RestAddress, Headers, Options}) ->
     ]),
     Response = do_request(RestAddress ++ "/user/groups/join", Headers, post, Body, Options),
     % Make sure that user's privileges are synchronized
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     get_header_val(<<"user/groups">>, Response).
 
 %% Group functions ==============================================================
@@ -2388,7 +2381,6 @@ create_group(Config, GroupName, GroupType, {RestAddress, Headers, Options}) ->
     ]),
     Response = do_request(RestAddress ++ "/groups", Headers, post, Body, Options),
     % Make sure that user's privileges are synchronized
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     get_header_val(<<"groups">>, Response).
 
 get_group_info(GID, {RestAddress, Headers, Options}) ->
@@ -2495,7 +2487,6 @@ set_group_privileges_of_user(Config, GID, UID, Privileges, {RestAddress, Headers
     EncodedUID = binary_to_list(http_utils:url_encode(UID)),
     Address = RestAddress ++ "/groups/" ++ EncodedGID ++ "/users/" ++ EncodedUID ++ "/privileges",
     Result = do_request(Address, Headers, put, Body, Options),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     Result.
 
 set_group_privileges_of_group(ParentGID, GID, Privileges, {RestAddress, Headers, Options}) ->
@@ -2526,7 +2517,6 @@ create_space_for_group(Config, Name, GID, {RestAddress, Headers, Options}) ->
     ]),
     EncodedGID = binary_to_list(http_utils:url_encode(GID)),
     Response = do_request(RestAddress ++ "/groups/" ++ EncodedGID ++ "/spaces", Headers, post, Body, Options),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     get_header_val(<<"spaces">>, Response).
 
 group_leaves_space(GID, SID, {RestAddress, Headers, Options}) ->
@@ -2684,7 +2674,6 @@ create_space(Config, Name, {RestAddress, Headers, Options}) ->
         {<<"name">>, Name}
     ]),
     Response = do_request(RestAddress ++ "/spaces", Headers, post, Body, Options),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     get_header_val(<<"spaces">>, Response).
 
 get_space_info(SID, {RestAddress, Headers, Options}) ->
@@ -2738,7 +2727,6 @@ set_space_privileges(Config, UserType, SID, ID, Privileges, {RestAddress, Header
     EncodedID = binary_to_list(http_utils:url_encode(ID)),
     Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/" ++ atom_to_list(UserType) ++ "/" ++ EncodedID ++ "/privileges",
     Result = do_request(Address, Headers, put, Body, Options),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     Result.
 
 get_space_groups(SID, {RestAddress, Headers, Options}) ->
@@ -2896,12 +2884,10 @@ clean_space_privileges(Config, SID, UserId, ReqParams) ->
 add_handle_service(Config, Service, UserId, {RestAddress, Headers, Options}) ->
     % User need special OZ privileges to create handle services
     oz_test_utils:set_user_oz_privileges(Config, UserId, grant, [?OZ_HANDLE_SERVICES_CREATE]),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ServiceJson = json_utils:encode_map(Service),
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/">>,
     Response = do_request(Address, Headers, post, ServiceJson, Options),
     % Make sure user privileges are synchronized
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     get_header_val(<<"handle_services">>, Response).
 
 list_handle_service({RestAddress, Headers, Options}) ->
@@ -2983,7 +2969,6 @@ set_group_privileges_for_handle_service(HSID, UID, Privileges, {RestAddress, Hea
 % must exists.
 create_space_and_share(Config, ShareId, {RestAddress, Headers, Options}) ->
     SpaceId = create_space_for_user(Config, <<"spaceName">>, {RestAddress, Headers, Options}),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     Address = <<(list_to_binary(RestAddress))/binary, "/spaces/", SpaceId/binary, "/shares/", ShareId/binary>>,
     BodyJson = json_utils:encode_map(#{
         <<"name">> => <<"whatever">>,
@@ -2998,7 +2983,6 @@ add_handle(Config, Handle, {RestAddress, Headers, Options}) ->
     Address = <<(list_to_binary(RestAddress))/binary, "/handles/">>,
     Response = do_request(Address, Headers, post, HandleJson, Options),
     % Make sure user privileges are synchronized
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     get_header_val(<<"handles">>, Response).
 
 list_handle({RestAddress, Headers, Options}) ->

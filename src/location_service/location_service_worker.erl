@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Michal Zmuda
-%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -131,7 +131,7 @@ init(_Args) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Handles various requests connected with subscriptions.
+%% Handles requests connected with Location Service.
 %% @end
 %%--------------------------------------------------------------------
 -spec handle(Request :: term()) -> ok | {error, Reason :: term()} | no_return().

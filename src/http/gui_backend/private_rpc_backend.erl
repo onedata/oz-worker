@@ -15,9 +15,9 @@
 -behaviour(rpc_backend_behaviour).
 
 -include("rest.hrl").
--include("errors.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("cluster_worker/include/api_errors.hrl").
 
 %% API
 -export([handle/2]).
@@ -112,16 +112,26 @@ handle(<<"userJoinSpace">>, [{<<"token">>, Token}]) ->
     end;
 
 handle(<<"userLeaveSpace">>, [{<<"spaceId">>, SpaceId}]) ->
+    Client = ?USER(gui_session:get_user_id()),
     UserId = gui_session:get_user_id(),
     user_logic:leave_space(?USER(UserId), UserId, SpaceId),
     % Push user record with a new space list.
     user_data_backend:push_user_record(UserId),
+    {ok, Providers} = user_logic:get_eff_providers(Client, UserId),
+    lists:foreach(
+        fun(ProvId) ->
+            gui_async:push_updated(
+                <<"provider">>,
+                provider_data_backend:provider_record(ProvId, UserId)
+            )
+    end, Providers),
     ok;
 
 handle(<<"getTokenUserJoinGroup">>, [{<<"groupId">>, GroupId}]) ->
     UserId = gui_session:get_user_id(),
     case group_logic:create_user_invite_token(?USER(UserId), GroupId) of
-        {ok, Token} ->
+        {ok, Macaroon} ->
+            {ok, Token} = token_utils:serialize62(Macaroon),
             {ok, [{<<"token">>, Token}]};
         ?ERROR_UNAUTHORIZED ->
             gui_error:report_warning(

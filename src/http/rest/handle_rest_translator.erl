@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -14,12 +14,8 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
--include("errors.hrl").
--include("datastore/oz_datastore_models.hrl").
--include("registered_names.hrl").
--include_lib("ctool/include/logging.hrl").
 
--export([response/4]).
+-export([create_response/3, get_response/2]).
 
 %%%===================================================================
 %%% API
@@ -27,82 +23,81 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates given entity logic result into REST response
-%% expressed by #rest_resp{} record.
+%% Translates given entity logic CREATE result into REST response
+%% expressed by #rest_resp{} record. GRI holds the #gri{} od the request,
+%% new GRI holds the #gri{} of new aspect that was created.
 %% @end
 %%--------------------------------------------------------------------
--spec response(Operation :: entity_logic:operation(),
-    EntityId :: entity_logic:entity_id(), Resource :: entity_logic:resource(),
-    Result :: entity_logic:result()) -> #rest_resp{}.
-% TODO VFS-2918
-response(create, _HandleId, {deprecated_user_privileges, _UserId}, ok) ->
-    rest_handler:ok_no_content_reply();
-% TODO VFS-2918
-response(create, _HandleId, {deprecated_group_privileges, _GroupId}, ok) ->
-    rest_handler:ok_no_content_reply();
+-spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
+    Result :: {data, term()} | {fetched, entity_logic:gri(), term()} |
+    {not_fetched, entity_logic:gri()} |
+    {not_fetched, entity_logic:gri(), entity_logic:auth_hint()}) -> #rest_resp{}.
+create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched, #gri{id = HandleId}}) ->
+    LocationTokens = case AuthHint of
+        ?AS_USER(_UserId) ->
+            % TODO VFS-2918
+%%        [<<"user">>, <<"handles">>, HandleId]
+            [<<"handles">>, HandleId];
+        ?AS_GROUP(GroupId) ->
+            [<<"groups">>, GroupId, <<"handles">>, HandleId];
+        _ ->
+            [<<"handles">>, HandleId]
+    end,
+    rest_translator:created_reply(LocationTokens);
 
-response(create, undefined, entity, {ok, HandleId}) ->
-    rest_handler:created_reply([<<"handles">>, HandleId]);
-
-response(create, HandleId, {user, UserId}, {ok, UserId}) ->
-    rest_handler:created_reply(
+create_response(#gri{id = HandleId, aspect = {user, UserId}}, _, {not_fetched, #gri{id = UserId}, _}) ->
+    rest_translator:created_reply(
         [<<"handles">>, HandleId, <<"users">>, UserId]
     );
 
-response(create, HandleId, {group, GroupId}, {ok, GroupId}) ->
-    rest_handler:created_reply(
+create_response(#gri{id = HandleId, aspect = {group, GroupId}}, _, {not_fetched, #gri{id = GroupId}, _}) ->
+    rest_translator:created_reply(
         [<<"handles">>, HandleId, <<"groups">>, GroupId]
-    );
+    ).
 
-response(get, HandleId, data, {ok, #{<<"timestamp">> := Timestamp} = HandleData}) ->
-    rest_handler:ok_body_reply(HandleData#{
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Translates given entity logic GET result into REST response
+%% expressed by #rest_resp{} record.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_response(entity_logic:gri(), entity_logic:get_result()) ->
+    #rest_resp{}.
+get_response(#gri{id = undefined, aspect = list}, Handles) ->
+    rest_translator:ok_body_reply(#{<<"handles">> => Handles});
+
+get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleData) ->
+    Timestamp = maps:get(<<"timestamp">>, HandleData),
+    % Replace "publicHandle" with "handle" key
+    PublicHandle = maps:get(<<"publicHandle">>, HandleData),
+    NewData = maps:remove(<<"publicHandle">>, HandleData),
+    rest_translator:ok_body_reply(NewData#{
         <<"handleId">> => HandleId,
+        <<"handle">> => PublicHandle,
         <<"timestamp">> => timestamp_utils:datetime_to_datestamp(Timestamp)
     });
 
-response(get, undefined, list, {ok, HServices}) ->
-    rest_handler:ok_body_reply(#{<<"handles">> => HServices});
+get_response(#gri{aspect = users}, Users) ->
+    rest_translator:ok_body_reply(#{<<"users">> => Users});
 
-response(get, _HandleId, users, {ok, Users}) ->
-    rest_handler:ok_body_reply(#{<<"users">> => Users});
+get_response(#gri{aspect = eff_users}, Users) ->
+    rest_translator:ok_body_reply(#{<<"users">> => Users});
 
-response(get, _HandleId, eff_users, {ok, Users}) ->
-    rest_handler:ok_body_reply(#{<<"users">> => Users});
+get_response(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
-response(get, _HandleId, {user, UserId}, {ok, User}) ->
-    user_rest_translator:response(get, UserId, data, {ok, User});
+get_response(#gri{aspect = {eff_user_privileges, _UserId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
-response(get, _HandleId, {eff_user, UserId}, {ok, User}) ->
-    user_rest_translator:response(get, UserId, data, {ok, User});
+get_response(#gri{aspect = groups}, Groups) ->
+    rest_translator:ok_body_reply(#{<<"groups">> => Groups});
 
-response(get, _HandleId, {user_privileges, _UserId}, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
+get_response(#gri{aspect = eff_groups}, Groups) ->
+    rest_translator:ok_body_reply(#{<<"groups">> => Groups});
 
-response(get, _HandleId, {eff_user_privileges, _UserId}, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
+get_response(#gri{aspect = {group_privileges, _GroupId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
-response(get, _HandleId, groups, {ok, Groups}) ->
-    rest_handler:ok_body_reply(#{<<"groups">> => Groups});
-
-response(get, _HandleId, eff_groups, {ok, Groups}) ->
-    rest_handler:ok_body_reply(#{<<"groups">> => Groups});
-
-response(get, _HandleId, {group, GroupId}, {ok, Group}) ->
-    group_rest_translator:response(get, GroupId, data, {ok, Group});
-
-response(get, _HandleId, {eff_group, GroupId}, {ok, Group}) ->
-    group_rest_translator:response(get, GroupId, data, {ok, Group});
-
-response(get, _HandleId, {group_privileges, _GroupId}, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
-
-response(get, _HandleId, {eff_group_privileges, _GroupId}, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
-
-
-response(update, _HandleId, _, ok) ->
-    rest_handler:updated_reply();
-
-
-response(delete, _HandleId, _, ok) ->
-    rest_handler:deleted_reply().
+get_response(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges}).

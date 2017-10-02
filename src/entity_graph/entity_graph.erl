@@ -53,12 +53,12 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include("errors.hrl").
+-include_lib("cluster_worker/include/api_errors.hrl").
 
 -define(ENTITY_GRAPH_LOCK, entity_graph).
 -define(STATE_KEY, <<"entity_graph_state">>).
 % How often should effective graph state be checked during ensure_up_to_date.
--define(UP_TO_DATE_CHECK_INTERVAL, 3000).
+-define(UP_TO_DATE_CHECK_INTERVAL, 300).
 
 % Data types that hold different types of relations.
 -type relation(EntityId) :: [EntityId].
@@ -328,6 +328,7 @@ add_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
         {error, Reason} ->
             throw({error, Reason});
         _ ->
+            ensure_up_to_date(),
             Result
     end.
 
@@ -407,6 +408,7 @@ update_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
         {error, Reason} ->
             throw({error, Reason});
         _ ->
+            ensure_up_to_date(),
             Result
     end.
 
@@ -450,6 +452,7 @@ remove_relation(ChType, ChId, ParType, ParId) ->
             % At least one side of relation existed, which means success
             % (either both sides were removed, or
             % a broken one-side relation was fixed by removing the side)
+            ensure_up_to_date(),
             ok
     end.
 
@@ -526,7 +529,9 @@ delete_with_relations(EntityType, EntityId) ->
         ok = sync_on_entity(EntityType, EntityId, fun() ->
             EntityType:delete(EntityId)
         end),
-        schedule_refresh()
+        schedule_refresh(),
+        ensure_up_to_date(),
+        ok
     catch
         Type:Message ->
             ?error_stacktrace(
@@ -560,6 +565,7 @@ update_oz_privileges(EntityType, EntityId, Operation, Privileges) ->
             Entity, NewOzPrivileges))}
     end),
     schedule_refresh(),
+    ensure_up_to_date(),
     ok.
 
 

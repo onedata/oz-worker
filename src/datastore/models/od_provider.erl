@@ -1,5 +1,5 @@
 %%%-------------------------------------------------------------------
-%%% @author Michal Zmuda
+%%% @author Lukasz Opiola
 %%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
@@ -10,13 +10,14 @@
 %%% @end
 %%%-------------------------------------------------------------------
 -module(od_provider).
--author("Michal Zmuda").
+-author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, delete/1, list/0]).
 -export([to_string/1]).
+-export([entity_logic_plugin/0]).
 
 %% datastore_model callbacks
 -export([get_prehooks/0]).
@@ -113,6 +114,15 @@ list() ->
 to_string(ProviderId) ->
     <<"provider:", ProviderId/binary>>.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the entity logic plugin module that handles model logic.
+%% @end
+%%--------------------------------------------------------------------
+-spec entity_logic_plugin() -> module().
+entity_logic_plugin() ->
+    provider_logic_plugin.
+
 %%%===================================================================
 %%% datastore_model callbacks
 %%%===================================================================
@@ -134,7 +144,7 @@ get_prehooks() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    3.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -168,6 +178,20 @@ get_record_struct(2) ->
         {eff_users, #{string => [{atom, string}]}},
         {eff_groups, #{string => [{atom, string}]}},
         {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(3) ->
+    {record, [
+        {name, string},
+        {redirection_point, string},
+        {urls, [string]},
+        {serial, string},
+        {latitude, float},
+        {longitude, float},
+        {online, boolean}, % New field as compared to version 2, rest is the same
+        {spaces, #{string => integer}},
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {bottom_up_dirty, boolean}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -180,7 +204,7 @@ get_record_struct(2) ->
 upgrade_record(1, Provider) ->
     {
         od_provider,
-        ClientName,
+        Name,
         RedirectionPoint,
         Urls,
         Serial,
@@ -194,20 +218,55 @@ upgrade_record(1, Provider) ->
 
         _BottomUpDirty
     } = Provider,
-    {2, #od_provider{
-        name = ClientName,
+    {2, {od_provider,
+        Name,
+        RedirectionPoint,
+        Urls,
+        Serial,
+        Latitude,
+        Longitude,
+
+        % Set support sizes to 0 as there is no access to this information
+        % from here.
+        maps:from_list([{SpaceId, 0} || SpaceId <- Spaces]),
+
+        #{},
+        #{},
+
+        true
+    }};
+upgrade_record(2, Provider) ->
+    {
+        od_provider,
+        Name,
+        RedirectionPoint,
+        Urls,
+        Serial,
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+
+        BottomUpDirty
+    } = Provider,
+    {3, #od_provider{
+        name = Name,
         redirection_point = RedirectionPoint,
         urls = Urls,
         serial = Serial,
         latitude = Latitude,
         longitude = Longitude,
+        online = false,
 
         % Set support sizes to 0 as there is no access to this information
         % from here.
-        spaces = maps:from_list([{SpaceId, 0} || SpaceId <- Spaces]),
+        spaces = Spaces,
 
-        eff_users = #{},
-        eff_groups = #{},
+        eff_users = EffUsers,
+        eff_groups = EffGroups,
 
-        bottom_up_dirty = true
+        bottom_up_dirty = BottomUpDirty
     }}.

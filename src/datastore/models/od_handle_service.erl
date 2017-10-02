@@ -18,6 +18,7 @@
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, delete/1, list/0]).
 -export([to_string/1]).
+-export([entity_logic_plugin/0]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -114,6 +115,15 @@ list() ->
 -spec to_string(HServiceId :: id()) -> binary().
 to_string(HServiceId) ->
     <<"handle_service:", HServiceId/binary>>.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the entity logic plugin module that handles model logic.
+%% @end
+%%--------------------------------------------------------------------
+-spec entity_logic_plugin() -> module().
+entity_logic_plugin() ->
+    handle_service_logic_plugin.
 
 %%%===================================================================
 %%% datastore_model callbacks

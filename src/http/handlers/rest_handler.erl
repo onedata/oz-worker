@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -13,14 +13,22 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
--include("errors.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("cluster_worker/include/api_errors.hrl").
 
 -type method() :: get | post | put | patch | delete.
--export_type([method/0]).
+-type binding() :: {binding, atom()} | client_id | client_ip.
+-type bound_gri() :: #b_gri{}.
+-type bound_auth_hint() :: undefined | {
+    throughUser | throughGroup | throughSpace | throughProvider |
+    throughHandleService | throughHandle | asUser | asGroup,
+    binding()
+}.
+
+-export_type([method/0, binding/0, bound_gri/0, bound_auth_hint/0]).
 
 % State of REST handler
 -record(state, {
@@ -46,14 +54,6 @@
 ]).
 -export([
     rest_routes/0
-]).
-%% Convenience functions for rest translators
--export([
-    created_reply/1,
-    ok_no_content_reply/0,
-    ok_body_reply/1,
-    updated_reply/0,
-    deleted_reply/0
 ]).
 
 
@@ -161,12 +161,12 @@ resource_exists(Req, State) ->
 is_authorized(Req, State) ->
     % Check if the request carries any authorization
     try
-        % Try to authenticate the client using several methods.
-        Client = authenticate(Req, [
-            fun authenticate_by_oauth_provider/1,
-            fun authenticate_by_basic_auth/1,
-            fun authenticate_by_macaroons/1,
-            fun authenticate_by_provider_certs/1
+        % Try to authorize the client using several methods.
+        Client = authorize(Req, [
+            fun authorize_by_oauth_provider/1,
+            fun authorize_by_basic_auth/1,
+            fun authorize_by_macaroons/1,
+            fun authorize_by_provider_certs/1
         ]),
         % Always return true - authorization is checked by entity_logic later.
         {true, Req, State#state{client = Client}}
@@ -267,72 +267,6 @@ rest_routes() ->
     end, AggregatedRoutes).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% REST reply that should be used for successful REST operations that send
-%% a body in response.
-%% @end
-%%--------------------------------------------------------------------
--spec ok_body_reply(Body :: jiffy:json_value()) -> #rest_resp{}.
-ok_body_reply(Body) ->
-    #rest_resp{code = ?HTTP_200_OK, body = Body}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% REST reply that should be used for successful REST operations that do not
-%% send any body in response.
-%% @end
-%%--------------------------------------------------------------------
--spec ok_no_content_reply() -> #rest_resp{}.
-ok_no_content_reply() ->
-    #rest_resp{code = ?HTTP_204_NO_CONTENT}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% REST reply that should be used for successful create REST calls.
-%% Returns 201 CREATED with proper location headers.
-%% @end
-%%--------------------------------------------------------------------
--spec created_reply(PathTokens :: [binary()]) -> #rest_resp{}.
-% Make sure there is no leading slash (so filename can be used for joining path)
-created_reply([<<"/", Path/binary>> | Tail]) ->
-    created_reply([Path | Tail]);
-created_reply(PathTokens) ->
-    % TODO VFS-2918 do not add rest prefix for now
-%%    {ok, RestPrefix} = application:get_env(?APP_NAME, rest_api_prefix),
-    RestPrefix = "/",
-    LocationHeader = #{
-        % TODO VFS-2918
-%%        <<"Location">> => filename:join([RestPrefix | PathTokens])
-        <<"location">> => filename:join([RestPrefix | PathTokens])
-    },
-    #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% REST reply that should be used for successful REST updates.
-%% @end
-%%--------------------------------------------------------------------
--spec updated_reply() -> #rest_resp{}.
-updated_reply() ->
-    #rest_resp{code = ?HTTP_204_NO_CONTENT}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% REST reply that should be used for successful REST deletions.
-%% @end
-%%--------------------------------------------------------------------
--spec deleted_reply() -> #rest_resp{}.
-deleted_reply() ->
-    % TODO VFS-2918
-%%    #rest_resp{code = ?HTTP_204_NO_CONTENT}.
-    #rest_resp{code = ?HTTP_202_ACCEPTED}.
-
-
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -350,26 +284,26 @@ process_request(Req, State) ->
     try
         #state{client = Client, rest_req = #rest_req{
             method = Method,
-            el_plugin = LogicPlugin,
-            entity_id = EntityIdVal,
-            resource = ResourceVal,
-            translator = TranslatorModule
+            b_gri = GriWithBindings,
+            b_auth_hint = AuthHintWithBindings
         }} = State,
         Operation = method_to_operation(Method),
-        EntityId = resolve_bindings(EntityIdVal, Client, Req),
-        Resource = resolve_bindings(ResourceVal, Client, Req),
+        GRI = resolve_gri_bindings(GriWithBindings, Client, Req),
+        AuthHint = resolve_auth_hint_bindings(AuthHintWithBindings, Client, Req),
         {Data, Req2} = case Operation of
             create -> get_data(Req);
             get -> {#{}, Req};
             update -> get_data(Req);
             delete -> {#{}, Req}
         end,
-        Result = call_entity_logic(
-            Operation, Client, LogicPlugin, EntityId, Resource, Data
-        ),
-        RestResp = translate_response(
-            TranslatorModule, Operation, EntityId, Resource, Result
-        ),
+        ElReq = #el_req{
+            operation = Operation,
+            client = Client,
+            gri = GRI,
+            auth_hint = AuthHint,
+            data = Data
+        },
+        RestResp = call_entity_logic_and_translate_response(ElReq),
         {halt, send_response(RestResp, Req2), State}
     catch
         throw:Error ->
@@ -406,21 +340,53 @@ send_response(#rest_resp{code = Code, headers = Headers, body = Body}, Req) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Transforms binding as specified in rest routes into actual data that was
+%% Transforms bindings included in a #gri{} record into actual data that was
 %% sent with the request.
 %% @end
 %%--------------------------------------------------------------------
--spec resolve_bindings(Binding | {atom(), Binding},
-    Client :: entity_logic:client(), Req :: cowboy_req:req()) ->
-    binary() |  {atom(), binary()} | cowboy_req:req() when
-    Binding :: {binding, atom()} | client_id | cowboy_req.
+-spec resolve_gri_bindings(bound_gri(), entity_logic:client(),
+    cowboy_req:req()) -> entity_logic:gri().
+resolve_gri_bindings(#b_gri{type = Tp, id = Id, aspect = As, scope = Sc}, Client, Req) ->
+    IdBinding = resolve_bindings(Id, Client, Req),
+    AspectBinding = case As of
+        {Atom, Asp} -> {Atom, resolve_bindings(Asp, Client, Req)};
+        Atom -> Atom
+    end,
+    #gri{type = Tp, id = IdBinding, aspect = AspectBinding, scope = Sc}.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Transforms bindings included in an authHint expression into actual data that
+%% was sent with the request.
+%% @end
+%%--------------------------------------------------------------------
+-spec resolve_auth_hint_bindings(bound_auth_hint(), entity_logic:client(),
+    cowboy_req:req()) -> entity_logic:auth_hint().
+resolve_auth_hint_bindings({Key, Value}, Client, Req) ->
+    {Key, resolve_bindings(Value, Client, Req)};
+resolve_auth_hint_bindings(undefined, _Client, _Req) ->
+    undefined.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Transforms bindings as specified in rest routes into actual data that was
+%% sent with the request.
+%% @end
+%%--------------------------------------------------------------------
+-spec resolve_bindings(binding() | {atom(), binding()} | term(),
+    entity_logic:client(), cowboy_req:req()) -> binary() | {atom(), binary()}.
 resolve_bindings(?BINDING(Key), _Client, Req) ->
     {Binding, _} = cowboy_req:binding(Key, Req),
     Binding;
 resolve_bindings(?CLIENT_ID, #client{id = Id}, _Req) ->
     Id;
-resolve_bindings(?COWBOY_REQ, _Client, Req) ->
-    Req;
+resolve_bindings(?CLIENT_IP, _Client, Req) ->
+    {{Ip, _Port}, _} = cowboy_req:peer(Req),
+    list_to_binary(inet_parse:ntoa(Ip));
 resolve_bindings({Atom, PossibleBinding}, Client, Req) when is_atom(Atom) ->
     {Atom, resolve_bindings(PossibleBinding, Client, Req)};
 resolve_bindings(Other, _Client, _Req) ->
@@ -430,113 +396,72 @@ resolve_bindings(Other, _Client, _Req) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Calls entity logic function to handle a request.
-%% @end
-%%--------------------------------------------------------------------
--spec call_entity_logic(method(), entity_logic:client(), entity_logic:el_plugin(),
-    entity_logic:entity_id(), entity_logic:resource(), entity_logic:data()) ->
-    ok | {ok, term()} | {error, term()}.
-call_entity_logic(create, Client, LogicPlugin, EntityId, Resource, Data) ->
-    entity_logic:create(Client, LogicPlugin, EntityId, Resource, Data);
-call_entity_logic(get, Client, LogicPlugin, EntityId, Resource, _Data) ->
-    entity_logic:get(Client, LogicPlugin, EntityId, Resource);
-call_entity_logic(update, Client, LogicPlugin, EntityId, Resource, Data) ->
-    entity_logic:update(Client, LogicPlugin, EntityId, Resource, Data);
-call_entity_logic(delete, Client, LogicPlugin, EntityId, Resource, _Data) ->
-    entity_logic:delete(Client, LogicPlugin, EntityId, Resource).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
 %% Translates entity logic response into REST response using TranslatorModule.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_response(TranslatorModule :: module(), entity_logic:operation(),
-    entity_logic:entity_id(), entity_logic:resource(), entity_logic:result()) ->
-    #rest_resp{}.
-translate_response(TranslatorModule, Operation, EntityId, Resource, Result) ->
+-spec call_entity_logic_and_translate_response(#el_req{}) -> #rest_resp{}.
+call_entity_logic_and_translate_response(ElReq) ->
+    Result = entity_logic:handle(ElReq),
     try
-        case Result of
-            {error, Reason} ->
-                error_rest_translator:response({error, Reason});
-            _ ->
-                TranslatorModule:response(Operation, EntityId, Resource, Result)
-        end
+        rest_translator:response(ElReq, Result)
     catch
         Type:Message ->
+            #el_req{operation = Operation, gri = GRI, auth_hint = AuthHint} = ElReq,
             ?error_stacktrace("Cannot translate REST result for:~n"
-            "TranslatorModule: ~p~n"
             "Operation: ~p~n"
-            "EntityId: ~p~n"
-            "Resource: ~p~n"
+            "GRI: ~p~n"
+            "AuthHint: ~p~n"
             "Result: ~p~n"
             "---------~n"
             "Error was: ~p:~p", [
-                TranslatorModule, Operation, EntityId,
-                Resource, Result, Type, Message
+                Operation, GRI, AuthHint, Result, Type, Message
             ]),
-            error_rest_translator:response(?ERROR_INTERNAL_SERVER_ERROR)
+            rest_translator:response(ElReq, ?ERROR_INTERNAL_SERVER_ERROR)
     end.
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Tries to authenticate REST client using provided auth methods expressed
+%% Tries to authorize REST client using provided auth methods expressed
 %% as functions to use.
 %% @end
 %%--------------------------------------------------------------------
--spec authenticate(Req :: cowboy_req:req(),
+-spec authorize(Req :: cowboy_req:req(),
     AuthFuns :: [fun((cowboy_req:req()) -> false | {true, #client{}})]) ->
     #client{}.
-authenticate(_Req, []) ->
+authorize(_Req, []) ->
     ?NOBODY;
-authenticate(Req, [AuthMethod | Rest]) ->
+authorize(Req, [AuthMethod | Rest]) ->
     case AuthMethod(Req) of
         {true, Client} ->
             Client;
         false ->
-            authenticate(Req, Rest)
+            authorize(Req, Rest)
     end.
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Tries to authenticate client by provided token, if its prefix matches
+%% Tries to authorize client by provided token, if its prefix matches
 %% any of the configured oauth providers supporting authority delegation.
 %% @end
 %%--------------------------------------------------------------------
--spec authenticate_by_oauth_provider(Req :: cowboy_req:req()) ->
+-spec authorize_by_oauth_provider(Req :: cowboy_req:req()) ->
     false | {true, #client{}}.
-authenticate_by_oauth_provider(Req) ->
+authorize_by_oauth_provider(Req) ->
     case cowboy_req:header(<<"x-auth-token">>, Req) of
         {undefined, _} ->
             false;
         {AccessToken, _} ->
-            AuthDelegationProviders = auth_config:get_providers_with_auth_delegation(),
-            MatchingProviders = lists:dropwhile(
-                fun({_ProvId, TokenPrefix}) ->
-                    % If prefix matches, return false:
-                    % dropwhile will stop and return the rest
-                    % of the list with matched provider at the beginning
-                    not bin_starts_with(AccessToken, TokenPrefix)
-                end, AuthDelegationProviders),
-            case MatchingProviders of
-                [] ->
+            case auth_utils:authorize_by_oauth_provider(AccessToken) of
+                false ->
                     false;
-                [{ProviderId, TokPrefix} | _] ->
-                    Len = byte_size(TokPrefix),
-                    <<TokPrefix:Len/binary, AccessTokenNoPrefix/binary>> = AccessToken,
-                    case auth_utils:acquire_user_by_external_access_token(
-                        ProviderId, AccessTokenNoPrefix
-                    ) of
-                        {error, bad_access_token} ->
-                            throw(?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(ProviderId));
-                        {_, #document{key = UserId}} ->
-                            {true, #client{type = user, id = UserId}}
-                    end
+                {true, Client} ->
+                    {true, Client};
+                {error, {bad_access_token, ProviderId}} ->
+                    throw(?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(ProviderId))
             end
     end.
 
@@ -544,20 +469,17 @@ authenticate_by_oauth_provider(Req) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Tries to authenticate client by basic auth headers.
+%% Tries to authorize client by basic auth headers.
 %% @end
 %%--------------------------------------------------------------------
--spec authenticate_by_basic_auth(Req :: cowboy_req:req()) ->
+-spec authorize_by_basic_auth(Req :: cowboy_req:req()) ->
     false | {true, #client{}}.
-authenticate_by_basic_auth(Req) ->
+authorize_by_basic_auth(Req) ->
     {Header, _} = cowboy_req:header(<<"authorization">>, Req),
     case Header of
         <<"Basic ", UserPasswdB64/binary>> ->
-            UserPasswd = base64:decode(UserPasswdB64),
-            [User, Passwd] = binary:split(UserPasswd, <<":">>),
-            case user_logic:authenticate_by_basic_credentials(User, Passwd) of
-                {ok, #document{key = UserId}, _} ->
-                    Client = #client{type = user, id = UserId},
+            case auth_utils:authorize_by_basic_auth(UserPasswdB64) of
+                {true, Client} ->
                     {true, Client};
                 _ ->
                     throw(?ERROR_BAD_BASIC_CREDENTIALS)
@@ -570,25 +492,21 @@ authenticate_by_basic_auth(Req) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Tries to authenticate client by macaroons.
+%% Tries to authorize client by macaroons.
 %% @end
 %%--------------------------------------------------------------------
--spec authenticate_by_macaroons(Req :: cowboy_req:req()) ->
+-spec authorize_by_macaroons(Req :: cowboy_req:req()) ->
     false | {true, #client{}}.
-authenticate_by_macaroons(Req) ->
-    {Macaroon, DischargeMacaroons, _} = parse_macaroons_from_headers(Req),
-    %% @todo: VFS-1869
-    %% Pass empty string as providerId because we do
-    %% not expect the macaroon to have provider caveat
-    %% (it is an authorization code for client).
+authorize_by_macaroons(Req) ->
+    {Macaroon, DischargeMacaroons} = parse_macaroons_from_headers(Req),
     case Macaroon of
         undefined ->
             false;
         _ ->
-            case auth_logic:validate_token(<<>>, Macaroon,
-                DischargeMacaroons, <<"">>, undefined) of
-                {ok, UserId} ->
-                    Client = #client{type = user, id = UserId},
+            case auth_utils:authorize_by_macaroons(
+                Macaroon, DischargeMacaroons
+            ) of
+                {true, Client} ->
                     {true, Client};
                 {error, _} ->
                     throw(?ERROR_BAD_MACAROON)
@@ -599,23 +517,19 @@ authenticate_by_macaroons(Req) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Tries to authenticate client by provider certs.
+%% Tries to authorize client by provider certs.
 %% @end
 %%--------------------------------------------------------------------
--spec authenticate_by_provider_certs(Req :: cowboy_req:req()) ->
+-spec authorize_by_provider_certs(Req :: cowboy_req:req()) ->
     false | {true, #client{}}.
-authenticate_by_provider_certs(Req) ->
+authorize_by_provider_certs(Req) ->
     case ssl:peercert(cowboy_req:get(socket, Req)) of
         {ok, PeerCert} ->
-            case worker_proxy:call(ozpca_worker,
-                {verify_provider, PeerCert}) of
-                {ok, ProviderId} ->
-                    Client = #client{type = provider, id = ProviderId},
+            case auth_utils:authorize_by_provider_certs(PeerCert) of
+                {true, Client} ->
                     {true, Client};
-                {error, {bad_cert, Reason}} ->
-                    ?warning("Attempted authentication with "
-                    "bad peer certificate: ~p", [Reason]),
-                    false
+                {error, bad_cert} ->
+                    throw(?ERROR_UNAUTHORIZED)
             end;
         {error, no_peercert} ->
             false
@@ -629,8 +543,7 @@ authenticate_by_provider_certs(Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec parse_macaroons_from_headers(Req :: cowboy_req:req()) ->
-    {Macaroon :: macaroon:macaroon() | undefined,
-        DischargeMacaroons :: [macaroon:macaroon()], cowboy_req:req()} |
+    {Macaroon :: binary() | undefined, DischargeMacaroons :: [binary()]} |
     no_return().
 parse_macaroons_from_headers(Req) ->
     {MacaroonHeader, _} = cowboy_req:header(<<"macaroon">>, Req),
@@ -638,44 +551,22 @@ parse_macaroons_from_headers(Req) ->
     % X-Auth-Token is an alias for macaroon header, check if any of them
     % is given.
     SerializedMacaroon = case MacaroonHeader of
-        <<_/binary>> -> MacaroonHeader;
-        _ -> XAuthTokenHeader
-    end,
-    Macaroon = case SerializedMacaroon of
-        <<_/binary>> -> deserialize_macaroon(SerializedMacaroon);
-        _ -> undefined
-    end,
-
-    {SerializedDischarges, _} =
-        cowboy_req:header(<<"discharge-macaroons">>, Req),
-    DischargeMacaroons = case SerializedDischarges of
-        <<>> ->
-            [];
-
         <<_/binary>> ->
-            Split = binary:split(SerializedDischarges, <<" ">>, [global]),
-            [deserialize_macaroon(S) || S <- Split];
-
+            MacaroonHeader;
         _ ->
-            []
+            XAuthTokenHeader % binary() or undefined
     end,
 
-    {Macaroon, DischargeMacaroons, Req}.
+    DischargeMacaroons = case cowboy_req:header(<<"discharge-macaroons">>, Req) of
+        {undefined, _} ->
+            [];
+        {<<"">>, _} ->
+            [];
+        {SerializedDischarges, _} ->
+            binary:split(SerializedDischarges, <<" ">>, [global])
+    end,
 
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Deserializes a macaroon, throws on error.
-%% @end
-%%--------------------------------------------------------------------
--spec deserialize_macaroon(Data :: binary()) ->
-    macaroon:macaroon() | no_return().
-deserialize_macaroon(Data) ->
-    case token_utils:deserialize(Data) of
-        {ok, M} -> M;
-        {error, _} -> throw(?ERROR_BAD_MACAROON)
-    end.
+    {SerializedMacaroon, DischargeMacaroons}.
 
 
 %%--------------------------------------------------------------------
@@ -743,15 +634,3 @@ method_to_operation(put) -> create;
 method_to_operation(get) -> get;
 method_to_operation(patch) -> update;
 method_to_operation(delete) -> delete.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Checks if given binary starts with given prefix.
-%% @end
-%%--------------------------------------------------------------------
--spec bin_starts_with(Subject :: binary(), Prefix :: binary()) -> boolean().
-bin_starts_with(Subject, Prefix) ->
-    FirstChars = binary:part(Subject, 0, byte_size(Prefix)),
-    FirstChars =:= Prefix.

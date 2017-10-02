@@ -18,6 +18,7 @@
 -export([create/1, save/1, get/1, exists/1, update/2, delete/1, list/0]).
 -export([get_by_criterion/1]).
 -export([to_string/1]).
+-export([entity_logic_plugin/0]).
 
 %% datastore_model callbacks
 -export([get_prehooks/0]).
@@ -170,6 +171,15 @@ get_by_criterion({linked_account, {ProviderID, UserID}}) ->
 -spec to_string(UserId :: id()) -> binary().
 to_string(UserId) ->
     <<"user:", UserId/binary>>.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the entity logic plugin module that handles model logic.
+%% @end
+%%--------------------------------------------------------------------
+-spec entity_logic_plugin() -> module().
+entity_logic_plugin() ->
+    user_logic_plugin.
 
 %%%===================================================================
 %%% datastore_model callbacks

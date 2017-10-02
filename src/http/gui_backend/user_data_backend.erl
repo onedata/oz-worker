@@ -15,9 +15,9 @@
 -author("Lukasz Opiola").
 
 
--include("errors.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("cluster_worker/include/api_errors.hrl").
 
 -export([init/0, terminate/0]).
 -export([find_record/2, find_all/1, query/2, query_record/2]).
@@ -123,7 +123,7 @@ update_record(<<"user">>, UserId, [{<<"alias">>, NewAlias}]) ->
             gui_error:report_warning(
                 <<"Alias can contain only lowercase letters and digits, and "
                 "must be at least 5 characters long.">>);
-        ?ERROR_ALIAS_OCCUPIED ->
+        ?ERROR_ALIAS_OCCUPIED(_) ->
             gui_error:report_warning(
                 <<"This alias is occupied by someone else. "
                 "Please choose other alias.">>)

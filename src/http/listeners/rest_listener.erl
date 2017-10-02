@@ -13,6 +13,7 @@
 
 -include("rest.hrl").
 -include("registered_names.hrl").
+-include("graph_sync/oz_graph_sync.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -behaviour(listener_behaviour).
@@ -67,7 +68,9 @@ start() ->
             % TODO VFS-2873 Currently unused
             % Redirect requests in form: alias.onedata.org
 %%            {":alias." ++ Hostname, [{'_', client_redirect_handler, [RestPort]}]},
-            {'_', routes()}
+            {'_', [
+                {?GRAPH_SYNC_WS_PATH ++ "[...]", gs_ws_handler, [provider_gs_translator]}
+            ] ++ routes()}
         ]),
 
         {ok, _} = ranch:start_listener(?REST_LISTENER, RestHttpsAcceptors,

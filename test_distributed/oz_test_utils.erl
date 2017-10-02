@@ -115,7 +115,6 @@
     create_and_support_3_spaces/2,
     minimum_support_size/1,
     generate_provider_cert_files/0,
-    ensure_eff_graph_up_to_date/1,
     mock_handle_proxy/1,
     unmock_handle_proxy/1
 ]).
@@ -789,11 +788,12 @@ create_provider_and_certs(Config, Name) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_provider(Config :: term(), Data :: maps:map()) ->
-    {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
+    {ok, {ProviderId :: od_provider:id()}}.
 create_provider(Config, Data) ->
-    ?assertMatch({ok, _}, call_oz(
+    {ok, {ProviderId, Certificate}} = ?assertMatch({ok, _}, call_oz(
         Config, provider_logic, create, [?NOBODY, Data]
-    )).
+    )),
+    {ok, {ProviderId, Certificate}}.
 
 
 %%--------------------------------------------------------------------
@@ -1216,16 +1216,6 @@ generate_provider_cert_files() ->
     os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
     os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
     {KeyFile, CSRFile, CertFile}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns when effective graph has been fully recalculated.
-%% @end
-%%--------------------------------------------------------------------
--spec ensure_eff_graph_up_to_date(Config :: term()) -> true.
-ensure_eff_graph_up_to_date(Config) ->
-    ?assert(call_oz(Config, entity_graph, ensure_up_to_date, [])).
 
 
 %%--------------------------------------------------------------------

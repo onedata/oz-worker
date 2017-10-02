@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -14,12 +14,8 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
--include("errors.hrl").
--include("datastore/oz_datastore_models.hrl").
--include("registered_names.hrl").
--include_lib("ctool/include/logging.hrl").
 
--export([response/4]).
+-export([create_response/3, get_response/2]).
 
 %%%===================================================================
 %%% API
@@ -27,120 +23,119 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates given entity logic result into REST response
-%% expressed by #rest_resp{} record.
+%% Translates given entity logic CREATE result into REST response
+%% expressed by #rest_resp{} record. GRI holds the #gri{} od the request,
+%% new GRI holds the #gri{} of new aspect that was created.
 %% @end
 %%--------------------------------------------------------------------
--spec response(Operation :: entity_logic:operation(),
-    EntityId :: entity_logic:entity_id(), Resource :: entity_logic:resource(),
-    Result :: entity_logic:result()) -> #rest_resp{}.
-% TODO VFS-2918
-response(create, _SpaceId, {deprecated_create_share, ShareId}, {ok, ShareId}) ->
-    rest_handler:ok_no_content_reply();
-% TODO VFS-2918
-response(create, _SpaceId, {deprecated_user_privileges, _UserId}, ok) ->
-    rest_handler:ok_no_content_reply();
-% TODO VFS-2918
-response(create, _SpaceId, {deprecated_group_privileges, _GroupId}, ok) ->
-    rest_handler:ok_no_content_reply();
+-spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
+    Result :: {data, term()} | {fetched, entity_logic:gri(), term()} |
+    {not_fetched, entity_logic:gri()} |
+    {not_fetched, entity_logic:gri(), entity_logic:auth_hint()}) -> #rest_resp{}.
+create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched, #gri{id = SpaceId}}) ->
+    LocationTokens = case AuthHint of
+        ?AS_USER(_UserId) ->
+            % TODO VFS-2918
+%%        [<<"user">>, <<"spaces">>, SpaceId]
+            [<<"spaces">>, SpaceId];
+        ?AS_GROUP(GroupId) ->
+            [<<"groups">>, GroupId, <<"spaces">>, SpaceId];
+        _ ->
+            [<<"spaces">>, SpaceId]
+    end,
+    rest_translator:created_reply(LocationTokens);
+% TODO VFS-2918 Responses should be the same
+%%    create_response(#gri{aspect = join}, AuthHint, #gri{id = SpaceId}, Data);
 
-response(create, undefined, entity, {ok, SpaceId}) ->
-    rest_handler:created_reply([<<"spaces">>, SpaceId]);
+create_response(#gri{aspect = join}, AuthHint, {not_fetched, #gri{id = SpaceId}}) ->
+    LocationTokens = case AuthHint of
+        ?AS_USER(_UserId) ->
+            [<<"user">>, <<"spaces">>, SpaceId];
+        ?AS_GROUP(GroupId) ->
+            [<<"groups">>, GroupId, <<"spaces">>, SpaceId];
+        _ ->
+            [<<"spaces">>, SpaceId]
+    end,
+    rest_translator:created_reply(LocationTokens);
 
-response(create, _SpaceId, invite_user_token, {ok, Macaroon}) ->
+create_response(#gri{aspect = invite_user_token}, _, {data, Macaroon}) ->
     {ok, Token} = token_utils:serialize62(Macaroon),
-    rest_handler:ok_body_reply(#{<<"token">> => Token});
+    rest_translator:ok_body_reply(#{<<"token">> => Token});
 
-response(create, _SpaceId, invite_group_token, {ok, Macaroon}) ->
+create_response(#gri{aspect = invite_group_token}, _, {data, Macaroon}) ->
     {ok, Token} = token_utils:serialize62(Macaroon),
-    rest_handler:ok_body_reply(#{<<"token">> => Token});
+    rest_translator:ok_body_reply(#{<<"token">> => Token});
 
-response(create, _SpaceId, invite_provider_token, {ok, Macaroon}) ->
+create_response(#gri{aspect = invite_provider_token}, _, {data, Macaroon}) ->
     {ok, Token} = token_utils:serialize62(Macaroon),
-    rest_handler:ok_body_reply(#{<<"token">> => Token});
+    rest_translator:ok_body_reply(#{<<"token">> => Token});
 
-response(create, SpaceId, {user, UserId}, {ok, UserId}) ->
-    rest_handler:created_reply(
+create_response(#gri{id = SpaceId, aspect = {user, UserId}}, _, {not_fetched, #gri{id = UserId}, _}) ->
+    rest_translator:created_reply(
         [<<"spaces">>, SpaceId, <<"users">>, UserId]
     );
 
-response(create, SpaceId, {group, GroupId}, {ok, GroupId}) ->
-    rest_handler:created_reply(
-        [<<"spaces">>, SpaceId, <<"groups">>, GroupId]
-    );
+create_response(#gri{id = SpaceId, aspect = {group, GrId}}, _, {not_fetched, #gri{id = GrId}, _}) ->
+    rest_translator:created_reply(
+        [<<"spaces">>, SpaceId, <<"groups">>, GrId]
+    ).
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Translates given entity logic GET result into REST response
+%% expressed by #rest_resp{} record.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_response(entity_logic:gri(), entity_logic:get_result()) ->
+    #rest_resp{}.
 % TODO VFS-2918
-response(get, _SpaceId, deprecated_invite_user_token, {ok, Macaroon}) ->
+get_response(#gri{aspect = deprecated_invite_user_token}, Macaroon) ->
     {ok, Token} = token_utils:serialize62(Macaroon),
-    rest_handler:ok_body_reply(#{<<"token">> => Token});
+    rest_translator:ok_body_reply(#{<<"token">> => Token});
 % TODO VFS-2918
-response(get, _SpaceId, deprecated_invite_group_token, {ok, Macaroon}) ->
+get_response(#gri{aspect = deprecated_invite_group_token}, Macaroon) ->
     {ok, Token} = token_utils:serialize62(Macaroon),
-    rest_handler:ok_body_reply(#{<<"token">> => Token});
+    rest_translator:ok_body_reply(#{<<"token">> => Token});
 % TODO VFS-2918
-response(get, _SpaceId, deprecated_invite_provider_token, {ok, Macaroon}) ->
+get_response(#gri{aspect = deprecated_invite_provider_token}, Macaroon) ->
     {ok, Token} = token_utils:serialize62(Macaroon),
-    rest_handler:ok_body_reply(#{<<"token">> => Token});
+    rest_translator:ok_body_reply(#{<<"token">> => Token});
 
-response(get, SpaceId, data, {ok, SpaceData}) ->
-    rest_handler:ok_body_reply(SpaceData#{<<"spaceId">> => SpaceId});
+get_response(#gri{id = undefined, aspect = list}, Spaces) ->
+    rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
 
-response(get, undefined, list, {ok, Spaces}) ->
-    rest_handler:ok_body_reply(#{<<"spaces">> => Spaces});
+get_response(#gri{id = SpaceId, aspect = instance, scope = _}, SpaceData) ->
+    % scope can be protected or shared
+    rest_translator:ok_body_reply(SpaceData#{<<"spaceId">> => SpaceId});
 
-response(get, _SpaceId, users, {ok, Users}) ->
-    rest_handler:ok_body_reply(#{<<"users">> => Users});
+get_response(#gri{aspect = users}, Users) ->
+    rest_translator:ok_body_reply(#{<<"users">> => Users});
 
-response(get, _SpaceId, eff_users, {ok, Users}) ->
-    rest_handler:ok_body_reply(#{<<"users">> => Users});
+get_response(#gri{aspect = eff_users}, Users) ->
+    rest_translator:ok_body_reply(#{<<"users">> => Users});
 
-response(get, _SpaceId, {user, UserId}, {ok, User}) ->
-    user_rest_translator:response(get, UserId, data, {ok, User});
+get_response(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
-response(get, _SpaceId, {eff_user, UserId}, {ok, User}) ->
-    user_rest_translator:response(get, UserId, data, {ok, User});
+get_response(#gri{aspect = {eff_user_privileges, _UserId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
-response(get, _SpaceId, {user_privileges, _UserId}, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
+get_response(#gri{aspect = groups}, Groups) ->
+    rest_translator:ok_body_reply(#{<<"groups">> => Groups});
 
-response(get, _SpaceId, {eff_user_privileges, _UserId}, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
+get_response(#gri{aspect = eff_groups}, Groups) ->
+    rest_translator:ok_body_reply(#{<<"groups">> => Groups});
 
-response(get, _SpaceId, groups, {ok, Groups}) ->
-    rest_handler:ok_body_reply(#{<<"groups">> => Groups});
+get_response(#gri{aspect = {group_privileges, _GroupId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
-response(get, _SpaceId, eff_groups, {ok, Groups}) ->
-    rest_handler:ok_body_reply(#{<<"groups">> => Groups});
+get_response(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
-response(get, _SpaceId, {group, GroupId}, {ok, Group}) ->
-    group_rest_translator:response(get, GroupId, data, {ok, Group});
+get_response(#gri{aspect = shares}, Shares) ->
+    rest_translator:ok_body_reply(#{<<"shares">> => Shares});
 
-response(get, _SpaceId, {eff_group, GroupId}, {ok, Group}) ->
-    group_rest_translator:response(get, GroupId, data, {ok, Group});
-
-response(get, _SpaceId, {group_privileges, _GroupId}, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
-
-response(get, _SpaceId, {eff_group_privileges, _GroupId}, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
-
-response(get, _SpaceId, shares, {ok, Shares}) ->
-    rest_handler:ok_body_reply(#{<<"shares">> => Shares});
-
-response(get, _SpaceId, {share, ShareId}, {ok, Share}) ->
-    share_rest_translator:response(get, ShareId, data, {ok, Share});
-
-response(get, _SpaceId, providers, {ok, Providers}) ->
-    rest_handler:ok_body_reply(#{<<"providers">> => Providers});
-
-response(get, _SpaceId, {provider, ProviderId}, {ok, Provider}) ->
-    provider_rest_translator:response(get, ProviderId, data, {ok, Provider});
-
-
-response(update, _SpaceId, _, ok) ->
-    rest_handler:updated_reply();
-
-
-response(delete, _SpaceId, _, ok) ->
-    rest_handler:deleted_reply().
+get_response(#gri{aspect = providers}, Providers) ->
+    rest_translator:ok_body_reply(#{<<"providers">> => Providers}).
 

@@ -139,7 +139,6 @@ create_share_test(Config) ->
     {ok, Space} = oz_test_utils:create_space(
         Config, ?USER(User), <<"sp">>
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % User should be able to create a share, as he has space_manages_shares
     % privilege by default in his space.
     ?assert(check_create_share(Config, 204, {user, User}, Space, <<"someShareId">>, #{
@@ -167,7 +166,6 @@ create_share_test(Config) ->
     oz_test_utils:space_set_group_privileges(
         Config, Space, Group, set, [?SPACE_MANAGE_SHARES]
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Now the user should be able to create a share
     ?assert(check_create_share(Config, 204, {user, User}, Space, <<"anotherShareId">>, #{
         <<"name">> => <<"whatever">>,
@@ -182,7 +180,6 @@ view_shares_test(Config) ->
     {ok, Space} = oz_test_utils:create_space(
         Config, ?USER(User), <<"sp">>
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Create a share
     {Share1Id, Share1Name, Share1File} = {<<"s1id">>, <<"s1nm">>, <<"s1rf">>},
     ?assert(check_create_share(Config, 204, {user, User}, Space, Share1Id, #{
@@ -251,7 +248,6 @@ view_shares_test(Config) ->
 
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(User), <<"gr">>),
     oz_test_utils:add_group_to_space(Config, Space, Group),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     ?assert(check_get_share(Config, 200, {user, User}, Share1Id, Share1ExpectedData)),
     ?assert(check_get_share(Config, 200, {user, User}, Share2Id, Share2ExpectedData)),
     ?assert(check_get_share(Config, 200, {user, User}, Share3Id, Share3ExpectedData)),
@@ -267,7 +263,6 @@ modify_share_test(Config) ->
     {ok, Space} = oz_test_utils:create_space(
         Config, ?USER(User), <<"sp">>
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Create a share
     {ShareId, ShareName, ShareFile} = {<<"s1id">>, <<"s1nm">>, <<"s1rf">>},
     ?assert(check_create_share(Config, 204, {user, User}, Space, ShareId, #{
@@ -317,7 +312,6 @@ modify_share_test(Config) ->
     oz_test_utils:space_set_group_privileges(
         Config, Space, Group, set, [?SPACE_MANAGE_SHARES]
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Now the user should be able to rename the share
     ?assert(check_rename_share(
         Config, 204, {user, User}, ShareId, #{<<"name">> => EvenMoreNewName}
@@ -335,7 +329,6 @@ remove_share_test(Config) ->
     {ok, Space} = oz_test_utils:create_space(
         Config, ?USER(User), <<"sp">>
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Create two shares
     {Share1Id, Share1Name, Share1File} = {<<"s1id">>, <<"s1nm">>, <<"s1rf">>},
     {Share2Id, Share2Name, Share2File} = {<<"s2id">>, <<"s2nm">>, <<"s2rf">>},
@@ -366,7 +359,6 @@ remove_share_test(Config) ->
     oz_test_utils:space_set_group_privileges(
         Config, Space, Group, set, [?SPACE_MANAGE_SHARES]
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
     % Now the user should be able to remove the share
     ?assert(check_remove_share(Config, 202, {user, User}, Share2Id)),
     % Make sure the share 2 not longer exists

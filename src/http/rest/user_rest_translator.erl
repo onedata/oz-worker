@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -14,12 +14,10 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
--include("errors.hrl").
--include("datastore/oz_datastore_models.hrl").
--include("registered_names.hrl").
--include_lib("ctool/include/logging.hrl").
+-include_lib("cluster_worker/include/api_errors.hrl").
 
--export([response/4]).
+
+-export([create_response/3, get_response/2]).
 
 %%%===================================================================
 %%% API
@@ -27,163 +25,97 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates given entity logic result into REST response
+%% Translates given entity logic CREATE result into REST response
+%% expressed by #rest_resp{} record. GRI holds the #gri{} od the request,
+%% new GRI holds the #gri{} of new aspect that was created.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
+    Result :: {data, term()} | {fetched, entity_logic:gri(), term()} |
+    {not_fetched, entity_logic:gri()} |
+    {not_fetched, entity_logic:gri(), entity_logic:auth_hint()}) -> #rest_resp{}.
+create_response(#gri{aspect = authorize}, _, {data, DischargeMacaroon}) ->
+    rest_translator:ok_body_reply({binary, DischargeMacaroon});
+
+create_response(#gri{aspect = client_tokens}, _, {fetched, _, Token}) ->
+    rest_translator:ok_body_reply(#{<<"token">> => Token}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Translates given entity logic GET result into REST response
 %% expressed by #rest_resp{} record.
 %% @end
 %%--------------------------------------------------------------------
--spec response(Operation :: entity_logic:operation(),
-    EntityId :: entity_logic:entity_id(), Resource :: entity_logic:resource(),
-    Result :: entity_logic:result()) -> #rest_resp{}.
-response(create, UserId, {deprecated_default_space, UserId}, ok) ->
-    rest_handler:ok_no_content_reply();
+-spec get_response(entity_logic:gri(), entity_logic:get_result()) ->
+    #rest_resp{}.
+get_response(#gri{aspect = deprecated_default_space}, SpaceId) ->
+    rest_translator:ok_body_reply(#{<<"spaceId">> => SpaceId});
 
-response(create, _UserId, authorize, {ok, DischargeMacaroon}) ->
-    rest_handler:ok_body_reply({binary, DischargeMacaroon});
+get_response(#gri{id = undefined, aspect = list}, Users) ->
+    rest_translator:ok_body_reply(#{<<"users">> => Users});
 
-response(create, _UserId, client_tokens, {ok, Token}) ->
-    rest_handler:ok_body_reply(#{<<"token">> => Token});
+get_response(#gri{id = UserId, aspect = instance, scope = _}, UserData) ->
+    % scope can be protected or shared
+    rest_translator:ok_body_reply(UserData#{<<"userId">> => UserId});
 
-response(create, UserId, {default_space, UserId}, ok) ->
-    rest_handler:ok_no_content_reply();
+get_response(#gri{aspect = oz_privileges}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
-response(create, _UserId, space_alias, ok) ->
-    rest_handler:ok_no_content_reply();
+get_response(#gri{aspect = eff_oz_privileges}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
-response(create, UserId, {default_provider, UserId}, ok) ->
-    rest_handler:ok_no_content_reply();
+get_response(#gri{aspect = default_space}, DefaultSpace) ->
+    rest_translator:ok_body_reply(#{<<"spaceId">> => DefaultSpace});
 
-response(create, _UserId, create_group, {ok, GroupId}) ->
-    rest_handler:created_reply(
-        % TODO VFS-2918
-%%        [<<"user">>, <<"groups">>, GroupId]
-        [<<"groups">>, GroupId]
-    );
+get_response(#gri{aspect = {space_alias, _}}, SpaceAlias) ->
+    rest_translator:ok_body_reply(#{<<"alias">> => SpaceAlias});
 
-response(create, _UserId, create_space, {ok, SpaceId}) ->
-    rest_handler:created_reply(
-        % TODO VFS-2918
-%%        [<<"user">>, <<"spaces">>, SpaceId]
-        [<<"spaces">>, SpaceId]
-    );
+get_response(#gri{aspect = default_provider}, DefaultProvider) ->
+    rest_translator:ok_body_reply(#{<<"providerId">> => DefaultProvider});
 
-response(create, _UserId, create_handle_service, {ok, HServiceId}) ->
-    rest_handler:created_reply(
-        % TODO VFS-2918
-%%        [<<"user">>, <<"handle_services">>, HServiceId]
-        [<<"handle_services">>, HServiceId]
-    );
+get_response(#gri{aspect = client_tokens}, Tokens) ->
+    rest_translator:ok_body_reply(#{<<"tokens">> => Tokens});
 
-response(create, _UserId, create_handle, {ok, HandleId}) ->
-    rest_handler:created_reply(
-        % TODO VFS-2918
-%%        [<<"user">>, <<"handles">>, HandleId]
-        [ <<"handles">>, HandleId]
-    );
+get_response(#gri{aspect = groups}, Groups) ->
+    rest_translator:ok_body_reply(#{<<"groups">> => Groups});
 
-response(create, _UserId, join_group, {ok, GroupId}) ->
-    rest_handler:created_reply([<<"user">>, <<"groups">>, GroupId]);
-
-response(create, _UserId, join_space, {ok, SpaceId}) ->
-    rest_handler:created_reply([<<"user">>, <<"spaces">>, SpaceId]);
-
-
-response(get, UserId, {deprecated_default_space, UserId}, {ok, SpaceId}) ->
-    rest_handler:ok_body_reply(#{<<"spaceId">> => SpaceId});
-
-response(get, UserId, data, {ok, UserData}) ->
-    rest_handler:ok_body_reply(UserData#{<<"userId">> => UserId});
-
-response(get, undefined, list, {ok, Users}) ->
-    rest_handler:ok_body_reply(#{<<"users">> => Users});
-
-response(get, _UserId, oz_privileges, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
-
-response(get, _UserId, eff_oz_privileges, {ok, Privileges}) ->
-    rest_handler:ok_body_reply(#{<<"privileges">> => Privileges});
-
-response(get, UserId, {default_space, UserId}, {ok, DefaultSpace}) ->
-    rest_handler:ok_body_reply(#{<<"spaceId">> => DefaultSpace});
-
-response(get, _UserId, {space_alias, _SpaceId}, {ok, SpaceAlias}) ->
-    rest_handler:ok_body_reply(#{<<"alias">> => SpaceAlias});
-
-response(get, UserId, {default_provider, UserId}, {ok, DefaultProvider}) ->
-    rest_handler:ok_body_reply(#{<<"providerId">> => DefaultProvider});
-
-response(get, _UserId, client_tokens, {ok, Tokens}) ->
-    rest_handler:ok_body_reply(#{<<"tokens">> => Tokens});
-
-response(get, _UserId, groups, {ok, Groups}) ->
-    rest_handler:ok_body_reply(#{<<"groups">> => Groups});
-
-response(get, _UserId, eff_groups, {ok, Groups}) ->
+get_response(#gri{aspect = eff_groups}, Groups) ->
     % TODO VFS-2918
-    rest_handler:ok_body_reply(#{<<"effective_groups">> => Groups});
+    rest_translator:ok_body_reply(#{<<"effective_groups">> => Groups});
 %%    rest_handler:ok_body_reply(#{<<"groups">> => Groups});
 
-response(get, _UserId, {group, GroupId}, {ok, Group}) ->
-    group_rest_translator:response(get, GroupId, data, {ok, Group});
 
-response(get, _UserId, {eff_group, GroupId}, {ok, Group}) ->
-    group_rest_translator:response(get, GroupId, data, {ok, Group});
-
-response(get, UserId, spaces, {ok, Spaces}) ->
+get_response(#gri{id = UserId, aspect = spaces}, Spaces) ->
     % TODO VFS-2918
     DefaultSpace = case user_logic:get_default_space(?ROOT, UserId) of
         {ok, SpaceId} -> SpaceId;
         ?ERROR_NOT_FOUND -> undefined
     end,
-    rest_handler:ok_body_reply(
+    rest_translator:ok_body_reply(
         #{
             <<"spaces">> => Spaces,
             % TODO VFS-2918
             <<"default">> => DefaultSpace
         });
 
-response(get, _UserId, eff_spaces, {ok, Spaces}) ->
-    rest_handler:ok_body_reply(#{<<"spaces">> => Spaces});
-
-response(get, _UserId, {space, SpaceId}, {ok, Space}) ->
-    space_rest_translator:response(get, SpaceId, data, {ok, Space});
-
-response(get, _UserId, {eff_space, SpaceId}, {ok, Space}) ->
-    space_rest_translator:response(get, SpaceId, data, {ok, Space});
-
-response(get, _UserId, eff_providers, {ok, Providers}) ->
-    rest_handler:ok_body_reply(#{<<"providers">> => Providers});
-
-response(get, _UserId, {eff_provider, ProviderId}, {ok, Provider}) ->
-    provider_rest_translator:response(get, ProviderId, data, {ok, Provider});
-
-response(get, _UserId, handle_services, {ok, HServices}) ->
-    rest_handler:ok_body_reply(#{<<"handle_services">> => HServices});
-
-response(get, _UserId, eff_handle_services, {ok, HServices}) ->
-    rest_handler:ok_body_reply(#{<<"handle_services">> => HServices});
-
-response(get, _UserId, {handle_service, HServiceId}, {ok, HService}) ->
-    handle_service_rest_translator:response(get, HServiceId, data, {ok, HService});
-
-response(get, _UserId, {eff_handle_service, HServiceId}, {ok, HService}) ->
-    handle_service_rest_translator:response(get, HServiceId, data, {ok, HService});
-
-response(get, _UserId, handles, {ok, Handles}) ->
-    rest_handler:ok_body_reply(#{<<"handles">> => Handles});
-
-response(get, _UserId, eff_handles, {ok, Handles}) ->
-    rest_handler:ok_body_reply(#{<<"handles">> => Handles});
-
-response(get, _UserId, {handle, HandleId}, {ok, Handle}) ->
-    handle_rest_translator:response(get, HandleId, data, {ok, Handle});
-
-response(get, _UserId, {eff_handle, HandleId}, {ok, Handle}) ->
-    handle_rest_translator:response(get, HandleId, data, {ok, Handle});
+get_response(#gri{aspect = eff_spaces}, Spaces) ->
+    rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
 
 
-response(update, _UserId, _, ok) ->
-    rest_handler:updated_reply();
+get_response(#gri{aspect = eff_providers}, Providers) ->
+    rest_translator:ok_body_reply(#{<<"providers">> => Providers});
 
 
-response(delete, _UserId, _, ok) ->
-    rest_handler:deleted_reply().
+get_response(#gri{aspect = handle_services}, HServices) ->
+    rest_translator:ok_body_reply(#{<<"handle_services">> => HServices});
+
+get_response(#gri{aspect = eff_handle_services}, HServices) ->
+    rest_translator:ok_body_reply(#{<<"handle_services">> => HServices});
+
+
+get_response(#gri{aspect = handles}, Handles) ->
+    rest_translator:ok_body_reply(#{<<"handles">> => Handles});
+
+get_response(#gri{aspect = eff_handles}, Handles) ->
+    rest_translator:ok_body_reply(#{<<"handles">> => Handles}).
