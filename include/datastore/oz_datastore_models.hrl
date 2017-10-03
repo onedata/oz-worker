@@ -204,7 +204,6 @@
     serial :: undefined | binary(),
     latitude = 0.0 :: float(),
     longitude = 0.0 :: float(),
-    online = false :: boolean(),
 
     % Direct relations to other entities
     spaces = #{} :: entity_graph:relation_with_attrs(od_space:id(), Size :: pos_integer()),
@@ -294,6 +293,11 @@
 %% Model that holds the last processed seq for Graph Sync server.
 -record(gs_server_state, {
     seq = 1 :: couchbase_changes:seq()
+}).
+
+%% Stores information about active provider connection
+-record(provider_connection, {
+    connection_ref :: gs_server:conn_ref()
 }).
 
 % Info about identities, which are owned by this OZ

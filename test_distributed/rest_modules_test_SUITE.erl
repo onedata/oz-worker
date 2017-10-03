@@ -525,8 +525,8 @@ delete_provider_test(Config) ->
     ParamsWithOtherAddress = update_req_params(ProviderReqParams, OtherRestAddress, address),
 
     ?assertMatch(ok, check_status(delete_provider(ParamsWithOtherAddress))),
-    ?assertMatch({request_error, ?NOT_FOUND}, get_provider_info(ParamsWithOtherAddress)),
-    ?assertMatch({request_error, ?NOT_FOUND}, get_provider_info(ProviderReqParams)).
+    ?assertMatch({request_error, ?UNAUTHORIZED}, get_provider_info(ParamsWithOtherAddress)),
+    ?assertMatch({request_error, ?UNAUTHORIZED}, get_provider_info(ProviderReqParams)).
 
 get_supported_space_info_test(Config) ->
     ProviderId = ?config(providerId, Config),

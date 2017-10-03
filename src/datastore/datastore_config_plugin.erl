@@ -39,5 +39,6 @@ get_models() -> [
     session,
     token,
     entity_graph_state,
-    ozpca_state
+    ozpca_state,
+    provider_connection
 ].

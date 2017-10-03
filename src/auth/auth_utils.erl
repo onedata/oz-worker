@@ -138,8 +138,12 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
 authorize_by_provider_certs(PeerCert) ->
     case worker_proxy:call(ozpca_worker, {verify_provider, PeerCert}) of
         {ok, ProviderId} ->
-            Client = #client{type = provider, id = ProviderId},
-            {true, Client};
+            % Make sure that provider exists - the client might hold a valid
+            % certificate, but for a provider that has been removed.
+            case provider_logic:exists(ProviderId) of
+                true -> {true, #client{type = provider, id = ProviderId}};
+                false -> {error, bad_cert}
+            end;
         {error, {bad_cert, Reason}} ->
             ?warning("Attempted authentication with "
             "bad peer certificate: ~p", [Reason]),
