@@ -4,6 +4,11 @@
 CHANGELOG
 ---------
 
+### 17.06.0-rc4
+
+* Releasing new version 17.06.0-rc4
+
+
 ### 17.06.0-rc3
 
 * VFS-3455 Updating GUI ref
