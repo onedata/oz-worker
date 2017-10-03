@@ -43,6 +43,8 @@ translate_create(1, #gri{aspect = invite_provider_token}, Macaroon) ->
 translate_create(1, #gri{aspect = invite_user_token}, Macaroon) ->
     {ok, Token} = token_utils:serialize62(Macaroon),
     Token;
+translate_create(1, #gri{type = od_provider, aspect = map_idp_group}, Id) ->
+    Id;
 
 translate_create(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n

@@ -58,7 +58,7 @@ operation_supported(create, instance, private) -> true;
 operation_supported(create, instance_dev, private) -> true;
 operation_supported(create, support, private) -> true;
 operation_supported(create, check_my_ports, private) -> true;
-operation_supported(create, map_group, private) -> true;
+operation_supported(create, map_idp_group, private) -> true;
 
 operation_supported(get, list, private) -> true;
 
@@ -155,11 +155,12 @@ create(Req = #el_req{gri = #gri{aspect = check_my_ports}}) ->
         ?ERROR_INTERNAL_SERVER_ERROR
     end;
 
-create(#el_req{gri = #gri{aspect = map_group}, data = Data}) ->
+create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
     ProviderId = maps:get(<<"idp">>, Data),
     GroupId = maps:get(<<"groupId">>, Data),
-    GroupSpec = auth_utils:normalize_membership_spec(
+    MembershipSpec = auth_utils:normalize_membership_spec(
         binary_to_atom(ProviderId, latin1), GroupId),
+    GroupSpec = idp_group_mapping:membership_spec_to_group_spec(MembershipSpec),
     {ok, {data, idp_group_mapping:group_spec_to_db_id(GroupSpec)}}.
 
 
@@ -284,7 +285,7 @@ exists(#el_req{gri = #gri{id = Id}}, #od_provider{}) ->
 authorize(#el_req{operation = create, gri = #gri{aspect = check_my_ports}}, _) ->
     true;
 
-authorize(#el_req{operation = create, gri = #gri{aspect = map_group}}, _) ->
+authorize(#el_req{operation = create, gri = #gri{aspect = map_idp_group}}, _) ->
     true;
 
 authorize(#el_req{operation = create, gri = #gri{aspect = instance}}, _) ->
@@ -421,7 +422,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
 validate(#el_req{operation = create, gri = #gri{aspect = check_my_ports}}) -> #{
 };
 
-validate(#el_req{operation = create, gri = #gri{aspect = map_group}}) -> #{
+validate(#el_req{operation = create, gri = #gri{aspect = map_idp_group}}) -> #{
     required => #{
         <<"idp">> => {binary, {exists, fun(Idp) ->
             auth_utils:has_group_mapping_enabled(binary_to_atom(Idp, utf8))

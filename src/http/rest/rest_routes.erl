@@ -920,9 +920,9 @@ provider_routes() -> [
         method = post,
         b_gri = #b_gri{type = od_provider, aspect = check_my_ports}
     }},
-    {<<"/provider/test/map_group">>, #rest_req{
+    {<<"/provider/test/map_idp_group">>, #rest_req{
         method = post,
-        b_gri = #b_gri{type = od_provider, aspect = map_group}
+        b_gri = #b_gri{type = od_provider, aspect = map_idp_group}
     }}
 ].
 
