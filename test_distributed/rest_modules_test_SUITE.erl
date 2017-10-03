@@ -162,7 +162,8 @@
 -define(MAP_GROUP_TEST_AUTH, test_auth).
 -define(MAP_GROUP_TEST_AUTH_BIN, atom_to_binary(?MAP_GROUP_TEST_AUTH, latin1)).
 -define(MAP_GROUP_TEST_AUTH_MODULE, test_auth_module).
--define(MAPPED_GROUP, <<"mapped_group1">>).
+-define(MAPPED_MEMBERSHIP_SPEC, <<"mapped_group1/user:member">>).
+-define(MAPPED_GROUP_SPEC, <<"mapped_group1">>).
 
 %% API
 -export([all/0, groups/0, init_per_suite/1, end_per_suite/1, init_per_testcase/2, end_per_testcase/2]).
@@ -603,7 +604,7 @@ map_group_fail_test(Config) ->
 
 map_group_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
-    MappedGroupHash = idp_group_mapping:group_spec_to_db_id(?MAPPED_GROUP),
+    MappedGroupHash = idp_group_mapping:group_spec_to_db_id(?MAPPED_GROUP_SPEC),
     ?assertMatch(MappedGroupHash,
         map_group(?MAP_GROUP_TEST_AUTH_BIN, <<"group1">>, ProviderReqParams)).
 
@@ -1984,7 +1985,7 @@ init_per_testcase(map_group_test, Config) ->
     end),
     ok = test_utils:mock_new(Nodes, ?MAP_GROUP_TEST_AUTH_MODULE, [passthrough, non_strict]),
     ok = test_utils:mock_expect(Nodes, ?MAP_GROUP_TEST_AUTH_MODULE, normalized_membership_spec, fun(_) ->
-        ?MAPPED_GROUP
+        ?MAPPED_MEMBERSHIP_SPEC
     end),
     init_per_testcase(default, Config);
 init_per_testcase(_Default, Config) ->
@@ -2247,7 +2248,7 @@ map_group(Idp, GroupId, {RestAddress, Headers, Options}) ->
         {<<"idp">>, Idp},
         {<<"groupId">>, GroupId}
     ]),
-    Response = do_request(RestAddress ++ "/provider/test/map_group", Headers, post, Body, Options),
+    Response = do_request(RestAddress ++ "/provider/test/map_idp_group", Headers, post, Body, Options),
     case get_body_val([groupId], Response) of
         Error = {request_error, _} ->
             Error;

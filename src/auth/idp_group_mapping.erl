@@ -62,7 +62,8 @@
 %% API
 -export([
     coalesce_groups/4,
-    group_spec_to_db_id/1
+    group_spec_to_db_id/1,
+    membership_spec_to_group_spec/1
 ]).
 
 %%%===================================================================
@@ -98,6 +99,20 @@ coalesce_groups(IdP, UserId, OldGroups, NewGroups) ->
 group_spec_to_db_id(GroupSpec) ->
     datastore_utils:gen_key(<<"">>, GroupSpec).
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Converts membership spec to group spec, i.e. strips the string denoting
+%% member type and role.
+%% @end
+%%--------------------------------------------------------------------
+-spec membership_spec_to_group_spec(membership_spec()) -> group_spec().
+membership_spec_to_group_spec(MembershipSpec) ->
+    Tokens = spec_to_tokens(MembershipSpec),
+    ParentGroupTokens = lists:sublist(Tokens, length(Tokens) - 1),
+    tokens_to_spec(ParentGroupTokens).
+
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -115,9 +130,8 @@ add_membership(MembershipSpec, UserId, SuperGroupSpec) ->
         undefined -> ok;
         _ -> ensure_group_structure(SuperGroupSpec, SuperGroupSpec)
     end,
-    Tokens = spec_to_tokens(MembershipSpec),
-    ParentGroupTokens = lists:sublist(Tokens, length(Tokens) - 1),
-    ensure_group_structure(ParentGroupTokens, SuperGroupSpec),
+    ParentGroupSpec = membership_spec_to_group_spec(MembershipSpec),
+    ensure_group_structure(ParentGroupSpec, SuperGroupSpec),
     ensure_member(true, MembershipSpec, UserId).
 
 %%--------------------------------------------------------------------

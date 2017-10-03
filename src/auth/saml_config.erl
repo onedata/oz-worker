@@ -107,7 +107,7 @@ get_idp_config(IdPId) ->
 has_group_mapping_enabled(IdPId) ->
     SAMLConfig = get_config(),
     SupportedIdPs = maps:get(supported_idps, SAMLConfig),
-    IdPConfig = maps:get(IdPId, SupportedIdPs),
+    IdPConfig = maps:get(IdPId, SupportedIdPs, #{}),
     GroupMappingConfig = maps:get(group_mapping, IdPConfig, #{}),
     maps:get(enabled, GroupMappingConfig, false).
 

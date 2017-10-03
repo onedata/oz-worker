@@ -211,8 +211,6 @@ is_authorized(Client, AuthHint, GRI, Operation, Entity) ->
 -spec handle_rpc(gs_protocol:protocol_version(), gs_protocol:client(),
     gs_protocol:rpc_function(), gs_protocol:rpc_args()) ->
     gs_protocol:rpc_result().
-handle_rpc(1, _, <<"testRPC">>, Args) ->
-    {ok, Args};
 handle_rpc(1, _, <<"authorizeUser">>, Args) ->
     user_logic:authorize(Args);
 handle_rpc(1, _, _, _) ->
