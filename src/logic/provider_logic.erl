@@ -52,9 +52,6 @@
     supports_space/2
 ]).
 -export([
-    set_online/2,
-    is_online/1,
-    mark_all_providers_as_offline/0,
     get_url/1,
     choose_provider_for_user/1
 ]).
@@ -473,46 +470,6 @@ supports_space(ProviderId, SpaceId) when is_binary(ProviderId) ->
     end;
 supports_space(#od_provider{spaces = Spaces}, SpaceId) ->
     maps:is_key(SpaceId, Spaces).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Sets "online" status of given provider to true/false.
-%% @end
-%%--------------------------------------------------------------------
--spec set_online(ProviderId :: od_provider:id(), Flag :: boolean()) -> ok.
-set_online(ProviderId, Flag) ->
-    {ok, _} = od_provider:update(ProviderId, fun(Provider = #od_provider{}) ->
-        {ok, Provider#od_provider{online = Flag}}
-    end),
-    ok.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns if given provider is online (connected to OZ).
-%% @end
-%%--------------------------------------------------------------------
--spec is_online(ProviderId :: od_provider:id()) -> boolean().
-is_online(ProviderId) ->
-    {ok, #od_provider{online = Online}} = get(?ROOT, ProviderId),
-    Online.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Marks all providers as offline - needed at startup to correct possible
-%% mistakes in provider statuses - in case OZ crashed and connections were not
-%% closed cleanly.
-%% @end
-%%--------------------------------------------------------------------
--spec mark_all_providers_as_offline() -> ok.
-mark_all_providers_as_offline() ->
-    {ok, ProviderIds} = list(?ROOT),
-    lists:foreach(
-        fun(ProviderId) ->
-            set_online(ProviderId, false)
-        end, ProviderIds).
 
 
 %%--------------------------------------------------------------------

@@ -480,12 +480,15 @@ delete_test(Config) ->
     {ok, {P8, KeyFile8, CertFile8}} = oz_test_utils:create_provider_and_certs(
         Config, <<"P5">>
     ),
+    {ok, {P9, KeyFile9, CertFile9}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P9">>
+    ),
     ApiTestSpec3 = #api_test_spec{
         client_spec = #client_spec{
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {provider, P1, KeyFile1, CertFile1}
+                {provider, P9, KeyFile9, CertFile9}
             ]
         },
         rest_spec = #rest_spec{

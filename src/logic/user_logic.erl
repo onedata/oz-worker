@@ -1500,7 +1500,7 @@ get_default_provider_if_online(UserId) when is_binary(UserId) ->
 get_default_provider_if_online(#od_user{default_provider = undefined}) ->
     false;
 get_default_provider_if_online(#od_user{default_provider = DefaultProv}) ->
-    case provider_logic:is_online(DefaultProv) of
+    case provider_connection:is_online(DefaultProv) of
         true -> {true, DefaultProv};
         false -> false
     end.

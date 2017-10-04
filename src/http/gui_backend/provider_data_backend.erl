@@ -154,7 +154,7 @@ provider_record(ProviderId, UserId) ->
     Spaces = maps:keys(SpacesWithSupports),
 
     #{host := Host} = url_utils:parse(RedPoint),
-    Status = case provider_logic:is_online(ProviderId) of
+    Status = case provider_connection:is_online(ProviderId) of
         true ->
             <<"online">>;
         false ->

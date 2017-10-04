@@ -240,7 +240,12 @@ update(Req = #el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
-    entity_graph:delete_with_relations(od_provider, ProviderId);
+    entity_graph:delete_with_relations(od_provider, ProviderId),
+    % Force disconnect the provider (if connected)
+    case provider_connection:get_connection_ref(ProviderId) of
+        {ok, ConnRef} -> gs_server:terminate_connection(ConnRef);
+        _ -> ok
+    end;
 
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
     entity_graph:remove_relation(

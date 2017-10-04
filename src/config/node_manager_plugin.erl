@@ -125,8 +125,6 @@ after_init([]) ->
                 identity_publisher_worker:start_refreshing()
         end,
 
-        provider_logic:mark_all_providers_as_offline(),
-
         entity_graph:init_state(),
 
         %% This code will be run on every node_manager, so we need a

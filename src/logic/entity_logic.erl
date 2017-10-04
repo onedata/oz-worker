@@ -173,7 +173,7 @@ is_authorized(#el_req{gri = #gri{type = EntityType}} = ElReq, Entity) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec client_to_string(Client :: client()) -> string().
-client_to_string(?NOBODY) -> "nobody (unauthenticated user)";
+client_to_string(?NOBODY) -> "nobody (unauthenticated client)";
 client_to_string(?ROOT) -> "root";
 client_to_string(?USER(UId)) -> str_utils:format("user:~s", [UId]);
 client_to_string(?PROVIDER(PId)) -> str_utils:format("provider:~s", [PId]).

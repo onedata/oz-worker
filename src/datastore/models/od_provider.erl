@@ -144,7 +144,7 @@ get_prehooks() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    3.
+    2.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -178,20 +178,6 @@ get_record_struct(2) ->
         {eff_users, #{string => [{atom, string}]}},
         {eff_groups, #{string => [{atom, string}]}},
         {bottom_up_dirty, boolean}
-    ]};
-get_record_struct(3) ->
-    {record, [
-        {name, string},
-        {redirection_point, string},
-        {urls, [string]},
-        {serial, string},
-        {latitude, float},
-        {longitude, float},
-        {online, boolean}, % New field as compared to version 2, rest is the same
-        {spaces, #{string => integer}},
-        {eff_users, #{string => [{atom, string}]}},
-        {eff_groups, #{string => [{atom, string}]}},
-        {bottom_up_dirty, boolean}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -218,55 +204,20 @@ upgrade_record(1, Provider) ->
 
         _BottomUpDirty
     } = Provider,
-    {2, {od_provider,
-        Name,
-        RedirectionPoint,
-        Urls,
-        Serial,
-        Latitude,
-        Longitude,
-
-        % Set support sizes to 0 as there is no access to this information
-        % from here.
-        maps:from_list([{SpaceId, 0} || SpaceId <- Spaces]),
-
-        #{},
-        #{},
-
-        true
-    }};
-upgrade_record(2, Provider) ->
-    {
-        od_provider,
-        Name,
-        RedirectionPoint,
-        Urls,
-        Serial,
-        Latitude,
-        Longitude,
-
-        Spaces,
-
-        EffUsers,
-        EffGroups,
-
-        BottomUpDirty
-    } = Provider,
-    {3, #od_provider{
+    {2, #od_provider{
         name = Name,
         redirection_point = RedirectionPoint,
         urls = Urls,
         serial = Serial,
         latitude = Latitude,
         longitude = Longitude,
-        online = false,
 
         % Set support sizes to 0 as there is no access to this information
         % from here.
-        spaces = Spaces,
+        spaces = maps:from_list([{SpaceId, 0} || SpaceId <- Spaces]),
 
-        eff_users = EffUsers,
-        eff_groups = EffGroups,
+        eff_users = #{},
+        eff_groups = #{},
 
-        bottom_up_dirty = BottomUpDirty
+        bottom_up_dirty = true
     }}.

@@ -197,7 +197,7 @@ share_id_to_redirect_url(ShareId) ->
     % Prefer online providers
     {Online, Offline} = lists:partition(
         fun(ProviderId) ->
-            provider_logic:is_online(ProviderId)
+            provider_connection:is_online(ProviderId)
         end, maps:keys(Providers)),
     % But if there are none, choose one of inactive
     Choice = case length(Online) of

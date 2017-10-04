@@ -24,7 +24,7 @@
 -export([authorize_by_session_cookie/1, authorize_by_token/1, authorize_by_macaroons/2]).
 -export([authorize_by_basic_auth/1, authorize_by_provider_cert/1]).
 -export([client_to_identity/1, root_client/0, guest_client/0]).
--export([client_connected/1, client_disconnected/1]).
+-export([client_connected/2, client_disconnected/2]).
 -export([is_authorized/5]).
 -export([handle_rpc/4]).
 -export([handle_graph_request/6]).
@@ -163,12 +163,21 @@ guest_client() ->
 %% Callback called when a new client connects to the Graph Sync server.
 %% @end
 %%--------------------------------------------------------------------
--spec client_connected(gs_protocol:client()) -> ok.
-client_connected(?PROVIDER(ProvId)) ->
-    {ok, #{<<"name">> := Name}} = provider_logic:get_protected_data(?ROOT, ProvId),
+-spec client_connected(gs_protocol:client(), gs_server:conn_ref()) -> ok.
+client_connected(?PROVIDER(ProvId), ConnectionRef) ->
+    {ok, ProviderRecord = #od_provider{
+        name = Name
+    }} = provider_logic:get(?ROOT, ProvId),
     ?info("Provider '~s' (~s) has connected", [Name, ProvId]),
-    provider_logic:set_online(ProvId, true);
-client_connected(_) ->
+    provider_connection:add_connection(ProvId, ConnectionRef),
+    % Generate a dummy update which will cause a push to GUI clients so that
+    % they can learn the provider is now online.
+    gs_server:updated(
+        od_provider,
+        ProvId,
+        ProviderRecord
+    );
+client_connected(_, _) ->
     ok.
 
 
@@ -177,12 +186,18 @@ client_connected(_) ->
 %% Callback called when a client disconnects from the Graph Sync server.
 %% @end
 %%--------------------------------------------------------------------
--spec client_disconnected(gs_protocol:client()) -> ok.
-client_disconnected(?PROVIDER(ProvId)) ->
-    {ok, #{<<"name">> := Name}} = provider_logic:get_protected_data(?ROOT, ProvId),
-    ?info("Provider '~s' (~s) went offline", [Name, ProvId]),
-    provider_logic:set_online(ProvId, false);
-client_disconnected(_) ->
+-spec client_disconnected(gs_protocol:client(), gs_server:conn_ref()) -> ok.
+client_disconnected(?PROVIDER(ProvId), _ConnectionRef) ->
+    case provider_logic:get_protected_data(?ROOT, ProvId) of
+        {ok, #{<<"name">> := Name}} ->
+            ?info("Provider '~s' (~s) went offline", [Name, ProvId]);
+        _ ->
+            % Provider could have been deleted in the meantime, in such case do
+            % not retrieve its name.
+            ?info("Provider '~s' went offline", [ProvId])
+    end,
+    provider_connection:remove_connection(ProvId);
+client_disconnected(_, _) ->
     ok.
 
 
