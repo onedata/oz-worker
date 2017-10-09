@@ -18,10 +18,12 @@
 -include("registered_names.hrl").
 -include_lib("public_key/include/public_key.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/global_definitions.hrl").
 
 %% API
 -export([start_link/0, sign_provider_req/2, verify_provider/1, revoke/1,
-    gen_crl/0, cacert_path/1]).
+    gen_crl/0, oz_ca_path/0, oz_ca_pem/0, crl_path/0]).
+-export([ensure_oz_ca_cert_present/0]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -31,15 +33,6 @@
 -define(CRL_REGENERATION_PERIOD, timer:hours(1)).
 -define(CACERT_FILE, "cacert.pem").
 -define(CAKEY_FILE, filename:join("private", "cakey.pem")).
-
--record(dn, {
-    commonName,
-    organizationalUnitName = "onezone",
-    organizationName = "onedata",
-    localityName = "Krakow",
-    countryName = "PL",
-    emailAddress = "support@onedata.com"}
-).
 
 -record(state, {
     ca_dir :: string()
@@ -108,13 +101,96 @@ revoke(Serial) ->
     end.
 
 %%--------------------------------------------------------------------
-%% @doc Returns a path to a CA Certificate based on a given CA directory.
+%% @doc
+%% Returns the path to OZ CA Certificate.
 %% @end
 %%--------------------------------------------------------------------
--spec cacert_path(CaDir :: string()) -> string().
-cacert_path(CaDir) ->
+-spec oz_ca_path() -> string().
+oz_ca_path() ->
     {ok, CaDir} = application:get_env(?APP_NAME, ozpca_dir),
     filename:join(CaDir, ?CACERT_FILE).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the contents of OZ CA Certificate (in PEM format).
+%% @end
+%%--------------------------------------------------------------------
+-spec oz_ca_pem() -> binary().
+oz_ca_pem() ->
+    {ok, ZoneCaCertPem} = file:read_file(oz_ca_path()),
+    ZoneCaCertPem.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the path to CRL file.
+%% @end
+%%--------------------------------------------------------------------
+-spec crl_path() -> string().
+crl_path() ->
+    {ok, CaDir} = application:get_env(?APP_NAME, ozpca_dir),
+    filename:join(CaDir, "crl.pem").
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Generates OZ CA key/cert pair if not present and distributes it across all
+%% cluster nodes. The procedure is run within critical section to make sure that
+%% only one of the nodes generates and distributes new certs.
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_oz_ca_cert_present() -> ok.
+ensure_oz_ca_cert_present() ->
+    critical_section:run(oz_ca_cert, fun ensure_oz_ca_cert_present_unsafe/0).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Generates OZ CA key/cert pair if not present and distributes it across all
+%% cluster nodes. Should not be called in parallel to prevent race conditions.
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_oz_ca_cert_present_unsafe() -> ok.
+ensure_oz_ca_cert_present_unsafe() ->
+    {ok, CaDir} = application:get_env(?APP_NAME, ozpca_dir),
+    KeyPath = filename:join(CaDir, ?CAKEY_FILE),
+    CertPath = filename:join(CaDir, ?CACERT_FILE),
+    case filelib:is_regular(KeyPath) andalso filelib:is_regular(CertPath) of
+        true ->
+            ?info("Reusing existing Zone CA cert");
+        false ->
+            % Generate RSA key
+            os:cmd([
+                "openssl genrsa",
+                " -out ", KeyPath,
+                " 2048"
+            ]),
+            % Generate RSA self-signed cert
+            os:cmd([
+                "openssl req",
+                " -new",
+                " -x509",
+                " -subj '/C=PL/L=OneZoneCA/O=OneZoneCA/CN=OneZoneCA'",
+                " -days 3650",
+                " -key ", KeyPath,
+                " -out ", CertPath
+            ]),
+            ?info("Generated new Zone CA cert")
+    end,
+    NodeList = gen_server2:call({global, ?CLUSTER_MANAGER}, get_nodes),
+    OtherWorkers = NodeList -- [node()],
+    {ok, Key} = file:read_file(KeyPath),
+    {ok, Cert} = file:read_file(CertPath),
+    ok = utils:save_file_on_hosts(OtherWorkers, KeyPath, Key),
+    ok = utils:save_file_on_hosts(OtherWorkers, CertPath, Cert),
+    ?info("Synchronized Zone CA cert across all nodes"),
+    FingerPrintOutput = os:cmd([
+        "openssl x509",
+        " -noout",
+        " -fingerprint",
+        " -sha1",
+        " -in ", CertPath
+    ]),
+    %% Fingerprint output is in form:
+    %% SHA1 Fingerprint=8A:7F:2D:0D:88:0B:41:F5:E8:18:7C:A4:BF:AA:23:9B:1E:2F:E1:2B
+    ?info("Zone CA ~s", [FingerPrintOutput]).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -128,14 +204,7 @@ cacert_path(CaDir) ->
     {ok, State :: #state{}} | {ok, State :: #state{}, timeout() | hibernate} |
     {stop, Reason :: term()} | ignore.
 init(_Args) ->
-    {ok, KeyFile} = application:get_env(?APP_NAME, oz_key_file),
-    {ok, CertFile} = application:get_env(?APP_NAME, oz_cert_file),
     {ok, CaDir} = application:get_env(?APP_NAME, ozpca_dir),
-    {ok, Domain} = application:get_env(?APP_NAME, http_domain),
-    case filelib:is_regular(CertFile) of
-        true -> ok;
-        false -> generate_oz_cert(KeyFile, CertFile, CaDir, Domain)
-    end,
     gen_crl_imp(CaDir),
     erlang:send_after(?CRL_REGENERATION_PERIOD, self(), gen_crl),
     {ok, #state{ca_dir = CaDir}}.
@@ -238,43 +307,6 @@ delegate(Fun, Args) ->
 
 %%--------------------------------------------------------------------
 %% @private @doc
-%% Generates a certificate for onezone's interfaces.
-%% @end
-%%--------------------------------------------------------------------
--spec generate_oz_cert(KeyFile :: string(), CertFile :: string(),
-    CaDir :: string(), Domain :: string()) -> ok.
-generate_oz_cert(KeyFile, CertFile, CaDir, Domain) ->
-    TmpDir = utils:mkdtemp(),
-    CSRFile = random_filename(TmpDir),
-    ReqConfigFile = req_config_file(TmpDir, #dn{commonName = Domain}),
-    CaConfigFile = ca_config_file(TmpDir, CaDir),
-
-    ?info("Creating a CSR for the onezone interfaces..."),
-
-    RequestOutput = os:cmd(["openssl req",
-        " -config ", ReqConfigFile,
-        " -new ",
-        " -keyout ", KeyFile,
-        " -out ", CSRFile]),
-
-    ?info("~s", [RequestOutput]),
-    ?info("Signing the onezone interfaces CSR..."),
-
-    SigningOutput = os:cmd(["openssl ca",
-        " -config ", CaConfigFile,
-        " -batch",
-        " -notext",
-        " -extensions user_cert",
-        " -in ", CSRFile,
-        " -out ", CertFile]),
-
-    ?info("~s", [SigningOutput]),
-
-    utils:rmtempdir(TmpDir),
-    ok.
-
-%%--------------------------------------------------------------------
-%% @private @doc
 %% The underlying implementation of {@link ozpca:sign_provider_req/2}.
 %% @end
 %%--------------------------------------------------------------------
@@ -318,8 +350,8 @@ sign_provider_req_imp(CaDir, ProviderId, CSRPem) ->
 %%--------------------------------------------------------------------
 -spec verify_provider_imp(CaDir :: string(), PeerCertDer :: public_key:der_encoded()) ->
     {ok, ProviderId :: binary()} | {error, {bad_cert, Reason :: any()}}.
-verify_provider_imp(CaDir, PeerCertDer) ->
-    CaCertFile = cacert_path(CaDir),
+verify_provider_imp(_CaDir, PeerCertDer) ->
+    CaCertFile = oz_ca_path(),
     {ok, CaCertPem} = file:read_file(CaCertFile),
     [{'Certificate', CaCertDer, not_encrypted}] = public_key:pem_decode(CaCertPem),
     #'OTPCertificate'{} = Cert = public_key:pkix_decode_cert(CaCertDer, otp),
@@ -371,17 +403,6 @@ revoke_imp(CaDir, Serial) ->
     utils:rmtempdir(TmpDir),
     gen_crl_imp(CaDir),
     ok.
-
-%%--------------------------------------------------------------------
-%% @private @doc
-%% Creates a temporary config file for creating onezone certificate's CSR.
-%% @end
-%%--------------------------------------------------------------------
--spec req_config_file(TmpDir :: string(), DN :: #dn{}) -> string().
-req_config_file(TmpDir, #dn{} = DN) ->
-    Config = random_filename(TmpDir),
-    ok = file:write_file(Config, req_cnf(DN)),
-    Config.
 
 %%--------------------------------------------------------------------
 %% @private @doc
@@ -449,45 +470,6 @@ random_filename(TmpDir) ->
 %%%===================================================================
 %%% Contents of configuration files.
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc Returns a configuration for creating a CSR with given DN by the zone CA.
-%%--------------------------------------------------------------------
--spec req_cnf(DN :: #dn{}) -> Config :: iolist().
-req_cnf(DN) ->
-    ["# Purpose: Configuration for requests (end users and CAs)."
-    "\n"
-    "ROOTDIR                = $ENV::ROOTDIR\n"
-    "\n"
-
-    "[req]\n"
-    "input_password         = secret\n"
-    "output_password        = secret\n"
-    "default_bits           = 4096\n"
-    "RANDFILE               = $ROOTDIR/RAND\n"
-    "encrypt_key            = no\n"
-    "default_md             = sha1\n"
-    "#string_mask           = pkix\n"
-    "x509_extensions        = ca_ext\n"
-    "prompt                 = no\n"
-    "distinguished_name     = name\n"
-    "\n"
-
-    "[name]\n"
-    "commonName             = ", DN#dn.commonName, "\n"
-    "organizationalUnitName = ", DN#dn.organizationalUnitName, "\n"
-    "organizationName       = ", DN#dn.organizationName, "\n"
-    "localityName           = ", DN#dn.localityName, "\n"
-    "countryName            = ", DN#dn.countryName, "\n"
-    "emailAddress           = ", DN#dn.emailAddress, "\n"
-    "\n"
-
-    "[ca_ext]\n"
-    "basicConstraints       = critical, CA:true\n"
-    "keyUsage               = cRLSign, keyCertSign\n"
-    "subjectKeyIdentifier   = hash\n"
-    "subjectAltName         = email:copy\n"].
 
 %%--------------------------------------------------------------------
 %% @private
