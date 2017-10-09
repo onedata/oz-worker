@@ -52,8 +52,7 @@ start() ->
         {ok, RestHttpsAcceptors} = application:get_env(?APP_NAME, rest_https_acceptors),
 
         % Get cert paths
-        {ok, ZoneCADir} = application:get_env(?APP_NAME, ozpca_dir),
-        {ok, ZoneCaCertPem} = file:read_file(ozpca:cacert_path(ZoneCADir)),
+        ZoneCaCertPem = ozpca:oz_ca_pem(),
 
         {ok, KeyFile} = application:get_env(?APP_NAME, web_key_file),
         {ok, CertFile} = application:get_env(?APP_NAME, web_cert_file),
@@ -133,8 +132,7 @@ healthcheck() ->
 %%--------------------------------------------------------------------
 -spec routes() -> [{Path :: binary(), Module :: module(), State :: term()}].
 routes() ->
-    {ok, ZoneCADir} = application:get_env(?APP_NAME, ozpca_dir),
     [
-        {<<"/crl.pem">>, cowboy_static, {file, filename:join(ZoneCADir, "crl.pem")}} |
+        {<<"/crl.pem">>, cowboy_static, {file, ozpca:crl_path()}} |
         rest_handler:rest_routes()
     ].

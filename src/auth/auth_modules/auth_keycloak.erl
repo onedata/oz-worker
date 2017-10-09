@@ -94,15 +94,8 @@ normalized_membership_spec(Group) ->
 -spec normalized_membership_specs(proplists:proplist()) ->
     [idp_group_mapping:membership_spec()].
 normalized_membership_specs(Props) ->
-    VoId = vo_id(),
     Groups = proplists:get_value(<<"groups">>, Props, []),
-    Roles = proplists:get_value(<<"roles">>, Props, []),
-    NormalizedRoles = lists:map(
-        fun(Role) ->
-            <<"vo:", VoId/binary, "/rl:", Role/binary, "/user:member">>
-        end, Roles),
-    NormalizedGroups = lists:map(fun normalized_membership_spec/1, Groups),
-    NormalizedRoles ++ NormalizedGroups.
+    lists:map(fun normalized_membership_spec/1, Groups).
 
 
 %%%===================================================================
