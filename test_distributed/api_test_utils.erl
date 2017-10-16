@@ -16,29 +16,50 @@
 -include("rest.hrl").
 -include("entity_logic.hrl").
 -include_lib("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("cluster_worker/include/api_errors.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
+-define(NO_DATA, undefined).
 -define(GS_RESP(Result), #gs_resp_graph{result = Result}).
 
 %% API
 -export([
-    init_env/0, end_env/2,
-    run_tests/2, run_tests/4
+    default_env_setup/0, default_env_teardown/1,
+    default_verify_fun/3,
+    run_tests/2, run_tests/5
 ]).
 
 
-init_env() -> #{}.
-end_env(_, _) -> ok.
+default_env_setup() -> #{}.
+default_env_teardown(_Env) -> ok.
+default_verify_fun(_ShouldSucceed, _Env, _Data) -> ok.
 
 
 % Runs possible combinations of tests on a given endpoint (logic + REST + GS)
 run_tests(Config, ApiTestSpec) ->
-    run_tests(Config, ApiTestSpec, fun init_env/0, fun end_env/2).
+    run_tests(
+        Config, ApiTestSpec,
+        fun default_env_setup/0,
+        fun default_env_teardown/1,
+        fun default_verify_fun/3
+    ).
 
 
-run_tests(Config, ApiTestSpec, InitFun, EndFun) ->
+run_tests(Config, ApiTestSpec, undefined, EnvTearDownFun, VerifyFun) ->
+    run_tests(
+        Config, ApiTestSpec, fun default_env_setup/0, EnvTearDownFun, VerifyFun
+    );
+run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyFun) ->
+    run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, fun default_env_teardown/1, VerifyFun
+    );
+run_tests(Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, undefined) ->
+    run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, fun default_verify_fun/3
+    );
+run_tests(Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, VerifyFun) ->
     #api_test_spec{
         client_spec = ClientSpec,
         rest_spec = RestSpec,
@@ -48,46 +69,63 @@ run_tests(Config, ApiTestSpec, InitFun, EndFun) ->
     } = ApiTestSpec,
     try
         % Run tests for REST and logic (if specified). If the code does not
-        % crash, it means that all tests passed (return true). If throw:fail is
-        % thrown from any test procedure, return false.
-        run_rest_tests(Config, RestSpec, ClientSpec, DataSpec, InitFun, EndFun),
-        run_logic_tests(Config, LogicSpec, ClientSpec, DataSpec, InitFun, EndFun),
-        run_gs_tests(Config, GsSpec, ClientSpec, DataSpec, InitFun, EndFun),
+        % crash, it means that all tests passed (return true).
+        % If throw:fail is thrown from any test procedure, return false.
+        run_rest_tests(
+            Config, RestSpec, ClientSpec, DataSpec,
+            EnvSetUpFun, EnvTearDownFun, VerifyFun
+        ),
+        run_logic_tests(
+            Config, LogicSpec, ClientSpec, DataSpec,
+            EnvSetUpFun, EnvTearDownFun, VerifyFun
+        ),
+        run_gs_tests(
+            Config, GsSpec, ClientSpec, DataSpec,
+            EnvSetUpFun, EnvTearDownFun, VerifyFun
+        ),
         true
     catch
-        % Tests failed, return false (failure details are printed before the throw)
+        % Tests failed, return false
+        % (failure details are printed before the throw)
         throw:fail ->
-            ct:pal(io_lib_pretty:print(ApiTestSpec, fun get_api_test_spec_rec_def/2)),
+            ct:pal(io_lib_pretty:print(
+                ApiTestSpec, fun get_api_test_spec_rec_def/2)
+            ),
             false;
         % Unexpected error
         Type:Message ->
             ct:pal("~p:run_tests failed with unexpected result - ~p:~p~n"
             "Stacktrace: ~s", [
-                ?MODULE, Type, Message, lager:pr_stacktrace(erlang:get_stacktrace())
+                ?MODULE, Type, Message,
+                lager:pr_stacktrace(erlang:get_stacktrace())
             ]),
-            ct:pal(io_lib_pretty:print(ApiTestSpec, fun get_api_test_spec_rec_def/2)),
+            ct:pal(io_lib_pretty:print(
+                ApiTestSpec, fun get_api_test_spec_rec_def/2)
+            ),
             false
     end.
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%
-%% Prepare args and run rest tests
-%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%===================================================================
+%%% Prepare args and run rest tests
+%%%===================================================================
 
-run_rest_tests(_, undefined, _, _, _, _) ->
+run_rest_tests(_, undefined, _, _, _, _, _) ->
     ok;
-run_rest_tests(Config, RestSpec, ClientSpec, DataSpec, InitFun, EndFun) ->
+run_rest_tests(
+    Config, RestSpec, ClientSpec, DataSpec,
+    EnvSetUpFun, EnvTearDownFun, VerifyFun
+) ->
+    % Remove 'root' client not used in rest
     NewClientSpec = #client_spec{
-        correct = filter_rest_clients(ClientSpec#client_spec.correct),
-        unauthorized = filter_rest_clients(ClientSpec#client_spec.unauthorized),
-        forbidden = filter_rest_clients(ClientSpec#client_spec.forbidden)
+        correct = ClientSpec#client_spec.correct -- [root],
+        unauthorized = ClientSpec#client_spec.unauthorized -- [root],
+        forbidden = ClientSpec#client_spec.forbidden -- [root]
     },
 
     run_test_combinations(
         Config, RestSpec, NewClientSpec, DataSpec,
-        InitFun, EndFun, fun run_rest_test/7
+        EnvSetUpFun, EnvTearDownFun, VerifyFun, fun run_rest_test/7
     ).
 
 
@@ -210,22 +248,19 @@ log_rest_test_result(RestSpec, Client, Data, Description,
     throw(fail).
 
 
-filter_rest_clients(Clients) ->
-    filter_out_logic_only_clients(Clients).
+%%%===================================================================
+%%% Prepare args and run logic tests
+%%%===================================================================
 
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%
-%% Prepare args and run logic tests
-%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-run_logic_tests(_, undefined, _, _, _, _) ->
+run_logic_tests(_, undefined, _, _, _, _, _) ->
     ok;
-run_logic_tests(Config, LogicSpec, ClientSpec, DataSpec, InitFun, EndFun) ->
+run_logic_tests(
+    Config, LogicSpec, ClientSpec, DataSpec,
+    EnvSetUpFun, EnvTearDownFun, VerifyFun
+) ->
     run_test_combinations(
         Config, LogicSpec, ClientSpec, DataSpec,
-        InitFun, EndFun, fun run_logic_test/7
+        EnvSetUpFun, EnvTearDownFun, VerifyFun, fun run_logic_test/7
     ).
 
 
@@ -250,6 +285,8 @@ prepare_logic_client(nobody) ->
 prepare_logic_client(root) ->
     ?ROOT;
 prepare_logic_client({user, UserId}) ->
+    ?USER(UserId);
+prepare_logic_client({user, UserId, _Macaroon}) ->
     ?USER(UserId);
 prepare_logic_client({provider, ProviderId, _, _}) ->
     ?PROVIDER(ProviderId).
@@ -363,24 +400,26 @@ log_logic_test_result(LogicSpec, Client, Description, {result, Result}) ->
     throw(fail).
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%
-%% Prepare args and run gs tests
-%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%===================================================================
+%%% Prepare args and run gs tests
+%%%===================================================================
 
-run_gs_tests(_, undefined, _, _, _, _) ->
+run_gs_tests(_, undefined, _, _, _, _, _) ->
     ok;
-run_gs_tests(Config, GsSpec, ClientSpec, DataSpec, InitFun, EndFun) ->
+run_gs_tests(
+    Config, GsSpec, ClientSpec, DataSpec,
+    EnvSetUpFun, EnvTearDownFun, VerifyFun
+) ->
+    % Remove 'root' client not used in graph sync
     NewClientSpec = #client_spec{
-        correct = filter_gs_clients(ClientSpec#client_spec.correct),
-        unauthorized = filter_gs_clients(ClientSpec#client_spec.unauthorized),
-        forbidden = filter_gs_clients(ClientSpec#client_spec.forbidden)
+        correct = ClientSpec#client_spec.correct -- [root],
+        unauthorized = ClientSpec#client_spec.unauthorized -- [root],
+        forbidden = ClientSpec#client_spec.forbidden -- [root]
     },
 
     run_test_combinations(
         Config, GsSpec, NewClientSpec, DataSpec,
-        InitFun, EndFun, fun run_gs_test/7
+        EnvSetUpFun, EnvTearDownFun, VerifyFun, fun run_gs_test/7
     ).
 
 
@@ -418,24 +457,37 @@ error_to_gs_expectations(Config, ErrorType) ->
     ).
 
 
+prepare_gs_client(Config, {user, UserId, _Macaroon}) ->
+    prepare_gs_client(Config, {user, UserId});
 prepare_gs_client(Config, {user, UserId}) ->
     {ok, SessionId} = oz_test_utils:create_session(Config, UserId, []),
     {ok, CaCerts} = oz_test_utils:get_cacerts(Config),
-    {
-        ok, GsClient, #gs_resp_handshake{identity = {user, UserId}}
-    } = gs_client:start_link(
-        oz_test_utils:get_gs_ws_url(Config),
+    prepare_gs_client(
+        Config, {user, UserId},
         {?GRAPH_SYNC_SESSION_COOKIE_NAME, SessionId},
-        oz_test_utils:get_gs_supported_proto_verions(Config),
-        fun(_) -> ok end,
         [{cacerts, CaCerts}]
-    ),
-    GsClient;
-
+    );
 prepare_gs_client(_Config, nobody) ->
     ok;
-prepare_gs_client(_Config, {provider, _, _, _}) ->
-    ok.
+prepare_gs_client(Config, {provider, ProviderId, KeyFile, CertFile}) ->
+    {ok, CaCerts} = oz_test_utils:get_cacerts(Config),
+    Opts = [
+        {keyfile, KeyFile}, {certfile, CertFile}, {cacerts, CaCerts}
+    ],
+    prepare_gs_client(Config, {provider, ProviderId}, undefined, Opts).
+
+
+prepare_gs_client(Config, ExpIdentity, Cookie, Opts) ->
+    {
+        ok, GsClient, #gs_resp_handshake{identity = ExpIdentity}
+    } = gs_client:start_link(
+        oz_test_utils:get_gs_ws_url(Config),
+        Cookie,
+        oz_test_utils:get_gs_supported_proto_verions(Config),
+        fun(Heh) -> ct:pal("ASD~n~p~nZXC", [Heh]) end,
+        Opts
+    ),
+    GsClient.
 
 
 % Convert placeholders in various spec fields into real data
@@ -573,26 +625,24 @@ log_gs_test_result(GsSpec, Client, Data, Description, {result, Result}) ->
     throw(fail).
 
 
-filter_gs_clients(Clients) ->
-    filter_out_logic_only_clients(Clients).
-
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%
-%% Prepare data sets
-%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%===================================================================
+%%% Prepare and run test combinations
+%%%===================================================================
 
 % Using clients, data and helper functions run various combinations of them
 % (e.g. unauthorized/forbidden/correct clients with correct/malformed data)
 % with accordance to given spec
 run_test_combinations(
-    Config, Spec, ClientSpec, DataSpec, InitFun, EndFun, RunTestFun
+    Config, Spec, ClientSpec, DataSpec, EnvSetUpFun,
+    EnvTearDownFun, VerifyFun, RunTestFun
 ) ->
     CorrectClients = ClientSpec#client_spec.correct,
     UnauthorizedClients = ClientSpec#client_spec.unauthorized,
     ForbiddenClients = ClientSpec#client_spec.forbidden,
 
+    % Get list of various combinations of data regardless of operation.
+    % In case of operations that do not require nor expect any data
+    % (DataSpec == undefined) such as get or delete [?NO_DATA] is prepared
     RequiredDataSets = required_data_sets(DataSpec),
     CorrectDataSets = correct_data_sets(DataSpec),
     BadDataSets = bad_data_sets(DataSpec),
@@ -600,7 +650,7 @@ run_test_combinations(
     % assert unauthorized and forbidden clients with required data sets,
     % along with correct clients with bad/malformed data sets,
     % fails because of appropriate error
-    Environment = InitFun(),
+    Environment = EnvSetUpFun(),
     lists:foreach(
         fun({Clients, DataSets, DescFmt, Error}) ->
             lists:foreach(
@@ -608,17 +658,20 @@ run_test_combinations(
                     PreparedClient = prepare_client(Client, Environment),
                     lists:foreach(
                         fun
-                            (undefined) when Error == ?ERROR_MALFORMED_DATA ->
+                            % get and delete operations cannot
+                            % be run with malformed data
+                            (?NO_DATA) when Error == undefined ->
                                 ok;
                             (DataSet) ->
                                 {Data, Description, ExpError} = prepare_error(
                                     DataSet, DescFmt, Error
                                 ),
+                                PreparedData = prepare_data(Data, Environment),
                                 RunTestFun(
-                                    Config, Spec, PreparedClient,
-                                    prepare_data(Data, Environment),
+                                    Config, Spec, PreparedClient, PreparedData,
                                     Description, Environment, ExpError
-                                )
+                                ),
+                                VerifyFun(false, Environment, PreparedData)
                         end, DataSets
                     )
                 end, Clients
@@ -629,10 +682,10 @@ run_test_combinations(
             {ForbiddenClients, RequiredDataSets,
                 "forbidden client should fail", ?ERROR_FORBIDDEN},
             {CorrectClients, BadDataSets,
-                "bad data should fail: ~s => ~p", ?ERROR_MALFORMED_DATA}
+                "bad data should fail: ~s => ~p", undefined}
         ]
     ),
-    EndFun(Environment, #{}),
+    EnvTearDownFun(Environment),
 
     % Assert correct clients with correct data sets succeeds
     Description = "correct data should succeed",
@@ -641,13 +694,14 @@ run_test_combinations(
             lists:foreach(
                 fun(DataSet) ->
 
-                    Env = InitFun(),
+                    Env = EnvSetUpFun(),
+                    PreparedData = prepare_data(DataSet, Env),
                     RunTestFun(
                         Config, Spec, prepare_client(Client, Env),
-                        prepare_data(DataSet, Env), Description,
-                        Env, undefined
+                        PreparedData, Description, Env, undefined
                     ),
-                    EndFun(Env#{correctData => true}, DataSet)
+                    VerifyFun(true, Env, PreparedData),
+                    EnvTearDownFun(Env)
 
                 end, CorrectDataSets
             )
@@ -666,6 +720,8 @@ prepare_error(Data, Description, ExpError) ->
 % Converts placeholders in client into real data
 prepare_client({user, User}, Env) when is_atom(User) ->
     {user, maps:get(User, Env, User)};
+prepare_client({user, User, Macaroon}, Env) when is_atom(User) ->
+    {user, maps:get(User, Env, User), Macaroon};
 prepare_client(Client, _Env) ->
     Client.
 
@@ -675,6 +731,8 @@ prepare_data(undefined, _Env) ->
     undefined;
 prepare_data(Fun, _Env) when is_function(Fun, 0) ->
     Fun();
+prepare_data(Fun, Env) when is_function(Fun, 1) ->
+    Fun(Env);
 prepare_data(List, Env) when is_list(List) ->
     [prepare_data(Val, Env) || Val <- List];
 prepare_data(Map, Env) when is_map(Map) ->
@@ -685,7 +743,7 @@ prepare_data(Val, Env) ->
 
 % Generates all combinations of "required" and "at_least_one" data
 required_data_sets(undefined) ->
-    [undefined];
+    [?NO_DATA];
 required_data_sets(DataSpec) ->
     #data_spec{
         required = Required,
@@ -728,7 +786,7 @@ required_data_sets(DataSpec) ->
 % Data sets wih required params and one or all optional params
 % (e.g. returns 5 data sets for 4 optional params).
 optional_data_sets(undefined, _) ->
-    [undefined];
+    [?NO_DATA];
 optional_data_sets(DataSpec, RequiredWithAll) ->
     #data_spec{
         optional = Optional
@@ -755,8 +813,8 @@ optional_data_sets(DataSpec, RequiredWithAll) ->
 
 
 % Returns all data sets that are correct
-correct_data_sets(unedfined) ->
-    [undefined];
+correct_data_sets(undefined) ->
+    [?NO_DATA];
 correct_data_sets(DataSpec) ->
     RequiredDataSets = required_data_sets(DataSpec),
     AllRequired = case RequiredDataSets of
@@ -770,7 +828,7 @@ correct_data_sets(DataSpec) ->
 % Generates all combinations of bad data sets by adding wrong values to
 % correct data sets.
 bad_data_sets(undefined) ->
-    [undefined];
+    [?NO_DATA];
 bad_data_sets(DataSpec) ->
     #data_spec{
         required = Required,
@@ -798,11 +856,9 @@ get_correct_value(Key, #data_spec{correct_values = CorrectValues}) ->
     end.
 
 
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-%%
-%% General use private functions
-%%
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%%%===================================================================
+%%% General use private functions
+%%%===================================================================
 
 % Returns information about api test spec record, such as fields,
 % required to for example pretty print it
@@ -864,7 +920,3 @@ prepare_exp_result(?OK_ENV(PrepareFun), Env, Data) ->
     PrepareFun(Env, Data);
 prepare_exp_result(Expectation, _Env, _Data) ->
     Expectation.
-
-
-filter_out_logic_only_clients(Clients) ->
-    [Client || Client <- Clients, Client /= root].

@@ -26,18 +26,23 @@
 -export([
     create_user/2,
     create_client_token/2,
+    list_client_tokens/2,
     get_user/2,
     get_user_oz_privileges/2,
     get_user_eff_oz_privileges/2,
     get_user_groups/2,
+    get_user_spaces/2,
     get_user_eff_groups/2,
     list_users/1,
     set_user_oz_privileges/4,
     set_user_default_space/3,
+    get_user_default_space/2,
     unset_user_default_space/2,
     set_user_space_alias/4,
+    get_user_space_alias/3,
     unset_user_space_alias/3,
     set_user_default_provider/3,
+    get_user_default_provider/2,
     unset_user_default_provider/2,
     delete_user/2,
 
@@ -45,8 +50,10 @@
 ]).
 -export([
     create_group/3,
-    does_group_exist/2,
     get_group/2,
+    get_group_children/2,
+    get_group_spaces/2,
+    get_group_users/2,
     get_group_oz_privileges/2,
     get_group_eff_oz_privileges/2,
     list_groups/1,
@@ -61,6 +68,7 @@
     group_leave_space/3,
     group_leave_handle_service/3,
     group_invite_group_token/3,
+    group_invite_user_token/3,
 
     get_group_user_privileges/3,
     get_group_eff_user_privileges/3,
@@ -107,6 +115,8 @@
     create_handle_service/5, create_handle_service/3,
     list_handle_services/1,
     get_handle_service/2,
+    get_handle_service_groups/2,
+    get_handle_service_users/2,
     delete_handle_service/2,
     add_user_to_handle_service/3,
     add_group_to_handle_service/3
@@ -114,6 +124,8 @@
 -export([
     create_handle/6, create_handle/3,
     get_handle/2,
+    get_handle_groups/2,
+    get_handle_users/2,
     list_handles/1,
     update_handle/3, update_handle/5,
     delete_handle/2,
@@ -212,6 +224,19 @@ create_client_token(Config, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves client tokens from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec list_client_tokens(Config :: term(), UserId :: od_user:id()) ->
+    {ok, Tokens :: [binary()]}.
+list_client_tokens(Config, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, user_logic, list_client_tokens, [?ROOT, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Retrieves user data from onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -257,6 +282,19 @@ get_user_eff_oz_privileges(Config, UserId) ->
     {ok, [od_group:id()]}.
 get_user_groups(Config, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, user_logic, get_groups, [
+        ?ROOT, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns spaces of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_spaces(Config :: term(), UserId :: od_user:id()) ->
+    {ok, [od_space:id()]}.
+get_user_spaces(Config, UserId) ->
+    ?assertMatch({ok, _}, call_oz(Config, user_logic, get_spaces, [
         ?ROOT, UserId
     ])).
 
@@ -315,6 +353,19 @@ set_user_default_space(Config, UserId, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieve default space of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_default_space(Config :: term(),
+    UserId :: od_user:id()) -> SpaceId :: od_space:id().
+get_user_default_space(Config, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, user_logic, get_default_space, [?ROOT, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Unsets default space of a user.
 %% @end
 %%--------------------------------------------------------------------
@@ -340,6 +391,19 @@ set_user_space_alias(Config, UserId, SpaceId, Alias) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves alias for a space of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_space_alias(Config :: term(), UserId :: od_user:id(),
+    SpaceId :: od_space:id()) -> binary().
+get_user_space_alias(Config, UserId, SpaceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, user_logic, get_space_alias, [?ROOT, UserId, SpaceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Sets alias for a space of a user.
 %% @end
 %%--------------------------------------------------------------------
@@ -361,6 +425,19 @@ unset_user_space_alias(Config, UserId, SpaceId) ->
 set_user_default_provider(Config, UserId, ProviderId) ->
     ?assertMatch(ok, call_oz(Config, user_logic, set_default_provider, [
         ?ROOT, UserId, ProviderId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets default provider of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_default_provider(Config :: term(),
+    UserId :: od_user:id()) -> {ok, ProviderId :: od_provider:id()}.
+get_user_default_provider(Config, UserId) ->
+    ?assertMatch({ok, _}, call_oz(Config, user_logic, get_default_provider, [
+        ?ROOT, UserId
     ])).
 
 
@@ -417,19 +494,6 @@ create_group(Config, Client, NameOrData) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Check if group exists in onezone.
-%% @end
-%%--------------------------------------------------------------------
--spec does_group_exist(Config :: term(),
-    GroupId :: od_group:id()) -> boolean().
-does_group_exist(Config, GroupId) ->
-    ?assertMatch(_, call_oz(
-        Config, group_logic, exists, [GroupId]
-    )).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Retrieves group data from onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -438,6 +502,45 @@ does_group_exist(Config, GroupId) ->
 get_group(Config, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, group_logic, get, [?ROOT, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves group children groups from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_group_children(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [od_group:id()]}.
+get_group_children(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, get_children, [?ROOT, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves group spaces from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_group_spaces(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [od_space:id()]}.
+get_group_spaces(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, get_spaces, [?ROOT, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves group users from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_group_users(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [od_user:id()]}.
+get_group_users(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, get_users, [?ROOT, GroupId]
     )).
 
 
@@ -997,6 +1100,32 @@ get_handle_service(Config, HandleServiceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves groups belonging to handle service from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_service_groups(Config :: term(),
+    HandleServiceId :: od_handle_service:id()) -> {ok, [od_group:id()]}.
+get_handle_service_groups(Config, HandleServiceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_service_logic, get_groups, [?ROOT, HandleServiceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves users belonging to handle service from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_service_users(Config :: term(),
+    HandleServiceId :: od_handle_service:id()) -> {ok, [od_user:id()]}.
+get_handle_service_users(Config, HandleServiceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_service_logic, get_users, [?ROOT, HandleServiceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Deletes given handle_service from onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -1075,6 +1204,32 @@ create_handle(Config, Client, Data) ->
 get_handle(Config, HandleId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, handle_logic, get, [?ROOT, HandleId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves groups belonging to handle from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_groups(Config :: term(), HandleId :: od_handle:id()) ->
+    {ok, [od_group:id()]}.
+get_handle_groups(Config, HandleId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_logic, get_groups, [?ROOT, HandleId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves users belonging to handle from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_users(Config :: term(), HandleId :: od_handle:id()) ->
+    {ok, [od_user:id()]}.
+get_handle_users(Config, HandleId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_logic, get_users, [?ROOT, HandleId]
     )).
 
 
@@ -1408,6 +1563,20 @@ space_remove_group(Config, SpaceId, GroupId) ->
 group_invite_group_token(Config, Client, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, group_logic, create_group_invite_token, [Client, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a group invite token to given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_invite_user_token(Config :: term(),
+    Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, macaroon:macaroon()}.
+group_invite_user_token(Config, Client, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, create_user_invite_token, [Client, GroupId]
     )).
 
 

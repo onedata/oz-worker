@@ -121,12 +121,12 @@ create_test(Config) ->
             required = [<<"clientName">>, <<"urls">>, <<"redirectionPoint">>, <<"csr">>],
             optional = [<<"latitude">>, <<"longitude">>],
             correct_values = #{
-                <<"clientName">> => ExpName,
-                <<"urls">> => ExpUrls,
-                <<"redirectionPoint">> => ExpRedPoint,
-                <<"csr">> => CSR,
-                <<"latitude">> => 50.0,
-                <<"longitude">> => -24.8
+                <<"clientName">> => [ExpName],
+                <<"urls">> => [ExpUrls],
+                <<"redirectionPoint">> => [ExpRedPoint],
+                <<"csr">> => [CSR],
+                <<"latitude">> => [50.0],
+                <<"longitude">> => [-24.8]
             },
             bad_values = [
                 {<<"clientName">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"clientName">>)},
@@ -347,11 +347,11 @@ update_test(Config) ->
                 <<"latitude">>, <<"longitude">>
             ],
             correct_values = #{
-                <<"clientName">> => ExpName,
-                <<"urls">> => ExpUrls,
-                <<"redirectionPoint">> => ExpRedPoint,
-                <<"latitude">> => ExpLatitude,
-                <<"longitude">> => ExpLongitude
+                <<"clientName">> => [ExpName],
+                <<"urls">> => [ExpUrls],
+                <<"redirectionPoint">> => [ExpRedPoint],
+                <<"latitude">> => [ExpLatitude],
+                <<"longitude">> => [ExpLongitude]
             },
             bad_values = [
                 {<<"clientName">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"clientName">>)},
@@ -1082,7 +1082,7 @@ support_space_test(Config) ->
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
             correct_values = #{
-                <<"token">> => fun() ->
+                <<"token">> => [fun() ->
                     % Create a new space and token for every test case
                     % (this value is reused multiple times as many cases of
                     % the api test must be checked).
@@ -1094,8 +1094,8 @@ support_space_test(Config) ->
                     ),
                     {ok, TokenBin} = token_logic:serialize(Macaroon),
                     TokenBin
-                end,
-                <<"size">> => MinSupportSize
+                end],
+                <<"size">> => [MinSupportSize]
             },
             bad_values = BadValues
         }
@@ -1133,7 +1133,7 @@ support_space_test(Config) ->
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
             correct_values = #{
-                <<"token">> => fun() ->
+                <<"token">> => [fun() ->
                     % Create a new space and token for every test case
                     % (this value is reused multiple times as many cases of
                     % the api test must be checked).
@@ -1144,8 +1144,8 @@ support_space_test(Config) ->
                         Config, ?USER(U1), Space
                     ),
                     Macaroon
-                end,
-                <<"size">> => MinSupportSize
+                end],
+                <<"size">> => [MinSupportSize]
             },
             bad_values = BadValues ++ [
                 {<<"token">>, BadMacaroon3, ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(<<"token">>)}
@@ -1191,7 +1191,7 @@ update_support_size_test(Config) ->
         data_spec = #data_spec{
             required = [<<"size">>],
             correct_values = #{
-                <<"size">> => MinSupportSize
+                <<"size">> => [MinSupportSize]
             },
             bad_values = BadValues
         }
@@ -1370,7 +1370,10 @@ check_my_ports_test(Config) ->
         },
         data_spec = #data_spec{
             required = RequiredKeys,
-            correct_values = CorrectData
+            correct_values = maps:map(
+                fun(_, Val) ->
+                    [Val]
+                end, CorrectData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).

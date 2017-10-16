@@ -244,7 +244,7 @@ user_routes() -> [
     {<<"/user/handle_services">>, #rest_req{
         method = post,
         b_gri = #b_gri{type = od_handle_service, id = undefined, aspect = instance},
-        b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
+        b_auth_hint = ?AS_USER(?CLIENT_ID)
     }},
     {<<"/user/handle_services/:hsid">>, #rest_req{
         method = get,
@@ -272,7 +272,7 @@ user_routes() -> [
     {<<"/user/handles">>, #rest_req{
         method = post,
         b_gri = #b_gri{type = od_handle, id = undefined, aspect = instance},
-        b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
+        b_auth_hint = ?AS_USER(?CLIENT_ID)
     }},
     {<<"/user/handles/:hid">>, #rest_req{
         method = get,
