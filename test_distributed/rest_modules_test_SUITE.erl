@@ -2114,10 +2114,13 @@ do_request(Endpoint, Headers, Method) ->
 do_request(Endpoint, Headers, Method, Body) ->
     do_request(Endpoint, Headers, Method, Body, []).
 do_request(Endpoint, Headers, Method, Body, Options) ->
-    % Add insecure option - we do not want the GR server cert to be checked.
-    case http_client:request(Method, Endpoint, maps:from_list(Headers), Body,
-        [insecure, {pool, false} | Options])
-    of
+    % Add insecure option - we do not want the OZ server cert to be checked.
+    SslOpts = proplists:get_value(ssl_options, Options, []),
+    CompleteOpts = [
+        {ssl_options, [{secure, false} | SslOpts]},
+        proplists:delete(ssl_options, Options)
+    ],
+    case http_client:request(Method, Endpoint, maps:from_list(Headers), Body, CompleteOpts) of
         {ok, RespCode, RespHeaders, RespBody} ->
             {ok, RespCode, maps:to_list(RespHeaders), RespBody};
         Other ->
@@ -2174,7 +2177,6 @@ register_provider(Latitude, Longitude, URLS, RedirectionPoint, ClientName, Confi
             Params ++ [{<<"latitude">>, Latitude}, {<<"longitude">>, Longitude}]
     end),
 
-    % Add insecure option - we do not want the GR server cert to be checked.
     hackney_pool:start_pool(noauth, [{timeout, 150000}, {max_connections, 100}]),
     Response = do_request(RestAddress ++ "/provider", Headers, post, Body),
     hackney_pool:stop_pool(noauth),
@@ -2307,7 +2309,7 @@ get_user_default_space({RestAddress, Headers, Options}) ->
     Val = get_body_val([spaceId], Response),
     fetch_value_from_list(Val).
 
-create_space_for_user(Config, SpaceName, {RestAddress, Headers, Options}) ->
+create_space_for_user(_Config, SpaceName, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, SpaceName}
     ]),
@@ -2332,7 +2334,7 @@ join_user_to_space(Token, {RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/user/spaces/join", Headers, post, Body, Options),
     get_header_val(<<"user/spaces">>, Response).
 
-create_group_for_user(Config, GroupName, GroupType, {RestAddress, Headers, Options}) ->
+create_group_for_user(_Config, GroupName, GroupType, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, GroupName},
         {<<"type">>, GroupType}
@@ -2365,7 +2367,7 @@ user_leaves_group(GID, {RestAddress, Headers, Options}) ->
     Encoded = binary_to_list(http_utils:url_encode(GID)),
     do_request(RestAddress ++ "/user/groups/" ++ Encoded, Headers, delete, [], Options).
 
-join_user_to_group(Config, Token, {RestAddress, Headers, Options}) ->
+join_user_to_group(_Config, Token, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"token">>, Token}
     ]),
@@ -2375,7 +2377,7 @@ join_user_to_group(Config, Token, {RestAddress, Headers, Options}) ->
 
 %% Group functions ==============================================================
 
-create_group(Config, GroupName, GroupType, {RestAddress, Headers, Options}) ->
+create_group(_Config, GroupName, GroupType, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, GroupName},
         {<<"type">>, GroupType}
@@ -2480,7 +2482,7 @@ get_group_privileges_of_group(ParentGID, GID, {RestAddress, Headers, Options}) -
     Val = get_body_val([privileges], Response),
     fetch_value_from_list(Val).
 
-set_group_privileges_of_user(Config, GID, UID, Privileges, {RestAddress, Headers, Options}) ->
+set_group_privileges_of_user(_Config, GID, UID, Privileges, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"privileges">>, Privileges}
     ]),
@@ -2512,7 +2514,7 @@ get_space_info_by_group(GID, SID, {RestAddress, Headers, Options}) ->
     Response = do_request(Address, Headers, get, [], Options),
     get_body_val([spaceId, name], Response).
 
-create_space_for_group(Config, Name, GID, {RestAddress, Headers, Options}) ->
+create_space_for_group(_Config, Name, GID, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, Name}
     ]),
@@ -2670,7 +2672,7 @@ clean_group_privileges(Config, GID, UserId, ReqParams) ->
 %% Spaces functions ===========================================================
 
 %% create space for user
-create_space(Config, Name, {RestAddress, Headers, Options}) ->
+create_space(_Config, Name, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"name">>, Name}
     ]),
@@ -2720,7 +2722,7 @@ get_space_privileges(UserType, SID, ID, {RestAddress, Headers, Options}) ->
     Val = get_body_val([privileges], Response),
     fetch_value_from_list(Val).
 
-set_space_privileges(Config, UserType, SID, ID, Privileges, {RestAddress, Headers, Options}) ->
+set_space_privileges(_Config, UserType, SID, ID, Privileges, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
         {<<"privileges">>, Privileges}
     ]),
@@ -2979,7 +2981,7 @@ create_space_and_share(Config, ShareId, {RestAddress, Headers, Options}) ->
     ?assertEqual(204, get_response_status(Response)).
 
 
-add_handle(Config, Handle, {RestAddress, Headers, Options}) ->
+add_handle(_Config, Handle, {RestAddress, Headers, Options}) ->
     HandleJson = json_utils:encode_map(Handle),
     Address = <<(list_to_binary(RestAddress))/binary, "/handles/">>,
     Response = do_request(Address, Headers, post, HandleJson, Options),

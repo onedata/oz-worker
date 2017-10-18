@@ -1372,7 +1372,10 @@ is_email_occupied(UserId, Email) ->
 authenticate_by_basic_credentials(Login, Password) ->
     Headers = basic_auth_header(Login, Password),
     URL = get_onepanel_rest_user_url(Login),
-    RestCallResult = case http_client:get(URL, Headers, <<"">>, [insecure]) of
+    {ok, CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
+    CaCerts = cert_utils:load_ders_in_dir(CaCertsDir),
+    Opts = [{ssl_options, [{cacerts, CaCerts}]}],
+    RestCallResult = case http_client:get(URL, Headers, <<"">>, Opts) of
         {ok, 200, _, JSON} ->
             json_utils:decode(JSON);
         {ok, 401, _, _} ->
@@ -1465,7 +1468,10 @@ change_user_password(Login, OldPassword, NewPassword) ->
         <<"currentPassword">> => OldPassword,
         <<"newPassword">> => NewPassword
     }),
-    case http_client:patch(URL, Headers, Body, [insecure]) of
+    {ok, CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
+    CaCerts = cert_utils:load_ders_in_dir(CaCertsDir),
+    Opts = [{ssl_options, [{cacerts, CaCerts}]}],
+    case http_client:patch(URL, Headers, Body, Opts) of
         {ok, 204, _, _} ->
             ok;
         {ok, 401, _, _} ->

@@ -19,7 +19,7 @@
 
 %% API
 -export([all/0]).
--export([init_per_testcase/2, end_per_testcase/2]).
+-export([init_per_suite/1, init_per_testcase/2, end_per_testcase/2]).
 -export([rest_api_connection_test/1, datastore_connection_test/1]).
 
 %%%===================================================================
@@ -29,12 +29,12 @@
 all() -> ?ALL([rest_api_connection_test, datastore_connection_test]).
 
 rest_api_connection_test(Config) ->
-    [Node1, Node2] = ?config(oz_worker_nodes, Config),
+    [Node1 | _] = ?config(oz_worker_nodes, Config),
     {ok, RestPort} = rpc:call(Node1, application, get_env, [?APP_NAME, rest_port]),
-    URL1 = str_utils:format("https://~s:~B/provider/test/check_my_ip", [utils:get_host(Node1), RestPort]),
-    URL2 = str_utils:format("https://~s:~B/provider/test/check_my_ip", [utils:get_host(Node2), RestPort]),
-    ?assertMatch({ok, _, _, _}, http_client:get(URL1, #{}, <<>>, [insecure])),
-    ?assertMatch({ok, _, _, _}, http_client:get(URL2, #{}, <<>>, [insecure])).
+    {ok, Domain} = test_utils:get_env(Node1, ?APP_NAME, http_domain),
+    URL = str_utils:format("https://~s:~B/provider/test/check_my_ip", [str_utils:to_list(Domain), RestPort]),
+    Opts = [{ssl_options, [{cacerts, oz_test_utils:rest_ca_certs(Config)}]}],
+    ?assertMatch({ok, _, _, _}, http_client:get(URL, #{}, <<>>, Opts)).
 
 datastore_connection_test(Config) ->
     [Node1, Node2] = ?config(oz_worker_nodes, Config),
@@ -44,6 +44,9 @@ datastore_connection_test(Config) ->
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
+
+init_per_suite(Config) ->
+    [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 init_per_testcase(rest_api_connection_test, Config) ->
     ssl:start(),

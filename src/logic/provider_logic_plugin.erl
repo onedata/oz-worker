@@ -508,7 +508,8 @@ test_connection(Map) ->
 test_connection([], Acc) ->
     Acc;
 test_connection([{<<"undefined">>, <<Url/binary>>} | Rest], Acc) ->
-    ConnStatus = case http_client:get(Url, #{}, <<>>, [insecure]) of
+    Opts = [{ssl_options, [{secure, false}]}],
+    ConnStatus = case http_client:get(Url, #{}, <<>>, Opts) of
         {ok, 200, _, _} ->
             ok;
         _ ->
@@ -516,7 +517,8 @@ test_connection([{<<"undefined">>, <<Url/binary>>} | Rest], Acc) ->
     end,
     test_connection(Rest, Acc#{Url => ConnStatus});
 test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
-    ConnStatus = case http_client:get(Url, #{}, <<>>, [insecure]) of
+    Opts = [{ssl_options, [{secure, false}]}],
+    ConnStatus = case http_client:get(Url, #{}, <<>>, Opts) of
         {ok, 200, _, ServiceName} ->
             ok;
         Error ->

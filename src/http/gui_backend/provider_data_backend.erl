@@ -18,6 +18,10 @@
 -include("gui/common.hrl").
 -include_lib("ctool/include/logging.hrl").
 
+% How many retries (with 1 sec interval) a provider should be checked until
+% it is considered offline.
+-define(PROVIDER_STATUS_CHECK_MAX_RETRIES, 10).
+
 %% data_backend_behaviour callbacks
 -export([init/0, terminate/0]).
 -export([find_record/2, find_all/1, query/2, query_record/2]).
@@ -192,24 +196,26 @@ provider_record(ProviderId, UserId) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Asynchronously tries to connect to a provider via HTTP and pushes the
-%% information whether it was successful to client. This is used when
-%% Graph Sync channel report no connection, but the provider might still be
-%% online.
+%% Asynchronously waits for a provider do connect to OZ, polling once every
+%% second. Pushes 'offline' status to the client after given number of retries,
+%% or 'online' if the provider has reconnected in the meantime.
 %% @end
 %%--------------------------------------------------------------------
 -spec check_provider_async(ProviderId :: od_provider:id()) -> ok.
 check_provider_async(ProviderId) ->
-    Status = try
-        {ok, ProviderUrl} = provider_logic:get_url(ProviderId),
-        ConnCheckEndpoint = <<ProviderUrl/binary, ?PROVIDER_ID_ENDPOINT>>,
-        case http_client:get(ConnCheckEndpoint, #{}, <<>>, [insecure]) of
-            {ok, _, _, ProviderId} -> <<"online">>;
-            _ -> <<"offline">>
-        end
-    catch _:_ ->
-        <<"offline">>
-    end,
+    check_provider_async(ProviderId, 0).
+
+check_provider_async(ProviderId, ?PROVIDER_STATUS_CHECK_MAX_RETRIES) ->
     gui_async:push_updated(<<"provider">>, [
-        {<<"id">>, ProviderId}, {<<"status">>, Status}
-    ]).
+        {<<"id">>, ProviderId}, {<<"status">>, <<"offline">>}
+    ]);
+check_provider_async(ProviderId, Retries) ->
+    case provider_connection:is_online(ProviderId) of
+        true ->
+            gui_async:push_updated(<<"provider">>, [
+                {<<"id">>, ProviderId}, {<<"status">>, <<"online">>}
+            ]);
+        false ->
+            timer:sleep(1000),
+            check_provider_async(ProviderId, Retries + 1)
+    end.

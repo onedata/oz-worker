@@ -13,6 +13,7 @@
 
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include("registered_names.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 
 
@@ -116,7 +117,9 @@
     minimum_support_size/1,
     generate_provider_cert_files/0,
     mock_handle_proxy/1,
-    unmock_handle_proxy/1
+    unmock_handle_proxy/1,
+    gui_ca_certs/1,
+    rest_ca_certs/1
 ]).
 
 %%%===================================================================
@@ -1250,3 +1253,26 @@ mock_handle_proxy(Config) ->
 unmock_handle_proxy(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_unload(Nodes, handle_proxy_client).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the list of DER encoded ca certs used in gui server.
+%% @end
+%%--------------------------------------------------------------------
+-spec gui_ca_certs(Config :: term()) -> [public_key:der_encoded()].
+gui_ca_certs(Config) ->
+    {ok, CaCertsDir} = call_oz(Config, application, get_env, [?APP_NAME, cacerts_dir]),
+    call_oz(Config, cert_utils, load_ders_in_dir, [CaCertsDir]).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the list of DER encoded ca certs used in rest server.
+%% @end
+%%--------------------------------------------------------------------
+-spec rest_ca_certs(Config :: term()) -> [public_key:der_encoded()].
+rest_ca_certs(Config) ->
+    ZoneCaPath = call_oz(Config, ozpca, oz_ca_path, []),
+    ZoneCaCertDer = call_oz(Config, cert_utils, load_der, [ZoneCaPath]),
+    [ZoneCaCertDer | gui_ca_certs(Config)].
