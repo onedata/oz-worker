@@ -51,25 +51,24 @@ all() ->
 basic_auth_login_test(Config) ->
     % To resolve user details, OZ asks onepanel via a REST endpoint. In this
     % test, onepanel is mocked using appmock.
-    [Node | _] = ?config(oz_worker_nodes, Config),
-    OneZoneIP = test_utils:get_docker_ip(Node),
+    Nodes = ?config(oz_worker_nodes, Config),
+    {ok, Domain} = test_utils:get_env(hd(Nodes), ?APP_NAME, http_domain),
     % Set the env variable in OZ that points to onepanel URL to appmock's
     % mocked endpoint.
-    ok = test_utils:set_env(
-        Node, oz_worker, onepanel_rest_url, appmock_mocked_endpoint(Config)
-    ),
+    set_env_on_nodes(Nodes, ?APP_NAME, onepanel_rest_url, appmock_mocked_endpoint(Config)),
     % Appmock's app description contains mocked user (user1:password1),
     % now just try to log in into OZ using basic auth endpoint and
     % check if it works correctly.
     BasicAuthEndpoint = str_utils:format_bin(
-        "https://~s/do_login", [OneZoneIP]
+        "https://~s/do_login", [Domain]
     ),
     UserPasswordB64 = base64:encode(<<"user1:password1">>),
     BasicAuthHeaders = #{
         <<"authorization">> => <<"Basic ", UserPasswordB64/binary>>
     },
+    Opts = [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}],
     Response = http_client:post(
-        BasicAuthEndpoint, BasicAuthHeaders, [], [insecure]
+        BasicAuthEndpoint, BasicAuthHeaders, [], Opts
     ),
     ?assertMatch({ok, 200, _, _}, Response),
     {ok, 200, RespHeaders, _} = Response,
@@ -83,15 +82,15 @@ basic_auth_login_test(Config) ->
         <<"authorization">> => <<"Basic ", WrongUserPasswordB64/binary>>
     },
     ?assertMatch({ok, 401, _, _}, http_client:post(
-        BasicAuthEndpoint, WrongBasicAuthHeaders, [], [insecure]
+        BasicAuthEndpoint, WrongBasicAuthHeaders, [], Opts
     )),
     ok.
 
 % Users that log in through basic auth should automatically be added to
 % groups based on 'onepanel_role_to_group_mapping' env setting.
 automatic_group_membership_test(Config) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
-    OneZoneIP = test_utils:get_docker_ip(Node),
+    Nodes = [Node | _] = ?config(oz_worker_nodes, Config),
+    {ok, Domain} = test_utils:get_env(Node, ?APP_NAME, http_domain),
     % First make sure that groups for tests exist in the system. We can use
     % the predefined groups mechanism here.
     PredefinedGroups = [
@@ -107,9 +106,7 @@ automatic_group_membership_test(Config) ->
         }
     ],
     % Set the corresponding env variable on one of the nodes
-    ok = test_utils:set_env(
-        Node, oz_worker, predefined_groups, PredefinedGroups
-    ),
+    set_env_on_nodes(Nodes, ?APP_NAME, predefined_groups, PredefinedGroups),
     % Call the group creation procedure
     ok = rpc:call(Node, group_logic, create_predefined_groups, []),
     % Now, prepare config entry for onepanel role to groups mapping. We want
@@ -117,27 +114,23 @@ automatic_group_membership_test(Config) ->
     RoleToGroupMapping = #{
         <<"user2Role">> => [<<"group1">>, <<"group2">>]
     },
-    % Set the corresponding env
-    ok = test_utils:set_env(
-        Node, oz_worker, onepanel_role_to_group_mapping, RoleToGroupMapping
-    ),
-    % Set the env variable in OZ that points to onepanel URL to appmock's
-    % mocked endpoint.
-    ok = test_utils:set_env(
-        Node, oz_worker, onepanel_rest_url, appmock_mocked_endpoint(Config)
-    ),
+    % Set the corresponding env and the env variable in OZ that points to
+    % onepanel URL to appmock's mocked endpoint.
+    set_env_on_nodes(Nodes, ?APP_NAME, onepanel_role_to_group_mapping, RoleToGroupMapping),
+    set_env_on_nodes(Nodes, ?APP_NAME, onepanel_rest_url, appmock_mocked_endpoint(Config)),
     % Try to log in using credentials user2:password2 (user with id user2Id)
     % and see if he was added to both groups.
     BasicAuthEndpoint = str_utils:format_bin(
-        "https://~s/do_login", [OneZoneIP]
+        "https://~s/do_login", [Domain]
     ),
     % Appmock's app description contains mocked user (user2:password2)
     UserPasswordB64 = base64:encode(<<"user2:password2">>),
     BasicAuthHeaders = #{
         <<"authorization">> => <<"Basic ", UserPasswordB64/binary>>
     },
+    Opts = [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}],
     ?assertMatch({ok, 200, _, _}, http_client:post(
-        BasicAuthEndpoint, BasicAuthHeaders, [], [insecure]
+        BasicAuthEndpoint, BasicAuthHeaders, [], Opts
     )),
     % now for the groups check
     User2Id = oz_test_utils:call_oz(
@@ -150,12 +143,10 @@ automatic_group_membership_test(Config) ->
 % This tests checks if password changing procedure correctly follows the
 % request to onepanel.
 change_password_test(Config) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
+    Nodes = [Node | _] = ?config(oz_worker_nodes, Config),
     % Set the env variable in OZ that points to onepanel URL to appmock's
     % mocked endpoint.
-    ok = test_utils:set_env(
-        Node, oz_worker, onepanel_rest_url, appmock_mocked_endpoint(Config)
-    ),
+    set_env_on_nodes(Nodes, ?APP_NAME, onepanel_rest_url, appmock_mocked_endpoint(Config)),
     % Appmock's app description contains change password endpoint that
     % accepts (user3:password3) credentials for user with id userId3
     % Try to change password of userId3. First, use wrong password.
@@ -470,7 +461,12 @@ merge_groups_in_linked_accounts_test(Config) ->
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
+    Posthook = fun(NewConfig) ->
+        Nodes = ?config(oz_worker_nodes, NewConfig),
+        set_env_on_nodes(Nodes, web_client, force_insecure_connections, true),
+        NewConfig
+    end,
+    [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]} | Config].
 
 init_per_testcase(merge_groups_in_linked_accounts_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
@@ -551,3 +547,9 @@ has_linked_accounts(Config, UserId, LinkedAccounts) ->
         linked_accounts = ActualLinkedAccounts
     }} = oz_test_utils:get_user(Config, UserId),
     lists:sort(LinkedAccounts) =:= lists:sort(ActualLinkedAccounts).
+
+
+set_env_on_nodes(Nodes, AppName, Key, Value) ->
+    lists:foreach(fun(Node) ->
+        ok = test_utils:set_env(Node, AppName, Key, Value)
+    end, Nodes).

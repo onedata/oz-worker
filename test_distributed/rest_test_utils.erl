@@ -102,7 +102,7 @@ check_rest_call(Config, ArgsMap) ->
                 json_utils:encode_map(Map3)
         end,
         ReqOpts = maps:get(opts, RequestMap, []),
-        ReqURL = maps:get(url, RequestMap, get_random_oz_url(Config)),
+        ReqURL = maps:get(url, RequestMap, get_oz_url(Config)),
 
         ExpCode = maps:get(code, ExpectMap, undefined),
         ExpHeaders = maps:get(headers, ExpectMap, undefined),
@@ -159,16 +159,22 @@ check_rest_call(Config, ArgsMap) ->
 %%        "   HeadersPlusAuth: ~p~n"
 %%        "   ReqBody: ~p~n"
 %%        "   Opts: ~p~n", [
-%%            ReqMethod, URL, HeadersPlusAuth, ReqBody, [{pool, false}, insecure | ReqOptsPlusAuth]
+%%            ReqMethod, URL, HeadersPlusAuth, ReqBody, [{pool, false}, ReqOptsPlusAuth]
 %%        ]),
 
-        % Add insecure option - we do not want the OZ server cert to be checked.
+        CaCerts = oz_test_utils:rest_ca_certs(Config),
+        SslOpts = proplists:get_value(ssl_options, ReqOptsPlusAuth, []),
+        CompleteOpts = [
+            {ssl_options, [{cacerts, CaCerts} | SslOpts]} |
+            proplists:delete(ssl_options, ReqOptsPlusAuth)
+        ],
+
         {ok, RespCode, RespHeaders, RespBody} = http_client:request(
             ReqMethod,
             URL,
             HeadersPlusAuth,
             ReqBody,
-            [{pool, false}, insecure | ReqOptsPlusAuth]
+            CompleteOpts
         ),
 
         % Check response code if specified
@@ -333,22 +339,19 @@ check_rest_call(Config, ArgsMap) ->
     end.
 
 
-get_random_oz_url(Config) ->
+get_oz_url(Config) ->
     % Resolve REST URLs of oz-worker nodes
-    Nodes = ?config(oz_worker_nodes, Config),
-    RestURLs = lists:map(fun(Node) ->
-        NodeIP = test_utils:get_docker_ip(Node),
-        {ok, RestPort} = rpc:call(
-            Node, application, get_env, [?APP_NAME, rest_port]
-        ),
-        {ok, RestAPIPrefix} = rpc:call(
-            Node, application, get_env, [?APP_NAME, rest_api_prefix]
-        ),
-        str_utils:format_bin(
-            "https://~s:~B~s", [NodeIP, RestPort, RestAPIPrefix]
-        )
-    end, Nodes),
-    lists:nth(rand:uniform(length(RestURLs)), RestURLs).
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    {ok, Domain} = test_utils:get_env(Node, ?APP_NAME, http_domain),
+    {ok, RestPort} = rpc:call(
+        Node, application, get_env, [?APP_NAME, rest_port]
+    ),
+    {ok, RestAPIPrefix} = rpc:call(
+        Node, application, get_env, [?APP_NAME, rest_api_prefix]
+    ),
+    str_utils:format_bin(
+        "https://~s:~B~s", [Domain, RestPort, RestAPIPrefix]
+    ).
 
 
 compare_headers(ActualHeadersInput, ExpectedHeadersInput) ->
