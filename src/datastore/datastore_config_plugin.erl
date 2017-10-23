@@ -40,7 +40,8 @@ models() -> [
     outbox,
     provider_subscription,
     subscriptions_state,
-    ozpca_state
+    ozpca_state,
+    state_token
 ].
 
 %%--------------------------------------------------------------------

@@ -57,6 +57,5 @@ start(_StartType, _StartArgs) ->
 %%--------------------------------------------------------------------
 -spec(stop(State :: term()) -> term()).
 stop(_State) ->
-    auth_logic:stop(),
     test_node_starter:maybe_stop_cover(),
     ok.
