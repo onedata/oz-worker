@@ -60,8 +60,6 @@ start() ->
         {ok, CaCertPems} = file_utils:read_files({dir, CaCertsDir}),
         CaCerts = lists:map(fun cert_decoder:pem_to_der/1, [ZoneCaCertPem | CaCertPems]),
 
-        auth_logic:start(),
-
 %%        {ok, Hostname} = application:get_env(oz_worker, http_domain),
         Dispatch = cowboy_router:compile([
             % TODO VFS-2873 Currently unused
