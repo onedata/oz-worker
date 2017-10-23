@@ -20,41 +20,21 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("hackney/include/hackney_lib.hrl").
 
--define(STATE_TOKEN, state_token).
--define(STATE_TOKEN_EXPIRATION_SECS, 60). %% @todo: config
-
 % String that will be placed in macaroons' location field
 -define(MACAROONS_LOCATION, <<"onezone">>).
 
 %% API
--export([start/0, stop/0, get_redirection_uri/2,
-    gen_token/1, gen_token/2, validate_token/5,
+-export([get_redirection_uri/2]).
+-export([gen_token/1, gen_token/2, validate_token/5,
     invalidate_token/1, invalidate_user_tokens/1,
     authenticate_user/1]).
 
 %% Handling state tokens
--export([generate_state_token/2, lookup_state_token/1,
-    clear_expired_state_tokens/0]).
+-export([generate_state_token/2, lookup_state_token/1]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc Initializes temporary storage for OpenID tokens.
-%%--------------------------------------------------------------------
--spec start() -> ok.
-start() ->
-    ets:new(?STATE_TOKEN, [set, named_table, public]),
-    ok.
-
-%%--------------------------------------------------------------------
-%% @doc Deinitializes temporary storage for OpenID tokens.
-%%--------------------------------------------------------------------
--spec stop() -> ok.
-stop() ->
-    ets:delete(?STATE_TOKEN),
-    ok.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -202,25 +182,22 @@ invalidate_token(Identifier) when is_binary(Identifier) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Generates a state token and retuns it. In the process, it stores the token
+%% @doc Generates a state token and returns it. In the process, it stores the token
 %% and associates some login info, that can be later retrieved given the token.
 %% For example, where to redirect the user after login.
 %% @end
 %%--------------------------------------------------------------------
--spec generate_state_token(HandlerModule :: atom(), ConnectAccount :: boolean()) -> binary().
+-spec generate_state_token(HandlerModule :: atom(), ConnectAccount :: boolean()) ->
+    state_token:id().
 generate_state_token(HandlerModule, ConnectAccount) ->
-    clear_expired_state_tokens(),
-    Token = list_to_binary(hex_utils:to_hex(crypto:strong_rand_bytes(32))),
-
-    StateInfo = [
-        {module, HandlerModule},
-        {connect_account, ConnectAccount},
+    StateInfo = #{
+        module => HandlerModule,
+        connect_account => ConnectAccount,
         % Right now this always redirects to main page, although
         % might be used in the future.
-        {redirect_after_login, <<?PAGE_AFTER_LOGIN>>}
-    ],
-
-    ets:insert(?STATE_TOKEN, {Token, erlang:monotonic_time(seconds), StateInfo}),
+        redirect_after_login => <<?PAGE_AFTER_LOGIN>>
+    },
+    {ok, Token} = state_token:create(StateInfo),
     Token.
 
 %%--------------------------------------------------------------------
@@ -228,29 +205,10 @@ generate_state_token(HandlerModule, ConnectAccount) ->
 %% associated with it or error otherwise.
 %% @end
 %%--------------------------------------------------------------------
--spec lookup_state_token(Token :: binary()) -> [tuple()] | error.
+-spec lookup_state_token(Token :: binary()) ->
+    {ok, state_token:state_info()} | error.
 lookup_state_token(Token) ->
-    clear_expired_state_tokens(),
-    case ets:lookup(?STATE_TOKEN, Token) of
-        [{Token, Time, LoginInfo}] ->
-            ets:delete_object(?STATE_TOKEN, {Token, Time, LoginInfo}),
-            LoginInfo;
-        _ ->
-            error
-    end.
-
-%%--------------------------------------------------------------------
-%% @doc Removes all state tokens that are no longer valid from ETS.
-%%--------------------------------------------------------------------
--spec clear_expired_state_tokens() -> ok.
-clear_expired_state_tokens() ->
-    Now = erlang:monotonic_time(seconds),
-
-    ExpiredSessions = ets:select(?STATE_TOKEN, [{{'$1', '$2', '$3'}, [{'<', '$2', Now - (?STATE_TOKEN_EXPIRATION_SECS)}], ['$_']}]),
-    lists:foreach(
-        fun({Token, Time, LoginInfo}) ->
-            ets:delete_object(?STATE_TOKEN, {Token, Time, LoginInfo})
-        end, ExpiredSessions).
+    state_token:lookup(Token).
 
 %%%===================================================================
 %%% Internal functions
