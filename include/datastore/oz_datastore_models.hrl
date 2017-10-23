@@ -306,4 +306,13 @@
     encoded_public_key :: undefined | identity:encoded_public_key()
 }).
 
+% Token used to match together OIDC/SAML requests and responses and protect
+% against replay attacks. It is correlated with some state, defining for example
+% to which IdP the client was redirected.
+-record(state_token, {
+    timestamp = 0 :: integer(),  % In seconds since epoch
+    state_info = #{} :: state_token:state_info()
+}).
+
+
 -endif.

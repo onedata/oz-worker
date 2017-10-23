@@ -59,8 +59,6 @@ start() ->
         ZoneCaCertDer = cert_utils:load_der(ozpca:oz_ca_path()),
         CaCerts = [ZoneCaCertDer | cert_utils:load_ders_in_dir(CaCertsDir)],
 
-        auth_logic:start(),
-
 %%        {ok, Hostname} = application:get_env(oz_worker, http_domain),
         Dispatch = cowboy_router:compile([
             % TODO VFS-2873 Currently unused
