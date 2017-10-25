@@ -238,5 +238,5 @@ rest_ca_certs(OzNode) ->
     {ok, CaCertsDir} = rpc:call(OzNode, application, get_env, [?APP_NAME, cacerts_dir]),
     CaCertsDer = rpc:call(OzNode, cert_utils, load_ders_in_dir, [CaCertsDir]),
     ZoneCaCertPath = rpc:call(OzNode, ozpca, oz_ca_path, []),
-    ZoneCaCertDer = rpc:call(OzNode, cert_utils, load_der, [ZoneCaCertPath]),
-    [ZoneCaCertDer | CaCertsDer].
+    ZoneCaCertDers = rpc:call(OzNode, cert_utils, load_ders, [ZoneCaCertPath]),
+    ZoneCaCertDers ++ CaCertsDer.

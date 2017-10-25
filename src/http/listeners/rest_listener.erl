@@ -56,8 +56,8 @@ start() ->
         {ok, KeyFile} = application:get_env(?APP_NAME, web_key_file),
         {ok, CertFile} = application:get_env(?APP_NAME, web_cert_file),
         {ok, CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
-        ZoneCaCertDer = cert_utils:load_der(ozpca:oz_ca_path()),
-        CaCerts = [ZoneCaCertDer | cert_utils:load_ders_in_dir(CaCertsDir)],
+        ZoneCaCertDers = cert_utils:load_ders(ozpca:oz_ca_path()),
+        CaCerts = ZoneCaCertDers ++ cert_utils:load_ders_in_dir(CaCertsDir),
 
 %%        {ok, Hostname} = application:get_env(oz_worker, http_domain),
         Dispatch = cowboy_router:compile([
