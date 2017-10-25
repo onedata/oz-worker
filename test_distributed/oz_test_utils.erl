@@ -1274,5 +1274,5 @@ gui_ca_certs(Config) ->
 -spec rest_ca_certs(Config :: term()) -> [public_key:der_encoded()].
 rest_ca_certs(Config) ->
     ZoneCaPath = call_oz(Config, ozpca, oz_ca_path, []),
-    ZoneCaCertDer = call_oz(Config, cert_utils, load_der, [ZoneCaPath]),
-    [ZoneCaCertDer | gui_ca_certs(Config)].
+    ZoneCaCertDers = call_oz(Config, cert_utils, load_ders, [ZoneCaPath]),
+    ZoneCaCertDers ++ gui_ca_certs(Config).
