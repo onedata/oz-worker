@@ -203,6 +203,8 @@ translate_get(1, #gri{type = od_provider, aspect = instance, scope = private}, P
         subdomain_delegation = SubdomainDelegation,
         domain = Domain,
         subdomain = Subdomain,
+        latitude = Latitude,
+        longitude = Longitude,
 
         spaces = Spaces,
         eff_users = EffUsers,
@@ -213,6 +215,9 @@ translate_get(1, #gri{type = od_provider, aspect = instance, scope = private}, P
         <<"subdomainDelegation">> => SubdomainDelegation,
         <<"domain">> => Domain,
         <<"subdomain">> => Subdomain,
+
+        <<"latitude">> => Latitude,
+        <<"longitude">> => Longitude,
 
         <<"spaces">> => Spaces,
         <<"effectiveUsers">> => maps:keys(EffUsers),
