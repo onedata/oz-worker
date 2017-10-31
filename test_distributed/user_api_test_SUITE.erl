@@ -1611,19 +1611,18 @@ list_eff_groups_test(Config) ->
 
 get_eff_group_test(Config) ->
     {
-        EffGroups, {U1, U2, NonAdmin}
+        EffGroups, {U1, _U2, NonAdmin}
     } = api_test_scenarios:create_eff_groups_env(Config),
 
     lists:foreach(
         fun({GroupId, GroupDetails}) ->
-            User = lists:nth(rand:uniform(2), [U1, U2]),
             ExpType = maps:get(<<"type">>, GroupDetails, role),
 
             ApiTestSpec = #api_test_spec{
                 client_spec = ClientSpec = #client_spec{
                     correct = [
                         root,
-                        {user, User}
+                        {user, U1}
                     ]
                 },
                 rest_spec = #rest_spec{
@@ -1643,7 +1642,7 @@ get_eff_group_test(Config) ->
                         type = od_group, id = GroupId,
                         aspect = instance, scope = protected
                     },
-                    auth_hint = ?THROUGH_USER(User),
+                    auth_hint = ?THROUGH_USER(U1),
                     expected_result = ?OK_MAP(
                         GroupDetails#{
                             <<"type">> => atom_to_binary(ExpType, utf8),
@@ -1671,7 +1670,7 @@ get_eff_group_test(Config) ->
                 logic_spec = #logic_spec{
                     module = user_logic,
                     function = get_eff_group,
-                    args = [client, User, GroupId],
+                    args = [client, U1, GroupId],
                     expected_result = ?OK_MAP(GroupDetails)
                 },
                 gs_spec = undefined

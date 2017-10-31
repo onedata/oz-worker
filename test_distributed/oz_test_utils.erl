@@ -11,10 +11,10 @@
 %%%-------------------------------------------------------------------
 -module(oz_test_utils).
 
--include("registered_names.hrl").
 -include("entity_logic.hrl").
 -include("graph_sync/oz_graph_sync.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include("registered_names.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 
 
@@ -143,13 +143,14 @@
     minimum_support_size/1,
     generate_provider_cert_files/0,
     mock_handle_proxy/1,
-    unmock_handle_proxy/1
+    unmock_handle_proxy/1,
+    gui_ca_certs/1,
+    rest_ca_certs/1
 ]).
 
 % Convenience functions for gs
 -export([
     create_session/3,
-    get_cacerts/1,
     get_rest_port/1,
     get_gs_ws_url/1,
     get_gs_supported_proto_verions/1,
@@ -1313,6 +1314,88 @@ add_group_to_handle(Config, HandleId, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Sets privileges for group's user.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_set_user_privileges(Config :: term(), GroupId :: od_group:id(),
+    UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:group_privilege()]) -> ok.
+group_set_user_privileges(Config, GroupId, UserId, Operation, Privs) ->
+    ?assertMatch(ok, call_oz(Config, group_logic, update_user_privileges, [
+        ?ROOT, GroupId, UserId, Operation, Privs
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges for subgroup.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_set_group_privileges(Config :: term(), GroupId :: od_group:id(),
+    ChildGroupId :: od_group:id(), Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:group_privilege()]) -> ok.
+group_set_group_privileges(Config, GroupId, ChildGroupId, Operation, Privs) ->
+    ?assertMatch(ok, call_oz(Config, group_logic, update_child_privileges, [
+        ?ROOT, GroupId, ChildGroupId, Operation, Privs
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a space in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_space_for_group(Config :: term(), GroupId :: od_group:id(),
+    NameOrData :: od_space:name() | #{}) -> {ok, od_space:id()}.
+create_space_for_group(Config, GroupId, NameOrData) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, create_space, [?ROOT, GroupId, NameOrData]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes group from space in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_remove_group(Config :: term(), SpaceId :: od_space:id(),
+    GroupId :: od_group:id()) -> ok.
+space_remove_group(Config, SpaceId, GroupId) ->
+    ?assertMatch(ok, call_oz(
+        Config, space_logic, remove_group, [?ROOT, SpaceId, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a group invite token to given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_invite_group_token(Config :: term(),
+    Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, macaroon:macaroon()}.
+group_invite_group_token(Config, Client, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, create_group_invite_token, [Client, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a group invite token to given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_invite_user_token(Config :: term(),
+    Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, macaroon:macaroon()}.
+group_invite_user_token(Config, Client, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, create_user_invite_token, [Client, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Deletes all entities from onezone
 %% (users, groups, spaces, shares, providers).
 %% NOTE: Does not remove predefined groups! Use remove_all_entities/2 for that.
@@ -1500,84 +1583,25 @@ unmock_handle_proxy(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Sets privileges for group's user.
+%% Returns the list of DER encoded ca certs used in gui server.
 %% @end
 %%--------------------------------------------------------------------
--spec group_set_user_privileges(Config :: term(), GroupId :: od_group:id(),
-    UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
-    Privileges :: [privileges:group_privilege()]) -> ok.
-group_set_user_privileges(Config, GroupId, UserId, Operation, Privs) ->
-    ?assertMatch(ok, call_oz(Config, group_logic, update_user_privileges, [
-        ?ROOT, GroupId, UserId, Operation, Privs
-    ])).
+-spec gui_ca_certs(Config :: term()) -> [public_key:der_encoded()].
+gui_ca_certs(Config) ->
+    {ok, CaCertsDir} = call_oz(Config, application, get_env, [?APP_NAME, cacerts_dir]),
+    call_oz(Config, cert_utils, load_ders_in_dir, [CaCertsDir]).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Sets privileges for subgroup.
+%% Returns the list of DER encoded ca certs used in rest server.
 %% @end
 %%--------------------------------------------------------------------
--spec group_set_group_privileges(Config :: term(), GroupId :: od_group:id(),
-    ChildGroupId :: od_group:id(), Operation :: entity_graph:privileges_operation(),
-    Privileges :: [privileges:group_privilege()]) -> ok.
-group_set_group_privileges(Config, GroupId, ChildGroupId, Operation, Privs) ->
-    ?assertMatch(ok, call_oz(Config, group_logic, update_child_privileges, [
-        ?ROOT, GroupId, ChildGroupId, Operation, Privs
-    ])).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates a space in onezone.
-%% @end
-%%--------------------------------------------------------------------
--spec create_space_for_group(Config :: term(), GroupId :: od_group:id(),
-    NameOrData :: od_space:name() | #{}) -> {ok, od_space:id()}.
-create_space_for_group(Config, GroupId, NameOrData) ->
-    ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, create_space, [?ROOT, GroupId, NameOrData]
-    )).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Removes group from space in onezone.
-%% @end
-%%--------------------------------------------------------------------
--spec space_remove_group(Config :: term(), SpaceId :: od_space:id(),
-    GroupId :: od_group:id()) -> ok.
-space_remove_group(Config, SpaceId, GroupId) ->
-    ?assertMatch(ok, call_oz(
-        Config, space_logic, remove_group, [?ROOT, SpaceId, GroupId]
-    )).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates a group invite token to given group.
-%% @end
-%%--------------------------------------------------------------------
--spec group_invite_group_token(Config :: term(),
-    Client :: entity_logic:client(), GroupId :: od_group:id()) ->
-    {ok, macaroon:macaroon()}.
-group_invite_group_token(Config, Client, GroupId) ->
-    ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, create_group_invite_token, [Client, GroupId]
-    )).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates a group invite token to given user.
-%% @end
-%%--------------------------------------------------------------------
--spec group_invite_user_token(Config :: term(),
-    Client :: entity_logic:client(), GroupId :: od_group:id()) ->
-    {ok, macaroon:macaroon()}.
-group_invite_user_token(Config, Client, GroupId) ->
-    ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, create_user_invite_token, [Client, GroupId]
-    )).
+-spec rest_ca_certs(Config :: term()) -> [public_key:der_encoded()].
+rest_ca_certs(Config) ->
+    ZoneCaPath = call_oz(Config, ozpca, oz_ca_path, []),
+    ZoneCaCertDers = call_oz(Config, cert_utils, load_ders, [ZoneCaPath]),
+    ZoneCaCertDers ++ gui_ca_certs(Config).
 
 
 %%--------------------------------------------------------------------
@@ -1591,30 +1615,6 @@ group_invite_user_token(Config, Client, GroupId) ->
 create_session(Config, UserId, CustomArgs) ->
     ?assertMatch({ok, _}, call_oz(
         Config, gui_session_plugin, create_session, [UserId, CustomArgs]
-    )).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Get cacerts.
-%% @end
-%%--------------------------------------------------------------------
--spec get_cacerts(Config :: term()) -> {ok, CaCerts :: [binary()]}.
-get_cacerts(Config) ->
-    GetCertsFun =
-        fun() ->
-            {ok, ZoneCADir} = application:get_env(?APP_NAME, ozpca_dir),
-            {ok, ZoneCaCertPem} = file:read_file(ozpca:cacert_path(ZoneCADir)),
-            {ok, CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
-            {ok, CaCertPems} = file_utils:read_files({dir, CaCertsDir}),
-            CaCerts = lists:map(
-                fun cert_decoder:pem_to_der/1, [ZoneCaCertPem | CaCertPems]
-            ),
-            {ok, CaCerts}
-        end,
-
-    ?assertMatch({ok, _}, call_oz(
-        Config, erlang, apply, [GetCertsFun, []]
     )).
 
 

@@ -20,7 +20,11 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
 
 -type logic_expectation() :: ok_binary| {ok_binary, binary()} |
 {ok_list, [term()]} | {ok_term, fun((Result :: term()) -> boolean())} |
-{ok_env, fun((Result :: term()) -> boolean())} | {error_reason, term()}.
+{ok_env, fun((Result :: term()) -> term())} | {error_reason, term()}.
+
+-type gs_expectation() :: ok | {ok_map, #{}} | {ok_map_contains, #{}} |
+{ok_term, fun((Result :: term()) -> boolean())} |
+{ok_env, fun((Result :: term()) -> term())} | {error_reason, term()}.
 
 -record(client_spec, {
     correct = [] :: [client()],
@@ -56,11 +60,11 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
 }).
 
 -record(gs_spec, {
-    operation = get :: create | get | update | delete,
+    operation = get :: gs_protocol:operation(),
     gri :: gs_protocol:gri(),
     subscribe = false :: boolean(),
-    auth_hint = undefined,
-    expected_result
+    auth_hint = undefined :: gs_protocol:auth_hint(),
+    expected_result = undefined :: undefined | gs_expectation()
 }).
 
 -record(api_test_spec, {

@@ -74,13 +74,14 @@ normalized_membership_spec(<<"urn:mace:egi.eu:", Group/binary>>) ->
     % Strip out the prefix standard for EGI
 
     [GroupStructureEncoded, Vo] = binary:split(Group, <<"@">>),
-    % EGI can provide groups both from egi.eu and elixir-europe.org VOs
+    % EGI can provide groups from multiple VOs
     VoId = case Vo of
-        <<"egi.eu">> ->
-            <<"egi.eu">>;
         <<"vo.elixir-europe.org">> ->
             % Unified id with groups from ELIXIR SAML
-            <<"elixir">>
+            <<"elixir">>;
+        _ ->
+            % Use the same names as in EGI for other VO's
+            Vo
     end,
     % Replace plus sings with spaces
     GroupStructure = binary:replace(GroupStructureEncoded, <<"+">>, <<" ">>, [global]),

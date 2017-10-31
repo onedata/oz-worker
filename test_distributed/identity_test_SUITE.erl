@@ -21,7 +21,7 @@
 
 %% API
 -export([all/0]).
--export([init_per_testcase/2, end_per_testcase/2]).
+-export([init_per_suite/1, init_per_testcase/2, end_per_testcase/2]).
 -export([
     oz_certs_published_after_refresh/1,
     oz_certs_obtainable_via_rest/1,
@@ -120,6 +120,9 @@ provider_certs_are_updated_via_rest(Config) ->
 %%% Setup/teardown functions
 %%%===================================================================
 
+init_per_suite(Config) ->
+    [{?LOAD_MODULES, [oz_test_utils]} | Config].
+
 init_per_testcase(_, Config) ->
     ssl:start(),
     hackney:start(),
@@ -181,7 +184,8 @@ get_public_key_rest(OzNode, ID) ->
     RestAddress = get_rest_address(OzNode),
     EncodedID = binary_to_list(http_utils:url_encode(ID)),
     Endpoint = RestAddress ++ "/publickey/" ++ EncodedID,
-    Response = http_client:request(get, Endpoint, #{}, [], [insecure]),
+    Opts = [{ssl_options, [{cacerts, rest_ca_certs(OzNode)}]}],
+    Response = http_client:request(get, Endpoint, #{}, [], Opts),
 
     ?assertMatch({ok, 200, _ResponseHeaders, _}, Response),
     {_, _, _, ResponseBody} = Response,
@@ -196,7 +200,8 @@ update_public_key_rest(OzNode, ID, PublicKey) ->
     Encoded = identity_utils:encode(PublicKey),
     Body = json_utils:encode([{<<"publicKey">>, Encoded}]),
     Headers = #{<<"content-type">> => <<"application/json">>},
-    Response = http_client:request(patch, Endpoint, Headers, Body, [insecure]),
+    Opts = [{ssl_options, [{cacerts, rest_ca_certs(OzNode)}]}],
+    Response = http_client:request(patch, Endpoint, Headers, Body, Opts),
     ?assertMatch({ok, 204, _, _}, Response).
 
 register_provider_rest(OzNode, ID, PublicKey) ->
@@ -210,20 +215,16 @@ register_provider_rest(OzNode, ID, PublicKey) ->
         {<<"redirectionPoint">>, <<"127.0.0.1">>}
     ]),
     Headers = #{<<"content-type">> => <<"application/json">>},
-    Response = http_client:request(post, Endpoint, Headers, Body, [insecure]),
+    Opts = [{ssl_options, [{cacerts, rest_ca_certs(OzNode)}]}],
+    Response = http_client:request(post, Endpoint, Headers, Body, Opts),
     ?assertMatch({ok, 204, _, _}, Response).
 
 get_rest_address(OzNode) ->
-    OZ_IP = get_node_ip(OzNode),
+    {ok, Domain} = test_utils:get_env(OzNode, ?APP_NAME, http_domain),
     RestPort = get_rest_port(OzNode),
     RestAPIPrefix = get_rest_api_prefix(OzNode),
-    RestAddress = str_utils:format("https://~s:~B~s", [OZ_IP, RestPort, RestAPIPrefix]),
+    RestAddress = str_utils:format("https://~s:~B~s", [Domain, RestPort, RestAPIPrefix]),
     RestAddress.
-
-%% returns ip (as a string) of given node
-get_node_ip(Node) ->
-    CMD = "docker inspect --format '{{ .NetworkSettings.IPAddress }}'" ++ " " ++ utils:get_host(Node),
-    re:replace(os:cmd(CMD), "\\s+", "", [global, {return, list}]).
 
 get_rest_port(Node) ->
     {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_NAME, rest_port]),
@@ -232,3 +233,10 @@ get_rest_port(Node) ->
 get_rest_api_prefix(Node) ->
     {ok, RestAPIPrefix} = rpc:call(Node, application, get_env, [?APP_NAME, rest_api_prefix]),
     RestAPIPrefix.
+
+rest_ca_certs(OzNode) ->
+    {ok, CaCertsDir} = rpc:call(OzNode, application, get_env, [?APP_NAME, cacerts_dir]),
+    CaCertsDer = rpc:call(OzNode, cert_utils, load_ders_in_dir, [CaCertsDir]),
+    ZoneCaCertPath = rpc:call(OzNode, ozpca, oz_ca_path, []),
+    ZoneCaCertDers = rpc:call(OzNode, cert_utils, load_ders, [ZoneCaCertPath]),
+    ZoneCaCertDers ++ CaCertsDer.

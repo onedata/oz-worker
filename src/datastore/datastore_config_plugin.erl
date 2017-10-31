@@ -40,5 +40,6 @@ get_models() -> [
     token,
     entity_graph_state,
     ozpca_state,
-    provider_connection
+    provider_connection,
+    state_token
 ].

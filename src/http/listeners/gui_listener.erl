@@ -12,6 +12,7 @@
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
+-include("gui/common.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("gui/include/gui.hrl").
 
@@ -56,8 +57,7 @@ start() ->
         {ok, KeyFile} = application:get_env(?APP_NAME, web_key_file),
         {ok, CertFile} = application:get_env(?APP_NAME, web_cert_file),
         {ok, CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
-        {ok, CaCertPems} = file_utils:read_files({dir, CaCertsDir}),
-        CaCerts = lists:map(fun cert_decoder:pem_to_der/1, CaCertPems),
+        CaCerts = cert_utils:load_ders_in_dir(CaCertsDir),
 
         % Initialize auth handler
         auth_config:load_auth_config(),
@@ -72,8 +72,9 @@ start() ->
                 {'_', redirector_handler, []}
             ]},
             {'_', lists:flatten([
-                {"/nagios/[...]", nagios_handler, []},
-                {"/share/:share_id", public_share_handler, []},
+                {?NAGIOS_ENDPOINT, nagios_handler, []},
+                {?PUBLIC_SHARE_ENDPOINT ++ "/:share_id", public_share_handler, []},
+                {?PUBLIC_CA_ENDPOINT, public_ca_handler, []},
                 {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
                 rest_listener:routes(),
                 static_routes()
@@ -129,8 +130,11 @@ stop() ->
 %%--------------------------------------------------------------------
 -spec healthcheck() -> ok | {error, server_not_responding}.
 healthcheck() ->
-    Endpoint = <<"https://127.0.0.1:", (integer_to_binary(port()))/binary>>,
-    case http_client:get(Endpoint, #{}, <<>>, [insecure]) of
+    Endpoint = str_utils:format_bin("https://127.0.0.1:~B", [port()]),
+    {ok, CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
+    CaCerts = cert_utils:load_ders_in_dir(CaCertsDir),
+    Opts = [{ssl_options, [{secure, only_verify_peercert}, {cacerts, CaCerts}]}],
+    case http_client:get(Endpoint, #{}, <<>>, Opts) of
         {ok, _, _, _} -> ok;
         _ -> {error, server_not_responding}
     end.
