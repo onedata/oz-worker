@@ -57,7 +57,7 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
 
 -record(gs_spec, {
     operation = get :: create | get | update | delete,
-    gri,
+    gri :: gs_protocol:gri(),
     subscribe = false :: boolean(),
     auth_hint = undefined,
     expected_result
