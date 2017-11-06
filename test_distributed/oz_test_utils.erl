@@ -1635,12 +1635,14 @@ get_rest_port(Config) ->
 %%--------------------------------------------------------------------
 -spec get_gs_ws_url(Config :: term()) -> binary().
 get_gs_ws_url(Config) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
-    NodeIP = test_utils:get_docker_ip(Node),
+    GetZoneDomainFun = fun() ->
+        application:get_env(oz_worker, http_domain)
+    end,
+    {ok, ZoneDomain} = call_oz(Config, erlang, apply, [GetZoneDomainFun, []]),
     GsPort = get_rest_port(Config),
     str_utils:format_bin(
         "wss://~s:~B/~s",
-        [NodeIP, GsPort, string:strip(?GRAPH_SYNC_WS_PATH, both, $/)]
+        [ZoneDomain, GsPort, string:strip(?GRAPH_SYNC_WS_PATH, both, $/)]
     ).
 
 
