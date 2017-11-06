@@ -71,10 +71,9 @@ list_parents_test(Config) ->
     ]),
 
     ExpGroups = lists:map(
-        fun(Idx) ->
-            IdxBin = integer_to_binary(Idx),
+        fun(_) ->
             {ok, GroupId} = oz_test_utils:create_group(
-                Config, ?ROOT, <<"ParentGroup", IdxBin/binary>>
+                Config, ?ROOT, <<"ParentGroup">>
             ),
             oz_test_utils:add_group_to_group(Config, GroupId, G1),
             GroupId

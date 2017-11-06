@@ -71,10 +71,9 @@ list_handle_services_test(Config) ->
     ]),
 
     ExpHandleServices = lists:map(
-        fun(Idx) ->
+        fun(_) ->
             {ok, HServiceId} = oz_test_utils:create_handle_service(
-                Config, ?ROOT, <<"HS", (Idx+48)/integer>>,
-                <<"https://dot.com">>, #{asd => 1}
+                Config, ?ROOT, <<"HS">>, <<"https://dot.com">>, #{asd => 1}
             ),
             {ok, G1} = oz_test_utils:add_group_to_handle_service(
                 Config, HServiceId, G1

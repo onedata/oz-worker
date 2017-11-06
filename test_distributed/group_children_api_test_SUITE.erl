@@ -79,11 +79,8 @@ list_children_test(Config) ->
     ]),
 
     ExpChildren = lists:map(
-        fun(Idx) ->
-            IdxBin = integer_to_binary(Idx),
-            {ok, GroupId} = oz_test_utils:create_group(
-                Config, ?ROOT, <<"Group", IdxBin/binary>>
-            ),
+        fun(_) ->
+            {ok, GroupId} = oz_test_utils:create_group(Config, ?ROOT, <<"G">>),
             oz_test_utils:add_group_to_group(Config, G1, GroupId),
             GroupId
         end, lists:seq(2, 5)
@@ -274,21 +271,19 @@ add_group_test(Config) ->
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(User), <<"G1">>),
     {ok, G2} = oz_test_utils:create_group(Config, ?USER(User), <<"G2">>),
 
-    VerifyEndFun = fun(ShouldSucceed, _Env, Data) ->
-        {ok, SubGroups} = oz_test_utils:get_group_children(Config, G1),
-        ?assertEqual(lists:member(G2, SubGroups), ShouldSucceed),
-        case ShouldSucceed of
-            true ->
+    VerifyEndFun =
+        fun
+            (true = _ShouldSucceed, _, Data) ->
                 Privs = lists:sort(maps:get(<<"privileges">>, Data)),
                 {ok, ActualPrivs} = oz_test_utils:get_group_subgroup_privileges(
                     Config, G1, G2
                 ),
                 ?assertEqual(Privs, lists:sort(ActualPrivs)),
                 oz_test_utils:group_remove_group(Config, G1, G2);
-            false ->
-                ok
-        end
-    end,
+            (false = ShouldSucceed, _, _) ->
+                {ok, SubGroups} = oz_test_utils:get_group_children(Config, G1),
+                ?assertEqual(lists:member(G2, SubGroups), ShouldSucceed)
+        end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{

@@ -400,7 +400,8 @@ get_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {provider, P1, KeyFile, CertFile},
-                {user, NonAdmin}
+                {user, NonAdmin},
+                {provider, P1, KeyFile, CertFile}
             ]
         },
         rest_spec = #rest_spec{
@@ -443,7 +444,8 @@ get_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, NonAdmin}
+                {user, NonAdmin},
+                {provider, P1, KeyFile, CertFile}
             ]
         },
         rest_spec = undefined,
@@ -855,21 +857,15 @@ set_default_space_test(Config) ->
         ),
         #{spaceId => SpaceId}
     end,
-    VerifyEndFun =
-        fun
-            (true = _ShouldSucceed, #{spaceId := SpaceId} = _Env, _) ->
-                ?assertMatch(
-                    {ok, SpaceId},
-                    oz_test_utils:get_user_default_space(Config, User)
-                );
-            (false = _ShouldSucceed, #{spaceId := SpaceId} = _Env, _) ->
-                ?assertNotEqual(
-                    {ok, SpaceId},
-                    oz_test_utils:call_oz(
-                        Config, user_logic, get_default_space, [?ROOT, User]
-                    )
-                )
-        end,
+    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _) ->
+        Result = oz_test_utils:call_oz(
+            Config, user_logic, get_default_space, [?ROOT, User]
+        ),
+        case ShouldSucceed of
+            true -> ?assertMatch({ok, SpaceId}, Result);
+            false -> ?assertNotMatch({ok, SpaceId}, Result)
+        end
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = ClientSpec = #client_spec{
@@ -979,21 +975,15 @@ unset_default_space_test(Config) ->
         ok = oz_test_utils:set_user_default_space(Config, User, S1),
         #{}
     end,
-    VerifyEndFun =
-        fun
-            (true = _ShouldSucceed, _, _) ->
-                ?assertMatch(
-                    ?ERROR_NOT_FOUND,
-                    oz_test_utils:call_oz(
-                        Config, user_logic, get_default_space, [?ROOT, User]
-                    )
-                );
-            (false = _ShouldSucceed, _, _) ->
-                ?assertMatch(
-                    {ok, S1},
-                    oz_test_utils:get_user_default_space(Config, User)
-                )
-        end,
+    VerifyEndFun = fun(ShouldSucceed, _, _) ->
+        Result = oz_test_utils:call_oz(
+            Config, user_logic, get_default_space, [?ROOT, User]
+        ),
+        case ShouldSucceed of
+            true -> ?assertMatch(?ERROR_NOT_FOUND, Result);
+            false -> ?assertMatch({ok, S1}, Result)
+        end
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -1028,30 +1018,23 @@ set_default_provider_test(Config) ->
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), <<"S1">>),
 
     EnvSetUpFun = fun() ->
-        UniqueInt = erlang:unique_integer([positive]),
         {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(
-            Config, <<"Provider", (integer_to_binary(UniqueInt))/binary>>
+            Config, <<"Provider">>
         ),
         {ok, S1} = oz_test_utils:support_space(
             Config, ProviderId, S1, oz_test_utils:minimum_support_size(Config)
         ),
         #{providerId => ProviderId}
     end,
-    VerifyEndFun =
-        fun
-            (true = _ShouldSucceed, #{providerId := ProviderId} = _Env, _) ->
-                ?assertMatch(
-                    {ok, ProviderId},
-                    oz_test_utils:get_user_default_provider(Config, User)
-                );
-            (false = _ShouldSucceed, #{providerId := ProviderId} = _Env, _) ->
-                ?assertNotEqual(
-                    {ok, ProviderId},
-                    oz_test_utils:call_oz(
-                        Config, user_logic, get_default_provider, [?ROOT, User]
-                    )
-                )
-        end,
+    VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId} = _Env, _) ->
+        Result = oz_test_utils:call_oz(
+            Config, user_logic, get_default_provider, [?ROOT, User]
+        ),
+        case ShouldSucceed of
+            true -> ?assertMatch({ok, ProviderId}, Result);
+            false -> ?assertNotMatch({ok, ProviderId}, Result)
+        end
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = ClientSpec = #client_spec{
@@ -1177,21 +1160,15 @@ unset_default_provider_test(Config) ->
         ok = oz_test_utils:set_user_default_provider(Config, User, P1),
         #{}
     end,
-    VerifyEndFun =
-        fun
-            (true = _ShouldSucceed, _, _) ->
-                ?assertMatch(
-                    ?ERROR_NOT_FOUND,
-                    oz_test_utils:call_oz(
-                        Config, user_logic, get_default_provider, [?ROOT, User]
-                    )
-                );
-            (false = _ShouldSucceed, _, _) ->
-                ?assertMatch(
-                    {ok, P1},
-                    oz_test_utils:get_user_default_provider(Config, User)
-                )
-        end,
+    VerifyEndFun = fun(ShouldSucceed, _, _) ->
+        Result = oz_test_utils:call_oz(
+            Config, user_logic, get_default_provider, [?ROOT, User]
+        ),
+        case ShouldSucceed of
+            true -> ?assertMatch(?ERROR_NOT_FOUND, Result);
+            false -> ?assertMatch({ok, P1}, Result)
+        end
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -1222,9 +1199,9 @@ list_groups_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
     ExpGroups = lists:map(
-        fun(Idx) ->
+        fun(_) ->
             {ok, GroupId} = oz_test_utils:create_group(
-                Config, ?USER(User), <<"Group", (Idx+48)/integer>>
+                Config, ?USER(User), <<"G">>
             ),
             GroupId
         end, lists:seq(1, 5)
@@ -1998,22 +1975,15 @@ set_space_alias_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), <<"S1">>),
 
-    VerifyEndFun =
-        fun
-            (true = _ShouldSucceed, _, #{<<"alias">> := ExpAlias} = _Data) ->
-                ?assertMatch(
-                    {ok, ExpAlias},
-                    oz_test_utils:get_user_space_alias(Config, User, S1)
-                ),
-                oz_test_utils:unset_user_space_alias(Config, User, S1);
-            (false = _ShouldSucceed, _, _) ->
-                ?assertMatch(
-                    ?ERROR_NOT_FOUND,
-                    oz_test_utils:call_oz(
-                        Config, user_logic, get_space_alias, [?ROOT, User, S1]
-                    )
-                )
-        end,
+    VerifyEndFun = fun(ShouldSucceed, _, #{<<"alias">> := ExpAlias} = _Data) ->
+        Result = oz_test_utils:call_oz(
+            Config, user_logic, get_space_alias, [?ROOT, User, S1]
+        ),
+        case ShouldSucceed of
+            true -> ?assertMatch({ok, ExpAlias}, Result);
+            false -> ?assertNotMatch({ok, ExpAlias}, Result)
+        end
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = ClientSpec = #client_spec{
@@ -2124,23 +2094,17 @@ delete_space_alias_test(Config) ->
         UniqueInt = erlang:unique_integer([positive]),
         Alias = <<"Space", (integer_to_binary(UniqueInt))/binary>>,
         oz_test_utils:set_user_space_alias(Config, User, S1, Alias),
-        #{<<"alias">> => Alias}
+        #{alias => Alias}
     end,
-    VerifyEndFun =
-        fun
-            (true = _ShouldSucceed, _, _) ->
-                ?assertMatch(
-                    ?ERROR_NOT_FOUND,
-                    oz_test_utils:call_oz(
-                        Config, user_logic, get_space_alias, [?ROOT, User, S1]
-                    )
-                );
-            (false = _ShouldSucceed, _, #{<<"alias">> := ExpAlias} = _Data) ->
-                ?assertMatch(
-                    {ok, ExpAlias},
-                    oz_test_utils:get_user_space_alias(Config, User, S1)
-                )
-        end,
+    VerifyEndFun = fun(ShouldSucceed, #{alias := ExpAlias} = _Env, _) ->
+        Result = oz_test_utils:call_oz(
+            Config, user_logic, get_space_alias, [?ROOT, User, S1]
+        ),
+        case ShouldSucceed of
+            true -> ?assertMatch(?ERROR_NOT_FOUND, Result);
+            false -> ?assertMatch({ok, ExpAlias}, Result)
+        end
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -2503,9 +2467,9 @@ list_handle_services_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
     ExpHandleServices = lists:map(
-        fun(Idx) ->
+        fun(_) ->
             {ok, HServiceId} = oz_test_utils:create_handle_service(
-                Config, ?ROOT, <<"HS", (Idx+48)/integer>>,
+                Config, ?ROOT, <<"HS">>,
                 <<"https://dot.com">>, #{asd => 1}
             ),
 
