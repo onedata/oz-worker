@@ -64,45 +64,73 @@ get_user_info(AccessToken) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns a string that represents user's group membership for given
-%% IdP. They are strings complying with specification in idp_group_mapping
-%% module. Returned values will be used to compute a diff in memberships
-%% every time a user logs in, so he can be added to / removed from
-%% certain groups. Because of this, the same values coming from IdP must always
-%% be mapped to the same specs.
+%% @equiv normalized_membership_spec(Group, team, {nested, <<"/">>})
 %% @end
 %%--------------------------------------------------------------------
 -spec normalized_membership_spec(Group :: binary()) ->
     idp_group_mapping:membership_spec().
 normalized_membership_spec(Group) ->
+    normalized_membership_spec(Group, team, {nested, <<"/">>}).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns a string that represents user's group membership for this
+%% IdP, complying with specification in idp_group_mapping module.
+%% @end
+%%--------------------------------------------------------------------
+-spec normalized_membership_spec(Group :: binary(), od_group:type(),
+    Structure :: flat | {nested, SplitWith :: binary()}) ->
+    idp_group_mapping:membership_spec().
+normalized_membership_spec(Group, Type, Structure) ->
     VoId = vo_id(),
-    GroupTokens = binary:split(Group, <<"/">>, [global]),
-    MappedTokens = [<<"tm:", T/binary>> || T <- GroupTokens],
-    GroupSpec = str_utils:join_binary(MappedTokens, <<"/">>),
+    TypeStr = idp_group_mapping:type_to_str(Type),
+    GroupSpec = case Structure of
+        flat ->
+            <<TypeStr/binary, ":", Group/binary>>;
+        {nested, SplitWith} ->
+            GroupTokens = binary:split(Group, SplitWith, [global, trim_all]),
+            MappedTokens = [<<TypeStr/binary, ":", T/binary>> || T <- GroupTokens],
+            str_utils:join_binary(MappedTokens, <<"/">>)
+    end,
     <<"vo:", VoId/binary, "/", GroupSpec/binary, "/user:member">>.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns a list of strings that represent user's group memberships for given
+%% Returns a list of strings that represent user's group memberships for this
 %% IdP. They are strings complying with specification in idp_group_mapping
 %% module. Returned values will be used to compute a diff in memberships
 %% every time a user logs in, so he can be added to / removed from
 %% certain groups. Because of this, the same values coming from IdP must always
 %% be mapped to the same specs.
+%% ===============================================
+%% Mapping behaviour is configured in auth.config:
+%% group_mapping -> attributes_to_map - which attributes sent by IdP should be
+%% mapped to groups (each attribute value is expected to hold a list of strings).
+%% Format: list of tuples {A, B, C}:
+%%   A -> attribute key
+%%   B -> derived group type (role | team | unit | organization)
+%%   C -> expected group structure, one of:
+%%     * flat -> all groups will be a direct child of the VO group,
+%%       names of groups will be the same as in the attribute.
+%%     * {nested, SplitWith} -> each group membership will be split
+%%       into a hierarchical structure using the specified split pattern.
+%%       E.g. for string <<"a/b/c">> and SplitWith = <<"/">>, three
+%%       nested groups will be created, with user belonging to the
+%%       last one: VO <- a <- b <- c <- user.
 %% @end
 %%--------------------------------------------------------------------
 -spec normalized_membership_specs(proplists:proplist()) ->
     [idp_group_mapping:membership_spec()].
 normalized_membership_specs(Props) ->
-    VoId = vo_id(),
-    Groups = proplists:get_value(<<"groups">>, Props, []),
-    Roles = proplists:get_value(<<"roles">>, Props, []),
-    NormalizedRoles = lists:map(
-        fun(Role) ->
-            <<"vo:", VoId/binary, "/rl:", Role/binary, "/user:member">>
-        end, Roles),
-    NormalizedGroups = lists:map(fun normalized_membership_spec/1, Groups),
-    NormalizedRoles ++ NormalizedGroups.
+    Config = auth_config:get_auth_config(?PROVIDER_ID),
+    GroupMappingConfig = proplists:get_value(group_mapping, Config, []),
+    AttributesConfig = proplists:get_value(attributes_to_map, GroupMappingConfig, []),
+    lists:flatmap(fun({Attr, Type, Structure}) ->
+        Groups = proplists:get_value(Attr, Props, []),
+        lists:map(fun(Group) ->
+            normalized_membership_spec(Group, Type, Structure)
+        end, Groups)
+    end, AttributesConfig).
 
 
 %%%===================================================================
