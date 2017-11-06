@@ -4,6 +4,15 @@
 CHANGELOG
 ---------
 
+### 17.06.0-rc7
+
+* VFS-3826 Add richer configuration options for Keycloak group mapping
+* Updating GUI, including: VFS-3710 - VFS-3710 Using binary prefixes for size units (IEC format: MiB, GiB, TiB, etc.)
+* Updating GUI, including: VFS-3669 - VFS-3669 Added a refresh token button on each tab of space support modal
+* VFS-3783 Move state tokens from single-node ETS to datastore
+* VFS-3772 Accept all VOs in EGI OIDC group mapping
+
+
 ### 17.06.0-rc6
 
 * Releasing new version 17.06.0-rc6
