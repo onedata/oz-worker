@@ -63,7 +63,8 @@
 -export([
     coalesce_groups/4,
     group_spec_to_db_id/1,
-    membership_spec_to_group_spec/1
+    membership_spec_to_group_spec/1,
+    str_to_type/1, type_to_str/1
 ]).
 
 %%%===================================================================
@@ -111,6 +112,33 @@ membership_spec_to_group_spec(MembershipSpec) ->
     Tokens = spec_to_tokens(MembershipSpec),
     ParentGroupTokens = lists:sublist(Tokens, length(Tokens) - 1),
     tokens_to_spec(ParentGroupTokens).
+
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Converts group type identifier used in group/membership specs into types
+%% recognized in onedata.
+%% @end
+%%--------------------------------------------------------------------
+-spec str_to_type(binary()) -> od_group:type().
+str_to_type(<<"vo">>) -> organization;
+str_to_type(<<"ut">>) -> unit;
+str_to_type(<<"tm">>) -> team;
+str_to_type(<<"rl">>) -> role.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Converts group type recognized in onedata into group type identifier used in
+%% group/membership specs.
+%% @end
+%%--------------------------------------------------------------------
+-spec type_to_str(od_group:type()) -> binary().
+type_to_str(organization) -> <<"vo">>;
+type_to_str(unit) -> <<"ut">>;
+type_to_str(team) -> <<"tm">>;
+type_to_str(role) -> <<"rl">>.
 
 
 %%%===================================================================
@@ -262,20 +290,6 @@ spec_to_tokens(Spec) ->
 -spec tokens_to_spec([binary()]) -> Spec :: group_spec().
 tokens_to_spec(Tokens) ->
     str_utils:join_binary(Tokens, <<"/">>).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Converts group type identifier used in group/membership specs into types
-%% recognized in onedata.
-%% @end
-%%--------------------------------------------------------------------
--spec str_to_type(binary()) -> od_group:type().
-str_to_type(<<"vo">>) -> organization;
-str_to_type(<<"ut">>) -> unit;
-str_to_type(<<"tm">>) -> team;
-str_to_type(<<"rl">>) -> role.
 
 
 %%--------------------------------------------------------------------
