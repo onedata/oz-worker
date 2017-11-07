@@ -369,10 +369,10 @@ update_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
     % Create a group
-    InitialGroupName = <<"G1">>,
+    InitialName = <<"G1">>,
     EnvSetUpFun = fun() ->
         {ok, G1} = oz_test_utils:create_group(
-            Config, ?USER(U1), InitialGroupName
+            Config, ?USER(U1), InitialName
         ),
         oz_test_utils:group_set_user_privileges(
             Config, G1, U1, revoke, [?GROUP_UPDATE]
@@ -383,22 +383,20 @@ update_test(Config) ->
         ),
         #{groupId => G1}
     end,
-    VerifyEndFun =
-        fun
-            (ShouldSucceed, #{groupId := GroupId} = _Env, Data) ->
-                {ok, Group} = oz_test_utils:get_group(Config, GroupId),
-                {ExpType, ExpName} = case ShouldSucceed of
-                    false ->
-                        {role, InitialGroupName};
-                    true ->
-                        {
-                            maps:get(<<"type">>, Data, role),
-                            maps:get(<<"name">>, Data, InitialGroupName)
-                        }
-                end,
-                ?assertEqual(ExpName, Group#od_group.name),
-                ?assertEqual(ExpType, Group#od_group.type)
+    VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, Data) ->
+        {ok, Group} = oz_test_utils:get_group(Config, GroupId),
+        {ExpType, ExpName} = case ShouldSucceed of
+            false ->
+                {role, InitialName};
+            true ->
+                {
+                    maps:get(<<"type">>, Data, role),
+                    maps:get(<<"name">>, Data, InitialName)
+                }
         end,
+        ?assertEqual(ExpName, Group#od_group.name),
+        ?assertEqual(ExpType, Group#od_group.type)
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -431,7 +429,10 @@ update_test(Config) ->
                 <<"type">>
             ],
             correct_values = #{
-                <<"name">> => [InitialGroupName],
+                <<"name">> => [fun() ->
+                    UniqueInt = erlang:unique_integer([positive]),
+                    <<"Group", (integer_to_binary(UniqueInt))/binary>>
+                end],
                 <<"type">> => [organization]
             },
             bad_values = [

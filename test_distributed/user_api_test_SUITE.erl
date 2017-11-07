@@ -575,7 +575,10 @@ update_test(Config) ->
                 <<"alias">>
             ],
             correct_values = #{
-                <<"name">> => [InitialName],
+                <<"name">> => [fun() ->
+                    UniqueInt = erlang:unique_integer([positive]),
+                    <<"userName", (integer_to_binary(UniqueInt))/binary>>
+                end],
                 <<"alias">> => [fun() ->
                     UniqueInt = erlang:unique_integer([positive]),
                     <<"alias", (integer_to_binary(UniqueInt))/binary>>

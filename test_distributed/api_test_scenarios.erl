@@ -28,6 +28,8 @@
 
 -export([
     create_eff_groups_env/1,
+    create_eff_child_groups_env/1,
+    create_space_eff_users_env/1,
     create_eff_spaces_env/1,
     create_eff_providers_env/1,
     create_eff_handle_services_env/1,
@@ -624,6 +626,111 @@ create_eff_groups_env(Config) ->
     {Groups, {U1, U2, NonAdmin}}.
 
 
+create_eff_child_groups_env(Config) ->
+    %% Create environment with following relations:
+    %%
+    %%                  Group1
+    %%                 /      \
+    %%                /        \
+    %%             Group6     Group2
+    %%              /         /     \
+    %%           User4       /     User1
+    %%                    Group3
+    %%                    /    \
+    %%                   /      \
+    %%                Group4  Group5
+    %%                 /          \
+    %%              User2        User3
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    Users = [{U1, _}, {U2, _}, {U3, _}, {U4, _}] = lists:map(
+        fun(Idx) ->
+            Alias = Login = Name = <<"user", (Idx + 48)/integer>>,
+            UserDetails = #{
+                <<"alias">> => Alias,
+                <<"login">> => Login,
+                <<"name">> => Name
+            },
+            {ok, UserId} = oz_test_utils:create_user(Config, #od_user{
+                name = Name, login = Login, alias = Alias
+            }),
+            {UserId, UserDetails}
+        end, lists:seq(1, 4)
+    ),
+
+    Groups = [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}, {G6, _}] =
+        lists:map(
+            fun(Idx) ->
+                GroupDetails = ?GROUP_DETAILS(<<"G", (Idx+48)/integer>>),
+                {ok, GroupId} = oz_test_utils:create_group(
+                    Config, ?ROOT, GroupDetails
+                ),
+                {GroupId, GroupDetails}
+            end, lists:seq(1, 6)
+        ),
+
+    lists:foreach(
+        fun({ParentGroup, ChildGroup}) ->
+            oz_test_utils:add_group_to_group(Config, ParentGroup, ChildGroup)
+        end, [{G1, G6}, {G1, G2}, {G2, G3}, {G3, G4}, {G3, G5}]
+    ),
+    lists:foreach(
+        fun({Group, User}) ->
+            oz_test_utils:add_user_to_group(Config, Group, User)
+        end, [{G2, U1}, {G6, U4}, {G4, U2}, {G5, U3}]
+    ),
+
+    {Groups, Users, NonAdmin}.
+
+
+create_space_eff_users_env(Config) ->
+    %% Create environment with following relations:
+    %%
+    %%                  Space
+    %%                 /  |  \
+    %%                /   |   \
+    %%     [~space_view]  |  [space_view]
+    %%           /        |        \
+    %%        User1     Group1    User2
+    %%                 /      \
+    %%                /        \
+    %%             Group6     Group2
+    %%              /         /    \
+    %%           User6       /     User3
+    %%                    Group3
+    %%                    /    \
+    %%                   /      \
+    %%                Group4  Group5
+    %%                 /          \
+    %%               User4      User5
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {
+        [{G1, _} | _] = Groups, Users, NonAdmin
+    } = api_test_scenarios:create_eff_child_groups_env(Config),
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
+        ?SPACE_VIEW
+    ]),
+    {ok, U2} = oz_test_utils:add_user_to_space(Config, S1, U2),
+    oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
+        ?SPACE_VIEW
+    ]),
+    {ok, G1} = oz_test_utils:add_group_to_space(Config, S1, G1),
+
+    {S1, Groups, Users, {U1, U2, NonAdmin}}.
+
+
 create_eff_spaces_env(Config) ->
     %% Create environment with following relations:
     %%
@@ -706,14 +813,13 @@ create_eff_providers_env(Config) ->
                 <<"name">> => <<"Prov", (Idx+48)/integer>>,
                 <<"urls">> => [<<"127.0.0.1">>],
                 <<"redirectionPoint">> => <<"https://127.0.0.1">>,
-                <<"csr">> => CSR,
                 <<"latitude">> => rand:uniform() * 90,
                 <<"longitude">> => rand:uniform() * 180
             },
             {ok, {ProvId, _}} = oz_test_utils:create_provider(
-                Config, ProvDetails
+                Config, ProvDetails#{<<"csr">> => CSR}
             ),
-            {ProvId, maps:remove(<<"csr">>, ProvDetails)}
+            {ProvId, ProvDetails}
         end, lists:seq(1, 4)
     ),
 

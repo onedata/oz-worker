@@ -20,7 +20,10 @@
 
 %% API
 -export([
-    call_oz/4
+    call_oz/4,
+    get_env/3,
+    get_domain/1,
+    get_rest_port/1
 ]).
 % Operations corresponding to logic modules
 -export([
@@ -79,15 +82,23 @@
     create_space_for_group/3
 ]).
 -export([
+    get_space_privileges/1,
+
     create_space/3,
     get_space/2,
     list_spaces/1,
     update_space/3,
     delete_space/2,
+    get_space_users/2,
+    get_space_groups/2,
+    get_space_providers/2,
 
     add_user_to_space/3,
+    remove_user_from_space/3,
     add_group_to_space/3,
+    get_space_user_privileges/3,
     space_set_user_privileges/5,
+    get_space_group_privileges/3,
     space_set_group_privileges/5,
     space_invite_user_token/3,
     space_invite_group_token/3,
@@ -151,7 +162,6 @@
 % Convenience functions for gs
 -export([
     create_session/3,
-    get_rest_port/1,
     get_gs_ws_url/1,
     get_gs_supported_proto_verions/1,
     decode_gri/2
@@ -692,7 +702,7 @@ group_leave_handle_service(Config, GroupId, HandleServiceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_group_user_privileges(Config :: term(), GroupId :: od_group:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:oz_privilege()]}.
+    UserId :: od_user:id()) -> {ok, [privileges:group_privilege()]}.
 get_group_user_privileges(Config, GroupId, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, group_logic, get_user_privileges, [
         ?ROOT, GroupId, UserId
@@ -705,7 +715,7 @@ get_group_user_privileges(Config, GroupId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_group_eff_user_privileges(Config :: term(), GroupId :: od_group:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:oz_privilege()]}.
+    UserId :: od_user:id()) -> {ok, [privileges:group_privilege()]}.
 get_group_eff_user_privileges(Config, GroupId, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, group_logic, get_eff_user_privileges, [
         ?ROOT, GroupId, UserId
@@ -718,11 +728,21 @@ get_group_eff_user_privileges(Config, GroupId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_group_subgroup_privileges(Config :: term(), GroupId :: od_group:id(),
-    UserId :: od_group:id()) -> {ok, [privileges:oz_privilege()]}.
+    UserId :: od_group:id()) -> {ok, [privileges:group_privilege()]}.
 get_group_subgroup_privileges(Config, GroupId, ChildGroupId) ->
     ?assertMatch({ok, _}, call_oz(Config, group_logic, get_child_privileges, [
         ?ROOT, GroupId, ChildGroupId
     ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get all atoms representing space privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_space_privileges(Config :: term()) -> [atom()].
+get_space_privileges(Config) ->
+    call_oz(Config, privileges, space_privileges, []).
 
 
 %%--------------------------------------------------------------------
@@ -788,6 +808,45 @@ delete_space(Config, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves users of given space from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_space_users(Config :: term(),
+    SpaceId :: od_space:id()) -> {ok, [od_user:id()]}.
+get_space_users(Config, SpaceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, space_logic, get_users, [?ROOT, SpaceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves groups of given space from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_space_groups(Config :: term(),
+    SpaceId :: od_space:id()) -> {ok, [od_group:id()]}.
+get_space_groups(Config, SpaceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, space_logic, get_groups, [?ROOT, SpaceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves supporting providers of given space from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_space_providers(Config :: term(),
+    SpaceId :: od_space:id()) -> {ok, [od_provider:id()]}.
+get_space_providers(Config, SpaceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, space_logic, get_providers, [?ROOT, SpaceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Adds a user to a space.
 %% @end
 %%--------------------------------------------------------------------
@@ -796,6 +855,19 @@ delete_space(Config, SpaceId) ->
 add_user_to_space(Config, SpaceId, UserId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, space_logic, add_user, [?ROOT, SpaceId, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Remove user from space.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_user_from_space(Config :: term(), SpaceId :: od_space:id(),
+    UserId :: od_user:id()) -> {ok, od_user:id()}.
+remove_user_from_space(Config, SpaceId, UserId) ->
+    ?assertMatch(ok, call_oz(
+        Config, space_logic, remove_user, [?ROOT, SpaceId, UserId]
     )).
 
 
@@ -814,6 +886,19 @@ add_group_to_space(Config, SpaceId, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves space privileges of given user from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_space_user_privileges(Config :: term(), SpaceId :: od_space:id(),
+    UserId :: od_user:id()) -> {ok, [privileges:space_privilege()]}.
+get_space_user_privileges(Config, SpaceId, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, space_logic, get_user_privileges, [?ROOT, SpaceId, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Sets privileges of a user in a space.
 %% @end
 %%--------------------------------------------------------------------
@@ -824,6 +909,19 @@ space_set_user_privileges(Config, SpaceId, UserId, Operation, Privs) ->
     ?assertMatch(ok, call_oz(Config, space_logic, update_user_privileges, [
         ?ROOT, SpaceId, UserId, Operation, Privs
     ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves space privileges of given group from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_space_group_privileges(Config :: term(), SpaceId :: od_space:id(),
+    GroupId :: od_group:id()) -> {ok, [privileges:space_privilege()]}.
+get_space_group_privileges(Config, SpaceId, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, space_logic, get_group_privileges, [?ROOT, SpaceId, GroupId]
+    )).
 
 
 %%--------------------------------------------------------------------
@@ -1620,26 +1718,46 @@ create_session(Config, UserId, CustomArgs) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Get REST listener port.
+%% Returns the value of the environment variable 'Name' for 'Application'.
 %% @end
 %%--------------------------------------------------------------------
--spec get_rest_port(Config :: term()) -> Port :: integer().
-get_rest_port(Config) ->
-    ?assertMatch(_, call_oz(Config, rest_listener, port, [])).
+-spec get_env(Config :: term(), Application :: atom(), Name :: atom()) ->
+    {ok, Value :: term()}.
+get_env(Config, Application, Name) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, application, get_env, [Application, Name]
+    )).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Get graph sync ws url.
+%% Get REST listener port for zone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_rest_port(Config :: term()) -> {ok, Port :: inet:port_number()}.
+get_rest_port(Config) ->
+    get_env(Config, ?APP_NAME, rest_port).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get zone domain.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_domain(Config :: term()) -> {ok, Domain :: string()}.
+get_domain(Config) ->
+    get_env(Config, ?APP_NAME, http_domain).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get graph sync ws url for zone.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_gs_ws_url(Config :: term()) -> binary().
 get_gs_ws_url(Config) ->
-    GetZoneDomainFun = fun() ->
-        application:get_env(oz_worker, http_domain)
-    end,
-    {ok, ZoneDomain} = call_oz(Config, erlang, apply, [GetZoneDomainFun, []]),
-    GsPort = get_rest_port(Config),
+    {ok, ZoneDomain} = get_domain(Config),
+    {ok, GsPort} = get_rest_port(Config),
     str_utils:format_bin(
         "wss://~s:~B/~s",
         [ZoneDomain, GsPort, string:strip(?GRAPH_SYNC_WS_PATH, both, $/)]

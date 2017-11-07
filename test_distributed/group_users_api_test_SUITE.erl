@@ -608,8 +608,7 @@ get_eff_user_details_test(Config) ->
                     auth_hint = ?THROUGH_GROUP(G1),
                     expected_result = ?OK_MAP(
                         (maps:remove(<<"alias">>, UserDetails))#{
-                            <<"gri">> =>
-                            fun(EncodedGri) ->
+                            <<"gri">> => fun(EncodedGri) ->
                                 #gri{id = UId} = oz_test_utils:decode_gri(
                                     Config, EncodedGri
                                 ),

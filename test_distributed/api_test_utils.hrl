@@ -90,7 +90,49 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
 -define(OK_ENV(__PrepareFun), {ok_env, __PrepareFun}).
 -define(ERROR_REASON(__ExpectedError), {error_reason, __ExpectedError}).
 
-% Convenience macros to use when dealing with handles/handle services
+%%  Example test data
+-define(USER_NAME, <<"user">>).
+-define(GROUP_NAME1, <<"group1">>).
+-define(GROUP_NAME2, <<"group2">>).
+-define(GROUP_TYPE1, unit).
+-define(GROUP_TYPE2, team).
+-define(GROUP_TYPES, [unit, organization, team, role]).
+-define(GROUP_TYPE1_BIN, <<"unit">>).
+-define(GROUP_TYPE2_BIN, <<"team">>).
+-define(SPACE_NAME1, <<"space1">>).
+-define(SPACE_NAME2, <<"space2">>).
+-define(PROVIDER_NAME, <<"provider">>).
+-define(ROOT_FILE_ID, <<"root_file">>).
+
+-define(PROVIDER_DETAILS(ProviderName),
+    #{
+        <<"name">> => ProviderName,
+        <<"urls">> => [<<"127.0.0.1">>],
+        <<"redirectionPoint">> => <<"https://127.0.0.1">>,
+        <<"latitude">> => rand:uniform() * 90,
+        <<"longitude">> => rand:uniform() * 180
+    }
+).
+
+-define(GROUP_DETAILS(GroupName),
+    #{
+        <<"name">> => GroupName,
+        <<"type">> => lists:nth(rand:uniform(4), ?GROUP_TYPES)
+    }
+).
+
+-define(SHARE_PUBLIC_URL(ZoneDomain, ShareId),
+    str_utils:format_bin("https://~s/share/~s", [ZoneDomain, ShareId])
+).
+
+-define(UNIQUE_NAME(Prefix),
+    <<
+        Prefix/binary,
+        (integer_to_binary(erlang:unique_integer([positive])))/binary
+    >>
+).
+
+
 -define(PROXY_ENDPOINT, <<"172.17.0.9:8080/api/v1">>).
 
 -define(DOI_SERVICE,
