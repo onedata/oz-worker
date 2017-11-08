@@ -25,7 +25,6 @@
 -define(LATITUDE, 23.10).
 -define(LONGITUDE, 44.44).
 -define(DOMAIN1, <<"127.0.0.1">>).
--define(DOMAIN2, <<"127.0.0.2">>).
 -define(CLIENT_NAME1, <<"provider1">>).
 -define(CLIENT_NAME2, <<"provider2">>).
 -define(USER_NAME1, <<"user1">>).
@@ -2180,7 +2179,7 @@ register_provider(Latitude, Longitude, Domain, ClientName, Config, ReqParams = {
     hackney_pool:stop_pool(noauth),
     %% save cert
     [Cert, ProviderId] = get_body_val([certificate, providerId], Response),
-        file:write_file(CertFile, Cert),
+    file:write_file(CertFile, Cert),
     %% set request options for provider
     Options = [{ssl_options, [{keyfile, KeyFile}, {certfile, CertFile}]}],
     %% set request parameters for provider

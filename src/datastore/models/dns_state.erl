@@ -54,13 +54,15 @@ o%% @end
 set_delegation_config(ProviderId, Subdomain, IPs) ->
    Result = case is_subdomain_reserved(Subdomain) of
         true ->
+            ?info("Refusing to register provider subdomain ~s as it is reserved", [Subdomain]),
             {error, subdomain_exists};
         false ->
             update(fun(DnsState) ->
                 StateOrError = case get_provider_by_subdomain(DnsState, Subdomain) of
                     {ok, ProviderId} ->
                         DnsState; % subdomain is already set
-                    {ok, _} ->
+                    {ok, OtherProvider} ->
+                        ?info("Refusing to register provider subdomain ~s as it is used by provider ~s", [Subdomain, OtherProvider]),
                         {error, subdomain_exists};
                     {error, not_found} ->
                         % remove old subdomain of given provider before setting new

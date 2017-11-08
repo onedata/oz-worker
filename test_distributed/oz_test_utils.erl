@@ -168,8 +168,8 @@ call_oz(Config, Module, Function, Args) ->
 
 -spec get_oz_domain(Config :: term()) -> string().
 get_oz_domain(Config) ->
-    {ok, Host} = call_oz(Config,
-        application, get_env, [?APP_NAME, http_domain]),
+    {ok, Host} = call_oz(Config, application, get_env,
+        [?APP_NAME, http_domain]),
     Host.
 
 
@@ -889,7 +889,7 @@ enable_subdomain_delegation(Config, ProviderId, Subdomain, IPs) ->
       <<"subdomain">> => Subdomain,
       <<"ipList">> => IPs},
     ?assertMatch(ok, oz_test_utils:call_oz(Config,
-        provider_logic, update_domain_config, [#client{type = root}, ProviderId, Data])).
+        provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
 
 
 %%--------------------------------------------------------------------
@@ -904,7 +904,7 @@ set_provider_domain(Config, ProviderId, Domain) ->
       <<"subdomainDelegation">> => false,
       <<"domain">> => Domain},
     ?assertMatch(ok, oz_test_utils:call_oz(Config,
-        provider_logic, update_domain_config, [#client{type = root}, ProviderId, Data])).
+        provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
 
 
 
