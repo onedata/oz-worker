@@ -123,14 +123,22 @@
     support_space/5
 ]).
 -export([
+    get_handle_service_privileges/1,
+
     create_handle_service/5, create_handle_service/3,
     list_handle_services/1,
     get_handle_service/2,
     get_handle_service_groups/2,
     get_handle_service_users/2,
+    get_handle_service_user_privileges/3,
+    get_handle_service_group_privileges/3,
     delete_handle_service/2,
     add_user_to_handle_service/3,
-    add_group_to_handle_service/3
+    remove_user_from_handle_service/3,
+    handle_service_set_user_privileges/5,
+    add_group_to_handle_service/3,
+    remove_group_from_handle_service/3,
+    handle_service_set_group_privileges/5
 ]).
 -export([
     create_handle/6, create_handle/3,
@@ -1145,6 +1153,16 @@ support_space(Config, Client, ProviderId, Token, Size) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Get all atoms representing handle service privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_service_privileges(Config :: term()) -> [atom()].
+get_handle_service_privileges(Config) ->
+    call_oz(Config, privileges, handle_service_privileges, []).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a handle service.
 %% @end
 %%--------------------------------------------------------------------
@@ -1225,6 +1243,38 @@ get_handle_service_users(Config, HandleServiceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves privileges of user belonging to handle service from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_service_user_privileges(Config :: term(),
+    HandleServiceId :: od_handle_service:id(),
+    UserId :: od_user:id()) -> {ok, [atom()]}.
+get_handle_service_user_privileges(Config, HandleServiceId, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_service_logic, get_user_privileges, [
+            ?ROOT, HandleServiceId, UserId
+        ]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves privileges of group belonging to handle service from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_service_group_privileges(Config :: term(),
+    HandleServiceId :: od_handle_service:id(),
+    GroupId :: od_group:id()) -> {ok, [atom()]}.
+get_handle_service_group_privileges(Config, HandleServiceId, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_service_logic, get_group_privileges, [
+            ?ROOT, HandleServiceId, GroupId
+        ]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Deletes given handle_service from onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -1252,6 +1302,37 @@ add_user_to_handle_service(Config, HServiceId, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Removes user from handle service.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_user_from_handle_service(Config :: term(),
+    HServiceId :: od_handle_service:id(), UserId :: od_user:id()) -> ok.
+remove_user_from_handle_service(Config, HServiceId, UserId) ->
+    ?assertMatch(ok, call_oz(Config, handle_service_logic, remove_user, [
+        ?ROOT, HServiceId, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges of a user in a handle service.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_service_set_user_privileges(Config :: term(),
+    HServiceId :: od_handle_service:id(), UserId :: od_user:id(),
+    Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:handle_service_privilege()]) -> ok.
+handle_service_set_user_privileges(
+    Config, HServiceId, UserId, Operation, Privs
+) ->
+    ?assertMatch(ok, call_oz(Config, handle_service_logic,
+        update_user_privileges, [?ROOT, HServiceId, UserId, Operation, Privs]
+    )).
+
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Adds a group to a handle service.
 %% @end
 %%--------------------------------------------------------------------
@@ -1262,6 +1343,36 @@ add_group_to_handle_service(Config, HServiceId, GroupId) ->
     ?assertMatch({ok, _}, call_oz(Config, handle_service_logic, add_group, [
         ?ROOT, HServiceId, GroupId
     ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes a group from handle service.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_group_from_handle_service(Config :: term(),
+    HServiceId :: od_handle_service:id(), GroupId :: od_group:id()) -> ok.
+remove_group_from_handle_service(Config, HServiceId, GroupId) ->
+    ?assertMatch(ok, call_oz(Config, handle_service_logic, remove_group, [
+        ?ROOT, HServiceId, GroupId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges of a group in a handle service.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_service_set_group_privileges(Config :: term(),
+    HServiceId :: od_handle_service:id(), GroupId:: od_group:id(),
+    Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:handle_service_privilege()]) -> ok.
+handle_service_set_group_privileges(
+    Config, HServiceId, GroupId, Operation, Privs
+) ->
+    ?assertMatch(ok, call_oz(Config, handle_service_logic,
+        update_group_privileges, [?ROOT, HServiceId, GroupId, Operation, Privs]
+    )).
 
 
 %%--------------------------------------------------------------------

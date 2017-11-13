@@ -30,6 +30,7 @@
     create_eff_groups_env/1,
     create_eff_child_groups_env/1,
     create_space_eff_users_env/1,
+    create_hservice_eff_users_env/1,
     create_eff_spaces_env/1,
     create_eff_providers_env/1,
     create_eff_handle_services_env/1,
@@ -729,6 +730,53 @@ create_space_eff_users_env(Config) ->
     {ok, G1} = oz_test_utils:add_group_to_space(Config, S1, G1),
 
     {S1, Groups, Users, {U1, U2, NonAdmin}}.
+
+
+create_hservice_eff_users_env(Config) ->
+    %% Create environment with following relations:
+    %%
+    %%                  Space
+    %%                 /  |  \
+    %%                /   |   \
+    %%   [~hservice_view] |  [hservice_view]
+    %%           /        |        \
+    %%        User1     Group1    User2
+    %%                 /      \
+    %%                /        \
+    %%             Group6     Group2
+    %%              /         /    \
+    %%           User6       /     User3
+    %%                    Group3
+    %%                    /    \
+    %%                   /      \
+    %%                Group4  Group5
+    %%                 /          \
+    %%               User4      User5
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {
+        [{G1, _} | _] = Groups, Users, NonAdmin
+    } = api_test_scenarios:create_eff_child_groups_env(Config),
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, HService} = oz_test_utils:create_handle_service(
+        Config, ?ROOT, ?DOI_SERVICE
+    ),
+    {ok, U1} = oz_test_utils:add_user_to_handle_service(Config, HService, U1),
+    oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
+        revoke, [?HANDLE_SERVICE_VIEW]
+    ),
+    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
+    oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
+        set, [?HANDLE_SERVICE_VIEW]
+    ),
+    {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
+
+    {HService, Groups, Users, {U1, U2, NonAdmin}}.
 
 
 create_eff_spaces_env(Config) ->
