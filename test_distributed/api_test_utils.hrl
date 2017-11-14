@@ -132,47 +132,54 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
     >>
 ).
 
-
+% Example test data for handle services
+-define(HANDLE_SERVICE_NAME1, <<"LifeWatch DataCite">>).
+-define(HANDLE_SERVICE_NAME2, <<"iMarine EPIC">>).
 -define(PROXY_ENDPOINT, <<"172.17.0.9:8080/api/v1">>).
-
+-define(DOI_SERVICE_PROPERTIES,
+    #{
+        <<"type">> => <<"DOI">>,
+        <<"host">> => <<"https://mds.test.datacite.org">>,
+        <<"doiEndpoint">> => <<"/doi">>,
+        <<"metadataEndpoint">> => <<"/metadata">>,
+        <<"mediaEndpoint">> => <<"/media">>,
+        <<"prefix">> => <<"10.5072">>,
+        <<"username">> => <<"alice">>,
+        <<"password">> => <<"*******">>,
+        <<"identifierTemplate">> => <<"{{space.name}}-{{space.guid}}">>,
+        <<"allowTemplateOverride">> => false
+    }
+).
 -define(DOI_SERVICE,
     #{
-        <<"name">> => <<"LifeWatch DataCite">>,
+        <<"name">> => ?HANDLE_SERVICE_NAME1,
         <<"proxyEndpoint">> => ?PROXY_ENDPOINT,
-        <<"serviceProperties">> => #{
-            <<"type">> => <<"DOI">>,
-            <<"host">> => <<"https://mds.test.datacite.org">>,
-            <<"doiEndpoint">> => <<"/doi">>,
-            <<"metadataEndpoint">> => <<"/metadata">>,
-            <<"mediaEndpoint">> => <<"/media">>,
-            <<"prefix">> => <<"10.5072">>,
-            <<"username">> => <<"alice">>,
-            <<"password">> => <<"*******">>,
-            <<"identifierTemplate">> => <<"{{space.name}}-{{space.guid}}">>,
-            <<"allowTemplateOverride">> => false
-        }
+        <<"serviceProperties">> => ?DOI_SERVICE_PROPERTIES
     }
 ).
-
+-define(PID_SERVICE_PROPERTIES,
+    #{
+        <<"type">> => <<"PID">>,
+        <<"endpoint">> => <<"https://epic.grnet.gr/api/v2/handles">>,
+        <<"prefix">> => <<"11789">>,
+        <<"suffixGeneration">> => <<"auto">>,
+        <<"suffixPrefix">> => <<"{{space.name}}">>,
+        <<"suffixSuffix">> => <<"{{user.name}}">>,
+        <<"username">> => <<"alice">>,
+        <<"password">> => <<"*******">>,
+        <<"identifierTemplate">> => <<"{{space.name}}-{{space.guid}}">>,
+        <<"allowTemplateOverride">> => false
+    }
+).
 -define(PID_SERVICE,
     #{
-        <<"name">> => <<"iMarine EPIC">>,
+        <<"name">> => ?HANDLE_SERVICE_NAME2,
         <<"proxyEndpoint">> => ?PROXY_ENDPOINT,
-        <<"serviceProperties">> => #{
-            <<"type">> => <<"PID">>,
-            <<"endpoint">> => <<"https://epic.grnet.gr/api/v2/handles">>,
-            <<"prefix">> => <<"11789">>,
-            <<"suffixGeneration">> => <<"auto">>,
-            <<"suffixPrefix">> => <<"{{space.name}}">>,
-            <<"suffixSuffix">> => <<"{{user.name}}">>,
-            <<"username">> => <<"alice">>,
-            <<"password">> => <<"*******">>,
-            <<"identifierTemplate">> => <<"{{space.name}}-{{space.guid}}">>,
-            <<"allowTemplateOverride">> => false
-        }
+        <<"serviceProperties">> => ?PID_SERVICE_PROPERTIES
     }
 ).
 
+% Example test data for use with handles
 -define(DC_METADATA, <<"<?xml version=\"1.0\"?>",
     "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
     "<dc:title>Test dataset<\/dc:title>",

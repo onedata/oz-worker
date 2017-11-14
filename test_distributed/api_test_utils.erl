@@ -428,7 +428,7 @@ run_gs_test(_Config, _GsSpec, nobody, _Data, _DescFmt, _Env, undefined) ->
     ok;
 run_gs_test(Config, GsSpec, Client, Data, Description, Env, undefined) ->
     GsClient = prepare_gs_client(Config, Client),
-    NewGsSpec = prepare_gs_spec(Config, GsSpec, Data, Env),
+    NewGsSpec = prepare_gs_spec(Config, GsSpec, Client, Data, Env),
     Result = check_gs_call(NewGsSpec, GsClient, Data),
     log_gs_test_result(NewGsSpec, Client, Data, Description, Result);
 
@@ -491,10 +491,10 @@ prepare_gs_client(Config, ExpIdentity, Cookie, Opts) ->
 
 
 % Convert placeholders in various spec fields into real data
-prepare_gs_spec(_Config, GsSpec, Data, Env) ->
+prepare_gs_spec(_Config, GsSpec, Client, Data, Env) ->
     GsSpec#gs_spec{
         gri = prepare_gri(GsSpec#gs_spec.gri, Env),
-        auth_hint = prepare_auth_hint(GsSpec#gs_spec.auth_hint, Env),
+        auth_hint = prepare_auth_hint(GsSpec#gs_spec.auth_hint, Client, Env),
         expected_result = prepare_exp_result(
             GsSpec#gs_spec.expected_result, Env, Data
         )
@@ -509,25 +509,29 @@ prepare_gri(Gri, _Env) ->
 
 
 % Convert placeholders in auth hint into real data
-prepare_auth_hint(undefined, _Env) ->
+prepare_auth_hint(undefined, _, _Env) ->
     undefined;
-prepare_auth_hint(?THROUGH_USER(UserId), Env) when is_atom(UserId) ->
+prepare_auth_hint(?THROUGH_USER(client), {user, UserId}, _Env) ->
+    ?THROUGH_USER(UserId);
+prepare_auth_hint(?THROUGH_USER(UserId), _, Env) when is_atom(UserId) ->
     ?THROUGH_USER(maps:get(UserId, Env, UserId));
-prepare_auth_hint(?THROUGH_GROUP(GroupId), Env) when is_atom(GroupId) ->
+prepare_auth_hint(?THROUGH_GROUP(GroupId), _, Env) when is_atom(GroupId) ->
     ?THROUGH_GROUP(maps:get(GroupId, Env, GroupId));
-prepare_auth_hint(?THROUGH_SPACE(SpaceId), Env) when is_atom(SpaceId) ->
+prepare_auth_hint(?THROUGH_SPACE(SpaceId), _, Env) when is_atom(SpaceId) ->
     ?THROUGH_SPACE(maps:get(SpaceId, Env, SpaceId));
-prepare_auth_hint(?THROUGH_PROVIDER(ProvId), Env) when is_atom(ProvId) ->
+prepare_auth_hint(?THROUGH_PROVIDER(ProvId), _, Env) when is_atom(ProvId) ->
     ?THROUGH_PROVIDER(maps:get(ProvId, Env, ProvId));
-prepare_auth_hint(?THROUGH_HANDLE_SERVICE(HSId), Env) when is_atom(HSId) ->
+prepare_auth_hint(?THROUGH_HANDLE_SERVICE(HSId), _, Env) when is_atom(HSId) ->
     ?THROUGH_HANDLE_SERVICE(maps:get(HSId, Env, HSId));
-prepare_auth_hint(?THROUGH_HANDLE(HandleId), Env) when is_atom(HandleId) ->
+prepare_auth_hint(?THROUGH_HANDLE(HandleId), _, Env) when is_atom(HandleId) ->
     ?THROUGH_HANDLE(maps:get(HandleId, Env, HandleId));
-prepare_auth_hint(?AS_USER(UserId), Env) when is_atom(UserId) ->
+prepare_auth_hint(?AS_USER(client), {user, UserId}, _Env) ->
+    ?AS_USER(UserId);
+prepare_auth_hint(?AS_USER(UserId), _, Env) when is_atom(UserId) ->
     ?AS_USER(maps:get(UserId, Env, UserId));
-prepare_auth_hint(?AS_GROUP(GroupId), Env) when is_atom(GroupId) ->
+prepare_auth_hint(?AS_GROUP(GroupId), _, Env) when is_atom(GroupId) ->
     ?AS_GROUP(maps:get(GroupId, Env, GroupId));
-prepare_auth_hint(Auth_Hint, _Env) ->
+prepare_auth_hint(Auth_Hint, _Client, _Env) ->
     Auth_Hint.
 
 
