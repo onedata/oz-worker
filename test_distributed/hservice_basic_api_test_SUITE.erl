@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Bartosz Walkowicz
-%%% @copyright (C): 2017 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -29,7 +29,8 @@
 
 -export([
     all/0,
-    init_per_suite/1, end_per_suite/1
+    init_per_suite/1, end_per_suite/1,
+    init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
     create_test/1,
@@ -143,9 +144,13 @@ create_test(Config) ->
 
 
 list_test(Config) ->
-    % Make sure that spaces created in other tests are deleted.
+    % Make sure that handle services created in other tests are deleted.
     oz_test_utils:delete_all_entities(Config),
 
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, set, [
@@ -155,7 +160,7 @@ list_test(Config) ->
     ExpHServices = lists:map(
         fun(_) ->
             {ok, HServiceId} = oz_test_utils:create_handle_service(
-                Config, ?ROOT, ?DOI_SERVICE
+                Config, ?USER(U1), ?DOI_SERVICE
             ),
             HServiceId
         end, lists:seq(1, 5)
@@ -169,6 +174,7 @@ list_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
+                {user, U1},
                 {user, NonAdmin}
             ]
         },
@@ -203,7 +209,7 @@ list_test(Config) ->
 
 get_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, grant, [
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
         ?OZ_HANDLE_SERVICES_CREATE
     ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
@@ -327,24 +333,28 @@ get_test(Config) ->
 
 update_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     EnvSetUpFun = fun() ->
         {ok, HService} = oz_test_utils:create_handle_service(
-            Config, ?ROOT, ?DOI_SERVICE
+            Config, ?USER(U1), ?DOI_SERVICE
         ),
-        {ok, U1} = oz_test_utils:add_user_to_handle_service(Config, HService, U1),
         oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
             revoke, [?HANDLE_SERVICE_UPDATE]
         ),
-        {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
+        {ok, U2} = oz_test_utils:add_user_to_handle_service(
+            Config, HService, U2
+        ),
         oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
             set, [?HANDLE_SERVICE_UPDATE]
         ),
         #{hserviceId => HService}
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{hserviceId := HServiceId} = _Env, Data) ->
+    VerifyEndFun = fun(ShouldSucceed, #{hserviceId := HServiceId}, Data) ->
         {ok, HService} = oz_test_utils:get_handle_service(Config, HServiceId),
         ExpName = case ShouldSucceed of
             false -> ?HANDLE_SERVICE_NAME1;
@@ -411,18 +421,22 @@ update_test(Config) ->
 
 delete_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     EnvSetUpFun = fun() ->
         {ok, HService} = oz_test_utils:create_handle_service(
-            Config, ?ROOT, ?DOI_SERVICE
+            Config, ?USER(U1), ?DOI_SERVICE
         ),
-        {ok, U1} = oz_test_utils:add_user_to_handle_service(Config, HService, U1),
         oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
             revoke, [?HANDLE_SERVICE_DELETE]
         ),
-        {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
+        {ok, U2} = oz_test_utils:add_user_to_handle_service(
+            Config, HService, U2
+        ),
         oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
             set, [?HANDLE_SERVICE_DELETE]
         ),
@@ -469,12 +483,131 @@ delete_test(Config) ->
     )).
 
 
-list_handles_test(_Config) ->
-    erlang:error(not_implemented).
+list_handles_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, HService} = oz_test_utils:create_handle_service(
+        Config, ?USER(U1), ?DOI_SERVICE
+    ),
+    oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
+%%        TODO
+%%        revoke, [?HANDLE_SERVICE_LIST_HANDLES]
+        revoke, [?HANDLE_SERVICE_VIEW]
+    ),
+    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
+    oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
+%%        TODO
+%%        set, [?HANDLE_SERVICE_LIST_HANDLES]
+        set, [?HANDLE_SERVICE_VIEW]
+    ),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(U2), ?SPACE_NAME2),
+
+    % Create 3 handles, 2 for S1 and 1 for S2
+    ExpHandles = lists:map(
+        fun(SpaceId) ->
+            ShareId = ?UNIQUE_NAME(?SHARE_NAME1),
+            {ok, ShareId} = oz_test_utils:create_share(
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
+            ),
+            {ok, HandleId} = oz_test_utils:create_handle(
+                Config, ?ROOT, ?HANDLE(HService, ShareId)
+            ),
+            HandleId
+        end, [S1, S1, S2]
+    ),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U2}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {user, U1}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/handle_services/">>, HService, <<"/handles">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"handles">> => ExpHandles}
+        },
+        logic_spec = #logic_spec{
+            module = handle_service_logic,
+            function = get_handles,
+            args = [client, HService],
+            expected_result = ?OK_LIST(ExpHandles)
+        }
+        % TODO gs
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
-get_handle_test(_Config) ->
-    erlang:error(not_implemented).
+get_handle_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, HService} = oz_test_utils:create_handle_service(
+        Config, ?USER(U1), ?DOI_SERVICE
+    ),
+    oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
+        revoke, [?HANDLE_SERVICE_VIEW]
+    ),
+    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
+    oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
+        set, [?HANDLE_SERVICE_VIEW]
+    ),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, ShareId} = oz_test_utils:create_share(
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+    ),
+
+    HandleDetails = ?HANDLE(HService, ShareId),
+    {ok, HandleId} = oz_test_utils:create_handle(Config, ?ROOT, HandleDetails),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U2}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [
+                <<"/handle_services/">>, HService, <<"/handles/">>, HandleId
+            ],
+            expected_code = ?HTTP_200_OK,
+            expected_body = {contains, HandleDetails}
+        },
+        logic_spec = #logic_spec{
+            module = handle_service_logic,
+            function = get_handle,
+            args = [client, HService, HandleId],
+            expected_result = ?OK_MAP_CONTAINS(HandleDetails)
+        }
+        % TODO gs
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 %%%===================================================================
@@ -491,3 +624,25 @@ init_per_suite(Config) ->
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
+
+
+init_per_testcase(list_handles_test, Config) ->
+    init_per_testcase(handle_tests, Config);
+init_per_testcase(get_handle_test, Config) ->
+    init_per_testcase(handle_tests, Config);
+init_per_testcase(handle_tests, Config) ->
+    oz_test_utils:mock_handle_proxy(Config),
+    Config;
+init_per_testcase(_, Config) ->
+    Config.
+
+
+end_per_testcase(list_handles_test, Config) ->
+    end_per_testcase(handle_tests, Config);
+end_per_testcase(get_handle_test, Config) ->
+    end_per_testcase(handle_tests, Config);
+end_per_testcase(handle_tests, Config) ->
+    oz_test_utils:delete_all_entities(Config),
+    oz_test_utils:unmock_handle_proxy(Config);
+end_per_testcase(_, _Config) ->
+    ok.

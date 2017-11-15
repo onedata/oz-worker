@@ -1,12 +1,12 @@
 %%%-------------------------------------------------------------------
 %%% @author Bartosz Walkowicz
-%%% @copyright (C): 2017 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This file contains tests concerning groups handle services
+%%% This file contains tests concerning group handle services
 %%% API (REST + logic + gs).
 %%% @end
 %%%-------------------------------------------------------------------
@@ -61,7 +61,7 @@ list_handle_services_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_VIEW
     ]),
@@ -70,15 +70,15 @@ list_handle_services_test(Config) ->
         ?GROUP_VIEW
     ]),
 
-    ExpHandleServices = lists:map(
+    ExpHServices = lists:map(
         fun(_) ->
-            {ok, HServiceId} = oz_test_utils:create_handle_service(
-                Config, ?ROOT, <<"HS">>, <<"https://dot.com">>, #{asd => 1}
+            {ok, HService} = oz_test_utils:create_handle_service(
+                Config, ?ROOT, ?DOI_SERVICE
             ),
             {ok, G1} = oz_test_utils:add_group_to_handle_service(
-                Config, HServiceId, G1
+                Config, HService, G1
             ),
-            HServiceId
+            HService
         end, lists:seq(1, 5)
     ),
 
@@ -98,13 +98,13 @@ list_handle_services_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/handle_services">>],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"handle_services">> => ExpHandleServices}
+            expected_body = #{<<"handle_services">> => ExpHServices}
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_handle_services,
             args = [client, G1],
-            expected_result = ?OK_LIST(ExpHandleServices)
+            expected_result = ?OK_LIST(ExpHServices)
         }
         % TODO gs
     },
@@ -119,23 +119,19 @@ create_handle_service_test(Config) ->
     ]),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
 
-    ExpName = <<"HS">>,
-    ExpProxyEndPoint = <<"http://dot.com">>,
-    ExpProperties = #{<<"asd">> => 1},
-
-    AllPrivs = oz_test_utils:call_oz(
-        Config, privileges, handle_service_privileges, []
-    ),
+    AllPrivs = oz_test_utils:get_handle_service_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
-    VerifyFun = fun(HServiceId) ->
-        {ok, HS} = oz_test_utils:get_handle_service(Config, HServiceId),
-        ?assertEqual(ExpName, HS#od_handle_service.name),
-        ?assertEqual(ExpProxyEndPoint, HS#od_handle_service.proxy_endpoint),
-        ?assertEqual(ExpProperties, HS#od_handle_service.service_properties),
+    VerifyFun = fun(HService) ->
+        {ok, HS} = oz_test_utils:get_handle_service(Config, HService),
+        ?assertEqual(?HANDLE_SERVICE_NAME1, HS#od_handle_service.name),
+        ?assertEqual(?PROXY_ENDPOINT, HS#od_handle_service.proxy_endpoint),
+        ?assertEqual(
+            ?DOI_SERVICE_PROPERTIES, HS#od_handle_service.service_properties
+        ),
         true
     end,
 
@@ -181,7 +177,7 @@ create_handle_service_test(Config) ->
                     U1 => AllPrivsBin,
                     U2 => AllPrivsBin
                 },
-                <<"name">> => ExpName,
+                <<"name">> => ?HANDLE_SERVICE_NAME1,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -197,9 +193,9 @@ create_handle_service_test(Config) ->
                 <<"serviceProperties">>
             ],
             correct_values = #{
-                <<"name">> => [ExpName],
-                <<"proxyEndpoint">> => [ExpProxyEndPoint],
-                <<"serviceProperties">> => [ExpProperties]
+                <<"name">> => [?HANDLE_SERVICE_NAME1],
+                <<"proxyEndpoint">> => [?PROXY_ENDPOINT],
+                <<"serviceProperties">> => [?DOI_SERVICE_PROPERTIES]
             },
             bad_values = [
                 {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
@@ -224,24 +220,14 @@ get_handle_service_details_test(Config) ->
         ?OZ_HANDLE_SERVICES_LIST
     ]),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
 
-    ExpName = <<"HS">>,
-    ExpProxyEndPoint = <<"http://dot.com">>,
-    ExpProperties = #{<<"asd">> => 1},
-    {ok, HServiceId} = oz_test_utils:create_handle_service(
-        Config, ?ROOT, ExpName, ExpProxyEndPoint, ExpProperties
+    {ok, HService} = oz_test_utils:create_handle_service(
+        Config, ?ROOT, ?DOI_SERVICE
     ),
-    {ok, G1} = oz_test_utils:add_group_to_handle_service(
-        Config, HServiceId, G1
-    ),
+    {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
 
-    ExpMap = #{
-        <<"name">> => ExpName,
-        <<"proxyEndpoint">> => ExpProxyEndPoint,
-        <<"serviceProperties">> => ExpProperties
-    },
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -256,17 +242,17 @@ get_handle_service_details_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/groups/">>, G1, <<"/handle_services/">>, HServiceId],
+            path = [<<"/groups/">>, G1, <<"/handle_services/">>, HService],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpMap#{
-                <<"handleServiceId">> => HServiceId
+            expected_body = ?DOI_SERVICE#{
+                <<"handleServiceId">> => HService
             }
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_handle_service,
-            args = [client, G1, HServiceId],
-            expected_result = ?OK_MAP(ExpMap)
+            args = [client, G1, HService],
+            expected_result = ?OK_MAP(?DOI_SERVICE)
         }
         % TODO gs
     },
@@ -278,7 +264,7 @@ leave_handle_service_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_UPDATE
     ]),
@@ -288,13 +274,13 @@ leave_handle_service_test(Config) ->
     ]),
 
     EnvSetUpEnv = fun() ->
-        {ok, HServiceId} = oz_test_utils:create_handle_service(
-            Config, ?ROOT, <<"HS">>, <<"http://dot.com">>, #{<<"asd">> => 1}
+        {ok, HService} = oz_test_utils:create_handle_service(
+            Config, ?ROOT, ?PID_SERVICE
         ),
         {ok, G1} = oz_test_utils:add_group_to_handle_service(
-            Config, HServiceId, G1
+            Config, HService, G1
         ),
-        #{hsid => HServiceId}
+        #{hsid => HService}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{hsid := HServiceId} = _Env, _) ->
         {ok, Groups} = oz_test_utils:get_handle_service_groups(
@@ -339,7 +325,7 @@ list_eff_handle_services_test(Config) ->
         [{G1, _} | _Groups], {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_handle_services_env(Config),
 
-    ExpHandleServices = [HS1, HS2, HS3, HS4, HS5],
+    ExpHServices = [HS1, HS2, HS3, HS4, HS5],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -356,13 +342,13 @@ list_eff_handle_services_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/effective_handle_services">>],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"handle_services">> => ExpHandleServices}
+            expected_body = #{<<"handle_services">> => ExpHServices}
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_eff_handle_services,
             args = [client, G1],
-            expected_result = ?OK_LIST(ExpHandleServices)
+            expected_result = ?OK_LIST(ExpHServices)
         }
         % TODO gs
     },
@@ -370,11 +356,11 @@ list_eff_handle_services_test(Config) ->
 
     % check also group_logic:has_eff_handle_service function
     lists:foreach(
-        fun(HServiceId) ->
+        fun(HService) ->
             ?assert(oz_test_utils:call_oz(
-                Config, group_logic, has_eff_handle_service, [G1, HServiceId])
+                Config, group_logic, has_eff_handle_service, [G1, HService])
             )
-        end, ExpHandleServices
+        end, ExpHServices
     ),
     ?assert(not oz_test_utils:call_oz(
         Config, group_logic, has_eff_handle_service,
@@ -384,11 +370,11 @@ list_eff_handle_services_test(Config) ->
 
 get_eff_handle_service_details_test(Config) ->
     {
-        EffHandleServicesList, [{G1, _} | _Groups], {U1, _U2, NonAdmin}
+        EffHServices, [{G1, _} | _Groups], {U1, _U2, NonAdmin}
     } = api_test_scenarios:create_eff_handle_services_env(Config),
 
     lists:foreach(
-        fun({HServiceId, HSDetails}) ->
+        fun({HService, HSDetails}) ->
             ApiTestSpec = #api_test_spec{
                 client_spec = #client_spec{
                     correct = [
@@ -404,24 +390,24 @@ get_eff_handle_service_details_test(Config) ->
                     method = get,
                     path = [
                         <<"/groups/">>, G1,
-                        <<"/effective_handle_services/">>, HServiceId
+                        <<"/effective_handle_services/">>, HService
                     ],
                     expected_code = ?HTTP_200_OK,
                     expected_body = HSDetails#{
-                        <<"handleServiceId">> => HServiceId
+                        <<"handleServiceId">> => HService
                     }
                 },
                 logic_spec = #logic_spec{
                     module = group_logic,
                     function = get_eff_handle_service,
-                    args = [client, G1, HServiceId],
+                    args = [client, G1, HService],
                     expected_result = ?OK_MAP(HSDetails)
                 }
                 % TODO gs
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-        end, EffHandleServicesList
+        end, EffHServices
     ).
 
 

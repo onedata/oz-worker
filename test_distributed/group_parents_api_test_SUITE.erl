@@ -1,12 +1,12 @@
 %%%-------------------------------------------------------------------
 %%% @author Bartosz Walkowicz
-%%% @copyright (C): 2017 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This file contains tests concerning groups parents API (REST + logic + gs).
+%%% This file contains tests concerning group parents API (REST + logic + gs).
 %%% @end
 %%%-------------------------------------------------------------------
 -module(group_parents_api_test_SUITE).
@@ -61,7 +61,7 @@ list_parents_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_VIEW
     ]),
@@ -73,7 +73,7 @@ list_parents_test(Config) ->
     ExpGroups = lists:map(
         fun(_) ->
             {ok, GroupId} = oz_test_utils:create_group(
-                Config, ?ROOT, <<"ParentGroup">>
+                Config, ?ROOT, ?GROUP_NAME2
             ),
             oz_test_utils:add_group_to_group(Config, GroupId, G1),
             GroupId
@@ -114,22 +114,22 @@ join_group_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G2} = oz_test_utils:create_group(Config, ?USER(U1), <<"G2">>),
-    oz_test_utils:group_set_user_privileges(Config, G2, U1, revoke, [
+    {ok, Child} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    oz_test_utils:group_set_user_privileges(Config, Child, U1, revoke, [
         ?GROUP_JOIN_GROUP
     ]),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, G2, U2),
-    oz_test_utils:group_set_user_privileges(Config, G2, U2, set, [
+    {ok, U2} = oz_test_utils:add_user_to_group(Config, Child, U2),
+    oz_test_utils:group_set_user_privileges(Config, Child, U2, set, [
         ?GROUP_JOIN_GROUP
     ]),
 
     EnvSetUpFun = fun() ->
-        {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, <<"G1">>),
-        #{groupId => G1}
+        {ok, Group} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME2),
+        #{groupId => Group}
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{groupId := G1} = _Env, _) ->
-        {ok, ChildrenGroups} = oz_test_utils:get_group_children(Config, G1),
-        ?assertEqual(lists:member(G2, ChildrenGroups), ShouldSucceed)
+    VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, _) ->
+        {ok, ChildGroups} = oz_test_utils:get_group_children(Config, GroupId),
+        ?assertEqual(lists:member(Child, ChildGroups), ShouldSucceed)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -146,17 +146,14 @@ join_group_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = post,
-            path = [<<"/groups/">>, G2, <<"/parents/join">>],
+            path = [<<"/groups/">>, Child, <<"/parents/join">>],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = ?OK_ENV(fun(#{groupId := G1} = _Env, _) ->
+            expected_headers = ?OK_ENV(fun(#{groupId := GroupId} = _Env, _) ->
                 fun(#{<<"location">> := Location} = _Headers) ->
-                    [GroupId, ParentGroupId] = binary:split(
-                        Location,
-                        [<<"/groups/">>, <<"/nested/">>],
-                        [trim_all, global]
-                    ),
-                    ?assertEqual(GroupId, G2),
-                    ?assertEqual(ParentGroupId, G1),
+                    ExpLocation = <<
+                        "/groups/", Child/binary, "/nested/", GroupId/binary
+                    >>,
+                    ?assertMatch(ExpLocation, Location),
                     true
                 end
             end)
@@ -164,9 +161,9 @@ join_group_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = join_group,
-            args = [client, G2, data],
-            expected_result = ?OK_ENV(fun(#{groupId := G1} = _Env, _) ->
-                ?OK_BINARY(G1)
+            args = [client, Child, data],
+            expected_result = ?OK_ENV(fun(#{groupId := GroupId} = _Env, _) ->
+                ?OK_BINARY(GroupId)
             end)
         },
         % TODO gs
@@ -199,29 +196,25 @@ leave_group_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1), <<"Group">>),
-    oz_test_utils:group_set_user_privileges(Config, Group, U1, revoke, [
+    {ok, Child} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    oz_test_utils:group_set_user_privileges(Config, Child, U1, revoke, [
         % TODO VFS-3351 ?GROUP_LEAVE_GROUP
         ?GROUP_UPDATE
     ]),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, Group, U2),
-    oz_test_utils:group_set_user_privileges(Config, Group, U2, set, [
+    {ok, U2} = oz_test_utils:add_user_to_group(Config, Child, U2),
+    oz_test_utils:group_set_user_privileges(Config, Child, U2, set, [
         % TODO VFS-3351 ?GROUP_LEAVE_GROUP
         ?GROUP_UPDATE
     ]),
 
     EnvSetUpFun = fun() ->
-        {ok, ParentGroup} = oz_test_utils:create_group(
-            Config, ?ROOT, <<"PG">>
-        ),
-        {ok, Group} = oz_test_utils:add_group_to_group(
-            Config, ParentGroup, Group
-        ),
-        #{parentGroupId => ParentGroup}
+        {ok, Group} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME2),
+        {ok, Child} = oz_test_utils:add_group_to_group(Config, Group, Child),
+        #{groupId => Group}
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{parentGroupId := PGID} = _Env, _) ->
-        {ok, ChildrenGroups} = oz_test_utils:get_group_children(Config, PGID),
-        ?assertEqual(lists:member(Group, ChildrenGroups), not ShouldSucceed)
+    VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, _) ->
+        {ok, ChildGroups} = oz_test_utils:get_group_children(Config, GroupId),
+        ?assertEqual(lists:member(Child, ChildGroups), not ShouldSucceed)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -238,13 +231,13 @@ leave_group_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = delete,
-            path = [<<"/groups/">>, Group, <<"/parents/">>, parentGroupId],
+            path = [<<"/groups/">>, Child, <<"/parents/">>, groupId],
             expected_code = ?HTTP_202_ACCEPTED
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = leave_group,
-            args = [client, Group, parentGroupId],
+            args = [client, Child, groupId],
             expected_result = ?OK
         }
         % TODO gs
@@ -260,7 +253,7 @@ get_parent_details_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1), <<"G2">>),
+    {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(Config, Group, U1, revoke, [
         ?GROUP_VIEW
     ]),
@@ -269,10 +262,8 @@ get_parent_details_test(Config) ->
         ?GROUP_VIEW
     ]),
 
-    ExpName = <<"G1">>,
-    ExpType = organization,
-    {ok, ParentGroup} = oz_test_utils:create_group(
-        Config, ?ROOT, #{<<"name">> => ExpName, <<"type">> => ExpType}
+    {ok, ParentGroup} = oz_test_utils:create_group(Config, ?ROOT,
+        #{<<"name">> => ?GROUP_NAME2, <<"type">> => ?GROUP_TYPE2}
     ),
     oz_test_utils:add_group_to_group(Config, ParentGroup, Group),
 
@@ -294,8 +285,8 @@ get_parent_details_test(Config) ->
             expected_code = ?HTTP_200_OK,
             expected_body = #{
                 <<"groupId">> => ParentGroup,
-                <<"name">> => ExpName,
-                <<"type">> => atom_to_binary(ExpType, utf8)
+                <<"name">> => ?GROUP_NAME2,
+                <<"type">> => ?GROUP_TYPE2_BIN
             }
         },
         logic_spec = #logic_spec{
@@ -303,8 +294,8 @@ get_parent_details_test(Config) ->
             function = get_parent,
             args = [client, Group, ParentGroup],
             expected_result = ?OK_MAP(#{
-                    <<"name">> => ExpName,
-                    <<"type">> => ExpType
+                    <<"name">> => ?GROUP_NAME2,
+                    <<"type">> => ?GROUP_TYPE2
                 })
         },
         gs_spec = #gs_spec{
@@ -315,8 +306,8 @@ get_parent_details_test(Config) ->
             },
             auth_hint = ?THROUGH_GROUP(Group),
             expected_result = ?OK_MAP(#{
-                <<"name">> => ExpName,
-                <<"type">> => atom_to_binary(ExpType, utf8),
+                <<"name">> => ?GROUP_NAME2,
+                <<"type">> => ?GROUP_TYPE2_BIN,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -332,7 +323,7 @@ get_parent_details_test(Config) ->
 list_eff_parents_test(Config) ->
     {
         [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}], {U1, U2, NonAdmin}
-    } = api_test_scenarios:create_eff_groups_env(Config),
+    } = api_test_scenarios:create_eff_parent_groups_env(Config),
 
     ExpGroups = [G2, G3, G4, G5],
     ApiTestSpec = #api_test_spec{
@@ -378,8 +369,8 @@ list_eff_parents_test(Config) ->
 
 get_eff_parent_details_test(Config) ->
     {
-        [{G1, _} | EffParentsList], {U1, U2, NonAdmin}
-    } = api_test_scenarios:create_eff_groups_env(Config),
+        [{G1, _} | EffParents], {U1, U2, NonAdmin}
+    } = api_test_scenarios:create_eff_parent_groups_env(Config),
 
     lists:foreach(
         fun({GroupId, GroupDetails}) ->
@@ -437,14 +428,13 @@ get_eff_parent_details_test(Config) ->
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-        end, EffParentsList
+        end, EffParents
     ).
 
 
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
-
 
 init_per_suite(Config) ->
     ssl:start(),

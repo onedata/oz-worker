@@ -1,7 +1,7 @@
 %%%-------------------------------------------------------------------
 %%% @author Krzysztof Trzepla
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2014-2016 ACK CYFRONET AGH
+%%% @copyright (C) 2014-2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -23,7 +23,8 @@
     call_oz/4,
     get_env/3,
     get_domain/1,
-    get_rest_port/1
+    get_rest_port/1,
+    get_oz_privileges/1
 ]).
 % Operations corresponding to logic modules
 -export([
@@ -52,6 +53,8 @@
     user_leave_space/3
 ]).
 -export([
+    get_group_privileges/1,
+
     create_group/3,
     get_group/2,
     get_group_children/2,
@@ -141,6 +144,8 @@
     handle_service_set_group_privileges/5
 ]).
 -export([
+    get_handles_privileges/1,
+
     create_handle/6, create_handle/3,
     get_handle/2,
     get_handle_groups/2,
@@ -496,6 +501,16 @@ user_leave_space(Config, UserId, SpaceId) ->
     ?assertMatch(ok, call_oz(
         Config, user_logic, leave_space, [?ROOT, UserId, SpaceId]
     )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get all atoms representing group privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_group_privileges(Config :: term()) -> [atom()].
+get_group_privileges(Config) ->
+    call_oz(Config, privileges, group_privileges, []).
 
 
 %%--------------------------------------------------------------------
@@ -1377,6 +1392,16 @@ handle_service_set_group_privileges(
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Get all atoms representing handles privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handles_privileges(Config :: term()) -> [atom()].
+get_handles_privileges(Config) ->
+    call_oz(Config, privileges, handle_privileges, []).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a handle.
 %% @end
 %%--------------------------------------------------------------------
@@ -1825,6 +1850,16 @@ create_session(Config, UserId, CustomArgs) ->
     ?assertMatch({ok, _}, call_oz(
         Config, gui_session_plugin, create_session, [UserId, CustomArgs]
     )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get all atoms representing oz privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_oz_privileges(Config :: term()) -> [atom()].
+get_oz_privileges(Config) ->
+    call_oz(Config, privileges, oz_privileges, []).
 
 
 %%--------------------------------------------------------------------

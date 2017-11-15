@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Bartosz Walkowicz
-%%% @copyright (C): 2017 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -75,17 +75,17 @@ add_group_test(Config) ->
         ?OZ_SPACES_ADD_MEMBERS
     ]),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(User), ?GROUP_NAME1),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
 
     VerifyEndFun =
         fun
             (true = _ShouldSucceed, _, Data) ->
-                Privs = lists:sort(maps:get(<<"privileges">>, Data)),
-                {ok, ActualPrivs} = oz_test_utils:get_space_group_privileges(
+                ExpPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
+                {ok, Privs} = oz_test_utils:get_space_group_privileges(
                     Config, S1, G1
                 ),
-                ?assertEqual(Privs, lists:sort(ActualPrivs)),
+                ?assertEqual(ExpPrivs, lists:sort(Privs)),
                 oz_test_utils:space_remove_group(Config, S1, G1);
             (false = ShouldSucceed, _, _) ->
                 {ok, Groups} = oz_test_utils:get_space_groups(Config, S1),
@@ -226,13 +226,13 @@ remove_group_test(Config) ->
     ]),
 
     EnvSetUpFun = fun() ->
-        {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME2),
-        {ok, G2} = oz_test_utils:add_group_to_space(Config, S1, G2),
-        #{groupId => G2}
+        {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+        {ok, G1} = oz_test_utils:add_group_to_space(Config, S1, G1),
+        #{groupId => G1}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, _) ->
-        {ok, SubGroups} = oz_test_utils:get_space_groups(Config, S1),
-        ?assertEqual(lists:member(GroupId, SubGroups), not ShouldSucceed)
+        {ok, Groups} = oz_test_utils:get_space_groups(Config, S1),
+        ?assertEqual(lists:member(GroupId, Groups), not ShouldSucceed)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -421,11 +421,11 @@ get_group_privileges_test(Config) ->
         ?SPACE_VIEW
     ]),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U3), <<"G2">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME1),
     {ok, G1} = oz_test_utils:add_group_to_space(Config, S1, G1),
 
     AllPrivs = oz_test_utils:get_space_privileges(Config),
-    InitialPrivs = [space_view, space_write_data],
+    InitialPrivs = [?SPACE_VIEW, ?SPACE_WRITE_DATA],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:space_set_group_privileges(

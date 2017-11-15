@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Bartosz Walkowicz
-%%% @copyright (C): 2017 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -63,11 +63,10 @@ all() ->
 
 create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    ExpName = <<"G1">>,
 
     VerifyFun = fun(GroupId, ExpType) ->
         {ok, Group} = oz_test_utils:get_group(Config, GroupId),
-        ?assertEqual(ExpName, Group#od_group.name),
+        ?assertEqual(?GROUP_NAME1, Group#od_group.name),
         ?assertEqual(ExpType, Group#od_group.type),
         true
     end,
@@ -108,7 +107,7 @@ create_test(Config) ->
             expected_result = ?OK_ENV(fun(_, DataSet) ->
                 ExpType = maps:get(<<"type">>, DataSet, role),
                 ?OK_MAP_CONTAINS(#{
-                    <<"name">> => ExpName,
+                    <<"name">> => ?GROUP_NAME1,
                     <<"type">> => atom_to_binary(ExpType, utf8),
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = Id} = oz_test_utils:decode_gri(
@@ -123,15 +122,14 @@ create_test(Config) ->
             required = [<<"name">>],
             optional = [<<"type">>],
             correct_values = #{
-                <<"name">> => [ExpName],
-                <<"type">> => [organization, unit, team, role]
+                <<"name">> => [?GROUP_NAME1],
+                <<"type">> => ?GROUP_TYPES
             },
             bad_values = [
                 {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
                 {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
                 {<<"type">>, kingdom,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"type">>,
-                        [organization,unit,team,role])},
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
                 {<<"type">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"type">>)}
             ]
         }
@@ -150,12 +148,11 @@ list_test(Config) ->
         ?OZ_GROUPS_LIST
     ]),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
-    {ok, G2} = oz_test_utils:create_group(Config, ?USER(U1), <<"G2">>),
-    {ok, G3} = oz_test_utils:create_group(Config, ?USER(U1), <<"G3">>),
-    {ok, G4} = oz_test_utils:create_group(Config, ?USER(U1), <<"G4">>),
-    {ok, G5} = oz_test_utils:create_group(Config, ?USER(U1), <<"G5">>),
-
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    {ok, G2} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    {ok, G3} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    {ok, G4} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    {ok, G5} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     ExpGroups = [G1, G2, G3, G4, G5, <<"all_users">>, <<"admins">>],
 
     ApiTestSpec = #api_test_spec{
@@ -208,11 +205,8 @@ get_test(Config) ->
         ?OZ_GROUPS_LIST
     ]),
 
-    ExpName = <<"G1">>,
-    ExpType = unit,
-    ExpTypeBinary = atom_to_binary(ExpType, utf8),
-    {ok, G1} = oz_test_utils:create_group(
-        Config, ?USER(U1), #{<<"name">> => ExpName, <<"type">> => ExpType}
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1),
+        #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
     ),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_VIEW
@@ -222,7 +216,7 @@ get_test(Config) ->
         ?GROUP_VIEW
     ]),
 
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, group_privileges, []),
+    AllPrivs = oz_test_utils:get_group_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     % Get and check private data
@@ -258,15 +252,14 @@ get_test(Config) ->
                     eff_spaces = #{}, eff_providers = #{},
                     eff_handle_services = #{}, eff_handles = #{}
                 }) ->
-                    ?assertEqual(ExpType, Type),
-                    ?assertEqual(ExpName, Name),
+                    ?assertEqual(?GROUP_NAME1, Name),
+                    ?assertEqual(?GROUP_TYPE1, Type),
                     ?assertEqual(Users, #{
-                        U1 => AllPrivs -- [group_view],
-                        U2 => [group_view]}
+                        U1 => AllPrivs -- [?GROUP_VIEW], U2 => [?GROUP_VIEW]}
                     ),
                     ?assertEqual(EffUsers, #{
-                        U1 => {AllPrivs -- [group_view], [{od_group, G1}]},
-                        U2 => {[group_view], [{od_group, G1}]}
+                        U1 => {AllPrivs -- [?GROUP_VIEW], [{od_group, G1}]},
+                        U2 => {[?GROUP_VIEW], [{od_group, G1}]}
                     })
                 end
             )
@@ -277,8 +270,8 @@ get_test(Config) ->
             expected_result = ?OK_MAP(#{
                 <<"children">> => #{},
                 <<"effectiveChildren">> => #{},
-                <<"name">> => ExpName,
-                <<"type">> => ExpTypeBinary,
+                <<"name">> => ?GROUP_NAME1,
+                <<"type">> => ?GROUP_TYPE1_BIN,
                 <<"parents">> => [],
                 <<"spaces">> => [],
                 <<"effectiveUsers">> => #{
@@ -317,8 +310,8 @@ get_test(Config) ->
             function = get_shared_data,
             args = [client, G1],
             expected_result = ?OK_MAP(#{
-                <<"name">> => ExpName,
-                <<"type">> => ExpType
+                <<"name">> => ?GROUP_NAME1,
+                <<"type">> => ?GROUP_TYPE1
             })
         },
         gs_spec = GsSpec = #gs_spec{
@@ -327,8 +320,8 @@ get_test(Config) ->
                 type = od_group, id = G1, aspect = instance, scope = shared
             },
             expected_result = ?OK_MAP(#{
-                <<"name">> => ExpName,
-                <<"type">> => ExpTypeBinary,
+                <<"name">> => ?GROUP_NAME1,
+                <<"type">> => ?GROUP_TYPE1_BIN,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -348,8 +341,8 @@ get_test(Config) ->
             expected_code = ?HTTP_200_OK,
             expected_body = #{
                 <<"groupId">> => G1,
-                <<"name">> => ExpName,
-                <<"type">> => ExpTypeBinary
+                <<"name">> => ?GROUP_NAME1,
+                <<"type">> => ?GROUP_TYPE1_BIN
             }
         },
         logic_spec = LogicSpec#logic_spec{
@@ -368,30 +361,26 @@ update_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
-    % Create a group
-    InitialName = <<"G1">>,
     EnvSetUpFun = fun() ->
-        {ok, G1} = oz_test_utils:create_group(
-            Config, ?USER(U1), InitialName
-        ),
-        oz_test_utils:group_set_user_privileges(
-            Config, G1, U1, revoke, [?GROUP_UPDATE]
-        ),
+        {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+        oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
+            ?GROUP_UPDATE
+        ]),
         oz_test_utils:add_user_to_group(Config, G1, U2),
-        oz_test_utils:group_set_user_privileges(
-            Config, G1, U2, set, [?GROUP_UPDATE]
-        ),
+        oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
+            ?GROUP_UPDATE
+        ]),
         #{groupId => G1}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, Data) ->
         {ok, Group} = oz_test_utils:get_group(Config, GroupId),
         {ExpType, ExpName} = case ShouldSucceed of
             false ->
-                {role, InitialName};
+                {role, ?GROUP_NAME1};
             true ->
                 {
                     maps:get(<<"type">>, Data, role),
-                    maps:get(<<"name">>, Data, InitialName)
+                    maps:get(<<"name">>, Data, ?GROUP_NAME1)
                 }
         end,
         ?assertEqual(ExpName, Group#od_group.name),
@@ -424,23 +413,16 @@ update_test(Config) ->
             expected_result = ?OK
         },
         data_spec = #data_spec{
-            at_least_one = [
-                <<"name">>,
-                <<"type">>
-            ],
+            at_least_one = [<<"name">>, <<"type">>],
             correct_values = #{
-                <<"name">> => [fun() ->
-                    UniqueInt = erlang:unique_integer([positive]),
-                    <<"Group", (integer_to_binary(UniqueInt))/binary>>
-                end],
-                <<"type">> => [organization]
+                <<"name">> => [fun() -> ?UNIQUE_NAME(<<"group">>) end],
+                <<"type">> => [?GROUP_TYPE2]
             },
             bad_values = [
                 {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
                 {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
                 {<<"type">>, kingdom,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"type">>,
-                        [organization,unit,team,role])},
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
                 {<<"type">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"type">>)}
             ]
         }
@@ -454,9 +436,8 @@ delete_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
-    GroupName = <<"G1">>,
     EnvSetUpFun = fun() ->
-        {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), GroupName),
+        {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
         oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
             ?GROUP_DELETE
         ]),
@@ -505,16 +486,20 @@ delete_test(Config) ->
 
 
 get_oz_privileges_test(Config) ->
+    % User whose privileges will be changing during test run and as such
+    % should not be listed in client spec (he will sometimes has privilege
+    % to get group privileges and sometimes not)
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_VIEW_PRIVILEGES
     ]),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
 
     InitialPrivs = [],
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
+    AllPrivs = oz_test_utils:get_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:set_group_oz_privileges(Config, G1, Operation, Privs)
     end,
@@ -557,10 +542,14 @@ update_oz_privileges_test(Config) ->
     oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_SET_PRIVILEGES
     ]),
+
+    % User whose privileges will be changing during test run and as such
+    % should not be listed in client spec (he will sometimes has privilege
+    % to update group privileges and sometimes not)
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
 
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
+    AllPrivs = oz_test_utils:get_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:set_group_oz_privileges(Config, G1, Operation, Privs)
     end,
@@ -607,9 +596,9 @@ delete_oz_privileges_test(Config) ->
         ?OZ_SET_PRIVILEGES
     ]),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
 
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
+    AllPrivs = oz_test_utils:get_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:set_group_oz_privileges(Config, G1, Operation, Privs)
     end,
@@ -651,6 +640,9 @@ delete_oz_privileges_test(Config) ->
 
 
 get_eff_oz_privileges_test(Config) ->
+    % User whose privileges will be changing during test run and as such
+    % should not be listed in client spec (he will sometimes has privilege
+    % to get group privileges and sometimes not)
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
@@ -661,7 +653,7 @@ get_eff_oz_privileges_test(Config) ->
     {Bottom, Mid, Top} = oz_test_utils:create_3_nested_groups(Config, U1),
 
     InitialPrivs = [],
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
+    AllPrivs = oz_test_utils:get_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         % In case of SET and GRANT, randomly split privileges into four
         % parts and update groups with the privileges. G3 eff_privileges
@@ -725,7 +717,6 @@ get_eff_oz_privileges_test(Config) ->
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
-
 
 init_per_suite(Config) ->
     ssl:start(),

@@ -1,12 +1,12 @@
 %%%-------------------------------------------------------------------
 %%% @author Bartosz Walkowicz
-%%% @copyright (C): 2017 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This file contains tests concerning groups spaces and provider
+%%% This file contains tests concerning group spaces and providers
 %%% API (REST + logic + gs).
 %%% @end
 %%%-------------------------------------------------------------------
@@ -70,7 +70,7 @@ list_spaces_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_VIEW
     ]),
@@ -79,10 +79,10 @@ list_spaces_test(Config) ->
         ?GROUP_VIEW
     ]),
 
-    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, <<"S1">>),
-    {ok, S2} = oz_test_utils:create_space_for_group(Config, G1, <<"S2">>),
-    {ok, S3} = oz_test_utils:create_space_for_group(Config, G1, <<"S3">>),
-    {ok, S4} = oz_test_utils:create_space_for_group(Config, G1, <<"S4">>),
+    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
+    {ok, S3} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
+    {ok, S4} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
     ExpSpaces = [S1, S2, S3, S4],
 
     ApiTestSpec = #api_test_spec{
@@ -119,7 +119,7 @@ get_space_details_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_VIEW
     ]),
@@ -128,9 +128,8 @@ get_space_details_test(Config) ->
         ?GROUP_VIEW
     ]),
 
-    ExpName = <<"S1">>,
-    ExpMap = #{<<"name">> => ExpName, <<"providersSupports">> => #{}},
-    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, ExpName),
+    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
+    ExpDetails = #{<<"name">> => ?SPACE_NAME1, <<"providersSupports">> => #{}},
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -148,13 +147,13 @@ get_space_details_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/spaces/">>, S1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpMap#{<<"spaceId">> => S1}
+            expected_body = ExpDetails#{<<"spaceId">> => S1}
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_space,
             args = [client, G1, S1],
-            expected_result = ?OK_MAP(ExpMap)
+            expected_result = ?OK_MAP(ExpDetails)
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -162,7 +161,7 @@ get_space_details_test(Config) ->
                 type = od_space, id = S1, aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_GROUP(G1),
-            expected_result = ?OK_MAP(ExpMap#{
+            expected_result = ?OK_MAP(ExpDetails#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -180,7 +179,7 @@ create_space_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_CREATE_SPACE
     ]),
@@ -189,13 +188,12 @@ create_space_test(Config) ->
         ?GROUP_CREATE_SPACE
     ]),
 
-    ExpName = <<"SpaceName">>,
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, space_privileges, []),
+    AllPrivs = oz_test_utils:get_space_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(SpaceId) ->
         {ok, Space} = oz_test_utils:get_space(Config, SpaceId),
-        ?assertEqual(ExpName, Space#od_space.name),
+        ?assertEqual(?SPACE_NAME1, Space#od_space.name),
         true
     end,
 
@@ -242,7 +240,7 @@ create_space_test(Config) ->
                     U2 => AllPrivsBin
                 },
                 <<"groups">> => #{G1 => AllPrivsBin},
-                <<"name">> => ExpName,
+                <<"name">> => ?SPACE_NAME1,
                 <<"providers">> => #{},
                 <<"shares">> => [],
                 <<"users">> => #{},
@@ -256,9 +254,7 @@ create_space_test(Config) ->
         },
         data_spec = #data_spec{
             required = [<<"name">>],
-            correct_values = #{
-                <<"name">> => [ExpName]
-            },
+            correct_values = #{<<"name">> => [?SPACE_NAME1]},
             bad_values = [
                 {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
                 {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)}
@@ -273,7 +269,7 @@ join_space_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_JOIN_SPACE
     ]),
@@ -283,7 +279,7 @@ join_space_test(Config) ->
     ]),
 
     EnvSetUpFun = fun() ->
-        {ok, SpaceId} = oz_test_utils:create_space(Config, ?ROOT, <<"Sp">>),
+        {ok, SpaceId} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
         #{spaceId => SpaceId}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _) ->
@@ -309,13 +305,10 @@ join_space_test(Config) ->
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{spaceId := SpaceId} = _Env, _) ->
                 fun(#{<<"location">> := Location} = _Headers) ->
-                    [GroupId, SpaceId] = binary:split(
-                        Location,
-                        [<<"/groups/">>, <<"/spaces/">>],
-                        [global, trim_all]
-                    ),
-                    ?assertEqual(GroupId, G1),
-                    ?assertEqual(SpaceId, SpaceId),
+                    ExpLocation = <<
+                        "/groups/", G1/binary, "/spaces/", SpaceId/binary
+                    >>,
+                    ?assertMatch(ExpLocation, Location),
                     true
                 end
             end)
@@ -358,7 +351,7 @@ leave_space_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_LEAVE_SPACE
     ]),
@@ -368,7 +361,9 @@ leave_space_test(Config) ->
     ]),
 
     EnvSetUpFun = fun() ->
-        {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, <<"S1">>),
+        {ok, S1} = oz_test_utils:create_space_for_group(
+            Config, G1, ?SPACE_NAME1
+        ),
         #{spaceId => S1}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _) ->
@@ -567,9 +562,6 @@ get_eff_provider_details_test(Config) ->
 
     lists:foreach(
         fun({ProvId, ProvDetails}) ->
-            NewProvDetails = ProvDetails#{
-                <<"clientName">> => maps:get(<<"name">>, ProvDetails)
-            },
             ApiTestSpec = #api_test_spec{
                 client_spec = #client_spec{
                     correct = [
@@ -588,13 +580,13 @@ get_eff_provider_details_test(Config) ->
                         <<"/groups/">>, G1, <<"/effective_providers/">>, ProvId
                     ],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = NewProvDetails#{<<"providerId">> => ProvId}
+                    expected_body = ProvDetails#{<<"providerId">> => ProvId}
                 },
                 logic_spec = #logic_spec{
                     module = group_logic,
                     function = get_eff_provider,
                     args = [client, G1, ProvId],
-                    expected_result = ?OK_MAP(NewProvDetails)
+                    expected_result = ?OK_MAP(ProvDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -603,7 +595,7 @@ get_eff_provider_details_test(Config) ->
                         aspect = instance, scope = protected
                     },
                     auth_hint = ?THROUGH_GROUP(G1),
-                    expected_result = ?OK_MAP(NewProvDetails#{
+                    expected_result = ?OK_MAP(ProvDetails#{
                         <<"gri">> => fun(EncodedGri) ->
                             #gri{id = Id} = oz_test_utils:decode_gri(
                                 Config, EncodedGri

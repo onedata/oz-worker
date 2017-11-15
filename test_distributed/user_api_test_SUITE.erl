@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -1548,7 +1548,7 @@ leave_group_test(Config) ->
 list_eff_groups_test(Config) ->
     {
         [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}], {U1, U2, NonAdmin}
-    } = api_test_scenarios:create_eff_groups_env(Config),
+    } = api_test_scenarios:create_eff_parent_groups_env(Config),
 
     ExpGroups = [G1, G2, G3, G4, G5],
     ApiTestSpec = #api_test_spec{
@@ -1592,7 +1592,7 @@ list_eff_groups_test(Config) ->
 get_eff_group_test(Config) ->
     {
         EffGroups, {U1, _U2, NonAdmin}
-    } = api_test_scenarios:create_eff_groups_env(Config),
+    } = api_test_scenarios:create_eff_parent_groups_env(Config),
 
     lists:foreach(
         fun({GroupId, GroupDetails}) ->

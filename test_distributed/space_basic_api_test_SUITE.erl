@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Bartosz Walkowicz
-%%% @copyright (C): 2017 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -104,7 +104,7 @@ create_test(Config) ->
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_space, aspect = instance},
-            auth_hint = ?AS_USER(U1),
+            auth_hint = ?AS_USER(client),
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?SPACE_NAME1,
                 <<"gri">> => fun(EncodedGri) ->
@@ -205,7 +205,7 @@ get_test(Config) ->
     ]),
 
     {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
-        Config, ?PROVIDER_NAME
+        Config, ?PROVIDER_NAME1
     ),
     SupportSize = oz_test_utils:minimum_support_size(Config),
     {ok, S1} = oz_test_utils:support_space(
@@ -345,13 +345,13 @@ update_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-        oz_test_utils:space_set_user_privileges(
-            Config, S1, U1, revoke, [?SPACE_UPDATE]
-        ),
+        oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
+            ?SPACE_UPDATE
+        ]),
         oz_test_utils:add_user_to_space(Config, S1, U2),
-        oz_test_utils:space_set_user_privileges(
-            Config, S1, U2, set, [?SPACE_UPDATE]
-        ),
+        oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
+            ?SPACE_UPDATE
+        ]),
         #{spaceId => S1}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, Data) ->
@@ -608,7 +608,7 @@ list_providers_test(Config) ->
     ExpProviders = lists:map(
         fun(_) ->
             {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(
-                Config, ?PROVIDER_NAME
+                Config, ?PROVIDER_NAME1
             ),
             {ok, S1} = oz_test_utils:support_space(
                 Config, ProviderId, S1, SupportSize
@@ -743,8 +743,7 @@ get_provider_test(Config) ->
 
     {_, CSRFile, _} = oz_test_utils:generate_provider_cert_files(),
     {ok, CSR} = file:read_file(CSRFile),
-    ProviderDetails = ?PROVIDER_DETAILS(?PROVIDER_NAME),
-
+    ProviderDetails = ?PROVIDER_DETAILS(?PROVIDER_NAME1),
     {ok, {P1, _}} = oz_test_utils:create_provider(
         Config, ProviderDetails#{<<"csr">> => CSR}
     ),
@@ -753,7 +752,7 @@ get_provider_test(Config) ->
     ),
 
     ExpProvidersDetails = ProviderDetails#{
-        <<"clientName">> => ?PROVIDER_NAME
+        <<"clientName">> => ?PROVIDER_NAME1
     },
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -817,7 +816,7 @@ leave_provider_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(
-            Config, ?PROVIDER_NAME
+            Config, ?PROVIDER_NAME1
         ),
         {ok, S1} = oz_test_utils:support_space(
             Config, ProviderId, S1, oz_test_utils:minimum_support_size(Config)

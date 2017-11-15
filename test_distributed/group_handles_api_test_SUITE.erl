@@ -1,12 +1,12 @@
 %%%-------------------------------------------------------------------
 %%% @author Bartosz Walkowicz
-%%% @copyright (C): 2017 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This file contains tests concerning groups handles API (REST + logic + gs).
+%%% This file contains tests concerning group handles API (REST + logic + gs).
 %%% @end
 %%%-------------------------------------------------------------------
 -module(group_handles_api_test_SUITE).
@@ -62,7 +62,7 @@ list_handles_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_VIEW
     ]),
@@ -71,8 +71,8 @@ list_handles_test(Config) ->
         ?GROUP_VIEW
     ]),
 
-    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, <<"S1">>),
-    {ok, S2} = oz_test_utils:create_space_for_group(Config, G1, <<"S2">>),
+    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME2),
 
     {ok, HServiceId} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
@@ -80,17 +80,17 @@ list_handles_test(Config) ->
 
     % Create 3 handles, 2 for S1 and 1 for S2
     ExpHandles = lists:map(
-        fun({Idx, SpaceId}) ->
-            ShareId = <<"shareId", (Idx+48)/integer>>,
+        fun(SpaceId) ->
+            ShareId = ?UNIQUE_NAME(?SHARE_NAME1),
             {ok, ShareId} = oz_test_utils:create_share(
-                Config, ?ROOT, ShareId, <<"share">>, <<"file">>, SpaceId
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
             ),
             {ok, HandleId} = oz_test_utils:create_handle(
                 Config, ?ROOT, ?HANDLE(HServiceId, ShareId)
             ),
             {ok, G1} = oz_test_utils:add_group_to_handle(Config, HandleId, G1),
             HandleId
-        end, [{1, S1}, {2, S1}, {3, S2}]
+        end, [S1, S1, S2]
     ),
 
     ApiTestSpec = #api_test_spec{
@@ -126,10 +126,10 @@ create_handle_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
-    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, <<"S1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, <<"share1">>, <<"share">>, <<"file">>, S1
+        Config, ?ROOT, ?SHARE_NAME1, ?SHARE_ID_1, ?ROOT_FILE_ID, S1
     ),
 
     {ok, HServiceId} = oz_test_utils:create_handle_service(
@@ -139,9 +139,7 @@ create_handle_test(Config) ->
         Config, HServiceId, G1
     ),
 
-    AllPrivs = oz_test_utils:call_oz(
-        Config, privileges, handle_privileges, []
-    ),
+    AllPrivs = oz_test_utils:get_handles_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     ExpResourceType = <<"Share">>,
@@ -288,7 +286,7 @@ get_handle_details_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_VIEW
     ]),
@@ -297,25 +295,19 @@ get_handle_details_test(Config) ->
         ?GROUP_VIEW
     ]),
 
-    {ok, HServiceId} = oz_test_utils:create_handle_service(
+    {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
     ),
-    {ok, G1} = oz_test_utils:add_group_to_handle_service(
-        Config, HServiceId, G1
-    ),
+    {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
 
-    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, <<"S1">>),
+    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, <<"share1">>, <<"share">>, <<"file">>, S1
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
     ),
 
-    HandleDetails = ?HANDLE(HServiceId, ShareId),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?ROOT, HandleDetails
-    ),
-    {ok, G1} = oz_test_utils:add_group_to_handle(
-        Config, HandleId, G1
-    ),
+    HandleDetails = ?HANDLE(HService, ShareId),
+    {ok, HandleId} = oz_test_utils:create_handle(Config, ?ROOT, HandleDetails),
+    {ok, G1} = oz_test_utils:add_group_to_handle(Config, HandleId, G1),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -342,22 +334,6 @@ get_handle_details_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(HandleDetails)
         }
         % TODO gs
-%%        gs_spec = #gs_spec{
-%%            operation = get,
-%%            gri = #gri{
-%%                type = od_handle, id = HandleId,
-%%                aspect = instance, scope = protected
-%%            },
-%%            auth_hint = ?THROUGH_GROUP(G1),
-%%            expected_result = ?OK_MAP_CONTAINS(HandleDetails#{
-%%                fun(EncodedGri) ->
-%%                    #gri{id = Hid} = oz_test_utils:decode_gri(
-%%                        Config, EncodedGri
-%%                    ),
-%%                    ?assertEqual(Hid, HandleId)
-%%                end
-%%            })
-%%        }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -367,7 +343,7 @@ leave_handle_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_UPDATE
     ]),
@@ -376,21 +352,19 @@ leave_handle_test(Config) ->
         ?GROUP_UPDATE
     ]),
 
-    {ok, HServiceId} = oz_test_utils:create_handle_service(
+    {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
     ),
-    {ok, G1} = oz_test_utils:add_group_to_handle_service(
-        Config, HServiceId, G1
-    ),
+    {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
 
-    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, <<"S1">>),
+    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, <<"share1">>, <<"share">>, <<"file">>, S1
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
     ),
 
     EnvSetUpFun = fun() ->
         {ok, HandleId} = oz_test_utils:create_handle(
-            Config, ?ROOT, ?HANDLE(HServiceId, ShareId)
+            Config, ?ROOT, ?HANDLE(HService, ShareId)
         ),
         {ok, G1} = oz_test_utils:add_group_to_handle(Config, HandleId, G1),
         #{handleId => HandleId}
@@ -513,23 +487,6 @@ get_eff_handle_details_test(Config) ->
                     expected_result = ?OK_MAP_CONTAINS(HandleDetails)
                 }
                 % TODO gs
-%%                gs_spec = #gs_spec{
-%%                    operation = get,
-%%                    gri = #gri{
-%%                        type = od_handle, id = HandleId,
-%%                        aspect = instance, scope = protected
-%%                    },
-%%                    auth_hint = ?THROUGH_GROUP(G5),
-%%                    expected_result = ?OK_MAP(HandleDetails#{
-%%                        <<"gri">> =>
-%%                        fun(EncodedGri) ->
-%%                            #gri{id = Id} = oz_test_utils:decode_gri(
-%%                                Config, EncodedGri
-%%                            ),
-%%                            ?assertEqual(Id, HandleId)
-%%                        end
-%%                    })
-%%                }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 

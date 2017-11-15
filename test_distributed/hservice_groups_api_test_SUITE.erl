@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Bartosz Walkowicz
-%%% @copyright (C): 2017 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -68,13 +68,15 @@ all() ->
 
 add_group_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?ROOT, ?DOI_SERVICE
+        Config, ?USER(U1), ?DOI_SERVICE
     ),
-    {ok, U1} = oz_test_utils:add_user_to_handle_service(Config, HService, U1),
     oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
         revoke, [?HANDLE_SERVICE_UPDATE]
     ),
@@ -151,13 +153,15 @@ add_group_test(Config) ->
 
 remove_group_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?ROOT, ?DOI_SERVICE
+        Config, ?USER(U1), ?DOI_SERVICE
     ),
-    {ok, U1} = oz_test_utils:add_user_to_handle_service(Config, HService, U1),
     oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
         revoke, [?HANDLE_SERVICE_UPDATE]
     ),
@@ -212,13 +216,15 @@ remove_group_test(Config) ->
 
 list_groups_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?ROOT, ?DOI_SERVICE
+        Config, ?USER(U1), ?DOI_SERVICE
     ),
-    {ok, U1} = oz_test_utils:add_user_to_handle_service(Config, HService, U1),
     oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
         revoke, [?HANDLE_SERVICE_VIEW]
     ),
@@ -270,13 +276,15 @@ list_groups_test(Config) ->
 
 get_group_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?ROOT, ?DOI_SERVICE
+        Config, ?USER(U1), ?DOI_SERVICE
     ),
-    {ok, U1} = oz_test_utils:add_user_to_handle_service(Config, HService, U1),
     oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
         revoke, [?HANDLE_SERVICE_VIEW]
     ),
@@ -345,6 +353,9 @@ get_group_test(Config) ->
 get_group_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
     % User whose privileges will be changing during test run and as such
@@ -353,9 +364,8 @@ get_group_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?ROOT, ?DOI_SERVICE
+        Config, ?USER(U1), ?DOI_SERVICE
     ),
-    {ok, U1} = oz_test_utils:add_user_to_handle_service(Config, HService, U1),
     oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
         revoke, [?HANDLE_SERVICE_VIEW]
     ),
@@ -414,6 +424,9 @@ get_group_privileges_test(Config) ->
 update_group_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
     % User whose privileges will be changing during test run and as such
@@ -422,9 +435,8 @@ update_group_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?ROOT, ?DOI_SERVICE
+        Config, ?USER(U1), ?DOI_SERVICE
     ),
-    {ok, U1} = oz_test_utils:add_user_to_handle_service(Config, HService, U1),
     oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
         revoke, [?HANDLE_SERVICE_UPDATE]
     ),
@@ -625,6 +637,9 @@ get_eff_group_privileges_test(Config) ->
 
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
     % User whose eff privileges will be changing during test run and as such
@@ -633,9 +648,8 @@ get_eff_group_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?ROOT, ?DOI_SERVICE
+        Config, ?USER(U1), ?DOI_SERVICE
     ),
-    {ok, U1} = oz_test_utils:add_user_to_handle_service(Config, HService, U1),
     oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
         revoke, [?HANDLE_SERVICE_VIEW]
     ),

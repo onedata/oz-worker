@@ -90,41 +90,7 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
 -define(OK_ENV(__PrepareFun), {ok_env, __PrepareFun}).
 -define(ERROR_REASON(__ExpectedError), {error_reason, __ExpectedError}).
 
-%%  Example test data
--define(USER_NAME, <<"user">>).
--define(GROUP_NAME1, <<"group1">>).
--define(GROUP_NAME2, <<"group2">>).
--define(GROUP_TYPE1, unit).
--define(GROUP_TYPE2, team).
--define(GROUP_TYPES, [unit, organization, team, role]).
--define(GROUP_TYPE1_BIN, <<"unit">>).
--define(GROUP_TYPE2_BIN, <<"team">>).
--define(SPACE_NAME1, <<"space1">>).
--define(SPACE_NAME2, <<"space2">>).
--define(PROVIDER_NAME, <<"provider">>).
--define(ROOT_FILE_ID, <<"root_file">>).
-
--define(PROVIDER_DETAILS(ProviderName),
-    #{
-        <<"name">> => ProviderName,
-        <<"urls">> => [<<"127.0.0.1">>],
-        <<"redirectionPoint">> => <<"https://127.0.0.1">>,
-        <<"latitude">> => rand:uniform() * 90,
-        <<"longitude">> => rand:uniform() * 180
-    }
-).
-
--define(GROUP_DETAILS(GroupName),
-    #{
-        <<"name">> => GroupName,
-        <<"type">> => lists:nth(rand:uniform(4), ?GROUP_TYPES)
-    }
-).
-
--define(SHARE_PUBLIC_URL(ZoneDomain, ShareId),
-    str_utils:format_bin("https://~s/share/~s", [ZoneDomain, ShareId])
-).
-
+%% Example test data
 -define(UNIQUE_NAME(Prefix),
     <<
         Prefix/binary,
@@ -132,7 +98,66 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
     >>
 ).
 
-% Example test data for handle services
+%% Example test data for users
+-define(USER_NAME1, <<"user1">>).
+-define(USER_NAME2, <<"user2">>).
+-define(USER_NAME3, <<"user3">>).
+% Default alias (= no alias set) is an empty string
+-define(DEFAULT_USER_ALIAS, <<"">>).
+-define(USER_ALIAS1, <<"alias1">>).
+-define(USER_ALIAS2, <<"alias2">>).
+
+%% Example test data for groups
+-define(GROUP_NAME1, <<"group1">>).
+-define(GROUP_NAME2, <<"group2">>).
+-define(GROUP_TYPE1, unit).
+-define(GROUP_TYPE1_BIN, <<"unit">>).
+-define(GROUP_TYPE2, team).
+-define(GROUP_TYPE2_BIN, <<"team">>).
+-define(GROUP_TYPES, [organization,unit,team,role]).
+-define(GROUP_DETAILS(GroupName),
+    #{
+        <<"name">> => GroupName,
+        <<"type">> => lists:nth(rand:uniform(4), ?GROUP_TYPES)
+    }
+).
+
+%% Example test data for spaces
+-define(SPACE_NAME1, <<"space1">>).
+-define(SPACE_NAME2, <<"space2">>).
+-define(SPACE_SIZE1, <<"1024024024">>).
+-define(SPACE_SIZE2, <<"4096096096">>).
+
+%% Example test data for shares
+-define(SHARE_NAME1, <<"share1">>).
+-define(SHARE_NAME2, <<"share2">>).
+-define(SHARE_ID_1, <<"shareId1">>).
+-define(SHARE_ID_2, <<"shareId2">>).
+-define(ROOT_FILE_ID, <<"root_file">>).
+-define(SHARE_PUBLIC_URL(ZoneDomain, ShareId),
+    str_utils:format_bin("https://~s/share/~s", [ZoneDomain, ShareId])
+).
+
+%% Example test data for providers
+-define(LATITUDE, 23.10).
+-define(LONGITUDE, 44.44).
+-define(URLS1, [<<"127.0.0.1">>]).
+-define(URLS2, [<<"127.0.0.2">>]).
+-define(REDIRECTION_POINT1, <<"https://127.0.0.1:443">>).
+-define(REDIRECTION_POINT2, <<"https://127.0.0.2:443">>).
+-define(PROVIDER_NAME1, <<"provider1">>).
+-define(PROVIDER_NAME2, <<"provider2">>).
+-define(PROVIDER_DETAILS(ProviderName),
+    #{
+        <<"name">> => ProviderName,
+        <<"urls">> => ?URLS1,
+        <<"redirectionPoint">> => ?REDIRECTION_POINT1,
+        <<"latitude">> => rand:uniform() * 90,
+        <<"longitude">> => rand:uniform() * 180
+    }
+).
+
+%% Example test data for handle services
 -define(HANDLE_SERVICE_NAME1, <<"LifeWatch DataCite">>).
 -define(HANDLE_SERVICE_NAME2, <<"iMarine EPIC">>).
 -define(PROXY_ENDPOINT, <<"172.17.0.9:8080/api/v1">>).
@@ -179,7 +204,7 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
     }
 ).
 
-% Example test data for use with handles
+%% Example test data for handles
 -define(DC_METADATA, <<"<?xml version=\"1.0\"?>",
     "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
     "<dc:title>Test dataset<\/dc:title>",
@@ -190,6 +215,22 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
     "<dc:publisher>Onedata<\/dc:publisher>",
     "<dc:publisher>EGI<\/dc:publisher>",
     "<dc:date>2016<\/dc:date>",
+    "<dc:format>application\/pdf<\/dc:format>",
+    "<dc:identifier>onedata:LKJHASKFJHASLKDJHKJHuah132easd<\/dc:identifier>",
+    "<dc:language>eng<\/dc:language>",
+    "<dc:rights>CC-0<\/dc:rights>",
+    "<\/metadata>">>).
+
+-define(DC_METADATA_2, <<"<?xml version=\"1.0\"?>",
+    "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
+    "<dc:title>Test dataset<\/dc:title>",
+    "<dc:creator>Jane Johnson<\/dc:creator>",
+    "<dc:creator>John Doe<\/dc:creator>",
+    "<dc:subject>Test of datacite<\/dc:subject>",
+    "<dc:description>Dolor sit amet<\/dc:description>",
+    "<dc:publisher>Onedata<\/dc:publisher>",
+    "<dc:publisher>EGI<\/dc:publisher>",
+    "<dc:date>2017<\/dc:date>",
     "<dc:format>application\/pdf<\/dc:format>",
     "<dc:identifier>onedata:LKJHASKFJHASLKDJHKJHuah132easd<\/dc:identifier>",
     "<dc:language>eng<\/dc:language>",

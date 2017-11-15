@@ -27,7 +27,7 @@
 -export([delete_privileges/7]).
 
 -export([
-    create_eff_groups_env/1,
+    create_eff_parent_groups_env/1,
     create_eff_child_groups_env/1,
     create_space_eff_users_env/1,
     create_hservice_eff_users_env/1,
@@ -569,7 +569,7 @@ assert(_) -> throw(fail).
 %%%===================================================================
 
 
-create_eff_groups_env(Config) ->
+create_eff_parent_groups_env(Config) ->
     %% Create environment with following relations:
     %%
     %%      Group5
@@ -583,7 +583,7 @@ create_eff_groups_env(Config) ->
     %%                \    /
     %%                Group1
     %%               /      \
-    %%        [group_view]   \
+    %%      [group_view]  [~group_view]
     %%            /           \
     %%         User1          User2
     %%
@@ -591,14 +591,8 @@ create_eff_groups_env(Config) ->
     %%      NonAdmin
 
     Groups = [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}] = lists:map(
-        fun(Idx) ->
-            IdxBin = integer_to_binary(Idx),
-            GroupDetails = #{
-                <<"name">> => <<"Group", IdxBin/binary>>,
-                <<"type">> => lists:nth(
-                    rand:uniform(4), [unit, organization, team, role]
-                )
-            },
+        fun(_) ->
+            GroupDetails = ?GROUP_DETAILS(?UNIQUE_NAME(<<"Group">>)),
             {ok, GroupId} = oz_test_utils:create_group(
                 Config, ?ROOT, GroupDetails
             ),
@@ -620,9 +614,9 @@ create_eff_groups_env(Config) ->
         ?GROUP_VIEW
     ]),
     {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, revoke, [
-        ?GROUP_VIEW
-    ]),
+    oz_test_utils:group_set_user_privileges(Config, G1, U2, set,
+        oz_test_utils:get_group_privileges(Config) -- [?GROUP_VIEW]
+    ),
 
     {Groups, {U1, U2, NonAdmin}}.
 
@@ -642,15 +636,10 @@ create_eff_child_groups_env(Config) ->
     %%                Group4  Group5
     %%                 /          \
     %%              User2        User3
-    %%
-    %%      <<user>>
-    %%      NonAdmin
-
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     Users = [{U1, _}, {U2, _}, {U3, _}, {U4, _}] = lists:map(
-        fun(Idx) ->
-            Alias = Login = Name = <<"user", (Idx + 48)/integer>>,
+        fun(_) ->
+            Alias = Login = Name = ?UNIQUE_NAME(<<"user">>),
             UserDetails = #{
                 <<"alias">> => Alias,
                 <<"login">> => Login,
@@ -665,8 +654,8 @@ create_eff_child_groups_env(Config) ->
 
     Groups = [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}, {G6, _}] =
         lists:map(
-            fun(Idx) ->
-                GroupDetails = ?GROUP_DETAILS(<<"G", (Idx+48)/integer>>),
+            fun(_) ->
+                GroupDetails = ?GROUP_DETAILS(?UNIQUE_NAME(<<"Group">>)),
                 {ok, GroupId} = oz_test_utils:create_group(
                     Config, ?ROOT, GroupDetails
                 ),
@@ -685,7 +674,7 @@ create_eff_child_groups_env(Config) ->
         end, [{G2, U1}, {G6, U4}, {G4, U2}, {G5, U3}]
     ),
 
-    {Groups, Users, NonAdmin}.
+    {Groups, Users}.
 
 
 create_space_eff_users_env(Config) ->
@@ -713,11 +702,12 @@ create_space_eff_users_env(Config) ->
     %%      NonAdmin
 
     {
-        [{G1, _} | _] = Groups, Users, NonAdmin
+        [{G1, _} | _] = Groups, Users
     } = api_test_scenarios:create_eff_child_groups_env(Config),
 
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
@@ -757,16 +747,19 @@ create_hservice_eff_users_env(Config) ->
     %%      NonAdmin
 
     {
-        [{G1, _} | _] = Groups, Users, NonAdmin
+        [{G1, _} | _] = Groups, Users
     } = api_test_scenarios:create_eff_child_groups_env(Config),
 
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?ROOT, ?DOI_SERVICE
+        Config, ?USER(U1), ?DOI_SERVICE
     ),
-    {ok, U1} = oz_test_utils:add_user_to_handle_service(Config, HService, U1),
     oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
         revoke, [?HANDLE_SERVICE_VIEW]
     ),
@@ -794,10 +787,10 @@ create_eff_spaces_env(Config) ->
     %%               Group3    Group2
     %%                  \      /        Space1
     %%                   \    /         /
-    %%                   Group1 -------/
+    %%                   Group1 --------
     %%                  /      \
-    %%           [group_view]   \
-    %%               /           \
+    %%          [group_view]  [~group_view]
+    %%               /            \
     %%            User1          User2
     %%
     %%      <<user>>
@@ -805,17 +798,16 @@ create_eff_spaces_env(Config) ->
 
     {
         [{G1, _}, {G2, _}, _, {G4, _}, {G5, _}] = Groups, Users
-    } = create_eff_groups_env(Config),
+    } = create_eff_parent_groups_env(Config),
 
     Spaces = lists:map(
-        fun({Idx, GroupId}) ->
-            IdxBin = integer_to_binary(Idx),
-            SpaceDetails = #{<<"name">> => <<"Space", IdxBin/binary>>},
+        fun(GroupId) ->
+            SpaceDetails = #{<<"name">> => ?UNIQUE_NAME(<<"space">>)},
             {ok, SpaceId} = oz_test_utils:create_space_for_group(
                 Config, GroupId, SpaceDetails
             ),
             {SpaceId, SpaceDetails#{<<"providersSupports">> => #{}}}
-        end, [{1, G1}, {2, G2}, {3, G4}, {4, G5}, {5, G5}]
+        end, [G1, G2, G4, G5, G5]
     ),
 
     {Spaces, Groups, Users}.
@@ -824,8 +816,7 @@ create_eff_spaces_env(Config) ->
 create_eff_providers_env(Config) ->
     %% Create environment with following relations:
     %%
-    %%
-    %%  Prov3       Prov4
+    %%  Provider3   Provider4
     %%    |          /
     %%    |         /
     %%  Space4   Space5
@@ -835,14 +826,14 @@ create_eff_providers_env(Config) ->
     %%          \      /             |
     %%           \    /              |
     %%           Group4           Space2
-    %%               \            /
-    %%                \          /
-    %%               Group3    Group2
+    %%               \            /         Provider1
+    %%                \          /           /
+    %%               Group3    Group2       /
     %%                  \      /        Space1
-    %%                   \    /         /   \
-    %%                   Group1 -------/     \
-    %%                  /      \            Prov1
-    %%           [group_view]   \
+    %%                   \    /         /
+    %%                   Group1 --------
+    %%                  /      \
+    %%          [group_view]  [~group_view]
     %%               /           \
     %%            User1          User2
     %%
@@ -854,20 +845,15 @@ create_eff_providers_env(Config) ->
     } = create_eff_spaces_env(Config),
 
     Providers = [{P1, _}, {P2, _}, {P3, _}, {P4, _}] = lists:map(
-        fun(Idx) ->
+        fun(_) ->
             {_, CSRFile, _} = oz_test_utils:generate_provider_cert_files(),
             {ok, CSR} = file:read_file(CSRFile),
-            ProvDetails = #{
-                <<"name">> => <<"Prov", (Idx+48)/integer>>,
-                <<"urls">> => [<<"127.0.0.1">>],
-                <<"redirectionPoint">> => <<"https://127.0.0.1">>,
-                <<"latitude">> => rand:uniform() * 90,
-                <<"longitude">> => rand:uniform() * 180
-            },
+            ProviderName = ?UNIQUE_NAME(<<"provider">>),
+            ProvDetails = ?PROVIDER_DETAILS(ProviderName),
             {ok, {ProvId, _}} = oz_test_utils:create_provider(
                 Config, ProvDetails#{<<"csr">> => CSR}
             ),
-            {ProvId, ProvDetails}
+            {ProvId, ProvDetails#{<<"clientName">> => ProviderName}}
         end, lists:seq(1, 4)
     ),
 
@@ -904,7 +890,7 @@ create_eff_handle_services_env(Config) ->
     %%                   \    /         /
     %%                   Group1 -------/
     %%                  /      \
-    %%           [group_view]   \
+    %%      [group_view]  [~group_view]
     %%               /           \
     %%            User1          User2
     %%
@@ -913,26 +899,27 @@ create_eff_handle_services_env(Config) ->
 
     {
         [{G1, _}, {G2, _}, _, {G4, _}, {G5, _}] = Groups, Users
-    } = create_eff_groups_env(Config),
+    } = create_eff_parent_groups_env(Config),
 
     HandleServices = lists:map(
-        fun({Idx, GroupId}) ->
-            Name = <<"HS", (Idx+48)/integer>>,
-            ProxyEndpoint = <<"https://dot", (Idx+48)/integer, ".com">>,
-            Properties = #{<<"asd">> => 1},
-            {ok, HSid} = oz_test_utils:create_handle_service(
-                Config, ?ROOT, Name, ProxyEndpoint, Properties
-            ),
-            HSDetails = #{
+        fun(GroupId) ->
+            Name = ?UNIQUE_NAME(<<"hservice">>),
+            Properties = lists:nth(rand:uniform(2), [
+                ?DOI_SERVICE_PROPERTIES, ?PID_SERVICE_PROPERTIES
+            ]),
+            HServiceDetails = #{
                 <<"name">> => Name,
-                <<"proxyEndpoint">> => ProxyEndpoint,
+                <<"proxyEndpoint">> => ?PROXY_ENDPOINT,
                 <<"serviceProperties">> => Properties
             },
+            {ok, HSid} = oz_test_utils:create_handle_service(
+                Config, ?ROOT, HServiceDetails
+            ),
             {ok, GroupId} = oz_test_utils:add_group_to_handle_service(
                 Config, HSid, GroupId
             ),
-            {HSid, HSDetails}
-        end, [{1, G1}, {2, G2}, {3, G4}, {4, G5}, {5, G5}]
+            {HSid, HServiceDetails}
+        end, [G1, G2, G4, G5, G5]
     ),
 
     {HandleServices, Groups, Users}.
@@ -964,26 +951,23 @@ create_eff_handles_env(Config) ->
 
     {
         [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}] = Groups, Users
-    } = create_eff_groups_env(Config),
+    } = create_eff_parent_groups_env(Config),
 
-    {ok, HandleServiceId} = oz_test_utils:create_handle_service(
+    {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
     ),
-    {ok, G1} = oz_test_utils:add_group_to_handle_service(
-        Config, HandleServiceId, G1
-    ),
+    {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
 
     Handles = lists:map(
-        fun({Idx, GroupId}) ->
+        fun(GroupId) ->
             {ok, SpaceId} = oz_test_utils:create_space_for_group(
-                Config, GroupId, <<"Space", (Idx+48)/integer>>
+                Config, GroupId, ?SPACE_NAME1
             ),
-            UniqueInt = erlang:unique_integer([positive]),
-            ShareId = <<"Share", (integer_to_binary(UniqueInt))/binary>>,
+            ShareId = ?UNIQUE_NAME(?SHARE_NAME1),
             {ok, ShareId} = oz_test_utils:create_share(
-                Config, ?ROOT, ShareId, <<"share">>, <<"file">>, SpaceId
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
             ),
-            HandleDetails = ?HANDLE(HandleServiceId, ShareId),
+            HandleDetails = ?HANDLE(HService, ShareId),
             {ok, HandleId} = oz_test_utils:create_handle(
                 Config, ?ROOT, HandleDetails
             ),
@@ -991,7 +975,7 @@ create_eff_handles_env(Config) ->
                 Config, HandleId, GroupId
             ),
             {HandleId, HandleDetails}
-        end, [{1, G1}, {2, G2}, {3, G3}, {4, G4}, {5, G5}]
+        end, [G1, G2, G3, G4, G5]
     ),
 
     {Handles, Groups, Users}.

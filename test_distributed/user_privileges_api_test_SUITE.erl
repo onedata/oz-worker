@@ -1,16 +1,16 @@
 %%%-------------------------------------------------------------------
-%%% @author Lukasz Opiola
-%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% @author Bartosz Walkowicz
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This file contains tests concerning user API (REST + logic + gs).
+%%% This file contains tests concerning user privileges API (REST + logic + gs).
 %%% @end
 %%%-------------------------------------------------------------------
 -module(user_privileges_api_test_SUITE).
--author("Lukasz Opiola").
+-author("Bartosz Walkowicz").
 
 -include("rest.hrl").
 -include("entity_logic.hrl").

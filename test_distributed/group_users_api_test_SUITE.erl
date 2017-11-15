@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Bartosz Walkowicz
-%%% @copyright (C): 2017 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -73,7 +73,7 @@ list_users_test(Config) ->
         ?OZ_GROUPS_LIST_USERS
     ]),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_VIEW
@@ -120,7 +120,7 @@ create_user_invite_token_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_INVITE_USER
     ]),
@@ -191,27 +191,22 @@ create_user_invite_token_test(Config) ->
 get_user_details_test(Config) ->
     ExpAlias = ExpLogin = ExpName = <<"user1">>,
     ExpEmails = [<<"john.doe@uruk.com">>],
-    ExpMap = #{
-        <<"alias">> => ExpAlias,
-        <<"login">> => ExpLogin,
-        <<"name">> => ExpName
-    },
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config, #od_user{
         name = ExpName,
         login = ExpLogin,
         alias = ExpAlias,
         email_list = ExpEmails
     }),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_GROUPS_LIST_USERS
     ]),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_VIEW
     ]),
@@ -224,36 +219,41 @@ get_user_details_test(Config) ->
         ?GROUP_VIEW
     ]),
 
+    ExpDetails = #{
+        <<"alias">> => ExpAlias,
+        <<"login">> => ExpLogin,
+        <<"name">> => ExpName
+    },
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
                 {user, Admin},
-                {user, U1},
-                {user, U2}
+                {user, U2},
+                {user, U3}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {user, U3}
+                {user, U1}
             ]
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/groups/">>, G1, <<"/users/">>, U1],
+            path = [<<"/groups/">>, G1, <<"/users/">>, U3],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpMap#{<<"userId">> => U1}
+            expected_body = ExpDetails#{<<"userId">> => U3}
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_user,
-            args = [client, G1, U1],
-            expected_result = ?OK_MAP(ExpMap)
+            args = [client, G1, U3],
+            expected_result = ?OK_MAP(ExpDetails)
         },
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{
-                type = od_user, id = U1, aspect = instance, scope = shared
+                type = od_user, id = U3, aspect = instance, scope = shared
             },
             auth_hint = ?THROUGH_GROUP(G1),
             expected_result = ?OK_MAP(#{
@@ -263,7 +263,7 @@ get_user_details_test(Config) ->
                     #gri{id = UserId} = oz_test_utils:decode_gri(
                         Config, EncodedGri
                     ),
-                    ?assertEqual(U1, UserId)
+                    ?assertEqual(U3, UserId)
                 end
             })
         }
@@ -279,16 +279,16 @@ add_user_test(Config) ->
     oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_GROUPS_ADD_MEMBERS
     ]),
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
 
     VerifyEndFun =
         fun
             (true = _ShouldSucceed, _, Data) ->
-                Privs = lists:sort(maps:get(<<"privileges">>, Data)),
-                {ok, ActualPrivs} = oz_test_utils:get_group_user_privileges(
+                ExpPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
+                {ok, Privs} = oz_test_utils:get_group_user_privileges(
                     Config, G1, U2
                 ),
-                ?assertEqual(Privs, lists:sort(ActualPrivs)),
+                ?assertEqual(ExpPrivs, lists:sort(Privs)),
                 oz_test_utils:group_remove_user(Config, G1, U2);
             (false = ShouldSucceed, _, _) ->
                 {ok, Users} = oz_test_utils:get_group_users(Config, G1),
@@ -348,7 +348,7 @@ remove_user_test(Config) ->
         ?OZ_GROUPS_REMOVE_MEMBERS
     ]),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_REMOVE_USER
     ]),
@@ -402,17 +402,24 @@ list_user_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+
+    % User whose privileges will be changing during test run and as such
+    % should not be listed in client spec (he will sometimes has privilege
+    % to get group privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
+        ?GROUP_VIEW
+    ]),
     {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
     oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
         ?GROUP_VIEW
     ]),
     {ok, U3} = oz_test_utils:add_user_to_group(Config, G1, U3),
 
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, group_privileges, []),
-    InitialPrivs = [group_view],
+    AllPrivs = oz_test_utils:get_group_privileges(Config),
+    InitialPrivs = [?GROUP_VIEW],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
     SetPrivsFun = fun(Operation, Privs) ->
@@ -425,11 +432,11 @@ list_user_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1},
                 {user, U2}
             ],
             unauthorized = [nobody],
             forbidden = [
+                {user, U1},
                 {user, NonAdmin}
             ]
         },
@@ -458,16 +465,23 @@ update_user_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+
+    % User whose privileges will be changing during test run and as such
+    % should not be listed in client spec (he will sometimes has privilege
+    % to update group privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
+        ?GROUP_SET_PRIVILEGES
+    ]),
     {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
     oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
         ?GROUP_SET_PRIVILEGES
     ]),
     {ok, U3} = oz_test_utils:add_user_to_group(Config, G1, U3),
 
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, group_privileges, []),
+    AllPrivs = oz_test_utils:get_group_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:group_set_user_privileges(
             Config, G1, U3, Operation, Privs
@@ -482,11 +496,11 @@ update_user_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1},
                 {user, U2}
             ],
             unauthorized = [nobody],
             forbidden = [
+                {user, U1},
                 {user, NonAdmin}
             ]
         },
@@ -512,22 +526,32 @@ update_user_privileges_test(Config) ->
 
 list_eff_users_test(Config) ->
     {
-        G1, [{U1, _}, {U2, _}, {U3, _}, {U4, _}, {U5, _}], NonAdmin
-    } = create_eff_group_users_env(Config),
+        [{G1, _} | _Groups], [{U3, _}, {U4, _}, {U5, _}, {U6, _}] = _EffUsers
+    } = api_test_scenarios:create_eff_child_groups_env(Config),
 
-    ExpUsers = [U1, U2, U3, U4, U5],
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, U1} = oz_test_utils:add_user_to_group(Config, G1, U1),
+    oz_test_utils:group_set_user_privileges(Config, G1, U1, set,
+        oz_test_utils:get_group_privileges(Config) -- [?GROUP_VIEW]
+    ),
+    {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
+    oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
+        ?GROUP_VIEW
+    ]),
+
+    ExpUsers = [U1, U2, U3, U4, U5, U6],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1},
-                {user, U4},
-                {user, U5}
+                {user, U2}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, U2},
-                {user, U3},
+                {user, U1},
                 {user, NonAdmin}
             ]
         },
@@ -562,34 +586,41 @@ list_eff_users_test(Config) ->
 
 get_eff_user_details_test(Config) ->
     {
-        G1,
-        [{U1, _}, {U2, _}, {U3, _}, {U4, _}, {U5, _}] = EffUsersList,
-        NonAdmin
-    } = create_eff_group_users_env(Config),
+        [{G1, _} | _Groups], EffUsers
+    } = api_test_scenarios:create_eff_child_groups_env(Config),
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, U1} = oz_test_utils:add_user_to_group(Config, G1, U1),
+    oz_test_utils:group_set_user_privileges(Config, G1, U1, set,
+        oz_test_utils:get_group_privileges(Config) -- [?GROUP_VIEW]
+    ),
+    {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
+    oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
+        ?GROUP_VIEW
+    ]),
 
     lists:foreach(
         fun({UserId, UserDetails}) ->
-
             ApiTestSpec = #api_test_spec{
                 client_spec = #client_spec{
                     correct = lists:usort([
                         root,
-                        {user, U1},
-                        {user, U4},
-                        {user, U5},
-                        {user, UserId}
+                        {user, U2}
                     ]),
                     unauthorized = [nobody],
                     forbidden = [
+                        {user, U1},
                         {user, NonAdmin}
-                        | lists:delete(
-                            {user, UserId}, [{user, U2}, {user, U3}]
-                        )
                     ]
                 },
                 rest_spec = #rest_spec{
                     method = get,
-                    path = [<<"/groups/">>, G1, <<"/effective_users/">>, UserId],
+                    path = [
+                        <<"/groups/">>, G1, <<"/effective_users/">>, UserId
+                    ],
                     expected_code = ?HTTP_200_OK,
                     expected_body = UserDetails#{<<"userId">> => UserId}
                 },
@@ -620,67 +651,8 @@ get_eff_user_details_test(Config) ->
 
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-        end, EffUsersList
+        end, EffUsers
     ).
-
-
-create_eff_group_users_env(Config) ->
-    %% Create environment with following relations:
-    %%
-    %%            User1         User2
-    %%               \           /
-    %%          [group_view]    /
-    %%                  \      /
-    %%                   Group1
-    %%                  /      \
-    %%                 /    [group_view]
-    %%                /           \
-    %%             Group2        Group3     User5
-    %%              /            /    \     /
-    %%             /            /      \   /
-    %%          User3         User4   Group4
-    %%
-    %%
-    %%      <<user>>
-    %%      NonAdmin
-
-    Users = [{U1, _}, {U2, _}, {U3, _}, {U4, _}, {U5, _}] = lists:map(
-        fun(Idx) ->
-            Alias = Login = Name = <<"user", (Idx + 48)/integer>>,
-            UserDetails = #{
-                <<"alias">> => Alias,
-                <<"login">> => Login,
-                <<"name">> => Name
-            },
-            {ok, UserId} = oz_test_utils:create_user(Config, #od_user{
-                name = Name,
-                login = Login,
-                alias = Alias
-            }),
-            {UserId, UserDetails}
-        end, lists:seq(1, 5)
-    ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {_G4, G3, G1} = oz_test_utils:create_3_nested_groups(Config, U5),
-    {ok, G2} = oz_test_utils:create_group(Config, ?USER(U3), <<"G2">>),
-    {ok, G2} = oz_test_utils:add_group_to_group(Config, G1, G2),
-    oz_test_utils:group_set_group_privileges(Config, G1, G2, revoke, [
-        ?GROUP_VIEW
-    ]),
-
-    {ok, U1} = oz_test_utils:add_user_to_group(Config, G1, U1),
-    oz_test_utils:group_set_user_privileges(Config, G1, U1, set, [
-        ?GROUP_VIEW
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, revoke, [
-        ?GROUP_VIEW
-    ]),
-
-    {ok, U4} = oz_test_utils:add_user_to_group(Config, G3, U4),
-
-    {G1, Users, NonAdmin}.
 
 
 list_eff_user_privileges_test(Config) ->
@@ -690,31 +662,41 @@ list_eff_user_privileges_test(Config) ->
     %%               \           /
     %%         [group_view]  [~group_view]
     %%                  \      /
-    %%                   Group1 --------------- User1
-    %%                  /      \               /   /
-    %%                 /        \  [~group_view]  /
-    %%                /          \     /         /
-    %%             Group2        Group4         /
-    %%                 \                    [all privs]
-    %%                  \                     /
-    %%                  Group3 --------------/
+    %%                   Group1
+    %%                  /   |  \
+    %%                 /    |   \
+    %%              Group2  |   Group4
+    %%               /      |      |
+    %%              /       |  [~group_view]
+    %%            Group3    |      |
+    %%              \       |     /
+    %%          [all_privs] |    /
+    %%                  \   |   /
+    %%                    User1
     %%      <<user>>
     %%      NonAdmin
 
+    AllPrivs = oz_test_utils:get_group_privileges(Config),
+    InitialPrivs = [?GROUP_VIEW],
+    InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
+
+    % User whose privileges will be changing during test run and as such
+    % should not be listed in client spec (he will sometimes has privilege
+    % to get group privileges and sometimes not)
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {_G3, G2, G1} = oz_test_utils:create_3_nested_groups(Config, U1),
-    {ok, G4} = oz_test_utils:create_group(Config, ?ROOT, <<"G4">>),
+    {ok, G4} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G4} = oz_test_utils:add_group_to_group(Config, G1, G4),
 
     {ok, U1} = oz_test_utils:add_user_to_group(Config, G1, U1),
     {ok, U1} = oz_test_utils:add_user_to_group(Config, G4, U1),
-    oz_test_utils:group_set_user_privileges(Config, G4, U1, revoke, [
-        ?GROUP_VIEW
-    ]),
+    oz_test_utils:group_set_user_privileges(Config, G4, U1, set,
+        AllPrivs -- [?GROUP_VIEW]
+    ),
 
     {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
     oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
@@ -724,10 +706,6 @@ list_eff_user_privileges_test(Config) ->
     oz_test_utils:group_set_user_privileges(Config, G1, U3, revoke, [
         ?GROUP_VIEW
     ]),
-
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, group_privileges, []),
-    InitialPrivs = [group_view],
-    InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
     SetPrivsFun = fun(Operation, Privs) ->
         % In case of SET and GRANT, randomly split privileges into four
