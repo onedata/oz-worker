@@ -31,6 +31,7 @@
     create_eff_child_groups_env/1,
     create_space_eff_users_env/1,
     create_hservice_eff_users_env/1,
+    create_handle_eff_users_env/1,
     create_eff_spaces_env/1,
     create_eff_providers_env/1,
     create_eff_handle_services_env/1,
@@ -725,7 +726,7 @@ create_space_eff_users_env(Config) ->
 create_hservice_eff_users_env(Config) ->
     %% Create environment with following relations:
     %%
-    %%                  Space
+    %%              HandleService
     %%                 /  |  \
     %%                /   |   \
     %%   [~hservice_view] |  [hservice_view]
@@ -770,6 +771,65 @@ create_hservice_eff_users_env(Config) ->
     {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
 
     {HService, Groups, Users, {U1, U2, NonAdmin}}.
+
+
+create_handle_eff_users_env(Config) ->
+    %% Create environment with following relations:
+    %%
+    %%                  Handle
+    %%                 /  |   \
+    %%                /   |    \
+    %%   [~hservice_view] |   [hservice_view]
+    %%           /        |         \
+    %%        User1     Group1     User2
+    %%                 /      \
+    %%                /        \
+    %%             Group6     Group2
+    %%              /         /    \
+    %%           User6       /     User3
+    %%                    Group3
+    %%                    /    \
+    %%                   /      \
+    %%                Group4  Group5
+    %%                 /          \
+    %%               User4      User5
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {
+        [{G1, _} | _] = Groups, Users
+    } = api_test_scenarios:create_eff_child_groups_env(Config),
+
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, HService} = oz_test_utils:create_handle_service(
+        Config, ?USER(U1), ?DOI_SERVICE
+    ),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, ShareId} = oz_test_utils:create_share(
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+    ),
+
+    HandleDetails = ?HANDLE(HService, ShareId),
+    {ok, HandleId} = oz_test_utils:create_handle(
+        Config, ?USER(U1), HandleDetails
+    ),
+    oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, revoke, [
+        ?HANDLE_VIEW
+    ]),
+    {ok, U2} = oz_test_utils:add_user_to_handle(Config, HandleId, U2),
+    oz_test_utils:handle_set_user_privileges(Config, HandleId, U2, set, [
+        ?HANDLE_VIEW
+    ]),
+    {ok, G1} = oz_test_utils:add_group_to_handle(Config, HandleId, G1),
+
+    {HandleId, Groups, Users, {U1, U2, NonAdmin}}.
 
 
 create_eff_spaces_env(Config) ->

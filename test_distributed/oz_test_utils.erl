@@ -144,7 +144,7 @@
     handle_service_set_group_privileges/5
 ]).
 -export([
-    get_handles_privileges/1,
+    get_handle_privileges/1,
 
     create_handle/6, create_handle/3,
     get_handle/2,
@@ -153,8 +153,15 @@
     list_handles/1,
     update_handle/3, update_handle/5,
     delete_handle/2,
+
     add_user_to_handle/3,
-    add_group_to_handle/3
+    remove_user_from_handle/3,
+    handle_set_user_privileges/5,
+    get_handle_user_privileges/3,
+
+    add_group_to_handle/3,
+    handle_set_group_privileges/5,
+    get_handle_group_privileges/3
 ]).
 -export([
     delete_all_entities/1,
@@ -1395,8 +1402,8 @@ handle_service_set_group_privileges(
 %% Get all atoms representing handles privileges.
 %% @end
 %%--------------------------------------------------------------------
--spec get_handles_privileges(Config :: term()) -> [atom()].
-get_handles_privileges(Config) ->
+-spec get_handle_privileges(Config :: term()) -> [atom()].
+get_handle_privileges(Config) ->
     call_oz(Config, privileges, handle_privileges, []).
 
 
@@ -1525,7 +1532,7 @@ delete_handle(Config, HandleId) ->
 %% Adds a user to a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user_to_handle(Config :: term(), HServiceId :: od_handle:id(),
+-spec add_user_to_handle(Config :: term(), HandleId :: od_handle:id(),
     UserId :: od_user:id()) -> {ok, od_user:id()}.
 add_user_to_handle(Config, HandleId, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, handle_logic, add_user, [
@@ -1535,15 +1542,84 @@ add_user_to_handle(Config, HandleId, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Removes user from handle.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_user_from_handle(Config :: term(), HandleId :: od_handle:id(),
+    UserId :: od_user:id()) -> {ok, od_user:id()}.
+remove_user_from_handle(Config, HandleId, UserId) ->
+    ?assertMatch(ok, call_oz(Config, handle_logic, remove_user, [
+        ?ROOT, HandleId, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges of a user in a handle.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_set_user_privileges(Config :: term(),
+    HandleId :: od_handle:id(), UserId :: od_user:id(),
+    Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:handle_privilege()]) -> ok.
+handle_set_user_privileges(Config, HandleId, UserId, Operation, Privs) ->
+    ?assertMatch(ok, call_oz(Config, handle_logic,
+        update_user_privileges, [?ROOT, HandleId, UserId, Operation, Privs]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves privileges of user belonging to handle from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_user_privileges(Config :: term(),
+    HandleId :: od_service:id(), UserId :: od_user:id()) -> {ok, [atom()]}.
+get_handle_user_privileges(Config, HandleId, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_logic, get_user_privileges, [?ROOT, HandleId, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Adds a group to a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group_to_handle(Config :: term(), HServiceId :: od_handle:id(),
+-spec add_group_to_handle(Config :: term(), HandleId :: od_handle:id(),
     GroupId :: od_group:id()) -> {ok, od_group:id()}.
 add_group_to_handle(Config, HandleId, GroupId) ->
     ?assertMatch({ok, _}, call_oz(Config, handle_logic, add_group, [
         ?ROOT, HandleId, GroupId
     ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges of a group in a handle.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_set_group_privileges(Config :: term(),
+    HandleId :: od_handle:id(), GroupId :: od_user:id(),
+    Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:handle_privilege()]) -> ok.
+handle_set_group_privileges(Config, HandleId, GroupId, Operation, Privs) ->
+    ?assertMatch(ok, call_oz(Config, handle_logic,
+        update_group_privileges, [?ROOT, HandleId, GroupId, Operation, Privs]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves privileges of group belonging to handle from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_group_privileges(Config :: term(),
+    HandleId :: od_service:id(), GroupId :: od_user:id()) -> {ok, [atom()]}.
+get_handle_group_privileges(Config, HandleId, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_logic, get_group_privileges, [?ROOT, HandleId, GroupId]
+    )).
 
 
 %%--------------------------------------------------------------------

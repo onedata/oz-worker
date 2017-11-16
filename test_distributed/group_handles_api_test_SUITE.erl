@@ -139,7 +139,7 @@ create_handle_test(Config) ->
         Config, HServiceId, G1
     ),
 
-    AllPrivs = oz_test_utils:get_handles_privileges(Config),
+    AllPrivs = oz_test_utils:get_handle_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     ExpResourceType = <<"Share">>,
