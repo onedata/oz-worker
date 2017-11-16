@@ -12,19 +12,27 @@
 -ifndef(API_TEST_UTILS_HRL).
 -define(API_TEST_UTILS_HRL, 1).
 
+%% @formatter:off
 -type client() :: nobody | root | {user, UserId :: binary()} |
-{provider, ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}.
+    {provider, ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}.
 
 -type data_error() :: bad | empty | bad_token | bad_token_type |
-id_not_found | id_occupied | relation_exists | relation_does_not_exist.
+    id_not_found | id_occupied | relation_exists | relation_does_not_exist.
 
--type logic_expectation() :: ok_binary| {ok_binary, binary()} |
-{ok_list, [term()]} | {ok_term, fun((Result :: term()) -> boolean())} |
-{ok_env, fun((Result :: term()) -> term())} | {error_reason, term()}.
+-type rest_expectation() :: undefined | #{} | {contains, #{}} |
+    fun((Result :: term()) -> term()).
+
+-type logic_expectation() :: undefined | ok | ok_binary | {ok_binary, binary()} |
+    {ok_map, #{}} | {ok_map_contains, #{}} |
+    {ok_list, [term()]} | {ok_list_contains, [term()]} |
+    {ok_list_doesnt_contain, [term()]} |
+    {ok_term, fun((Result :: term()) -> boolean())} |
+    {ok_env, fun((Env :: #{}, Data :: #{}) -> term())} | {error_reason, term()}.
 
 -type gs_expectation() :: ok | {ok_map, #{}} | {ok_map_contains, #{}} |
-{ok_term, fun((Result :: term()) -> boolean())} |
-{ok_env, fun((Result :: term()) -> term())} | {error_reason, term()}.
+    {ok_term, fun((Result :: term()) -> boolean())} |
+    {ok_env, fun((Env :: #{}, Data :: #{}) -> term())} | {error_reason, term()}.
+%% @formatter:on
 
 -record(client_spec, {
     correct = [] :: [client()],
@@ -36,7 +44,7 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
     required = [] :: [Key :: binary()],
     optional = [] :: [Key :: binary()],
     at_least_one = [] :: [Key :: binary()],
-    correct_values = #{} :: #{Key :: binary() => Value :: [binary()]},
+    correct_values = #{} :: #{Key :: binary() => Values :: [binary()]},
     bad_values = [] :: [{Key :: binary(), Value :: term(), data_error()}]
 }).
 
@@ -45,8 +53,8 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
     path = <<"/">> :: binary() | [binary()],
     headers = undefined :: undefined | #{Key :: binary() => Value :: binary()},
     expected_code = undefined :: undefined | integer(),
-    expected_headers = undefined :: undefined | #{} | {contains, #{}},
-    expected_body = undefined :: undefined | #{} | {contains, #{}}
+    expected_headers = undefined :: undefined | rest_expectation(),
+    expected_body = undefined :: undefined | rest_expectation()
 }).
 
 -record(logic_spec, {
@@ -75,9 +83,8 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
     data_spec = undefined :: undefined | #data_spec{}
 }).
 
-% Convenience macros for expressing logic result expectations
+% Convenience macros for expressing gs and/or logic result expectations
 -define(OK, ok).
--define(TRUE, true).
 -define(OK_BINARY, ok_binary).
 -define(OK_BINARY(__ExactValue), {ok_binary, __ExactValue}).
 -define(OK_MAP(__ExactValue), {ok_map, __ExactValue}).
@@ -106,6 +113,8 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
 -define(DEFAULT_USER_ALIAS, <<"">>).
 -define(USER_ALIAS1, <<"alias1">>).
 -define(USER_ALIAS2, <<"alias2">>).
+-define(USER_LOGIN1, <<"login1">>).
+-define(USER_LOGIN2, <<"login2">>).
 
 %% Example test data for groups
 -define(GROUP_NAME1, <<"group1">>).
@@ -221,7 +230,7 @@ id_not_found | id_occupied | relation_exists | relation_does_not_exist.
     "<dc:rights>CC-0<\/dc:rights>",
     "<\/metadata>">>).
 
--define(DC_METADATA_2, <<"<?xml version=\"1.0\"?>",
+-define(DC_METADATA2, <<"<?xml version=\"1.0\"?>",
     "<metadata xmlns:xsi=\"http:\/\/www.w3.org\/2001\/XMLSchema-instance\" xmlns:dc=\"http:\/\/purl.org\/dc\/elements\/1.1\/\">"
     "<dc:title>Test dataset<\/dc:title>",
     "<dc:creator>Jane Johnson<\/dc:creator>",

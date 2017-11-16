@@ -26,7 +26,6 @@
 -include("api_test_utils.hrl").
 
 
-%% API
 -export([
     all/0,
     init_per_suite/1, end_per_suite/1
@@ -60,6 +59,7 @@ all() ->
 %%%===================================================================
 %%% Test functions
 %%%===================================================================
+
 
 create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
@@ -547,7 +547,7 @@ update_oz_privileges_test(Config) ->
     % should not be listed in client spec (he will sometimes has privilege
     % to update group privileges and sometimes not)
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
 
     AllPrivs = oz_test_utils:get_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
@@ -717,6 +717,7 @@ get_eff_oz_privileges_test(Config) ->
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
+
 
 init_per_suite(Config) ->
     ssl:start(),

@@ -77,6 +77,8 @@ add_user_test(Config) ->
     ]),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
 
+    AllPrivs = oz_test_utils:get_space_privileges(Config),
+
     VerifyEndFun =
         fun
             (true = _ShouldSucceed, _, Data) ->
@@ -119,13 +121,15 @@ add_user_test(Config) ->
             required = [<<"privileges">>],
             correct_values = #{
                 <<"privileges">> => [
-                    [space_update, space_remove_group],
-                    [space_invite_user, space_view]
+                    [?SPACE_UPDATE, ?SPACE_REMOVE_GROUP],
+                    [?SPACE_WRITE_DATA, ?SPACE_VIEW]
                 ]
             },
             bad_values = [
                 {<<"privileges">>, <<"">>,
-                    ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)}
+                    ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)},
+                {<<"privileges">>, [?SPACE_VIEW, ?GROUP_VIEW],
+                    ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
             ]
         }
     },
@@ -135,18 +139,12 @@ add_user_test(Config) ->
 
 
 create_user_invite_token_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create space with 2 users; give space_invite_user privilege
+    % for one of them and all but that for the second one
+    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_INVITE_USER
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
-        ?SPACE_INVITE_USER
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_space(Config, S1, U2),
-    oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
-        ?SPACE_INVITE_USER
-    ]),
 
     % We will keep all tokens generated until now in a process, we will query
     GeneratedTokens = fun Loop(Tokens) ->
@@ -206,21 +204,15 @@ create_user_invite_token_test(Config) ->
 
 
 remove_user_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create space with 2 users; give space_remove_user privilege
+    % for one of them and all but that for the second one
+    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_REMOVE_USER
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_SPACES_REMOVE_MEMBERS
-    ]),
-
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
-        ?SPACE_REMOVE_USER
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_space(Config, S1, U2),
-    oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
-        ?SPACE_REMOVE_USER
     ]),
 
     EnvSetUpFun = fun() ->
@@ -265,8 +257,11 @@ remove_user_test(Config) ->
 
 
 list_users_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create space with 2 users; give space_view privilege
+    % for one of them and all but that for the second one
+    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_VIEW
+    ),
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
@@ -274,16 +269,7 @@ list_users_test(Config) ->
         ?OZ_SPACES_LIST_USERS
     ]),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, U2} = oz_test_utils:add_user_to_space(Config, S1, U2),
-    oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
-        ?SPACE_VIEW
-    ]),
-    oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
-        ?SPACE_VIEW
-    ]),
     {ok, U3} = oz_test_utils:add_user_to_space(Config, S1, U3),
-
     ExpUsers = [U1, U2, U3],
 
     ApiTestSpec = #api_test_spec{
@@ -318,29 +304,24 @@ list_users_test(Config) ->
 
 
 get_user_test(Config) ->
-    ExpAlias = ExpLogin = ExpName = ?USER_NAME1,
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{
-        name = ExpName,
-        login = ExpLogin,
-        alias = ExpAlias,
-        email_list = [<<"john.doe@uruk.com">>]
-    }),
+    % create space with 2 users; give space_view privilege
+    % for one of them and all but that for the second one
+    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_SPACES_LIST_USERS
     ]),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, U2} = oz_test_utils:add_user_to_space(Config, S1, U2),
-    oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
-        ?SPACE_VIEW
-    ]),
-    oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
-        ?SPACE_VIEW
-    ]),
+    ExpAlias = ExpLogin = ExpName = ?USER_NAME1,
+    {ok, U3} = oz_test_utils:create_user(Config, #od_user{
+        name = ExpName,
+        login = ExpLogin,
+        alias = ExpAlias,
+        email_list = [<<"john.doe@uruk.com">>]
+    }),
     {ok, U3} = oz_test_utils:add_user_to_space(Config, S1, U3),
     oz_test_utils:space_set_user_privileges(Config, S1, U3, revoke, [
         ?SPACE_VIEW
@@ -399,23 +380,17 @@ get_user_test(Config) ->
 
 
 get_user_privileges_test(Config) ->
+    % create space with 2 users; give space_view privilege
+    % for one of them and all but that for the second one
+    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
-        ?SPACE_VIEW
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_space(Config, S1, U2),
-    oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
-        ?SPACE_VIEW
-    ]),
 
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
+    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U3} = oz_test_utils:add_user_to_space(Config, S1, U3),
 
     AllPrivs = oz_test_utils:get_space_privileges(Config),
@@ -461,26 +436,20 @@ get_user_privileges_test(Config) ->
 
 
 update_user_privileges_test(Config) ->
+    % create space with 2 users; give space_set_privileges privilege
+    % for one of them and all but that for the second one
+    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_SET_PRIVILEGES
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
-        ?SPACE_SET_PRIVILEGES
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_space(Config, S1, U2),
-    oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
-        ?SPACE_SET_PRIVILEGES
-    ]),
 
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to update user privileges and sometimes not)
+    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U3} = oz_test_utils:add_user_to_space(Config, S1, U3),
 
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, space_privileges, []),
+    AllPrivs = oz_test_utils:get_space_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:space_set_user_privileges(
             Config, S1, U3, Operation, Privs
@@ -649,23 +618,17 @@ get_eff_user_privileges_test(Config) ->
     %%      <<user>>
     %%      NonAdmin
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create space with 2 users; give space_view privilege
+    % for one of them and all but that for the second one
+    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_VIEW
+    ),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     % User whose eff privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
-        ?SPACE_VIEW
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_space(Config, S1, U2),
-    oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
-        ?SPACE_VIEW
-    ]),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),

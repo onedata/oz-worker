@@ -587,21 +587,15 @@ get_share_test(Config) ->
 
 
 list_providers_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create space with 2 users; give space_view privilege
+    % for one of them and all but that for the second one
+    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, set, [
         ?OZ_SPACES_LIST_PROVIDERS
-    ]),
-
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
-        ?SPACE_VIEW
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_space(Config, S1, U2),
-    oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
-        ?SPACE_VIEW
     ]),
 
     SupportSize = oz_test_utils:minimum_support_size(Config),
@@ -660,18 +654,12 @@ list_providers_test(Config) ->
 
 
 create_provider_support_token(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create space with 2 users; give space_invite_provider privilege
+    % for one of them and all but that for the second one
+    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_INVITE_PROVIDER
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
-        ?SPACE_INVITE_PROVIDER
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_space(Config, S1, U2),
-    oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
-        ?SPACE_INVITE_PROVIDER
-    ]),
 
     % We will keep all tokens generated until now in a process, we will query
     GeneratedTokens = fun Loop(Tokens) ->
@@ -801,18 +789,12 @@ get_provider_test(Config) ->
 
 
 leave_provider_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create space with 2 users; give space_remove_provider privilege
+    % for one of them and all but that for the second one
+    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_REMOVE_PROVIDER
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
-        ?SPACE_REMOVE_PROVIDER
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_space(Config, S1, U2),
-    oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
-        ?SPACE_REMOVE_PROVIDER
-    ]),
 
     EnvSetUpFun = fun() ->
         {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(

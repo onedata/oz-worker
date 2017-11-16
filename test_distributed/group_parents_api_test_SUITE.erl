@@ -26,7 +26,6 @@
 -include("api_test_utils.hrl").
 
 
-%% API
 -export([
     all/0,
     init_per_suite/1, end_per_suite/1
@@ -57,18 +56,12 @@ all() ->
 
 
 list_parents_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create group with 2 users; give group_view privilege
+    % for one of them and all but that for the second one
+    {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
+        Config, ?GROUP_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-    oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
-        ?GROUP_VIEW
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
-        ?GROUP_VIEW
-    ]),
 
     ExpGroups = lists:map(
         fun(_) ->
@@ -110,18 +103,12 @@ list_parents_test(Config) ->
 
 
 join_group_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create group with 2 users; give group_join_group privilege
+    % for one of them and all but that for the second one
+    {Child, U1, U2} = api_test_scenarios:create_basic_group_env(
+        Config, ?GROUP_JOIN_GROUP
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, Child} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-    oz_test_utils:group_set_user_privileges(Config, Child, U1, revoke, [
-        ?GROUP_JOIN_GROUP
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, Child, U2),
-    oz_test_utils:group_set_user_privileges(Config, Child, U2, set, [
-        ?GROUP_JOIN_GROUP
-    ]),
 
     EnvSetUpFun = fun() ->
         {ok, Group} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME2),
@@ -192,20 +179,13 @@ join_group_test(Config) ->
 
 
 leave_group_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create group with 2 users; give group_update privilege
+    % for one of them and all but that for the second one
+    {Child, U1, U2} = api_test_scenarios:create_basic_group_env(
+        % TODO VFS-3351 ?GROUP_LEAVE_GROUP
+        Config, ?GROUP_UPDATE
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, Child} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-    oz_test_utils:group_set_user_privileges(Config, Child, U1, revoke, [
-        % TODO VFS-3351 ?GROUP_LEAVE_GROUP
-        ?GROUP_UPDATE
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, Child, U2),
-    oz_test_utils:group_set_user_privileges(Config, Child, U2, set, [
-        % TODO VFS-3351 ?GROUP_LEAVE_GROUP
-        ?GROUP_UPDATE
-    ]),
 
     EnvSetUpFun = fun() ->
         {ok, Group} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME2),
@@ -249,18 +229,12 @@ leave_group_test(Config) ->
 
 
 get_parent_details_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create group with 2 users; give group_view privilege
+    % for one of them and all but that for the second one
+    {Group, U1, U2} = api_test_scenarios:create_basic_group_env(
+        Config, ?GROUP_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-    oz_test_utils:group_set_user_privileges(Config, Group, U1, revoke, [
-        ?GROUP_VIEW
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, Group, U2),
-    oz_test_utils:group_set_user_privileges(Config, Group, U2, set, [
-        ?GROUP_VIEW
-    ]),
 
     {ok, ParentGroup} = oz_test_utils:create_group(Config, ?ROOT,
         #{<<"name">> => ?GROUP_NAME2, <<"type">> => ?GROUP_TYPE2}

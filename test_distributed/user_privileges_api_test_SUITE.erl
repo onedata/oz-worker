@@ -26,7 +26,6 @@
 -include("api_test_utils.hrl").
 
 
-%% API
 -export([
     all/0,
     init_per_suite/1, end_per_suite/1
@@ -54,6 +53,7 @@ all() ->
         get_self_eff_oz_privileges_test
     ]).
 
+
 %%%===================================================================
 %%% Test functions
 %%%===================================================================
@@ -68,7 +68,7 @@ get_oz_privileges_test(Config) ->
     ]),
 
     InitialPrivs = [],
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
+    AllPrivs = oz_test_utils:get_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:set_user_oz_privileges(Config, User, Operation, Privs)
     end,
@@ -108,7 +108,7 @@ get_oz_privileges_test(Config) ->
 get_self_oz_privileges_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
+    AllPrivs = oz_test_utils:get_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:set_user_oz_privileges(Config, User, Operation, Privs)
     end,
@@ -139,7 +139,7 @@ update_oz_privileges_test(Config) ->
         ?OZ_SET_PRIVILEGES
     ]),
 
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
+    AllPrivs = oz_test_utils:get_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:set_user_oz_privileges(Config, User, Operation, Privs)
     end,
@@ -180,9 +180,11 @@ update_oz_privileges_test(Config) ->
 
 
 update_self_oz_privileges_test(Config) ->
+    % oz_set_privilege will be granted for user every time as const priv,
+    % so he will be able to change his privileges
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
+    AllPrivs = oz_test_utils:get_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:set_user_oz_privileges(Config, User, Operation, Privs)
     end,
@@ -217,7 +219,7 @@ delete_oz_privileges_test(Config) ->
         ?OZ_SET_PRIVILEGES
     ]),
 
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
+    AllPrivs = oz_test_utils:get_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:set_user_oz_privileges(Config, User, Operation, Privs)
     end,
@@ -261,7 +263,7 @@ delete_oz_privileges_test(Config) ->
 delete_self_oz_privileges_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
+    AllPrivs = oz_test_utils:get_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:set_user_oz_privileges(Config, User, Operation, Privs)
     end,
@@ -297,8 +299,8 @@ get_eff_oz_privileges_test(Config) ->
     ]),
 
     InitialPrivs = [],
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
-    SetPrivsFun = prepare_set_oz_privs_fun(Config, User),
+    AllPrivs = oz_test_utils:get_oz_privileges(Config),
+    SetPrivsFun = set_oz_privs_fun(Config, User),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -335,7 +337,7 @@ get_eff_oz_privileges_test(Config) ->
 get_self_eff_oz_privileges_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
-    SetPrivsFun = prepare_set_oz_privs_fun(Config, User),
+    SetPrivsFun = set_oz_privs_fun(Config, User),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -355,7 +357,7 @@ get_self_eff_oz_privileges_test(Config) ->
     ])).
 
 
-prepare_set_oz_privs_fun(Config, User) ->
+set_oz_privs_fun(Config, User) ->
     {BottomGroup, MidGroup, TopGroup} = oz_test_utils:create_3_nested_groups(
         Config, User
     ),

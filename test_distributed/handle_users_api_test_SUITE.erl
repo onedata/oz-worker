@@ -67,33 +67,13 @@ all() ->
 
 
 add_user_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create handle with 2 users; give handle_update privilege for one of them
+    % and all but handle_update for the second one
+    {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
+        Config, ?HANDLE_UPDATE
+    ),
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
-    ),
-
-    HandleDetails = ?HANDLE(HService, ShareId),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
-    ),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, revoke, [
-        ?HANDLE_UPDATE
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_handle(Config, HandleId, U2),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U2, set, [
-        ?HANDLE_UPDATE
-    ]),
 
     AllPrivs = oz_test_utils:get_handle_privileges(Config),
 
@@ -146,7 +126,7 @@ add_user_test(Config) ->
             bad_values = [
                 {<<"privileges">>, <<"">>,
                     ?ERROR_BAD_VALUE_LIST_OF_ATOMS(<<"privileges">>)},
-                {<<"privileges">>, [space_view, group_view],
+                {<<"privileges">>, [?SPACE_VIEW, ?GROUP_VIEW],
                     ?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(<<"privileges">>, AllPrivs)}
             ]
         }
@@ -157,32 +137,12 @@ add_user_test(Config) ->
 
 
 remove_user_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create handle with 2 users; give handle_update privilege for one of them
+    % and all but handle_update for the second one
+    {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
+        Config, ?HANDLE_UPDATE
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
-    ),
-
-    HandleDetails = ?HANDLE(HService, ShareId),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
-    ),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, revoke, [
-        ?HANDLE_UPDATE
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_handle(Config, HandleId, U2),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U2, set, [
-        ?HANDLE_UPDATE
-    ]),
 
     EnvSetUpFun = fun() ->
         {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
@@ -225,33 +185,13 @@ remove_user_test(Config) ->
 
 
 list_users_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    % create handle with 2 users; give handle_view privilege for one of them
+    % and all but handle_view for the second one
+    {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
+        Config, ?HANDLE_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
-    ),
-
-    HandleDetails = ?HANDLE(HService, ShareId),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
-    ),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, revoke, [
-        ?HANDLE_VIEW
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_handle(Config, HandleId, U2),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U2, set, [
-        ?HANDLE_VIEW
-    ]),
+    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U3} = oz_test_utils:add_user_to_handle(Config, HandleId, U3),
 
     ExpUsers = [U1, U2, U3],
@@ -286,39 +226,20 @@ list_users_test(Config) ->
 
 
 get_user_test(Config) ->
+    % create handle with 2 users; give handle_view privilege for one of them
+    % and all but handle_view for the second one
+    {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
+        Config, ?HANDLE_VIEW
+    ),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
     ExpAlias = ExpLogin = ExpName = ?USER_NAME1,
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{
         name = ExpName,
         login = ExpLogin,
         alias = ExpAlias,
         email_list = [<<"john.doe@uruk.com">>]
     }),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
-    ),
-
-    HandleDetails = ?HANDLE(HService, ShareId),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
-    ),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, revoke, [
-        ?HANDLE_VIEW
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_handle(Config, HandleId, U2),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U2, set, [
-        ?HANDLE_VIEW
-    ]),
     {ok, U3} = oz_test_utils:add_user_to_handle(Config, HandleId, U3),
 
     ExpUserDetails = #{
@@ -373,33 +294,14 @@ get_user_test(Config) ->
 
 
 get_user_privileges_test(Config) ->
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create handle with 2 users; give handle_view privilege for one of them
+    % and all but handle_view for the second one
+    {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
+        Config, ?HANDLE_VIEW
+    ),
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
-    ),
-
-    HandleDetails = ?HANDLE(HService, ShareId),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
-    ),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, revoke, [
-        ?HANDLE_VIEW
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_handle(Config, HandleId, U2),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U2, set, [
-        ?HANDLE_VIEW
-    ]),
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
@@ -450,33 +352,13 @@ get_user_privileges_test(Config) ->
 
 
 update_user_privileges_test(Config) ->
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create handle with 2 users; give handle_update privilege for one of them
+    % and all but handle_update for the second one
+    {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
+        Config, ?HANDLE_UPDATE
+    ),
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
-    ),
-
-    HandleDetails = ?HANDLE(HService, ShareId),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
-    ),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, revoke, [
-        ?HANDLE_UPDATE
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_handle(Config, HandleId, U2),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U2, set, [
-        ?HANDLE_UPDATE
-    ]),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
@@ -645,7 +527,6 @@ get_eff_user_privileges_test(Config) ->
     %%                /   ||    \
     %%               /    ||     \
     %%              /     ||      \
-    %%             /      ||       \
     %%    [~handle_view]  ||   [handle_view]
     %%           /        ||         \
     %%        User1      /  \       User2
@@ -661,37 +542,17 @@ get_eff_user_privileges_test(Config) ->
     %%      <<user>>
     %%      NonAdmin
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create handle with 2 users; give handle_view privilege for one of them
+    % and all but handle_view for the second one
+    {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
+        Config, ?HANDLE_VIEW
+    ),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     % User whose eff privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HServiceId} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
-    ),
-
-    HandleDetails = ?HANDLE(HServiceId, ShareId),
-    {ok, HandleId} = oz_test_utils:create_handle(
-        Config, ?USER(U1), HandleDetails
-    ),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, revoke, [
-        ?HANDLE_VIEW
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_handle(Config, HandleId, U2),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U2, set, [
-        ?HANDLE_VIEW
-    ]),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),

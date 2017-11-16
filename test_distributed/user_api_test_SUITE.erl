@@ -26,7 +26,6 @@
 -include("api_test_utils.hrl").
 
 
-%% API
 -export([
     all/0,
     init_per_suite/1, end_per_suite/1,
@@ -147,13 +146,15 @@ all() ->
         get_eff_handle_test
     ]).
 
+
 %%%===================================================================
 %%% Test functions
 %%%===================================================================
 
+
 create_test(Config) ->
-    ExpName = <<"name">>,
-    ExpLogin = <<"login">>,
+    ExpName = ?USER_NAME1,
+    ExpLogin = ?USER_LOGIN1,
     UserRecord = #od_user{name = ExpName, login = ExpLogin},
 
     % Try to create user without predefined id
@@ -184,7 +185,7 @@ create_test(Config) ->
 authorize_test(Config) ->
     % Create a provider and a user.
     {ok, {Provider, _, _}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+        Config, ?PROVIDER_NAME1
     ),
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     % Generate an auth token, parse the token for 3rd party caveats and check
@@ -249,7 +250,7 @@ list_test(Config) ->
         ?OZ_USERS_LIST
     ]),
     {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+        Config, ?PROVIDER_NAME1
     ),
 
     ExpUsers = [Admin, NonAdmin, U1, U2, U3],
@@ -280,12 +281,22 @@ list_test(Config) ->
         }
         % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % check also user_logic:exists function
+    lists:foreach(
+        fun(User) ->
+            ?assert(oz_test_utils:call_oz(Config, user_logic, exists, [User]))
+        end, ExpUsers
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, user_logic, exists, [<<"asdiucyaie827346w">>])
+    ).
 
 
 get_test(Config) ->
     {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+        Config, ?PROVIDER_NAME1
     ),
     {ok, User} = oz_test_utils:create_user(Config, #od_user{
         name = ExpName = <<"UserName">>,
@@ -527,7 +538,7 @@ get_self_test(Config) ->
 
 
 update_test(Config) ->
-    InitialName = <<"U1">>,
+    InitialName = ?USER_NAME1,
 
     EnvSetUpFun = fun() ->
         {ok, User} = oz_test_utils:create_user(Config, #od_user{
@@ -667,7 +678,15 @@ delete_test(Config) ->
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, {user, userId}]
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun]
+    )),
+
+    % Also check that user can delete himself
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{correct = [{user, userId}]}
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
     )).
 
 
@@ -852,11 +871,11 @@ delete_client_token_test(Config) ->
 
 set_default_space_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, <<"S1">>),
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
 
     EnvSetUpFun = fun() ->
         {ok, SpaceId} = oz_test_utils:create_space(
-            Config, ?USER(User), <<"Space">>
+            Config, ?USER(User), ?SPACE_NAME2
         ),
         #{spaceId => SpaceId}
     end,
@@ -951,7 +970,7 @@ get_default_space_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % Set a default space for user
-    {ok, Space} = oz_test_utils:create_space(Config, ?USER(User), <<"S1">>),
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     oz_test_utils:set_user_default_space(Config, User, Space),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         rest_spec = RestSpec#rest_spec{
@@ -972,7 +991,7 @@ get_default_space_test(Config) ->
 
 unset_default_space_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), <<"S1">>),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
 
     EnvSetUpFun = fun() ->
         ok = oz_test_utils:set_user_default_space(Config, User, S1),
@@ -1015,14 +1034,14 @@ unset_default_space_test(Config) ->
 
 set_default_provider_test(Config) ->
     {ok, {P1, _, _}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+        Config, ?PROVIDER_NAME1
     ),
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), <<"S1">>),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
 
     EnvSetUpFun = fun() ->
         {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(
-            Config, <<"Provider">>
+            Config, ?PROVIDER_NAME2
         ),
         {ok, S1} = oz_test_utils:support_space(
             Config, ProviderId, S1, oz_test_utils:minimum_support_size(Config)
@@ -1119,9 +1138,9 @@ get_default_provider_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % Set a default provider for user
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), <<"S1">>),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     {ok, {P1, _, _}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+        Config, ?PROVIDER_NAME1
     ),
     {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
         Config, ?ROOT, S1
@@ -1151,9 +1170,9 @@ get_default_provider_test(Config) ->
 
 unset_default_provider_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), <<"S1">>),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     {ok, {P1, _, _}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+        Config, ?PROVIDER_NAME1
     ),
     {ok, S1} = oz_test_utils:support_space(
         Config, P1, S1, oz_test_utils:minimum_support_size(Config)
@@ -1250,7 +1269,7 @@ list_groups_test(Config) ->
 create_group_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, group_privileges, []),
+    AllPrivs = oz_test_utils:get_group_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(GroupId, ExpName, ExpType) ->
@@ -1357,7 +1376,7 @@ create_group_test(Config) ->
 
 join_group_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, <<"G1">>),
+    {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
 
     GenTokenFun = fun() ->
         {ok, Macaroon} = oz_test_utils:group_invite_user_token(
@@ -1435,12 +1454,8 @@ join_group_test(Config) ->
 
 get_group_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-
-    ExpName = <<"G2">>,
-    ExpType = team,
-    ExpTypeBinary = atom_to_binary(ExpType, utf8),
-    {ok, Group} = oz_test_utils:create_group(
-        Config, ?USER(User), #{<<"name">> => ExpName, <<"type">> => ExpType}
+    {ok, Group} = oz_test_utils:create_group(Config, ?USER(User),
+        #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
     ),
 
     ApiTestSpec = #api_test_spec{
@@ -1456,8 +1471,8 @@ get_group_test(Config) ->
             expected_code = ?HTTP_200_OK,
             expected_body = #{
                 <<"groupId">> => Group,
-                <<"name">> => ExpName,
-                <<"type">> => ExpTypeBinary
+                <<"name">> => ?GROUP_NAME1,
+                <<"type">> => ?GROUP_TYPE1_BIN
             }
         },
         gs_spec = #gs_spec{
@@ -1468,8 +1483,8 @@ get_group_test(Config) ->
             },
             auth_hint = ?THROUGH_USER(User),
             expected_result = ?OK_MAP(#{
-                <<"name">> => ExpName,
-                <<"type">> => ExpTypeBinary,
+                <<"name">> => ?GROUP_NAME1,
+                <<"type">> => ?GROUP_TYPE1_BIN,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -1496,8 +1511,8 @@ get_group_test(Config) ->
             function = get_group,
             args = [client, User, Group],
             expected_result = ?OK_MAP(#{
-                <<"name">> => ExpName,
-                <<"type">> => ExpType
+                <<"name">> => ?GROUP_NAME1,
+                <<"type">> => ?GROUP_TYPE1
             })
         },
         gs_spec = undefined
@@ -1510,7 +1525,7 @@ leave_group_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, GroupId} = oz_test_utils:create_group(
-            Config, ?USER(User), <<"Group">>
+            Config, ?USER(User), ?GROUP_NAME1
         ),
         #{groupId => GroupId}
     end,
@@ -1586,7 +1601,19 @@ list_eff_groups_test(Config) ->
         }
         % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+    % check also user_logic:has_eff_group function
+    lists:foreach(
+        fun(GroupId) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, user_logic, has_eff_group, [U2, GroupId])
+            )
+        end, ExpGroups
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, user_logic, has_eff_group, [U2, <<"asdiucyaie827346w">>])
+    ).
 
 
 get_eff_group_test(Config) ->
@@ -1664,8 +1691,8 @@ get_eff_group_test(Config) ->
 create_space_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
-    ExpName = <<"SpaceName">>,
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, space_privileges, []),
+    ExpName = ?SPACE_NAME1,
+    AllPrivs = oz_test_utils:get_space_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(SpaceId) ->
@@ -1749,10 +1776,10 @@ create_space_test(Config) ->
 list_spaces_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), <<"S1">>),
-    {ok, S2} = oz_test_utils:create_space(Config, ?USER(User), <<"S2">>),
-    {ok, S3} = oz_test_utils:create_space(Config, ?USER(User), <<"S3">>),
-    {ok, S4} = oz_test_utils:create_space(Config, ?USER(User), <<"S4">>),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
+    {ok, S3} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
+    {ok, S4} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     ExpSpaces = [S1, S2, S3, S4],
 
     ApiTestSpec = #api_test_spec{
@@ -1799,7 +1826,7 @@ join_space_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
     EnvSetUpFun = fun() ->
-        {ok, SpaceId} = oz_test_utils:create_space(Config, ?ROOT, <<"Sp">>),
+        {ok, SpaceId} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
         #{spaceId => SpaceId}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _) ->
@@ -1878,7 +1905,7 @@ join_space_test(Config) ->
 get_space_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
-    ExpName = <<"S1">>,
+    ExpName = ?SPACE_NAME1,
     ExpMap = #{<<"name">> => ExpName, <<"providersSupports">> => #{}},
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ExpName),
 
@@ -1939,7 +1966,7 @@ leave_space_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, SpaceId} = oz_test_utils:create_space(
-            Config, ?USER(User), <<"Sp">>
+            Config, ?USER(User), ?SPACE_NAME1
         ),
         #{spaceId => SpaceId}
     end,
@@ -1976,7 +2003,7 @@ leave_space_test(Config) ->
 
 set_space_alias_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), <<"S1">>),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
 
     VerifyEndFun = fun(ShouldSucceed, _, #{<<"alias">> := ExpAlias} = _Data) ->
         Result = oz_test_utils:call_oz(
@@ -2044,7 +2071,7 @@ set_space_alias_test(Config) ->
 
 get_space_alias_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Space} = oz_test_utils:create_space(Config, ?USER(User), <<"sp">>),
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
 
     % Newly created space should not have an alias
     ApiTestSpec = #api_test_spec{
@@ -2091,11 +2118,10 @@ get_space_alias_test(Config) ->
 
 delete_space_alias_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), <<"S1">>),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
 
     EnvSetUpFun = fun() ->
-        UniqueInt = erlang:unique_integer([positive]),
-        Alias = <<"Space", (integer_to_binary(UniqueInt))/binary>>,
+        Alias = ?UNIQUE_NAME(<<"space">>),
         oz_test_utils:set_user_space_alias(Config, User, S1, Alias),
         #{alias => Alias}
     end,
@@ -2141,7 +2167,7 @@ list_eff_spaces_test(Config) ->
     } = api_test_scenarios:create_eff_spaces_env(Config),
 
     % Create also space for user only
-    {ok, S6} = oz_test_utils:create_space(Config, ?USER(U2), <<"S6">>),
+    {ok, S6} = oz_test_utils:create_space(Config, ?USER(U2), ?SPACE_NAME1),
 
     ExpSpaces = [S1, S2, S3, S4, S5, S6],
     ApiTestSpec = #api_test_spec{
@@ -2179,7 +2205,19 @@ list_eff_spaces_test(Config) ->
         }
         % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+    % check also user_logic:has_eff_space function
+    lists:foreach(
+        fun(SpacesId) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, user_logic, has_eff_space, [U2, SpacesId])
+            )
+        end, ExpSpaces
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, user_logic, has_eff_space, [U2, <<"asdiucyaie827346w">>])
+    ).
 
 
 get_eff_space_test(Config) ->
@@ -2188,8 +2226,8 @@ get_eff_space_test(Config) ->
     } = api_test_scenarios:create_eff_spaces_env(Config),
 
     % Create also space for user only
-    {ok, S6} = oz_test_utils:create_space(Config, ?USER(U2), <<"S6">>),
-    S6Details = #{<<"name">> => <<"S6">>, <<"providersSupports">> => #{}},
+    {ok, S6} = oz_test_utils:create_space(Config, ?USER(U2), ?SPACE_NAME1),
+    S6Details = #{<<"name">> => ?SPACE_NAME1, <<"providersSupports">> => #{}},
     {ok, U1} = oz_test_utils:add_user_to_space(Config, S6, U1),
     NewEffSpacesList = [{S6, S6Details} | EffSpacesList],
 
@@ -2295,7 +2333,19 @@ list_eff_providers_test(Config) ->
         }
         % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+    % check also user_logic:has_eff_provider function
+    lists:foreach(
+        fun(ProviderId) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, user_logic, has_eff_provider, [U2, ProviderId])
+            )
+        end, ExpProviders
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, user_logic, has_eff_provider, [U2, <<"asdiucyaie827346w">>])
+    ).
 
 
 get_eff_provider_test(Config) ->
@@ -2372,9 +2422,9 @@ create_handle_service_test(Config) ->
         ?OZ_HANDLE_SERVICES_CREATE
     ]),
 
-    ExpName = <<"HS">>,
-    ExpProxyEndPoint = <<"http://dot.com">>,
-    ExpProperties = #{<<"asd">> => 1},
+    ExpName = ?HANDLE_SERVICE_NAME1,
+    ExpProxyEndPoint = ?PROXY_ENDPOINT,
+    ExpProperties = ?DOI_SERVICE_PROPERTIES,
 
     VerifyFun = fun(HServiceId) ->
         {ok, HS} = oz_test_utils:get_handle_service(Config, HServiceId),
@@ -2472,10 +2522,8 @@ list_handle_services_test(Config) ->
     ExpHandleServices = lists:map(
         fun(_) ->
             {ok, HServiceId} = oz_test_utils:create_handle_service(
-                Config, ?ROOT, <<"HS">>,
-                <<"https://dot.com">>, #{asd => 1}
+                Config, ?ROOT, ?DOI_SERVICE
             ),
-
             {ok, User} = oz_test_utils:add_user_to_handle_service(
                 Config, HServiceId, User
             ),
@@ -2524,20 +2572,17 @@ list_handle_services_test(Config) ->
 get_handle_service_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
-    ExpName = <<"HS">>,
-    ExpProxyEndPoint = <<"http://dot.com">>,
-    ExpProperties = #{<<"asd">> => 1},
-    {ok, HServiceId} = oz_test_utils:create_handle_service(
-        Config, ?ROOT, ExpName, ExpProxyEndPoint, ExpProperties
+    {ok, HServiceId} = oz_test_utils:create_handle_service(Config, ?ROOT,
+        ?HANDLE_SERVICE_NAME1, ?PROXY_ENDPOINT, ?DOI_SERVICE_PROPERTIES
     ),
     {ok, User} = oz_test_utils:add_user_to_handle_service(
         Config, HServiceId, User
     ),
 
     ExpHServiceDetails = #{
-        <<"name">> => ExpName,
-        <<"proxyEndpoint">> => ExpProxyEndPoint,
-        <<"serviceProperties">> => ExpProperties
+        <<"name">> => ?HANDLE_SERVICE_NAME1,
+        <<"proxyEndpoint">> => ?PROXY_ENDPOINT,
+        <<"serviceProperties">> => ?DOI_SERVICE_PROPERTIES
     },
     ApiTestSpec = #api_test_spec{
         client_spec = ClientSpec = #client_spec{
@@ -2555,22 +2600,6 @@ get_handle_service_test(Config) ->
             }
         }
         % TODO gs
-%%        gs_spec = #gs_spec{
-%%            operation = get,
-%%            gri = #gri{
-%%                type = od_handle_service, id = HServiceId,
-%%                aspect = instance, scope = protected
-%%            },
-%%            auth_hint = ?THROUGH_USER(User),
-%%            expected_result = ?OK_MAP(ExpHServiceDetails#{
-%%                <<"gri">> => fun(EncodedGri) ->
-%%                    #gri{id = Id} = oz_test_utils:decode_gri(
-%%                        Config, EncodedGri
-%%                    ),
-%%                    ?assertEqual(Id, HServiceId)
-%%                end
-%%            })
-%%        }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -2600,7 +2629,7 @@ leave_handle_service_test(Config) ->
 
     EnvSetUpEnv = fun() ->
         {ok, HServiceId} = oz_test_utils:create_handle_service(
-            Config, ?ROOT, <<"HS">>, <<"http://dot.com">>, #{<<"asd">> => 1}
+            Config, ?ROOT, ?DOI_SERVICE
         ),
         {ok, User} = oz_test_utils:add_user_to_handle_service(
             Config, HServiceId, User
@@ -2653,7 +2682,7 @@ list_eff_handle_services_test(Config) ->
         Config, HServiceId, U2
     ),
 
-    ExpHandleServices = [HS1, HS2, HS3, HS4, HS5, HServiceId],
+    ExpHServices = [HS1, HS2, HS3, HS4, HS5, HServiceId],
     ApiTestSpec = #api_test_spec{
         client_spec = ClientSpec = #client_spec{
             correct = [
@@ -2665,7 +2694,7 @@ list_eff_handle_services_test(Config) ->
             method = get,
             path = <<"/user/effective_handle_services">>,
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"handle_services">> => ExpHandleServices}
+            expected_body = #{<<"handle_services">> => ExpHServices}
         }
         % TODO gs
     },
@@ -2685,11 +2714,24 @@ list_eff_handle_services_test(Config) ->
             module = user_logic,
             function = get_eff_handle_services,
             args = [client, U2],
-            expected_result = ?OK_LIST(ExpHandleServices)
+            expected_result = ?OK_LIST(ExpHServices)
         }
         % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+    % check also user_logic:has_eff_handle_service function
+    lists:foreach(
+        fun(HService) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, user_logic, has_eff_handle_service, [U2, HService])
+            )
+        end, ExpHServices
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, user_logic, has_eff_handle_service,
+        [U2, <<"asdiucyaie827346w">>])
+    ).
 
 
 get_eff_handle_service_test(Config) ->
@@ -2731,22 +2773,6 @@ get_eff_handle_service_test(Config) ->
                     }
                 }
                 % TODO gs
-%%                gs_spec = #gs_spec{
-%%                    operation = get,
-%%                    gri = #gri{
-%%                        type = od_handle_service, id = HServiceId,
-%%                        aspect = instance, scope = protected
-%%                    },
-%%                    auth_hint = ?THROUGH_USER(User),
-%%                    expected_result = ?OK_MAP(HServiceDetails#{
-%%                        <<"gri">> => fun(EncodedGri) ->
-%%                            #gri{id = Id} = oz_test_utils:decode_gri(
-%%                                Config, EncodedGri
-%%                            ),
-%%                            ?assertEqual(Id, HServiceId)
-%%                        end
-%%                    })
-%%                }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -2776,12 +2802,11 @@ get_eff_handle_service_test(Config) ->
 
 create_handle_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), <<"S1">>),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
 
-    UniqueInt = erlang:unique_integer([positive]),
-    ShareId = <<"Share", (integer_to_binary(UniqueInt))/binary>>,
+    ShareId = ?UNIQUE_NAME(<<"share">>),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ShareId, <<"share">>, <<"file">>, S1
+        Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
     ),
 
     {ok, HServiceId} = oz_test_utils:create_handle_service(
@@ -2791,9 +2816,7 @@ create_handle_test(Config) ->
         Config, HServiceId, User
     ),
 
-    AllPrivs = oz_test_utils:call_oz(
-        Config, privileges, handle_privileges, []
-    ),
+    AllPrivs = oz_test_utils:get_handle_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     ExpResourceType = <<"Share">>,
@@ -2939,8 +2962,8 @@ create_handle_test(Config) ->
 
 list_handles_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), <<"S1">>),
-    {ok, S2} = oz_test_utils:create_space(Config, ?USER(User), <<"S2">>),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME2),
 
     {ok, HServiceId} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
@@ -2949,10 +2972,9 @@ list_handles_test(Config) ->
     % Create 3 handles, 2 for S1 and 1 for S2
     ExpHandles = lists:map(
         fun(SpaceId) ->
-            UniqueInt = erlang:unique_integer([positive]),
-            ShareId = <<"Share", (integer_to_binary(UniqueInt))/binary>>,
+            ShareId = ?UNIQUE_NAME(<<"share">>),
             {ok, ShareId} = oz_test_utils:create_share(
-                Config, ?ROOT, ShareId, <<"share">>, <<"file">>, SpaceId
+                Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
             ),
             {ok, HandleId} = oz_test_utils:create_handle(
                 Config, ?ROOT, ?HANDLE(HServiceId, ShareId)
@@ -3004,19 +3026,14 @@ list_handles_test(Config) ->
 
 get_handle_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), <<"S1">>),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
 
-    UniqueInt = erlang:unique_integer([positive]),
-    ShareId = <<"Share", (integer_to_binary(UniqueInt))/binary>>,
+    ShareId = ?UNIQUE_NAME(<<"share">>),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ShareId, <<"share">>, <<"file">>, S1
+        Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
     ),
-
     {ok, HServiceId} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
-    ),
-    {ok, User} = oz_test_utils:add_user_to_handle_service(
-        Config, HServiceId, User
     ),
 
     HandleDetails = ?HANDLE(HServiceId, ShareId),
@@ -3056,41 +3073,20 @@ get_handle_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(HandleDetails)
         }
         % TODO gs
-%%        gs_spec = #gs_spec{
-%%            operation = get,
-%%            gri = #gri{
-%%                type = od_handle, id = HandleId,
-%%                aspect = instance, scope = protected
-%%            },
-%%            auth_hint = ?THROUGH_USER(User),
-%%            expected_result = ?OK_MAP_CONTAINS(HandleDetails#{
-%%                <<"gri">> => fun(EncodedGri) ->
-%%                    #gri{id = Id} = oz_test_utils:decode_gri(
-%%                        Config, EncodedGri
-%%                    ),
-%%                    ?assertEqual(Id, HandleId)
-%%                end
-%%            })
-%%        }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 leave_handle_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), <<"S1">>),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
 
-    UniqueInt = erlang:unique_integer([positive]),
-    ShareId = <<"Share", (integer_to_binary(UniqueInt))/binary>>,
+    ShareId = ?UNIQUE_NAME(<<"share">>),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ShareId, <<"share">>, <<"file">>, S1
+        Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
     ),
-
     {ok, HServiceId} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
-    ),
-    {ok, User} = oz_test_utils:add_user_to_handle_service(
-        Config, HServiceId, User
     ),
 
     EnvSetUpFun = fun() ->
@@ -3188,7 +3184,19 @@ list_eff_handles_test(Config) ->
         }
         % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+    % check also user_logic:has_eff_handle function
+    lists:foreach(
+        fun(Handle) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, user_logic, has_eff_handle, [U2, Handle])
+            )
+        end, ExpHandles
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, user_logic, has_eff_handle, [U2, <<"asdiucyaie827346w">>])
+    ).
 
 
 get_eff_handle_test(Config) ->
@@ -3235,22 +3243,6 @@ get_eff_handle_test(Config) ->
                     expected_result = ?OK_MAP_CONTAINS(HandleDetails)
                 }
                 % TODO gs
-%%                gs_spec = #gs_spec{
-%%                    operation = get,
-%%                    gri = #gri{
-%%                        type = od_handle, id = HandleId,
-%%                        aspect = instance, scope = protected
-%%                    },
-%%                    auth_hint = ?THROUGH_USER(User),
-%%                    expected_result = ?OK_MAP(HandleDetails#{
-%%                        <<"gri">> => fun(EncodedGri) ->
-%%                            #gri{id = Id} = oz_test_utils:decode_gri(
-%%                                Config, EncodedGri
-%%                            ),
-%%                            ?assertEqual(Id, HandleId)
-%%                        end
-%%                    })
-%%                }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
 

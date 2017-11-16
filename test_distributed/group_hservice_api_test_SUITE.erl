@@ -57,18 +57,12 @@ all() ->
 
 
 list_handle_services_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create group with 2 users; give group_view privilege
+    % for one of them and all but that for the second one
+    {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
+        Config, ?GROUP_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-    oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
-        ?GROUP_VIEW
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
-        ?GROUP_VIEW
-    ]),
 
     ExpHServices = lists:map(
         fun(_) ->
@@ -112,15 +106,15 @@ list_handle_services_test(Config) ->
 
 
 create_handle_service_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create group with 2 users; give all privileges
+    % for one of them and none for the second one
+    {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
+        Config, oz_test_utils:get_group_privileges(Config)
+    ),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, U2, grant, [
         ?OZ_HANDLE_SERVICES_CREATE
     ]),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
 
     AllPrivs = oz_test_utils:get_handle_service_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
@@ -213,15 +207,15 @@ create_handle_service_test(Config) ->
 
 
 get_handle_service_details_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create group with 2 users; give group_view privilege
+    % for one of them and all but that for the second one
+    {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
+        Config, ?GROUP_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, NonAdmin, grant, [
         ?OZ_HANDLE_SERVICES_LIST
     ]),
-
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
 
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
@@ -260,18 +254,12 @@ get_handle_service_details_test(Config) ->
 
 
 leave_handle_service_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create group with 2 users; give group_update privilege
+    % for one of them and all but that for the second one
+    {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
+        Config, ?GROUP_UPDATE
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-    oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
-        ?GROUP_UPDATE
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
-        ?GROUP_UPDATE
-    ]),
 
     EnvSetUpEnv = fun() ->
         {ok, HService} = oz_test_utils:create_handle_service(

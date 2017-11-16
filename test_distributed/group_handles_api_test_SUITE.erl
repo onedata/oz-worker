@@ -26,7 +26,6 @@
 -include("api_test_utils.hrl").
 
 
-%% API
 -export([
     all/0,
     init_per_suite/1, end_per_suite/1,
@@ -58,23 +57,16 @@ all() ->
 
 
 list_handles_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create group with 2 users; give group_view privilege
+    % for one of them and all but that for the second one
+    {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
+        Config, ?GROUP_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-    oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
-        ?GROUP_VIEW
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
-        ?GROUP_VIEW
-    ]),
-
-    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
-    {ok, S2} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME2),
-
-    {ok, HServiceId} = oz_test_utils:create_handle_service(
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME2),
+    {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
     ),
 
@@ -86,7 +78,7 @@ list_handles_test(Config) ->
                 Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
             ),
             {ok, HandleId} = oz_test_utils:create_handle(
-                Config, ?ROOT, ?HANDLE(HServiceId, ShareId)
+                Config, ?ROOT, ?HANDLE(HService, ShareId)
             ),
             {ok, G1} = oz_test_utils:add_group_to_handle(Config, HandleId, G1),
             HandleId
@@ -132,12 +124,10 @@ create_handle_test(Config) ->
         Config, ?ROOT, ?SHARE_NAME1, ?SHARE_ID_1, ?ROOT_FILE_ID, S1
     ),
 
-    {ok, HServiceId} = oz_test_utils:create_handle_service(
+    {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
     ),
-    {ok, G1} = oz_test_utils:add_group_to_handle_service(
-        Config, HServiceId, G1
-    ),
+    {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
 
     AllPrivs = oz_test_utils:get_handle_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
@@ -147,7 +137,7 @@ create_handle_test(Config) ->
         {ok, Handle} = oz_test_utils:get_handle(Config, HandleId),
         ?assertEqual(ExpResourceType, Handle#od_handle.resource_type),
         ?assertEqual(ShareId, Handle#od_handle.resource_id),
-        ?assertEqual(HServiceId, Handle#od_handle.handle_service),
+        ?assertEqual(HService, Handle#od_handle.handle_service),
         ?assertEqual(#{G1 => AllPrivs}, Handle#od_handle.groups),
         ?assertEqual(
             #{G1 => {AllPrivs, [{od_handle, HandleId}]}},
@@ -199,7 +189,7 @@ create_handle_test(Config) ->
                 <<"effectiveGroups">> => #{G1 => AllPrivsBin},
                 <<"effectiveUsers">> => #{U1 => AllPrivsBin},
                 <<"metadata">> => ?DC_METADATA,
-                <<"handleServiceId">> => HServiceId,
+                <<"handleServiceId">> => HService,
                 <<"resourceType">> => ExpResourceType,
                 <<"resourceId">> => ShareId,
                 <<"gri">> => fun(EncodedGri) ->
@@ -218,7 +208,7 @@ create_handle_test(Config) ->
                 <<"metadata">>
             ],
             correct_values = #{
-                <<"handleServiceId">> => [HServiceId],
+                <<"handleServiceId">> => [HService],
                 <<"resourceType">> => [<<"Share">>],
                 <<"resourceId">> => [ShareId],
                 <<"metadata">> => [?DC_METADATA]
@@ -282,25 +272,17 @@ create_handle_test(Config) ->
 
 
 get_handle_details_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create group with 2 users; give group_view privilege
+    % for one of them and all but that for the second one
+    {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
+        Config, ?GROUP_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-    oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
-        ?GROUP_VIEW
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
-        ?GROUP_VIEW
-    ]),
 
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
     ),
-    {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
-
-    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
         Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
     ),
@@ -339,24 +321,16 @@ get_handle_details_test(Config) ->
 
 
 leave_handle_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create group with 2 users; give group_update privilege
+    % for one of them and all but that for the second one
+    {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
+        Config, ?GROUP_UPDATE
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-    oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
-        ?GROUP_UPDATE
-    ]),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
-        ?GROUP_UPDATE
-    ]),
 
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
     ),
-    {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
-
     {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
         Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1

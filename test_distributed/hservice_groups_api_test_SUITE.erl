@@ -67,23 +67,12 @@ all() ->
 
 
 add_group_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create handle service with 2 users; give handle_service_update privilege
+    % for one of them and all but that for the second one
+    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
+        Config, ?HANDLE_SERVICE_UPDATE
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
-        revoke, [?HANDLE_SERVICE_UPDATE]
-    ),
-    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
-        set, [?HANDLE_SERVICE_UPDATE]
-    ),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     AllPrivs = oz_test_utils:get_handle_service_privileges(Config),
@@ -152,23 +141,12 @@ add_group_test(Config) ->
 
 
 remove_group_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create handle service with 2 users; give handle_service_update privilege
+    % for one of them and all but that for the second one
+    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
+        Config, ?HANDLE_SERVICE_UPDATE
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
-        revoke, [?HANDLE_SERVICE_UPDATE]
-    ),
-    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
-        set, [?HANDLE_SERVICE_UPDATE]
-    ),
 
     EnvSetUpFun = fun() ->
         {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
@@ -215,23 +193,12 @@ remove_group_test(Config) ->
 
 
 list_groups_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create handle service with 2 users; give handle_service_view privilege
+    % for one of them and all but that for the second one
+    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
+        Config, ?HANDLE_SERVICE_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
-        revoke, [?HANDLE_SERVICE_VIEW]
-    ),
-    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
-        set, [?HANDLE_SERVICE_VIEW]
-    ),
 
     ExpGroups = lists:map(
         fun(_) ->
@@ -275,23 +242,12 @@ list_groups_test(Config) ->
 
 
 get_group_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create handle service with 2 users; give handle_service_view privilege
+    % for one of them and all but that for the second one
+    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
+        Config, ?HANDLE_SERVICE_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
-        revoke, [?HANDLE_SERVICE_VIEW]
-    ),
-    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
-        set, [?HANDLE_SERVICE_VIEW]
-    ),
 
     {ok, G1} = oz_test_utils:create_group(
         Config, ?ROOT, #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
@@ -351,28 +307,17 @@ get_group_test(Config) ->
 
 
 get_group_privileges_test(Config) ->
+    % create handle service with 2 users; give handle_service_view privilege
+    % for one of them and all but that for the second one
+    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
+        Config, ?HANDLE_SERVICE_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
-        revoke, [?HANDLE_SERVICE_VIEW]
-    ),
-    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
-        set, [?HANDLE_SERVICE_VIEW]
-    ),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME1),
     {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
@@ -422,28 +367,17 @@ get_group_privileges_test(Config) ->
 
 
 update_group_privileges_test(Config) ->
+    % create handle service with 2 users; give handle_service_update privilege
+    % for one of them and all but that for the second one
+    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
+        Config, ?HANDLE_SERVICE_UPDATE
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
-        revoke, [?HANDLE_SERVICE_UPDATE]
-    ),
-    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
-        set, [?HANDLE_SERVICE_UPDATE]
-    ),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME1),
     {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
@@ -635,28 +569,17 @@ get_eff_group_privileges_test(Config) ->
     %%      <<user>>
     %%      NonAdmin
 
+    % create handle service with 2 users; give handle_service_view privilege
+    % for one of them and all but that for the second one
+    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
+        Config, ?HANDLE_SERVICE_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
     % User whose eff privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
-        revoke, [?HANDLE_SERVICE_VIEW]
-    ),
-    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
-        set, [?HANDLE_SERVICE_VIEW]
-    ),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
@@ -676,9 +599,9 @@ get_eff_group_privileges_test(Config) ->
 
     SetPrivsFun = fun(Operation, Privs) ->
         % In case of SET and GRANT, randomly split privileges into four
-        % parts and update groups with the privileges. G3 eff_privileges
+        % parts and update groups with the privileges. G4 eff_privileges
         % should contain the sum of those. In case of revoke, the
-        % privileges must be revoked for all 3 entities.
+        % privileges must be revoked for all entities.
         PartitionScheme =
             case Operation of
                 revoke ->

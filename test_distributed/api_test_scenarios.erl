@@ -20,12 +20,18 @@
 -include_lib("cluster_worker/include/api_errors.hrl").
 
 -export([run_scenario/2]).
--export([delete_entity/4, delete_entity/5]).
+-export([delete_entity/4]).
 -export([get_relations/4]).
 -export([get_privileges/7]).
 -export([update_privileges/7]).
 -export([delete_privileges/7]).
 
+-export([
+    create_basic_group_env/2,
+    create_basic_space_env/2,
+    create_basic_doi_hservice_env/2,
+    create_basic_handle_env/2
+]).
 -export([
     create_eff_parent_groups_env/1,
     create_eff_child_groups_env/1,
@@ -58,20 +64,15 @@ run_scenario(Function, Args) ->
     end.
 
 
-% Test that entity can be deleted, and every succeeding call results in 403.
-% In case when entity can delete itself, it should not be listed in
-% client spec, but additionally added as argument to this fun
+% Test that entity can be deleted, and every succeeding call results in 404.
+% Logic spec is required to be set.
 delete_entity(Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun) ->
-    delete_entity(Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, undefined).
-
-
-delete_entity(Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, Entity) ->
     #api_test_spec{
         client_spec = #client_spec{
             correct = Correct,
             unauthorized = Unauthorized,
             forbidden = Forbidden
-        } = ClientSpec,
+        },
         rest_spec = RestSpec,
         logic_spec = #logic_spec{
             module = Module,
@@ -81,28 +82,14 @@ delete_entity(Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, Entity) ->
         gs_spec = GsSpec
     } = ApiTestSpec,
 
-    % In case of entity that can delete itself add it to correct clients
-    NewApiTestSpec = case Entity of
-                       undefined ->
-                           ApiTestSpec;
-                       _ ->
-                           ApiTestSpec#api_test_spec{
-                               client_spec = ClientSpec#client_spec{
-                                   correct = [Entity | Correct]
-                               }
-                           }
-                   end,
-
     assert(api_test_utils:run_tests(
-        Config, NewApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )),
 
     % To check that entity cannot be deleted twice and every succeeding
-    % call return ERROR_NOT_FOUND, it's first created with EnvSetUpFun,
+    % call returns ERROR_NOT_FOUND, entity is first created with EnvSetUpFun,
     % deleted using logic (it is assumed there always will be logic fun
-    % to delete entity), tests run against delete entity id.
-    % Do not include entity (if entity deleted itself,
-    % it cannot check if it's deleted, right?)
+    % to delete entity) and tests run against deleted entity id.
     EntityCanNotBeDeletedTwiceTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = Correct ++ Unauthorized ++ Forbidden
@@ -114,15 +101,15 @@ delete_entity(Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, Entity) ->
         gs_spec = prepare_entity_not_found_gs_spec(GsSpec)
     },
 
-    % check that entity cannot be deleted twice
     Env = EnvSetUpFun(),
-    PreparedArgs = lists:map(
-        fun(client) -> ?ROOT;
+    DeleteEntityArgs = lists:map(
+        fun
+            (client) -> ?ROOT;
             (Arg) -> maps:get(Arg, Env, Arg)
         end, Args
     ),
     ?assertMatch(ok, oz_test_utils:call_oz(
-        Config, Module, Function, PreparedArgs
+        Config, Module, Function, DeleteEntityArgs
     )),
 
     assert(api_test_utils:run_tests(
@@ -147,10 +134,9 @@ prepare_entity_not_found_gs_spec(GsSpec) ->
     }.
 
 
-% Set different privileges and run api test spec against them;
-% Entity whose privileges will be changing during those tests
-% (either normal or effective) should not be listed in client spec but
-% provided additionally, so that spec can be adjusted for that case.
+% Set different privileges, run tests and check they are returned.
+% Entity whose eff privileges will be changing during those tests
+% should not be listed in client spec but provided additionally.
 % Exception to this is when entity directly tries to get it's privileges,
 % then it should be listed as only correct client and provided as argument
 get_privileges(
@@ -159,10 +145,9 @@ get_privileges(
     % Run original spec
     assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-    % In case of getting entity privileges for itself, skip this step,
-    % as all it is doing is setting various combinations of privileges
-    % and trying to get them (so it is valid only for clients that always
-    % can get privileges)
+    % In case of getting privileges for Entity (mainly in user api), skip this
+    % step because eff privileges of entity are affected during test run and
+    % it will be able to sometimes get privileges and sometimes not
     case ApiTestSpec#api_test_spec.client_spec#client_spec.correct of
         [Entity] ->
             ok;
@@ -172,8 +157,8 @@ get_privileges(
             )
     end,
 
-    % Replace clients with entity and assert it can get privileges
-    % when view priv is granted in environment setup
+    % Replace clients with entity and check if it can get privileges
+    % when view priv is set
     EntityTestSpec = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{correct = [Entity]}
     },
@@ -182,7 +167,7 @@ get_privileges(
         AllPrivs, lists:usort(ConstPrivs ++ [ViewPriv])
     ),
 
-    % Replace clients with entity and assert it can not get privileges
+    % Replace clients with entity and check if it can not get privileges
     % when all privileges but view one is set
     SetPrivsFun(set, AllPrivs -- [ViewPriv]),
     ForbiddenApiTestSpec = create_forbidden_test_spec(ApiTestSpec, Entity),
@@ -252,13 +237,12 @@ prepare_get_privs_gs_spec(GsSpec, Privs) ->
 update_privileges(
     Config, #api_test_spec{
         client_spec = #client_spec{correct = [Entity]}
-    } = ApiTestSpec,
-    SetPrivsFun, GetPrivsFun, AllPrivs, Entity, UpdatePriv
+    } = ApiTestSpec, SetPrivsFun, GetPrivsFun, AllPrivs, Entity, UpdatePriv
 ) ->
     % Run tests giving entity always update priv
     run_update_privs_tests(
         Config, ApiTestSpec, SetPrivsFun,
-        prepare_update_privs_verify_fun(GetPrivsFun),
+        update_privs_verify_fun(GetPrivsFun),
         AllPrivs, [UpdatePriv]
     ),
 
@@ -279,7 +263,7 @@ update_privileges(
     % Run original spec without any constant privs
     run_update_privs_tests(
         Config, ApiTestSpec, SetPrivsFun,
-        prepare_update_privs_verify_fun(GetPrivsFun),
+        update_privs_verify_fun(GetPrivsFun),
         AllPrivs, []
     ),
 
@@ -293,7 +277,7 @@ update_privileges(
     ).
 
 
-prepare_update_privs_verify_fun(GetPrivsFun) ->
+update_privs_verify_fun(GetPrivsFun) ->
     fun
         (true = _ShouldSucceed, #{privs := InitialPrivs} = _Env, Data) ->
             DataPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
@@ -416,44 +400,41 @@ run_revoke_privs_tests(
     ).
 
 
-% Set all privileges and assert all correct clients can delete them;
-% For entity whose privileges are affected (normal or effective ones)
-% create also separate spec and set up all privileges but delete one,
-% run tests and assert it cannot delete them
+% Grant all oz privileges and check that correct clients can delete them but
+% forbidden and unauthorized cannot.
+% For entity whose effective privileges are affected (and as such it should be
+% listed in correct clients and as Entity arg) create separate spec and set all
+% privileges but delete one, run tests and check that it cannot delete them
 delete_privileges(
-    Config, ApiTestSpec, SetPrivsFun, GetPrivsFun,
-    AllPrivs, Entity, DeletePriv
+    Config, ApiTestSpec, SetPrivsFun, GetPrivsFun, AllPrivs, Entity, DeletePriv
 ) ->
     EnvSetUpFun = fun() ->
         SetPrivsFun(set, AllPrivs),
         #{privs => AllPrivs}
     end,
-    VerifyEndFun =
-        fun
-            (true = _ShouldSucceed, _Env, _Data) ->
-                ActualPrivs = lists:sort(GetPrivsFun()),
-                ?assertEqual([], ActualPrivs);
-            (false = _ShouldSucceed, _, _) ->
-                ActualPrivs = lists:sort(GetPrivsFun()),
-                ?assertEqual(AllPrivs, ActualPrivs)
-        end,
+    VerifyEndFun = fun(ShouldSucceed, _Env, _Data) ->
+        ActualPrivs = lists:sort(GetPrivsFun()),
+        case ShouldSucceed of
+            true -> ?assertEqual([], ActualPrivs);
+            false -> ?assertEqual(AllPrivs, ActualPrivs)
+        end
+    end,
     assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )),
 
-    ForbiddenApiTestSpec = create_forbidden_test_spec(ApiTestSpec, Entity),
-    ForbiddenEnvSetUpFun = fun() ->
+    ApiTestSpec2 = create_forbidden_test_spec(ApiTestSpec, Entity),
+    EnvSetUpFun2 = fun() ->
         Privs = AllPrivs -- [DeletePriv],
         SetPrivsFun(set, Privs),
         #{privs => Privs}
     end,
-    ForbiddenVerifyEndFun = fun(_, #{privs := InitialPrivs} = _Env, _Data) ->
+    VerifyEndFun2 = fun(_, #{privs := InitialPrivs} = _Env, _Data) ->
         ActualPrivs = lists:sort(GetPrivsFun()),
         ?assertEqual(InitialPrivs, ActualPrivs)
     end,
     assert(api_test_utils:run_tests(
-        Config, ForbiddenApiTestSpec, ForbiddenEnvSetUpFun,
-        undefined, ForbiddenVerifyEndFun
+        Config, ApiTestSpec2, EnvSetUpFun2, undefined, VerifyEndFun2
     )).
 
 
@@ -568,6 +549,129 @@ assert(_) -> throw(fail).
 %%%===================================================================
 %%% Functions creating starting environment
 %%%===================================================================
+
+
+create_basic_group_env(Config, Privs) when not is_list(Privs) ->
+    create_basic_group_env(Config, [Privs]);
+create_basic_group_env(Config, Privileges) ->
+    %% Create environment with following relations:
+    %%
+    %%                  Group
+    %%                 /     \
+    %%                /       \
+    %%       [~privileges]  [privileges]
+    %%              /           \
+    %%           User1         User2
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    oz_test_utils:group_set_user_privileges(
+        Config, Group, U1, revoke, Privileges
+    ),
+    {ok, U2} = oz_test_utils:add_user_to_group(Config, Group, U2),
+    oz_test_utils:group_set_user_privileges(Config, Group, U2, set, Privileges),
+
+    {Group, U1, U2}.
+
+
+create_basic_space_env(Config, Privs) when not is_list(Privs) ->
+    create_basic_space_env(Config, [Privs]);
+create_basic_space_env(Config, Privileges) ->
+    %% Create environment with following relations:
+    %%
+    %%                  Space
+    %%                 /     \
+    %%                /       \
+    %%       [~privileges]  [privileges]
+    %%              /           \
+    %%           User1         User2
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    oz_test_utils:space_set_user_privileges(
+        Config, Space, U1, revoke, Privileges
+    ),
+    {ok, U2} = oz_test_utils:add_user_to_space(Config, Space, U2),
+    oz_test_utils:space_set_user_privileges(Config, Space, U2, set, Privileges),
+
+    {Space, U1, U2}.
+
+
+create_basic_doi_hservice_env(Config, Privs) when not is_list(Privs) ->
+    create_basic_doi_hservice_env(Config, [Privs]);
+create_basic_doi_hservice_env(Config, Privileges) ->
+    %% Create environment with following relations:
+    %%
+    %%              HandleService
+    %%                 /      \
+    %%                /        \
+    %%       [~privileges]  [privileges]
+    %%              /            \
+    %%           User1         User2
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, HService} = oz_test_utils:create_handle_service(
+        Config, ?USER(U1), ?DOI_SERVICE
+    ),
+    oz_test_utils:handle_service_set_user_privileges(
+        Config, HService, U1, revoke, Privileges
+    ),
+    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
+    oz_test_utils:handle_service_set_user_privileges(
+        Config, HService, U2, set, Privileges
+    ),
+
+    {HService, U1, U2}.
+
+
+create_basic_handle_env(Config, Privs) when not is_list(Privs) ->
+    create_basic_handle_env(Config, [Privs]);
+create_basic_handle_env(Config, Privileges) ->
+    %% Create environment with following relations:
+    %%
+    %%                  Handle
+    %%                 /      \
+    %%                /        \
+    %%       [~privileges]  [privileges]
+    %%              /            \
+    %%           User1         User2
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, HService} = oz_test_utils:create_handle_service(
+        Config, ?USER(U1), ?DOI_SERVICE
+    ),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, ShareId} = oz_test_utils:create_share(
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+    ),
+
+    HandleDetails = ?HANDLE(HService, ShareId),
+    {ok, HandleId} = oz_test_utils:create_handle(
+        Config, ?USER(U1), HandleDetails
+    ),
+    oz_test_utils:handle_set_user_privileges(
+        Config, HandleId, U1, revoke, Privileges
+    ),
+    {ok, U2} = oz_test_utils:add_user_to_handle(Config, HandleId, U2),
+    oz_test_utils:handle_set_user_privileges(
+        Config, HandleId, U2, set, Privileges
+    ),
+
+    {HandleId, U1, U2}.
 
 
 create_eff_parent_groups_env(Config) ->

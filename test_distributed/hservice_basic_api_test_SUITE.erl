@@ -52,7 +52,7 @@ all() ->
         delete_test,
 
         list_handles_test,
-        get_handles_test
+        get_handle_test
     ]).
 
 
@@ -208,27 +208,16 @@ list_test(Config) ->
 
 
 get_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create handle service with 2 users; give handle_service_view privilege
+    % for one of them and all but that for the second one
+    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
+        Config, ?HANDLE_SERVICE_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
         ?OZ_HANDLE_SERVICES_LIST
     ]),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
-        revoke, [?HANDLE_SERVICE_VIEW]
-    ),
-    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
-        set, [?HANDLE_SERVICE_VIEW]
-    ),
 
     AllPrivs = oz_test_utils:get_handle_service_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
@@ -484,27 +473,13 @@ delete_test(Config) ->
 
 
 list_handles_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create handle service with 2 users; give handle_service_view privilege
+    % for one of them and all but that for the second one
+    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
+%%        TODO ?HANDLE_SERVICE_LIST_HANDLES
+        Config, ?HANDLE_SERVICE_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
-%%        TODO
-%%        revoke, [?HANDLE_SERVICE_LIST_HANDLES]
-        revoke, [?HANDLE_SERVICE_VIEW]
-    ),
-    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
-%%        TODO
-%%        set, [?HANDLE_SERVICE_LIST_HANDLES]
-        set, [?HANDLE_SERVICE_VIEW]
-    ),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, S2} = oz_test_utils:create_space(Config, ?USER(U2), ?SPACE_NAME2),
@@ -553,23 +528,12 @@ list_handles_test(Config) ->
 
 
 get_handle_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
-        ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    % create handle service with 2 users; give handle_service_view privilege
+    % for one of them and all but that for the second one
+    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
+        Config, ?HANDLE_SERVICE_VIEW
+    ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?USER(U1), ?DOI_SERVICE
-    ),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
-        revoke, [?HANDLE_SERVICE_VIEW]
-    ),
-    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
-    oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
-        set, [?HANDLE_SERVICE_VIEW]
-    ),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(

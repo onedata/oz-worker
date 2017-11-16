@@ -160,6 +160,7 @@
     get_handle_user_privileges/3,
 
     add_group_to_handle/3,
+    remove_group_from_handle/3,
     handle_set_group_privileges/5,
     get_handle_group_privileges/3
 ]).
@@ -1591,6 +1592,19 @@ get_handle_user_privileges(Config, HandleId, UserId) ->
 add_group_to_handle(Config, HandleId, GroupId) ->
     ?assertMatch({ok, _}, call_oz(Config, handle_logic, add_group, [
         ?ROOT, HandleId, GroupId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes group from handle.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_group_from_handle(Config :: term(), HandleId :: od_handle:id(),
+    GroupId :: od_group:id()) -> {ok, od_user:id()}.
+remove_group_from_handle(Config, GroupId, UserId) ->
+    ?assertMatch(ok, call_oz(Config, handle_logic, remove_group, [
+        ?ROOT, GroupId, UserId
     ])).
 
 
