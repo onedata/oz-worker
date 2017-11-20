@@ -30,11 +30,12 @@
     dns_state_stores_provider_data_test/1,
     dns_server_resolves_delegated_subdomain_test/1,
     dns_server_resolves_changed_subdomain_test/1,
-    dns_server_does_not_resolve_removed_subdomain_test/1,
     update_fails_on_duplicated_subdomain_test/1,
     dns_server_resolves_ns_records_test/1,
+    dns_server_duplicates_ns_records_test/1,
     dns_server_resolves_static_subdomains_test/1,
-    static_subdomain_does_not_shadow_provider_subdomain_test/1
+    static_subdomain_does_not_shadow_provider_subdomain_test/1,
+    dns_server_does_not_resolve_removed_subdomain_test/1
 ]).
 
 
@@ -44,10 +45,11 @@ all() -> ?ALL([
     dns_server_resolves_delegated_subdomain_test,
     dns_server_resolves_changed_subdomain_test,
     update_fails_on_duplicated_subdomain_test,
-    dns_server_does_not_resolve_removed_subdomain_test,
     dns_server_resolves_ns_records_test,
+    dns_server_duplicates_ns_records_test,
     dns_server_resolves_static_subdomains_test,
-    static_subdomain_does_not_shadow_provider_subdomain_test
+    static_subdomain_does_not_shadow_provider_subdomain_test,
+    dns_server_does_not_resolve_removed_subdomain_test
 ]).
 
 -define(DNS_ASSERT_RETRY_COUNT, 7).
@@ -91,6 +93,10 @@ init_per_suite(Config) ->
 end_per_suite(_Config) ->
     ok.
 
+end_per_testcase(static_subdomain_does_not_shadow_provider_subdomain_test, Config) ->
+    set_dns_config(Config, static_entries, []),
+    oz_test_utils:delete_all_entities(Config),
+    ok;
 
 end_per_testcase(_, Config) ->
     % prevent "subdomain occupied" errors
@@ -209,42 +215,6 @@ dns_server_resolves_changed_subdomain_test(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% When subdomain delegation is disabled, dns server should stop resolving old
-%% subdomain.
-%% @end
-%%--------------------------------------------------------------------
-dns_server_does_not_resolve_removed_subdomain_test(Config) ->
-    %% given
-    Name = ?PROVIDER_NAME1,
-    ProviderIPs = ?PROVIDER_IPS1,
-    OZIPs = ?config(oz_ips, Config),
-
-    OZDomain = ?config(oz_domain, Config),
-    Subdomain = ?PROVIDER_SUBDOMAIN1,
-    SubdomainBin = <<?PROVIDER_SUBDOMAIN1>>,
-    FullDomain = Subdomain ++ "." ++ OZDomain,
-
-    Domain = ?EXTERNAL_DOMAIN1,
-    DomainBin = list_to_binary(Domain),
-
-    %% when
-    {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(Config, Name),
-    oz_test_utils:enable_subdomain_delegation(
-        Config, ProviderId, SubdomainBin, ProviderIPs),
-
-    assert_dns_answer(OZIPs, FullDomain, a, ProviderIPs),
-
-    % disable subdomain delegation
-    oz_test_utils:set_provider_domain(Config, ProviderId, DomainBin),
-
-    %% then
-    assert_dns_answer(OZIPs, FullDomain, a, []),
-    % this domain should not be handled by OZ dns
-    assert_dns_answer(OZIPs, DomainBin, a, []).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% DNS zone should have a number of NS records pointing to nsX subdomains.
 %% Those subdomains should be resolved to OZ nodes ips.
 %% Their number is limited by config.
@@ -253,14 +223,18 @@ dns_server_does_not_resolve_removed_subdomain_test(Config) ->
 dns_server_resolves_ns_records_test(Config) ->
     OZIPs = ?config(oz_ips, Config),
     OZDomain = ?config(oz_domain, Config),
-    NSLimit = proplists:get_value(ns_limit, oz_test_utils:call_oz(Config,
-        application, get_env, [?APP_NAME, dns, []])),
-    NSCount = min(NSLimit, erlang:length(OZIPs)),
 
-    NSIPs = lists:sublist(lists:sort(OZIPs), NSCount),
-    NSDomainsIPs = lists:map(fun({Number, IP}) ->
-        {"ns" ++ integer_to_list(Number) ++ "." ++ OZDomain, [IP]}
-    end, lists:zip(lists:seq(1, NSCount), NSIPs)),
+    Maximum = 2,
+    set_dns_config(Config, ns_limit, Maximum),
+    set_dns_config(Config, ns_minimum, 1), % the basic case
+
+    % force dns update
+    ?assertEqual(ok, oz_test_utils:call_oz(Config,
+        node_manager_plugin, trigger_broadcast_dns_config, [])),
+
+    % number of nodes based on env_desc
+    [IP1, IP2, IP3] = NSIPs = lists:sort(OZIPs),
+    NSDomainsIPs = [{"ns1." ++ OZDomain, [IP1]}, {"ns2." ++ OZDomain, [IP2]}],
     {NSDomains, _} = lists:unzip(NSDomainsIPs),
 
     assert_dns_answer(OZIPs, OZDomain, ns, NSDomains),
@@ -268,6 +242,39 @@ dns_server_resolves_ns_records_test(Config) ->
     lists:foreach(fun({Domain, IPs}) ->
         assert_dns_answer(OZIPs, Domain, a, IPs)
     end, NSDomainsIPs).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Configuration variable can be used to force resolving more
+%% nsX domains than there are nodes.
+%% @end
+%%--------------------------------------------------------------------
+dns_server_duplicates_ns_records_test(Config) ->
+    OZIPs = ?config(oz_ips, Config),
+    OZDomain = ?config(oz_domain, Config),
+
+    Minimum = 4,
+    Maximum = 5,
+    set_dns_config(Config, ns_limit, Maximum),
+    set_dns_config(Config, ns_minimum, Minimum), % the basic case
+
+    % force dns update
+    ?assertEqual(ok, oz_test_utils:call_oz(Config,
+        node_manager_plugin, trigger_broadcast_dns_config, [])),
+
+    % number of nodes based on env_desc
+    [IP1, IP2, IP3] = NSIPs = lists:sort(OZIPs),
+    NSDomainsIPs = [{"ns1." ++ OZDomain, [IP1]}, {"ns2." ++ OZDomain, [IP2]},
+        {"ns3." ++ OZDomain, [IP3]}, {"ns4." ++ OZDomain, [IP1]}],
+    {NSDomains, _} = lists:unzip(NSDomainsIPs),
+
+    assert_dns_answer(OZIPs, OZDomain, ns, NSDomains),
+    % all NS records have associated A records
+    lists:foreach(fun({Domain, IPs}) ->
+        assert_dns_answer(OZIPs, Domain, a, IPs)
+    end, NSDomainsIPs).
+
 
 
 %%--------------------------------------------------------------------
@@ -381,6 +388,41 @@ static_subdomain_does_not_shadow_provider_subdomain_test(Config) ->
     assert_dns_answer(OZIPs, FullDomain, a, ProviderIPs1).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% When subdomain delegation is disabled, dns server should stop resolving old
+%% subdomain.
+%% @end
+%%--------------------------------------------------------------------
+dns_server_does_not_resolve_removed_subdomain_test(Config) ->
+    %% given
+    Name = ?PROVIDER_NAME1,
+    ProviderIPs = ?PROVIDER_IPS1,
+    OZIPs = ?config(oz_ips, Config),
+
+    OZDomain = ?config(oz_domain, Config),
+    Subdomain = ?PROVIDER_SUBDOMAIN1,
+    SubdomainBin = <<?PROVIDER_SUBDOMAIN1>>,
+    FullDomain = Subdomain ++ "." ++ OZDomain,
+
+    Domain = ?EXTERNAL_DOMAIN1,
+    DomainBin = list_to_binary(Domain),
+
+    %% when
+    {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(Config, Name),
+    oz_test_utils:enable_subdomain_delegation(
+        Config, ProviderId, SubdomainBin, ProviderIPs),
+
+    assert_dns_answer(OZIPs, FullDomain, a, ProviderIPs),
+
+    % disable subdomain delegation
+    oz_test_utils:set_provider_domain(Config, ProviderId, DomainBin),
+
+    %% then
+    assert_dns_answer(OZIPs, FullDomain, a, []),
+    % this domain should not be handled by OZ dns
+    assert_dns_answer(OZIPs, DomainBin, a, []).
+
 
 %%%===================================================================
 %%% Utils
@@ -425,7 +467,7 @@ assert_dns_answer(Servers, Query, Type, Expected, Attempts) ->
                          lists:sort(inet_res:lookup(Query, any, Type, Opts)),
                          Attempts, ?DNS_ASSERT_RETRY_DELAY)
         catch error:{assertEqual_failed, _} = Error ->
-            ct:print("DNS query type ~p to server ~p for name ~p"
+            ct:print("DNS query type ~p to server ~p for name ~p "
                      "returned incorrect results in ~p attempts.",
                      [Type, Server, Query, Attempts]),
             erlang:error(Error)
@@ -444,4 +486,5 @@ set_dns_config(Config, Key, Value) ->
     OldConfig = oz_test_utils:call_oz(Config,
         application, get_env, [?APP_NAME, dns, []]),
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:set_env(Nodes, ?APP_NAME, dns, [{Key, Value} | OldConfig]).
+    test_utils:set_env(Nodes, ?APP_NAME, dns,
+        lists:keystore(Key, 1, OldConfig, {Key, Value})).

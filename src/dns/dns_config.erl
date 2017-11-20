@@ -86,7 +86,7 @@ build_config(OneZoneIPs) ->
     ProviderDomains = get_provider_domains(OneZoneDomain),
 
     % check if there are any overlapping records
-    StaticDomains = lists:filter(fun({Domain, IP}) ->
+    StaticDomains = lists:filter(fun({Domain, _IP}) ->
         case lists:keyfind(Domain, 1, ProviderDomains) of
             false -> true;
             _ ->
@@ -165,13 +165,25 @@ get_provider_domains(OneZoneDomain) ->
     OneZoneIPs :: [inet:ip4_address()]) ->
     [{domain(), [inet:ip4_address()]}].
 build_nameserver_domains(OneZoneDomain, OneZoneIPs) ->
-    NSIPs = lists:sublist(lists:sort(OneZoneIPs), get_app_config(ns_limit, 10)),
+    NSIPs = lists:sort(OneZoneIPs),
+
+    % ensure minimum number of NS subdomains is met
+    Minimum = get_app_config(ns_minimum, 1),
+    Maximum = get_app_config(ns_limit, 10),
+    TargetNum = min(Maximum, max(Minimum, length(NSIPs))),
+
+    % Erlang 19 lacks ceil/1 function.
+    % sublist/2 below allows us to add "1" unconditionally
+    RepeatNum = (Minimum div length(NSIPs)) + 1,
+    NSIPsRepeated =
+        lists:sublist(lists:append(lists:duplicate(RepeatNum, NSIPs)),
+            TargetNum),
 
     {NSDomainsIPs, _} = lists:foldl(fun(IP, {DomainsIPs, Count}) ->
         Index = integer_to_binary(Count),
         Domain = build_domain(<<"ns", Index/binary>>, OneZoneDomain),
         {[{Domain, [IP]} | DomainsIPs], Count + 1}
-    end, {[], 1}, NSIPs),
+    end, {[], 1}, NSIPsRepeated),
 
     % preserve ascending order
     lists:reverse(NSDomainsIPs).
