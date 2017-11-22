@@ -4,6 +4,11 @@
 CHANGELOG
 ---------
 
+### 17.06.0-rc8
+
+* Releasing new version 17.06.0-rc7
+
+
 ### 17.06.0-rc7
 
 * VFS-3826 Add richer configuration options for Keycloak group mapping
