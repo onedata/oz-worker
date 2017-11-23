@@ -146,7 +146,7 @@ dns_state_stores_provider_data_test(Config) ->
 
     StIP = oz_test_utils:call_oz(Config,
         dns_state, get_subdomains_to_ips, []),
-    ?assertEqual(ProviderIPs, lists:sort(proplists:get_value(SubdomainBin, StIP))).
+    ?assertEqual(ProviderIPs, lists:sort(maps:get(SubdomainBin, StIP))).
 
 
 %%--------------------------------------------------------------------
@@ -225,12 +225,12 @@ dns_server_resolves_ns_records_test(Config) ->
     OZDomain = ?config(oz_domain, Config),
 
     Maximum = 2,
-    set_dns_config(Config, ns_limit, Maximum),
-    set_dns_config(Config, ns_minimum, 1), % the basic case
+    set_dns_config(Config, ns_max_entries, Maximum),
+    set_dns_config(Config, ns_min_entries, 1), % the basic case
 
     % force dns update
     ?assertEqual(ok, oz_test_utils:call_oz(Config,
-        node_manager_plugin, trigger_broadcast_dns_config, [])),
+        node_manager_plugin, reconcile_dns_config, [])),
 
     % number of nodes based on env_desc
     [IP1, IP2, IP3] = NSIPs = lists:sort(OZIPs),
@@ -256,12 +256,12 @@ dns_server_duplicates_ns_records_test(Config) ->
 
     Minimum = 4,
     Maximum = 5,
-    set_dns_config(Config, ns_limit, Maximum),
-    set_dns_config(Config, ns_minimum, Minimum), % the basic case
+    set_dns_config(Config, ns_max_entries, Maximum),
+    set_dns_config(Config, ns_min_entries, Minimum),
 
     % force dns update
     ?assertEqual(ok, oz_test_utils:call_oz(Config,
-        node_manager_plugin, trigger_broadcast_dns_config, [])),
+        node_manager_plugin, reconcile_dns_config, [])),
 
     % number of nodes based on env_desc
     [IP1, IP2, IP3] = NSIPs = lists:sort(OZIPs),
@@ -344,7 +344,7 @@ dns_server_resolves_static_subdomains_test(Config) ->
 
     % force dns update
     ?assertEqual(ok, oz_test_utils:call_oz(Config,
-        node_manager_plugin, trigger_broadcast_dns_config, [])),
+        node_manager_plugin, reconcile_dns_config, [])),
 
     lists:foreach(fun({Domain, IPs}) ->
         assert_dns_answer(OZIPs, Domain, a, IPs)
@@ -382,7 +382,7 @@ static_subdomain_does_not_shadow_provider_subdomain_test(Config) ->
 
     % DNS update is sent
     ?assertEqual(ok, oz_test_utils:call_oz(Config,
-        node_manager_plugin, trigger_broadcast_dns_config, [])),
+        node_manager_plugin, reconcile_dns_config, [])),
 
     % provider IPs are still resolved
     assert_dns_answer(OZIPs, FullDomain, a, ProviderIPs1).

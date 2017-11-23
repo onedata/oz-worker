@@ -24,7 +24,7 @@
 -export([handle_call/3, handle_cast/2]).
 -export([check_node_ip_address/0]).
 
--export([trigger_broadcast_dns_config/0]).
+-export([reconcile_dns_config/0]).
 
 -type state() :: #state{}.
 
@@ -228,10 +228,10 @@ check_node_ip_address() ->
 %% Trigger broadcasting dns update from this node
 %% @end
 %%--------------------------------------------------------------------
--spec trigger_broadcast_dns_config() -> ok.
-trigger_broadcast_dns_config() ->
+-spec reconcile_dns_config() -> ok.
+reconcile_dns_config() ->
     DedicatedNode = get_dns_dedicated_node(),
-    gen_server2:cast({DedicatedNode, ?NODE_MANAGER_NAME}, broadcast_dns_config).
+    gen_server2:cast({?NODE_MANAGER_NAME, DedicatedNode}, broadcast_dns_config).
 
 
 

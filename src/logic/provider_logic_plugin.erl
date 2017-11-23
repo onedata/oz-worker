@@ -485,7 +485,7 @@ authorize(_, _) ->
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
 validate(#el_req{operation = create, gri = #gri{aspect = instance},
-                 data = Data}) ->
+    data = Data}) ->
     Required = #{
         <<"csr">> => {binary, non_empty},
         <<"subdomainDelegation">> => {boolean, any}
@@ -518,7 +518,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance},
     end;
 
 validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
-                 data = Data}) ->
+    data = Data}) ->
     Required = #{
         <<"csr">> => {binary, non_empty},
         <<"uuid">> => {binary, non_empty},

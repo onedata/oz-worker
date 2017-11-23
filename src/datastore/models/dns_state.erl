@@ -8,7 +8,7 @@
 %%% @doc
 %%% Stores all information related to providers required to build up to
 %%% date DNS configuration - provider IPs and subdomains.
-o%% @end
+%%% @end
 %%%-------------------------------------------------------------------
 -module(dns_state).
 -author("Wojciech Geisler").
@@ -57,15 +57,15 @@ set_delegation_config(ProviderId, Subdomain, IPs) ->
             ?info("Refusing to register provider subdomain ~s as it is reserved", [Subdomain]),
             {error, subdomain_exists};
         false ->
-            update(fun(DnsState) ->
+            Diff = fun(DnsState) ->
                 StateOrError = case get_provider_by_subdomain(DnsState, Subdomain) of
-                    {ok, ProviderId} ->
+                    {true, ProviderId} ->
                         DnsState; % subdomain is already set
-                    {ok, OtherProvider} ->
+                    {true, OtherProvider} ->
                         ?info("Refusing to register provider subdomain ~s as it is used by provider ~s", [Subdomain, OtherProvider]),
                         {error, subdomain_exists};
-                    {error, not_found} ->
-                        % remove old subdomain of given provider before setting new
+                    false ->
+                        % remove old subdomain of provider beign updated before setting new
                         DnsState2 = unset_subdomain(DnsState, ProviderId),
                         set_subdomain(DnsState2, ProviderId, Subdomain)
                 end,
@@ -73,12 +73,14 @@ set_delegation_config(ProviderId, Subdomain, IPs) ->
                     {error, subdomain_exists} -> {error, subdomain_exists};
                     NewState -> {ok, set_ips(NewState, ProviderId, IPs)}
                 end
-            end, set_ips(set_subdomain(#dns_state{}, ProviderId, Subdomain),
-                         ProviderId, IPs))
+            end,
+            Default = set_ips(set_subdomain(#dns_state{}, ProviderId, Subdomain),
+                ProviderId, IPs),
+            update(Diff, Default)
    end,
    case Result of
        {ok, _} ->
-           node_manager_plugin:trigger_broadcast_dns_config(),
+           node_manager_plugin:reconcile_dns_config(),
            ok;
        {error, subdomain_exists} ->
            {error, subdomain_exists}
@@ -94,7 +96,7 @@ set_delegation_config(ProviderId, Subdomain, IPs) ->
     {ok, Subdomain :: subdomain(), IPs :: [inet:ip4_address()]} |
     {error, not_found}.
 get_delegation_config(ProviderId) ->
-    {ok, DnsState} = get_or_create(),
+    {ok, DnsState} = get_dns_state(),
     #dns_state{
         provider_to_subdomain = PtS,
         provider_to_ips = PtIPs} = DnsState,
@@ -117,7 +119,7 @@ remove_delegation_config(ProviderId) ->
         DnsState2 = unset_subdomain(DnsState, ProviderId),
         {ok, unset_ips(DnsState2, ProviderId)}
     end, #dns_state{}),
-    node_manager_plugin:trigger_broadcast_dns_config(),
+    node_manager_plugin:reconcile_dns_config(),
     ok.
 
 
@@ -126,15 +128,15 @@ remove_delegation_config(ProviderId) ->
 %% Returns all provider subdomains and associated IPs.
 %% @end
 %%--------------------------------------------------------------------
--spec get_subdomains_to_ips() -> [{subdomain(), [inet:ip4_address()]}].
+-spec get_subdomains_to_ips() -> #{subdomain() => [inet:ip4_address()]}.
 get_subdomains_to_ips() ->
-    {ok, DnsState} = get_or_create(),
+    {ok, DnsState} = get_dns_state(),
     #dns_state{
-       provider_to_ips = PtIPs,
-       provider_to_subdomain = PtS} = DnsState,
-    maps:fold(fun(Provider, Subdomain, SubdomainsToIps) ->
-        [{Subdomain, maps:get(Provider, PtIPs, [])} | SubdomainsToIps]
-    end, [], PtS).
+        provider_to_ips = PtIPs,
+        subdomain_to_provider = StP} = DnsState,
+    maps:map(fun(_Subdomain, ProviderId) ->
+        maps:get(ProviderId, PtIPs, [])
+    end, StP).
 
 
 %%%===================================================================
@@ -179,10 +181,10 @@ is_subdomain_reserved(Subdomain) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Updates provider subdomain in dns state document.
+%% Sets provider subdomain in the dns state record.
 %% @end
 %%--------------------------------------------------------------------
--spec set_subdomain(#dns_state{}, od_provider:id(), subdomain()) -> #dns_state{}.
+-spec set_subdomain(record(), od_provider:id(), subdomain()) -> record().
 set_subdomain(DnsState, ProviderId, Subdomain) ->
     #dns_state{
         provider_to_subdomain = PtS,
@@ -200,11 +202,11 @@ set_subdomain(DnsState, ProviderId, Subdomain) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Updates provider ips in dns state document.
+%% Sets provider IPs in the dns state record.
 %% @end
 %%--------------------------------------------------------------------
--spec set_ips(#dns_state{}, od_provider:id(), [inet:ip4_address()]) ->
-    #dns_state{}.
+-spec set_ips(record(), od_provider:id(), [inet:ip4_address()]) ->
+    record().
 set_ips(#dns_state{provider_to_ips = PtIPs} = DnsState, ProviderId, IPs) ->
     DnsState#dns_state{provider_to_ips = PtIPs#{ProviderId => IPs}}.
 
@@ -215,8 +217,8 @@ set_ips(#dns_state{provider_to_ips = PtIPs} = DnsState, ProviderId, IPs) ->
 %% Removes subdomain of given provider from dns state document.
 %% @end
 %%--------------------------------------------------------------------
--spec unset_subdomain(#dns_state{}, od_provider:id()) ->
-    #dns_state{}.
+-spec unset_subdomain(record(), od_provider:id()) ->
+    record().
 unset_subdomain(DnsState, ProviderId) ->
     #dns_state{
        provider_to_subdomain = PtS,
@@ -234,8 +236,8 @@ unset_subdomain(DnsState, ProviderId) ->
 %% Removes IPs of given provider from dns state document.
 %% @end
 %%--------------------------------------------------------------------
--spec unset_ips(#dns_state{}, od_provider:id()) ->
-    #dns_state{}.
+-spec unset_ips(record(), od_provider:id()) ->
+    record().
 unset_ips(#dns_state{provider_to_ips = PtIPs} = DnsState, ProviderId) ->
     DnsState#dns_state{
         provider_to_ips = maps:remove(ProviderId, PtIPs)
@@ -249,14 +251,14 @@ unset_ips(#dns_state{provider_to_ips = PtIPs} = DnsState, ProviderId) ->
 %% Finds provider associated with given subdomain.
 %% @end
 %%--------------------------------------------------------------------
--spec get_provider_by_subdomain(#dns_state{}, subdomain()) ->
-    {ok, od_provider:id()} | {error, not_found}.
+-spec get_provider_by_subdomain(record(), subdomain()) ->
+    {true, od_provider:id()} | false.
 get_provider_by_subdomain(#dns_state{subdomain_to_provider = StP}, Subdomain) ->
     case maps:find(Subdomain, StP) of
         error ->
-            {error, not_found};
+            false;
         {ok, Found} ->
-            {ok, Found}
+            {true, Found}
     end.
 
 
@@ -264,25 +266,15 @@ get_provider_by_subdomain(#dns_state{subdomain_to_provider = StP}, Subdomain) ->
 %% @private
 %% @doc
 %% Returns dns state document.
-%% Creates default document if it doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_or_create() -> {ok, #dns_state{}} | {error, term()}.
-get_or_create() ->
-    Result = case datastore_model:get(?CTX, ?DNS_STATE_KEY) of
-        {ok, Doc} -> {ok, Doc};
+-spec get_dns_state() -> {ok, record()} | {error, term()}.
+get_dns_state() ->
+    case datastore_model:get(?CTX, ?DNS_STATE_KEY) of
+        {ok, #document{value = #dns_state{} = DnsState}} -> {ok, DnsState};
         {error, not_found} ->
-            % use update instead of insert to prevent data races
-            datastore_model:update(?CTX, ?DNS_STATE_KEY,
-                fun(DnsState) -> {ok, DnsState} end,
-                #document{key = ?DNS_STATE_KEY, value=#dns_state{}});
+            {ok, #dns_state{}};
         Error -> Error
-    end,
-    case Result of
-        {ok, #document{key = ?DNS_STATE_KEY, value=DnsState}} ->
-            {ok, DnsState};
-        {error, _} = E ->
-            E
     end.
 
 
@@ -292,7 +284,7 @@ get_or_create() ->
 %% Updates dns state. If record does not exist, inserts Default.
 %% @end
 %%--------------------------------------------------------------------
--spec update(diff(), #dns_state{}) -> {ok, #dns_state{}} | {error, term()}.
+-spec update(diff(), record()) -> {ok, record()} | {error, term()}.
 update(Diff, Default) ->
     case datastore_model:update(?CTX, ?DNS_STATE_KEY, Diff, Default) of
         {ok, #document{key = ?DNS_STATE_KEY, value = DnsState}} ->

@@ -77,20 +77,20 @@ build_config() ->
 -spec build_config(OneZoneIPs :: [inet:ip4_address()]) -> dns_config().
 build_config(OneZoneIPs) ->
     OneZoneDomain = get_onezone_domain(),
-    AdminEmail = get_app_config(soa_admin_mailbox),
+    AdminEmail = get_env(soa_admin_mailbox),
 
     NSDomainsIPs = build_nameserver_domains(OneZoneDomain, OneZoneIPs),
     {NSDomains, _} = lists:unzip(NSDomainsIPs),
     PrimaryNS = hd(NSDomains),
 
-    ProviderDomains = get_provider_domains(OneZoneDomain),
+    ProviderDomains = build_provider_domains(OneZoneDomain),
 
     % check if there are any overlapping records
     StaticDomains = lists:filter(fun({Domain, _IP}) ->
-        case lists:keyfind(Domain, 1, ProviderDomains) of
+        case proplists:is_defined(Domain, ProviderDomains) of
             false -> true;
             _ ->
-                ?warning("Skipping static subdomain entry for domain ~s "
+                ?warning("Ignoring static subdomain entry for domain ~s "
                 "as the subdomain is already used by a provider.", [Domain]),
                 false
         end
@@ -146,12 +146,12 @@ get_onezone_domain() ->
 %% Each provider's domain is mapped to a list of its IPs.
 %% @end
 %%--------------------------------------------------------------------
--spec get_provider_domains(OneZoneDomain :: domain()) ->
+-spec build_provider_domains(OneZoneDomain :: domain()) ->
     [{domain(), [inet:ip4_address()]}].
-get_provider_domains(OneZoneDomain) ->
+build_provider_domains(OneZoneDomain) ->
     SubdomainsIPs = dns_state:get_subdomains_to_ips(),
     [{build_domain(Subdomain, OneZoneDomain), IPs}
-     || {Subdomain, IPs} <- SubdomainsIPs].
+     || {Subdomain, IPs} <- maps:to_list(SubdomainsIPs)].
 
 
 %%--------------------------------------------------------------------
@@ -168,13 +168,11 @@ build_nameserver_domains(OneZoneDomain, OneZoneIPs) ->
     NSIPs = lists:sort(OneZoneIPs),
 
     % ensure minimum number of NS subdomains is met
-    Minimum = get_app_config(ns_minimum, 1),
-    Maximum = get_app_config(ns_limit, 10),
+    Minimum = get_env(ns_min_entries, 1),
+    Maximum = get_env(ns_max_entries, 10),
     TargetNum = min(Maximum, max(Minimum, length(NSIPs))),
 
-    % Erlang 19 lacks ceil/1 function.
-    % sublist/2 below allows us to add "1" unconditionally
-    RepeatNum = (Minimum div length(NSIPs)) + 1,
+    RepeatNum = utils:ceil(Minimum / length(NSIPs)),
     NSIPsRepeated =
         lists:sublist(lists:append(lists:duplicate(RepeatNum, NSIPs)),
             TargetNum),
@@ -198,7 +196,7 @@ build_nameserver_domains(OneZoneDomain, OneZoneIPs) ->
 -spec build_static_domains(OneZoneDomain :: domain()) ->
     [{domain(), [inet:ip4_address()]}].
 build_static_domains(OneZoneDomain) ->
-    Subdomains = get_app_config(static_entries, []),
+    Subdomains = get_env(static_entries, []),
     [{build_domain(Sub, OneZoneDomain), IPs} || {Sub, IPs} <- Subdomains].
 
 
@@ -213,7 +211,7 @@ build_record_a(Domain, IP) ->
     #dns_rr{
         name = Domain,
         type = ?DNS_TYPE_A,
-        ttl = get_app_config(a_ttl),
+        ttl = get_env(a_ttl),
         data = #dns_rrdata_a{ip = IP}
     }.
 
@@ -230,15 +228,15 @@ build_record_soa(Domain, MainName, Admin) ->
     #dns_rr{
         name = Domain,
         type = ?DNS_TYPE_SOA,
-        ttl = get_app_config(soa_ttl, 120),
+        ttl = get_env(soa_ttl, 120),
         data = #dns_rrdata_soa{
             mname = MainName,
             rname = Admin,
-            serial = get_app_config(soa_serial),
-            refresh = get_app_config(soa_refresh),
-            retry = get_app_config(soa_retry),
-            expire = get_app_config(soa_expire),
-            minimum = get_app_config(soa_minimum)
+            serial = get_env(soa_serial),
+            refresh = get_env(soa_refresh),
+            retry = get_env(soa_retry),
+            expire = get_env(soa_expire),
+            minimum = get_env(soa_minimum)
        }
     }.
 
@@ -248,7 +246,7 @@ build_record_ns(Domain, NSDomain) ->
     #dns_rr{
         name = Domain,
         type = ?DNS_TYPE_NS,
-        ttl = get_app_config(ns_ttl, 120),
+        ttl = get_env(ns_ttl, 120),
         data = #dns_rrdata_ns{dname = NSDomain}
     }.
 
@@ -259,8 +257,8 @@ build_record_ns(Domain, NSDomain) ->
 %% Retrieves value from dns config. Throw error if config is not set.
 %% @end
 %%--------------------------------------------------------------------
--spec get_app_config(Key :: atom()) -> term().
-get_app_config(Key) ->
+-spec get_env(Key :: atom()) -> term().
+get_env(Key) ->
     Props = application:get_env(?APP_NAME, dns, []),
     case proplists:get_value(Key, Props) of
         undefined ->
@@ -276,7 +274,7 @@ get_app_config(Key) ->
 %% Retrieves value from dns config or return Default if not set.
 %% @end
 %%--------------------------------------------------------------------
--spec get_app_config(Key :: atom(), Default :: term()) -> term().
-get_app_config(Key, Default) ->
+-spec get_env(Key :: atom(), Default :: term()) -> term().
+get_env(Key, Default) ->
     Props = application:get_env(?APP_NAME, dns, []),
     proplists:get_value(Key, Props, Default).

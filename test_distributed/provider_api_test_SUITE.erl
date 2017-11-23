@@ -48,6 +48,8 @@
     check_my_ports_test/1,
     check_my_ip_test/1,
     update_subdomaindomain_test/1,
+    update_domain_test/1,
+    update_domain_to_ip_address_test/1,
     get_domain_config_test/1
 ]).
 
@@ -67,7 +69,9 @@ all() ->
         revoke_support_test,
         check_my_ports_test,
         check_my_ip_test,
+        update_domain_test,
         update_subdomaindomain_test,
+        update_domain_to_ip_address_test,
         get_domain_config_test
     ]).
 
@@ -1559,6 +1563,86 @@ update_subdomaindomain_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, Undelegated_ApiTestSpec)),
     {ok, Provider} = oz_test_utils:get_provider(Config, P1),
     ?assertEqual(ExpDomain, Provider#od_provider.domain),
+    ?assertEqual(undefined, Provider#od_provider.subdomain),
+    ?assertEqual(false, Provider#od_provider.subdomain_delegation),
+    ok.
+
+
+update_domain_test(Config) ->
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+
+    NewDomain = <<"changed.pl">>,
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, {provider, P1, KeyFile1, CertFile1}],
+            unauthorized = [nobody]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            operation = update,
+            module = provider_logic,
+            function = update_domain_config,
+            args = [client, P1, data],
+            expected_result = ?OK
+        },
+        data_spec = #data_spec{
+            required = [
+                <<"subdomainDelegation">>, <<"domain">>
+            ],
+            correct_values = #{
+                <<"subdomainDelegation">> => false,
+                <<"domain">> => NewDomain
+            },
+            bad_values = [
+                {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                {<<"domain">>, <<"https://hasprotocol">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    {ok, Provider} = oz_test_utils:get_provider(Config, P1),
+    ?assertEqual(NewDomain, Provider#od_provider.domain),
+    ?assertEqual(undefined, Provider#od_provider.subdomain),
+    ?assertEqual(false, Provider#od_provider.subdomain_delegation),
+    ok.
+
+
+% Ensure provider domain can be set to an IP address
+update_domain_to_ip_address_test(Config) ->
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+
+    NewDomain = <<"172.17.0.5">>,
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, {provider, P1, KeyFile1, CertFile1}],
+            unauthorized = [nobody]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            operation = update,
+            module = provider_logic,
+            function = update_domain_config,
+            args = [client, P1, data],
+            expected_result = ?OK
+        },
+        data_spec = #data_spec{
+            required = [
+                <<"subdomainDelegation">>, <<"domain">>
+            ],
+            correct_values = #{
+                <<"subdomainDelegation">> => false,
+                <<"domain">> => NewDomain
+            },
+            bad_values = []
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    {ok, Provider} = oz_test_utils:get_provider(Config, P1),
+    ?assertEqual(NewDomain, Provider#od_provider.domain),
     ?assertEqual(undefined, Provider#od_provider.subdomain),
     ?assertEqual(false, Provider#od_provider.subdomain_delegation),
     ok.
