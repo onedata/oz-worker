@@ -9,7 +9,7 @@
 %%% This file contains tests concerning space basic API (REST + logic + gs).
 %%% @end
 %%%-------------------------------------------------------------------
--module(space_basic_api_test_SUITE).
+-module(space_misc_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
 -include("rest.hrl").
@@ -71,6 +71,7 @@ all() ->
 
 create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
     VerifyFun = fun(SpaceId) ->
         {ok, Space} = oz_test_utils:get_space(Config, SpaceId),
@@ -101,20 +102,6 @@ create_test(Config) ->
             args = [client, data],
             expected_result = ?OK_TERM(VerifyFun)
         },
-        gs_spec = #gs_spec{
-            operation = create,
-            gri = #gri{type = od_space, aspect = instance},
-            auth_hint = ?AS_USER(client),
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?SPACE_NAME1,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    VerifyFun(Id)
-                end
-            })
-        },
         data_spec = #data_spec{
             required = [<<"name">>],
             correct_values = #{<<"name">> => [?SPACE_NAME1]},
@@ -124,7 +111,33 @@ create_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % Check that regular client can't make request on behalf of other client
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [{user, U1}],
+            unauthorized = [nobody],
+            forbidden = [{user, U2}]
+        },
+        rest_spec = undefined,
+        logic_spec = undefined,
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_space, aspect = instance},
+            auth_hint = ?AS_USER(U1),
+            expected_result = ?OK_MAP_CONTAINS(#{
+                <<"name">> => ?SPACE_NAME1,
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = oz_test_utils:decode_gri(
+                        Config, EncodedGri
+                    ),
+                    VerifyFun(Id)
+                end
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 list_test(Config) ->
@@ -134,7 +147,7 @@ list_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_SPACES_LIST
     ]),
 
@@ -191,7 +204,7 @@ get_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_SPACES_LIST
     ]),
 
@@ -199,7 +212,7 @@ get_test(Config) ->
     oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
         ?SPACE_VIEW
     ]),
-    oz_test_utils:add_user_to_space(Config, S1, U2),
+    oz_test_utils:space_add_user(Config, S1, U2),
     oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
         ?SPACE_VIEW
     ]),
@@ -212,7 +225,7 @@ get_test(Config) ->
         Config, P1, S1, SupportSize
     ),
 
-    AllPrivs = oz_test_utils:get_space_privileges(Config),
+    AllPrivs = oz_test_utils:all_space_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     % Get and check private data
@@ -348,7 +361,7 @@ update_test(Config) ->
         oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
             ?SPACE_UPDATE
         ]),
-        oz_test_utils:add_user_to_space(Config, S1, U2),
+        oz_test_utils:space_add_user(Config, S1, U2),
         oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
             ?SPACE_UPDATE
         ]),
@@ -394,7 +407,7 @@ update_test(Config) ->
         data_spec = #data_spec{
             at_least_one = [<<"name">>],
             correct_values = #{
-                <<"name">> => [fun() -> ?UNIQUE_NAME(<<"space">>) end]
+                <<"name">> => [fun() -> ?UNIQUE_STRING end]
             },
             bad_values = [
                 {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
@@ -417,11 +430,14 @@ delete_test(Config) ->
         oz_test_utils:space_set_user_privileges(
             Config, S1, U1, revoke, [?SPACE_DELETE]
         ),
-        oz_test_utils:add_user_to_space(Config, S1, U2),
+        oz_test_utils:space_add_user(Config, S1, U2),
         oz_test_utils:space_set_user_privileges(
             Config, S1, U2, set, [?SPACE_DELETE]
         ),
         #{spaceId => S1}
+    end,
+    DeleteEntityFun = fun(#{spaceId := SpaceId} = _Env) ->
+        oz_test_utils:delete_space(Config, SpaceId)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _) ->
         {ok, Spaces} = oz_test_utils:list_spaces(Config),
@@ -458,7 +474,7 @@ delete_test(Config) ->
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun]
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
 
 
@@ -471,7 +487,7 @@ list_shares_test(Config) ->
 
     ExpShares = lists:map(
         fun(_) ->
-            ShareId = ?UNIQUE_NAME(<<"Share">>),
+            ShareId = ?UNIQUE_STRING,
             {ok, ShareId} = oz_test_utils:create_share(
                 Config, ?ROOT, ShareId, ShareId, ?ROOT_FILE_ID, S1
             ),
@@ -515,7 +531,7 @@ get_share_test(Config) ->
     oz_test_utils:space_set_user_privileges(Config, S1, User, set, []),
 
     ShareName = <<"Share">>,
-    ShareId = ?UNIQUE_NAME(ShareName),
+    ShareId = ?UNIQUE_STRING,
     {ok, ShareId} = oz_test_utils:create_share(
         Config, ?ROOT, ShareId, ShareName, ?ROOT_FILE_ID, S1
     ),
@@ -587,14 +603,15 @@ get_share_test(Config) ->
 
 
 list_providers_test(Config) ->
-    % create space with 2 users; give space_view privilege
-    % for one of them and all but that for the second one
+    % create space with 2 users:
+    %   U2 gets the SPACE_VIEW privilege
+    %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, set, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [
         ?OZ_SPACES_LIST_PROVIDERS
     ]),
 
@@ -654,40 +671,15 @@ list_providers_test(Config) ->
 
 
 create_provider_support_token(Config) ->
-    % create space with 2 users; give space_invite_provider privilege
-    % for one of them and all but that for the second one
+    % create space with 2 users:
+    %   U2 gets the SPACE_INVITE_PROVIDER privilege
+    %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_INVITE_PROVIDER
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    % We will keep all tokens generated until now in a process, we will query
-    GeneratedTokens = fun Loop(Tokens) ->
-        receive
-            {Pid, Token} ->
-                case lists:member(Token, Tokens) of
-                    false ->
-                        Pid ! true,
-                        Loop([Token | Tokens]);
-                    true ->
-                        Pid ! false,
-                        Loop(Tokens)
-                end
-        end
-    end,
-    TokensProc = spawn_link(fun() -> GeneratedTokens([]) end),
-
-    VerifyFun = fun(Token) ->
-        TokensProc ! {self(), Token},
-        IsTokenUnique =
-            receive
-                Response -> Response
-            after 1000 ->
-                false
-            end,
-        ?assert(IsTokenUnique),
-        true
-    end,
+    VerifyFun = api_test_scenarios:collect_unique_tokens_fun(),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -722,18 +714,16 @@ get_provider_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, set, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [
         ?OZ_SPACES_LIST_PROVIDERS
     ]),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     oz_test_utils:space_set_user_privileges(Config, S1, User, set, []),
 
-    {_, CSRFile, _} = oz_test_utils:generate_provider_cert_files(),
-    {ok, CSR} = file:read_file(CSRFile),
     ProviderDetails = ?PROVIDER_DETAILS(?PROVIDER_NAME1),
-    {ok, {P1, _}} = oz_test_utils:create_provider(
-        Config, ProviderDetails#{<<"csr">> => CSR}
+    {ok, {P1, _, _}} = oz_test_utils:create_provider_and_certs(
+        Config, ProviderDetails
     ),
     {ok, S1} = oz_test_utils:support_space(
         Config, P1, S1, oz_test_utils:minimum_support_size(Config)
@@ -789,8 +779,9 @@ get_provider_test(Config) ->
 
 
 leave_provider_test(Config) ->
-    % create space with 2 users; give space_remove_provider privilege
-    % for one of them and all but that for the second one
+    % create space with 2 users:
+    %   U2 gets the SPACE_REMOVE_PROVIDER privilege
+    %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_REMOVE_PROVIDER
     ),
@@ -805,8 +796,11 @@ leave_provider_test(Config) ->
         ),
         #{providerId => ProviderId}
     end,
+    DeleteEntityFun = fun(#{providerId := ProviderId} = _Env) ->
+        oz_test_utils:space_leave_provider(Config, S1, ProviderId)
+    end,
     VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId} = _Env, _) ->
-        {ok, Providers} = oz_test_utils:get_space_providers(Config, S1),
+        {ok, Providers} = oz_test_utils:space_get_providers(Config, S1),
         ?assertEqual(lists:member(ProviderId, Providers), not ShouldSucceed)
     end,
 
@@ -836,7 +830,7 @@ leave_provider_test(Config) ->
         % TODO gs
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun]
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
 
 

@@ -162,7 +162,7 @@ create_share_test(Config) ->
     % User should be able to create shares again if we add him to a group that
     % has space_manages_shares privilege and belongs to the space.
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(User), <<"gr">>),
-    oz_test_utils:add_group_to_space(Config, Space, Group),
+    oz_test_utils:space_add_group(Config, Space, Group),
     oz_test_utils:space_set_group_privileges(
         Config, Space, Group, set, [?SPACE_MANAGE_SHARES]
     ),
@@ -247,7 +247,7 @@ view_shares_test(Config) ->
     % be possible again.
 
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(User), <<"gr">>),
-    oz_test_utils:add_group_to_space(Config, Space, Group),
+    oz_test_utils:space_add_group(Config, Space, Group),
     ?assert(check_get_share(Config, 200, {user, User}, Share1Id, Share1ExpectedData)),
     ?assert(check_get_share(Config, 200, {user, User}, Share2Id, Share2ExpectedData)),
     ?assert(check_get_share(Config, 200, {user, User}, Share3Id, Share3ExpectedData)),
@@ -308,7 +308,7 @@ modify_share_test(Config) ->
     % has space_manages_shares privilege and belongs to the space.
 
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(User), <<"gr">>),
-    oz_test_utils:add_group_to_space(Config, Space, Group),
+    oz_test_utils:space_add_group(Config, Space, Group),
     oz_test_utils:space_set_group_privileges(
         Config, Space, Group, set, [?SPACE_MANAGE_SHARES]
     ),
@@ -355,7 +355,7 @@ remove_share_test(Config) ->
     % has space_manages_shares privilege and belongs to the space.
 
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(User), <<"gr">>),
-    oz_test_utils:add_group_to_space(Config, Space, Group),
+    oz_test_utils:space_add_group(Config, Space, Group),
     oz_test_utils:space_set_group_privileges(
         Config, Space, Group, set, [?SPACE_MANAGE_SHARES]
     ),

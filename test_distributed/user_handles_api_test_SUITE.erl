@@ -6,10 +6,10 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This file contains tests concerning group handles API (REST + logic + gs).
+%%% This file contains tests concerning user handles API (REST + logic + gs).
 %%% @end
 %%%-------------------------------------------------------------------
--module(group_handles_api_test_SUITE).
+-module(user_handles_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
 -include("rest.hrl").
@@ -34,20 +34,22 @@
 -export([
     list_handles_test/1,
     create_handle_test/1,
-    get_handle_details_test/1,
+    get_handle_test/1,
     leave_handle_test/1,
+
     list_eff_handles_test/1,
-    get_eff_handle_details_test/1
+    get_eff_handle_test/1
 ]).
 
 all() ->
     ?ALL([
         list_handles_test,
         create_handle_test,
-        get_handle_details_test,
+        get_handle_test,
         leave_handle_test,
+
         list_eff_handles_test,
-        get_eff_handle_details_test
+        get_eff_handle_test
     ]).
 
 
@@ -57,17 +59,13 @@ all() ->
 
 
 list_handles_test(Config) ->
-    % create group with 2 users:
-    %   U2 gets the GROUP_VIEW privilege
-    %   U1 gets all remaining privileges
-    {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_VIEW
-    ),
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
     {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME2),
-    {ok, HService} = oz_test_utils:create_handle_service(
+    {ok, HServiceId} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
     ),
 
@@ -79,9 +77,10 @@ list_handles_test(Config) ->
                 Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
             ),
             {ok, HandleId} = oz_test_utils:create_handle(
-                Config, ?ROOT, ?HANDLE(HService, ShareId)
+                Config, ?ROOT, ?HANDLE(HServiceId, ShareId)
             ),
-            {ok, G1} = oz_test_utils:handle_add_group(Config, HandleId, G1),
+            {ok, U1} = oz_test_utils:handle_add_user(Config, HandleId, U1),
+            {ok, U2} = oz_test_utils:handle_add_user(Config, HandleId, U2),
             HandleId
         end, [S1, S1, S2]
     ),
@@ -89,46 +88,60 @@ list_handles_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
+                {user, U1},
                 {user, U2}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, NonAdmin},
-                {user, U1}
             ]
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/groups/">>, G1, <<"/handles">>],
+            path = <<"/user/handles">>,
             expected_code = ?HTTP_200_OK,
             expected_body = #{<<"handles">> => ExpHandles}
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % Check that regular client can't make request on behalf of other client
+    ApiTestSpec2 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U1}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U2},
+                {user, NonAdmin}
+            ]
         },
+        rest_spec = undefined,
         logic_spec = #logic_spec{
-            module = group_logic,
+            module = user_logic,
             function = get_handles,
-            args = [client, G1],
+            args = [client, U1],
             expected_result = ?OK_LIST(ExpHandles)
         }
         % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 create_handle_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-    {ok, S1} = oz_test_utils:group_create_space(Config, G1, ?SPACE_NAME1),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
     {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_NAME1, ?SHARE_ID_1, ?ROOT_FILE_ID, S1
+        Config, ?USER(U1), ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
     ),
 
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
     ),
-    {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
+    {ok, U1} = oz_test_utils:handle_service_add_user(Config, HService, U1),
+    {ok, U2} = oz_test_utils:handle_service_add_user(Config, HService, U2),
 
     AllPrivs = oz_test_utils:all_handle_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
@@ -139,14 +152,11 @@ create_handle_test(Config) ->
         ?assertEqual(ExpResourceType, Handle#od_handle.resource_type),
         ?assertEqual(ShareId, Handle#od_handle.resource_id),
         ?assertEqual(HService, Handle#od_handle.handle_service),
-        ?assertEqual(#{G1 => AllPrivs}, Handle#od_handle.groups),
+        ?assertEqual(#{}, Handle#od_handle.groups),
+        ?assertEqual(#{}, Handle#od_handle.eff_groups),
+        ?assertEqual(#{U1 => AllPrivs}, Handle#od_handle.users),
         ?assertEqual(
-            #{G1 => {AllPrivs, [{od_handle, HandleId}]}},
-            Handle#od_handle.eff_groups
-        ),
-        ?assertEqual(#{}, Handle#od_handle.users),
-        ?assertEqual(
-            #{U1 => {AllPrivs, [{od_group, G1}]}},
+            #{U1 => {AllPrivs, [{od_handle, HandleId}]}},
             Handle#od_handle.eff_users
         ),
         true
@@ -154,52 +164,18 @@ create_handle_test(Config) ->
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [
-                {user, U1}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, NonAdmin}
-            ]
+            correct = [{user, U1}]
         },
         rest_spec = #rest_spec{
             method = post,
-            path = [<<"/groups/">>, G1, <<"/handles">>],
+            path = <<"/user/handles">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                [GroupId, HandleId] = binary:split(
-                    Location,
-                    [<<"/groups/">>, <<"/handles/">>],
-                    [trim_all, global]
-                ),
-                ?assertEqual(GroupId, G1),
+                % TODO 2918
+%%                <<"/user/handles/", HandleId/binary>> = Location,
+                <<"/handles/", HandleId/binary>> = Location,
                 VerifyFun(HandleId)
             end
-        },
-        logic_spec = #logic_spec{
-            module = group_logic,
-            function = create_handle,
-            args = [client, G1, data],
-            expected_result = ?OK_TERM(VerifyFun)
-        },
-        gs_spec = #gs_spec{
-            operation = create,
-            gri = #gri{type = od_handle, aspect = instance},
-            auth_hint = ?AS_GROUP(G1),
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"effectiveGroups">> => #{G1 => AllPrivsBin},
-                <<"effectiveUsers">> => #{U1 => AllPrivsBin},
-                <<"metadata">> => ?DC_METADATA,
-                <<"handleServiceId">> => HService,
-                <<"resourceType">> => ExpResourceType,
-                <<"resourceId">> => ShareId,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = HandleId} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    VerifyFun(HandleId)
-                end
-            })
         },
         data_spec = DataSpec = #data_spec{
             required = [
@@ -215,7 +191,8 @@ create_handle_test(Config) ->
                 <<"metadata">> => [?DC_METADATA]
             },
             bad_values = [
-                % One cannot check privileges of hs if it does not exist so 403
+                % authorization is checked before request validation
+                % so incorrect ids result in 403 rather than other errors
                 {<<"handleServiceId">>, <<"">>, ?ERROR_FORBIDDEN},
                 {<<"handleServiceId">>, 1234, ?ERROR_FORBIDDEN},
                 {<<"resourceType">>, <<"">>,
@@ -236,17 +213,55 @@ create_handle_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-    % Root bypass authorize so malformed data result in errors
-    % in validation step not authorize
+    % Check that regular client can't make request on behalf of other client
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [{user, U1}],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U2},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            module = user_logic,
+            function = create_handle,
+            args = [client, U1, data],
+            expected_result = ?OK_TERM(VerifyFun)
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_handle, aspect = instance},
+            auth_hint = ?AS_USER(U1),
+            expected_result = ?OK_MAP_CONTAINS(#{
+                <<"effectiveGroups">> => #{},
+                <<"effectiveUsers">> => #{U1 => AllPrivsBin},
+                <<"metadata">> => ?DC_METADATA,
+                <<"handleServiceId">> => HService,
+                <<"resourceType">> => ExpResourceType,
+                <<"resourceId">> => ShareId,
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = oz_test_utils:decode_gri(
+                        Config, EncodedGri
+                    ),
+                    VerifyFun(Id)
+                end
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+    % Root client bypasses authorization checks,
+    % hence wrong values of handleServiceId or resourceId
+    % cause validation errors rather than authorization errors.
     RootApiTestSpec = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
             correct = [root]
         },
-        rest_spec = undefined,
         gs_spec = undefined,
         data_spec = DataSpec#data_spec{
             bad_values = [
-                % one cannot check privileges of hs if it does not exist so 403
                 {<<"handleServiceId">>, <<"">>,
                     ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
                 {<<"handleServiceId">>, 1234,
@@ -256,8 +271,6 @@ create_handle_test(Config) ->
                         [<<"Share">>])},
                 {<<"resourceType">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
-                % one cannot check privileges of resource
-                % if it does not exist so 403
                 {<<"resourceId">>, <<"">>,
                     ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"resourceId">>, 1234,
@@ -272,126 +285,42 @@ create_handle_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, RootApiTestSpec)).
 
 
-get_handle_details_test(Config) ->
-    % create group with 2 users:
-    %   U2 gets the GROUP_VIEW privilege
-    %   U1 gets all remaining privileges
-    {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_VIEW
-    ),
+get_handle_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, HService} = oz_test_utils:create_handle_service(
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, ShareId} = oz_test_utils:create_share(Config, ?ROOT,
+        ?UNIQUE_STRING, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+    ),
+    {ok, HServiceId} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
     ),
-    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
-    ),
 
-    HandleDetails = ?HANDLE(HService, ShareId),
+    HandleDetails = ?HANDLE(HServiceId, ShareId),
     {ok, HandleId} = oz_test_utils:create_handle(Config, ?ROOT, HandleDetails),
-    {ok, G1} = oz_test_utils:handle_add_group(Config, HandleId, G1),
+    {ok, U1} = oz_test_utils:handle_add_user(Config, HandleId, U1),
+    {ok, U2} = oz_test_utils:handle_add_user(Config, HandleId, U2),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
-                {user, U2}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
                 {user, U1},
-                {user, NonAdmin}
+                {user, U2}
             ]
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/groups/">>, G1, <<"/handles/">>, HandleId],
+            path = [<<"/user/handles/">>, HandleId],
             expected_code = ?HTTP_200_OK,
             expected_body = {contains, HandleDetails}
-        },
-        logic_spec = #logic_spec{
-            module = group_logic,
-            function = get_handle,
-            args = [client, G1, HandleId],
-            expected_result = ?OK_MAP_CONTAINS(HandleDetails)
         }
-        % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-
-leave_handle_test(Config) ->
-    % create group with 2 users:
-    %   U2 gets the GROUP_UPDATE privilege
-    %   U1 gets all remaining privileges
-    {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_UPDATE
-    ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, HService} = oz_test_utils:create_handle_service(
-        Config, ?ROOT, ?DOI_SERVICE
-    ),
-    {ok, S1} = oz_test_utils:group_create_space(Config, G1, ?SPACE_NAME1),
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
-    ),
-
-    EnvSetUpFun = fun() ->
-        {ok, HandleId} = oz_test_utils:create_handle(
-            Config, ?ROOT, ?HANDLE(HService, ShareId)
-        ),
-        {ok, G1} = oz_test_utils:handle_add_group(Config, HandleId, G1),
-        #{handleId => HandleId}
-    end,
-    DeleteEntityFun = fun(#{handleId := HandleId} = _Env) ->
-        oz_test_utils:handle_remove_group(Config, HandleId, G1)
-    end,
-    VerifyEndFun = fun(ShouldSucceed, #{handleId := HandleId} = _Env, _) ->
-        {ok, Groups} = oz_test_utils:handle_get_groups(Config, HandleId),
-        ?assertEqual(lists:member(G1, Groups), not ShouldSucceed)
-    end,
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U2}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = delete,
-            path = [<<"/groups/">>, G1, <<"/handles/">>, handleId],
-            expected_code = ?HTTP_202_ACCEPTED
-        },
-        logic_spec = #logic_spec{
-            module = group_logic,
-            function = leave_handle,
-            args = [client, G1, handleId],
-            expected_result = ?OK
-        }
-        % TODO gs
-    },
-    ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
-    )).
-
-
-list_eff_handles_test(Config) ->
-    {
-        [{H1, _}, {H2, _}, {H3, _}, {H4, _}, {H5, _}],
-        [{G1, _} | _Groups], {U1, U2, NonAdmin}
-    } = api_test_scenarios:create_eff_handles_env(Config),
-
-    ExpHandles = [H1, H2, H3, H4, H5],
-    ApiTestSpec = #api_test_spec{
+    % Check that regular client can't make request on behalf of other client
+    ApiTestSpec2 = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
@@ -403,38 +332,147 @@ list_eff_handles_test(Config) ->
                 {user, NonAdmin}
             ]
         },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            module = user_logic,
+            function = get_handle,
+            args = [client, U1, HandleId],
+            expected_result = ?OK_MAP_CONTAINS(HandleDetails)
+        }
+        % TODO gs
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+
+
+leave_handle_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, ShareId} = oz_test_utils:create_share(Config, ?ROOT,
+        ?UNIQUE_STRING, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+    ),
+    {ok, HServiceId} = oz_test_utils:create_handle_service(
+        Config, ?ROOT, ?DOI_SERVICE
+    ),
+
+    EnvSetUpFun = fun() ->
+        {ok, HandleId} = oz_test_utils:create_handle(
+            Config, ?ROOT, ?HANDLE(HServiceId, ShareId)
+        ),
+        {ok, U1} = oz_test_utils:handle_add_user(Config, HandleId, U1),
+        #{handleId => HandleId}
+    end,
+    DeleteEntityFun = fun(#{handleId := HandleId} = _Env) ->
+        oz_test_utils:handle_remove_user(Config, HandleId, U1)
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{handleId := HandleId} = _Env, _) ->
+        {ok, Users} = oz_test_utils:handle_get_users(Config, HandleId),
+        ?assertEqual(lists:member(U1, Users), not ShouldSucceed)
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{correct = [{user, U1}]},
         rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/groups/">>, G1, <<"/effective_handles">>],
-            expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"handles">> => ExpHandles}
+            method = delete,
+            path = [<<"/user/handles/">>, handleId],
+            expected_code = ?HTTP_202_ACCEPTED
+        }
+    },
+    ?assert(api_test_scenarios:run_scenario(delete_entity, [
+        Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun
+    ])),
+
+    % Check that regular client can't make request on behalf of other client
+    ApiTestSpec2 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U1}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U2},
+                {user, NonAdmin}
+            ]
         },
         logic_spec = #logic_spec{
-            module = group_logic,
+            module = user_logic,
+            function = leave_handle,
+            args = [client, U1, handleId],
+            expected_result = ?OK
+        }
+        % TODO gs
+    },
+    ?assert(api_test_scenarios:run_scenario(delete_entity, [
+        Config, ApiTestSpec2, EnvSetUpFun, VerifyEndFun, DeleteEntityFun
+    ])).
+
+
+list_eff_handles_test(Config) ->
+    {
+        [{H1, _}, {H2, _}, {H3, _}, {H4, _}, {H5, _}],
+        _Groups, {U1, U2, NonAdmin}
+    } = api_test_scenarios:create_eff_handles_env(Config),
+
+    ExpHandles = [H1, H2, H3, H4, H5],
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {user, U1},
+                {user, U2}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/user/effective_handles">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"handles">> => ExpHandles}
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % Check that regular client can't make request on behalf of other client
+    ApiTestSpec2 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U1}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U2},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            module = user_logic,
             function = get_eff_handles,
-            args = [client, G1],
+            args = [client, U1],
             expected_result = ?OK_LIST(ExpHandles)
         }
         % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
-    % check also group_logic:has_eff_handle function
+    % Check also user_logic:has_eff_handle function
     lists:foreach(
         fun(Handle) ->
             ?assert(oz_test_utils:call_oz(
-                Config, group_logic, has_eff_handle, [G1, Handle])
+                Config, user_logic, has_eff_handle, [U2, Handle])
             )
         end, ExpHandles
     ),
     ?assert(not oz_test_utils:call_oz(
-        Config, group_logic, has_eff_handle, [G1, <<"asdiucyaie827346w">>])
+        Config, user_logic, has_eff_handle, [U2, <<"asdiucyaie827346w">>])
     ).
 
 
-get_eff_handle_details_test(Config) ->
+get_eff_handle_test(Config) ->
     {
-        EffHandlesList, [{G1, _} | _Groups], {U1, _U2, NonAdmin}
+        EffHandlesList, _Groups, {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_handles_env(Config),
 
     lists:foreach(
@@ -442,33 +480,44 @@ get_eff_handle_details_test(Config) ->
             ApiTestSpec = #api_test_spec{
                 client_spec = #client_spec{
                     correct = [
+                        {user, U1},
+                        {user, U2}
+                    ]
+                },
+                rest_spec = #rest_spec{
+                    method = get,
+                    path = [<<"/user/effective_handles/">>, HandleId],
+                    expected_code = ?HTTP_200_OK,
+                    expected_body = {
+                        contains, HandleDetails#{<<"handleId">> => HandleId}
+                    }
+                }
+            },
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+            % Check that regular client can't make request
+            % on behalf of other client
+            ApiTestSpec2 = #api_test_spec{
+                client_spec = #client_spec{
+                    correct = [
                         root,
                         {user, U1}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
+                        {user, U2},
                         {user, NonAdmin}
                     ]
                 },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [
-                        <<"/groups/">>, G1, <<"/effective_handles/">>, HandleId
-                    ],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = {
-                        contains, HandleDetails#{<<"handleId">> => HandleId}
-                    }
-                },
                 logic_spec = #logic_spec{
-                    module = group_logic,
+                    module = user_logic,
                     function = get_eff_handle,
-                    args = [client, G1, HandleId],
+                    args = [client, U1, HandleId],
                     expected_result = ?OK_MAP_CONTAINS(HandleDetails)
                 }
                 % TODO gs
             },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
 
         end, EffHandlesList
     ).
@@ -496,5 +545,4 @@ init_per_testcase(_, Config) ->
 
 
 end_per_testcase(_, Config) ->
-    oz_test_utils:delete_all_entities(Config),
     oz_test_utils:unmock_handle_proxy(Config).

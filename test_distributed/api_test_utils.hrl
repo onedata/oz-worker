@@ -98,9 +98,9 @@
 -define(ERROR_REASON(__ExpectedError), {error_reason, __ExpectedError}).
 
 %% Example test data
--define(UNIQUE_NAME(Prefix),
+-define(UNIQUE_STRING,
     <<
-        Prefix/binary,
+        "uniqueString",
         (integer_to_binary(erlang:unique_integer([positive])))/binary
     >>
 ).

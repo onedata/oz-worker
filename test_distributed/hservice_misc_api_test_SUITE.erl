@@ -10,7 +10,7 @@
 %%% handle service basic API (REST + logic + gs).
 %%% @end
 %%%-------------------------------------------------------------------
--module(hservice_basic_api_test_SUITE).
+-module(hservice_misc_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
 -include("rest.hrl").
@@ -64,7 +64,11 @@ all() ->
 create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U2, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U2, set, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
+    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, U3, set, [
         ?OZ_HANDLE_SERVICES_CREATE
     ]),
 
@@ -83,7 +87,8 @@ create_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {user, U3}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -104,20 +109,6 @@ create_test(Config) ->
             function = create,
             args = [client, data],
             expected_result = ?OK_TERM(VerifyFun)
-        },
-        gs_spec = #gs_spec{
-            operation = create,
-            gri = #gri{type = od_handle_service, aspect = instance},
-            auth_hint = ?AS_USER(client),
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?HANDLE_SERVICE_NAME1,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    VerifyFun(Id)
-                end
-            })
         },
         data_spec = #data_spec{
             required = [
@@ -140,7 +131,38 @@ create_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % Check that regular client can't make request on behalf of other client
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {user, U3}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
+                {user, U2}
+            ]
+        },
+        rest_spec = undefined,
+        logic_spec = undefined,
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_handle_service, aspect = instance},
+            auth_hint = ?AS_USER(U3),
+            expected_result = ?OK_MAP_CONTAINS(#{
+                <<"name">> => ?HANDLE_SERVICE_NAME1,
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = oz_test_utils:decode_gri(
+                        Config, EncodedGri
+                    ),
+                    VerifyFun(Id)
+                end
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 list_test(Config) ->
@@ -148,12 +170,12 @@ list_test(Config) ->
     oz_test_utils:delete_all_entities(Config),
 
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
         ?OZ_HANDLE_SERVICES_CREATE
     ]),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, set, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [
         ?OZ_HANDLE_SERVICES_LIST
     ]),
 
@@ -208,18 +230,19 @@ list_test(Config) ->
 
 
 get_test(Config) ->
-    % create handle service with 2 users; give handle_service_view privilege
-    % for one of them and all but that for the second one
+    % create handle service with 2 users:
+    %   U2 gets the HANDLE_SERVICE_VIEW privilege
+    %   U1 gets all remaining privileges
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_HANDLE_SERVICES_LIST
     ]),
 
-    AllPrivs = oz_test_utils:get_handle_service_privileges(Config),
+    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     % Get and check private data
@@ -322,7 +345,7 @@ get_test(Config) ->
 
 update_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
         ?OZ_HANDLE_SERVICES_CREATE
     ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
@@ -335,7 +358,7 @@ update_test(Config) ->
         oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
             revoke, [?HANDLE_SERVICE_UPDATE]
         ),
-        {ok, U2} = oz_test_utils:add_user_to_handle_service(
+        {ok, U2} = oz_test_utils:handle_service_add_user(
             Config, HService, U2
         ),
         oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
@@ -387,7 +410,7 @@ update_test(Config) ->
                 <<"name">>, <<"proxyEndpoint">>, <<"serviceProperties">>
             ],
             correct_values = #{
-                <<"name">> => [fun() -> ?UNIQUE_NAME(<<"hservice">>) end],
+                <<"name">> => [fun() -> ?UNIQUE_STRING end],
                 <<"proxyEndpoint">> => [?PROXY_ENDPOINT],
                 <<"serviceProperties">> => [?PID_SERVICE_PROPERTIES]
             },
@@ -410,7 +433,7 @@ update_test(Config) ->
 
 delete_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
         ?OZ_HANDLE_SERVICES_CREATE
     ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
@@ -423,13 +446,16 @@ delete_test(Config) ->
         oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
             revoke, [?HANDLE_SERVICE_DELETE]
         ),
-        {ok, U2} = oz_test_utils:add_user_to_handle_service(
+        {ok, U2} = oz_test_utils:handle_service_add_user(
             Config, HService, U2
         ),
         oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
             set, [?HANDLE_SERVICE_DELETE]
         ),
         #{hserviceId => HService}
+    end,
+    DeleteEntityFun = fun(#{hserviceId := HService} = _Env) ->
+        oz_test_utils:delete_handle_service(Config, HService)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{hserviceId := HService} = _Env, _) ->
         {ok, HServices} = oz_test_utils:list_handle_services(Config),
@@ -468,13 +494,14 @@ delete_test(Config) ->
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun]
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
 
 
 list_handles_test(Config) ->
-    % create handle service with 2 users; give handle_service_view privilege
-    % for one of them and all but that for the second one
+    % create handle service with 2 users:
+    %   U2 gets the HANDLE_SERVICE_VIEW privilege
+    %   U1 gets all remaining privileges
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
 %%        TODO ?HANDLE_SERVICE_LIST_HANDLES
         Config, ?HANDLE_SERVICE_VIEW
@@ -487,7 +514,7 @@ list_handles_test(Config) ->
     % Create 3 handles, 2 for S1 and 1 for S2
     ExpHandles = lists:map(
         fun(SpaceId) ->
-            ShareId = ?UNIQUE_NAME(?SHARE_NAME1),
+            ShareId = ?UNIQUE_STRING,
             {ok, ShareId} = oz_test_utils:create_share(
                 Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
             ),
@@ -528,8 +555,9 @@ list_handles_test(Config) ->
 
 
 get_handle_test(Config) ->
-    % create handle service with 2 users; give handle_service_view privilege
-    % for one of them and all but that for the second one
+    % create handle service with 2 users:
+    %   U2 gets the HANDLE_SERVICE_VIEW privilege
+    %   U1 gets all remaining privileges
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),

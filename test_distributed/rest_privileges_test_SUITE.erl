@@ -538,7 +538,7 @@ view_privileges_test(Config) ->
     % User without permissions cannot view the OZ API privileges (403)
     ?assert(check_view_privileges(Config, 403, {user, User1}, User1, od_user, undefined)),
     % Give the user view privileges and check again
-    oz_test_utils:set_user_oz_privileges(Config, User1, set, [?OZ_VIEW_PRIVILEGES]),
+    oz_test_utils:user_set_oz_privileges(Config, User1, set, [?OZ_VIEW_PRIVILEGES]),
     ?assert(check_view_privileges(Config, 200, {user, User1}, User1, od_user,
         [?OZ_VIEW_PRIVILEGES])),
     % New users and groups should have no permissions by default
@@ -556,7 +556,7 @@ view_privileges_test(Config) ->
 set_privileges_test(Config) ->
     {ok, User1} = oz_test_utils:create_user(Config, #od_user{}),
     % Give the user perms to view and set privileges
-    oz_test_utils:set_user_oz_privileges(
+    oz_test_utils:user_set_oz_privileges(
         Config, User1, set, [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES]
     ),
     % First try some wrong perms
@@ -596,7 +596,7 @@ set_privileges_test(Config) ->
 modify_space_members_test(Config) ->
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
     % TestUser will be used to test the privileges
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
     % AddedUser will be added to spaces and removed by TestUser
@@ -753,7 +753,7 @@ list_users_test(Config) ->
     {ok, User4} = oz_test_utils:create_user(Config, #od_user{name = <<"u4">>}),
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{name = <<"adm">>}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{name = <<"tu">>}),
 
@@ -898,7 +898,7 @@ list_groups_test(Config) ->
     {ExpectedGroupIds, _} = lists:unzip(ExpectedGroups),
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -1034,7 +1034,7 @@ list_spaces_test(Config) ->
     {ExpectedSpaceIds, _} = lists:unzip(ExpectedSpaces),
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -1150,7 +1150,7 @@ list_providers_of_space_test(Config) ->
     {ExpectedProviderIds, _} = lists:unzip(ExpectedProviders),
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -1267,7 +1267,7 @@ list_providers_test(Config) ->
     {ExpectedProviderIds, _} = lists:unzip(ExpectedProviders),
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -1384,7 +1384,7 @@ list_eff_users_of_provider_test(Config) ->
     ),
     % User 3 belongs to space 3 by nested groups
     {_, _, ParentGroup} = oz_test_utils:create_3_nested_groups(Config, User3),
-    {ok, ParentGroup} = oz_test_utils:add_group_to_space(
+    {ok, ParentGroup} = oz_test_utils:space_add_group(
         Config, Space3, ParentGroup
     ),
     {ok, _} = oz_test_utils:support_space(Config, Provider, Space1, 10000000),
@@ -1398,7 +1398,7 @@ list_eff_users_of_provider_test(Config) ->
     {ExpectedUserIds, _} = lists:unzip(ExpectedUsers),
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -1537,14 +1537,14 @@ list_eff_groups_of_provider_test(Config) ->
     %   BottomGroup2,
     %   MiddleGroup2,
     %   TopGroup2
-    {ok, TopGroup2} = oz_test_utils:add_group_to_group(
+    {ok, TopGroup2} = oz_test_utils:group_add_group(
         Config, MiddleGroup1, TopGroup2
     ),
     % Add the groups to spaces
-    {ok, TopGroup1} = oz_test_utils:add_group_to_space(
+    {ok, TopGroup1} = oz_test_utils:space_add_group(
         Config, Space1, TopGroup1
     ),
-    {ok, SomeGroup} = oz_test_utils:add_group_to_space(
+    {ok, SomeGroup} = oz_test_utils:space_add_group(
         Config, Space2, SomeGroup
     ),
     ExpectedGroups = [
@@ -1559,7 +1559,7 @@ list_eff_groups_of_provider_test(Config) ->
     {ExpectedGroupIds, _} = lists:unzip(ExpectedGroups),
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -1687,7 +1687,7 @@ list_spaces_of_provider_test(Config) ->
     {ExpectedSpaceIds, _} = lists:unzip(ExpectedSpaces),
     % Admin will be used to grant or revoke privileges
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [?OZ_SET_PRIVILEGES]),
     % User will be used to test the functionality
     {ok, TestUser} = oz_test_utils:create_user(Config, #od_user{}),
 

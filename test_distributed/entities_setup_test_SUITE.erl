@@ -80,7 +80,7 @@ predefined_groups_test(Config) ->
         {ok, #document{value = #od_group{name = ActualName}}} = GroupResult,
         ?assertEqual(ExpName, ActualName),
         % Check if OZ API privileges are correct
-        {ok, PrivsResult} = oz_test_utils:get_group_oz_privileges(Config, ExpId),
+        {ok, PrivsResult} = oz_test_utils:group_get_oz_privileges(Config, ExpId),
         % Check if the privileges are correct
         ?assertEqual(lists:sort(ExpPrivileges), lists:sort(PrivsResult))
     end,
@@ -193,7 +193,7 @@ automatic_space_membership_via_global_group_test(Config) ->
     {ok, OpenSpaceId} = oz_test_utils:create_space(
         Config, ?USER(DummyUser), <<"OpenSpace">>
     ),
-    {ok, <<"all_users_group">>} = oz_test_utils:add_group_to_space(
+    {ok, <<"all_users_group">>} = oz_test_utils:space_add_group(
         Config, OpenSpaceId, <<"all_users_group">>
     ),
     % Now, every created user should belong to the All Users group and thus

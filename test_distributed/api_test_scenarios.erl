@@ -20,12 +20,15 @@
 -include_lib("cluster_worker/include/api_errors.hrl").
 
 -export([run_scenario/2]).
--export([delete_entity/4]).
+-export([delete_entity/5]).
 -export([get_relations/4]).
 -export([get_privileges/7]).
 -export([update_privileges/7]).
 -export([delete_privileges/7]).
 
+-export([
+    collect_unique_tokens_fun/0
+]).
 -export([
     create_basic_group_env/2,
     create_basic_space_env/2,
@@ -65,8 +68,9 @@ run_scenario(Function, Args) ->
 
 
 % Test that entity can be deleted, and every succeeding call results in 404.
-% Logic spec is required to be set.
-delete_entity(Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun) ->
+% For that DeleteFun, that will get initialized Env and delete entity,
+% is required.
+delete_entity(Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteFun) ->
     #api_test_spec{
         client_spec = #client_spec{
             correct = Correct,
@@ -74,11 +78,7 @@ delete_entity(Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun) ->
             forbidden = Forbidden
         },
         rest_spec = RestSpec,
-        logic_spec = #logic_spec{
-            module = Module,
-            function = Function,
-            args = Args
-        } = LogicSpec,
+        logic_spec = LogicSpec,
         gs_spec = GsSpec
     } = ApiTestSpec,
 
@@ -88,33 +88,20 @@ delete_entity(Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun) ->
 
     % To check that entity cannot be deleted twice and every succeeding
     % call returns ERROR_NOT_FOUND, entity is first created with EnvSetUpFun,
-    % deleted using logic (it is assumed there always will be logic fun
-    % to delete entity) and tests run against deleted entity id.
-    EntityCanNotBeDeletedTwiceTestSpec = #api_test_spec{
+    % deleted using DeleteEntityFun and tests run against deleted entity id.
+    ApiTestSpec2 = #api_test_spec{
         client_spec = #client_spec{
             correct = Correct ++ Unauthorized ++ Forbidden
         },
         rest_spec = prepare_entity_not_found_rest_spec(RestSpec),
-        logic_spec = LogicSpec#logic_spec{
-            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
-        },
+        logic_spec = prepare_entity_not_found_logic_spec(LogicSpec),
         gs_spec = prepare_entity_not_found_gs_spec(GsSpec)
     },
 
     Env = EnvSetUpFun(),
-    DeleteEntityArgs = lists:map(
-        fun
-            (client) -> ?ROOT;
-            (Arg) -> maps:get(Arg, Env, Arg)
-        end, Args
-    ),
-    ?assertMatch(ok, oz_test_utils:call_oz(
-        Config, Module, Function, DeleteEntityArgs
-    )),
-
+    DeleteFun(Env),
     assert(api_test_utils:run_tests(
-        Config, EntityCanNotBeDeletedTwiceTestSpec,
-        fun() -> Env end, undefined, undefined
+        Config, ApiTestSpec2, fun() -> Env end, undefined, undefined
     )).
 
 
@@ -123,6 +110,14 @@ prepare_entity_not_found_rest_spec(undefined) ->
 prepare_entity_not_found_rest_spec(RestSpec) ->
     RestSpec#rest_spec{
         expected_code = ?HTTP_404_NOT_FOUND
+    }.
+
+
+prepare_entity_not_found_logic_spec(undefined) ->
+    undefined;
+prepare_entity_not_found_logic_spec(LogicSpec) ->
+    LogicSpec#logic_spec{
+        expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
     }.
 
 
@@ -547,13 +542,47 @@ assert(_) -> throw(fail).
 
 
 %%%===================================================================
+%%% Miscellaneous functions used in api tests
+%%%===================================================================
+
+
+collect_unique_tokens_fun() ->
+    CollectUniqueTokens = fun Loop(Tokens) ->
+        receive
+            {Pid, Token} ->
+                case lists:member(Token, Tokens) of
+                    false ->
+                        Pid ! true,
+                        Loop([Token | Tokens]);
+                    true ->
+                        Pid ! false,
+                        Loop(Tokens)
+                end
+        end
+    end,
+    CollectTokensProc = spawn_link(fun() -> CollectUniqueTokens([]) end),
+
+    fun(Token) ->
+        CollectTokensProc ! {self(), Token},
+        IsTokenUnique =
+            receive
+                Response -> Response
+            after 1000 ->
+                false
+            end,
+        ?assert(IsTokenUnique),
+        true
+    end.
+
+
+%%%===================================================================
 %%% Functions creating starting environment
 %%%===================================================================
 
 
 create_basic_group_env(Config, Privs) when not is_list(Privs) ->
     create_basic_group_env(Config, [Privs]);
-create_basic_group_env(Config, Privileges) ->
+create_basic_group_env(Config, Privs) ->
     %% Create environment with following relations:
     %%
     %%                  Group
@@ -568,17 +597,17 @@ create_basic_group_env(Config, Privileges) ->
 
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(
-        Config, Group, U1, revoke, Privileges
+        Config, Group, U1, revoke, Privs
     ),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, Group, U2),
-    oz_test_utils:group_set_user_privileges(Config, Group, U2, set, Privileges),
+    {ok, U2} = oz_test_utils:group_add_user(Config, Group, U2),
+    oz_test_utils:group_set_user_privileges(Config, Group, U2, set, Privs),
 
     {Group, U1, U2}.
 
 
 create_basic_space_env(Config, Privs) when not is_list(Privs) ->
     create_basic_space_env(Config, [Privs]);
-create_basic_space_env(Config, Privileges) ->
+create_basic_space_env(Config, Privs) ->
     %% Create environment with following relations:
     %%
     %%                  Space
@@ -593,17 +622,17 @@ create_basic_space_env(Config, Privileges) ->
 
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     oz_test_utils:space_set_user_privileges(
-        Config, Space, U1, revoke, Privileges
+        Config, Space, U1, revoke, Privs
     ),
-    {ok, U2} = oz_test_utils:add_user_to_space(Config, Space, U2),
-    oz_test_utils:space_set_user_privileges(Config, Space, U2, set, Privileges),
+    {ok, U2} = oz_test_utils:space_add_user(Config, Space, U2),
+    oz_test_utils:space_set_user_privileges(Config, Space, U2, set, Privs),
 
     {Space, U1, U2}.
 
 
 create_basic_doi_hservice_env(Config, Privs) when not is_list(Privs) ->
     create_basic_doi_hservice_env(Config, [Privs]);
-create_basic_doi_hservice_env(Config, Privileges) ->
+create_basic_doi_hservice_env(Config, Privs) ->
     %% Create environment with following relations:
     %%
     %%              HandleService
@@ -614,7 +643,7 @@ create_basic_doi_hservice_env(Config, Privileges) ->
     %%           User1         User2
 
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
         ?OZ_HANDLE_SERVICES_CREATE
     ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
@@ -623,11 +652,11 @@ create_basic_doi_hservice_env(Config, Privileges) ->
         Config, ?USER(U1), ?DOI_SERVICE
     ),
     oz_test_utils:handle_service_set_user_privileges(
-        Config, HService, U1, revoke, Privileges
+        Config, HService, U1, revoke, Privs
     ),
-    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
+    {ok, U2} = oz_test_utils:handle_service_add_user(Config, HService, U2),
     oz_test_utils:handle_service_set_user_privileges(
-        Config, HService, U2, set, Privileges
+        Config, HService, U2, set, Privs
     ),
 
     {HService, U1, U2}.
@@ -635,7 +664,7 @@ create_basic_doi_hservice_env(Config, Privileges) ->
 
 create_basic_handle_env(Config, Privs) when not is_list(Privs) ->
     create_basic_handle_env(Config, [Privs]);
-create_basic_handle_env(Config, Privileges) ->
+create_basic_handle_env(Config, Privs) ->
     %% Create environment with following relations:
     %%
     %%                  Handle
@@ -646,7 +675,7 @@ create_basic_handle_env(Config, Privileges) ->
     %%           User1         User2
 
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
         ?OZ_HANDLE_SERVICES_CREATE
     ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
@@ -664,11 +693,11 @@ create_basic_handle_env(Config, Privileges) ->
         Config, ?USER(U1), HandleDetails
     ),
     oz_test_utils:handle_set_user_privileges(
-        Config, HandleId, U1, revoke, Privileges
+        Config, HandleId, U1, revoke, Privs
     ),
-    {ok, U2} = oz_test_utils:add_user_to_handle(Config, HandleId, U2),
+    {ok, U2} = oz_test_utils:handle_add_user(Config, HandleId, U2),
     oz_test_utils:handle_set_user_privileges(
-        Config, HandleId, U2, set, Privileges
+        Config, HandleId, U2, set, Privs
     ),
 
     {HandleId, U1, U2}.
@@ -697,7 +726,7 @@ create_eff_parent_groups_env(Config) ->
 
     Groups = [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}] = lists:map(
         fun(_) ->
-            GroupDetails = ?GROUP_DETAILS(?UNIQUE_NAME(<<"Group">>)),
+            GroupDetails = ?GROUP_DETAILS(?UNIQUE_STRING),
             {ok, GroupId} = oz_test_utils:create_group(
                 Config, ?ROOT, GroupDetails
             ),
@@ -705,22 +734,22 @@ create_eff_parent_groups_env(Config) ->
         end, lists:seq(1, 5)
     ),
 
-    {ok, G4} = oz_test_utils:add_group_to_group(Config, G5, G4),
-    {ok, G3} = oz_test_utils:add_group_to_group(Config, G4, G3),
-    {ok, G1} = oz_test_utils:add_group_to_group(Config, G3, G1),
-    {ok, G1} = oz_test_utils:add_group_to_group(Config, G2, G1),
+    {ok, G4} = oz_test_utils:group_add_group(Config, G5, G4),
+    {ok, G3} = oz_test_utils:group_add_group(Config, G4, G3),
+    {ok, G1} = oz_test_utils:group_add_group(Config, G3, G1),
+    {ok, G1} = oz_test_utils:group_add_group(Config, G2, G1),
 
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, U1} = oz_test_utils:add_user_to_group(Config, G1, U1),
+    {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, set, [
         ?GROUP_VIEW
     ]),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
+    {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
     oz_test_utils:group_set_user_privileges(Config, G1, U2, set,
-        oz_test_utils:get_group_privileges(Config) -- [?GROUP_VIEW]
+        oz_test_utils:all_group_privileges(Config) -- [?GROUP_VIEW]
     ),
 
     {Groups, {U1, U2, NonAdmin}}.
@@ -744,7 +773,7 @@ create_eff_child_groups_env(Config) ->
 
     Users = [{U1, _}, {U2, _}, {U3, _}, {U4, _}] = lists:map(
         fun(_) ->
-            Alias = Login = Name = ?UNIQUE_NAME(<<"user">>),
+            Alias = Login = Name = ?UNIQUE_STRING,
             UserDetails = #{
                 <<"alias">> => Alias,
                 <<"login">> => Login,
@@ -760,7 +789,7 @@ create_eff_child_groups_env(Config) ->
     Groups = [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}, {G6, _}] =
         lists:map(
             fun(_) ->
-                GroupDetails = ?GROUP_DETAILS(?UNIQUE_NAME(<<"Group">>)),
+                GroupDetails = ?GROUP_DETAILS(?UNIQUE_STRING),
                 {ok, GroupId} = oz_test_utils:create_group(
                     Config, ?ROOT, GroupDetails
                 ),
@@ -770,12 +799,12 @@ create_eff_child_groups_env(Config) ->
 
     lists:foreach(
         fun({ParentGroup, ChildGroup}) ->
-            oz_test_utils:add_group_to_group(Config, ParentGroup, ChildGroup)
+            oz_test_utils:group_add_group(Config, ParentGroup, ChildGroup)
         end, [{G1, G6}, {G1, G2}, {G2, G3}, {G3, G4}, {G3, G5}]
     ),
     lists:foreach(
         fun({Group, User}) ->
-            oz_test_utils:add_user_to_group(Config, Group, User)
+            oz_test_utils:group_add_user(Config, Group, User)
         end, [{G2, U1}, {G6, U4}, {G4, U2}, {G5, U3}]
     ),
 
@@ -818,11 +847,11 @@ create_space_eff_users_env(Config) ->
     oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
         ?SPACE_VIEW
     ]),
-    {ok, U2} = oz_test_utils:add_user_to_space(Config, S1, U2),
+    {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
     oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
         ?SPACE_VIEW
     ]),
-    {ok, G1} = oz_test_utils:add_group_to_space(Config, S1, G1),
+    {ok, G1} = oz_test_utils:space_add_group(Config, S1, G1),
 
     {S1, Groups, Users, {U1, U2, NonAdmin}}.
 
@@ -856,7 +885,7 @@ create_hservice_eff_users_env(Config) ->
     } = api_test_scenarios:create_eff_child_groups_env(Config),
 
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
         ?OZ_HANDLE_SERVICES_CREATE
     ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
@@ -868,11 +897,11 @@ create_hservice_eff_users_env(Config) ->
     oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
         revoke, [?HANDLE_SERVICE_VIEW]
     ),
-    {ok, U2} = oz_test_utils:add_user_to_handle_service(Config, HService, U2),
+    {ok, U2} = oz_test_utils:handle_service_add_user(Config, HService, U2),
     oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
         set, [?HANDLE_SERVICE_VIEW]
     ),
-    {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
+    {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
 
     {HService, Groups, Users, {U1, U2, NonAdmin}}.
 
@@ -907,7 +936,7 @@ create_handle_eff_users_env(Config) ->
 
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
         ?OZ_HANDLE_SERVICES_CREATE
     ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
@@ -927,11 +956,11 @@ create_handle_eff_users_env(Config) ->
     oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, revoke, [
         ?HANDLE_VIEW
     ]),
-    {ok, U2} = oz_test_utils:add_user_to_handle(Config, HandleId, U2),
+    {ok, U2} = oz_test_utils:handle_add_user(Config, HandleId, U2),
     oz_test_utils:handle_set_user_privileges(Config, HandleId, U2, set, [
         ?HANDLE_VIEW
     ]),
-    {ok, G1} = oz_test_utils:add_group_to_handle(Config, HandleId, G1),
+    {ok, G1} = oz_test_utils:handle_add_group(Config, HandleId, G1),
 
     {HandleId, Groups, Users, {U1, U2, NonAdmin}}.
 
@@ -966,8 +995,8 @@ create_eff_spaces_env(Config) ->
 
     Spaces = lists:map(
         fun(GroupId) ->
-            SpaceDetails = #{<<"name">> => ?UNIQUE_NAME(<<"space">>)},
-            {ok, SpaceId} = oz_test_utils:create_space_for_group(
+            SpaceDetails = #{<<"name">> => ?UNIQUE_STRING},
+            {ok, SpaceId} = oz_test_utils:group_create_space(
                 Config, GroupId, SpaceDetails
             ),
             {SpaceId, SpaceDetails#{<<"providersSupports">> => #{}}}
@@ -1012,7 +1041,7 @@ create_eff_providers_env(Config) ->
         fun(_) ->
             {_, CSRFile, _} = oz_test_utils:generate_provider_cert_files(),
             {ok, CSR} = file:read_file(CSRFile),
-            ProviderName = ?UNIQUE_NAME(<<"provider">>),
+            ProviderName = ?UNIQUE_STRING,
             ProvDetails = ?PROVIDER_DETAILS(ProviderName),
             {ok, {ProvId, _}} = oz_test_utils:create_provider(
                 Config, ProvDetails#{<<"csr">> => CSR}
@@ -1067,7 +1096,7 @@ create_eff_handle_services_env(Config) ->
 
     HandleServices = lists:map(
         fun(GroupId) ->
-            Name = ?UNIQUE_NAME(<<"hservice">>),
+            Name = ?UNIQUE_STRING,
             Properties = lists:nth(rand:uniform(2), [
                 ?DOI_SERVICE_PROPERTIES, ?PID_SERVICE_PROPERTIES
             ]),
@@ -1079,7 +1108,7 @@ create_eff_handle_services_env(Config) ->
             {ok, HSid} = oz_test_utils:create_handle_service(
                 Config, ?ROOT, HServiceDetails
             ),
-            {ok, GroupId} = oz_test_utils:add_group_to_handle_service(
+            {ok, GroupId} = oz_test_utils:handle_service_add_group(
                 Config, HSid, GroupId
             ),
             {HSid, HServiceDetails}
@@ -1120,14 +1149,14 @@ create_eff_handles_env(Config) ->
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
     ),
-    {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
+    {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
 
     Handles = lists:map(
         fun(GroupId) ->
-            {ok, SpaceId} = oz_test_utils:create_space_for_group(
+            {ok, SpaceId} = oz_test_utils:group_create_space(
                 Config, GroupId, ?SPACE_NAME1
             ),
-            ShareId = ?UNIQUE_NAME(?SHARE_NAME1),
+            ShareId = ?UNIQUE_STRING,
             {ok, ShareId} = oz_test_utils:create_share(
                 Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, SpaceId
             ),
@@ -1135,7 +1164,7 @@ create_eff_handles_env(Config) ->
             {ok, HandleId} = oz_test_utils:create_handle(
                 Config, ?ROOT, HandleDetails
             ),
-            {ok, GroupId} = oz_test_utils:add_group_to_handle(
+            {ok, GroupId} = oz_test_utils:handle_add_group(
                 Config, HandleId, GroupId
             ),
             {HandleId, HandleDetails}

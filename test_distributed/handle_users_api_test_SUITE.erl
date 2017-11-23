@@ -67,27 +67,28 @@ all() ->
 
 
 add_user_test(Config) ->
-    % create handle with 2 users; give handle_update privilege for one of them
-    % and all but handle_update for the second one
+    % create handle with 2 users:
+    %   U2 gets the HANDLE_UPDATE privilege
+    %   U1 gets all remaining privileges
     {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
         Config, ?HANDLE_UPDATE
     ),
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllPrivs = oz_test_utils:get_handle_privileges(Config),
+    AllPrivs = oz_test_utils:all_handle_privileges(Config),
 
     VerifyEndFun =
         fun
             (true = _ShouldSucceed, _, Data) ->
                 ExpPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
-                {ok, Privs} = oz_test_utils:get_handle_user_privileges(
+                {ok, Privs} = oz_test_utils:handle_get_user_privileges(
                     Config, HandleId, U3
                 ),
                 ?assertEqual(ExpPrivs, lists:sort(Privs)),
-                oz_test_utils:remove_user_from_handle(Config, HandleId, U3);
+                oz_test_utils:handle_remove_user(Config, HandleId, U3);
             (false = ShouldSucceed, _, _) ->
-                {ok, Users} = oz_test_utils:get_handle_users(Config, HandleId),
+                {ok, Users} = oz_test_utils:handle_get_users(Config, HandleId),
                 ?assertEqual(lists:member(U3, Users), ShouldSucceed)
         end,
 
@@ -137,8 +138,9 @@ add_user_test(Config) ->
 
 
 remove_user_test(Config) ->
-    % create handle with 2 users; give handle_update privilege for one of them
-    % and all but handle_update for the second one
+    % create handle with 2 users:
+    %   U2 gets the HANDLE_UPDATE privilege
+    %   U1 gets all remaining privileges
     {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
         Config, ?HANDLE_UPDATE
     ),
@@ -146,11 +148,14 @@ remove_user_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-        {ok, U3} = oz_test_utils:add_user_to_handle(Config, HandleId, U3),
+        {ok, U3} = oz_test_utils:handle_add_user(Config, HandleId, U3),
         #{userId => U3}
     end,
+    DeleteEntityFun = fun(#{userId := User} = _Env) ->
+        oz_test_utils:handle_remove_user(Config, HandleId, User)
+    end,
     VerifyEndFun = fun(ShouldSucceed, #{userId := User} = _Env, _) ->
-        {ok, Users} = oz_test_utils:get_handle_users(Config, HandleId),
+        {ok, Users} = oz_test_utils:handle_get_users(Config, HandleId),
         ?assertEqual(lists:member(User, Users), not ShouldSucceed)
     end,
 
@@ -180,19 +185,20 @@ remove_user_test(Config) ->
         % TODO gs
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun]
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
 
 
 list_users_test(Config) ->
-    % create handle with 2 users; give handle_view privilege for one of them
-    % and all but handle_view for the second one
+    % create handle with 2 users:
+    %   U2 gets the HANDLE_VIEW privilege
+    %   U1 gets all remaining privileges
     {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
         Config, ?HANDLE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U3} = oz_test_utils:add_user_to_handle(Config, HandleId, U3),
+    {ok, U3} = oz_test_utils:handle_add_user(Config, HandleId, U3),
 
     ExpUsers = [U1, U2, U3],
     ApiTestSpec = #api_test_spec{
@@ -226,8 +232,9 @@ list_users_test(Config) ->
 
 
 get_user_test(Config) ->
-    % create handle with 2 users; give handle_view privilege for one of them
-    % and all but handle_view for the second one
+    % create handle with 2 users:
+    %   U2 gets the HANDLE_VIEW privilege
+    %   U1 gets all remaining privileges
     {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
         Config, ?HANDLE_VIEW
     ),
@@ -237,10 +244,9 @@ get_user_test(Config) ->
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{
         name = ExpName,
         login = ExpLogin,
-        alias = ExpAlias,
-        email_list = [<<"john.doe@uruk.com">>]
+        alias = ExpAlias
     }),
-    {ok, U3} = oz_test_utils:add_user_to_handle(Config, HandleId, U3),
+    {ok, U3} = oz_test_utils:handle_add_user(Config, HandleId, U3),
 
     ExpUserDetails = #{
         <<"alias">> => ExpAlias,
@@ -294,8 +300,9 @@ get_user_test(Config) ->
 
 
 get_user_privileges_test(Config) ->
-    % create handle with 2 users; give handle_view privilege for one of them
-    % and all but handle_view for the second one
+    % create handle with 2 users:
+    %   U2 gets the HANDLE_VIEW privilege
+    %   U1 gets all remaining privileges
     {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
         Config, ?HANDLE_VIEW
     ),
@@ -305,9 +312,9 @@ get_user_privileges_test(Config) ->
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:add_user_to_handle(Config, HandleId, U3),
+    {ok, U3} = oz_test_utils:handle_add_user(Config, HandleId, U3),
 
-    AllPrivs = oz_test_utils:get_handle_privileges(Config),
+    AllPrivs = oz_test_utils:all_handle_privileges(Config),
     InitialPrivs = [?HANDLE_VIEW],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
     SetPrivsFun = fun(Operation, Privs) ->
@@ -352,8 +359,9 @@ get_user_privileges_test(Config) ->
 
 
 update_user_privileges_test(Config) ->
-    % create handle with 2 users; give handle_update privilege for one of them
-    % and all but handle_update for the second one
+    % create handle with 2 users:
+    %   U2 gets the HANDLE_UPDATE privilege
+    %   U1 gets all remaining privileges
     {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
         Config, ?HANDLE_UPDATE
     ),
@@ -363,16 +371,16 @@ update_user_privileges_test(Config) ->
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:add_user_to_handle(Config, HandleId, U3),
+    {ok, U3} = oz_test_utils:handle_add_user(Config, HandleId, U3),
 
-    AllPrivs = oz_test_utils:get_handle_privileges(Config),
+    AllPrivs = oz_test_utils:all_handle_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:handle_set_user_privileges(
             Config, HandleId, U3, Operation, Privs
         )
     end,
     GetPrivsFun = fun() ->
-        {ok, Privs} = oz_test_utils:get_handle_user_privileges(
+        {ok, Privs} = oz_test_utils:handle_get_user_privileges(
             Config, HandleId, U3
         ),
         Privs
@@ -542,8 +550,9 @@ get_eff_user_privileges_test(Config) ->
     %%      <<user>>
     %%      NonAdmin
 
-    % create handle with 2 users; give handle_view privilege for one of them
-    % and all but handle_view for the second one
+    % create handle with 2 users:
+    %   U2 gets the HANDLE_VIEW privilege
+    %   U1 gets all remaining privileges
     {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
         Config, ?HANDLE_VIEW
     ),
@@ -558,13 +567,13 @@ get_eff_user_privileges_test(Config) ->
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G3} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
 
-    {ok, G1} = oz_test_utils:add_group_to_handle(Config, HandleId, G1),
-    {ok, G2} = oz_test_utils:add_group_to_handle(Config, HandleId, G2),
-    {ok, G3} = oz_test_utils:add_group_to_group(Config, G1, G3),
-    {ok, U3} = oz_test_utils:add_user_to_group(Config, G3, U3),
-    {ok, U3} = oz_test_utils:add_user_to_group(Config, G2, U3),
+    {ok, G1} = oz_test_utils:handle_add_group(Config, HandleId, G1),
+    {ok, G2} = oz_test_utils:handle_add_group(Config, HandleId, G2),
+    {ok, G3} = oz_test_utils:group_add_group(Config, G1, G3),
+    {ok, U3} = oz_test_utils:group_add_user(Config, G3, U3),
+    {ok, U3} = oz_test_utils:group_add_user(Config, G2, U3),
 
-    AllPrivs = oz_test_utils:get_handle_privileges(Config),
+    AllPrivs = oz_test_utils:all_handle_privileges(Config),
     InitialPrivs = [?HANDLE_VIEW],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 

@@ -180,8 +180,8 @@ merge_groups_in_linked_accounts_test(Config) ->
         Config, user_logic, create_user_by_linked_account, [FirstLinkedAcc]
     ),
     ?assert(has_linked_accounts(Config, UserId, [FirstLinkedAcc])),
-    ?assertEqual({ok, []}, oz_test_utils:get_user_groups(Config, UserId)),
-    ?assertEqual({ok, []}, oz_test_utils:get_user_eff_groups(Config, UserId)),
+    ?assertEqual({ok, []}, oz_test_utils:user_get_groups(Config, UserId)),
+    ?assertEqual({ok, []}, oz_test_utils:user_get_eff_groups(Config, UserId)),
 
     % Try linked acc with a group
     SecondLinkedAcc = #linked_account{provider_id = ?IDP, groups = [
@@ -206,8 +206,8 @@ merge_groups_in_linked_accounts_test(Config) ->
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, FirstLinkedAcc]
     ),
-    ?assertEqual({ok, []}, oz_test_utils:get_user_groups(Config, UserId)),
-    ?assertEqual({ok, []}, oz_test_utils:get_user_eff_groups(Config, UserId)),
+    ?assertEqual({ok, []}, oz_test_utils:user_get_groups(Config, UserId)),
+    ?assertEqual({ok, []}, oz_test_utils:user_get_eff_groups(Config, UserId)),
 
     % Linked acc with two groups
     ThirdLinkedAcc = #linked_account{provider_id = ?IDP, groups = [
@@ -512,9 +512,9 @@ has_group(Config, UserId, GroupSpec, Name, Type, Privileges, DirectOrEff) ->
         ),
         {ok, UserGroups} = case DirectOrEff of
             direct ->
-                oz_test_utils:get_user_groups(Config, UserId);
+                oz_test_utils:user_get_groups(Config, UserId);
             effective ->
-                oz_test_utils:get_user_eff_groups(Config, UserId)
+                oz_test_utils:user_get_eff_groups(Config, UserId)
         end,
         BelongsToGroup = lists:member(GroupId, UserGroups),
         {ok, #od_group{
@@ -527,11 +527,11 @@ has_group(Config, UserId, GroupSpec, Name, Type, Privileges, DirectOrEff) ->
             true ->
                 {ok, UserPrivileges} = case DirectOrEff of
                     direct ->
-                        oz_test_utils:get_group_user_privileges(
+                        oz_test_utils:group_get_user_privileges(
                             Config, GroupId, UserId
                         );
                     effective ->
-                        oz_test_utils:get_group_eff_user_privileges(
+                        oz_test_utils:group_get_eff_user_privileges(
                             Config, GroupId, UserId
                         )
                 end,

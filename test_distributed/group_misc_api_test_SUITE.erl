@@ -9,7 +9,7 @@
 %%% This file contains tests concerning groups basic API (REST + logic + gs).
 %%% @end
 %%%-------------------------------------------------------------------
--module(group_basic_api_test_SUITE).
+-module(group_misc_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
 -include("rest.hrl").
@@ -39,7 +39,10 @@
     get_oz_privileges_test/1,
     update_oz_privileges_test/1,
     delete_oz_privileges_test/1,
-    get_eff_oz_privileges_test/1
+    get_eff_oz_privileges_test/1,
+
+    list_eff_providers_test/1,
+    get_eff_provider_details_test/1
 ]).
 
 all() ->
@@ -52,7 +55,10 @@ all() ->
         get_oz_privileges_test,
         update_oz_privileges_test,
         delete_oz_privileges_test,
-        get_eff_oz_privileges_test
+        get_eff_oz_privileges_test,
+
+        list_eff_providers_test,
+        get_eff_provider_details_test
     ]).
 
 
@@ -63,6 +69,7 @@ all() ->
 
 create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
     VerifyFun = fun(GroupId, ExpType) ->
         {ok, Group} = oz_test_utils:get_group(Config, GroupId),
@@ -75,7 +82,8 @@ create_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {user, U2}
             ],
             unauthorized = [nobody]
         },
@@ -100,6 +108,33 @@ create_test(Config) ->
                 ?OK_TERM(fun(GroupId) -> VerifyFun(GroupId, ExpType) end)
             end)
         },
+        data_spec = #data_spec{
+            required = [<<"name">>],
+            optional = [<<"type">>],
+            correct_values = #{
+                <<"name">> => [?GROUP_NAME1],
+                <<"type">> => ?GROUP_TYPES
+            },
+            bad_values = [
+                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
+                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
+                {<<"type">>, kingdom,
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
+                {<<"type">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"type">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % Check that regular client can't make request on behalf of other client
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [{user, U1}],
+            unauthorized = [nobody],
+            forbidden = [{user, U2}]
+        },
+        rest_spec = undefined,
+        logic_spec = undefined,
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_group, aspect = instance},
@@ -117,24 +152,9 @@ create_test(Config) ->
                     end
                 })
             end)
-        },
-        data_spec = #data_spec{
-            required = [<<"name">>],
-            optional = [<<"type">>],
-            correct_values = #{
-                <<"name">> => [?GROUP_NAME1],
-                <<"type">> => ?GROUP_TYPES
-            },
-            bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
-                {<<"type">>, kingdom,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
-                {<<"type">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"type">>)}
-            ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 list_test(Config) ->
@@ -144,7 +164,7 @@ list_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_GROUPS_LIST
     ]),
 
@@ -201,7 +221,7 @@ get_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_GROUPS_LIST
     ]),
 
@@ -211,12 +231,12 @@ get_test(Config) ->
     oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
         ?GROUP_VIEW
     ]),
-    oz_test_utils:add_user_to_group(Config, G1, U2),
+    oz_test_utils:group_add_user(Config, G1, U2),
     oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
         ?GROUP_VIEW
     ]),
 
-    AllPrivs = oz_test_utils:get_group_privileges(Config),
+    AllPrivs = oz_test_utils:all_group_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     % Get and check private data
@@ -366,7 +386,7 @@ update_test(Config) ->
         oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
             ?GROUP_UPDATE
         ]),
-        oz_test_utils:add_user_to_group(Config, G1, U2),
+        oz_test_utils:group_add_user(Config, G1, U2),
         oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
             ?GROUP_UPDATE
         ]),
@@ -415,7 +435,7 @@ update_test(Config) ->
         data_spec = #data_spec{
             at_least_one = [<<"name">>, <<"type">>],
             correct_values = #{
-                <<"name">> => [fun() -> ?UNIQUE_NAME(<<"group">>) end],
+                <<"name">> => [fun() -> ?UNIQUE_STRING end],
                 <<"type">> => [?GROUP_TYPE2]
             },
             bad_values = [
@@ -441,11 +461,14 @@ delete_test(Config) ->
         oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
             ?GROUP_DELETE
         ]),
-        oz_test_utils:add_user_to_group(Config, G1, U2),
+        oz_test_utils:group_add_user(Config, G1, U2),
         oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
             ?GROUP_DELETE
         ]),
         #{groupId => G1}
+    end,
+    DeleteEntityFun = fun(#{groupId := GroupId} = _Env) ->
+        oz_test_utils:delete_group(Config, GroupId)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, _) ->
         {ok, Groups} = oz_test_utils:list_groups(Config),
@@ -481,7 +504,7 @@ delete_test(Config) ->
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun]
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
 
 
@@ -494,14 +517,14 @@ get_oz_privileges_test(Config) ->
 
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_VIEW_PRIVILEGES
     ]),
 
     InitialPrivs = [],
-    AllPrivs = oz_test_utils:get_oz_privileges(Config),
+    AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:set_group_oz_privileges(Config, G1, Operation, Privs)
+        oz_test_utils:group_set_oz_privileges(Config, G1, Operation, Privs)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -539,7 +562,7 @@ get_oz_privileges_test(Config) ->
 update_oz_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_SET_PRIVILEGES
     ]),
 
@@ -549,12 +572,12 @@ update_oz_privileges_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
 
-    AllPrivs = oz_test_utils:get_oz_privileges(Config),
+    AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:set_group_oz_privileges(Config, G1, Operation, Privs)
+        oz_test_utils:group_set_oz_privileges(Config, G1, Operation, Privs)
     end,
     GetPrivsFun = fun() ->
-        {ok, Privs} = oz_test_utils:get_group_oz_privileges(Config, G1),
+        {ok, Privs} = oz_test_utils:group_get_oz_privileges(Config, G1),
         Privs
     end,
 
@@ -592,18 +615,18 @@ update_oz_privileges_test(Config) ->
 delete_oz_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_SET_PRIVILEGES
     ]),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
 
-    AllPrivs = oz_test_utils:get_oz_privileges(Config),
+    AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:set_group_oz_privileges(Config, G1, Operation, Privs)
+        oz_test_utils:group_set_oz_privileges(Config, G1, Operation, Privs)
     end,
     GetPrivsFun = fun() ->
-        {ok, Privs} = oz_test_utils:get_group_oz_privileges(Config, G1),
+        {ok, Privs} = oz_test_utils:group_get_oz_privileges(Config, G1),
         Privs
     end,
 
@@ -646,14 +669,14 @@ get_eff_oz_privileges_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_VIEW_PRIVILEGES
     ]),
 
     {Bottom, Mid, Top} = oz_test_utils:create_3_nested_groups(Config, U1),
 
     InitialPrivs = [],
-    AllPrivs = oz_test_utils:get_oz_privileges(Config),
+    AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         % In case of SET and GRANT, randomly split privileges into four
         % parts and update groups with the privileges. G3 eff_privileges
@@ -675,7 +698,7 @@ get_eff_oz_privileges_test(Config) ->
             end,
         lists:foreach(
             fun({GroupId, Privileges}) ->
-                oz_test_utils:set_group_oz_privileges(
+                oz_test_utils:group_set_oz_privileges(
                     Config, GroupId, Operation, Privileges
                 )
             end, PartitionScheme
@@ -712,6 +735,110 @@ get_eff_oz_privileges_test(Config) ->
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
         {user, U1}, ?OZ_VIEW_PRIVILEGES
     ])).
+
+
+list_eff_providers_test(Config) ->
+    {
+        [{P1, _}, {P2, _}, {P3, _}, {P4, _}],
+        _Spaces, [{G1, _} | _Groups], {U1, U2, NonAdmin}
+    } = api_test_scenarios:create_eff_providers_env(Config),
+
+    ExpProviders = [P1, P2, P3, P4],
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U1}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U2},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/groups/">>, G1, <<"/effective_providers">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"providers">> => ExpProviders}
+        },
+        logic_spec = #logic_spec{
+            module = group_logic,
+            function = get_eff_providers,
+            args = [client, G1],
+            expected_result = ?OK_LIST(ExpProviders)
+        }
+        % TODO gs
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % check also group_logic:has_eff_provider function
+    lists:foreach(
+        fun(ProviderId) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, group_logic, has_eff_provider, [G1, ProviderId])
+            )
+        end, ExpProviders
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, group_logic, has_eff_provider, [G1, <<"asdiucyaie827346w">>])
+    ).
+
+
+get_eff_provider_details_test(Config) ->
+    {
+        EffProvidersList, _Spaces, [{G1, _} | _Groups], {U1, U2, NonAdmin}
+    } = api_test_scenarios:create_eff_providers_env(Config),
+
+    lists:foreach(
+        fun({ProvId, ProvDetails}) ->
+            ApiTestSpec = #api_test_spec{
+                client_spec = #client_spec{
+                    correct = [
+                        root,
+                        {user, U2},
+                        {user, U1}
+                    ],
+                    unauthorized = [nobody],
+                    forbidden = [
+                        {user, NonAdmin}
+                    ]
+                },
+                rest_spec = #rest_spec{
+                    method = get,
+                    path = [
+                        <<"/groups/">>, G1, <<"/effective_providers/">>, ProvId
+                    ],
+                    expected_code = ?HTTP_200_OK,
+                    expected_body = ProvDetails#{<<"providerId">> => ProvId}
+                },
+                logic_spec = #logic_spec{
+                    module = group_logic,
+                    function = get_eff_provider,
+                    args = [client, G1, ProvId],
+                    expected_result = ?OK_MAP(ProvDetails)
+                },
+                gs_spec = #gs_spec{
+                    operation = get,
+                    gri = #gri{
+                        type = od_provider, id = ProvId,
+                        aspect = instance, scope = protected
+                    },
+                    auth_hint = ?THROUGH_GROUP(G1),
+                    expected_result = ?OK_MAP(ProvDetails#{
+                        <<"gri">> => fun(EncodedGri) ->
+                            #gri{id = Id} = oz_test_utils:decode_gri(
+                                Config, EncodedGri
+                            ),
+                            ?assertEqual(Id, ProvId)
+                        end
+                    })
+                }
+            },
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+
+        end, EffProvidersList
+    ).
 
 
 %%%===================================================================

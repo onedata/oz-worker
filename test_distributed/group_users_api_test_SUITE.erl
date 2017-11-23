@@ -64,19 +64,20 @@ all() ->
 
 
 list_users_test(Config) ->
-    % create group with 2 users; give group_view privilege
-    % for one of them and all but that for the second one
+    % create group with 2 users:
+    %   U2 gets the GROUP_VIEW privilege
+    %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_GROUPS_LIST_USERS
     ]),
 
-    {ok, U3} = oz_test_utils:add_user_to_group(Config, G1, U3),
+    {ok, U3} = oz_test_utils:group_add_user(Config, G1, U3),
     ExpUsers = [U1, U2, U3],
 
     ApiTestSpec = #api_test_spec{
@@ -111,40 +112,15 @@ list_users_test(Config) ->
 
 
 create_user_invite_token_test(Config) ->
-    % create group with 2 users; give group_invite_user privilege
-    % for one of them and all but that for the second one
+    % create group with 2 users:
+    %   U2 gets the GROUP_INVITE_USER privilege
+    %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_INVITE_USER
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    % We will keep all tokens generated until now in a process, we will query
-    GeneratedTokens = fun Loop(Tokens) ->
-        receive
-            {Pid, Token} ->
-                case lists:member(Token, Tokens) of
-                    false ->
-                        Pid ! true,
-                        Loop([Token | Tokens]);
-                    true ->
-                        Pid ! false,
-                        Loop(Tokens)
-                end
-        end
-    end,
-    TokensProc = spawn_link(fun() -> GeneratedTokens([]) end),
-
-    VerifyFun = fun(Token) ->
-        TokensProc ! {self(), Token},
-        IsTokenUnique =
-            receive
-                Response -> Response
-            after 1000 ->
-                false
-            end,
-        ?assert(IsTokenUnique),
-        true
-    end,
+    VerifyFun = api_test_scenarios:collect_unique_tokens_fun(),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -179,26 +155,25 @@ create_user_invite_token_test(Config) ->
 
 
 get_user_details_test(Config) ->
-    % create group with 2 users; give group_view privilege
-    % for one of them and all but that for the second one
+    % create group with 2 users:
+    %   U2 gets the GROUP_VIEW privilege
+    %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_GROUPS_LIST_USERS
     ]),
 
     ExpAlias = ExpLogin = ExpName = <<"user1">>,
-    ExpEmails = [<<"john.doe@uruk.com">>],
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{
         name = ExpName,
         login = ExpLogin,
-        alias = ExpAlias,
-        email_list = ExpEmails
+        alias = ExpAlias
     }),
-    {ok, U3} = oz_test_utils:add_user_to_group(Config, G1, U3),
+    {ok, U3} = oz_test_utils:group_add_user(Config, G1, U3),
     oz_test_utils:group_set_user_privileges(Config, G1, U3, set, []),
 
     ExpDetails = #{
@@ -258,7 +233,7 @@ add_user_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_GROUPS_ADD_MEMBERS
     ]),
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
@@ -267,13 +242,13 @@ add_user_test(Config) ->
         fun
             (true = _ShouldSucceed, _, Data) ->
                 ExpPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
-                {ok, Privs} = oz_test_utils:get_group_user_privileges(
+                {ok, Privs} = oz_test_utils:group_get_user_privileges(
                     Config, G1, U2
                 ),
                 ?assertEqual(ExpPrivs, lists:sort(Privs)),
                 oz_test_utils:group_remove_user(Config, G1, U2);
             (false = ShouldSucceed, _, _) ->
-                {ok, Users} = oz_test_utils:get_group_users(Config, G1),
+                {ok, Users} = oz_test_utils:group_get_users(Config, G1),
                 ?assertEqual(lists:member(U2, Users), ShouldSucceed)
         end,
 
@@ -322,24 +297,28 @@ add_user_test(Config) ->
 
 
 remove_user_test(Config) ->
-    % create group with 2 users; give group_remove_user privilege
-    % for one of them and all but that for the second one
+    % create group with 2 users:
+    %   U2 gets the GROUP_REMOVE_USER privilege
+    %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_REMOVE_USER
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_GROUPS_REMOVE_MEMBERS
     ]),
 
     EnvSetUpFun = fun() ->
         {ok, U4} = oz_test_utils:create_user(Config, #od_user{}),
-        {ok, U4} = oz_test_utils:add_user_to_group(Config, G1, U4),
+        {ok, U4} = oz_test_utils:group_add_user(Config, G1, U4),
         #{userId => U4}
     end,
+    DeleteEntityFun = fun(#{userId := User} = _Env) ->
+        oz_test_utils:group_remove_user(Config, G1, User)
+    end,
     VerifyEndFun = fun(ShouldSucceed, #{userId := User} = _Env, _) ->
-            {ok, Users} = oz_test_utils:get_group_users(Config, G1),
+            {ok, Users} = oz_test_utils:group_get_users(Config, G1),
             ?assertEqual(lists:member(User, Users), not ShouldSucceed)
     end,
 
@@ -370,13 +349,14 @@ remove_user_test(Config) ->
         % TODO gs
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun]
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
 
 
 list_user_privileges_test(Config) ->
-    % create group with 2 users; give group_view privilege
-    % for one of them and all but that for the second one
+    % create group with 2 users:
+    %   U2 gets the GROUP_VIEW privilege
+    %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
@@ -386,9 +366,9 @@ list_user_privileges_test(Config) ->
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U3} = oz_test_utils:add_user_to_group(Config, G1, U3),
+    {ok, U3} = oz_test_utils:group_add_user(Config, G1, U3),
 
-    AllPrivs = oz_test_utils:get_group_privileges(Config),
+    AllPrivs = oz_test_utils:all_group_privileges(Config),
     InitialPrivs = [?GROUP_VIEW],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
@@ -432,8 +412,9 @@ list_user_privileges_test(Config) ->
 
 
 update_user_privileges_test(Config) ->
-    % create group with 2 users; give group_set_privileges privilege
-    % for one of them and all but that for the second one
+    % create group with 2 users:
+    %   U2 gets the GROUP_SET_PRIVILEGES privilege
+    %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_SET_PRIVILEGES
     ),
@@ -443,16 +424,16 @@ update_user_privileges_test(Config) ->
     % should not be listed in client spec (he will sometimes has privilege
     % to update user privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U3} = oz_test_utils:add_user_to_group(Config, G1, U3),
+    {ok, U3} = oz_test_utils:group_add_user(Config, G1, U3),
 
-    AllPrivs = oz_test_utils:get_group_privileges(Config),
+    AllPrivs = oz_test_utils:all_group_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:group_set_user_privileges(
             Config, G1, U3, Operation, Privs
         )
     end,
     GetPrivsFun = fun() ->
-        {ok, Privs} = oz_test_utils:get_group_user_privileges(Config, G1, U3),
+        {ok, Privs} = oz_test_utils:group_get_user_privileges(Config, G1, U3),
         Privs
     end,
 
@@ -497,11 +478,11 @@ list_eff_users_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, U1} = oz_test_utils:add_user_to_group(Config, G1, U1),
+    {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, set,
-        oz_test_utils:get_group_privileges(Config) -- [?GROUP_VIEW]
+        oz_test_utils:all_group_privileges(Config) -- [?GROUP_VIEW]
     ),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
+    {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
     oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
         ?GROUP_VIEW
     ]),
@@ -557,11 +538,11 @@ get_eff_user_details_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, U1} = oz_test_utils:add_user_to_group(Config, G1, U1),
+    {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, set,
-        oz_test_utils:get_group_privileges(Config) -- [?GROUP_VIEW]
+        oz_test_utils:all_group_privileges(Config) -- [?GROUP_VIEW]
     ),
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
+    {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
     oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
         ?GROUP_VIEW
     ]),
@@ -640,7 +621,7 @@ list_eff_user_privileges_test(Config) ->
     %%      <<user>>
     %%      NonAdmin
 
-    AllPrivs = oz_test_utils:get_group_privileges(Config),
+    AllPrivs = oz_test_utils:all_group_privileges(Config),
     InitialPrivs = [?GROUP_VIEW],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
@@ -654,19 +635,19 @@ list_eff_user_privileges_test(Config) ->
 
     {_G3, G2, G1} = oz_test_utils:create_3_nested_groups(Config, U1),
     {ok, G4} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
-    {ok, G4} = oz_test_utils:add_group_to_group(Config, G1, G4),
+    {ok, G4} = oz_test_utils:group_add_group(Config, G1, G4),
 
-    {ok, U1} = oz_test_utils:add_user_to_group(Config, G1, U1),
-    {ok, U1} = oz_test_utils:add_user_to_group(Config, G4, U1),
+    {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
+    {ok, U1} = oz_test_utils:group_add_user(Config, G4, U1),
     oz_test_utils:group_set_user_privileges(Config, G4, U1, set,
         AllPrivs -- [?GROUP_VIEW]
     ),
 
-    {ok, U2} = oz_test_utils:add_user_to_group(Config, G1, U2),
+    {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
     oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
         ?GROUP_VIEW
     ]),
-    {ok, U3} = oz_test_utils:add_user_to_group(Config, G1, U3),
+    {ok, U3} = oz_test_utils:group_add_user(Config, G1, U3),
     oz_test_utils:group_set_user_privileges(Config, G1, U3, revoke, [
         ?GROUP_VIEW
     ]),

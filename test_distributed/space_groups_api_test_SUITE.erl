@@ -71,7 +71,7 @@ add_group_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_SPACES_ADD_MEMBERS
     ]),
 
@@ -82,13 +82,13 @@ add_group_test(Config) ->
         fun
             (true = _ShouldSucceed, _, Data) ->
                 ExpPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
-                {ok, Privs} = oz_test_utils:get_space_group_privileges(
+                {ok, Privs} = oz_test_utils:space_get_group_privileges(
                     Config, S1, G1
                 ),
                 ?assertEqual(ExpPrivs, lists:sort(Privs)),
                 oz_test_utils:space_remove_group(Config, S1, G1);
             (false = ShouldSucceed, _, _) ->
-                {ok, Groups} = oz_test_utils:get_space_groups(Config, S1),
+                {ok, Groups} = oz_test_utils:space_get_groups(Config, S1),
                 ?assertEqual(lists:member(G1, Groups), ShouldSucceed)
         end,
 
@@ -137,40 +137,15 @@ add_group_test(Config) ->
 
 
 create_group_invite_token_test(Config) ->
-    % create space with 2 users; give space_invite_group privilege
-    % for one of them and all but that for the second one
+    % create space with 2 users:
+    %   U2 gets the SPACE_INVITE_GROUP privilege
+    %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_INVITE_GROUP
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    % We will keep all tokens generated until now in a process, we will query
-    GeneratedTokens = fun Loop(Tokens) ->
-        receive
-            {Pid, Token} ->
-                case lists:member(Token, Tokens) of
-                    false ->
-                        Pid ! true,
-                        Loop([Token | Tokens]);
-                    true ->
-                        Pid ! false,
-                        Loop(Tokens)
-                end
-        end
-    end,
-    TokensProc = spawn_link(fun() -> GeneratedTokens([]) end),
-
-    VerifyFun = fun(Token) ->
-        TokensProc ! {self(), Token},
-        IsTokenUnique =
-            receive
-                Response -> Response
-            after 1000 ->
-                false
-            end,
-        ?assert(IsTokenUnique),
-        true
-    end,
+    VerifyFun = api_test_scenarios:collect_unique_tokens_fun(),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -202,24 +177,28 @@ create_group_invite_token_test(Config) ->
 
 
 remove_group_test(Config) ->
-    % create space with 2 users; give space_remove_group privilege
-    % for one of them and all but that for the second one
+    % create space with 2 users:
+    %   U2 gets the SPACE_REMOVE_GROUP privilege
+    %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_REMOVE_GROUP
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_SPACES_REMOVE_MEMBERS
     ]),
 
     EnvSetUpFun = fun() ->
         {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
-        {ok, G1} = oz_test_utils:add_group_to_space(Config, S1, G1),
+        {ok, G1} = oz_test_utils:space_add_group(Config, S1, G1),
         #{groupId => G1}
     end,
+    DeleteEntityFun = fun(#{groupId := GroupId} = _Env) ->
+        oz_test_utils:space_remove_group(Config, S1, GroupId)
+    end,
     VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, _) ->
-        {ok, Groups} = oz_test_utils:get_space_groups(Config, S1),
+        {ok, Groups} = oz_test_utils:space_get_groups(Config, S1),
         ?assertEqual(lists:member(GroupId, Groups), not ShouldSucceed)
     end,
 
@@ -251,19 +230,20 @@ remove_group_test(Config) ->
     },
 
     ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun]
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
 
 
 list_groups_test(Config) ->
-    % create space with 2 users; give space_view privilege
-    % for one of them and all but that for the second one
+    % create space with 2 users:
+    %   U2 gets the SPACE_VIEW privilege
+    %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, set, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [
         ?OZ_SPACES_LIST_GROUPS
     ]),
 
@@ -272,7 +252,7 @@ list_groups_test(Config) ->
             {ok, GroupId} = oz_test_utils:create_group(
                 Config, ?ROOT, ?GROUP_NAME1
             ),
-            oz_test_utils:add_group_to_space(Config, S1, GroupId),
+            oz_test_utils:space_add_group(Config, S1, GroupId),
             GroupId
         end, lists:seq(1, 5)
     ),
@@ -308,14 +288,15 @@ list_groups_test(Config) ->
 
 
 get_group_test(Config) ->
-    % create space with 2 users; give space_view privilege
-    % for one of them and all but that for the second one
+    % create space with 2 users:
+    %   U2 gets the SPACE_VIEW privilege
+    %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, set, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [
         ?OZ_SPACES_LIST_GROUPS
     ]),
 
@@ -323,7 +304,7 @@ get_group_test(Config) ->
         Config, ?ROOT,
         #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
     ),
-    oz_test_utils:add_group_to_space(Config, S1, G1),
+    oz_test_utils:space_add_group(Config, S1, G1),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -379,8 +360,9 @@ get_group_test(Config) ->
 
 
 get_group_privileges_test(Config) ->
-    % create space with 2 users; give space_view privilege
-    % for one of them and all but that for the second one
+    % create space with 2 users:
+    %   U2 gets the SPACE_VIEW privilege
+    %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW
     ),
@@ -391,9 +373,9 @@ get_group_privileges_test(Config) ->
     % to get group privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME1),
-    {ok, G1} = oz_test_utils:add_group_to_space(Config, S1, G1),
+    {ok, G1} = oz_test_utils:space_add_group(Config, S1, G1),
 
-    AllPrivs = oz_test_utils:get_space_privileges(Config),
+    AllPrivs = oz_test_utils:all_space_privileges(Config),
     InitialPrivs = [?SPACE_VIEW, ?SPACE_WRITE_DATA],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
     SetPrivsFun = fun(Operation, Privs) ->
@@ -437,8 +419,9 @@ get_group_privileges_test(Config) ->
 
 
 update_group_privileges_test(Config) ->
-    % create space with 2 users; give space_set_privileges privilege
-    % for one of them and all but that for the second one
+    % create space with 2 users:
+    %   U2 gets the SPACE_SET_PRIVILEGES privilege
+    %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_SET_PRIVILEGES
     ),
@@ -449,16 +432,16 @@ update_group_privileges_test(Config) ->
     % to update group privileges and sometimes not)
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME1),
-    {ok, G1} = oz_test_utils:add_group_to_space(Config, S1, G1),
+    {ok, G1} = oz_test_utils:space_add_group(Config, S1, G1),
 
-    AllPrivs = oz_test_utils:get_space_privileges(Config),
+    AllPrivs = oz_test_utils:all_space_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:space_set_group_privileges(
             Config, S1, G1, Operation, Privs
         )
     end,
     GetPrivsFun = fun() ->
-        {ok, Privs} = oz_test_utils:get_space_group_privileges(Config, S1, G1),
+        {ok, Privs} = oz_test_utils:space_get_group_privileges(Config, S1, G1),
         Privs
     end,
 
@@ -630,8 +613,9 @@ get_eff_group_privileges_test(Config) ->
     %%      <<user>>
     %%      NonAdmin
 
-    % create space with 2 users; give space_view privilege
-    % for one of them and all but that for the second one
+    % create space with 2 users:
+    %   U2 gets the SPACE_VIEW privilege
+    %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW
     ),
@@ -647,14 +631,14 @@ get_eff_group_privileges_test(Config) ->
     {ok, G3} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G4} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
 
-    {ok, G1} = oz_test_utils:add_group_to_space(Config, S1, G1),
-    {ok, G2} = oz_test_utils:add_group_to_space(Config, S1, G2),
-    {ok, G3} = oz_test_utils:add_group_to_group(Config, G1, G3),
-    {ok, G4} = oz_test_utils:add_group_to_group(Config, G2, G4),
-    {ok, G4} = oz_test_utils:add_group_to_group(Config, G3, G4),
-    {ok, U3} = oz_test_utils:add_user_to_group(Config, G4, U3),
+    {ok, G1} = oz_test_utils:space_add_group(Config, S1, G1),
+    {ok, G2} = oz_test_utils:space_add_group(Config, S1, G2),
+    {ok, G3} = oz_test_utils:group_add_group(Config, G1, G3),
+    {ok, G4} = oz_test_utils:group_add_group(Config, G2, G4),
+    {ok, G4} = oz_test_utils:group_add_group(Config, G3, G4),
+    {ok, U3} = oz_test_utils:group_add_user(Config, G4, U3),
 
-    AllPrivs = oz_test_utils:get_space_privileges(Config),
+    AllPrivs = oz_test_utils:all_space_privileges(Config),
     InitialPrivs = [?SPACE_VIEW, ?SPACE_WRITE_DATA],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 

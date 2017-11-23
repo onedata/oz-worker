@@ -63,14 +63,14 @@ get_oz_privileges_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_VIEW_PRIVILEGES
     ]),
 
     InitialPrivs = [],
-    AllPrivs = oz_test_utils:get_oz_privileges(Config),
+    AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:set_user_oz_privileges(Config, User, Operation, Privs)
+        oz_test_utils:user_set_oz_privileges(Config, User, Operation, Privs)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -108,9 +108,9 @@ get_oz_privileges_test(Config) ->
 get_self_oz_privileges_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllPrivs = oz_test_utils:get_oz_privileges(Config),
+    AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:set_user_oz_privileges(Config, User, Operation, Privs)
+        oz_test_utils:user_set_oz_privileges(Config, User, Operation, Privs)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -122,9 +122,7 @@ get_self_oz_privileges_test(Config) ->
             path = [<<"/user/privileges">>],
             expected_code = ?HTTP_403_FORBIDDEN
         }
-        % TODO gs
     },
-
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
         {user, User}, ?OZ_VIEW_PRIVILEGES
@@ -135,16 +133,16 @@ update_oz_privileges_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_SET_PRIVILEGES
     ]),
 
-    AllPrivs = oz_test_utils:get_oz_privileges(Config),
+    AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:set_user_oz_privileges(Config, User, Operation, Privs)
+        oz_test_utils:user_set_oz_privileges(Config, User, Operation, Privs)
     end,
     GetPrivsFun = fun() ->
-        {ok, Privs} = oz_test_utils:get_user_oz_privileges(Config, User),
+        {ok, Privs} = oz_test_utils:user_get_oz_privileges(Config, User),
         Privs
     end,
 
@@ -184,12 +182,12 @@ update_self_oz_privileges_test(Config) ->
     % so he will be able to change his privileges
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllPrivs = oz_test_utils:get_oz_privileges(Config),
+    AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:set_user_oz_privileges(Config, User, Operation, Privs)
+        oz_test_utils:user_set_oz_privileges(Config, User, Operation, Privs)
     end,
     GetPrivsFun = fun() ->
-        {ok, Privs} = oz_test_utils:get_user_oz_privileges(Config, User),
+        {ok, Privs} = oz_test_utils:user_get_oz_privileges(Config, User),
         Privs
     end,
 
@@ -202,7 +200,6 @@ update_self_oz_privileges_test(Config) ->
             path = <<"/user/privileges">>,
             expected_code = ?HTTP_204_NO_CONTENT
         }
-        % TODO gs
     },
 
     ?assert(api_test_scenarios:run_scenario(update_privileges, [
@@ -215,16 +212,16 @@ delete_oz_privileges_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_SET_PRIVILEGES
     ]),
 
-    AllPrivs = oz_test_utils:get_oz_privileges(Config),
+    AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:set_user_oz_privileges(Config, User, Operation, Privs)
+        oz_test_utils:user_set_oz_privileges(Config, User, Operation, Privs)
     end,
     GetPrivsFun = fun() ->
-        {ok, Privs} = oz_test_utils:get_user_oz_privileges(Config, User),
+        {ok, Privs} = oz_test_utils:user_get_oz_privileges(Config, User),
         Privs
     end,
 
@@ -263,12 +260,12 @@ delete_oz_privileges_test(Config) ->
 delete_self_oz_privileges_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllPrivs = oz_test_utils:get_oz_privileges(Config),
+    AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:set_user_oz_privileges(Config, User, Operation, Privs)
+        oz_test_utils:user_set_oz_privileges(Config, User, Operation, Privs)
     end,
     GetPrivsFun = fun() ->
-        {ok, Privs} = oz_test_utils:get_user_oz_privileges(Config, User),
+        {ok, Privs} = oz_test_utils:user_get_oz_privileges(Config, User),
         Privs
     end,
 
@@ -281,7 +278,6 @@ delete_self_oz_privileges_test(Config) ->
             path = <<"/user/privileges">>,
             expected_code = ?HTTP_202_ACCEPTED
         }
-        % TODO gs
     },
 
     ?assert(api_test_scenarios:run_scenario(delete_privileges, [
@@ -294,12 +290,12 @@ get_eff_oz_privileges_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_VIEW_PRIVILEGES
     ]),
 
     InitialPrivs = [],
-    AllPrivs = oz_test_utils:get_oz_privileges(Config),
+    AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = set_oz_privs_fun(Config, User),
 
     ApiTestSpec = #api_test_spec{
@@ -336,21 +332,17 @@ get_eff_oz_privileges_test(Config) ->
 
 get_self_eff_oz_privileges_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
+    AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = set_oz_privs_fun(Config, User),
 
     ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [{user, User}]
-        },
+        client_spec = #client_spec{correct = [{user, User}]},
         rest_spec = #rest_spec{
             method = get,
             path = [<<"/user/effective_privileges">>],
             expected_code = ?HTTP_403_FORBIDDEN
         }
-        % TODO gs
     },
-
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
         {user, User}, ?OZ_VIEW_PRIVILEGES
@@ -369,7 +361,7 @@ set_oz_privs_fun(Config, User) ->
         % the privileges must be revoked for all 4 entities.
         GroupsPrivsPartition = case Operation of
             revoke ->
-                oz_test_utils:set_user_oz_privileges(
+                oz_test_utils:user_set_oz_privileges(
                     Config, User, revoke, Privs
                 ),
                 [{BottomGroup, Privs}, {MidGroup, Privs}, {TopGroup, Privs}];
@@ -382,14 +374,14 @@ set_oz_privs_fun(Config, User) ->
                         AccMap#{Index => [Privilege | maps:get(Index, AccMap)]}
                     end, #{1 => [], 2 => [], 3 => [], 4 => []}, Privs
                 ),
-                oz_test_utils:set_user_oz_privileges(
+                oz_test_utils:user_set_oz_privileges(
                     Config, User, Operation, Privs1
                 ),
                 [{BottomGroup, Privs2}, {MidGroup, Privs3}, {TopGroup, Privs4}]
         end,
         lists:foreach(
             fun({GroupId, Privileges}) ->
-                oz_test_utils:set_group_oz_privileges(
+                oz_test_utils:group_set_oz_privileges(
                     Config, GroupId, Operation, Privileges
                 )
             end, GroupsPrivsPartition

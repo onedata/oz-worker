@@ -38,10 +38,7 @@
     join_space_test/1,
     leave_space_test/1,
     list_eff_spaces_test/1,
-    get_eff_space_details_test/1,
-
-    list_eff_providers_test/1,
-    get_eff_provider_details_test/1
+    get_eff_space_details_test/1
 ]).
 
 all() ->
@@ -52,10 +49,7 @@ all() ->
         join_space_test,
         leave_space_test,
         list_eff_spaces_test,
-        get_eff_space_details_test,
-
-        list_eff_providers_test,
-        get_eff_provider_details_test
+        get_eff_space_details_test
     ]).
 
 
@@ -65,17 +59,18 @@ all() ->
 
 
 list_spaces_test(Config) ->
-    % create group with 2 users; give group_view privilege
-    % for one of them and all but that for the second one
+    % create group with 2 users:
+    %   U2 gets the GROUP_VIEW privilege
+    %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
-    {ok, S2} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
-    {ok, S3} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
-    {ok, S4} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
+    {ok, S1} = oz_test_utils:group_create_space(Config, G1, ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:group_create_space(Config, G1, ?SPACE_NAME1),
+    {ok, S3} = oz_test_utils:group_create_space(Config, G1, ?SPACE_NAME1),
+    {ok, S4} = oz_test_utils:group_create_space(Config, G1, ?SPACE_NAME1),
     ExpSpaces = [S1, S2, S3, S4],
 
     ApiTestSpec = #api_test_spec{
@@ -108,14 +103,15 @@ list_spaces_test(Config) ->
 
 
 get_space_details_test(Config) ->
-    % create group with 2 users; give group_view privilege
-    % for one of them and all but that for the second one
+    % create group with 2 users:
+    %   U2 gets the GROUP_VIEW privilege
+    %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, S1} = oz_test_utils:create_space_for_group(Config, G1, ?SPACE_NAME1),
+    {ok, S1} = oz_test_utils:group_create_space(Config, G1, ?SPACE_NAME1),
     ExpDetails = #{<<"name">> => ?SPACE_NAME1, <<"providersSupports">> => #{}},
 
     ApiTestSpec = #api_test_spec{
@@ -162,14 +158,15 @@ get_space_details_test(Config) ->
 
 
 create_space_test(Config) ->
-    % create group with 2 users; give group_create_space privilege
-    % for one of them and all but that for the second one
+    % create group with 2 users:
+    %   U2 gets the GROUP_CREATE_SPACE privilege
+    %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_CREATE_SPACE
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllPrivs = oz_test_utils:get_space_privileges(Config),
+    AllPrivs = oz_test_utils:all_space_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(SpaceId) ->
@@ -246,8 +243,9 @@ create_space_test(Config) ->
 
 
 join_space_test(Config) ->
-    % create group with 2 users; give group_join_space privilege
-    % for one of them and all but that for the second one
+    % create group with 2 users:
+    %   U2 gets the GROUP_JOIN_SPACE privilege
+    %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_JOIN_SPACE
     ),
@@ -258,7 +256,7 @@ join_space_test(Config) ->
         #{spaceId => SpaceId}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _) ->
-        {ok, Spaces} = oz_test_utils:get_group_spaces(Config, G1),
+        {ok, Spaces} = oz_test_utils:group_get_spaces(Config, G1),
         ?assertEqual(lists:member(SpaceId, Spaces), ShouldSucceed)
     end,
 
@@ -322,21 +320,25 @@ join_space_test(Config) ->
 
 
 leave_space_test(Config) ->
-    % create group with 2 users; give group_leave_space privilege
-    % for one of them and all but that for the second one
+    % create group with 2 users:
+    %   U2 gets the GROUP_LEAVE_SPACE privilege
+    %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_LEAVE_SPACE
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     EnvSetUpFun = fun() ->
-        {ok, S1} = oz_test_utils:create_space_for_group(
+        {ok, S1} = oz_test_utils:group_create_space(
             Config, G1, ?SPACE_NAME1
         ),
         #{spaceId => S1}
     end,
+    DeleteEntityFun = fun(#{spaceId := SpaceId} = _Env) ->
+        oz_test_utils:space_remove_group(Config, SpaceId, G1)
+    end,
     VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _) ->
-        {ok, Spaces} = oz_test_utils:get_group_spaces(Config, G1),
+        {ok, Spaces} = oz_test_utils:group_get_spaces(Config, G1),
         ?assertEqual(lists:member(SpaceId, Spaces), not ShouldSucceed)
     end,
 
@@ -367,7 +369,7 @@ leave_space_test(Config) ->
     },
 
     ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun]
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
 
 
@@ -473,110 +475,6 @@ get_eff_space_details_test(Config) ->
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
         end, EffSpacesList
-    ).
-
-
-list_eff_providers_test(Config) ->
-    {
-        [{P1, _}, {P2, _}, {P3, _}, {P4, _}],
-        _Spaces, [{G1, _} | _Groups], {U1, U2, NonAdmin}
-    } = api_test_scenarios:create_eff_providers_env(Config),
-
-    ExpProviders = [P1, P2, P3, P4],
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U1}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U2},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/groups/">>, G1, <<"/effective_providers">>],
-            expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"providers">> => ExpProviders}
-        },
-        logic_spec = #logic_spec{
-            module = group_logic,
-            function = get_eff_providers,
-            args = [client, G1],
-            expected_result = ?OK_LIST(ExpProviders)
-        }
-        % TODO gs
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    % check also group_logic:has_eff_provider function
-    lists:foreach(
-        fun(ProviderId) ->
-            ?assert(oz_test_utils:call_oz(
-                Config, group_logic, has_eff_provider, [G1, ProviderId])
-            )
-        end, ExpProviders
-    ),
-    ?assert(not oz_test_utils:call_oz(
-        Config, group_logic, has_eff_provider, [G1, <<"asdiucyaie827346w">>])
-    ).
-
-
-get_eff_provider_details_test(Config) ->
-    {
-        EffProvidersList, _Spaces, [{G1, _} | _Groups], {U1, U2, NonAdmin}
-    } = api_test_scenarios:create_eff_providers_env(Config),
-
-    lists:foreach(
-        fun({ProvId, ProvDetails}) ->
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {user, U2},
-                        {user, U1}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, NonAdmin}
-                    ]
-                },
-                rest_spec = #rest_spec{
-                    method = get,
-                    path = [
-                        <<"/groups/">>, G1, <<"/effective_providers/">>, ProvId
-                    ],
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = ProvDetails#{<<"providerId">> => ProvId}
-                },
-                logic_spec = #logic_spec{
-                    module = group_logic,
-                    function = get_eff_provider,
-                    args = [client, G1, ProvId],
-                    expected_result = ?OK_MAP(ProvDetails)
-                },
-                gs_spec = #gs_spec{
-                    operation = get,
-                    gri = #gri{
-                        type = od_provider, id = ProvId,
-                        aspect = instance, scope = protected
-                    },
-                    auth_hint = ?THROUGH_GROUP(G1),
-                    expected_result = ?OK_MAP(ProvDetails#{
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
-                            ?assertEqual(Id, ProvId)
-                        end
-                    })
-                }
-            },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
-
-        end, EffProvidersList
     ).
 
 

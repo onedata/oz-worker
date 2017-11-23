@@ -32,8 +32,8 @@
 ]).
 -export([
     list_parents_test/1,
-    join_group_test/1,
-    leave_group_test/1,
+    join_parent_test/1,
+    leave_parent_test/1,
     get_parent_details_test/1,
     list_eff_parents_test/1,
     get_eff_parent_details_test/1
@@ -42,8 +42,8 @@
 all() ->
     ?ALL([
         list_parents_test,
-        join_group_test,
-        leave_group_test,
+        join_parent_test,
+        leave_parent_test,
         get_parent_details_test,
         list_eff_parents_test,
         get_eff_parent_details_test
@@ -56,8 +56,9 @@ all() ->
 
 
 list_parents_test(Config) ->
-    % create group with 2 users; give group_view privilege
-    % for one of them and all but that for the second one
+    % create group with 2 users:
+    %   U2 gets the GROUP_VIEW privilege
+    %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
@@ -68,7 +69,7 @@ list_parents_test(Config) ->
             {ok, GroupId} = oz_test_utils:create_group(
                 Config, ?ROOT, ?GROUP_NAME2
             ),
-            oz_test_utils:add_group_to_group(Config, GroupId, G1),
+            oz_test_utils:group_add_group(Config, GroupId, G1),
             GroupId
         end, lists:seq(1, 5)
     ),
@@ -102,9 +103,10 @@ list_parents_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
-join_group_test(Config) ->
-    % create group with 2 users; give group_join_group privilege
-    % for one of them and all but that for the second one
+join_parent_test(Config) ->
+    % create group with 2 users:
+    %   U2 gets the GROUP_JOIN_GROUP privilege
+    %   U1 gets all remaining privileges
     {Child, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_JOIN_GROUP
     ),
@@ -115,7 +117,7 @@ join_group_test(Config) ->
         #{groupId => Group}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, _) ->
-        {ok, ChildGroups} = oz_test_utils:get_group_children(Config, GroupId),
+        {ok, ChildGroups} = oz_test_utils:group_get_children(Config, GroupId),
         ?assertEqual(lists:member(Child, ChildGroups), ShouldSucceed)
     end,
 
@@ -178,9 +180,10 @@ join_group_test(Config) ->
     )).
 
 
-leave_group_test(Config) ->
-    % create group with 2 users; give group_update privilege
-    % for one of them and all but that for the second one
+leave_parent_test(Config) ->
+    % create group with 2 users:
+    %   U2 gets the GROUP_UPDATE privilege
+    %   U1 gets all remaining privileges
     {Child, U1, U2} = api_test_scenarios:create_basic_group_env(
         % TODO VFS-3351 ?GROUP_LEAVE_GROUP
         Config, ?GROUP_UPDATE
@@ -189,11 +192,14 @@ leave_group_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, Group} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME2),
-        {ok, Child} = oz_test_utils:add_group_to_group(Config, Group, Child),
+        {ok, Child} = oz_test_utils:group_add_group(Config, Group, Child),
         #{groupId => Group}
     end,
+    DeleteEntityFun = fun(#{groupId := GroupId} = _Env) ->
+        oz_test_utils:group_remove_group(Config, GroupId, Child)
+    end,
     VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, _) ->
-        {ok, ChildGroups} = oz_test_utils:get_group_children(Config, GroupId),
+        {ok, ChildGroups} = oz_test_utils:group_get_children(Config, GroupId),
         ?assertEqual(lists:member(Child, ChildGroups), not ShouldSucceed)
     end,
 
@@ -224,13 +230,14 @@ leave_group_test(Config) ->
     },
 
     ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun]
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
 
 
 get_parent_details_test(Config) ->
-    % create group with 2 users; give group_view privilege
-    % for one of them and all but that for the second one
+    % create group with 2 users:
+    %   U2 gets the GROUP_VIEW privilege
+    %   U1 gets all remaining privileges
     {Group, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
@@ -239,7 +246,7 @@ get_parent_details_test(Config) ->
     {ok, ParentGroup} = oz_test_utils:create_group(Config, ?ROOT,
         #{<<"name">> => ?GROUP_NAME2, <<"type">> => ?GROUP_TYPE2}
     ),
-    oz_test_utils:add_group_to_group(Config, ParentGroup, Group),
+    oz_test_utils:group_add_group(Config, ParentGroup, Group),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -268,9 +275,9 @@ get_parent_details_test(Config) ->
             function = get_parent,
             args = [client, Group, ParentGroup],
             expected_result = ?OK_MAP(#{
-                    <<"name">> => ?GROUP_NAME2,
-                    <<"type">> => ?GROUP_TYPE2
-                })
+                <<"name">> => ?GROUP_NAME2,
+                <<"type">> => ?GROUP_TYPE2
+            })
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -409,6 +416,7 @@ get_eff_parent_details_test(Config) ->
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
+
 
 init_per_suite(Config) ->
     ssl:start(),

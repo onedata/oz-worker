@@ -448,12 +448,12 @@ run_gs_test(Config, GsSpec, Client, Data, DescFmt, Env, ExpError) ->
 % fully jsonify error and dejsonify it
 error_to_gs_expectations(Config, ErrorType) ->
     ProtoVer = hd(oz_test_utils:get_gs_supported_proto_verions(Config)),
-    JsonifiedError = json_utils:encode_map(oz_test_utils:call_oz(
+    ErrorJson = json_utils:encode_map(oz_test_utils:call_oz(
         Config, gs_protocol_errors, error_to_json, [ProtoVer, ErrorType]
     )),
     oz_test_utils:call_oz(
         Config, gs_protocol_errors, json_to_error,
-        [ProtoVer, json_utils:decode_map(JsonifiedError)]
+        [ProtoVer, json_utils:decode_map(ErrorJson)]
     ).
 
 
@@ -651,9 +651,9 @@ run_test_combinations(
     CorrectDataSets = correct_data_sets(DataSpec),
     BadDataSets = bad_data_sets(DataSpec),
 
-    % assert unauthorized and forbidden clients with required data sets,
+    % assert that unauthorized and forbidden clients with required data sets,
     % along with correct clients with bad/malformed data sets,
-    % fails because of appropriate error
+    % fails with an appropriate error
     Environment = EnvSetUpFun(),
     lists:foreach(
         fun({Clients, DataSets, DescFmt, Error}) ->
@@ -713,7 +713,8 @@ run_test_combinations(
     ).
 
 
-% In case of malformed data prepare data, description and error
+% Prepare data, description and error code for test cases
+% where data error is expected
 prepare_error({Data, BadKey, ExpError}, DescFmt, _) ->
     Description = str_utils:format(DescFmt, [BadKey, maps:get(BadKey, Data)]),
     {Data, Description, ExpError};

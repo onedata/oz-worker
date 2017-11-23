@@ -67,29 +67,30 @@ all() ->
 
 
 add_group_test(Config) ->
-    % create handle service with 2 users; give handle_service_update privilege
-    % for one of them and all but that for the second one
+    % create handle service with 2 users:
+    %   U2 gets the HANDLE_SERVICE_UPDATE privilege
+    %   U1 gets all remaining privileges
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_UPDATE
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-    AllPrivs = oz_test_utils:get_handle_service_privileges(Config),
+    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
 
     VerifyEndFun =
         fun
             (true = _ShouldSucceed, _, Data) ->
                 ExpPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
-                {ok, Privs} = oz_test_utils:get_handle_service_group_privileges(
+                {ok, Privs} = oz_test_utils:handle_service_get_group_privileges(
                     Config, HService, G1
                 ),
                 ?assertEqual(ExpPrivs, lists:sort(Privs)),
-                oz_test_utils:remove_group_from_handle_service(
+                oz_test_utils:handle_service_remove_group(
                     Config, HService, G1
                 );
             (false = ShouldSucceed, _, _) ->
-                {ok, Groups} = oz_test_utils:get_handle_service_groups(
+                {ok, Groups} = oz_test_utils:handle_service_get_groups(
                     Config, HService
                 ),
                 ?assertEqual(lists:member(G1, Groups), ShouldSucceed)
@@ -141,8 +142,9 @@ add_group_test(Config) ->
 
 
 remove_group_test(Config) ->
-    % create handle service with 2 users; give handle_service_update privilege
-    % for one of them and all but that for the second one
+    % create handle service with 2 users:
+    %   U2 gets the HANDLE_SERVICE_UPDATE privilege
+    %   U1 gets all remaining privileges
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_UPDATE
     ),
@@ -150,13 +152,16 @@ remove_group_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
-        {ok, G1} = oz_test_utils:add_group_to_handle_service(
+        {ok, G1} = oz_test_utils:handle_service_add_group(
             Config, HService, G1
         ),
         #{groupId => G1}
     end,
+    DeleteEntityFun = fun(#{groupId := Group} = _Env) ->
+        oz_test_utils:handle_service_remove_group(Config, HService, Group)
+    end,
     VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, _) ->
-        {ok, SubGroups} = oz_test_utils:get_handle_service_groups(
+        {ok, SubGroups} = oz_test_utils:handle_service_get_groups(
             Config, HService
         ),
         ?assertEqual(lists:member(GroupId, SubGroups), not ShouldSucceed)
@@ -188,13 +193,14 @@ remove_group_test(Config) ->
         % TODO gs
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun]
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
 
 
 list_groups_test(Config) ->
-    % create handle service with 2 users; give handle_service_view privilege
-    % for one of them and all but that for the second one
+    % create handle service with 2 users:
+    %   U2 gets the HANDLE_SERVICE_VIEW privilege
+    %   U1 gets all remaining privileges
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),
@@ -205,7 +211,7 @@ list_groups_test(Config) ->
             {ok, GroupId} = oz_test_utils:create_group(
                 Config, ?ROOT, ?GROUP_NAME1
             ),
-            oz_test_utils:add_group_to_handle_service(
+            oz_test_utils:handle_service_add_group(
                 Config, HService, GroupId
             ),
             GroupId
@@ -242,8 +248,9 @@ list_groups_test(Config) ->
 
 
 get_group_test(Config) ->
-    % create handle service with 2 users; give handle_service_view privilege
-    % for one of them and all but that for the second one
+    % create handle service with 2 users:
+    %   U2 gets the HANDLE_SERVICE_VIEW privilege
+    %   U1 gets all remaining privileges
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),
@@ -252,7 +259,7 @@ get_group_test(Config) ->
     {ok, G1} = oz_test_utils:create_group(
         Config, ?ROOT, #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
     ),
-    oz_test_utils:add_group_to_handle_service(Config, HService, G1),
+    oz_test_utils:handle_service_add_group(Config, HService, G1),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -307,8 +314,9 @@ get_group_test(Config) ->
 
 
 get_group_privileges_test(Config) ->
-    % create handle service with 2 users; give handle_service_view privilege
-    % for one of them and all but that for the second one
+    % create handle service with 2 users:
+    %   U2 gets the HANDLE_SERVICE_VIEW privilege
+    %   U1 gets all remaining privileges
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),
@@ -320,9 +328,9 @@ get_group_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME1),
-    {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
+    {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
 
-    AllPrivs = oz_test_utils:get_handle_service_privileges(Config),
+    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
     InitialPrivs = [?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
     SetPrivsFun = fun(Operation, Privs) ->
@@ -367,8 +375,9 @@ get_group_privileges_test(Config) ->
 
 
 update_group_privileges_test(Config) ->
-    % create handle service with 2 users; give handle_service_update privilege
-    % for one of them and all but that for the second one
+    % create handle service with 2 users:
+    %   U2 gets the HANDLE_SERVICE_UPDATE privilege
+    %   U1 gets all remaining privileges
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_UPDATE
     ),
@@ -380,16 +389,16 @@ update_group_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME1),
-    {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
+    {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
 
-    AllPrivs = oz_test_utils:get_handle_service_privileges(Config),
+    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:handle_service_set_group_privileges(
             Config, HService, G1, Operation, Privs
         )
     end,
     GetPrivsFun = fun() ->
-        {ok, Privs} = oz_test_utils:get_handle_service_group_privileges(
+        {ok, Privs} = oz_test_utils:handle_service_get_group_privileges(
             Config, HService, G1
         ),
         Privs
@@ -569,8 +578,9 @@ get_eff_group_privileges_test(Config) ->
     %%      <<user>>
     %%      NonAdmin
 
-    % create handle service with 2 users; give handle_service_view privilege
-    % for one of them and all but that for the second one
+    % create handle service with 2 users:
+    %   U2 gets the HANDLE_SERVICE_VIEW privilege
+    %   U1 gets all remaining privileges
     {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_VIEW
     ),
@@ -586,14 +596,14 @@ get_eff_group_privileges_test(Config) ->
     {ok, G3} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G4} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
 
-    {ok, G1} = oz_test_utils:add_group_to_handle_service(Config, HService, G1),
-    {ok, G2} = oz_test_utils:add_group_to_handle_service(Config, HService, G2),
-    {ok, G3} = oz_test_utils:add_group_to_group(Config, G1, G3),
-    {ok, G4} = oz_test_utils:add_group_to_group(Config, G2, G4),
-    {ok, G4} = oz_test_utils:add_group_to_group(Config, G3, G4),
-    {ok, U3} = oz_test_utils:add_user_to_group(Config, G4, U3),
+    {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
+    {ok, G2} = oz_test_utils:handle_service_add_group(Config, HService, G2),
+    {ok, G3} = oz_test_utils:group_add_group(Config, G1, G3),
+    {ok, G4} = oz_test_utils:group_add_group(Config, G2, G4),
+    {ok, G4} = oz_test_utils:group_add_group(Config, G3, G4),
+    {ok, U3} = oz_test_utils:group_add_user(Config, G4, U3),
 
-    AllPrivs = oz_test_utils:get_handle_service_privileges(Config),
+    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
     InitialPrivs = [?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
