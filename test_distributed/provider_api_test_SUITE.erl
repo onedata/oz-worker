@@ -34,6 +34,7 @@
 ]).
 -export([
     create_test/1,
+    create_with_subdomain_test/1,
     get_test/1,
     list_test/1,
     update_test/1,
@@ -45,12 +46,17 @@
     update_support_size_test/1,
     revoke_support_test/1,
     check_my_ports_test/1,
-    check_my_ip_test/1
+    check_my_ip_test/1,
+    update_subdomaindomain_test/1,
+    update_domain_test/1,
+    update_domain_to_ip_address_test/1,
+    get_domain_config_test/1
 ]).
 
 all() ->
     ?ALL([
         create_test,
+        create_with_subdomain_test,
         get_test,
         list_test,
         support_space_test,
@@ -62,7 +68,11 @@ all() ->
         update_support_size_test,
         revoke_support_test,
         check_my_ports_test,
-        check_my_ip_test
+        check_my_ip_test,
+        update_domain_test,
+        update_subdomaindomain_test,
+        update_domain_to_ip_address_test,
+        get_domain_config_test
     ]).
 
 %%%===================================================================
@@ -75,17 +85,19 @@ create_test(Config) ->
     {_, CSRFile, _} = oz_test_utils:generate_provider_cert_files(),
     {ok, CSR} = file:read_file(CSRFile),
     ExpName = <<"ProvName">>,
-    ExpUrls = [<<"127.0.0.1">>],
-    ExpRedPoint = <<"https://127.0.0.1">>,
+    ExpDomain = <<"multilevel.provider-domain.org">>,
     ExpLatitude = 50.0,
     ExpLongitude = -24.8,
+    ExpSubdomainDelegation = false,
+    ExpSubdomain = undefined,
 
     VerifyFun = fun(ProviderId, Certificate) ->
         true = is_binary(Certificate),
         {ok, Provider} = oz_test_utils:get_provider(Config, ProviderId),
         ?assertEqual(ExpName, Provider#od_provider.name),
-        ?assertEqual(ExpUrls, Provider#od_provider.urls),
-        ?assertEqual(ExpRedPoint, Provider#od_provider.redirection_point),
+        ?assertEqual(ExpDomain, Provider#od_provider.domain),
+        ?assertEqual(ExpSubdomainDelegation, Provider#od_provider.subdomain_delegation),
+        ?assertEqual(ExpSubdomain, Provider#od_provider.subdomain),
         % Latitude and longitude are optional, so default value might
         % be set.
         ?assert(Provider#od_provider.latitude =:= ExpLatitude orelse
@@ -118,24 +130,26 @@ create_test(Config) ->
             end)
         },
         data_spec = #data_spec{
-            required = [<<"clientName">>, <<"urls">>, <<"redirectionPoint">>, <<"csr">>],
+            required = [<<"clientName">>, <<"domain">>, <<"subdomainDelegation">>, <<"csr">>],
             optional = [<<"latitude">>, <<"longitude">>],
             correct_values = #{
                 <<"clientName">> => ExpName,
-                <<"urls">> => ExpUrls,
-                <<"redirectionPoint">> => ExpRedPoint,
+                <<"domain">> => ExpDomain,
+                <<"subdomainDelegation">> => ExpSubdomainDelegation,
                 <<"csr">> => CSR,
-                <<"latitude">> => 50.0,
-                <<"longitude">> => -24.8
+                <<"latitude">> => ExpLatitude,
+                <<"longitude">> => ExpLongitude
             },
             bad_values = [
                 {<<"clientName">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"clientName">>)},
                 {<<"clientName">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"clientName">>)},
-                {<<"urls">>, [], ?ERROR_BAD_VALUE_EMPTY(<<"urls">>)},
-                {<<"urls">>, <<"127.0.0.1">>, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"urls">>)},
-                {<<"urls">>, 1234, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"urls">>)},
-                {<<"redirectionPoint">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"redirectionPoint">>)},
-                {<<"redirectionPoint">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"redirectionPoint">>)},
+                {<<"domain">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"domain">>)},
+                {<<"domain">>, <<"https://domain.com">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
+                {<<"domain">>, <<"domain.com:443">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
+                {<<"domain">>, <<".leadingdot">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
+                {<<"domain">>, <<"trailing-.hyphen">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
+                {<<"subdomainDelegation">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
                 {<<"csr">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"csr">>)},
                 {<<"csr">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"csr">>)},
                 {<<"csr">>, <<"wrong-csr">>, ?ERROR_BAD_DATA(<<"csr">>)},
@@ -154,20 +168,100 @@ create_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
+%% Create provider with subdomain delegation turned on
+create_with_subdomain_test(Config) ->
+    {_, CSRFile, _} = oz_test_utils:generate_provider_cert_files(),
+    {ok, CSR} = file:read_file(CSRFile),
+    ExpName = <<"ProvName">>,
+    ExpLatitude = 50.0,
+    ExpLongitude = -24.8,
+    ExpSubdomainDelegation = true,
+    ExpSubdomain = <<"prov-sub">>,
+    ExpIPs = [<<"2.4.6.8">>, <<"255.253.251.2">>],
+    {ok, OZDomainString} = oz_test_utils:call_oz(Config,
+        application, get_env, [oz_worker, http_domain]),
+    OZDomain = list_to_binary(OZDomainString),
+    ExpDomain = <<ExpSubdomain/binary, ".", OZDomain/binary>>,
+
+    VerifyFun = fun(ProviderId, Certificate) ->
+        true = is_binary(Certificate),
+        {ok, Provider} = oz_test_utils:get_provider(Config, ProviderId),
+        ?assertEqual(ExpName, Provider#od_provider.name),
+        ?assertEqual(ExpDomain, Provider#od_provider.domain),
+        ?assertEqual(ExpSubdomainDelegation, Provider#od_provider.subdomain_delegation),
+        ?assertEqual(ExpSubdomain, Provider#od_provider.subdomain),
+
+        % delete provider to avoid "subdomain occupied" errors
+        oz_test_utils:delete_provider(Config, ProviderId),
+        true
+    end,
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, nobody]
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = <<"/provider">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = fun(Value) ->
+                Certificate = maps:get(<<"certificate">>, Value),
+                ProviderId = maps:get(<<"providerId">>, Value),
+                VerifyFun(ProviderId, Certificate)
+            end},
+        logic_spec = #logic_spec{
+            operation = create,
+            module = provider_logic,
+            function = create,
+            args = [client, data],
+            expected_result = ?OK_TERM(fun({ProviderId, Certificate}) ->
+                VerifyFun(ProviderId, Certificate)
+            end)
+        },
+        data_spec = #data_spec{
+            required = [<<"clientName">>, <<"subdomain">>, <<"ipList">>,
+                        <<"subdomainDelegation">>, <<"csr">>],
+            optional = [<<"latitude">>, <<"longitude">>],
+            correct_values = #{
+                <<"clientName">> => ExpName,
+                <<"subdomainDelegation">> => ExpSubdomainDelegation,
+                <<"subdomain">> => ExpSubdomain,
+                <<"ipList">> => ExpIPs,
+                <<"csr">> => CSR,
+                <<"latitude">> => ExpLatitude,
+                <<"longitude">> => ExpLongitude
+            },
+            bad_values = [
+                {<<"subdomain">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"subdomain">>)},
+                {<<"subdomain">>, <<"port:443">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"Uppercase">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"under_score">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"-leadinghyphen">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"trailingdot.">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"multi.part">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"https://protocol">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomainDelegation">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                {<<"ipList">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ipList">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ipList">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
 
 get_test(Config) ->
     % Create a provider manually
     {KeyFile1, CSRFile1, CertFile1} = oz_test_utils:generate_provider_cert_files(),
     {ok, CSR} = file:read_file(CSRFile1),
     ExpName = <<"Provider 1">>,
-    ExpUrls = [<<"172.16.0.10">>, <<"172.16.0.11">>],
-    ExpRedPoint = <<"https://hostname.com">>,
+    ExpDomain = <<"domain.com">>,
     ExpLatitude = 14.78,
     ExpLongitude = -106.12,
     {ok, {P1, Certificate}} = oz_test_utils:create_provider(Config, #{
         <<"clientName">> => ExpName,
-        <<"urls">> => ExpUrls,
-        <<"redirectionPoint">> => ExpRedPoint,
+        <<"domain">> => ExpDomain,
+        <<"subdomainDelegation">> => false,
         <<"csr">> => CSR,
         <<"latitude">> => ExpLatitude,
         <<"longitude">> => ExpLongitude
@@ -188,8 +282,7 @@ get_test(Config) ->
     ExpBody = #{
         <<"name">> => ExpName,
         <<"clientName">> => ExpName,
-        <<"urls">> => ExpUrls,
-        <<"redirectionPoint">> => ExpRedPoint,
+        <<"domain">> => ExpDomain,
         <<"latitude">> => ExpLatitude,
         <<"longitude">> => ExpLongitude
     },
@@ -318,8 +411,7 @@ update_test(Config) ->
         Config, <<"P1">>
     ),
     ExpName = <<"New Prov name">>,
-    ExpUrls = [<<"new.url">>],
-    ExpRedPoint = <<"https://new.url">>,
+    ExpDomain = <<"127.0.0.1">>, % not changed - it is done in the domain_config aspect
     ExpLatitude = -12.87645,
     ExpLongitude = -4.44,
     ApiTestSpec = #api_test_spec{
@@ -343,24 +435,16 @@ update_test(Config) ->
         },
         data_spec = #data_spec{
             at_least_one = [
-                <<"clientName">>, <<"urls">>, <<"redirectionPoint">>,
-                <<"latitude">>, <<"longitude">>
+                <<"clientName">>, <<"latitude">>, <<"longitude">>
             ],
             correct_values = #{
                 <<"clientName">> => ExpName,
-                <<"urls">> => ExpUrls,
-                <<"redirectionPoint">> => ExpRedPoint,
                 <<"latitude">> => ExpLatitude,
                 <<"longitude">> => ExpLongitude
             },
             bad_values = [
                 {<<"clientName">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"clientName">>)},
                 {<<"clientName">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"clientName">>)},
-                {<<"urls">>, [], ?ERROR_BAD_VALUE_EMPTY(<<"urls">>)},
-                {<<"urls">>, <<"127.0.0.1">>, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"urls">>)},
-                {<<"urls">>, 1234, ?ERROR_BAD_VALUE_LIST_OF_BINARIES(<<"urls">>)},
-                {<<"redirectionPoint">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"redirectionPoint">>)},
-                {<<"redirectionPoint">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"redirectionPoint">>)},
                 {<<"latitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"latitude">>)},
                 {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
                 {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
@@ -377,8 +461,7 @@ update_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
     {ok, Provider} = oz_test_utils:get_provider(Config, P1),
     ?assertEqual(ExpName, Provider#od_provider.name),
-    ?assertEqual(ExpUrls, Provider#od_provider.urls),
-    ?assertEqual(ExpRedPoint, Provider#od_provider.redirection_point),
+    ?assertEqual(ExpDomain, Provider#od_provider.domain),
     ?assertEqual(ExpLatitude, Provider#od_provider.latitude),
     ?assertEqual(ExpLongitude, Provider#od_provider.longitude).
 
@@ -1395,6 +1478,257 @@ check_my_ip_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+update_subdomaindomain_test(Config) ->
+    ExpSubdomain = <<"proper-subdomain">>,
+    ExpIPs = [{1,2,3,4}, <<"5.6.7.8">>],
+
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+    % Test enabling subdomain delegation
+    Delegated_ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, {provider, P1, KeyFile1, CertFile1}],
+            unauthorized = [nobody]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            operation = update,
+            module = provider_logic,
+            function = update_domain_config,
+            args = [client, P1, data],
+            expected_result = ?OK
+        },
+        data_spec = #data_spec{
+            required = [
+                <<"subdomainDelegation">>, <<"subdomain">>, <<"ipList">>
+            ],
+            correct_values = #{
+                <<"subdomainDelegation">> => true,
+                <<"subdomain">> => ExpSubdomain,
+                <<"ipList">> => ExpIPs
+            },
+            bad_values = [
+                {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                {<<"subdomain">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"subdomain">>)},
+                {<<"subdomain">>, <<"port:443">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"Uppercase">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"under_score">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<".leadingdot">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"trailingdot.">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"multi.part">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
+                {<<"subdomain">>, <<"https://protocol">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
+                {<<"ipList">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ipList">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ipList">>, [{256,256,256,256}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ipList">>, [{-1,-1,-1,-1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ipList">>, [{1,1,1,1,1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ipList">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, Delegated_ApiTestSpec)),
+
+    % Test disabling subdomain delegation
+    ExpDomain = <<"provider.domain.org">>,
+    Undelegated_ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, {provider, P1, KeyFile1, CertFile1}],
+            unauthorized = [nobody]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            operation = update,
+            module = provider_logic,
+            function = update_domain_config,
+            args = [client, P1, data],
+            expected_result = ?OK
+        },
+        data_spec = #data_spec{
+            required = [
+                <<"subdomainDelegation">>, <<"domain">>
+            ],
+            correct_values = #{
+                <<"subdomainDelegation">> => false,
+                <<"domain">> => ExpDomain
+            },
+            bad_values = [
+                {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                {<<"domain">>, <<"https://hasprotocol">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, Undelegated_ApiTestSpec)),
+    {ok, Provider} = oz_test_utils:get_provider(Config, P1),
+    ?assertEqual(ExpDomain, Provider#od_provider.domain),
+    ?assertEqual(undefined, Provider#od_provider.subdomain),
+    ?assertEqual(false, Provider#od_provider.subdomain_delegation),
+    ok.
+
+
+update_domain_test(Config) ->
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+
+    NewDomain = <<"changed.pl">>,
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, {provider, P1, KeyFile1, CertFile1}],
+            unauthorized = [nobody]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            operation = update,
+            module = provider_logic,
+            function = update_domain_config,
+            args = [client, P1, data],
+            expected_result = ?OK
+        },
+        data_spec = #data_spec{
+            required = [
+                <<"subdomainDelegation">>, <<"domain">>
+            ],
+            correct_values = #{
+                <<"subdomainDelegation">> => false,
+                <<"domain">> => NewDomain
+            },
+            bad_values = [
+                {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                {<<"domain">>, <<"https://hasprotocol">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    {ok, Provider} = oz_test_utils:get_provider(Config, P1),
+    ?assertEqual(NewDomain, Provider#od_provider.domain),
+    ?assertEqual(undefined, Provider#od_provider.subdomain),
+    ?assertEqual(false, Provider#od_provider.subdomain_delegation),
+    ok.
+
+
+% Ensure provider domain can be set to an IP address
+update_domain_to_ip_address_test(Config) ->
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+
+    NewDomain = <<"172.17.0.5">>,
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, {provider, P1, KeyFile1, CertFile1}],
+            unauthorized = [nobody]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            operation = update,
+            module = provider_logic,
+            function = update_domain_config,
+            args = [client, P1, data],
+            expected_result = ?OK
+        },
+        data_spec = #data_spec{
+            required = [
+                <<"subdomainDelegation">>, <<"domain">>
+            ],
+            correct_values = #{
+                <<"subdomainDelegation">> => false,
+                <<"domain">> => NewDomain
+            },
+            bad_values = []
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    {ok, Provider} = oz_test_utils:get_provider(Config, P1),
+    ?assertEqual(NewDomain, Provider#od_provider.domain),
+    ?assertEqual(undefined, Provider#od_provider.subdomain),
+    ?assertEqual(false, Provider#od_provider.subdomain_delegation),
+    ok.
+
+
+%% Test getting aspect "domain_config"
+get_domain_config_test(Config) ->
+
+    % Test without delegated subdomain
+
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+
+    % Create two users, grant one of them the privilege to list providers.
+    % They still shouldn't be able to read domain aspect
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+        ?OZ_PROVIDERS_LIST
+    ]),
+
+    ExpDomain = <<"127.0.0.1">>, % as set in create_provider_and_certs
+    ExpBody = #{
+        <<"subdomainDelegation">> => false,
+        <<"domain">> => ExpDomain
+    },
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {provider, P1, KeyFile1, CertFile1}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, Admin},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            operation = get,
+            module = provider_logic,
+            function = get_domain_config,
+            args = [client, P1],
+            expected_result = ?OK_MAP(ExpBody)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % test enabled subdomain delegation
+    ExpSubdomain = <<"subdomain">>,
+    ExpIPs = [{5,8,2,4}, {10,12,255,255}],
+    OZDomain = oz_test_utils:get_oz_domain(Config),
+    ExpDomain2 = <<ExpSubdomain/binary, ".", (list_to_binary(OZDomain))/binary>>,
+
+    oz_test_utils:enable_subdomain_delegation(Config, P1, ExpSubdomain, ExpIPs),
+
+    ExpBody2 = #{
+        <<"subdomainDelegation">> => true,
+        <<"domain">> => ExpDomain2,
+        <<"ipList">> => ExpIPs,
+        <<"subdomain">> => ExpSubdomain
+    },
+    ApiTestSpec2 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {provider, P1, KeyFile1, CertFile1}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, Admin},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            operation = get,
+            module = provider_logic,
+            function = get_domain_config,
+            args = [client, P1],
+            expected_result = ?OK_MAP(ExpBody2)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 %%%===================================================================

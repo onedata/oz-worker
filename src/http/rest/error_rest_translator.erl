@@ -107,7 +107,10 @@ translate(?ERROR_BAD_VALUE_EMPTY(Key)) ->
 translate(?ERROR_BAD_VALUE_ATOM(Key)) ->
     % Atoms are strings in json
     translate(?ERROR_BAD_VALUE_BINARY(Key));
-
+translate(?ERROR_BAD_VALUE_BOOLEAN(Key)) ->
+    {?HTTP_400_BAD_REQUEST,
+        {<<"Bad value: provided \"~s\" must be a boolean">>, [Key]}
+    };
 translate(?ERROR_BAD_VALUE_LIST_OF_ATOMS(Key)) ->
     % Atoms are strings in json
     translate(?ERROR_BAD_VALUE_LIST_OF_BINARIES(Key));
@@ -134,6 +137,18 @@ translate(?ERROR_BAD_VALUE_JSON(Key)) ->
 translate(?ERROR_BAD_VALUE_TOKEN(Key)) ->
     {?HTTP_400_BAD_REQUEST,
         {<<"Bad value: provided \"~s\" is not a valid token">>, [Key]}
+    };
+translate(?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(Key)) ->
+    {?HTTP_400_BAD_REQUEST,
+        {<<"Bad value: provided \"~s\" is not a valid list of IPv4 addresses">>, [Key]}
+    };
+translate(?ERROR_BAD_VALUE_DOMAIN(Key)) ->
+    {?HTTP_400_BAD_REQUEST,
+        {<<"Bad value: provided \"~s\" is not a valid domain">>, [Key]}
+    };
+translate(?ERROR_BAD_VALUE_SUBDOMAIN) ->
+    {?HTTP_400_BAD_REQUEST,
+        <<"Bad value: provided subdomain is not valid">>
     };
 translate(?ERROR_BAD_VALUE_TOO_LOW(Key, Threshold)) ->
     {?HTTP_400_BAD_REQUEST,
@@ -173,9 +188,11 @@ translate(?ERROR_BAD_VALUE_ID_NOT_FOUND(Key)) ->
     {?HTTP_400_BAD_REQUEST,
         {<<"Bad value: provided ID (\"~s\") does not exist">>, [Key]}
     };
-translate(?ERROR_BAD_VALUE_ID_OCCUPIED(Key)) ->
+translate(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(Key)) ->
     {?HTTP_400_BAD_REQUEST,
-        {<<"Bad value: provided ID (\"~s\") is already occupied">>, [Key]}
+        % until VFS-3817 has been resolved do not change this description
+        % as it is used to identify this specific error
+        {<<"Bad value: provided identifier (\"~s\") is already occupied">>, [Key]}
     };
 translate(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key)) ->
     {?HTTP_400_BAD_REQUEST,
@@ -190,11 +207,6 @@ translate(?ERROR_BAD_VALUE_ALIAS_WRONG_PREFIX(Key)) ->
     {?HTTP_400_BAD_REQUEST, {
         <<"Bad value: provided \"~s\" cannot start with '~s'">>,
         [Key, ?NO_ALIAS_UUID_PREFIX]
-    }};
-translate(?ERROR_ALIAS_OCCUPIED(Key)) ->
-    {?HTTP_400_BAD_REQUEST, {
-        <<"Provided \"~s\" is already occupied, please choose other one.">>,
-        [Key]
     }};
 translate(?ERROR_BAD_VALUE_IDENTIFIER(Key)) ->
     {?HTTP_400_BAD_REQUEST, {

@@ -137,7 +137,7 @@ create_test(Config) ->
     ?assertEqual(Name, <<"Name">>),
     ?assertEqual(Login, <<"login">>),
     % Second try should fail (such id exists)
-    ?assertMatch(?ERROR_BAD_VALUE_ID_OCCUPIED(<<"userId">>), oz_test_utils:call_oz(
+    ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"userId">>), oz_test_utils:call_oz(
         Config, user_logic, create, [UserRecord, PredefinedUserId]
     )).
 

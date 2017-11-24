@@ -22,7 +22,7 @@
                             "cm_nodes": [
                                 "cm"
                             ],
-                            "worker_num": 2
+                            "worker_num": 3
                         }
                     }
                 }
@@ -41,7 +41,7 @@
                                 "127.0.0.1:49161"
                             ],
                             "http_domain": {
-                                "string": "127.0.0.1"
+                                "string": "onezone_test.org"
                             }
                         }
                     }
@@ -59,7 +59,25 @@
                                 "127.0.0.1:49161"
                             ],
                             "http_domain": {
-                                "string": "127.0.0.1"
+                                "string": "onezone_test.org"
+                            }
+                        }
+                    }
+                },
+                "node3": {
+                    "vm.args": {
+                        "setcookie": "test_cookie"
+                    },
+                    "sys.config": {
+                        "oz_worker": {
+                            "cm_nodes": [
+                                "cm"
+                            ],
+                            "db_nodes": [
+                                "127.0.0.1:49161"
+                            ],
+                            "http_domain": {
+                                "string": "onezone_test.org"
                             }
                         }
                     }

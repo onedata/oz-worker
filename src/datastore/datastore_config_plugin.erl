@@ -40,6 +40,7 @@ get_models() -> [
     token,
     entity_graph_state,
     ozpca_state,
+    dns_state,
     provider_connection,
     state_token
 ].

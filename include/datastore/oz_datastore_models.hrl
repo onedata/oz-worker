@@ -199,8 +199,9 @@
 %% This record defines a provider who supports spaces and can be reached via url
 -record(od_provider, {
     name = <<"">> :: od_provider:name(),
-    redirection_point :: undefined | binary(),
-    urls :: undefined | [binary()],
+    subdomain_delegation = false :: boolean(),
+    domain :: binary(),
+    subdomain = undefined :: undefined | binary(),
     serial :: undefined | binary(),
     latitude = 0.0 :: float(),
     longitude = 0.0 :: float(),
@@ -283,6 +284,12 @@
 %% todo: implement distributed CA properly (connected with VFS-1499)
 -record(ozpca_state, {
     dedicated_node :: undefined | {ok, node()} | {error, Reason :: term()}
+}).
+
+-record(dns_state, {
+    subdomain_to_provider = #{} :: #{dns_state:subdomain() => od_provider:id()},
+    provider_to_subdomain = #{} :: #{od_provider:id() => dns_state:subdomain()},
+    provider_to_ips = #{} :: #{od_provider:id() => [inet:ipv4_address()]}
 }).
 
 -record(entity_graph_state, {

@@ -62,11 +62,10 @@ operation_supported(_, _, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(#el_req{gri = #gri{aspect = {provider, Id}}, data = Data}) ->
     EncodedPublicKey = maps:get(<<"publicKey">>, Data),
-    URLs = maps:get(<<"urls">>, Data),
-    RedirectionPoint = maps:get(<<"redirectionPoint">>, Data),
+    Domain = maps:get(<<"domain">>, Data),
     case plugins:apply(identity_repository, publish, [Id, EncodedPublicKey]) of
         ok ->
-            Provider = #od_provider{name = Id, urls = URLs, redirection_point = RedirectionPoint},
+            Provider = #od_provider{name = Id, domain = Domain},
             {ok, _} = od_provider:save(#document{key = Id, value = Provider}),
             ok;
         {error, Reason} ->
@@ -165,8 +164,7 @@ authorize(#el_req{operation = delete}, _) ->
 validate(#el_req{operation = create, gri = #gri{aspect = {provider, _}}}) -> #{
     required => #{
         <<"publicKey">> => {binary, non_empty},
-        <<"urls">> => {list_of_binaries, non_empty},
-        <<"redirectionPoint">> => {binary, non_empty}
+        <<"domain">> => {binary, domain}
     }
 };
 

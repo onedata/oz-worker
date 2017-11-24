@@ -98,12 +98,23 @@ share_upgrade_test(Config) ->
 
 
 provider_upgrade_test(Config) ->
-    OldProviderRecord = old_provider_record(),
-    {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, od_provider, upgrade_record, [1, OldProviderRecord]
+    ProviderRecordV1 = provider_record(1),
+    ProviderRecordV2 = provider_record(2),
+    ProviderRecordV3 = provider_record(3),
+
+    % Upgrade 1 -> 2
+    {NewVersion1, NewRecord1} = oz_test_utils:call_oz(
+        Config, od_provider, upgrade_record, [1, ProviderRecordV1]
     ),
-    ?assertEqual(2, NewVersion),
-    ?assertEqual(NewRecord, new_provider_record()).
+    ?assertEqual(2, NewVersion1),
+    ?assertEqual(NewRecord1, ProviderRecordV2),
+
+    % Upgrade 1 -> 2
+    {NewVersion2, NewRecord2} = oz_test_utils:call_oz(
+        Config, od_provider, upgrade_record, [2, ProviderRecordV2]
+    ),
+    ?assertEqual(3, NewVersion2),
+    ?assertEqual(NewRecord2, ProviderRecordV3).
 
 
 handle_service_upgrade_test(Config) ->
@@ -455,7 +466,7 @@ new_share_record() -> #od_share{
     root_file = <<"root_file_id">>
 }.
 
-old_provider_record() -> {od_provider,
+provider_record(1) -> {od_provider,
     <<"name">>,
     <<"redirection_point">>,
     [<<"url1.com">>, <<"url2.com">>, <<"url3.com">>],
@@ -466,12 +477,37 @@ old_provider_record() -> {od_provider,
     [],  % eff_users
     [],  % eff_groups
     false  % bottom_up_dirty
-}.
+};
 
-new_provider_record() -> #od_provider{
+provider_record(2) -> {od_provider,
+    <<"name">>, % name
+    <<"redirection_point">>, % redirection_point
+    [<<"url1.com">>, <<"url2.com">>, <<"url3.com">>], % urls
+    <<"cert_serial">>,
+    -93.2341,
+    17,
+
+    #{
+        % During provider doc translation, extra information is added - support
+        % sizes. However, it is not possible to gather this information because
+        % during update there is no information about document id in context.
+        <<"space1">> => 0,
+        <<"space2">> => 0,
+        <<"space3">> => 0,
+        <<"space4">> => 0
+    },
+
+    #{}, % eff_users
+    #{}, % eff_groups
+
+    true % bottom_up_dirt
+};
+
+provider_record(3) -> #od_provider{
     name = <<"name">>,
-    redirection_point = <<"redirection_point">>,
-    urls = [<<"url1.com">>, <<"url2.com">>, <<"url3.com">>],
+    domain = <<"redirection_point">>,
+    subdomain_delegation = false,
+    subdomain = undefined,
     serial = <<"cert_serial">>,
     latitude = -93.2341,
     longitude = 17,

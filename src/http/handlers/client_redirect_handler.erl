@@ -1,7 +1,7 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
 %%% @copyright (C) 2014 ACK CYFRONET AGH
-%%% This software is released under the MIT license 
+%%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
@@ -55,10 +55,10 @@ handle(Req, RequestedPort = State) ->
                 chosen_provider = ChosenProvider
             }}} = GetUserResult,
         % If default provider is not known, set it.
-        RedirectionPoint =
+        Host =
             try
                 {ok, #od_provider{
-                    redirection_point = RedPoint
+                    domain = RedPoint
                 }} = provider_logic:get(?ROOT, ChosenProvider),
                 RedPoint
             catch _:_ ->
@@ -68,11 +68,10 @@ handle(Req, RequestedPort = State) ->
                     {ok, User#od_user{chosen_provider = NewChosenProv}}
                 end),
                 {ok, #od_provider{
-                    redirection_point = RedPoint2
+                    domain = RedPoint2
                 }} = provider_logic:get(?ROOT, NewChosenProv),
                 RedPoint2
             end,
-        #{host := Host} = url_utils:parse(RedirectionPoint),
         {Path, _} = cowboy_req:path(Req),
         QueryString = case cowboy_req:qs(Req) of
             {<<"">>, _} ->
@@ -80,7 +79,7 @@ handle(Req, RequestedPort = State) ->
             {QS, _} ->
                 <<"?", QS/binary>>
         end,
-        % Redirect to provider's hostname, but to requested port
+        % Redirect to provider's domain, but to requested port
         URL = str_utils:format_bin("https://~s:~B~s~s", [
             Host, RequestedPort, Path, QueryString
         ]),

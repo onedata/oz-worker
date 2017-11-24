@@ -56,7 +56,7 @@
 
 %% API
 -export([set_up_test_entities/3, destroy_test_entities/3]).
--export([create_provider_with_uuid/6, create_provider_with_uuid/5]).
+-export([create_provider_with_uuid/5, create_provider_with_uuid/4]).
 -export([create_user_with_uuid/2]).
 -export([create_group_with_uuid/3]).
 -export([create_space_with_uuid/3, create_space_with_uuid/5, create_space_with_provider/4]).
@@ -201,11 +201,11 @@ destroy_test_entities(Users, Groups, Spaces) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider_with_uuid(ClientName :: binary(), URLs :: [binary()],
-    RedirectionPoint :: binary(), CSR :: binary(), UUId :: binary()) ->
+-spec create_provider_with_uuid(ClientName :: binary(), Domain :: binary(),
+    CSR :: binary(), UUId :: binary()) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
-create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUId) ->
-    create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUId, #{}).
+create_provider_with_uuid(ClientName, Domain, CSRBin, UUId) ->
+    create_provider_with_uuid(ClientName, Domain, CSRBin, UUId, #{}).
 
 %%--------------------------------------------------------------------
 %% @doc Create a provider's account with implicit UUId.
@@ -214,18 +214,16 @@ create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUId) ->
 %% 'longitude' keys)
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider_with_uuid(ClientName :: binary(), URLs :: [binary()],
-    RedirectionPoint :: binary(), CSR :: binary(), UUId :: binary(),
-    OptionalArgs :: #{atom() => term()}) ->
+-spec create_provider_with_uuid(ClientName :: binary(), Domain :: binary(),
+    CSR :: binary(), UUId :: binary(), OptionalArgs :: #{atom() => term()}) ->
     {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
-create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUId, OptionalArgs) ->
+create_provider_with_uuid(ClientName, Domain, CSRBin, UUId, OptionalArgs) ->
     {ok, {ProviderCertPem, Serial}} = ozpca:sign_provider_req(UUId, CSRBin),
     Latitude = maps:get(latitude, OptionalArgs, undefined),
     Longitude = maps:get(longitude, OptionalArgs, undefined),
 
-    Provider = #od_provider{name = ClientName, urls = URLs,
-        redirection_point = RedirectionPoint, serial = Serial,
-        latitude = Latitude, longitude = Longitude},
+    Provider = #od_provider{name = ClientName, domain = Domain,
+        serial = Serial, latitude = Latitude, longitude = Longitude},
 
     od_provider:save(#document{key = UUId, value = Provider}),
     {ok, UUId, ProviderCertPem}.
