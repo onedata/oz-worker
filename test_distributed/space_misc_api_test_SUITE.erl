@@ -723,7 +723,7 @@ get_provider_test(Config) ->
 
     ProviderDetails = ?PROVIDER_DETAILS(?PROVIDER_NAME1),
     {ok, {P1, _, _}} = oz_test_utils:create_provider_and_certs(
-        Config, ProviderDetails
+        Config, ProviderDetails#{<<"subdomainDelegation">> => false}
     ),
     {ok, S1} = oz_test_utils:support_space(
         Config, P1, S1, oz_test_utils:minimum_support_size(Config)

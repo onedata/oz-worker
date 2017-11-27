@@ -1039,12 +1039,10 @@ create_eff_providers_env(Config) ->
 
     Providers = [{P1, _}, {P2, _}, {P3, _}, {P4, _}] = lists:map(
         fun(_) ->
-            {_, CSRFile, _} = oz_test_utils:generate_provider_cert_files(),
-            {ok, CSR} = file:read_file(CSRFile),
             ProviderName = ?UNIQUE_STRING,
             ProvDetails = ?PROVIDER_DETAILS(ProviderName),
-            {ok, {ProvId, _}} = oz_test_utils:create_provider(
-                Config, ProvDetails#{<<"csr">> => CSR}
+            {ok, {ProvId, _, _}} = oz_test_utils:create_provider_and_certs(
+                Config, ProvDetails#{<<"subdomainDelegation">> => false}
             ),
             {ProvId, ProvDetails#{<<"clientName">> => ProviderName}}
         end, lists:seq(1, 4)

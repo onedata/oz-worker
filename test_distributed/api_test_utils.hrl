@@ -100,7 +100,7 @@
 %% Example test data
 -define(UNIQUE_STRING,
     <<
-        "uniqueString",
+        "unique",
         (integer_to_binary(erlang:unique_integer([positive])))/binary
     >>
 ).
@@ -150,17 +150,14 @@
 %% Example test data for providers
 -define(LATITUDE, 23.10).
 -define(LONGITUDE, 44.44).
--define(URLS1, [<<"127.0.0.1">>]).
--define(URLS2, [<<"127.0.0.2">>]).
--define(REDIRECTION_POINT1, <<"https://127.0.0.1:443">>).
--define(REDIRECTION_POINT2, <<"https://127.0.0.2:443">>).
+-define(DOMAIN, <<"multilevel.provider-domain.org">>).
+-define(SUB_DOMAIN, <<"prov-sub">>).
 -define(PROVIDER_NAME1, <<"provider1">>).
 -define(PROVIDER_NAME2, <<"provider2">>).
 -define(PROVIDER_DETAILS(ProviderName),
     #{
         <<"name">> => ProviderName,
-        <<"urls">> => ?URLS1,
-        <<"redirectionPoint">> => ?REDIRECTION_POINT1,
+        <<"domain">> => ?DOMAIN,
         <<"latitude">> => rand:uniform() * 90,
         <<"longitude">> => rand:uniform() * 180
     }

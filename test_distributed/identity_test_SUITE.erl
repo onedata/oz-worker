@@ -211,8 +211,7 @@ register_provider_rest(OzNode, ID, PublicKey) ->
     Encoded = identity_utils:encode(PublicKey),
     Body = json_utils:encode([
         {<<"publicKey">>, Encoded},
-        {<<"urls">>, [<<"127.0.0.1">>]},
-        {<<"redirectionPoint">>, <<"127.0.0.1">>}
+        {<<"domain">>, <<"127.0.0.1">>}
     ]),
     Headers = #{<<"content-type">> => <<"application/json">>},
     Opts = [{ssl_options, [{cacerts, rest_ca_certs(OzNode)}]}],

@@ -104,7 +104,7 @@ create_test(Config) ->
     ?assertEqual(User2#od_user.login, ExpLogin),
 
     % Second try should fail (such id exists)
-    ?assertMatch(?ERROR_BAD_VALUE_ID_OCCUPIED(<<"userId">>),
+    ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"userId">>),
         oz_test_utils:call_oz(
             Config, user_logic, create, [UserRecord, PredefinedUserId]
         )
@@ -788,7 +788,7 @@ set_default_provider_test(Config) ->
             Config, ProviderId, S1, oz_test_utils:minimum_support_size(Config)
         ),
         #{providerId => ProviderId}
-                  end,
+    end,
     VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId} = _Env, _) ->
         Result = oz_test_utils:call_oz(
             Config, user_logic, get_default_provider, [?ROOT, U1]
@@ -797,7 +797,7 @@ set_default_provider_test(Config) ->
             true -> ?assertMatch({ok, ProviderId}, Result);
             false -> ?assertNotMatch({ok, ProviderId}, Result)
         end
-                   end,
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{correct = [{user, U1}]},
@@ -949,10 +949,10 @@ unset_default_provider_test(Config) ->
         ),
         oz_test_utils:user_set_default_provider(Config, U1, ProviderId),
         #{providerId => ProviderId}
-                  end,
+    end,
     DeleteEntityFun = fun(_Env) ->
         oz_test_utils:user_unset_default_provider(Config, U1)
-                      end,
+    end,
     VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId} = _Env, _) ->
         Result = oz_test_utils:call_oz(
             Config, user_logic, get_default_provider, [?ROOT, U1]
@@ -961,7 +961,7 @@ unset_default_provider_test(Config) ->
             true -> ?assertMatch(?ERROR_NOT_FOUND, Result);
             false -> ?assertMatch({ok, ProviderId}, Result)
         end
-                   end,
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{correct = [{user, U1}]},

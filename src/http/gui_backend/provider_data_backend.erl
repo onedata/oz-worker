@@ -150,14 +150,13 @@ provider_record(ProviderId, UserId) ->
     {ok, #od_user{eff_spaces = EffUserSpaces}} = user_logic:get(Client, UserId),
     {ok, #od_provider{
         name = Name,
-        redirection_point = RedPoint,
+        domain = Host,
         latitude = Latitude,
         longitude = Longitude,
         spaces = SpacesWithSupports
     }} = provider_logic:get(?ROOT, ProviderId),
     Spaces = maps:keys(SpacesWithSupports),
 
-    #{host := Host} = url_utils:parse(RedPoint),
     Status = case provider_connection:is_online(ProviderId) of
         true ->
             <<"online">>;

@@ -86,6 +86,17 @@
     end
 ).
 
+% Regexp to validate domain (domain, subdomain or IP)
+% Domain consists of some number of parts delimited by single dot characters.
+% Each part must start and end with an lowercase alphanum
+% and may contain a hyphen '-'.
+-define(DOMAIN_VALIDATION_REGEXP,
+    <<"^(([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])\\.)*([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$">>).
+
+-define(MAX_DOMAIN_LENGTH, 253).
+
+-define(SUBDOMAIN_VALIDATION_REGEXP,
+    <<"^([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$">>).
 
 % Definitions concerning aliases
 % Value in DB meaning that alias is not set.

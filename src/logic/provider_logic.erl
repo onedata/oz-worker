@@ -21,7 +21,7 @@
 -define(PLUGIN, provider_logic_plugin).
 
 -export([
-    create/5, create/7, create/2, create_dev/2
+    create/4, create/6, create/2, create_dev/2
 ]).
 -export([
     get/2,
@@ -43,6 +43,10 @@
     revoke_support/3
 ]).
 -export([
+    update_domain_config/3,
+    get_domain_config/2
+]).
+-export([
     check_my_ports/2
 ]).
 -export([
@@ -62,37 +66,37 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new provider document in database based on Name, URLs,
-%% RedirectionPoint and CSR (Certificate Signing Request).
+%% Creates a new provider document in database based on Name,
+%% Domain and CSR (Certificate Signing Request).
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client(), Name :: binary(),
-    URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary()) ->
+    Domain :: binary(), CSR :: binary()) ->
     {ok, od_provider:id()} | {error, term()}.
-create(Client, Name, URLs, RedirectionPoint, CSR) ->
+create(Client, Name, Domain, CSR) ->
     create(Client, #{
         <<"name">> => Name,
-        <<"urls">> => URLs,
-        <<"redirectionPoint">> => RedirectionPoint,
+        <<"domain">> => Domain,
+        <<"subdomainDelegation">> => false,
         <<"csr">> => CSR
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new provider document in database based on Name, URLs,
-%% RedirectionPoint, CSR (Certificate Signing Request), Latitude and Longitude.
+%% Creates a new provider document in database based on Name,
+%% Domain, CSR (Certificate Signing Request), Latitude and Longitude.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client(), Name :: binary(),
-    URLs :: [binary()], RedirectionPoint :: binary(), CSR :: binary(),
+    Domain :: binary(), CSR :: binary(),
     Latitude :: float(), Longitude :: float()) ->
     {ok, od_provider:id()} | {error, term()}.
-create(Client, Name, URLs, RedirectionPoint, CSR, Latitude, Longitude) ->
+create(Client, Name, Domain, CSR, Latitude, Longitude) ->
     create(Client, #{
         <<"name">> => Name,
-        <<"urls">> => URLs,
-        <<"redirectionPoint">> => RedirectionPoint,
+        <<"domain">> => Domain,
+        <<"subdomainDelegation">> => false,
         <<"csr">> => CSR,
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude
@@ -101,7 +105,7 @@ create(Client, Name, URLs, RedirectionPoint, CSR, Latitude, Longitude) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new provider document in database. Name, URLs, RedirectionPoint and
+%% Creates a new provider document in database. Name, URLs, Domain and
 %% CSR (Certificate Signing Request) are provided in a
 %% proper Data object, Latitude and Longitude are optional.
 %% @end
@@ -127,8 +131,8 @@ create(Client, Data) ->
 %% @doc
 %% TODO This is a developer functionality and should be removed when
 %% TODO VFS-2550 is ready.
-%% Creates a new provider document in database. UUID, Name, URLs,
-%% RedirectionPoint and CSR (Certificate Signing Request) are provided in a
+%% Creates a new provider document in database. UUID, Name,
+%% Domain and CSR (Certificate Signing Request) are provided in a
 %% proper Data object, Latitude and Longitude are optional.
 %% @end
 %%--------------------------------------------------------------------
@@ -196,8 +200,8 @@ list(Client) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates information of given provider. Supports updating Name, URLs,
-%% RedirectionPoint, Latitude and Longitude.
+%% Updates information of given provider.
+%% Supports updating Name, Latitude and Longitude.
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
@@ -255,6 +259,35 @@ support_space(Client, ProviderId, Data) ->
         gri = #gri{type = od_provider, id = ProviderId, aspect = support},
         data = Data
     })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Update data related to domain config and subdomain delegation.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_domain_config(Client :: entity_logic:client(),
+    ProviderId :: od_provider:id(), Data :: #{}) -> ok | {error, term()}.
+update_domain_config(Client, ProviderId, Data) ->
+    entity_logic:handle(#el_req{
+        operation = update,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = domain_config},
+        data = Data}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieve data related to domain config and subdomain delegation.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_domain_config(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+    {ok, map()} | {error, term()}.
+get_domain_config(Client, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = domain_config}}).
 
 
 %%--------------------------------------------------------------------
@@ -479,9 +512,8 @@ supports_space(#od_provider{spaces = Spaces}, SpaceId) ->
 %%--------------------------------------------------------------------
 -spec get_url(ProviderId :: od_provider:id()) -> {ok, ProviderURL :: binary()}.
 get_url(ProviderId) ->
-    {ok, #od_provider{redirection_point = RedPoint}} = get(?ROOT, ProviderId),
-    #{host := Host, port := Port} = url_utils:parse(RedPoint),
-    {ok, str_utils:format_bin("https://~s:~B", [Host, Port])}.
+    {ok, #od_provider{domain = Domain}} = get(?ROOT, ProviderId),
+    {ok, str_utils:format_bin("https://~s", [Domain])}.
 
 
 %%--------------------------------------------------------------------
@@ -528,3 +560,4 @@ choose_provider_for_user(UserId) ->
                     {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIds) + 1), ProviderIds)}
             end
     end.
+

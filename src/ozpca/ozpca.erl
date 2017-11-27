@@ -23,7 +23,7 @@
 %% API
 -export([start_link/0, sign_provider_req/2, verify_provider/1, revoke/1,
     gen_crl/0, oz_ca_path/0, oz_ca_pem/0, crl_path/0]).
--export([ensure_oz_ca_cert_present/0]).
+-export([ensure_oz_ca_cert_present/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2,
@@ -137,9 +137,9 @@ crl_path() ->
 %% only one of the nodes generates and distributes new certs.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_oz_ca_cert_present() -> ok.
-ensure_oz_ca_cert_present() ->
-    critical_section:run(oz_ca_cert, fun ensure_oz_ca_cert_present_unsafe/0).
+-spec ensure_oz_ca_cert_present(Nodes :: [node()]) -> ok.
+ensure_oz_ca_cert_present(Nodes) ->
+    critical_section:run(oz_ca_cert, fun () -> ensure_oz_ca_cert_present_unsafe(Nodes) end).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -147,8 +147,8 @@ ensure_oz_ca_cert_present() ->
 %% cluster nodes. Should not be called in parallel to prevent race conditions.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_oz_ca_cert_present_unsafe() -> ok.
-ensure_oz_ca_cert_present_unsafe() ->
+-spec ensure_oz_ca_cert_present_unsafe(NodeList :: [node()]) -> ok.
+ensure_oz_ca_cert_present_unsafe(NodeList) ->
     {ok, CaDir} = application:get_env(?APP_NAME, ozpca_dir),
     KeyPath = filename:join(CaDir, ?CAKEY_FILE),
     CertPath = filename:join(CaDir, ?CACERT_FILE),
@@ -174,7 +174,6 @@ ensure_oz_ca_cert_present_unsafe() ->
             ]),
             ?info("Generated new Zone CA cert")
     end,
-    NodeList = gen_server2:call({global, ?CLUSTER_MANAGER}, get_nodes),
     OtherWorkers = NodeList -- [node()],
     {ok, Key} = file:read_file(KeyPath),
     {ok, Cert} = file:read_file(CertPath),

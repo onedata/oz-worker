@@ -138,7 +138,7 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {deprecated_group_privileges, G
 create(#el_req{client = Client, gri = #gri{id = SpaceId, aspect = {deprecated_create_share, ShareId}}, data = Data}) ->
     case share_logic:exists(ShareId) of
         true ->
-            ?ERROR_BAD_VALUE_ID_OCCUPIED(<<"shareId">>);
+            ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"shareId">>);
         false ->
             share_logic:create(Client, Data#{
                 <<"spaceId">> => SpaceId,

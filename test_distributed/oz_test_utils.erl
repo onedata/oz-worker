@@ -129,7 +129,9 @@
     list_providers/1,
     delete_provider/2,
     support_space/4,
-    support_space/5
+    support_space/5,
+    enable_subdomain_delegation/4,
+    set_provider_domain/3
 ]).
 -export([
     all_handle_service_privileges/1,
@@ -1103,8 +1105,8 @@ delete_share(Config, ShareId) ->
 create_provider_and_certs(Config, Name) when is_binary(Name) ->
     create_provider_and_certs(Config, #{
         <<"name">> => Name,
-        <<"urls">> => [<<"127.0.0.1">>],
-        <<"redirectionPoint">> => <<"127.0.0.1">>,
+        <<"domain">> => <<"127.0.0.1">>,
+        <<"subdomainDelegation">> => false,
         <<"latitude">> => 0.0,
         <<"longitude">> => 0.0
     });
@@ -1207,6 +1209,39 @@ support_space(Config, Client, ProviderId, Token, Size) ->
 -spec all_handle_service_privileges(Config :: term()) -> [atom()].
 all_handle_service_privileges(Config) ->
     call_oz(Config, privileges, handle_service_privileges, []).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets provider subdomain.
+%% @end
+%%--------------------------------------------------------------------
+-spec enable_subdomain_delegation(Config :: term(),
+    ProviderId :: od_provider:id(), Subdomain :: binary(),
+    IPs :: [inet:ip4_address()]) -> ok.
+enable_subdomain_delegation(Config, ProviderId, Subdomain, IPs) ->
+    Data = #{
+      <<"subdomainDelegation">> => true,
+      <<"subdomain">> => Subdomain,
+      <<"ipList">> => IPs},
+    ?assertMatch(ok, oz_test_utils:call_oz(Config,
+        provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets provider domain (not a delegated subdomain).
+%% @end
+%%--------------------------------------------------------------------
+-spec set_provider_domain(Config :: term(), ProviderId :: od_provider:od(),
+    Domain :: binary())  -> ok.
+set_provider_domain(Config, ProviderId, Domain) ->
+    Data = #{
+      <<"subdomainDelegation">> => false,
+      <<"domain">> => Domain},
+    ?assertMatch(ok, oz_test_utils:call_oz(Config,
+        provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
+
 
 
 %%--------------------------------------------------------------------

@@ -141,7 +141,7 @@ create(UserInfo, ProposedUserId) ->
     try
         case od_user:create(#document{key = ProposedUserId, value = UserInfo}) of
             {error, already_exists} ->
-                ?ERROR_BAD_VALUE_ID_OCCUPIED(<<"userId">>);
+                ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"userId">>);
             {ok, #document{key = UserId}} ->
                 setup_user(UserId, UserInfo),
                 {ok, UserId}

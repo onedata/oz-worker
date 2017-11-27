@@ -200,22 +200,43 @@ translate_get(1, #gri{type = od_share, aspect = instance, scope = protected}, Sh
 translate_get(1, #gri{type = od_provider, aspect = instance, scope = private}, Provider) ->
     #od_provider{
         name = Name,
-        urls = Urls,
+        subdomain_delegation = SubdomainDelegation,
+        domain = Domain,
+        subdomain = Subdomain,
+        latitude = Latitude,
+        longitude = Longitude,
+
         spaces = Spaces,
         eff_users = EffUsers,
         eff_groups = EffGroups
     } = Provider,
     #{
         <<"name">> => Name,
-        <<"urls">> => Urls,
+        <<"subdomainDelegation">> => SubdomainDelegation,
+        <<"domain">> => Domain,
+        <<"subdomain">> => Subdomain,
+
+        <<"latitude">> => Latitude,
+        <<"longitude">> => Longitude,
+
         <<"spaces">> => Spaces,
         <<"effectiveUsers">> => maps:keys(EffUsers),
         <<"effectiveGroups">> => maps:keys(EffGroups)
 
     };
 
+
 translate_get(1, #gri{type = od_provider, aspect = instance, scope = protected}, ProviderData) ->
     ProviderData;
+
+translate_get(1, #gri{type = od_provider, aspect = domain_config}, Data) ->
+    case maps:find(<<"ipList">>, Data) of
+        {ok, IPList} ->
+            IPBinaries = [list_to_binary(inet:ntoa(IP)) || IP <- IPList],
+            Data#{<<"ipList">> := IPBinaries};
+        error ->
+            Data
+    end;
 
 translate_get(1, #gri{type = od_handle_service, aspect = instance, scope = private}, HService) ->
     #od_handle_service{

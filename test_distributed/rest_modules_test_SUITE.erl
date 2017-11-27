@@ -24,10 +24,7 @@
 %%  set example test data
 -define(LATITUDE, 23.10).
 -define(LONGITUDE, 44.44).
--define(URLS1, [<<"127.0.0.1">>]).
--define(URLS2, [<<"127.0.0.2">>]).
--define(REDIRECTION_POINT1, <<"https://127.0.0.1:443">>).
--define(REDIRECTION_POINT2, <<"https://127.0.0.2:443">>).
+-define(DOMAIN1, <<"127.0.0.1">>).
 -define(CLIENT_NAME1, <<"provider1">>).
 -define(CLIENT_NAME2, <<"provider2">>).
 -define(USER_NAME1, <<"user1">>).
@@ -457,15 +454,15 @@ create_provider_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
-    {ProviderId, ProviderReqParams} = register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    {ProviderId, ProviderReqParams} = register_provider(?DOMAIN1, ?CLIENT_NAME1, Config, ReqParams),
     ParamsWithOtherAddress = update_req_params(ProviderReqParams, OtherRestAddress, address),
 
     ?assertMatch(
-        [?CLIENT_NAME1, ?URLS1, ?REDIRECTION_POINT1, ProviderId],
+        [?CLIENT_NAME1, ?DOMAIN1, ProviderId],
         get_provider_info(ProviderReqParams)
     ),
     ?assertMatch(
-        [?CLIENT_NAME1, ?URLS1, ?REDIRECTION_POINT1, ProviderId],
+        [?CLIENT_NAME1, ?DOMAIN1, ProviderId],
         get_provider_info(ParamsWithOtherAddress)
     ).
 
@@ -474,15 +471,15 @@ create_provider_with_location_test(Config) ->
     OtherRestAddress = ?config(otherRestAddress, Config),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
 
-    {ProviderId, ProviderReqParams} = register_provider(?LATITUDE, ?LONGITUDE, ?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, Config, ReqParams),
+    {ProviderId, ProviderReqParams} = register_provider(?LATITUDE, ?LONGITUDE, ?DOMAIN1, ?CLIENT_NAME1, Config, ReqParams),
     ParamsWithOtherAddress = update_req_params(ProviderReqParams, OtherRestAddress, address),
 
     ?assertMatch(
-        [?LATITUDE, ?LONGITUDE, ?CLIENT_NAME1, ?URLS1, ?REDIRECTION_POINT1, ProviderId],
+        [?LATITUDE, ?LONGITUDE, ?CLIENT_NAME1, ?DOMAIN1, ProviderId],
         get_provider_info_with_location(ProviderReqParams)
     ),
     ?assertMatch(
-        [?LATITUDE, ?LONGITUDE, ?CLIENT_NAME1, ?URLS1, ?REDIRECTION_POINT1, ProviderId],
+        [?LATITUDE, ?LONGITUDE, ?CLIENT_NAME1, ?DOMAIN1, ProviderId],
         get_provider_info_with_location(ParamsWithOtherAddress)
     ).
 
@@ -492,14 +489,14 @@ update_provider_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
     ParamsWithOtherAddress = update_req_params(ProviderReqParams, OtherRestAddress, address),
 
-    update_provider(?URLS2, ?REDIRECTION_POINT2, ?CLIENT_NAME2, ProviderReqParams),
+    update_provider(?CLIENT_NAME2, ProviderReqParams),
 
     ?assertMatch(
-        [?CLIENT_NAME2, ?URLS2, ?REDIRECTION_POINT2, ProviderId],
+        [?CLIENT_NAME2, ?DOMAIN1, ProviderId],
         get_provider_info(ProviderReqParams)
     ),
     ?assertMatch(
-        [?CLIENT_NAME2, ?URLS2, ?REDIRECTION_POINT2, ProviderId],
+        [?CLIENT_NAME2, ?DOMAIN1, ProviderId],
         get_provider_info(ParamsWithOtherAddress)
     ).
 
@@ -508,14 +505,14 @@ get_provider_info_test(Config) ->
     ProviderReqParams = ?config(providerReqParams, Config),
 
     ?assertMatch(
-        [?CLIENT_NAME1, ?URLS1, ?REDIRECTION_POINT1, ProviderId],
+        [?CLIENT_NAME1, ?DOMAIN1, ProviderId],
         get_provider_info(ProviderId, ProviderReqParams)
     ),
 
     OtherRestAddress = ?config(otherRestAddress, Config),
     ParamsWithOtherAddress = update_req_params(ProviderReqParams, OtherRestAddress, address),
     ?assertMatch(
-        [?CLIENT_NAME1, ?URLS1, ?REDIRECTION_POINT1, ProviderId],
+        [?CLIENT_NAME1, ?DOMAIN1, ProviderId],
         get_provider_info(ProviderId, ParamsWithOtherAddress)
     ).
 
@@ -1328,7 +1325,7 @@ get_info_of_provider_supporting_space_test(Config) ->
 
     SID = create_space_and_get_support(Config, ?SPACE_NAME1, UserReqParams, ?SPACE_SIZE1, ProviderReqParams),
 
-    Expected = [?CLIENT_NAME1, ProviderId, ?URLS1, ?REDIRECTION_POINT1],
+    Expected = [?CLIENT_NAME1, ProviderId, ?DOMAIN1],
     ?assertMatch(Expected, get_supporting_provider_info(SID, ProviderId, ProviderReqParams)),
     ?assertMatch(Expected, get_supporting_provider_info(SID, ProviderId, UserReqParams)),
     ?assertMatch(Expected, get_supporting_provider_info(SID, ProviderId, UserParamsOtherAddress)).
@@ -1954,7 +1951,7 @@ init_per_testcase(register_only_provider, Config) ->
     RestAddress = ?config(restAddress, NewConfig),
     ReqParams = {RestAddress, ?CONTENT_TYPE_HEADER, []},
     {ProviderId, ProviderReqParams} =
-        register_provider(?URLS1, ?REDIRECTION_POINT1, ?CLIENT_NAME1, NewConfig, ReqParams),
+        register_provider(?DOMAIN1, ?CLIENT_NAME1, NewConfig, ReqParams),
     [
         {providerId, ProviderId},
         {providerReqParams, ProviderReqParams}
@@ -2158,16 +2155,16 @@ update_req_params({_, Headers, Options}, NewParam, address) ->
 
 %% Provider functions =====================================================
 
-register_provider(URLS, RedirectionPoint, ClientName, Config, ReqParams) ->
-    register_provider(undefined, undefined, URLS, RedirectionPoint, ClientName, Config, ReqParams).
+register_provider(Domain, ClientName, Config, ReqParams) ->
+    register_provider(undefined, undefined, Domain, ClientName, Config, ReqParams).
 
-register_provider(Latitude, Longitude, URLS, RedirectionPoint, ClientName, Config, ReqParams = {RestAddress, Headers, _Options}) ->
+register_provider(Latitude, Longitude, Domain, ClientName, Config, ReqParams = {RestAddress, Headers, _Options}) ->
     {KeyFile, CSRFile, CertFile} = ?config(cert_files, Config),
     {ok, CSR} = file:read_file(CSRFile),
     Params = [
-        {<<"urls">>, URLS},
         {<<"csr">>, CSR},
-        {<<"redirectionPoint">>, RedirectionPoint},
+        {<<"domain">>, Domain},
+        {<<"subdomainDelegation">>, false},
         {<<"clientName">>, ClientName}
     ],
     Body = json_utils:encode(case {Latitude, Longitude} of
@@ -2191,21 +2188,19 @@ register_provider(Latitude, Longitude, URLS, RedirectionPoint, ClientName, Confi
 
 get_provider_info({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/provider", Headers, get, [], Options),
-    get_body_val([clientName, urls, redirectionPoint, providerId], Response).
+    get_body_val([clientName, domain, providerId], Response).
 
 get_provider_info_with_location({RestAddress, Headers, Options}) ->
     Response = do_request(RestAddress ++ "/provider", Headers, get, [], Options),
-    get_body_val([latitude, longitude, clientName, urls, redirectionPoint, providerId], Response).
+    get_body_val([latitude, longitude, clientName, domain, providerId], Response).
 
 get_provider_info(ProviderId, {RestAddress, Headers, Options}) ->
     EncodedPID = binary_to_list(http_utils:url_encode(ProviderId)),
     Response = do_request(RestAddress ++ "/providers/" ++ EncodedPID, Headers, get, [], Options),
-    get_body_val([clientName, urls, redirectionPoint, providerId], Response).
+    get_body_val([clientName, domain, providerId], Response).
 
-update_provider(URLS, RedirectionPoint, ClientName, {RestAddress, Headers, Options}) ->
+update_provider(ClientName, {RestAddress, Headers, Options}) ->
     Body = json_utils:encode([
-        {<<"urls">>, URLS},
-        {<<"redirectionPoint">>, RedirectionPoint},
         {<<"clientName">>, ClientName}
     ]),
     do_request(RestAddress ++ "/provider", Headers, patch, Body, Options).
@@ -2766,7 +2761,7 @@ get_supporting_provider_info(SID, PID, {RestAddress, Headers, Options}) ->
     EncodedSID = binary_to_list(http_utils:url_encode(SID)),
     Address = RestAddress ++ "/spaces/" ++ EncodedSID ++ "/providers/" ++ EncodedPID,
     Response = do_request(Address, Headers, get, [], Options),
-    get_body_val([clientName, providerId, urls, redirectionPoint], Response).
+    get_body_val([clientName, providerId, domain], Response).
 
 delete_supporting_provider(SID, PID, {RestAddress, Headers, Options}) ->
     EncodedPID = binary_to_list(http_utils:url_encode(PID)),
