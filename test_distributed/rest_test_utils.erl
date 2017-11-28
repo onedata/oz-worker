@@ -136,6 +136,12 @@ check_rest_call(Config, ArgsMap) ->
                     1 -> <<"macaroon">>;
                     2 -> <<"X-Auth-Token">>
                 end,
+                ReqHeaders#{HeaderName => Macaroon};
+            {user, _, Macaroon} ->
+                HeaderName = case rand:uniform(2) of
+                    1 -> <<"macaroon">>;
+                    2 -> <<"X-Auth-Token">>
+                end,
                 ReqHeaders#{HeaderName => Macaroon}
         end,
         ReqOptsPlusAuth = case ReqAuth of
@@ -144,6 +150,9 @@ check_rest_call(Config, ArgsMap) ->
             nobody ->
                 ReqOpts;
             {user, _UserId} ->
+                % User authorizes by macaroon
+                ReqOpts;
+            {user, _UserId, _Macaroon} ->
                 % User authorizes by macaroon
                 ReqOpts;
             {provider, _ProviderId, KeyFile, CertFile} ->

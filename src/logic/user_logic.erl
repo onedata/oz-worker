@@ -848,11 +848,11 @@ get_eff_spaces(Client, UserId) ->
 %%--------------------------------------------------------------------
 -spec get_space(Client :: entity_logic:client(), UserId :: od_user:id(),
     SpaceId :: od_space:id()) -> {ok, #{}} | {error, term()}.
-get_space(Client, UserId, GroupId) ->
+get_space(Client, UserId, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_space, id = GroupId, aspect = instance, scope = protected},
+        gri = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_USER(UserId)
     }).
 
@@ -865,11 +865,11 @@ get_space(Client, UserId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec get_eff_space(Client :: entity_logic:client(), UserId :: od_user:id(),
     SpaceId :: od_space:id()) -> {ok, #{}} | {error, term()}.
-get_eff_space(Client, UserId, GroupId) ->
+get_eff_space(Client, UserId, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_space, id = GroupId, aspect = instance, scope = protected},
+        gri = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_USER(UserId)
     }).
 
@@ -944,11 +944,11 @@ get_eff_handle_services(Client, UserId) ->
 %%--------------------------------------------------------------------
 -spec get_handle_service(Client :: entity_logic:client(), UserId :: od_user:id(),
     HServiceId :: od_handle_service:id()) -> {ok, #{}} | {error, term()}.
-get_handle_service(Client, UserId, GroupId) ->
+get_handle_service(Client, UserId, HServiceId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_handle_service, id = GroupId, aspect = instance, scope = protected},
+        gri = #gri{type = od_handle_service, id = HServiceId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_USER(UserId)
     }).
 
@@ -961,11 +961,11 @@ get_handle_service(Client, UserId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec get_eff_handle_service(Client :: entity_logic:client(), UserId :: od_user:id(),
     HServiceId :: od_handle_service:id()) -> {ok, #{}} | {error, term()}.
-get_eff_handle_service(Client, UserId, GroupId) ->
+get_eff_handle_service(Client, UserId, HServiceId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_handle_service, id = GroupId, aspect = instance, scope = protected},
+        gri = #gri{type = od_handle_service, id = HServiceId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_USER(UserId)
     }).
 

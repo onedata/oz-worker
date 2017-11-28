@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Jakub Kudzia
-%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% @copyright (C) 2014 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -1414,7 +1414,7 @@ list_services_test(Config) ->
     UserId = ?config(userId, Config),
     DoiId = add_handle_service(Config, ?DOI_SERVICE, UserId, UserReqParams),
     PidId = add_handle_service(Config, ?PID_SERVICE, UserId, UserReqParams),
-    oz_test_utils:set_user_oz_privileges(Config, UserId, grant, [?OZ_HANDLE_SERVICES_LIST]),
+    oz_test_utils:user_set_oz_privileges(Config, UserId, grant, [?OZ_HANDLE_SERVICES_LIST]),
 
     Services = list_handle_service(UserReqParams),
 
@@ -1627,7 +1627,7 @@ list_handles_test(Config) ->
     create_space_and_share(Config, ?SHARE_ID_2, UserReqParams),
     Id1 = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_1), UserReqParams),
     Id2 = add_handle(Config, ?HANDLE(Id, ?SHARE_ID_2), UserReqParams),
-    oz_test_utils:set_user_oz_privileges(Config, UserId, grant, [?OZ_HANDLES_LIST]),
+    oz_test_utils:user_set_oz_privileges(Config, UserId, grant, [?OZ_HANDLES_LIST]),
     Handles = list_handle(UserReqParams),
 
     #{<<"handles">> := HandlesList} =
@@ -2881,7 +2881,7 @@ clean_space_privileges(Config, SID, UserId, ReqParams) ->
 
 add_handle_service(Config, Service, UserId, {RestAddress, Headers, Options}) ->
     % User need special OZ privileges to create handle services
-    oz_test_utils:set_user_oz_privileges(Config, UserId, grant, [?OZ_HANDLE_SERVICES_CREATE]),
+    oz_test_utils:user_set_oz_privileges(Config, UserId, grant, [?OZ_HANDLE_SERVICES_CREATE]),
     ServiceJson = json_utils:encode_map(Service),
     Address = <<(list_to_binary(RestAddress))/binary, "/handle_services/">>,
     Response = do_request(Address, Headers, post, ServiceJson, Options),

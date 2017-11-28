@@ -55,7 +55,8 @@
     exists/1,
     has_eff_privilege/3,
     has_eff_user/2,
-    has_eff_group/2
+    has_eff_group/2,
+    has_handle_service/2
 ]).
 
 %%%===================================================================
@@ -610,3 +611,19 @@ has_eff_group(#od_handle{eff_groups = EffGroups}, GroupId) ->
     maps:is_key(GroupId, EffGroups).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether handle belongs to specified handle service.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_handle_service(HandleOrId :: od_handle:id() | #od_handle{},
+    HServiceId :: od_handle_service:id()) -> boolean().
+has_handle_service(HandleId, HServiceId) when is_binary(HandleId) ->
+    case od_handle:get(HandleId) of
+        {ok, #document{value = Handle}} ->
+            has_handle_service(Handle, HServiceId);
+        _ ->
+            false
+    end;
+has_handle_service(#od_handle{handle_service = HService}, HServiceId) ->
+    HServiceId =:= HService.

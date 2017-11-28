@@ -244,7 +244,7 @@ user_routes() -> [
     {<<"/user/handle_services">>, #rest_req{
         method = post,
         b_gri = #b_gri{type = od_handle_service, id = undefined, aspect = instance},
-        b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
+        b_auth_hint = ?AS_USER(?CLIENT_ID)
     }},
     {<<"/user/handle_services/:hsid">>, #rest_req{
         method = get,
@@ -272,7 +272,7 @@ user_routes() -> [
     {<<"/user/handles">>, #rest_req{
         method = post,
         b_gri = #b_gri{type = od_handle, id = undefined, aspect = instance},
-        b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
+        b_auth_hint = ?AS_USER(?CLIENT_ID)
     }},
     {<<"/user/handles/:hid">>, #rest_req{
         method = get,
@@ -418,6 +418,10 @@ group_routes() -> [
         method = get,
         b_gri = #b_gri{type = od_group, id = ?BINDING(pid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
+    }},
+    {<<"/groups/:id/parents/:pid">>, #rest_req{
+        method = delete,
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {parent, ?BINDING(pid)}}
     }},
     {<<"/groups/:id/effective_parents">>, #rest_req{
         method = get,

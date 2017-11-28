@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -133,12 +133,12 @@ create_test(Config) ->
             required = [<<"clientName">>, <<"domain">>, <<"subdomainDelegation">>, <<"csr">>],
             optional = [<<"latitude">>, <<"longitude">>],
             correct_values = #{
-                <<"clientName">> => ExpName,
-                <<"domain">> => ExpDomain,
-                <<"subdomainDelegation">> => ExpSubdomainDelegation,
-                <<"csr">> => CSR,
-                <<"latitude">> => ExpLatitude,
-                <<"longitude">> => ExpLongitude
+                <<"clientName">> => [ExpName],
+                <<"domain">> => [ExpDomain],
+                <<"subdomainDelegation">> => [ExpSubdomainDelegation],
+                <<"csr">> => [CSR],
+                <<"latitude">> => [ExpLatitude],
+                <<"longitude">> => [ExpLongitude]
             },
             bad_values = [
                 {<<"clientName">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"clientName">>)},
@@ -222,13 +222,13 @@ create_with_subdomain_test(Config) ->
                         <<"subdomainDelegation">>, <<"csr">>],
             optional = [<<"latitude">>, <<"longitude">>],
             correct_values = #{
-                <<"clientName">> => ExpName,
-                <<"subdomainDelegation">> => ExpSubdomainDelegation,
-                <<"subdomain">> => ExpSubdomain,
-                <<"ipList">> => ExpIPs,
-                <<"csr">> => CSR,
-                <<"latitude">> => ExpLatitude,
-                <<"longitude">> => ExpLongitude
+                <<"clientName">> => [ExpName],
+                <<"subdomainDelegation">> => [ExpSubdomainDelegation],
+                <<"subdomain">> => [ExpSubdomain],
+                <<"ipList">> => [ExpIPs],
+                <<"csr">> => [CSR],
+                <<"latitude">> => [ExpLatitude],
+                <<"longitude">> => [ExpLongitude]
             },
             bad_values = [
                 {<<"subdomain">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"subdomain">>)},
@@ -274,7 +274,7 @@ get_test(Config) ->
     % Create two users, grant one of them the privilege to list providers.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST
     ]),
 
@@ -378,7 +378,7 @@ list_test(Config) ->
     % Create two users, grant one of them the privilege to list providers.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST
     ]),
 
@@ -438,9 +438,9 @@ update_test(Config) ->
                 <<"clientName">>, <<"latitude">>, <<"longitude">>
             ],
             correct_values = #{
-                <<"clientName">> => ExpName,
-                <<"latitude">> => ExpLatitude,
-                <<"longitude">> => ExpLongitude
+                <<"clientName">> => [ExpName],
+                <<"latitude">> => [ExpLatitude],
+                <<"longitude">> => [ExpLongitude]
             },
             bad_values = [
                 {<<"clientName">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"clientName">>)},
@@ -495,7 +495,7 @@ delete_test(Config) ->
     % Create two users, grant one of them the privilege to remove providers.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_DELETE
     ]),
 
@@ -625,7 +625,7 @@ get_eff_users_test(Config) ->
     % Create two users, grant one of them the privilege to list users.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST_USERS
     ]),
 
@@ -725,7 +725,7 @@ get_eff_users_test(Config) ->
                     {ok, User} = oz_test_utils:create_user(
                         Config, #od_user{name = UserName}
                     ),
-                    {ok, User} = oz_test_utils:add_user_to_space(Config, Space, User),
+                    {ok, User} = oz_test_utils:space_add_user(Config, Space, User),
                     AccMap#{User => UserName}
                 end, #{}, lists:zip(lists:seq(1, 6), [S1, S2, S3, S1, S2, S3])
             )}
@@ -748,8 +748,8 @@ get_eff_users_test(Config) ->
                     {ok, Group} = oz_test_utils:create_group(
                         Config, ?USER(User1), GroupName
                     ),
-                    {ok, User2} = oz_test_utils:add_user_to_group(Config, Group, User2),
-                    {ok, Group} = oz_test_utils:add_group_to_space(Config, Space, Group),
+                    {ok, User2} = oz_test_utils:group_add_user(Config, Group, User2),
+                    {ok, Group} = oz_test_utils:space_add_group(Config, Space, Group),
                     AccMap#{User1 => UserName1, User2 => UserName2}
                 end, #{}, lists:zip(lists:seq(1, 6), [S4, S5, S6, S4, S5, S6])
             )}
@@ -763,16 +763,16 @@ get_eff_users_test(Config) ->
                 oz_test_utils:minimum_support_size(Config)
             ),
             {ok, TopGroup} = oz_test_utils:create_group(Config, ?ROOT, <<"gr">>),
-            {ok, TopGroup} = oz_test_utils:add_group_to_space(Config, S1, TopGroup),
+            {ok, TopGroup} = oz_test_utils:space_add_group(Config, S1, TopGroup),
             {ok, BottomGroup} = oz_test_utils:create_group(Config, ?ROOT, <<"gr">>),
-            {ok, BottomGroup} = oz_test_utils:add_group_to_group(
+            {ok, BottomGroup} = oz_test_utils:group_add_group(
                 Config, TopGroup, BottomGroup
             ),
             UserName = <<"un">>,
             {ok, User} = oz_test_utils:create_user(
                 Config, #od_user{name = UserName}
             ),
-            {ok, User} = oz_test_utils:add_user_to_group(Config, BottomGroup, User),
+            {ok, User} = oz_test_utils:group_add_user(Config, BottomGroup, User),
             {include, #{User => UserName}}
         end,
         fun() ->
@@ -799,7 +799,7 @@ get_eff_groups_test(Config) ->
     % Create two users, grant one of them the privilege to list groups.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST_GROUPS
     ]),
 
@@ -901,7 +901,7 @@ get_eff_groups_test(Config) ->
                     {ok, Group} = oz_test_utils:create_group(
                         Config, ?ROOT, GroupName
                     ),
-                    {ok, Group} = oz_test_utils:add_group_to_space(Config, Space, Group),
+                    {ok, Group} = oz_test_utils:space_add_group(Config, Space, Group),
                     AccMap#{Group => GroupName}
                 end, #{}, lists:zip(lists:seq(1, 6), [S1, S2, S3, S4, S5, S6])
             )}
@@ -918,12 +918,12 @@ get_eff_groups_test(Config) ->
             {ok, TopGroup} = oz_test_utils:create_group(
                 Config, ?ROOT, TopGroupName
             ),
-            {ok, TopGroup} = oz_test_utils:add_group_to_space(Config, S1, TopGroup),
+            {ok, TopGroup} = oz_test_utils:space_add_group(Config, S1, TopGroup),
             BottomGroupName = <<"bgn">>,
             {ok, BottomGroup} = oz_test_utils:create_group(
                 Config, ?ROOT, BottomGroupName
             ),
-            {ok, BottomGroup} = oz_test_utils:add_group_to_group(
+            {ok, BottomGroup} = oz_test_utils:group_add_group(
                 Config, TopGroup, BottomGroup
             ),
             {include, #{TopGroup => TopGroupName, BottomGroup => BottomGroupName}}
@@ -949,7 +949,7 @@ get_spaces_test(Config) ->
     % Create two users, grant one of them the privilege to list spaces.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST_SPACES
     ]),
 
@@ -1165,7 +1165,7 @@ support_space_test(Config) ->
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
             correct_values = #{
-                <<"token">> => fun() ->
+                <<"token">> => [fun() ->
                     % Create a new space and token for every test case
                     % (this value is reused multiple times as many cases of
                     % the api test must be checked).
@@ -1177,8 +1177,8 @@ support_space_test(Config) ->
                     ),
                     {ok, TokenBin} = token_logic:serialize(Macaroon),
                     TokenBin
-                end,
-                <<"size">> => MinSupportSize
+                end],
+                <<"size">> => [MinSupportSize]
             },
             bad_values = BadValues
         }
@@ -1216,7 +1216,7 @@ support_space_test(Config) ->
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
             correct_values = #{
-                <<"token">> => fun() ->
+                <<"token">> => [fun() ->
                     % Create a new space and token for every test case
                     % (this value is reused multiple times as many cases of
                     % the api test must be checked).
@@ -1227,8 +1227,8 @@ support_space_test(Config) ->
                         Config, ?USER(U1), Space
                     ),
                     Macaroon
-                end,
-                <<"size">> => MinSupportSize
+                end],
+                <<"size">> => [MinSupportSize]
             },
             bad_values = BadValues ++ [
                 {<<"token">>, BadMacaroon3, ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(<<"token">>)}
@@ -1274,7 +1274,7 @@ update_support_size_test(Config) ->
         data_spec = #data_spec{
             required = [<<"size">>],
             correct_values = #{
-                <<"size">> => MinSupportSize
+                <<"size">> => [MinSupportSize]
             },
             bad_values = BadValues
         }
@@ -1453,7 +1453,10 @@ check_my_ports_test(Config) ->
         },
         data_spec = #data_spec{
             required = RequiredKeys,
-            correct_values = CorrectData
+            correct_values = maps:map(
+                fun(_, Val) ->
+                    [Val]
+                end, CorrectData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -1506,9 +1509,9 @@ update_subdomaindomain_test(Config) ->
                 <<"subdomainDelegation">>, <<"subdomain">>, <<"ipList">>
             ],
             correct_values = #{
-                <<"subdomainDelegation">> => true,
-                <<"subdomain">> => ExpSubdomain,
-                <<"ipList">> => ExpIPs
+                <<"subdomainDelegation">> => [true],
+                <<"subdomain">> => [ExpSubdomain],
+                <<"ipList">> => [ExpIPs]
             },
             bad_values = [
                 {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
@@ -1551,8 +1554,8 @@ update_subdomaindomain_test(Config) ->
                 <<"subdomainDelegation">>, <<"domain">>
             ],
             correct_values = #{
-                <<"subdomainDelegation">> => false,
-                <<"domain">> => ExpDomain
+                <<"subdomainDelegation">> => [false],
+                <<"domain">> => [ExpDomain]
             },
             bad_values = [
                 {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
@@ -1592,8 +1595,8 @@ update_domain_test(Config) ->
                 <<"subdomainDelegation">>, <<"domain">>
             ],
             correct_values = #{
-                <<"subdomainDelegation">> => false,
-                <<"domain">> => NewDomain
+                <<"subdomainDelegation">> => [false],
+                <<"domain">> => [NewDomain]
             },
             bad_values = [
                 {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
@@ -1634,8 +1637,8 @@ update_domain_to_ip_address_test(Config) ->
                 <<"subdomainDelegation">>, <<"domain">>
             ],
             correct_values = #{
-                <<"subdomainDelegation">> => false,
-                <<"domain">> => NewDomain
+                <<"subdomainDelegation">> => [false],
+                <<"domain">> => [NewDomain]
             },
             bad_values = []
         }
@@ -1661,7 +1664,7 @@ get_domain_config_test(Config) ->
     % They still shouldn't be able to read domain aspect
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:set_user_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST
     ]),
 
@@ -1696,7 +1699,7 @@ get_domain_config_test(Config) ->
     % test enabled subdomain delegation
     ExpSubdomain = <<"subdomain">>,
     ExpIPs = [{5,8,2,4}, {10,12,255,255}],
-    OZDomain = oz_test_utils:get_oz_domain(Config),
+    {ok, OZDomain} = oz_test_utils:get_domain(Config),
     ExpDomain2 = <<ExpSubdomain/binary, ".", (list_to_binary(OZDomain))/binary>>,
 
     oz_test_utils:enable_subdomain_delegation(Config, P1, ExpSubdomain, ExpIPs),

@@ -316,6 +316,8 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) 
             handle_logic:has_eff_user(Handle, UserId);
         ?THROUGH_GROUP(GroupId) ->
             handle_logic:has_eff_group(Handle, GroupId);
+        ?THROUGH_HANDLE_SERVICE(HServiceId) ->
+            handle_logic:has_handle_service(Handle, HServiceId);
         undefined ->
             true
     end;
@@ -399,9 +401,18 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
             % User's membership in this handle_service is checked in 'exists'
             true;
 
+        {?USER(_UserId), ?THROUGH_USER(_OtherUserId)} ->
+            false;
+
         {?USER(ClientUserId), ?THROUGH_GROUP(GroupId)} ->
             % Groups's membership in this handle_service is checked in 'exists'
-            group_logic:has_eff_user(GroupId, ClientUserId);
+            group_logic:has_eff_privilege(GroupId, ClientUserId, ?GROUP_VIEW);
+
+        {?USER(ClientUserId), ?THROUGH_HANDLE_SERVICE(HServiceId)} ->
+            % Handle belonging to handle_service is checked in 'exists'
+            handle_service_logic:has_eff_privilege(
+                HServiceId, ClientUserId, ?HANDLE_SERVICE_VIEW
+            );
 
         {?USER(ClientUserId), _} ->
             handle_logic:has_eff_user(Handle, ClientUserId) orelse

@@ -413,6 +413,9 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
             % User's membership in this provider is checked in 'exists'
             true;
 
+        {?USER(_UserId), ?THROUGH_USER(_OtherUserId)} ->
+            false;
+
         {?USER(UserId), ?THROUGH_GROUP(GroupId)} ->
             % Groups's membership in this provider is checked in 'exists'
             group_logic:has_eff_user(GroupId, UserId);
