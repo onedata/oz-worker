@@ -201,10 +201,16 @@ get_msg(Seq, Doc, od_share = Model) ->
     ]}];
 get_msg(Seq, Doc, od_provider = Model) ->
     #document{value = Value, key = Id} = Doc,
-    #od_provider{name = Name, urls = URLs, spaces = Spaces} = Value,
+    #od_provider{
+        name = Name, urls = URLs,
+        latitude = Latitude, longitude = Longitude,
+        spaces = Spaces
+    } = Value,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {client_name, Name},
         {urls, URLs},
+        {latitude, Latitude},
+        {longitude, Longitude},
 
         % Direct relations to other entities
         {spaces, relation_to_proplist(Spaces)},
@@ -253,7 +259,7 @@ get_msg(Seq, Doc, od_handle = Model) ->
         {resource_type, ResourceType},
         {resource_id, ResourceId},
         {metadata, Metadata},
-        {timestamp, timestamp_utils:datetime_to_datestamp(Timestamp)},
+        {timestamp, time_utils:datetime_to_datestamp(Timestamp)},
 
         % Direct relations to other entities
         {handle_service, HandleService},
@@ -308,10 +314,15 @@ get_public_msg(Seq, Doc, od_user = Model) ->
     ]}];
 
 get_public_msg(Seq, Doc, od_provider = Model) ->
-    #document{key = Id, value = #od_provider{name = Name, urls = URLs}} = Doc,
+    #document{key = Id, value = #od_provider{
+        name = Name, urls = URLs,
+        latitude = Latitude, longitude = Longitude
+    }} = Doc,
     [{seq, Seq}, revs_prop(Doc), {id, Id}, {message_model(Model), [
         {client_name, Name},
         {urls, URLs},
+        {latitude, Latitude},
+        {longitude, Longitude},
 
         {spaces, []},
 

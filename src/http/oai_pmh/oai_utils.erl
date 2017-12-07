@@ -52,18 +52,18 @@ oai_identifier_decode(OAIId) ->
     end.
 
 %%%--------------------------------------------------------------------
-%%% @equiv timestamp_utils:datetime_to_datestamp(DateTime).
+%%% @equiv time_utils:datetime_to_datestamp(DateTime).
 %%%--------------------------------------------------------------------
 -spec datetime_to_oai_datestamp(DateTime :: erlang:datetime()) -> binary().
 datetime_to_oai_datestamp(DateTime) ->
-    timestamp_utils:datetime_to_datestamp(DateTime).
+    time_utils:datetime_to_datestamp(DateTime).
 
 %%%--------------------------------------------------------------------
-%%% @equiv timestamp_utils:datestamp_to_datetime(Datestamp).
+%%% @equiv time_utils:datestamp_to_datetime(Datestamp).
 %%%--------------------------------------------------------------------
 -spec oai_datestamp_to_datetime(undefined | binary()) -> maybe_invalid_datestamp().
 oai_datestamp_to_datetime(Datestamp) ->
-    timestamp_utils:datestamp_to_datetime(Datestamp).
+    time_utils:datestamp_to_datetime(Datestamp).
 
 %%%--------------------------------------------------------------------
 %%% @doc
