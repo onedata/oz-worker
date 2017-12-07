@@ -57,7 +57,7 @@ response(create, HandleId, {group, GroupId}, {ok, GroupId}) ->
 response(get, HandleId, data, {ok, #{<<"timestamp">> := Timestamp} = HandleData}) ->
     rest_handler:ok_body_reply(HandleData#{
         <<"handleId">> => HandleId,
-        <<"timestamp">> => timestamp_utils:datetime_to_datestamp(Timestamp)
+        <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp)
     });
 
 response(get, undefined, list, {ok, HServices}) ->

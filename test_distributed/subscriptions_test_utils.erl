@@ -335,7 +335,7 @@ handle_expectation(Id, HandleServiceId, PublicHandle, ResourceType, ResourceId,
         {<<"resource_type">>, ResourceType},
         {<<"resource_id">>, ResourceId},
         {<<"metadata">>, Metadata},
-        {<<"timestamp">>, timestamp_utils:datetime_to_datestamp(Timestamp)},
+        {<<"timestamp">>, time_utils:datetime_to_datestamp(Timestamp)},
 
         {<<"handle_service">>, HandleServiceId},
         {<<"users">>, privileges_as_binaries(maps:to_list(Users))},

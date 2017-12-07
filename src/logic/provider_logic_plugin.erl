@@ -18,6 +18,7 @@
 -include("tokens.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models_def.hrl").
+-include_lib("ctool/include/global_definitions.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
@@ -25,7 +26,7 @@
 eff_users | {eff_user, od_user:id()} |
 eff_groups | {eff_group, od_group:id()} |
 spaces | {space, od_space:id()} |
-check_my_ports | {check_my_ip, cowboy_req:req()} | map_group.
+check_my_ports | {check_my_ip, cowboy_req:req()} | current_time | map_group.
 
 -export_type([resource/0]).
 
@@ -97,8 +98,8 @@ create(_, _, entity_dev, Data) ->
     URLs = maps:get(<<"urls">>, Data),
     RedirectionPoint = maps:get(<<"redirectionPoint">>, Data),
     CSR = maps:get(<<"csr">>, Data),
-    Latitude = maps:get(<<"latitude">>, Data, undefined),
-    Longitude = maps:get(<<"longitude">>, Data, undefined),
+    Latitude = maps:get(<<"latitude">>, Data, 0.0),
+    Longitude = maps:get(<<"longitude">>, Data, 0.0),
     UUID = maps:get(<<"uuid">>, Data, undefined),
 
     ProviderId = UUID,
@@ -177,7 +178,9 @@ get(_, _ProviderId, #od_provider{}, {eff_group, GroupId}) ->
     group_logic_plugin:get(?ROOT, GroupId, Group, data);
 get(_, undefined, undefined, {check_my_ip, Req}) ->
     {{Ip, _Port}, _} = cowboy_req:peer(Req),
-    {ok, list_to_binary(inet_parse:ntoa(Ip))}.
+    {ok, list_to_binary(inet_parse:ntoa(Ip))};
+get(_, undefined, undefined, current_time) ->
+    {ok, time_utils:cluster_time_milli_seconds()}.
 
 
 %%--------------------------------------------------------------------
@@ -300,6 +303,9 @@ authorize(create, _ProvId, map_group, _) ->
 
 
 authorize(get, undefined, {check_my_ip, _}, _) ->
+    true;
+
+authorize(get, undefined, current_time, _) ->
     true;
 
 authorize(get, _ProvId, entity, ?USER(UserId)) ->

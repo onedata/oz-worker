@@ -708,6 +708,9 @@ provider_routes() ->
         {<<"/provider/test/check_my_ip">>, R#rest_req{
             method = get, entity_id = undefined, resource = {check_my_ip, ?COWBOY_REQ}
         }},
+        {<<"/provider/test/get_current_time">>, R#rest_req{
+            method = get, entity_id = undefined, resource = current_time
+        }},
         {<<"/provider/test/check_my_ports">>, R#rest_req{
             method = post, entity_id = undefined, resource = check_my_ports
         }},

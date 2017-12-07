@@ -526,6 +526,11 @@ authorize(get, _UserId, entity, ?USER(UserId)) ->
 authorize(delete, _UserId, entity, ?USER(UserId)) ->
     auth_by_oz_privilege(UserId, ?OZ_USERS_DELETE);
 
+authorize(get, UserId, data, ?PROVIDER(ProviderId)) ->
+    {external, fun() ->
+        provider_logic:has_eff_user(ProviderId, UserId)
+    end};
+
 authorize(_, _, _, _) ->
     false.
 

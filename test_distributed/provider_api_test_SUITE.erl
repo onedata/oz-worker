@@ -45,7 +45,8 @@
     update_support_size_test/1,
     revoke_support_test/1,
     check_my_ports_test/1,
-    check_my_ip_test/1
+    check_my_ip_test/1,
+    get_current_time_test/1
 ]).
 
 all() ->
@@ -62,7 +63,8 @@ all() ->
         update_support_size_test,
         revoke_support_test,
         check_my_ports_test,
-        check_my_ip_test
+        check_my_ip_test,
+        get_current_time_test
     ]).
 
 %%%===================================================================
@@ -1332,6 +1334,36 @@ check_my_ip_test(Config) ->
             path = <<"/provider/test/check_my_ip">>,
             expected_code = ?HTTP_200_OK,
             expected_body = json_utils:encode_map(ClientIP)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+get_current_time_test(Config) ->
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, nobody, {provider, P1, KeyFile1, CertFile1}]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/provider/test/get_current_time">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = fun(Value) ->
+                maps:get(<<"timeMillis">>, Value) > 0
+            end
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = provider_logic,
+            function = get_current_time,
+            args = [client],
+            expected_result = ?OK_TERM(fun(Result) ->
+                Result > 0
+            end)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).

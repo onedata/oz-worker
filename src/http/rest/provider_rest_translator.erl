@@ -71,6 +71,8 @@ response(get, _ProvId, {space, SpaceId}, {ok, SpaceData}) ->
     space_rest_translator:response(get, SpaceId, data, {ok, SpaceData});
 response(get, _ProvId, {check_my_ip, _}, {ok, IP}) ->
     rest_handler:ok_body_reply(IP);
+response(get, _ProvId, current_time, {ok, Timestamp}) ->
+    rest_handler:ok_body_reply(#{<<"timeMillis">> => Timestamp});
 
 response(update, _ProvId, _, ok) ->
     rest_handler:updated_reply();
