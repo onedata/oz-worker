@@ -120,7 +120,9 @@
     create_share/6,
     create_share/3,
     list_shares/1,
-    delete_share/2
+    get_share/2,
+    delete_share/2,
+    get_share_public_url/2
 ]).
 -export([
     create_provider_and_certs/2,
@@ -1086,12 +1088,37 @@ list_shares(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves share data from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_share(Config :: term(), ShareId :: od_share:id()) ->
+    {ok, #od_share{}}.
+get_share(Config, ShareId) ->
+    ?assertMatch({ok, #od_share{}}, call_oz(
+        Config, share_logic, get, [?ROOT, ShareId])
+    ).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Deletes given share from onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_share(Config :: term(), ShareId :: od_share:id()) -> ok.
 delete_share(Config, ShareId) ->
     ?assertMatch(ok, call_oz(Config, share_logic, delete, [?ROOT, ShareId])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get share public URL.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_share_public_url(Config :: term(), ShareId :: od_share:id()) -> binary().
+get_share_public_url(Config, ShareId) ->
+    ?assertMatch(<<_/binary>>, call_oz(
+        Config, share_logic, share_id_to_public_url, [ShareId])
+    ).
 
 
 %%--------------------------------------------------------------------

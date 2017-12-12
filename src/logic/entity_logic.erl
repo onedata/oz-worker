@@ -753,14 +753,16 @@ check_value(_, VerifyFun, Key, Val) when is_function(VerifyFun, 1) ->
         false ->
             throw(?ERROR_BAD_DATA(Key))
     end;
-check_value(_, {exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
+check_value(Type, {exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
+    check_value(Type, non_empty, Key, Val),
     case VerifyFun(Val) of
         true ->
             ok;
         false ->
             throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(Key))
     end;
-check_value(_, {not_exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
+check_value(Type, {not_exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
+    check_value(Type, non_empty, Key, Val),
     case VerifyFun(Val) of
         true ->
             ok;

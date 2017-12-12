@@ -256,7 +256,7 @@ create_test(Config) ->
         data_spec = DataSpec#data_spec{
             bad_values = [
                 {<<"handleServiceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
+                    ?ERROR_BAD_VALUE_EMPTY(<<"handleServiceId">>)},
                 {<<"handleServiceId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"handleServiceId">>)},
                 {<<"resourceType">>, <<"">>,
@@ -265,7 +265,7 @@ create_test(Config) ->
                 {<<"resourceType">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
                 {<<"resourceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
+                    ?ERROR_BAD_VALUE_EMPTY(<<"resourceId">>)},
                 {<<"resourceId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceId">>)},
                 {<<"metadata">>, 1234,

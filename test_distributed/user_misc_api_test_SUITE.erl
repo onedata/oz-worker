@@ -813,7 +813,7 @@ set_default_provider_test(Config) ->
             },
             bad_values = [
                 {<<"providerId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
+                    ?ERROR_BAD_VALUE_EMPTY(<<"providerId">>)},
                 {<<"providerId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"providerId">>)},
                 {<<"providerId">>, P1,
