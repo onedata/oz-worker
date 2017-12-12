@@ -22,7 +22,7 @@
 -export([
     call_oz/4,
     get_env/3,
-    get_domain/1,
+    get_oz_domain/1,
     get_rest_port/1,
     all_oz_privileges/1
 ]).
@@ -132,6 +132,7 @@
     delete_provider/2,
     support_space/4,
     support_space/5,
+    unsupport_space/3,
     enable_subdomain_delegation/4,
     set_provider_domain/3
 ]).
@@ -1230,6 +1231,19 @@ support_space(Config, Client, ProviderId, Token, Size) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Revoke space support by given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec unsupport_space(Config :: term(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> ok.
+unsupport_space(Config, ProviderId, SpaceId) ->
+    ?assertMatch(ok, call_oz(Config, provider_logic, revoke_support, [
+        ?ROOT, ProviderId, SpaceId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Get all atoms representing handle service privileges.
 %% @end
 %%--------------------------------------------------------------------
@@ -2067,8 +2081,8 @@ get_rest_port(Config) ->
 %% Get zone domain.
 %% @end
 %%--------------------------------------------------------------------
--spec get_domain(Config :: term()) -> {ok, Domain :: string()}.
-get_domain(Config) ->
+-spec get_oz_domain(Config :: term()) -> {ok, Domain :: string()}.
+get_oz_domain(Config) ->
     get_env(Config, ?APP_NAME, http_domain).
 
 
@@ -2079,7 +2093,7 @@ get_domain(Config) ->
 %%--------------------------------------------------------------------
 -spec get_gs_ws_url(Config :: term()) -> binary().
 get_gs_ws_url(Config) ->
-    {ok, ZoneDomain} = get_domain(Config),
+    {ok, ZoneDomain} = get_oz_domain(Config),
     {ok, GsPort} = get_rest_port(Config),
     str_utils:format_bin(
         "wss://~s:~B/~s",

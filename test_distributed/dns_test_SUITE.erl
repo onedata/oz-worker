@@ -85,7 +85,7 @@ init_per_suite(Config) ->
             IP
         end, IPstrings),
 
-        {ok, ZoneDomain} = oz_test_utils:get_domain(NewConfig),
+        {ok, ZoneDomain} = oz_test_utils:get_oz_domain(NewConfig),
         [{oz_domain, ZoneDomain}, {oz_ips, lists:sort(IPs)} | NewConfig]
     end,
     [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]}| Config].

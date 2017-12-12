@@ -477,6 +477,10 @@ list_eff_users_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_GROUPS_LIST_USERS
+    ]),
 
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, set,
@@ -492,6 +496,7 @@ list_eff_users_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {user, Admin},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -537,6 +542,10 @@ get_eff_user_details_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_GROUPS_LIST_USERS
+    ]),
 
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, set,
@@ -553,6 +562,7 @@ get_eff_user_details_test(Config) ->
                 client_spec = #client_spec{
                     correct = lists:usort([
                         root,
+                        {user, Admin},
                         {user, U2}
                     ]),
                     unauthorized = [nobody],
@@ -632,6 +642,10 @@ list_eff_user_privileges_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_GROUPS_LIST_USERS
+    ]),
 
     {_G3, G2, G1} = oz_test_utils:create_3_nested_groups(Config, U1),
     {ok, G4} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
@@ -694,6 +708,7 @@ list_eff_user_privileges_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, U3},
+                {user, Admin},
                 {user, NonAdmin}
             ]
         },
