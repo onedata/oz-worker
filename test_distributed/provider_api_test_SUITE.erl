@@ -25,6 +25,12 @@
 
 -include("api_test_utils.hrl").
 
+-define(MAP_GROUP_TEST_AUTH, test_auth).
+-define(MAP_GROUP_TEST_AUTH_BIN, atom_to_binary(?MAP_GROUP_TEST_AUTH, latin1)).
+-define(MAP_GROUP_TEST_AUTH_MODULE, test_auth_module).
+-define(MAPPED_MEMBERSHIP_SPEC, <<"mapped_group1/user:member">>).
+-define(MAPPED_GROUP_SPEC, <<"mapped_group1">>).
+
 
 %% API
 -export([
@@ -56,6 +62,7 @@
 
     check_my_ports_test/1,
     check_my_ip_test/1,
+    map_group_test/1,
     update_subdomain_test/1,
     update_domain_test/1,
     get_domain_config_test/1
@@ -86,6 +93,7 @@ all() ->
 
         check_my_ports_test,
         check_my_ip_test,
+        map_group_test,
         update_subdomain_test,
         update_domain_test,
         get_domain_config_test
@@ -1485,6 +1493,38 @@ check_my_ip_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
+map_group_test(Config) ->
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, ?PROVIDER_NAME1
+    ),
+    MappedGroupHash = idp_group_mapping:group_spec_to_db_id(?MAPPED_GROUP_SPEC),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {provider, P1, KeyFile1, CertFile1}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = <<"/provider/test/map_idp_group">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"groupId">> => MappedGroupHash}
+        },
+        data_spec = #data_spec{
+            required = [<<"idp">>, <<"groupId">>],
+            correct_values = #{
+                <<"idp">> => [?MAP_GROUP_TEST_AUTH_BIN],
+                <<"groupId">> => [<<"group1">>]
+            },
+            bad_values = [
+                {<<"idp">>, bad_bool, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"idp">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
 update_subdomain_test(Config) ->
     {ok, OZDomainString} = oz_test_utils:get_oz_domain(Config),
     OZDomain = list_to_binary(OZDomainString),
@@ -1792,7 +1832,26 @@ init_per_testcase(check_my_ports_test, Config) ->
                     meck:passthrough([Url, Headers, Body, Options])
             end
         end),
-    Config;
+    init_per_testcase(default, Config);
+init_per_testcase(map_group_test, Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_new(Nodes, auth_config),
+    ok = test_utils:mock_expect(
+        Nodes, auth_config, has_group_mapping_enabled, fun(_) -> true end
+    ),
+    ok = test_utils:mock_expect(Nodes, auth_config, get_auth_providers,
+        fun() -> [?MAP_GROUP_TEST_AUTH | meck:passthrough([])] end
+    ),
+    ok = test_utils:mock_expect(Nodes, auth_config, get_provider_module,
+        fun(_) -> ?MAP_GROUP_TEST_AUTH_MODULE end
+    ),
+    ok = test_utils:mock_new(
+        Nodes, ?MAP_GROUP_TEST_AUTH_MODULE, [passthrough, non_strict]
+    ),
+    ok = test_utils:mock_expect(Nodes, ?MAP_GROUP_TEST_AUTH_MODULE,
+        normalized_membership_spec, fun(_) -> ?MAPPED_MEMBERSHIP_SPEC end
+    ),
+    init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
     Config.
 
@@ -1800,7 +1859,12 @@ init_per_testcase(_, Config) ->
 end_per_testcase(check_my_ports_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_unload(Nodes, http_client),
-    ok;
+    end_per_testcase(default, Config);
+end_per_testcase(map_group_test, Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_unload(Nodes, auth_config),
+    test_utils:mock_unload(Nodes, ?MAP_GROUP_TEST_AUTH_MODULE),
+    end_per_testcase(default, Config);
 end_per_testcase(_, _Config) ->
     ok.
 
