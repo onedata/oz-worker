@@ -1983,15 +1983,15 @@ mock_handle_proxy(Config) ->
     ok = test_utils:mock_new(Nodes, handle_proxy_client, [passthrough]),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, put,
         fun(_, <<"/handle", _/binary>>, _, _) ->
-            {ok, 201, [{<<"location">>, <<"/test_location">>}], <<"">>}
+            {ok, 201, #{<<"location">> => <<"/test_location">>}, <<"">>}
         end),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, patch,
         fun(_, <<"/handle", _/binary>>, _, _) ->
-            {ok, 204, [], <<"">>}
+            {ok, 204, #{}, <<"">>}
         end),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, delete,
         fun(_, <<"/handle", _/binary>>, _, _) ->
-            {ok, 200, [], <<"">>}
+            {ok, 200, #{}, <<"">>}
         end).
 
 
