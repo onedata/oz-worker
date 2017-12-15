@@ -615,6 +615,8 @@ authenticate_by_provider_certs(Req) ->
                 {error, {bad_cert, Reason}} ->
                     ?warning("Attempted authentication with "
                     "bad peer certificate: ~p", [Reason]),
+                    false;
+                {error, _} ->
                     false
             end;
         {error, no_peercert} ->

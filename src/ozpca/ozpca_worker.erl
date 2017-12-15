@@ -129,12 +129,9 @@ supervisor_children_spec() ->
 -spec call_dedicated_node(ExecIfImDedicated :: fun(()-> term()), Req :: term())
         -> Result :: term() | {error, Reason :: term()}.
 call_dedicated_node(Fun, Req) ->
-    Self = node(),
     case get_dedicated_node() of
-        {ok, Self} ->
+        {ok, _} ->
             Fun();
-        {ok, DedicatedNode} ->
-            worker_proxy:call({?MODULE, DedicatedNode}, Req);
         {error, _Reason} ->
             ?error_stacktrace("Cannot process CA request ~p due to error ~p", [Req, _Reason]),
             {error, _Reason}

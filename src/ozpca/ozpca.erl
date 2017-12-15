@@ -70,8 +70,8 @@ sign_provider_req(ProviderId, CSRPem) ->
     case delegate(fun sign_provider_req_imp/3, [ProviderId, CSRPem]) of
         {ok, CertPem, Serial} when is_binary(CertPem), is_integer(Serial) ->
             {ok, {CertPem, integer_to_binary(Serial, 16)}};
-        {error, bad_csr} ->
-            {error, bad_csr}
+        Error ->
+            Error
     end.
 
 %%--------------------------------------------------------------------
@@ -84,7 +84,7 @@ sign_provider_req(ProviderId, CSRPem) ->
 verify_provider(PeerCertDer) ->
     case delegate(fun verify_provider_imp/2, [PeerCertDer]) of
         {ok, ProviderId} = Result when is_binary(ProviderId) -> Result;
-        {error, {bad_cert, _Reason}} = Result -> Result
+        Error -> Error
     end.
 
 %%--------------------------------------------------------------------
@@ -94,7 +94,8 @@ verify_provider(PeerCertDer) ->
 -spec gen_crl() -> ok.
 gen_crl() ->
     case delegate(fun gen_crl_imp/1, []) of
-        ok -> ok
+        ok -> ok;
+        Error -> Error
     end.
 
 %%--------------------------------------------------------------------
@@ -104,7 +105,8 @@ gen_crl() ->
 -spec revoke(Serial :: binary()) -> ok.
 revoke(Serial) ->
     case delegate(fun revoke_imp/2, [Serial]) of
-        ok -> ok
+        ok -> ok;
+        Error -> Error
     end.
 
 %%--------------------------------------------------------------------
@@ -228,12 +230,14 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 -spec delegate(Fun :: function(), Args :: list()) -> Response :: any().
 delegate(Fun, Args) ->
-    Ref = erlang:make_ref(),
-    gen_server:cast(?MODULE, {execute, Ref, self(), Fun, Args}),
-    receive
-        {Ref, Response} -> Response
-    after ?REQUEST_TIMEOUT ->
-        error(ca_loop_not_responding)
+    try
+        {ok, CaDir} = application:get_env(?APP_NAME, ozpca_dir),
+        erlang:apply(Fun, [CaDir | Args])
+    catch Type:Message ->
+        ?error_stacktrace("Cannot process CA request due to an error - ~p:~p", [
+            Type, Message
+        ]),
+        {error, Message}
     end.
 
 %%--------------------------------------------------------------------
@@ -326,12 +330,13 @@ verify_provider_imp(CaDir, PeerCertDer) ->
     case public_key:pkix_path_validation(Cert, [PeerCertDer], [{max_path_length, 0}]) of
         {ok, _} ->
             PeerCert = public_key:pkix_decode_cert(PeerCertDer, otp),
-            case check_revoked(CaCertDer, Cert, PeerCert) of
-                valid -> {ok, get_provider_id(PeerCert)};
-                BadCert -> {error, BadCert}
+            ProviderId = get_provider_id(PeerCert),
+            case od_provider:exists(ProviderId) of
+                true -> {ok, ProviderId};
+                false -> {error, bad_cert}
             end;
-
-        Error -> Error
+        Error ->
+            Error
     end.
 
 %%--------------------------------------------------------------------
