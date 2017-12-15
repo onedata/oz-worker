@@ -452,15 +452,26 @@ delete_test(Config) ->
     ),
     ApiTestSpec3 = #api_test_spec{
         client_spec = #client_spec{
-            unauthorized = [nobody],
+            unauthorized = [nobody, {provider, P1, KeyFile1, CertFile1}],
             forbidden = [
-                {user, NonAdmin},
-                {provider, P1, KeyFile1, CertFile1}
+                {user, NonAdmin}
             ]
         },
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/providers/">>, P8]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
+    % Logic should return forbidden rather than unauthorized (it does not perform
+    % authentication, but only authorization).
+    ApiTestSpec4 = #api_test_spec{
+        client_spec = #client_spec{
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {provider, P1, KeyFile1, CertFile1}
+            ]
         },
         logic_spec = #logic_spec{
             operation = delete,
@@ -469,10 +480,10 @@ delete_test(Config) ->
             args = [client, P8]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)),
 
     % Make sure that provider cannot be deleted twice (P1 is already deleted)
-    ApiTestSpec4 = #api_test_spec{
+    ApiTestSpec5 = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
@@ -495,7 +506,7 @@ delete_test(Config) ->
             expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec5)).
 
 
 
