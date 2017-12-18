@@ -330,10 +330,15 @@ verify_provider_imp(CaDir, PeerCertDer) ->
     case public_key:pkix_path_validation(Cert, [PeerCertDer], [{max_path_length, 0}]) of
         {ok, _} ->
             PeerCert = public_key:pkix_decode_cert(PeerCertDer, otp),
-            ProviderId = get_provider_id(PeerCert),
-            case od_provider:exists(ProviderId) of
-                true -> {ok, ProviderId};
-                false -> {error, bad_cert}
+            case check_revoked(CaCertDer, Cert, PeerCert) of
+                valid ->
+                    ProviderId = get_provider_id(PeerCert),
+                    case od_provider:exists(ProviderId) of
+                        true -> {ok, ProviderId};
+                        false -> {error, bad_cert}
+                    end;
+                BadCert ->
+                    {error, BadCert}
             end;
         Error ->
             Error
