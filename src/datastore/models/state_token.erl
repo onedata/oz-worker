@@ -52,7 +52,7 @@
 create(StateInfo) ->
     {ok, #document{key = Token}} = datastore_model:create(?CTX, #document{
         value = #state_token{
-            timestamp = utils:system_time_seconds(),
+            timestamp = time_utils:cluster_time_seconds(),
             state_info = StateInfo
         }
     }),
@@ -73,7 +73,7 @@ lookup(Token) ->
             % The token is consumed immediately
             datastore_model:delete(?CTX, Token),
             % Check if the token is still valid
-            case utils:system_time_seconds() - T =< ?STATE_TOKEN_TTL of
+            case time_utils:cluster_time_seconds() - T =< ?STATE_TOKEN_TTL of
                 true -> {ok, Info};
                 false -> error
             end;

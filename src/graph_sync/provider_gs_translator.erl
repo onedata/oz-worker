@@ -64,6 +64,9 @@ translate_create(ProtocolVersion, GRI, Data) ->
 %%--------------------------------------------------------------------
 -spec translate_get(gs_protocol:protocol_version(), gs_protocol:gri(),
     Data :: term()) -> gs_protocol:data() | gs_protocol:error().
+translate_get(1, #gri{type = od_provider, aspect = current_time}, TimeMillis) ->
+    #{<<"timeMillis">> => TimeMillis};
+
 translate_get(1, #gri{type = od_user, aspect = instance, scope = private}, User) ->
     #od_user{
         name = Name,
@@ -197,7 +200,7 @@ translate_get(1, #gri{type = od_share, aspect = instance, scope = private}, Shar
 translate_get(1, #gri{type = od_share, aspect = instance, scope = protected}, ShareData) ->
     ShareData;
 
-translate_get(1, #gri{type = od_provider, aspect = instance, scope = private}, Provider) ->
+translate_get(1, #gri{type = od_provider, id = Id, aspect = instance, scope = private}, Provider) ->
     #od_provider{
         name = Name,
         subdomain_delegation = SubdomainDelegation,
@@ -218,6 +221,8 @@ translate_get(1, #gri{type = od_provider, aspect = instance, scope = private}, P
 
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
+
+        <<"online">> => provider_connection:is_online(Id),
 
         <<"spaces">> => Spaces,
         <<"effectiveUsers">> => maps:keys(EffUsers),
@@ -269,7 +274,7 @@ translate_get(1, #gri{type = od_handle, aspect = instance, scope = private}, Han
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
-        <<"timestamp">> => timestamp_utils:datetime_to_datestamp(Timestamp),
+        <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp),
         <<"handleServiceId">> => HandleServiceId,
 
         <<"effectiveUsers">> => strip_eff_relation_data(EffUsers),

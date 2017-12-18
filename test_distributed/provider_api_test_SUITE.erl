@@ -50,7 +50,8 @@
     update_subdomaindomain_test/1,
     update_domain_test/1,
     update_domain_to_ip_address_test/1,
-    get_domain_config_test/1
+    get_domain_config_test/1,
+    get_current_time_test/1
 ]).
 
 all() ->
@@ -72,7 +73,8 @@ all() ->
         update_domain_test,
         update_subdomaindomain_test,
         update_domain_to_ip_address_test,
-        get_domain_config_test
+        get_domain_config_test,
+        get_current_time_test
     ]).
 
 %%%===================================================================
@@ -283,6 +285,7 @@ get_test(Config) ->
         <<"name">> => ExpName,
         <<"clientName">> => ExpName,
         <<"domain">> => ExpDomain,
+        <<"online">> => false,
         <<"latitude">> => ExpLatitude,
         <<"longitude">> => ExpLongitude
     },
@@ -1732,6 +1735,36 @@ get_domain_config_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+
+
+get_current_time_test(Config) ->
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, <<"P1">>
+    ),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, nobody, {provider, P1, KeyFile1, CertFile1}]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/provider/test/get_current_time">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = fun(Value) ->
+                maps:get(<<"timeMillis">>, Value) > 0
+            end
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = provider_logic,
+            function = get_current_time,
+            args = [client],
+            expected_result = ?OK_TERM(fun(Result) ->
+                Result > 0
+            end)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 %%%===================================================================
