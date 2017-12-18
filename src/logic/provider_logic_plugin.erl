@@ -421,6 +421,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
             group_logic:has_eff_user(GroupId, UserId);
 
         {?PROVIDER(ProvId), ?THROUGH_SPACE(SpaceId)} ->
+            % Space's support by subject provider is checked in 'exists'
             provider_logic:supports_space(ProvId, SpaceId);
 
         {?USER(UserId), ?THROUGH_SPACE(SpaceId)} ->

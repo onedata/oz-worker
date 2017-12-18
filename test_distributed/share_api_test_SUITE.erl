@@ -80,9 +80,8 @@ list_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root
-                % TODO enable when rest_translator will be ready
-%%                {user, Admin}
+                root,
+                {user, Admin}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -275,7 +274,7 @@ get_test(Config) ->
             path = [<<"/shares/">>, ShareId],
             expected_code = ?HTTP_200_OK,
             expected_body = SharePrivateDetails#{
-                % TODO mv undefined_to_null/null_to_undefined to ctool
+                % TODO VFS-3922
                 <<"handleId">> => <<"undefined">>,
                 <<"shareId">> => ShareId
             }

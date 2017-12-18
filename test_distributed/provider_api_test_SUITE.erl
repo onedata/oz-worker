@@ -1612,8 +1612,8 @@ update_subdomain_test(Config) ->
         Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, VerifyEndFun
     )),
 
-    % Erlang tuple cannot be converted to json so following bad_values results
-    % in gs_client crush rather than server error response
+    % Logic can also accept IPs as tuples,
+    % check if they are also properly validated.
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         gs_spec = undefined,
         data_spec = DataSpec#data_spec{
