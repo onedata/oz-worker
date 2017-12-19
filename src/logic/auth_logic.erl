@@ -52,7 +52,7 @@ authenticate_user(Identifier) ->
             Location = ?MACAROONS_LOCATION,
             M = macaroon:create(Location, Secret, Identifier),
             M2 = macaroon:add_first_party_caveat(M,
-                ["time < ", integer_to_binary(erlang:system_time(seconds) + ExpirationSecs)]),
+                ["time < ", integer_to_binary(time_utils:cluster_time_seconds() + ExpirationSecs)]),
 
             case token_utils:serialize62(M2) of
                 {ok, _} = Serialized -> Serialized;
@@ -141,7 +141,7 @@ validate_token(ProviderId, Macaroon, DischargeMacaroons, _Method, _RootResource)
 
             VerifyFun = fun
                 (<<"time < ", Integer/binary>>) ->
-                    erlang:system_time(seconds) < binary_to_integer(Integer);
+                    time_utils:cluster_time_seconds() < binary_to_integer(Integer);
                 (<<"providerId = ", PID/binary>>) ->
                     PID =:= ProviderId;
                 (_) ->
@@ -226,7 +226,7 @@ lookup_state_token(Token) ->
 create_macaroon(Secret, Identifier, Caveats) ->
     {ok, ExpirationSeconds} = application:get_env(?APP_NAME,
         authorization_macaroon_expiration_seconds),
-    ExpirationTime = erlang:system_time(seconds) + ExpirationSeconds,
+    ExpirationTime = time_utils:cluster_time_seconds() + ExpirationSeconds,
 
     Location = ?MACAROONS_LOCATION,
 
