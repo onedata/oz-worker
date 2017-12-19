@@ -80,4 +80,7 @@ get_response(#gri{aspect = spaces}, SpaceIds) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => SpaceIds});
 
 get_response(#gri{aspect = {check_my_ip, _}}, IP) ->
-    rest_translator:ok_body_reply(IP).
+    rest_translator:ok_body_reply(IP);
+
+get_response(#gri{aspect = current_time}, Timestamp) ->
+    rest_translator:ok_body_reply(#{<<"timeMillis">> => Timestamp}).

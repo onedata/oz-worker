@@ -65,7 +65,8 @@
     map_group_test/1,
     update_subdomain_test/1,
     update_domain_test/1,
-    get_domain_config_test/1
+    get_domain_config_test/1,
+    get_current_time_test/1
 ]).
 
 all() ->
@@ -96,7 +97,8 @@ all() ->
         map_group_test,
         update_subdomain_test,
         update_domain_test,
-        get_domain_config_test
+        get_domain_config_test,
+        get_current_time_test
     ]).
 
 %%%===================================================================
@@ -279,7 +281,10 @@ get_test(Config) ->
     SupportSize = oz_test_utils:minimum_support_size(Config),
     {ok, S1} = oz_test_utils:support_space(Config, P1, S1, SupportSize),
 
-    ExpDetails = ProviderDetails#{<<"clientName">> => ?PROVIDER_NAME1},
+    ExpDetails = ProviderDetails#{
+        <<"clientName">> => ?PROVIDER_NAME1,
+        <<"online">> => true
+    },
 
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{
@@ -320,6 +325,7 @@ get_test(Config) ->
             operation = get,
             gri = #gri{type = od_provider, id = P1, aspect = instance},
             expected_result = ?OK_MAP(#{
+                <<"online">> => true,
                 <<"name">> => ExpName, <<"domain">> => ExpDomain,
                 <<"effectiveGroups">> => [], <<"effectiveUsers">> => [U1],
                 <<"latitude">> => ExpLatitude, <<"longitude">> => ExpLongitude,
@@ -344,7 +350,6 @@ get_test(Config) ->
                 root,
                 {user, U1},
                 {user, Admin},
-                {provider, P1, KeyFile1, CertFile1},
                 {provider, P2, KeyFile2, CertFile2}
             ],
             unauthorized = [nobody],
@@ -365,7 +370,7 @@ get_test(Config) ->
             args = [client, P1],
             expected_result = ?OK_MAP(ExpDetails)
         },
-        gs_spec = #gs_spec{
+        gs_spec = GsSpec = #gs_spec{
             operation = get,
             gri = #gri{
                 type = od_provider, id = P1,
@@ -391,7 +396,8 @@ get_self_test(Config) ->
     ),
 
     ExpDetails = ProviderDetails#{
-        <<"clientName">> => ?PROVIDER_NAME1
+        <<"clientName">> => ?PROVIDER_NAME1,
+        <<"online">> => false
     },
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -410,6 +416,7 @@ get_self_test(Config) ->
                 aspect = instance, scope = protected
             },
             expected_result = ?OK_MAP(ExpDetails#{
+                <<"online">> => true,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -1796,6 +1803,40 @@ get_domain_config_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+
+
+get_current_time_test(Config) ->
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+        Config, ?PROVIDER_NAME1
+    ),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                nobody,
+                {provider, P1, KeyFile1, CertFile1}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/provider/test/get_current_time">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = fun(Value) ->
+                maps:get(<<"timeMillis">>, Value) > 0
+            end
+        },
+        logic_spec = #logic_spec{
+            module = provider_logic,
+            function = get_current_time,
+            args = [client],
+            expected_result = ?OK_TERM(fun(Result) ->
+                Result > 0
+            end)
+        }
+        % TODO gs
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 %%%===================================================================

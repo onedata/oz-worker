@@ -47,7 +47,8 @@
     get_domain_config/2
 ]).
 -export([
-    check_my_ports/2
+    check_my_ports/2,
+    get_current_time/1
 ]).
 -export([
     exists/1,
@@ -437,6 +438,23 @@ check_my_ports(Client, Data) ->
         gri = #gri{type = od_provider, id = undefined, aspect = check_my_ports},
         data = Data
     })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns current time in milliseconds, can be treated as synchronized across
+%% the whole onezone with the accuracy of about one second.
+%% Used to by providers to synchronize clocks with onezone (and thus each other).
+%% @end
+%%--------------------------------------------------------------------
+-spec get_current_time(Client :: entity_logic:client()) ->
+    {ok, non_neg_integer()} | {error, term()}.
+get_current_time(Client) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = undefined, aspect = current_time}
+    }).
 
 
 %%--------------------------------------------------------------------

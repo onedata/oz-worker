@@ -738,14 +738,16 @@ get_provider_test(Config) ->
         Config, P2, S1, oz_test_utils:minimum_support_size(Config)
     ),
 
-    ExpDetails = ProviderDetails#{<<"clientName">> => ?PROVIDER_NAME1},
+    ExpDetails = ProviderDetails#{
+        <<"clientName">> => ?PROVIDER_NAME1,
+        <<"online">> => false
+    },
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
                 {user, Admin},
                 {user, User},
-                {provider, P1, KeyFile1, CertFile1},
                 {provider, P2, KeyFile2, CertFile2}
             ],
             unauthorized = [nobody],
@@ -768,7 +770,7 @@ get_provider_test(Config) ->
             args = [client, S1, P1],
             expected_result = ?OK_MAP(ExpDetails)
         },
-        gs_spec = #gs_spec{
+        gs_spec = GsSpec = #gs_spec{
             operation = get,
             gri = #gri{
                 type = od_provider, id = P1,
@@ -785,7 +787,26 @@ get_provider_test(Config) ->
             })
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % When making connection with gs provider becomes online
+    ExpDetails2 = ExpDetails#{<<"online">> => true},
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P1, KeyFile1, CertFile1}]
+        },
+        gs_spec = GsSpec#gs_spec{
+            expected_result = ?OK_MAP(ExpDetails2#{
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = oz_test_utils:decode_gri(
+                        Config, EncodedGri
+                    ),
+                    ?assertEqual(Id, P1)
+                end
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 leave_provider_test(Config) ->

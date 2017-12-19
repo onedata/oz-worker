@@ -267,7 +267,12 @@ add_user_test(Config) ->
         rest_spec = #rest_spec{
             method = put,
             path = [<<"/groups/">>, G1, <<"/users/">>, U2],
-            expected_code = ?HTTP_201_CREATED
+            expected_code = ?HTTP_201_CREATED,
+            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
+                ExpLocation = <<"/groups/", G1/binary, "/users/", U2/binary>>,
+                ?assertEqual(ExpLocation, Location),
+                true
+            end
         },
         logic_spec = #logic_spec{
             module = group_logic,

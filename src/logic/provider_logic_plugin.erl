@@ -17,6 +17,7 @@
 -include("tokens.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/global_definitions.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("cluster_worker/include/api_errors.hrl").
@@ -68,8 +69,9 @@ operation_supported(get, instance, protected) -> true;
 operation_supported(get, eff_users, private) -> true;
 operation_supported(get, eff_groups, private) -> true;
 operation_supported(get, spaces, private) -> true;
-operation_supported(get, {check_my_ip, _}, private) -> true;
 operation_supported(get, domain_config, private) -> true;
+operation_supported(get, {check_my_ip, _}, private) -> true;
+operation_supported(get, current_time, private) -> true;
 
 operation_supported(update, instance, private) -> true;
 operation_supported(update, {space, _}, private) -> true;
@@ -143,8 +145,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
             N
     end,
     CSR = maps:get(<<"csr">>, Data),
-    Latitude = maps:get(<<"latitude">>, Data, undefined),
-    Longitude = maps:get(<<"longitude">>, Data, undefined),
+    Latitude = maps:get(<<"latitude">>, Data, 0.0),
+    Longitude = maps:get(<<"longitude">>, Data, 0.0),
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
     UUID = maps:get(<<"uuid">>, Data, undefined),
 
@@ -223,7 +225,7 @@ get(#el_req{gri = #gri{aspect = list}}, _) ->
 
 get(#el_req{gri = #gri{aspect = instance, scope = private}}, Provider) ->
     {ok, Provider};
-get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Provider) ->
+get(#el_req{gri = #gri{id = Id, aspect = instance, scope = protected}}, Provider) ->
     #od_provider{
         name = Name, domain = Domain,
         latitude = Latitude, longitude = Longitude
@@ -231,6 +233,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Provider) ->
     {ok, #{
         <<"name">> => Name, <<"domain">> => Domain,
         <<"latitude">> => Latitude, <<"longitude">> => Longitude,
+        <<"online">> => provider_connection:is_online(Id),
         % TODO VFS-2918
         <<"clientName">> => Name
     }};
@@ -264,7 +267,10 @@ get(#el_req{gri = #gri{aspect = spaces}}, Provider) ->
     {ok, maps:keys(Provider#od_provider.spaces)};
 
 get(#el_req{gri = #gri{aspect = {check_my_ip, ClientIP}}}, _) ->
-    {ok, ClientIP}.
+    {ok, ClientIP};
+
+get(#el_req{gri = #gri{aspect = current_time}}, _) ->
+    {ok, time_utils:cluster_time_milli_seconds()}.
 
 
 %%--------------------------------------------------------------------
@@ -399,6 +405,9 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, _) ->
     auth_by_self(Req);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = {check_my_ip, _}}}, _) ->
+    true;
+
+authorize(#el_req{operation = get, gri = #gri{aspect = current_time}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = list}}, _) ->

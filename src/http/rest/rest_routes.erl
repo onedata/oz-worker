@@ -920,6 +920,10 @@ provider_routes() -> [
         method = get,
         b_gri = #b_gri{type = od_provider, aspect = {check_my_ip, ?CLIENT_IP}}
     }},
+    {<<"/provider/test/get_current_time">>, #rest_req{
+        method = get,
+        b_gri = #b_gri{type = od_provider, aspect = current_time}
+    }},
     {<<"/provider/test/check_my_ports">>, #rest_req{
         method = post,
         b_gri = #b_gri{type = od_provider, aspect = check_my_ports}
