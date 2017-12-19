@@ -51,7 +51,7 @@
 -spec create_state_token(state_info()) -> {ok, id()} | datastore:create_error().
 create_state_token(StateInfo) ->
     create(#document{value = #state_token{
-        timestamp = erlang:system_time(seconds),
+        timestamp = time_utils:cluster_time_seconds(),
         state_info = StateInfo
     }}).
 
@@ -69,7 +69,7 @@ lookup_state_token(Token) ->
             % The token is consumed immediately
             delete(Token),
             % Check if the token is still valid
-            case erlang:system_time(seconds) - T =< ?STATE_TOKEN_TTL of
+            case time_utils:cluster_time_seconds() - T =< ?STATE_TOKEN_TTL of
                 true -> {ok, Info};
                 false -> error
             end;
