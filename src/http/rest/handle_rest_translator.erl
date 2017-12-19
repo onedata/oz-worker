@@ -75,7 +75,7 @@ get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleDa
     rest_translator:ok_body_reply(NewData#{
         <<"handleId">> => HandleId,
         <<"handle">> => PublicHandle,
-        <<"timestamp">> => timestamp_utils:datetime_to_datestamp(Timestamp)
+        <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp)
     });
 
 get_response(#gri{aspect = users}, Users) ->

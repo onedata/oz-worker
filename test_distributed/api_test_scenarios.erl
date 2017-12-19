@@ -1044,7 +1044,10 @@ create_eff_providers_env(Config) ->
             {ok, {ProvId, _, _}} = oz_test_utils:create_provider_and_certs(
                 Config, ProvDetails#{<<"subdomainDelegation">> => false}
             ),
-            {ProvId, ProvDetails#{<<"clientName">> => ProviderName}}
+            {ProvId, ProvDetails#{
+                <<"clientName">> => ProviderName,
+                <<"online">> => false
+            }}
         end, lists:seq(1, 4)
     ),
 

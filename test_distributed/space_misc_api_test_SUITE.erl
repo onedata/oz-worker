@@ -730,7 +730,8 @@ get_provider_test(Config) ->
     ),
 
     ExpProvidersDetails = ProviderDetails#{
-        <<"clientName">> => ?PROVIDER_NAME1
+        <<"clientName">> => ?PROVIDER_NAME1,
+        <<"online">> => false
     },
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
