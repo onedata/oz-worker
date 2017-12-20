@@ -72,14 +72,11 @@ create_test(Config) ->
         ?OZ_HANDLE_SERVICES_CREATE
     ]),
 
-    VerifyFun = fun(HServiceId) ->
+    VerifyFun = fun(HServiceId, ExpProperties) ->
         {ok, HService} = oz_test_utils:get_handle_service(Config, HServiceId),
         ?assertEqual(?HANDLE_SERVICE_NAME1, HService#od_handle_service.name),
         ?assertEqual(?PROXY_ENDPOINT, HService#od_handle_service.proxy_endpoint),
-        ?assertEqual(
-            ?DOI_SERVICE_PROPERTIES,
-            HService#od_handle_service.service_properties
-        ),
+        ?assertEqual(ExpProperties, HService#od_handle_service.service_properties),
         true
     end,
 
@@ -99,16 +96,22 @@ create_test(Config) ->
             method = post,
             path = <<"/handle_services">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                <<"/handle_services/", HServiceId/binary>> = Location,
-                VerifyFun(HServiceId)
-            end
+            expected_headers = ?OK_ENV(fun(_Env, Data) ->
+                ExpProperties = maps:get(<<"serviceProperties">>, Data),
+                fun(#{<<"location">> := Location} = _Headers) ->
+                    <<"/handle_services/", HServiceId/binary>> = Location,
+                    VerifyFun(HServiceId, ExpProperties)
+                end
+            end)
         },
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = create,
             args = [client, data],
-            expected_result = ?OK_TERM(VerifyFun)
+            expected_result = ?OK_ENV(fun(_Env, Data) ->
+                ExpProperties = maps:get(<<"serviceProperties">>, Data),
+                ?OK_TERM(fun(Result) -> VerifyFun(Result, ExpProperties) end)
+            end)
         },
         data_spec = #data_spec{
             required = [
@@ -117,7 +120,9 @@ create_test(Config) ->
             correct_values = #{
                 <<"name">> => [?HANDLE_SERVICE_NAME1],
                 <<"proxyEndpoint">> => [?PROXY_ENDPOINT],
-                <<"serviceProperties">> => [?DOI_SERVICE_PROPERTIES]
+                <<"serviceProperties">> => [
+                    ?DOI_SERVICE_PROPERTIES, ?PID_SERVICE_PROPERTIES
+                ]
             },
             bad_values = [
                 {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
@@ -151,15 +156,18 @@ create_test(Config) ->
             operation = create,
             gri = #gri{type = od_handle_service, aspect = instance},
             auth_hint = ?AS_USER(U3),
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?HANDLE_SERVICE_NAME1,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    VerifyFun(Id)
-                end
-            })
+            expected_result = ?OK_ENV(fun(_Env, Data) ->
+                ExpProperties = maps:get(<<"serviceProperties">>, Data),
+                ?OK_MAP_CONTAINS(#{
+                    <<"name">> => ?HANDLE_SERVICE_NAME1,
+                    <<"gri">> => fun(EncodedGri) ->
+                        #gri{id = Id} = oz_test_utils:decode_gri(
+                            Config, EncodedGri
+                        ),
+                        VerifyFun(Id, ExpProperties)
+                    end
+                })
+            end)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
@@ -180,12 +188,12 @@ list_test(Config) ->
     ]),
 
     ExpHServices = lists:map(
-        fun(_) ->
+        fun(ServiceDetails) ->
             {ok, HServiceId} = oz_test_utils:create_handle_service(
-                Config, ?USER(U1), ?DOI_SERVICE
+                Config, ?USER(U1), ServiceDetails
             ),
             HServiceId
-        end, lists:seq(1, 5)
+        end, [?DOI_SERVICE, ?PID_SERVICE, ?DOI_SERVICE, ?PID_SERVICE]
     ),
 
     ApiTestSpec = #api_test_spec{

@@ -54,4 +54,6 @@ get_response(#gri{id = ShareId, aspect = instance, scope = private}, Share) ->
         <<"shareId">> => ShareId, <<"name">> => Name,
         <<"publicUrl">> => PublicUrl, <<"spaceId">> => SpaceId,
         <<"rootFileId">> => RootFileId, <<"handleId">> => HandleId
-    }).
+    });
+get_response(#gri{id = undefined, aspect = list, scope = private}, Shares) ->
+    rest_translator:ok_body_reply(#{<<"shares">> => Shares}).

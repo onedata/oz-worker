@@ -536,7 +536,7 @@ get_share_test(Config) ->
         Config, ?ROOT, ShareId, ShareName, ?ROOT_FILE_ID, S1
     ),
 
-    {ok, ZoneDomain} = oz_test_utils:get_domain(Config),
+    {ok, ZoneDomain} = oz_test_utils:get_oz_domain(Config),
     SharePublicUrl = ?SHARE_PUBLIC_URL(ZoneDomain, ShareId),
 
     ExpShareDetails = #{
@@ -718,18 +718,27 @@ get_provider_test(Config) ->
         ?OZ_SPACES_LIST_PROVIDERS
     ]),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, User, set, []),
-
     ProviderDetails = ?PROVIDER_DETAILS(?PROVIDER_NAME1),
-    {ok, {P1, _, _}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
         Config, ProviderDetails#{<<"subdomainDelegation">> => false}
     ),
+    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
+        Config, ?PROVIDER_NAME2
+    ),
+    {ok, {P3, KeyFile3, CertFile3}} = oz_test_utils:create_provider_and_certs(
+        Config, ?PROVIDER_NAME2
+    ),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
+    oz_test_utils:space_set_user_privileges(Config, S1, User, set, []),
     {ok, S1} = oz_test_utils:support_space(
         Config, P1, S1, oz_test_utils:minimum_support_size(Config)
     ),
+    {ok, S1} = oz_test_utils:support_space(
+        Config, P2, S1, oz_test_utils:minimum_support_size(Config)
+    ),
 
-    ExpProvidersDetails = ProviderDetails#{
+    ExpDetails = ProviderDetails#{
         <<"clientName">> => ?PROVIDER_NAME1,
         <<"online">> => false
     },
@@ -738,18 +747,20 @@ get_provider_test(Config) ->
             correct = [
                 root,
                 {user, Admin},
-                {user, User}
+                {user, User},
+                {provider, P2, KeyFile2, CertFile2}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, NonAdmin}
+                {user, NonAdmin},
+                {provider, P3, KeyFile3, CertFile3}
             ]
         },
         rest_spec = #rest_spec{
             method = get,
             path = [<<"/spaces/">>, S1, <<"/providers/">>, P1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpProvidersDetails#{
+            expected_body = ExpDetails#{
                 <<"providerId">> => P1
             }
         },
@@ -757,16 +768,16 @@ get_provider_test(Config) ->
             module = space_logic,
             function = get_provider,
             args = [client, S1, P1],
-            expected_result = ?OK_MAP(ExpProvidersDetails)
+            expected_result = ?OK_MAP(ExpDetails)
         },
-        gs_spec = #gs_spec{
+        gs_spec = GsSpec = #gs_spec{
             operation = get,
             gri = #gri{
                 type = od_provider, id = P1,
                 aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_SPACE(S1),
-            expected_result = ?OK_MAP(ExpProvidersDetails#{
+            expected_result = ?OK_MAP(ExpDetails#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -776,7 +787,26 @@ get_provider_test(Config) ->
             })
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % When making connection with gs provider becomes online
+    ExpDetails2 = ExpDetails#{<<"online">> => true},
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P1, KeyFile1, CertFile1}]
+        },
+        gs_spec = GsSpec#gs_spec{
+            expected_result = ?OK_MAP(ExpDetails2#{
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = oz_test_utils:decode_gri(
+                        Config, EncodedGri
+                    ),
+                    ?assertEqual(Id, P1)
+                end
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 leave_provider_test(Config) ->

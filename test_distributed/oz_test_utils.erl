@@ -22,7 +22,7 @@
 -export([
     call_oz/4,
     get_env/3,
-    get_domain/1,
+    get_oz_domain/1,
     get_rest_port/1,
     all_oz_privileges/1
 ]).
@@ -120,7 +120,9 @@
     create_share/6,
     create_share/3,
     list_shares/1,
-    delete_share/2
+    get_share/2,
+    delete_share/2,
+    get_share_public_url/2
 ]).
 -export([
     create_provider_and_certs/2,
@@ -130,6 +132,7 @@
     delete_provider/2,
     support_space/4,
     support_space/5,
+    unsupport_space/3,
     enable_subdomain_delegation/4,
     set_provider_domain/3
 ]).
@@ -1086,12 +1089,37 @@ list_shares(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves share data from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_share(Config :: term(), ShareId :: od_share:id()) ->
+    {ok, #od_share{}}.
+get_share(Config, ShareId) ->
+    ?assertMatch({ok, #od_share{}}, call_oz(
+        Config, share_logic, get, [?ROOT, ShareId])
+    ).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Deletes given share from onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_share(Config :: term(), ShareId :: od_share:id()) -> ok.
 delete_share(Config, ShareId) ->
     ?assertMatch(ok, call_oz(Config, share_logic, delete, [?ROOT, ShareId])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get share public URL.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_share_public_url(Config :: term(), ShareId :: od_share:id()) -> binary().
+get_share_public_url(Config, ShareId) ->
+    ?assertMatch(<<_/binary>>, call_oz(
+        Config, share_logic, share_id_to_public_url, [ShareId])
+    ).
 
 
 %%--------------------------------------------------------------------
@@ -1198,6 +1226,19 @@ support_space(Config, ProviderId, SpaceId, Size) ->
 support_space(Config, Client, ProviderId, Token, Size) ->
     ?assertMatch({ok, _}, call_oz(Config, provider_logic, support_space, [
         Client, ProviderId, Token, Size
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Revoke space support by given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec unsupport_space(Config :: term(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> ok.
+unsupport_space(Config, ProviderId, SpaceId) ->
+    ?assertMatch(ok, call_oz(Config, provider_logic, revoke_support, [
+        ?ROOT, ProviderId, SpaceId
     ])).
 
 
@@ -1942,15 +1983,15 @@ mock_handle_proxy(Config) ->
     ok = test_utils:mock_new(Nodes, handle_proxy_client, [passthrough]),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, put,
         fun(_, <<"/handle", _/binary>>, _, _) ->
-            {ok, 201, [{<<"location">>, <<"/test_location">>}], <<"">>}
+            {ok, 201, #{<<"location">> => <<"/test_location">>}, <<"">>}
         end),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, patch,
         fun(_, <<"/handle", _/binary>>, _, _) ->
-            {ok, 204, [], <<"">>}
+            {ok, 204, #{}, <<"">>}
         end),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, delete,
         fun(_, <<"/handle", _/binary>>, _, _) ->
-            {ok, 200, [], <<"">>}
+            {ok, 200, #{}, <<"">>}
         end).
 
 
@@ -2040,8 +2081,8 @@ get_rest_port(Config) ->
 %% Get zone domain.
 %% @end
 %%--------------------------------------------------------------------
--spec get_domain(Config :: term()) -> {ok, Domain :: string()}.
-get_domain(Config) ->
+-spec get_oz_domain(Config :: term()) -> {ok, Domain :: string()}.
+get_oz_domain(Config) ->
     get_env(Config, ?APP_NAME, http_domain).
 
 
@@ -2052,7 +2093,7 @@ get_domain(Config) ->
 %%--------------------------------------------------------------------
 -spec get_gs_ws_url(Config :: term()) -> binary().
 get_gs_ws_url(Config) ->
-    {ok, ZoneDomain} = get_domain(Config),
+    {ok, ZoneDomain} = get_oz_domain(Config),
     {ok, GsPort} = get_rest_port(Config),
     str_utils:format_bin(
         "wss://~s:~B/~s",

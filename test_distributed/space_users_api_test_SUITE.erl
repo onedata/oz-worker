@@ -479,12 +479,18 @@ list_eff_users_test(Config) ->
         S1, _Groups, [{U3, _}, {U4, _}, {U5, _}, {U6, _}], {U1, U2, NonAdmin}
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_SPACES_LIST_USERS
+    ]),
+
     ExpUsers = [U1, U2, U3, U4, U5, U6],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {user, Admin}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -526,6 +532,11 @@ get_eff_user_test(Config) ->
         S1, _Groups, EffUsers, {U1, U2, NonAdmin}
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_SPACES_LIST_USERS
+    ]),
+
     lists:foreach(
         fun({UserId, UserDetails}) ->
 
@@ -533,6 +544,7 @@ get_eff_user_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
+                        {user, Admin},
                         {user, U2}
                     ],
                     unauthorized = [nobody],
@@ -607,6 +619,10 @@ get_eff_user_privileges_test(Config) ->
         Config, ?SPACE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_SPACES_LIST_USERS
+    ]),
 
     % User whose eff privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
@@ -664,6 +680,7 @@ get_eff_user_privileges_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
+                {user, Admin},
                 {user, NonAdmin}
             ]
         },

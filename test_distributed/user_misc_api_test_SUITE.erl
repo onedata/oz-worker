@@ -452,21 +452,29 @@ get_self_test(Config) ->
 
 
 update_test(Config) ->
+    UsedAlias = ?UNIQUE_STRING,
+    {ok, _U1} = oz_test_utils:create_user(Config, #od_user{alias = UsedAlias}),
+
+    % Trying to set owned alias again should not raise any error
+    OwnedAlias = ?UNIQUE_STRING,
     EnvSetUpFun = fun() ->
         {ok, User} = oz_test_utils:create_user(Config, #od_user{
-            name = ?USER_NAME1
+            name = ?USER_NAME1, alias = OwnedAlias
         }),
         #{userId => User}
+    end,
+    EnvTeardownFun = fun(#{userId := UserId} = _Env) ->
+        oz_test_utils:delete_user(Config, UserId)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{userId := UserId} = _Env, Data) ->
         {ok, User} = oz_test_utils:get_user(Config, UserId),
         {ExpName, ExpAlias} = case ShouldSucceed of
             false ->
-                {?USER_NAME1, <<"">>};
+                {?USER_NAME1, OwnedAlias};
             true ->
                 {
                     maps:get(<<"name">>, Data, ?USER_NAME1),
-                    maps:get(<<"alias">>, Data, <<"">>)
+                    maps:get(<<"alias">>, Data, OwnedAlias)
                 }
             end,
         ?assertEqual(ExpName, User#od_user.name),
@@ -494,19 +502,21 @@ update_test(Config) ->
             at_least_one = [<<"name">>, <<"alias">>],
             correct_values = #{
                 <<"name">> => [fun() -> ?UNIQUE_STRING end],
-                <<"alias">> => [fun() -> ?UNIQUE_STRING end]
+                <<"alias">> => [fun() -> ?UNIQUE_STRING end, OwnedAlias]
             },
             bad_values = [
                 {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
                 {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
                 {<<"alias">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"alias">>)},
                 {<<"alias">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"alias">>)},
-                {<<"alias">>, <<"Resu1">>, ?ERROR_BAD_VALUE_ALIAS(<<"alias">>)}
+                {<<"alias">>, <<"Resu1">>, ?ERROR_BAD_VALUE_ALIAS(<<"alias">>)},
+                {<<"alias">>, UsedAlias,
+                    ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"alias">>)}
             ]
         }
     },
     ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+        Config, ApiTestSpec, EnvSetUpFun, EnvTeardownFun, VerifyEndFun
     )),
 
     % Check that regular client can't make request on behalf of other client
@@ -528,7 +538,7 @@ update_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
+        Config, ApiTestSpec2, EnvSetUpFun, EnvTeardownFun, VerifyEndFun
     )).
 
 
@@ -813,7 +823,7 @@ set_default_provider_test(Config) ->
             },
             bad_values = [
                 {<<"providerId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
+                    ?ERROR_BAD_VALUE_EMPTY(<<"providerId">>)},
                 {<<"providerId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"providerId">>)},
                 {<<"providerId">>, P1,

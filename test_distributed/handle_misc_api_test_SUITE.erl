@@ -128,14 +128,26 @@ list_test(Config) ->
 
 
 create_test(Config) ->
-    % create handle service with 2 users:
+    % create pid and doi handle services with 2 users:
     %   U2 gets the HANDLE_SERVICE_REGISTER_HANDLE privilege
     %   U1 gets all remaining privileges
-    {HService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
+    {DoiHService, U1, U2} = api_test_scenarios:create_basic_doi_hservice_env(
         Config, ?HANDLE_SERVICE_REGISTER_HANDLE
     ),
+    {ok, PidHService} = oz_test_utils:create_handle_service(
+        Config, ?USER(U1), ?PID_SERVICE
+    ),
+    oz_test_utils:handle_service_set_user_privileges(
+        Config, PidHService, U1, revoke, [?HANDLE_SERVICE_REGISTER_HANDLE]
+    ),
+    {ok, U2} = oz_test_utils:handle_service_add_user(Config, PidHService, U2),
+    oz_test_utils:handle_service_set_user_privileges(
+        Config, PidHService, U2, set, [?HANDLE_SERVICE_REGISTER_HANDLE]
+    ),
+
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U3} = oz_test_utils:handle_service_add_user(Config, HService, U3),
+    {ok, U3} = oz_test_utils:handle_service_add_user(Config, DoiHService, U3),
+    {ok, U3} = oz_test_utils:handle_service_add_user(Config, PidHService, U3),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
@@ -151,7 +163,7 @@ create_test(Config) ->
         Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
     ),
 
-    VerifyFun = fun(HandleId) ->
+    VerifyFun = fun(HandleId, HService) ->
         {ok, Handle} = oz_test_utils:get_handle(Config, HandleId),
         ?assertEqual(<<"Share">>, Handle#od_handle.resource_type),
         ?assertEqual(ShareId, Handle#od_handle.resource_id),
@@ -176,16 +188,22 @@ create_test(Config) ->
             method = post,
             path = <<"/handles">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                <<"/handles/", HandleId/binary>> = Location,
-                VerifyFun(HandleId)
-            end
+            expected_headers = ?OK_ENV(fun(_Env, Data) ->
+                HService = maps:get(<<"handleServiceId">>, Data),
+                fun(#{<<"location">> := Location} = _Headers) ->
+                    <<"/handles/", HandleId/binary>> = Location,
+                    VerifyFun(HandleId, HService)
+                end
+            end)
         },
         logic_spec = LogicSpec = #logic_spec{
             module = handle_logic,
             function = create,
             args = [client, data],
-            expected_result = ?OK_TERM(VerifyFun)
+            expected_result = ?OK_ENV(fun(_Env, Data) ->
+                HService = maps:get(<<"handleServiceId">>, Data),
+                ?OK_TERM(fun(Result) -> VerifyFun(Result, HService) end)
+            end)
         },
         data_spec = DataSpec = #data_spec{
             required = [
@@ -193,7 +211,7 @@ create_test(Config) ->
                 <<"resourceId">>, <<"metadata">>
             ],
             correct_values = #{
-                <<"handleServiceId">> => [HService],
+                <<"handleServiceId">> => [DoiHService, PidHService],
                 <<"resourceType">> => [<<"Share">>],
                 <<"resourceId">> => [ShareId],
                 <<"metadata">> => [?DC_METADATA]
@@ -229,18 +247,21 @@ create_test(Config) ->
             operation = create,
             gri = #gri{type = od_handle, aspect = instance},
             auth_hint = ?AS_USER(U2),
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"handleServiceId">> => HService,
-                <<"metadata">> => ?DC_METADATA,
-                <<"resourceId">> => ShareId,
-                <<"resourceType">> => <<"Share">>,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    VerifyFun(Id)
-                end
-            })
+            expected_result = ?OK_ENV(fun(_Env, Data) ->
+                HService = maps:get(<<"handleServiceId">>, Data),
+                ?OK_MAP_CONTAINS(#{
+                    <<"handleServiceId">> => HService,
+                    <<"metadata">> => ?DC_METADATA,
+                    <<"resourceId">> => ShareId,
+                    <<"resourceType">> => <<"Share">>,
+                    <<"gri">> => fun(EncodedGri) ->
+                        #gri{id = Id} = oz_test_utils:decode_gri(
+                            Config, EncodedGri
+                        ),
+                        VerifyFun(Id, HService)
+                    end
+                })
+            end)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
@@ -256,7 +277,7 @@ create_test(Config) ->
         data_spec = DataSpec#data_spec{
             bad_values = [
                 {<<"handleServiceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
+                    ?ERROR_BAD_VALUE_EMPTY(<<"handleServiceId">>)},
                 {<<"handleServiceId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"handleServiceId">>)},
                 {<<"resourceType">>, <<"">>,
@@ -265,7 +286,7 @@ create_test(Config) ->
                 {<<"resourceType">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
                 {<<"resourceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
+                    ?ERROR_BAD_VALUE_EMPTY(<<"resourceId">>)},
                 {<<"resourceId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceId">>)},
                 {<<"metadata">>, 1234,
