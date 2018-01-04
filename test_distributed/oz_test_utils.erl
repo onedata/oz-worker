@@ -125,7 +125,6 @@
     get_share_public_url/2
 ]).
 -export([
-    create_provider_and_certs/2,
     create_provider/2,
     get_provider/2,
     list_providers/1,
@@ -186,11 +185,9 @@
     create_3_nested_groups/2, create_3_nested_groups/5,
     create_and_support_3_spaces/2,
     minimum_support_size/1,
-    generate_provider_cert_files/0,
     mock_handle_proxy/1,
     unmock_handle_proxy/1,
-    gui_ca_certs/1,
-    rest_ca_certs/1
+    gui_ca_certs/1
 ]).
 
 % Convenience functions for gs
@@ -1127,39 +1124,23 @@ get_share_public_url(Config, ShareId) ->
 %% Creates a provider (automatically generates certificates).
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider_and_certs(Config :: term(),
+-spec create_provider(Config :: term(),
     NameOrData :: od_provider:name() | #{}) ->
     {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
-create_provider_and_certs(Config, Name) when is_binary(Name) ->
-    create_provider_and_certs(Config, #{
+create_provider(Config, Name) when is_binary(Name) ->
+    create_provider(Config, #{
         <<"name">> => Name,
         <<"domain">> => <<"127.0.0.1">>,
         <<"subdomainDelegation">> => false,
         <<"latitude">> => 0.0,
         <<"longitude">> => 0.0
     });
-create_provider_and_certs(Config, Data) ->
-    {KeyFile, CSRFile, CertFile} = generate_provider_cert_files(),
-    {ok, CSR} = file:read_file(CSRFile),
-    {ok, {ProviderId, Certificate}} = ?assertMatch({ok, _}, call_oz(
-        Config, provider_logic, create, [?NOBODY, Data#{<<"csr">> => CSR}]
-    )),
-    ok = file:write_file(CertFile, Certificate),
-    {ok, {ProviderId, KeyFile, CertFile}}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates a provider.
-%% @end
-%%--------------------------------------------------------------------
--spec create_provider(Config :: term(), Data :: maps:map()) ->
-    {ok, {ProviderId :: od_provider:id()}}.
 create_provider(Config, Data) ->
-    {ok, {ProviderId, Certificate}} = ?assertMatch({ok, _}, call_oz(
+    {ok, {ProviderId, Macaroon}} = ?assertMatch({ok, _}, call_oz(
         Config, provider_logic, create, [?NOBODY, Data]
     )),
-    {ok, {ProviderId, Certificate}}.
+    {ok, MacaroonBin} = call_oz(Config, onedata_macaroons, serialize, [Macaroon]),
+    {ok, {ProviderId, MacaroonBin}}.
 
 
 %%--------------------------------------------------------------------
@@ -1957,23 +1938,6 @@ minimum_support_size(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a key/cert pair and a corresponding CSR for provider registration.
-%% @end
-%%--------------------------------------------------------------------
--spec generate_provider_cert_files() ->
-    {KeyFile :: string(), CSRFile :: string(), CertFile :: string()}.
-generate_provider_cert_files() ->
-    Prefix = "provider" ++ integer_to_list(erlang:system_time(micro_seconds)),
-    KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
-    CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
-    CertFile = filename:join(?TEMP_DIR, Prefix ++ "_cert.pem"),
-    os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
-    os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
-    {KeyFile, CSRFile, CertFile}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Mocks handle proxy on all nodes of onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -2015,18 +1979,6 @@ unmock_handle_proxy(Config) ->
 gui_ca_certs(Config) ->
     {ok, CaCertsDir} = call_oz(Config, application, get_env, [?APP_NAME, cacerts_dir]),
     call_oz(Config, cert_utils, load_ders_in_dir, [CaCertsDir]).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns the list of DER encoded ca certs used in rest server.
-%% @end
-%%--------------------------------------------------------------------
--spec rest_ca_certs(Config :: term()) -> [public_key:der_encoded()].
-rest_ca_certs(Config) ->
-    ZoneCaPath = call_oz(Config, ozpca, oz_ca_path, []),
-    ZoneCaCertDers = call_oz(Config, cert_utils, load_ders, [ZoneCaPath]),
-    ZoneCaCertDers ++ gui_ca_certs(Config).
 
 
 %%--------------------------------------------------------------------
@@ -2073,7 +2025,7 @@ get_env(Config, Application, Name) ->
 %%--------------------------------------------------------------------
 -spec get_rest_port(Config :: term()) -> {ok, Port :: inet:port_number()}.
 get_rest_port(Config) ->
-    get_env(Config, ?APP_NAME, rest_port).
+    get_env(Config, ?APP_NAME, gui_port).
 
 
 %%--------------------------------------------------------------------

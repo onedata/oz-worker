@@ -18,7 +18,7 @@
 -include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 -define(NO_DATA, undefined).
@@ -196,13 +196,13 @@ error_to_rest_expectations(Config, ErrorType) ->
         Config, error_rest_translator, response, [ErrorType]
     ),
     ExpHeaders = case Headers of
-                     #{} -> undefined;
-                     _ -> Headers
-                 end,
+        #{} -> undefined;
+        _ -> Headers
+    end,
     ExpBody = case Body of
-                  {binary, <<"">>} -> undefined;
-                  _ -> Body
-              end,
+        {binary, <<"">>} -> undefined;
+        _ -> Body
+    end,
     {ExpCode, ExpHeaders, ExpBody}.
 
 
@@ -288,7 +288,7 @@ prepare_logic_client({user, UserId}) ->
     ?USER(UserId);
 prepare_logic_client({user, UserId, _Macaroon}) ->
     ?USER(UserId);
-prepare_logic_client({provider, ProviderId, _, _}) ->
+prepare_logic_client({provider, ProviderId, _Macaroon}) ->
     ?PROVIDER(ProviderId).
 
 
@@ -339,8 +339,8 @@ check_logic_call(Config, LogicSpec) ->
             ct:pal(
                 "Logic result verification function crashed - ~p:~p~n"
                 "Stacktrace: ~s", [
-                Type, Message, lager:pr_stacktrace(erlang:get_stacktrace())
-            ]),
+                    Type, Message, lager:pr_stacktrace(erlang:get_stacktrace())
+                ]),
             false
     end.
 
@@ -359,9 +359,9 @@ verify_logic_result({ok, Got}, ?OK_MAP_CONTAINS(Expected)) when is_map(Got) ->
 verify_logic_result({ok, GotList}, ?OK_LIST(ExpList)) ->
     lists:sort(ExpList) =:= lists:sort(GotList);
 verify_logic_result({ok, GotList}, ?OK_LIST_CONTAINS(ExpList)) ->
-    ExpList -- GotList =:= [];
+        ExpList -- GotList =:= [];
 verify_logic_result({ok, GotList}, ?OK_LIST_DOESNT_CONTAIN(ExpList)) ->
-    GotList -- ExpList =:= GotList;
+        GotList -- ExpList =:= GotList;
 verify_logic_result({error, Error}, ?ERROR_REASON({error, Error})) ->
     true;
 verify_logic_result({ok, Result}, ?OK_TERM(VerifyFun)) ->
@@ -461,28 +461,30 @@ prepare_gs_client(Config, {user, UserId, _Macaroon}) ->
     prepare_gs_client(Config, {user, UserId});
 prepare_gs_client(Config, {user, UserId}) ->
     {ok, SessionId} = oz_test_utils:create_session(Config, UserId, []),
-    CaCerts = oz_test_utils:rest_ca_certs(Config),
     prepare_gs_client(
-        Config, {user, UserId},
-        {?GRAPH_SYNC_SESSION_COOKIE_NAME, SessionId},
-        [{cacerts, CaCerts}]
+        Config,
+        {user, UserId},
+        {cookie, {?GRAPH_SYNC_SESSION_COOKIE_NAME, SessionId}},
+        [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
     );
 prepare_gs_client(_Config, nobody) ->
     ok;
-prepare_gs_client(Config, {provider, ProviderId, KeyFile, CertFile}) ->
-    CaCerts = oz_test_utils:rest_ca_certs(Config),
-    Opts = [
-        {keyfile, KeyFile}, {certfile, CertFile}, {cacerts, CaCerts}
-    ],
-    prepare_gs_client(Config, {provider, ProviderId}, undefined, Opts).
+prepare_gs_client(Config, {provider, ProviderId, Macaroon}) ->
+    prepare_gs_client(
+        Config,
+        {provider, ProviderId},
+        {macaroon, Macaroon},
+        [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
+    ).
 
 
-prepare_gs_client(Config, ExpIdentity, Cookie, Opts) ->
-    {
-        ok, GsClient, #gs_resp_handshake{identity = ExpIdentity}
-    } = gs_client:start_link(
+% Authorization :: {cookie, Cookie} | {macaroon, Macaroon}.
+prepare_gs_client(Config, ExpIdentity, Authorization, Opts) ->
+    {ok, GsClient, #gs_resp_handshake{
+        identity = ExpIdentity
+    }} = gs_client:start_link(
         oz_test_utils:get_gs_ws_url(Config),
-        Cookie,
+        Authorization,
         oz_test_utils:get_gs_supported_proto_verions(Config),
         fun(_) -> ok end,
         Opts
@@ -662,8 +664,8 @@ run_test_combinations(
                     PreparedClient = prepare_client(Client, Environment),
                     lists:foreach(
                         fun
-                            % get and delete operations cannot
-                            % be run with malformed data
+                        % get and delete operations cannot
+                        % be run with malformed data
                             (?NO_DATA) when Error == undefined ->
                                 ok;
                             (DataSet) ->
@@ -825,9 +827,9 @@ correct_data_sets(undefined) ->
 correct_data_sets(DataSpec) ->
     RequiredDataSets = required_data_sets(DataSpec),
     AllRequired = case RequiredDataSets of
-                     [] -> #{};
-                     _ -> hd(RequiredDataSets)
-                 end,
+        [] -> #{};
+        _ -> hd(RequiredDataSets)
+    end,
     OptionalDataSets = optional_data_sets(DataSpec, AllRequired),
     RequiredDataSets ++ OptionalDataSets.
 
@@ -870,49 +872,49 @@ get_correct_value(Key, #data_spec{correct_values = CorrectValues}) ->
 % Returns information about api test spec record, such as fields,
 % required to for example pretty print it
 get_api_test_spec_rec_def(api_test_spec, N) ->
-    case record_info(size, api_test_spec)-1 of
+    case record_info(size, api_test_spec) - 1 of
         N ->
             record_info(fields, api_test_spec);
         _ ->
             no
     end;
 get_api_test_spec_rec_def(client_spec, N) ->
-    case record_info(size, client_spec)-1 of
+    case record_info(size, client_spec) - 1 of
         N ->
             record_info(fields, client_spec);
         _ ->
             no
     end;
 get_api_test_spec_rec_def(data_spec, N) ->
-    case record_info(size, data_spec)-1 of
+    case record_info(size, data_spec) - 1 of
         N ->
             record_info(fields, data_spec);
         _ ->
             no
     end;
 get_api_test_spec_rec_def(rest_spec, N) ->
-    case record_info(size, rest_spec)-1 of
+    case record_info(size, rest_spec) - 1 of
         N ->
             record_info(fields, rest_spec);
         _ ->
             no
     end;
 get_api_test_spec_rec_def(logic_spec, N) ->
-    case record_info(size, logic_spec)-1 of
+    case record_info(size, logic_spec) - 1 of
         N ->
             record_info(fields, logic_spec);
         _ ->
             no
     end;
 get_api_test_spec_rec_def(gs_spec, N) ->
-    case record_info(size, gs_spec)-1 of
+    case record_info(size, gs_spec) - 1 of
         N ->
             record_info(fields, gs_spec);
         _ ->
             no
     end;
 get_api_test_spec_rec_def(gri, N) ->
-    case record_info(size, gri)-1 of
+    case record_info(size, gri) - 1 of
         N ->
             record_info(fields, gri);
         _ ->

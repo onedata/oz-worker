@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -113,7 +113,7 @@ create_test(Config) ->
 
 authorize_test(Config) ->
     % Create a provider and a user.
-    {ok, {Provider, _, _}} = oz_test_utils:create_provider_and_certs(
+    {ok, {Provider, _}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
@@ -123,7 +123,7 @@ authorize_test(Config) ->
         Config, auth_logic, gen_token, [User, Provider]
     ),
     {ok, Macaroon} = oz_test_utils:call_oz(
-        Config, token_utils, deserialize, [AuthToken]
+        Config, onedata_macaroons, deserialize, [AuthToken]
     ),
     Caveats = macaroon:third_party_caveats(Macaroon),
 
@@ -178,7 +178,7 @@ list_test(Config) ->
     oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_USERS_LIST
     ]),
-    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
 
@@ -192,7 +192,7 @@ list_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {provider, P1, KeyFile, CertFile}
+                {provider, P1, P1Macaroon}
             ]
         },
         rest_spec = #rest_spec{
@@ -224,7 +224,7 @@ list_test(Config) ->
 
 
 get_test(Config) ->
-    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
     {ok, User} = oz_test_utils:create_user(Config, #od_user{
@@ -264,7 +264,7 @@ get_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {provider, P1, KeyFile, CertFile},
+                {provider, P1, P1Macaroon},
                 {user, NonAdmin},
                 {user, Admin}
             ]
@@ -341,7 +341,7 @@ get_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {provider, P1, KeyFile, CertFile}
+                {provider, P1, P1Macaroon}
             ]
         },
         rest_spec = #rest_spec{
@@ -635,7 +635,7 @@ create_client_token_test(Config) ->
 
     VerifyFun = fun(ClientToken) ->
         {ok, Macaroon} = oz_test_utils:call_oz(
-            Config, token_utils, deserialize, [ClientToken]
+            Config, onedata_macaroons, deserialize, [ClientToken]
         ),
         ?assertEqual({ok, User}, oz_test_utils:call_oz(
             Config, auth_logic, validate_token,
@@ -780,7 +780,7 @@ delete_client_token_test(Config) ->
 
 
 set_default_provider_test(Config) ->
-    {ok, {P1, _, _}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P1, _}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
@@ -791,7 +791,7 @@ set_default_provider_test(Config) ->
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
 
     EnvSetUpFun = fun() ->
-        {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(
+        {ok, {ProviderId, _}} = oz_test_utils:create_provider(
             Config, ?PROVIDER_NAME2
         ),
         {ok, S1} = oz_test_utils:support_space(
@@ -894,7 +894,7 @@ get_default_provider_test(Config) ->
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
 
-    {ok, {P1, _, _}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P1, _}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
     {ok, S1} = oz_test_utils:support_space(
@@ -951,7 +951,7 @@ unset_default_provider_test(Config) ->
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
 
     EnvSetUpFun = fun() ->
-        {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(
+        {ok, {ProviderId, _}} = oz_test_utils:create_provider(
             Config, ?PROVIDER_NAME2
         ),
         {ok, S1} = oz_test_utils:support_space(

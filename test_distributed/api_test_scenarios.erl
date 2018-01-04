@@ -17,7 +17,7 @@
 -include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -export([run_scenario/2]).
 -export([delete_entity/5]).
@@ -887,14 +887,14 @@ create_provider_eff_users_env(Config) ->
         S1, Groups, Users, {U1, U2, NonAdmin}
     } = create_space_eff_users_env(Config),
 
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P1, Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
     {ok, S1} = oz_test_utils:support_space(
         Config, P1, S1, oz_test_utils:minimum_support_size(Config)
     ),
 
-    {{P1, KeyFile1, CertFile1}, S1, Groups, Users, {U1, U2, NonAdmin}}.
+    {{P1, Macaroon}, S1, Groups, Users, {U1, U2, NonAdmin}}.
 
 
 create_hservice_eff_users_env(Config) ->
@@ -1082,7 +1082,7 @@ create_eff_providers_env(Config) ->
         fun(_) ->
             ProviderName = ?UNIQUE_STRING,
             ProvDetails = ?PROVIDER_DETAILS(ProviderName),
-            {ok, {ProvId, _, _}} = oz_test_utils:create_provider_and_certs(
+            {ok, {ProvId, _}} = oz_test_utils:create_provider(
                 Config, ProvDetails#{<<"subdomainDelegation">> => false}
             ),
             {ProvId, ProvDetails#{
@@ -1097,7 +1097,7 @@ create_eff_providers_env(Config) ->
             {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
                 Config, ?ROOT, SpaceId
             ),
-            {ok, Token} = token_utils:serialize62(Macaroon),
+            {ok, Token} = onedata_macaroons:serialize(Macaroon),
             {ok, SpaceId} = oz_test_utils:support_space(
                 Config, ?ROOT, ProvId, Token,
                 oz_test_utils:minimum_support_size(Config)

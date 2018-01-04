@@ -56,7 +56,6 @@
 
 %% API
 -export([set_up_test_entities/3, destroy_test_entities/3]).
--export([create_provider_with_uuid/5, create_provider_with_uuid/4]).
 -export([create_user_with_uuid/2]).
 -export([create_group_with_uuid/3]).
 -export([create_space_with_uuid/3, create_space_with_uuid/5, create_space_with_provider/4]).
@@ -196,38 +195,6 @@ destroy_test_entities(Users, Groups, Spaces) ->
         end, Spaces),
     ok.
 
-%%--------------------------------------------------------------------
-%% @doc Create a provider's account with implicit UUId.
-%% Throws exception when call to the datastore fails.
-%% @end
-%%--------------------------------------------------------------------
--spec create_provider_with_uuid(ClientName :: binary(), Domain :: binary(),
-    CSR :: binary(), UUId :: binary()) ->
-    {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
-create_provider_with_uuid(ClientName, Domain, CSRBin, UUId) ->
-    create_provider_with_uuid(ClientName, Domain, CSRBin, UUId, #{}).
-
-%%--------------------------------------------------------------------
-%% @doc Create a provider's account with implicit UUId.
-%% Throws exception when call to the datastore fails.
-%% Accepts optional arguments map (which currently supports 'latitude' and
-%% 'longitude' keys)
-%% @end
-%%--------------------------------------------------------------------
--spec create_provider_with_uuid(ClientName :: binary(), Domain :: binary(),
-    CSR :: binary(), UUId :: binary(), OptionalArgs :: #{atom() => term()}) ->
-    {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
-create_provider_with_uuid(ClientName, Domain, CSRBin, UUId, OptionalArgs) ->
-    {ok, {ProviderCertPem, Serial}} = ozpca:sign_provider_req(UUId, CSRBin),
-    Latitude = maps:get(latitude, OptionalArgs, undefined),
-    Longitude = maps:get(longitude, OptionalArgs, undefined),
-
-    Provider = #od_provider{name = ClientName, domain = Domain,
-        serial = Serial, latitude = Latitude, longitude = Longitude},
-
-    od_provider:save(#document{key = UUId, value = Provider}),
-    {ok, UUId, ProviderCertPem}.
-
 
 %%--------------------------------------------------------------------
 %% @doc Creates a user account with implicit UUId.
@@ -277,7 +244,7 @@ create_space_with_uuid(Member, Name, UUId) ->
     Token :: binary(), Support :: pos_integer(), UUId :: binary()) ->
     {ok, SpaceId :: binary()}.
 create_space_with_uuid({provider, ProviderId}, Name, Token, Support, UUId) ->
-    {ok, Macaroon} = token_utils:deserialize(Token),
+    {ok, Macaroon} = onedata_macaroons:deserialize(Token),
     {ok, Member} = token_logic:consume(Macaroon),
     create_space_with_provider(Member, Name, #{ProviderId => Support}, UUId).
 

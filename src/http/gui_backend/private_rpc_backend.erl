@@ -17,7 +17,7 @@
 -include("rest.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 %% API
 -export([handle/2]).
@@ -59,7 +59,7 @@ handle(<<"getTokenProviderSupportSpace">>, [{<<"spaceId">>, SpaceId}]) ->
     Client = ?USER(gui_session:get_user_id()),
     case space_logic:create_provider_invite_token(Client, SpaceId) of
         {ok, Macaroon} ->
-            {ok, Token} = token_utils:serialize62(Macaroon),
+            {ok, Token} = onedata_macaroons:serialize(Macaroon),
             {ok, [{<<"token">>, Token}]};
         ?ERROR_UNAUTHORIZED ->
             gui_error:report_warning(
@@ -131,7 +131,7 @@ handle(<<"getTokenUserJoinGroup">>, [{<<"groupId">>, GroupId}]) ->
     UserId = gui_session:get_user_id(),
     case group_logic:create_user_invite_token(?USER(UserId), GroupId) of
         {ok, Macaroon} ->
-            {ok, Token} = token_utils:serialize62(Macaroon),
+            {ok, Token} = onedata_macaroons:serialize(Macaroon),
             {ok, [{<<"token">>, Token}]};
         ?ERROR_UNAUTHORIZED ->
             gui_error:report_warning(

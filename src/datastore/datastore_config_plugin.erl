@@ -36,10 +36,10 @@ get_models() -> [
     gs_server_state,
     owned_identity,
     onedata_auth,
+    macaroon_auth,
     session,
     token,
     entity_graph_state,
-    ozpca_state,
     dns_state,
     provider_connection,
     state_token

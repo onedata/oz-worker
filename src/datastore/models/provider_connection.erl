@@ -29,7 +29,6 @@
 -type id() :: od_provider:id().
 -type record() :: #provider_connection{}.
 -type doc() :: datastore_doc:doc(record()).
--type diff() :: datastore_doc:diff(record()).
 -export_type([id/0, record/0]).
 
 -define(CTX, #{
