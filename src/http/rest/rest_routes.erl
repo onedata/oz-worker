@@ -915,11 +915,11 @@ provider_routes() -> [
         b_gri = #b_gri{type = od_provider, id = ?CLIENT_ID, aspect = {space, ?BINDING(sid)}}
     }},
 
-    {<<"/provider/test/check_my_ip">>, #rest_req{
+    {<<"/provider/public/check_my_ip">>, #rest_req{
         method = get,
         b_gri = #b_gri{type = od_provider, aspect = {check_my_ip, ?CLIENT_IP}}
     }},
-    {<<"/provider/test/check_my_ports">>, #rest_req{
+    {<<"/provider/public/check_my_ports">>, #rest_req{
         method = post,
         b_gri = #b_gri{type = od_provider, aspect = check_my_ports}
     }},

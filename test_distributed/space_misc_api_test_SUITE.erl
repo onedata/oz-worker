@@ -319,7 +319,7 @@ get_test(Config) ->
             expected_body = #{
                 <<"spaceId">> => S1,
                 <<"name">> => ?SPACE_NAME1,
-                <<"providersSupports">> => #{P1 => SupportSize}
+                <<"providers">> => #{P1 => SupportSize}
             }
         },
         logic_spec = #logic_spec{
@@ -328,7 +328,7 @@ get_test(Config) ->
             args = [client, S1],
             expected_result = ?OK_MAP(#{
                 <<"name">> => ?SPACE_NAME1,
-                <<"providersSupports">> => #{P1 => SupportSize}
+                <<"providers">> => #{P1 => SupportSize}
             })
         },
         gs_spec = #gs_spec{
@@ -338,7 +338,7 @@ get_test(Config) ->
             },
             expected_result = ?OK_MAP(#{
                 <<"name">> => ?SPACE_NAME1,
-                <<"providersSupports">> => #{P1 => SupportSize},
+                <<"providers">> => #{P1 => SupportSize},
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri

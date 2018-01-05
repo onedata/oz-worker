@@ -289,8 +289,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{name = Name, providers = Providers} = Space,
     {ok, #{
         <<"name">> => Name,
-        % TODO VFS-2918
-        <<"providersSupports">> => Providers
+        <<"providers">> => Providers
     }};
 
 get(#el_req{gri = #gri{aspect = users}}, Space) ->

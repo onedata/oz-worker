@@ -301,7 +301,7 @@ get_space_test(Config) ->
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
-    ExpDetails = #{<<"name">> => ?SPACE_NAME1, <<"providersSupports">> => #{}},
+    ExpDetails = #{<<"name">> => ?SPACE_NAME1, <<"providers">> => #{}},
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -898,7 +898,7 @@ get_eff_space_test(Config) ->
     } = api_test_scenarios:create_eff_spaces_env(Config),
 
     {ok, S6} = oz_test_utils:create_space(Config, ?USER(U2), ?SPACE_NAME1),
-    S6Details = #{<<"name">> => ?SPACE_NAME1, <<"providersSupports">> => #{}},
+    S6Details = #{<<"name">> => ?SPACE_NAME1, <<"providers">> => #{}},
     {ok, U1} = oz_test_utils:space_add_user(Config, S6, U1),
 
     NewEffSpacesList = [{S6, S6Details} | EffSpacesList],

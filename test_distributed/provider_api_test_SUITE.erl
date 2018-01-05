@@ -1453,7 +1453,7 @@ check_my_ports_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = post,
-            path = <<"/provider/test/check_my_ports">>,
+            path = <<"/provider/public/check_my_ports">>,
             expected_code = ?HTTP_200_OK,
             % Convert atoms to binaries in expected body for REST
             expected_body = maps:map(fun(_, ValAtom) ->
@@ -1497,7 +1497,7 @@ check_my_ip_test(Config) ->
         % This endpoint makes sense only via REST
         rest_spec = #rest_spec{
             method = get,
-            path = <<"/provider/test/check_my_ip">>,
+            path = <<"/provider/public/check_my_ip">>,
             expected_code = ?HTTP_200_OK,
             expected_body = json_utils:encode_map(ClientIP)
         }
@@ -2006,7 +2006,7 @@ create_2_providers_and_5_supported_spaces(Config) ->
             ),
             SpaceDetails = #{
                 <<"name">> => Name,
-                <<"providersSupports">> => #{P1 => SupportSize, P2 => SupportSize}
+                <<"providers">> => #{P1 => SupportSize, P2 => SupportSize}
             },
             {SpaceId, SpaceDetails}
         end, lists:seq(1, 5)
