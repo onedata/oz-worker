@@ -121,7 +121,7 @@ check_rest_call(Config, ArgsMap) ->
                     1 -> <<"macaroon">>;
                     2 -> <<"X-Auth-Token">>
                 end,
-                ReqHeaders#{<<"macaroon">> => Macaroon};
+                ReqHeaders#{HeaderName => Macaroon};
             {user, UserId} ->
                 % Cache user auth tokens, if none in cache create a new one.
                 Macaroon = case get({macaroon, UserId}) of

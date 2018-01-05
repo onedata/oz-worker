@@ -122,9 +122,7 @@ authorize_test(Config) ->
     AuthToken = oz_test_utils:call_oz(
         Config, auth_logic, gen_token, [User, Provider]
     ),
-    {ok, Macaroon} = oz_test_utils:call_oz(
-        Config, onedata_macaroons, deserialize, [AuthToken]
-    ),
+    {ok, Macaroon} = onedata_macaroons:deserialize(AuthToken),
     Caveats = macaroon:third_party_caveats(Macaroon),
 
     lists:foreach(
@@ -476,7 +474,7 @@ update_test(Config) ->
                     maps:get(<<"name">>, Data, ?USER_NAME1),
                     maps:get(<<"alias">>, Data, OwnedAlias)
                 }
-            end,
+        end,
         ?assertEqual(ExpName, User#od_user.name),
         ?assertEqual(ExpAlias, User#od_user.alias)
     end,
@@ -634,9 +632,7 @@ create_client_token_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
     VerifyFun = fun(ClientToken) ->
-        {ok, Macaroon} = oz_test_utils:call_oz(
-            Config, onedata_macaroons, deserialize, [ClientToken]
-        ),
+        {ok, Macaroon} = onedata_macaroons:deserialize(ClientToken),
         ?assertEqual({ok, User}, oz_test_utils:call_oz(
             Config, auth_logic, validate_token,
             [<<>>, Macaroon, [], undefined, undefined]

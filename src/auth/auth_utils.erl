@@ -114,10 +114,9 @@ authorize_by_macaroons(Macaroon, [Bin | _] = DischMacaroons) when is_binary(Bin)
             ?ERROR_BAD_MACAROON
     end;
 authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
-    %% @todo: VFS-1869
     %% Pass empty string as providerId because we do
     %% not expect the macaroon to have provider caveat
-    %% (it is an authorization code for client).
+    %% (this is an authorization code for client).
     case auth_logic:validate_token(<<>>, Macaroon, DischargeMacaroons, <<"">>, undefined) of
         {ok, UserId} ->
             {true, #client{type = user, id = UserId}};

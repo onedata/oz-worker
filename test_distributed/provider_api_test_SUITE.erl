@@ -1849,6 +1849,9 @@ verify_provider_identity_test(Config) ->
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
+    {ok, {P2, _}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
 
     {ok, DeserializedMacaroon} = onedata_macaroons:deserialize(P1Macaroon),
     Timestamp = oz_test_utils:call_oz(
@@ -1899,6 +1902,7 @@ verify_provider_identity_test(Config) ->
                 {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"providerId">>)},
                 {<<"providerId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"providerId">>)},
                 {<<"providerId">>, <<"sdfagh2345qwefg">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
+                {<<"providerId">>, P2, ?ERROR_BAD_MACAROON},
 
                 {<<"macaroon">>, <<"">>, ?ERROR_BAD_VALUE_TOKEN(<<"macaroon">>)},
                 {<<"macaroon">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"macaroon">>)},

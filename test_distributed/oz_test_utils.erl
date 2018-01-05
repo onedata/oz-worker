@@ -1139,7 +1139,7 @@ create_provider(Config, Data) ->
     {ok, {ProviderId, Macaroon}} = ?assertMatch({ok, _}, call_oz(
         Config, provider_logic, create, [?NOBODY, Data]
     )),
-    {ok, MacaroonBin} = call_oz(Config, onedata_macaroons, serialize, [Macaroon]),
+    {ok, MacaroonBin} = onedata_macaroons:serialize(Macaroon),
     {ok, {ProviderId, MacaroonBin}}.
 
 
