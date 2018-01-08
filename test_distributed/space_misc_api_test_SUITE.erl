@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -217,7 +217,7 @@ get_test(Config) ->
         ?SPACE_VIEW
     ]),
 
-    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
     SupportSize = oz_test_utils:minimum_support_size(Config),
@@ -234,7 +234,7 @@ get_test(Config) ->
             correct = [
                 root,
                 {user, U2},
-                {provider, P1, KeyFile, CertFile}
+                {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -309,7 +309,7 @@ get_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {provider, P1, KeyFile, CertFile}
+                {provider, P1, P1Macaroon}
             ]
         },
         rest_spec = #rest_spec{
@@ -319,7 +319,7 @@ get_test(Config) ->
             expected_body = #{
                 <<"spaceId">> => S1,
                 <<"name">> => ?SPACE_NAME1,
-                <<"providersSupports">> => #{P1 => SupportSize}
+                <<"providers">> => #{P1 => SupportSize}
             }
         },
         logic_spec = #logic_spec{
@@ -328,7 +328,7 @@ get_test(Config) ->
             args = [client, S1],
             expected_result = ?OK_MAP(#{
                 <<"name">> => ?SPACE_NAME1,
-                <<"providersSupports">> => #{P1 => SupportSize}
+                <<"providers">> => #{P1 => SupportSize}
             })
         },
         gs_spec = #gs_spec{
@@ -338,7 +338,7 @@ get_test(Config) ->
             },
             expected_result = ?OK_MAP(#{
                 <<"name">> => ?SPACE_NAME1,
-                <<"providersSupports">> => #{P1 => SupportSize},
+                <<"providers">> => #{P1 => SupportSize},
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -618,7 +618,7 @@ list_providers_test(Config) ->
     SupportSize = oz_test_utils:minimum_support_size(Config),
     ExpProviders = lists:map(
         fun(_) ->
-            {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(
+            {ok, {ProviderId, _}} = oz_test_utils:create_provider(
                 Config, ?PROVIDER_NAME1
             ),
             {ok, S1} = oz_test_utils:support_space(
@@ -719,13 +719,13 @@ get_provider_test(Config) ->
     ]),
 
     ProviderDetails = ?PROVIDER_DETAILS(?PROVIDER_NAME1),
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ProviderDetails#{<<"subdomainDelegation">> => false}
     ),
-    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, {P3, KeyFile3, CertFile3}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P3, P3Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
 
@@ -748,12 +748,12 @@ get_provider_test(Config) ->
                 root,
                 {user, Admin},
                 {user, User},
-                {provider, P2, KeyFile2, CertFile2}
+                {provider, P2, P2Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {provider, P3, KeyFile3, CertFile3}
+                {provider, P3, P3Macaroon}
             ]
         },
         rest_spec = #rest_spec{
@@ -793,7 +793,7 @@ get_provider_test(Config) ->
     ExpDetails2 = ExpDetails#{<<"online">> => true},
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
-            correct = [{provider, P1, KeyFile1, CertFile1}]
+            correct = [{provider, P1, P1Macaroon}]
         },
         gs_spec = GsSpec#gs_spec{
             expected_result = ?OK_MAP(ExpDetails2#{
@@ -819,7 +819,7 @@ leave_provider_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     EnvSetUpFun = fun() ->
-        {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(
+        {ok, {ProviderId, _}} = oz_test_utils:create_provider(
             Config, ?PROVIDER_NAME1
         ),
         {ok, S1} = oz_test_utils:support_space(

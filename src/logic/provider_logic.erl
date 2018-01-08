@@ -48,7 +48,8 @@
 ]).
 -export([
     check_my_ports/2,
-    get_current_time/1
+    get_current_time/1,
+    verify_provider_identity/2, verify_provider_identity/3
 ]).
 -export([
     exists/1,
@@ -455,6 +456,38 @@ get_current_time(Client) ->
         client = Client,
         gri = #gri{type = od_provider, id = undefined, aspect = current_time}
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Verifies provider identity based on provided identity macaroon and alleged
+%% provider id.
+%% @end
+%%--------------------------------------------------------------------
+-spec verify_provider_identity(Client :: entity_logic:client(), od_provider:id(),
+    Macaroon :: token:id() | macaroon:macaroon()) -> ok | {error, term()}.
+verify_provider_identity(Client, ProviderId, Macaroon) ->
+    verify_provider_identity(Client, #{
+        <<"providerId">> => ProviderId,
+        <<"macaroon">> => Macaroon
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Verifies provider identity based on provided identity macaroon and alleged
+%% provider id. The macaroon and ProviderId are provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec verify_provider_identity(Client :: entity_logic:client(), entity_logic:data()) ->
+    ok | {error, term()}.
+verify_provider_identity(Client, Data) ->
+    ?CREATE_RETURN_OK(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_provider, id = undefined, aspect = verify_provider_identity},
+        data = Data
+    })).
 
 
 %%--------------------------------------------------------------------

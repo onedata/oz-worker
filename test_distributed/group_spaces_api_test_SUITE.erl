@@ -22,7 +22,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -112,7 +112,7 @@ get_space_details_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, S1} = oz_test_utils:group_create_space(Config, G1, ?SPACE_NAME1),
-    ExpDetails = #{<<"name">> => ?SPACE_NAME1, <<"providersSupports">> => #{}},
+    ExpDetails = #{<<"name">> => ?SPACE_NAME1, <<"providers">> => #{}},
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -302,7 +302,7 @@ join_space_test(Config) ->
                     {ok, Macaroon} = oz_test_utils:space_invite_group_token(
                         Config, ?ROOT, SpaceId
                     ),
-                    {ok, Token} = token_utils:serialize62(Macaroon),
+                    {ok, Token} = onedata_macaroons:serialize(Macaroon),
                     Token
                 end]
             },

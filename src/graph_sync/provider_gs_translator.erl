@@ -16,7 +16,7 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 %% API
@@ -41,7 +41,7 @@ translate_create(1, #gri{aspect = invite_group_token}, Macaroon) ->
 translate_create(1, #gri{aspect = invite_provider_token}, Macaroon) ->
     translate_create(1, #gri{aspect = invite_user_token}, Macaroon);
 translate_create(1, #gri{aspect = invite_user_token}, Macaroon) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
     Token;
 translate_create(1, #gri{type = od_provider, aspect = map_idp_group}, Id) ->
     Id;

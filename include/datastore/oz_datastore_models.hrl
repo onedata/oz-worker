@@ -199,10 +199,10 @@
 %% This record defines a provider who supports spaces and can be reached via url
 -record(od_provider, {
     name = <<"">> :: od_provider:name(),
+    root_macaroon :: undefined | macaroon_auth:id(),
     subdomain_delegation = false :: boolean(),
     domain :: binary(),
     subdomain = undefined :: undefined | binary(),
-    serial :: undefined | binary(),
     latitude = 0.0 :: float(),
     longitude = 0.0 :: float(),
 
@@ -274,17 +274,20 @@
     issuer :: undefined | entity_logic:client()
 }).
 
-%% Records of this type store a macaroons secret
+%% Records of this type store a macaroons secret used for authorizing users
 -record(onedata_auth, {
     secret :: undefined | binary(),
     user_id :: undefined | binary()
 }).
 
-%% Stores CA dedicated node
-%% todo: implement distributed CA properly (connected with VFS-1499)
--record(ozpca_state, {
-    dedicated_node :: undefined | {ok, node()} | {error, Reason :: term()}
+%% Stores information about authorization correlated with a macaroon.
+%% Record id serves as macaroon identifier.
+-record(macaroon_auth, {
+    secret :: macaroon_auth:secret(),
+    type :: macaroon_auth:type(),
+    issuer :: macaroon_auth:issuer()
 }).
+
 
 -record(dns_state, {
     subdomain_to_provider = #{} :: #{dns_state:subdomain() => od_provider:id()},

@@ -13,6 +13,7 @@
 
 -include("registered_names.hrl").
 -include("gui/common.hrl").
+-include("graph_sync/oz_graph_sync.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("gui/include/gui.hrl").
 
@@ -74,9 +75,9 @@ start() ->
             {'_', lists:flatten([
                 {?NAGIOS_ENDPOINT, nagios_handler, []},
                 {?PUBLIC_SHARE_ENDPOINT ++ "/:share_id", public_share_handler, []},
-                {?PUBLIC_CA_ENDPOINT, public_ca_handler, []},
                 {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
-                rest_listener:routes(),
+                {?GRAPH_SYNC_WS_PATH ++ "[...]", gs_ws_handler, [provider_gs_translator]},
+                rest_handler:rest_routes(),
                 static_routes()
             ])}
         ]),
