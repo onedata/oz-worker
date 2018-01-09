@@ -68,11 +68,6 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = users}
     }},
-    % TODO VFS-2918
-    {<<"/groups/:id/users/token">>, #rest_req{
-        method = 'GET',
-        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = deprecated_invite_user_token}
-    }},
     {<<"/groups/:id/users/token">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = invite_user_token}
@@ -98,11 +93,6 @@ routes() -> [
         method = 'PATCH',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}
     }},
-    % TODO VFS-2918
-    {<<"/groups/:id/users/:uid/privileges">>, #rest_req{
-        method = 'PUT',
-        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {deprecated_user_privileges, ?BINDING(uid)}}
-    }},
     {<<"/groups/:id/effective_users">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_users}
@@ -116,20 +106,14 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {eff_user_privileges, ?BINDING(uid)}}
     }},
-    % TODO VFS-2918
-    {<<"/groups/:id/parent">>, #rest_req{
-        method = 'GET',
-        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = parents}
-    }},
-    % TODO VFS-2918
-    {<<"/groups/:id/parent/:pid">>, #rest_req{
-        method = 'GET',
-        b_gri = #b_gri{type = od_group, id = ?BINDING(pid), aspect = instance, scope = protected},
-        b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
-    }},
     {<<"/groups/:id/parents">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = parents}
+    }},
+    {<<"/groups/:id/parents">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_group, aspect = instance},
+        b_auth_hint = ?AS_GROUP(?BINDING(id))
     }},
     {<<"/groups/:id/parents/join">>, #rest_req{
         method = 'POST',
@@ -154,39 +138,6 @@ routes() -> [
         b_gri = #b_gri{type = od_group, id = ?BINDING(pid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
-    % TODO VFS-2918
-    {<<"/groups/:id/nested">>, #rest_req{
-        method = 'GET',
-        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = children}
-    }},
-    % TODO VFS-2918
-    {<<"/groups/:id/nested/token">>, #rest_req{
-        method = 'GET',
-        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = deprecated_invite_group_token}
-    }},
-    % TODO VFS-2918
-    {<<"/groups/:id/nested/join">>, #rest_req{
-        method = 'POST',
-        b_gri = #b_gri{type = od_group, id = undefined, aspect = join},
-        b_auth_hint = ?AS_GROUP(?BINDING(id))
-    }},
-    % TODO VFS-2918
-    {<<"/groups/:id/nested/:nid">>, #rest_req{
-        method = 'GET',
-        b_gri = #b_gri{type = od_group, id = ?BINDING(nid), aspect = instance, scope = shared},
-        b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
-    }},
-    % TODO VFS-2918
-    {<<"/groups/:id/nested/:nid">>, #rest_req{
-        method = 'DELETE',
-        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {child, ?BINDING(nid)}}
-    }},
-    % TODO VFS-2918
-    {<<"/groups/:id/nested/:nid/privileges">>, #rest_req{
-        method = 'GET',
-        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {child_privileges, ?BINDING(nid)}}
-    }},
-    % TODO VFS-2918
     {<<"/groups/:id/nested/:nid/privileges">>, #rest_req{
         method = 'PUT',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {deprecated_child_privileges, ?BINDING(nid)}}

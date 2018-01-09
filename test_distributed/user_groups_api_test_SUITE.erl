@@ -145,9 +145,7 @@ create_group_test(Config) ->
                     ExpName = maps:get(<<"name">>, Data),
                     ExpType = maps:get(<<"type">>, Data, role),
                     fun(#{<<"location">> := Location} = _Headers) ->
-                        % TODO 2918
-%%                        <<"/user/groups/", GroupId/binary>> = Location,
-                        <<"/groups/", GroupId/binary>> = Location,
+                        <<"/user/groups/", GroupId/binary>> = Location,
                         VerifyFun(GroupId, ExpName, ExpType)
                     end
                 end
@@ -394,7 +392,7 @@ leave_group_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/user/groups/">>, groupId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -443,7 +441,7 @@ list_eff_groups_test(Config) ->
             method = get,
             path = <<"/user/effective_groups">>,
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"effective_groups">> => ExpGroups}
+            expected_body = #{<<"groups">> => ExpGroups}
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),

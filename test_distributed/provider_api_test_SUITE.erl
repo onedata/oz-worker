@@ -105,7 +105,6 @@ all() ->
 %%% Test functions
 %%%===================================================================
 
-% TODO VFS-2918 (all tests) <<"clientName">> -> <<"name">>
 
 create_test(Config) ->
     {_, CSRFile, _} = oz_test_utils:generate_provider_cert_files(),
@@ -178,11 +177,11 @@ create_test(Config) ->
         % TODO gs
         data_spec = #data_spec{
             required = [
-                <<"clientName">>, <<"domain">>, <<"subdomainDelegation">>, <<"csr">>
+                <<"name">>, <<"domain">>, <<"subdomainDelegation">>, <<"csr">>
             ],
             optional = [<<"latitude">>, <<"longitude">>],
             correct_values = #{
-                <<"clientName">> => [ExpName],
+                <<"name">> => [ExpName],
                 <<"domain">> => [<<"multilevel.provider-domain.org">>],
                 <<"subdomainDelegation">> => [false],
                 <<"csr">> => [CSR],
@@ -190,8 +189,8 @@ create_test(Config) ->
                 <<"longitude">> => [rand:uniform() * 180]
             },
             bad_values = [
-                {<<"clientName">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"clientName">>)},
-                {<<"clientName">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"clientName">>)},
+                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
+                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
                 {<<"domain">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"domain">>)},
                 {<<"domain">>, <<"https://domain.com">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
                 {<<"domain">>, <<"domain.com:443">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
@@ -221,12 +220,12 @@ create_test(Config) ->
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         data_spec = #data_spec{
             required = [
-                <<"clientName">>, <<"subdomain">>, <<"ipList">>,
+                <<"name">>, <<"subdomain">>, <<"ipList">>,
                 <<"subdomainDelegation">>, <<"csr">>
             ],
             optional = [<<"latitude">>, <<"longitude">>],
             correct_values = #{
-                <<"clientName">> => [ExpName],
+                <<"name">> => [ExpName],
                 <<"subdomainDelegation">> => [true],
                 <<"subdomain">> => [<<"prov-sub">>],
                 <<"ipList">> => [[<<"2.4.6.8">>, <<"255.253.251.2">>]],
@@ -281,10 +280,7 @@ get_test(Config) ->
     SupportSize = oz_test_utils:minimum_support_size(Config),
     {ok, S1} = oz_test_utils:support_space(Config, P1, S1, SupportSize),
 
-    ExpDetails = ProviderDetails#{
-        <<"clientName">> => ?PROVIDER_NAME1,
-        <<"online">> => true
-    },
+    ExpDetails = ProviderDetails#{<<"online">> => true},
 
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{
@@ -396,7 +392,7 @@ get_self_test(Config) ->
     ),
 
     ExpDetails = ProviderDetails#{
-        <<"clientName">> => ?PROVIDER_NAME1,
+        <<"name">> => ?PROVIDER_NAME1,
         <<"online">> => false
     },
     ApiTestSpec = #api_test_spec{
@@ -515,7 +511,7 @@ update_test(Config) ->
                 {Name, Latitude, Longitude};
             true ->
                 {
-                    maps:get(<<"clientName">>, Data, Name),
+                    maps:get(<<"name">>, Data, Name),
                     maps:get(<<"latitude">>, Data, Latitude),
                     maps:get(<<"longitude">>, Data, Longitude)
                 }
@@ -538,15 +534,15 @@ update_test(Config) ->
             expected_code = ?HTTP_204_NO_CONTENT
         },
         data_spec = DataSpec = #data_spec{
-            at_least_one = [<<"clientName">>, <<"latitude">>, <<"longitude">>],
+            at_least_one = [<<"name">>, <<"latitude">>, <<"longitude">>],
             correct_values = #{
-                <<"clientName">> => [?PROVIDER_NAME2],
+                <<"name">> => [?PROVIDER_NAME2],
                 <<"latitude">> => [rand:uniform() * 90],
                 <<"longitude">> => [rand:uniform() * 180]
             },
             bad_values = [
-                {<<"clientName">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"clientName">>)},
-                {<<"clientName">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"clientName">>)},
+                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
+                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
                 {<<"latitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"latitude">>)},
                 {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
                 {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
@@ -637,7 +633,7 @@ delete_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/providers/">>, providerId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = provider_logic,
@@ -684,7 +680,7 @@ delete_self_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = <<"/provider">>,
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         }
         % TODO VFS-3902
 %%        gs_spec = #gs_spec{
@@ -1387,9 +1383,7 @@ revoke_support_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/provider/spaces/">>, spaceId],
-            % TODO VFS-2918
-%%            expected_code = ?HTTP_204_NO_CONTENT
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -1936,7 +1930,7 @@ create_2_providers_and_5_supported_spaces(Config) ->
             ),
             SpaceDetails = #{
                 <<"name">> => Name,
-                <<"providersSupports">> => #{P1 => SupportSize, P2 => SupportSize}
+                <<"providers">> => #{P1 => SupportSize, P2 => SupportSize}
             },
             {SpaceId, SpaceDetails}
         end, lists:seq(1, 5)

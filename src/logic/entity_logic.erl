@@ -549,9 +549,9 @@ check_type(atom, Key, Binary) when is_binary(Binary) ->
     end;
 check_type(atom, Key, _) ->
     throw(?ERROR_BAD_VALUE_ATOM(Key));
-check_type(boolean, Key, true) ->
+check_type(boolean, _Key, true) ->
     true;
-check_type(boolean, Key, false) ->
+check_type(boolean, _Key, false) ->
     false;
 check_type(boolean, Key, _) ->
     throw(?ERROR_BAD_VALUE_BOOLEAN(Key));
@@ -712,7 +712,7 @@ check_value(binary, domain, Key, Value) ->
 
 check_value(binary, subdomain, Key, <<"">>) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
-check_value(binary, subdomain, Key, Value) ->
+check_value(binary, subdomain, _Key, Value) ->
     case re:run(Value, ?SUBDOMAIN_VALIDATION_REGEXP, [{capture, none}]) of
         match -> % Check length
             {ok, OZDomain} = application:get_env(?APP_NAME, http_domain),

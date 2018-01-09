@@ -103,7 +103,7 @@ list_children_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/children">>],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"nested_groups">> => ExpChildren}
+            expected_body = #{<<"groups">> => ExpChildren}
         },
         logic_spec = #logic_spec{
             module = group_logic,
@@ -344,7 +344,7 @@ remove_child_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/groups/">>, G1, <<"/children/">>, groupId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = group_logic,
@@ -523,7 +523,7 @@ get_eff_children_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/effective_children">>],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"children">> => ExpGroups}
+            expected_body = #{<<"groups">> => ExpGroups}
         },
         logic_spec = #logic_spec{
             module = group_logic,

@@ -35,21 +35,6 @@
 create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched, #gri{id = SpaceId}}) ->
     LocationTokens = case AuthHint of
         ?AS_USER(_UserId) ->
-            % TODO VFS-2918
-%%        [<<"user">>, <<"spaces">>, SpaceId]
-            [<<"spaces">>, SpaceId];
-        ?AS_GROUP(GroupId) ->
-            [<<"groups">>, GroupId, <<"spaces">>, SpaceId];
-        _ ->
-            [<<"spaces">>, SpaceId]
-    end,
-    rest_translator:created_reply(LocationTokens);
-% TODO VFS-2918 Responses should be the same
-%%    create_response(#gri{aspect = join}, AuthHint, #gri{id = SpaceId}, Data);
-
-create_response(#gri{aspect = join}, AuthHint, {not_fetched, #gri{id = SpaceId}}) ->
-    LocationTokens = case AuthHint of
-        ?AS_USER(_UserId) ->
             [<<"user">>, <<"spaces">>, SpaceId];
         ?AS_GROUP(GroupId) ->
             [<<"groups">>, GroupId, <<"spaces">>, SpaceId];
@@ -57,6 +42,9 @@ create_response(#gri{aspect = join}, AuthHint, {not_fetched, #gri{id = SpaceId}}
             [<<"spaces">>, SpaceId]
     end,
     rest_translator:created_reply(LocationTokens);
+
+create_response(#gri{aspect = join} = Gri, AuthHint, Result) ->
+    create_response(Gri#gri{aspect = instance}, AuthHint, Result);
 
 create_response(#gri{aspect = invite_user_token}, _, {data, Macaroon}) ->
     {ok, Token} = token_utils:serialize62(Macaroon),
@@ -89,19 +77,6 @@ create_response(#gri{id = SpaceId, aspect = {group, GrId}}, _, {not_fetched, #gr
 %%--------------------------------------------------------------------
 -spec get_response(entity_logic:gri(), entity_logic:get_result()) ->
     #rest_resp{}.
-% TODO VFS-2918
-get_response(#gri{aspect = deprecated_invite_user_token}, Macaroon) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
-% TODO VFS-2918
-get_response(#gri{aspect = deprecated_invite_group_token}, Macaroon) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
-% TODO VFS-2918
-get_response(#gri{aspect = deprecated_invite_provider_token}, Macaroon) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
-
 get_response(#gri{id = undefined, aspect = list}, Spaces) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
 

@@ -218,7 +218,7 @@ remove_group_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/spaces/">>, S1, <<"/groups/">>, groupId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = space_logic,

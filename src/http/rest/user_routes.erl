@@ -164,16 +164,6 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = spaces}
     }},
-    % TODO VFS-2918
-    {<<"/user/spaces/default">>, #rest_req{
-        method = 'GET',
-        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = deprecated_default_space}
-    }},
-    % TODO VFS-2918
-    {<<"/user/spaces/default">>, #rest_req{
-        method = 'PUT',
-        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = deprecated_default_space}
-    }},
     {<<"/user/spaces/join">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_space, id = undefined, aspect = join},

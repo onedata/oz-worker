@@ -53,11 +53,6 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = users}
     }},
-    % TODO VFS-2918
-    {<<"/spaces/:id/users/token">>, #rest_req{
-        method = 'GET',
-        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = deprecated_invite_user_token}
-    }},
     {<<"/spaces/:id/users/token">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = invite_user_token}
@@ -83,11 +78,6 @@ routes() -> [
         method = 'PATCH',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}
     }},
-    % TODO VFS-2918
-    {<<"/spaces/:id/users/:uid/privileges">>, #rest_req{
-        method = 'PUT',
-        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {deprecated_user_privileges, ?BINDING(uid)}}
-    }},
     {<<"/spaces/:id/effective_users">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = eff_users}
@@ -109,11 +99,6 @@ routes() -> [
         method = 'POST',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = invite_group_token}
     }},
-    % TODO VFS-2918
-    {<<"/spaces/:id/groups/token">>, #rest_req{
-        method = 'GET',
-        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = deprecated_invite_group_token}
-    }},
     {<<"/spaces/:id/groups/:gid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = shared},
@@ -134,11 +119,6 @@ routes() -> [
     {<<"/spaces/:id/groups/:gid/privileges">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {group_privileges, ?BINDING(gid)}}
-    }},
-    % TODO VFS-2918
-    {<<"/spaces/:id/groups/:gid/privileges">>, #rest_req{
-        method = 'PUT',
-        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {deprecated_group_privileges, ?BINDING(gid)}}
     }},
     {<<"/spaces/:id/effective_groups">>, #rest_req{
         method = 'GET',
@@ -162,12 +142,6 @@ routes() -> [
         b_gri = #b_gri{type = od_share, id = ?BINDING(sid), aspect = instance, scope = private},
         b_auth_hint = ?THROUGH_SPACE(?BINDING(id))
     }},
-    % TODO VFS-2918
-    {<<"/spaces/:id/shares/:shid">>, #rest_req{
-        method = 'PUT',
-        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {deprecated_create_share, ?BINDING(shid)}}
-    }},
-
     {<<"/spaces/:id/providers">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = providers}
@@ -175,11 +149,6 @@ routes() -> [
     {<<"/spaces/:id/providers/token">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = invite_provider_token}
-    }},
-    % TODO VFS-2918
-    {<<"/spaces/:id/providers/token">>, #rest_req{
-        method = 'GET',
-        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = deprecated_invite_provider_token}
     }},
     {<<"/spaces/:id/providers/:pid">>, #rest_req{
         method = 'GET',

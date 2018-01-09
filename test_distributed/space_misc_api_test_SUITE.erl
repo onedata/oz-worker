@@ -319,7 +319,7 @@ get_test(Config) ->
             expected_body = #{
                 <<"spaceId">> => S1,
                 <<"name">> => ?SPACE_NAME1,
-                <<"providersSupports">> => #{P1 => SupportSize}
+                <<"providers">> => #{P1 => SupportSize}
             }
         },
         logic_spec = #logic_spec{
@@ -328,7 +328,7 @@ get_test(Config) ->
             args = [client, S1],
             expected_result = ?OK_MAP(#{
                 <<"name">> => ?SPACE_NAME1,
-                <<"providersSupports">> => #{P1 => SupportSize}
+                <<"providers">> => #{P1 => SupportSize}
             })
         },
         gs_spec = #gs_spec{
@@ -338,7 +338,7 @@ get_test(Config) ->
             },
             expected_result = ?OK_MAP(#{
                 <<"name">> => ?SPACE_NAME1,
-                <<"providersSupports">> => #{P1 => SupportSize},
+                <<"providers">> => #{P1 => SupportSize},
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -459,7 +459,7 @@ delete_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/spaces/">>, spaceId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = space_logic,
@@ -738,10 +738,7 @@ get_provider_test(Config) ->
         Config, P2, S1, oz_test_utils:minimum_support_size(Config)
     ),
 
-    ExpDetails = ProviderDetails#{
-        <<"clientName">> => ?PROVIDER_NAME1,
-        <<"online">> => false
-    },
+    ExpDetails = ProviderDetails#{<<"online">> => false},
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -850,7 +847,7 @@ leave_provider_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/spaces/">>, S1, <<"/providers/">>, providerId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = space_logic,

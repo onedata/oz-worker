@@ -53,11 +53,6 @@ fetch_entity(HServiceId) ->
 %%--------------------------------------------------------------------
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
-% TODO VFS-2918
-operation_supported(create, {deprecated_user_privileges, _}, private) -> true;
-% TODO VFS-2918
-operation_supported(create, {deprecated_group_privileges, _}, private) -> true;
-
 operation_supported(create, instance, private) -> true;
 operation_supported(create, {user, _}, private) -> true;
 operation_supported(create, {group, _}, private) -> true;
@@ -96,27 +91,6 @@ operation_supported(_, _, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-% TODO VFS-2918
-create(#el_req{gri = #gri{id = HServiceId, aspect = {deprecated_user_privileges, UserId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data),
-    Operation = maps:get(<<"operation">>, Data, set),
-    entity_graph:update_relation(
-        od_user, UserId,
-        od_handle_service, HServiceId,
-        {Operation, Privileges}
-    ),
-    ok;
-% TODO VFS-2918
-create(#el_req{gri = #gri{id = HServiceId, aspect = {deprecated_group_privileges, GroupId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data),
-    Operation = maps:get(<<"operation">>, Data, set),
-    entity_graph:update_relation(
-        od_group, GroupId,
-        od_handle_service, HServiceId,
-        {Operation, Privileges}
-    ),
-    ok;
-
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     Name = maps:get(<<"name">>, Req#el_req.data),
     ProxyEndpoint = maps:get(<<"proxyEndpoint">>, Req#el_req.data),
@@ -326,14 +300,6 @@ exists(#el_req{gri = #gri{id = Id}}, #od_handle_service{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
-% TODO VFS-2918
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {deprecated_user_privileges, Id}}}, HService) ->
-    authorize(Req#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}}, HService);
-
-% TODO VFS-2918
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {deprecated_group_privileges, Id}}}, HService) ->
-    authorize(Req#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}}, HService);
-
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
@@ -418,14 +384,6 @@ authorize(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
-% TODO VFS-2918
-validate(#el_req{operation = create, gri = #gri{aspect = {deprecated_user_privileges, Id}}}) ->
-    validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}});
-
-% TODO VFS-2918
-validate(#el_req{operation = create, gri = #gri{aspect = {deprecated_group_privileges, Id}}}) ->
-    validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}});
-
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"name">> => {binary, non_empty},

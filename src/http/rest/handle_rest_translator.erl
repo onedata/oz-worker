@@ -35,9 +35,7 @@
 create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched, #gri{id = HandleId}}) ->
     LocationTokens = case AuthHint of
         ?AS_USER(_UserId) ->
-            % TODO VFS-2918
-%%        [<<"user">>, <<"handles">>, HandleId]
-            [<<"handles">>, HandleId];
+            [<<"user">>, <<"handles">>, HandleId];
         ?AS_GROUP(GroupId) ->
             [<<"groups">>, GroupId, <<"handles">>, HandleId];
         _ ->

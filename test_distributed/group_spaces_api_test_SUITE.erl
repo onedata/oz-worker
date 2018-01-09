@@ -112,7 +112,7 @@ get_space_details_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, S1} = oz_test_utils:group_create_space(Config, G1, ?SPACE_NAME1),
-    ExpDetails = #{<<"name">> => ?SPACE_NAME1, <<"providersSupports">> => #{}},
+    ExpDetails = #{<<"name">> => ?SPACE_NAME1, <<"providers">> => #{}},
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -357,7 +357,7 @@ leave_space_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/groups/">>, G1, <<"/spaces/">>, spaceId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = group_logic,

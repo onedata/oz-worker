@@ -1040,7 +1040,7 @@ create_eff_spaces_env(Config) ->
             {ok, SpaceId} = oz_test_utils:group_create_space(
                 Config, GroupId, SpaceDetails
             ),
-            {SpaceId, SpaceDetails#{<<"providersSupports">> => #{}}}
+            {SpaceId, SpaceDetails#{<<"providers">> => #{}}}
         end, [G1, G2, G4, G5, G5]
     ),
 
@@ -1086,7 +1086,7 @@ create_eff_providers_env(Config) ->
                 Config, ProvDetails#{<<"subdomainDelegation">> => false}
             ),
             {ProvId, ProvDetails#{
-                <<"clientName">> => ProviderName,
+                <<"name">> => ProviderName,
                 <<"online">> => false
             }}
         end, lists:seq(1, 4)

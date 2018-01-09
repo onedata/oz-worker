@@ -171,9 +171,7 @@ create_handle_test(Config) ->
             path = <<"/user/handles">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                % TODO 2918
-%%                <<"/user/handles/", HandleId/binary>> = Location,
-                <<"/handles/", HandleId/binary>> = Location,
+                <<"/user/handles/", HandleId/binary>> = Location,
                 VerifyFun(HandleId)
             end
         },
@@ -377,7 +375,7 @@ leave_handle_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/user/handles/">>, handleId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity, [

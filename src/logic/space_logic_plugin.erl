@@ -54,19 +54,6 @@ fetch_entity(SpaceId) ->
 %%--------------------------------------------------------------------
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
-% TODO VFS-2918
-operation_supported(create, {deprecated_user_privileges, _}, private) -> true;
-% TODO VFS-2918
-operation_supported(create, {deprecated_group_privileges, _}, private) -> true;
-% TODO VFS-2918
-operation_supported(create, {deprecated_create_share, _}, private) -> true;
-% TODO VFS-2918
-operation_supported(get, deprecated_invite_user_token, private) -> true;
-% TODO VFS-2918
-operation_supported(get, deprecated_invite_group_token, private) -> true;
-% TODO VFS-2918
-operation_supported(get, deprecated_invite_provider_token, private) -> true;
-
 operation_supported(create, invite_user_token, private) -> true;
 operation_supported(create, invite_group_token, private) -> true;
 operation_supported(create, invite_provider_token, private) -> true;
@@ -114,39 +101,6 @@ operation_supported(_, _, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-% TODO VFS-2918
-create(#el_req{gri = #gri{id = SpaceId, aspect = {deprecated_user_privileges, UserId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data),
-    Operation = maps:get(<<"operation">>, Data, set),
-    entity_graph:update_relation(
-        od_user, UserId,
-        od_space, SpaceId,
-        {Operation, Privileges}
-    ),
-    ok;
-% TODO VFS-2918
-create(#el_req{gri = #gri{id = SpaceId, aspect = {deprecated_group_privileges, GroupId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data),
-    Operation = maps:get(<<"operation">>, Data, set),
-    entity_graph:update_relation(
-        od_group, GroupId,
-        od_space, SpaceId,
-        {Operation, Privileges}
-    ),
-    ok;
-% TODO VFS-2918
-create(#el_req{client = Client, gri = #gri{id = SpaceId, aspect = {deprecated_create_share, ShareId}}, data = Data}) ->
-    case share_logic:exists(ShareId) of
-        true ->
-            ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"shareId">>);
-        false ->
-            share_logic:create(Client, Data#{
-                <<"spaceId">> => SpaceId,
-                <<"shareId">> => ShareId
-            }),
-            ok
-    end;
-
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     #{<<"name">> := Name} = Req#el_req.data,
     {ok, #document{key = SpaceId}} = od_space:create(#document{
@@ -254,31 +208,6 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}, data = Data}
 %%--------------------------------------------------------------------
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
-% TODO VFS-2918
-get(Req = #el_req{gri = #gri{id = SpId, aspect = deprecated_invite_user_token}}, _) ->
-    {ok, Macaroon} = token_logic:create(
-        Req#el_req.client,
-        ?SPACE_INVITE_USER_TOKEN,
-        {od_space, SpId}
-    ),
-    {ok, Macaroon};
-% TODO VFS-2918
-get(Req = #el_req{gri = #gri{id = SpId, aspect = deprecated_invite_group_token}}, _) ->
-    {ok, Macaroon} = token_logic:create(
-        Req#el_req.client,
-        ?SPACE_INVITE_GROUP_TOKEN,
-        {od_space, SpId}
-    ),
-    {ok, Macaroon};
-% TODO VFS-2918
-get(Req = #el_req{gri = #gri{id = SpId, aspect = deprecated_invite_provider_token}}, _) ->
-    {ok, Macaroon} = token_logic:create(
-        Req#el_req.client,
-        ?SPACE_SUPPORT_TOKEN,
-        {od_space, SpId}
-    ),
-    {ok, Macaroon};
-
 get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, SpaceDocs} = od_space:list(),
     {ok, [SpaceId || #document{key = SpaceId} <- SpaceDocs]};
@@ -289,8 +218,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{name = Name, providers = Providers} = Space,
     {ok, #{
         <<"name">> => Name,
-        % TODO VFS-2918
-        <<"providersSupports">> => Providers
+        <<"providers">> => Providers
     }};
 
 get(#el_req{gri = #gri{aspect = users}}, Space) ->
@@ -432,30 +360,6 @@ exists(#el_req{gri = #gri{id = Id}}, #od_space{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
-% TODO VFS-2918
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = deprecated_invite_user_token}}, Space) ->
-    authorize(Req#el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Space);
-
-% TODO VFS-2918
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = deprecated_invite_group_token}}, Space) ->
-    authorize(Req#el_req{operation = create, gri = #gri{aspect = invite_group_token}}, Space);
-
-% TODO VFS-2918
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = deprecated_invite_provider_token}}, Space) ->
-    authorize(Req#el_req{operation = create, gri = #gri{aspect = invite_provider_token}}, Space);
-
-% TODO VFS-2918
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {deprecated_create_share, _}}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_MANAGE_SHARES);
-
-% TODO VFS-2918
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {deprecated_user_privileges, Id}}}, Space) ->
-    authorize(Req#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}}, Space);
-
-% TODO VFS-2918
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {deprecated_group_privileges, Id}}}, Space) ->
-    authorize(Req#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}}, Space);
-
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
@@ -597,23 +501,6 @@ authorize(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
-% TODO VFS-2918
-validate(#el_req{operation = create, gri = #gri{aspect = {deprecated_create_share, _}}}) ->
-    #{
-        required => #{
-            <<"name">> => {binary, non_empty},
-            <<"rootFileId">> => {binary, non_empty}
-        }
-    };
-
-% TODO VFS-2918
-validate(#el_req{operation = create, gri = #gri{aspect = {deprecated_user_privileges, Id}}}) ->
-    validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}});
-
-% TODO VFS-2918
-validate(#el_req{operation = create, gri = #gri{aspect = {deprecated_group_privileges, Id}}}) ->
-    validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}});
-
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"name">> => {binary, non_empty}

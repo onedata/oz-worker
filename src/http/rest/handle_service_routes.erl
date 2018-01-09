@@ -73,11 +73,6 @@ routes() -> [
         method = 'PATCH',
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}
     }},
-    % TODO VFS-2918
-    {<<"/handle_services/:id/users/:uid/privileges">>, #rest_req{
-        method = 'PUT',
-        b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = {deprecated_user_privileges, ?BINDING(uid)}}
-    }},
     {<<"/handle_services/:id/effective_users">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = eff_users}
@@ -115,11 +110,6 @@ routes() -> [
     {<<"/handle_services/:id/groups/:gid/privileges">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = {group_privileges, ?BINDING(gid)}}
-    }},
-    % TODO VFS-2918
-    {<<"/handle_services/:id/groups/:gid/privileges">>, #rest_req{
-        method = 'PUT',
-        b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = {deprecated_group_privileges, ?BINDING(gid)}}
     }},
     {<<"/handle_services/:id/effective_groups">>, #rest_req{
         method = 'GET',

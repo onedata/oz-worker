@@ -82,7 +82,7 @@ created_reply([<<"/", Path/binary>> | Tail]) ->
     created_reply([Path | Tail]);
 created_reply(PathTokens) ->
     % TODO VFS-2918 do not add rest prefix for now
-%%    {ok, RestPrefix} = application:get_env(?APP_NAME, rest_api_prefix),
+%%    {ok, RestPrefix} = application:get_env(?APP_NAME, rest_api_prefix), https://, http_domain
     RestPrefix = "/",
     LocationHeader = #{
         % TODO VFS-2918
@@ -109,9 +109,7 @@ updated_reply() ->
 %%--------------------------------------------------------------------
 -spec deleted_reply() -> #rest_resp{}.
 deleted_reply() ->
-    % TODO VFS-2918
-%%    #rest_resp{code = ?HTTP_204_NO_CONTENT}.
-    #rest_resp{code = ?HTTP_202_ACCEPTED}.
+    #rest_resp{code = ?HTTP_204_NO_CONTENT}.
 
 %%%===================================================================
 %%% Internal functions

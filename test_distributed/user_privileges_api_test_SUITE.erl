@@ -240,7 +240,7 @@ delete_oz_privileges_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/users/">>, User, <<"/privileges">>],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = user_logic,
@@ -276,7 +276,7 @@ delete_self_oz_privileges_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = <<"/user/privileges">>,
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         }
     },
 

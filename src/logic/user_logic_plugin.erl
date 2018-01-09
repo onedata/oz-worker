@@ -56,9 +56,6 @@ fetch_entity(UserId) ->
 %%--------------------------------------------------------------------
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
-operation_supported(create, deprecated_default_space, private) ->
-    true; % TODO VFS-2918
-
 operation_supported(create, authorize, private) -> true;
 operation_supported(create, client_tokens, private) -> true;
 operation_supported(create, default_space, private) -> true;
@@ -388,10 +385,6 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = shared}}, User) ->
         undefined ->
             true
     end;
-
-% TODO VFS-2918
-exists(#el_req{gri = #gri{aspect = deprecated_default_space}}, _) ->
-    true;
 
 exists(#el_req{gri = #gri{aspect = {client_token, TokenId}}}, User) ->
     lists:member(TokenId, User#od_user.client_tokens);

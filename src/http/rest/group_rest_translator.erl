@@ -38,30 +38,14 @@
 create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched, #gri{id = GroupId}}) ->
     LocationTokens = case AuthHint of
         ?AS_USER(_UserId) ->
-            % TODO VFS-2918
-%%        [<<"user">>, <<"groups">>, GroupId]
-            [<<"groups">>, GroupId];
-        ?AS_GROUP(GroupId) ->
-            [<<"groups">>, GroupId, <<"parents">>, GroupId];
-        _ ->
-            [<<"groups">>, GroupId]
+            [<<"user">>, <<"groups">>, GroupId];
+        ?AS_GROUP(ChildGroupId) ->
+            [<<"groups">>, ChildGroupId, <<"parents">>, GroupId]
     end,
     rest_translator:created_reply(LocationTokens);
-% TODO VFS-2918 Responses should be the same
-%%    create_response(#gri{aspect = join}, AuthHint, #gri{id = GroupId}, Data);
 
-create_response(#gri{aspect = join}, AuthHint, {not_fetched, #gri{id = ParentGroupId}}) ->
-    LocationTokens = case AuthHint of
-        ?AS_USER(_UserId) ->
-            [<<"user">>, <<"groups">>, ParentGroupId];
-        ?AS_GROUP(GroupId) ->
-            % TODO VFS-2918
-%%        [<<"groups">>, GroupId, <<"parents">>, ParentGroupId]
-            [<<"groups">>, GroupId, <<"nested">>, ParentGroupId];
-        _ ->
-            [<<"groups">>, ParentGroupId]
-    end,
-    rest_translator:created_reply(LocationTokens);
+create_response(#gri{aspect = join} = Gri, AuthHint, Result) ->
+    create_response(Gri#gri{aspect = instance}, AuthHint, Result);
 
 create_response(#gri{aspect = invite_user_token}, _, {data, Macaroon}) ->
     {ok, Token} = token_utils:serialize62(Macaroon),
@@ -90,15 +74,6 @@ create_response(#gri{id = GroupId, aspect = {child, ChGrId}}, _, {not_fetched, #
 %%--------------------------------------------------------------------
 -spec get_response(entity_logic:gri(), entity_logic:get_result()) ->
     #rest_resp{}.
-% TODO VFS-2918
-get_response(#gri{aspect = deprecated_invite_user_token}, Macaroon) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
-% TODO VFS-2918
-get_response(#gri{aspect = deprecated_invite_group_token}, Macaroon) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
-
 get_response(#gri{id = undefined, aspect = list}, Groups) ->
     rest_translator:ok_body_reply(#{<<"groups">> => Groups});
 
@@ -125,21 +100,17 @@ get_response(#gri{aspect = {eff_user_privileges, _UserId}}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
 get_response(#gri{aspect = parents}, Parents) ->
-% TODO VFS-2918
-%%    rest_translator:ok_body_reply(#{<<"parents">> => Parents});
-    rest_translator:ok_body_reply(#{<<"parent_groups">> => Parents});
+    rest_translator:ok_body_reply(#{<<"groups">> => Parents});
 
 get_response(#gri{aspect = eff_parents}, Parents) ->
-    rest_translator:ok_body_reply(#{<<"parents">> => Parents});
+    rest_translator:ok_body_reply(#{<<"groups">> => Parents});
 
 
 get_response(#gri{aspect = children}, Children) ->
-% TODO VFS-2918
-%%    rest_translator:ok_body_reply(#{<<"children">> => Children});
-    rest_translator:ok_body_reply(#{<<"nested_groups">> => Children});
+    rest_translator:ok_body_reply(#{<<"groups">> => Children});
 
 get_response(#gri{aspect = eff_children}, Children) ->
-    rest_translator:ok_body_reply(#{<<"children">> => Children});
+    rest_translator:ok_body_reply(#{<<"groups">> => Children});
 
 get_response(#gri{aspect = {child_privileges, _ChildId}}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
@@ -169,4 +140,3 @@ get_response(#gri{aspect = handles}, Handles) ->
 
 get_response(#gri{aspect = eff_handles}, Handles) ->
     rest_translator:ok_body_reply(#{<<"handles">> => Handles}).
-
