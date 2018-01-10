@@ -40,7 +40,6 @@ upgrade:
 	$(REBAR) upgrade
 
 deps:
-	cd location-service && npm install
 	$(LIB_DIR)/gui/pull-gui.sh gui-config.sh
 
 compile:
@@ -59,7 +58,6 @@ clean:
 	$(REBAR) clean
 
 distclean: clean
-	rm -rf location-service/node_modules
 	$(REBAR) clean --all
 
 ##
