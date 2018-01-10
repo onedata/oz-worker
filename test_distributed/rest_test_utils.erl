@@ -51,7 +51,8 @@ get_rest_api_prefix(Config) ->
 %%          nobody
 %%          root
 %%          {user, <<"uid">>}
-%%          {provider, <<"id">>, "KeyFile", "CertFile"}
+%%          {user, <<"uid">>, <<"macaroon">>}
+%%          {provider, <<"id">>, <<"macaroon">>}
 %%          undefined
 %%      opts => % Optional, default: []
 %%          [http_client_option]
@@ -115,9 +116,12 @@ check_rest_call(Config, ArgsMap) ->
                 ReqHeaders;
             nobody ->
                 ReqHeaders;
-            {provider, _, _, _} ->
-                % Provider authorizes by certs
-                ReqHeaders;
+            {provider, _, Macaroon} ->
+                HeaderName = case rand:uniform(2) of
+                    1 -> <<"macaroon">>;
+                    2 -> <<"X-Auth-Token">>
+                end,
+                ReqHeaders#{HeaderName => Macaroon};
             {user, UserId} ->
                 % Cache user auth tokens, if none in cache create a new one.
                 Macaroon = case get({macaroon, UserId}) of
@@ -144,22 +148,6 @@ check_rest_call(Config, ArgsMap) ->
                 end,
                 ReqHeaders#{HeaderName => Macaroon}
         end,
-        ReqOptsPlusAuth = case ReqAuth of
-            undefined ->
-                ReqOpts;
-            nobody ->
-                ReqOpts;
-            {user, _UserId} ->
-                % User authorizes by macaroon
-                ReqOpts;
-            {user, _UserId, _Macaroon} ->
-                % User authorizes by macaroon
-                ReqOpts;
-            {provider, _ProviderId, KeyFile, CertFile} ->
-                [{ssl_options, [
-                    {keyfile, KeyFile}, {certfile, CertFile}
-                ]} | ReqOpts]
-        end,
 
 %%        %% Useful for debug
 %%        ct:print("[Req]: ~n"
@@ -171,11 +159,11 @@ check_rest_call(Config, ArgsMap) ->
 %%            ReqMethod, URL, HeadersPlusAuth, ReqBody, [{pool, false}, ReqOptsPlusAuth]
 %%        ]),
 
-        CaCerts = oz_test_utils:rest_ca_certs(Config),
-        SslOpts = proplists:get_value(ssl_options, ReqOptsPlusAuth, []),
+        CaCerts = oz_test_utils:gui_ca_certs(Config),
+        SslOpts = proplists:get_value(ssl_options, ReqOpts, []),
         CompleteOpts = [
             {ssl_options, [{cacerts, CaCerts} | SslOpts]} |
-            proplists:delete(ssl_options, ReqOptsPlusAuth)
+            proplists:delete(ssl_options, ReqOpts)
         ],
 
         {ok, RespCode, RespHeaders, RespBody} = http_client:request(
@@ -353,7 +341,7 @@ get_oz_url(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
     {ok, Domain} = test_utils:get_env(Node, ?APP_NAME, http_domain),
     {ok, RestPort} = rpc:call(
-        Node, application, get_env, [?APP_NAME, rest_port]
+        Node, application, get_env, [?APP_NAME, gui_port]
     ),
     {ok, RestAPIPrefix} = rpc:call(
         Node, application, get_env, [?APP_NAME, rest_api_prefix]

@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -217,7 +217,7 @@ get_test(Config) ->
         ?SPACE_VIEW
     ]),
 
-    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
     SupportSize = oz_test_utils:minimum_support_size(Config),
@@ -234,7 +234,7 @@ get_test(Config) ->
             correct = [
                 root,
                 {user, U2},
-                {provider, P1, KeyFile, CertFile}
+                {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -309,7 +309,7 @@ get_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {provider, P1, KeyFile, CertFile}
+                {provider, P1, P1Macaroon}
             ]
         },
         rest_spec = #rest_spec{
@@ -319,7 +319,7 @@ get_test(Config) ->
             expected_body = #{
                 <<"spaceId">> => S1,
                 <<"name">> => ?SPACE_NAME1,
-                <<"providersSupports">> => #{P1 => SupportSize}
+                <<"providers">> => #{P1 => SupportSize}
             }
         },
         logic_spec = #logic_spec{
@@ -328,7 +328,7 @@ get_test(Config) ->
             args = [client, S1],
             expected_result = ?OK_MAP(#{
                 <<"name">> => ?SPACE_NAME1,
-                <<"providersSupports">> => #{P1 => SupportSize}
+                <<"providers">> => #{P1 => SupportSize}
             })
         },
         gs_spec = #gs_spec{
@@ -338,7 +338,7 @@ get_test(Config) ->
             },
             expected_result = ?OK_MAP(#{
                 <<"name">> => ?SPACE_NAME1,
-                <<"providersSupports">> => #{P1 => SupportSize},
+                <<"providers">> => #{P1 => SupportSize},
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -536,7 +536,7 @@ get_share_test(Config) ->
         Config, ?ROOT, ShareId, ShareName, ?ROOT_FILE_ID, S1
     ),
 
-    {ok, ZoneDomain} = oz_test_utils:get_domain(Config),
+    {ok, ZoneDomain} = oz_test_utils:get_oz_domain(Config),
     SharePublicUrl = ?SHARE_PUBLIC_URL(ZoneDomain, ShareId),
 
     ExpShareDetails = #{
@@ -618,7 +618,7 @@ list_providers_test(Config) ->
     SupportSize = oz_test_utils:minimum_support_size(Config),
     ExpProviders = lists:map(
         fun(_) ->
-            {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(
+            {ok, {ProviderId, _}} = oz_test_utils:create_provider(
                 Config, ?PROVIDER_NAME1
             ),
             {ok, S1} = oz_test_utils:support_space(
@@ -718,18 +718,27 @@ get_provider_test(Config) ->
         ?OZ_SPACES_LIST_PROVIDERS
     ]),
 
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, User, set, []),
-
     ProviderDetails = ?PROVIDER_DETAILS(?PROVIDER_NAME1),
-    {ok, {P1, _, _}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ProviderDetails#{<<"subdomainDelegation">> => false}
     ),
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+    {ok, {P3, P3Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
+    oz_test_utils:space_set_user_privileges(Config, S1, User, set, []),
     {ok, S1} = oz_test_utils:support_space(
         Config, P1, S1, oz_test_utils:minimum_support_size(Config)
     ),
+    {ok, S1} = oz_test_utils:support_space(
+        Config, P2, S1, oz_test_utils:minimum_support_size(Config)
+    ),
 
-    ExpProvidersDetails = ProviderDetails#{
+    ExpDetails = ProviderDetails#{
         <<"clientName">> => ?PROVIDER_NAME1,
         <<"online">> => false
     },
@@ -738,18 +747,20 @@ get_provider_test(Config) ->
             correct = [
                 root,
                 {user, Admin},
-                {user, User}
+                {user, User},
+                {provider, P2, P2Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, NonAdmin}
+                {user, NonAdmin},
+                {provider, P3, P3Macaroon}
             ]
         },
         rest_spec = #rest_spec{
             method = get,
             path = [<<"/spaces/">>, S1, <<"/providers/">>, P1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpProvidersDetails#{
+            expected_body = ExpDetails#{
                 <<"providerId">> => P1
             }
         },
@@ -757,16 +768,16 @@ get_provider_test(Config) ->
             module = space_logic,
             function = get_provider,
             args = [client, S1, P1],
-            expected_result = ?OK_MAP(ExpProvidersDetails)
+            expected_result = ?OK_MAP(ExpDetails)
         },
-        gs_spec = #gs_spec{
+        gs_spec = GsSpec = #gs_spec{
             operation = get,
             gri = #gri{
                 type = od_provider, id = P1,
                 aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_SPACE(S1),
-            expected_result = ?OK_MAP(ExpProvidersDetails#{
+            expected_result = ?OK_MAP(ExpDetails#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -776,7 +787,26 @@ get_provider_test(Config) ->
             })
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % When making connection with gs provider becomes online
+    ExpDetails2 = ExpDetails#{<<"online">> => true},
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P1, P1Macaroon}]
+        },
+        gs_spec = GsSpec#gs_spec{
+            expected_result = ?OK_MAP(ExpDetails2#{
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = oz_test_utils:decode_gri(
+                        Config, EncodedGri
+                    ),
+                    ?assertEqual(Id, P1)
+                end
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 leave_provider_test(Config) ->
@@ -789,7 +819,7 @@ leave_provider_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     EnvSetUpFun = fun() ->
-        {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(
+        {ok, {ProviderId, _}} = oz_test_utils:create_provider(
             Config, ?PROVIDER_NAME1
         ),
         {ok, S1} = oz_test_utils:support_space(

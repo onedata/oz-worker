@@ -17,7 +17,7 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -type method() :: get | post | put | patch | delete.
 -type binding() :: {binding, atom()} | client_id | client_ip.
@@ -165,8 +165,7 @@ is_authorized(Req, State) ->
         Client = authorize(Req, [
             fun authorize_by_oauth_provider/1,
             fun authorize_by_basic_auth/1,
-            fun authorize_by_macaroons/1,
-            fun authorize_by_provider_certs/1
+            fun authorize_by_macaroons/1
         ]),
         % Always return true - authorization is checked by entity_logic later.
         {true, Req, State#state{client = Client}}
@@ -460,7 +459,7 @@ authorize_by_oauth_provider(Req) ->
                     false;
                 {true, Client} ->
                     {true, Client};
-                {error, {bad_access_token, ProviderId}} ->
+                ?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(ProviderId) ->
                     throw(?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(ProviderId))
             end
     end.
@@ -511,28 +510,6 @@ authorize_by_macaroons(Req) ->
                 {error, _} ->
                     throw(?ERROR_BAD_MACAROON)
             end
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Tries to authorize client by provider certs.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_provider_certs(Req :: cowboy_req:req()) ->
-    false | {true, #client{}}.
-authorize_by_provider_certs(Req) ->
-    case ssl:peercert(cowboy_req:get(socket, Req)) of
-        {ok, PeerCert} ->
-            case auth_utils:authorize_by_provider_certs(PeerCert) of
-                {true, Client} ->
-                    {true, Client};
-                {error, bad_cert} ->
-                    throw(?ERROR_UNAUTHORIZED)
-            end;
-        {error, no_peercert} ->
-            false
     end.
 
 

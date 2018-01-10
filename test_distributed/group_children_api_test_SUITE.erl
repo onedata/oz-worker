@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -166,6 +166,10 @@ get_child_details_test(Config) ->
         Config, ?GROUP_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [
+        ?OZ_GROUPS_LIST_GROUPS
+    ]),
 
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT,
         #{<<"name">> => ?GROUP_NAME2, <<"type">> => ?GROUP_TYPE2}
@@ -176,7 +180,8 @@ get_child_details_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {user, Admin}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -263,7 +268,12 @@ add_child_test(Config) ->
         rest_spec = #rest_spec{
             method = put,
             path = [<<"/groups/">>, G1, <<"/children/">>, G2],
-            expected_code = ?HTTP_201_CREATED
+            expected_code = ?HTTP_201_CREATED,
+            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
+                ExpLocation = <<"/groups/", G1/binary, "/children/", G2/binary>>,
+                ?assertEqual(ExpLocation, Location),
+                true
+            end
         },
         logic_spec = #logic_spec{
             module = group_logic,
@@ -276,8 +286,8 @@ add_child_test(Config) ->
             required = [<<"privileges">>],
             correct_values = #{
                 <<"privileges">> => [
-                    [group_join_group, group_remove_group],
-                    [group_invite_user, group_view]
+                    [?GROUP_JOIN_GROUP, ?GROUP_REMOVE_GROUP],
+                    [?GROUP_INVITE_USER, ?GROUP_VIEW]
                 ]
             },
             bad_values = [
@@ -481,6 +491,10 @@ get_eff_children_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_GROUPS_LIST_GROUPS
+    ]),
 
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, set,
@@ -496,6 +510,7 @@ get_eff_children_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {user, Admin},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -541,6 +556,10 @@ get_eff_child_details_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_GROUPS_LIST_GROUPS
+    ]),
 
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1, set,
@@ -562,6 +581,7 @@ get_eff_child_details_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
+                        {user, Admin},
                         {user, U2}
                     ],
                     unauthorized = [nobody],
@@ -638,6 +658,10 @@ get_eff_child_privileges_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_GROUPS_LIST_GROUPS
+    ]),
 
     {G3, G2, G1} = oz_test_utils:create_3_nested_groups(Config, U1),
     {ok, G3} = oz_test_utils:group_add_group(Config, G1, G3),
@@ -688,6 +712,7 @@ get_eff_child_privileges_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, U3},
+                {user, Admin},
                 {user, NonAdmin}
             ]
         },

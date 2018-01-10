@@ -505,10 +505,10 @@ provider_record(2) -> {od_provider,
 
 provider_record(3) -> #od_provider{
     name = <<"name">>,
+    root_macaroon = undefined,
     domain = <<"redirection_point">>,
     subdomain_delegation = false,
     subdomain = undefined,
-    serial = <<"cert_serial">>,
     latitude = -93.2341,
     longitude = 17,
 

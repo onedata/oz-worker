@@ -23,7 +23,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 % Some of the types are just aliases for types from gs_protocol, this is
 % for better readability of logic modules.
@@ -549,9 +549,9 @@ check_type(atom, Key, Binary) when is_binary(Binary) ->
     end;
 check_type(atom, Key, _) ->
     throw(?ERROR_BAD_VALUE_ATOM(Key));
-check_type(boolean, Key, true) ->
+check_type(boolean, _Key, true) ->
     true;
-check_type(boolean, Key, false) ->
+check_type(boolean, _Key, false) ->
     false;
 check_type(boolean, Key, _) ->
     throw(?ERROR_BAD_VALUE_BOOLEAN(Key));
@@ -712,7 +712,7 @@ check_value(binary, domain, Key, Value) ->
 
 check_value(binary, subdomain, Key, <<"">>) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
-check_value(binary, subdomain, Key, Value) ->
+check_value(binary, subdomain, _Key, Value) ->
     case re:run(Value, ?SUBDOMAIN_VALIDATION_REGEXP, [{capture, none}]) of
         match -> % Check length
             {ok, OZDomain} = application:get_env(?APP_NAME, http_domain),
@@ -753,14 +753,16 @@ check_value(_, VerifyFun, Key, Val) when is_function(VerifyFun, 1) ->
         false ->
             throw(?ERROR_BAD_DATA(Key))
     end;
-check_value(_, {exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
+check_value(Type, {exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
+    check_value(Type, non_empty, Key, Val),
     case VerifyFun(Val) of
         true ->
             ok;
         false ->
             throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(Key))
     end;
-check_value(_, {not_exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
+check_value(Type, {not_exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
+    check_value(Type, non_empty, Key, Val),
     case VerifyFun(Val) of
         true ->
             ok;
@@ -774,6 +776,8 @@ check_value(_, {relation_exists, ChType, ChId, ParType, ParId, VerifyFun}, _Key,
         false ->
             throw(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId))
     end;
+check_value(token, any, _Key, _Macaroon) ->
+    ok;
 check_value(token, TokenType, Key, Macaroon) ->
     case token_logic:validate(Macaroon, TokenType) of
         ok ->

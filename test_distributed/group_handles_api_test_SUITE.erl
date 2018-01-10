@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -248,7 +248,7 @@ create_handle_test(Config) ->
             bad_values = [
                 % one cannot check privileges of hs if it does not exist so 403
                 {<<"handleServiceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
+                    ?ERROR_BAD_VALUE_EMPTY(<<"handleServiceId">>)},
                 {<<"handleServiceId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"handleServiceId">>)},
                 {<<"resourceType">>, <<"">>,
@@ -259,7 +259,7 @@ create_handle_test(Config) ->
                 % one cannot check privileges of resource
                 % if it does not exist so 403
                 {<<"resourceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
+                    ?ERROR_BAD_VALUE_EMPTY(<<"resourceId">>)},
                 {<<"resourceId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceId">>)},
                 {<<"metadata">>, 1234,

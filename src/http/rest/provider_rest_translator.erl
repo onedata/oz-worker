@@ -14,6 +14,7 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 -export([create_response/3, get_response/2]).
 
@@ -32,16 +33,18 @@
     Result :: {data, term()} | {fetched, entity_logic:gri(), term()} |
     {not_fetched, entity_logic:gri()} |
     {not_fetched, entity_logic:gri(), entity_logic:auth_hint()}) -> #rest_resp{}.
-create_response(#gri{id = undefined, aspect = instance}, _, {fetched, #gri{id = ProvId}, {_, Certificate}}) ->
+create_response(#gri{id = undefined, aspect = instance}, _, {fetched, #gri{id = ProvId}, {_, Macaroon}}) ->
+    {ok, MacaroonBin} = onedata_macaroons:serialize(Macaroon),
     rest_translator:ok_body_reply(#{
         <<"providerId">> => ProvId,
-        <<"certificate">> => Certificate
+        <<"macaroon">> => MacaroonBin
     });
 
-create_response(#gri{id = undefined, aspect = instance_dev}, _, {fetched, #gri{id = ProvId}, {_, Certificate}}) ->
+create_response(#gri{id = undefined, aspect = instance_dev}, _, {fetched, #gri{id = ProvId}, {_, Macaroon}}) ->
+    {ok, MacaroonBin} = onedata_macaroons:serialize(Macaroon),
     rest_translator:ok_body_reply(#{
         <<"providerId">> => ProvId,
-        <<"certificate">> => Certificate
+        <<"macaroon">> => MacaroonBin
     });
 
 create_response(#gri{aspect = support}, _, {not_fetched, #gri{id = SpaceId}}) ->

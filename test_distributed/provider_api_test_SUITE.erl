@@ -21,9 +21,16 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/auth/onedata_macaroons.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -include("api_test_utils.hrl").
+
+-define(MAP_GROUP_TEST_AUTH, test_auth).
+-define(MAP_GROUP_TEST_AUTH_BIN, atom_to_binary(?MAP_GROUP_TEST_AUTH, latin1)).
+-define(MAP_GROUP_TEST_AUTH_MODULE, test_auth_module).
+-define(MAPPED_MEMBERSHIP_SPEC, <<"mapped_group1/user:member">>).
+-define(MAPPED_GROUP_SPEC, <<"mapped_group1">>).
 
 
 %% API
@@ -34,45 +41,64 @@
 ]).
 -export([
     create_test/1,
-    create_with_subdomain_test/1,
     get_test/1,
+    get_self_test/1,
     list_test/1,
     update_test/1,
     delete_test/1,
-    get_eff_users_test/1,
-    get_eff_groups_test/1,
-    get_spaces_test/1,
+    delete_self_test/1,
+
+    list_eff_users_test/1,
+    get_eff_user_test/1,
+    list_eff_groups_test/1,
+    get_eff_group_test/1,
+
+    list_spaces_test/1,
+    list_self_spaces_test/1,
+    get_space_test/1,
+    get_self_space_test/1,
     support_space_test/1,
     update_support_size_test/1,
     revoke_support_test/1,
+
     check_my_ports_test/1,
     check_my_ip_test/1,
-    update_subdomaindomain_test/1,
+    map_group_test/1,
+    update_subdomain_test/1,
     update_domain_test/1,
-    update_domain_to_ip_address_test/1,
     get_domain_config_test/1,
-    get_current_time_test/1
+    get_current_time_test/1,
+    verify_provider_identity_test/1
 ]).
 
 all() ->
     ?ALL([
         create_test,
-        create_with_subdomain_test,
         get_test,
+        get_self_test,
         list_test,
-        support_space_test,
-        get_eff_users_test,
-        get_eff_groups_test,
-        get_spaces_test,
         update_test,
         delete_test,
+        delete_self_test,
+
+        list_eff_users_test,
+        get_eff_user_test,
+        list_eff_groups_test,
+        get_eff_group_test,
+
+        list_spaces_test,
+        list_self_spaces_test,
+        get_space_test,
+        get_self_space_test,
+        support_space_test,
         update_support_size_test,
         revoke_support_test,
+
         check_my_ports_test,
         check_my_ip_test,
+        map_group_test,
+        update_subdomain_test,
         update_domain_test,
-        update_subdomaindomain_test,
-        update_domain_to_ip_address_test,
         get_domain_config_test,
         get_current_time_test
     ]).
@@ -84,63 +110,93 @@ all() ->
 % TODO VFS-2918 (all tests) <<"clientName">> -> <<"name">>
 
 create_test(Config) ->
-    {_, CSRFile, _} = oz_test_utils:generate_provider_cert_files(),
-    {ok, CSR} = file:read_file(CSRFile),
-    ExpName = <<"ProvName">>,
-    ExpDomain = <<"multilevel.provider-domain.org">>,
-    ExpLatitude = 50.0,
-    ExpLongitude = -24.8,
-    ExpSubdomainDelegation = false,
-    ExpSubdomain = undefined,
+    ExpName = ?PROVIDER_NAME1,
 
-    VerifyFun = fun(ProviderId, Certificate) ->
-        true = is_binary(Certificate),
+    {ok, OZDomainString} = oz_test_utils:get_oz_domain(Config),
+    OZDomain = list_to_binary(OZDomainString),
+
+    VerifyFun = fun(ProviderId, Macaroon, Data) ->
+        ExpLatitude = maps:get(<<"latitude">>, Data, 0.0),
+        ExpLongitude = maps:get(<<"longitude">>, Data, 0.0),
+        ExpSubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
+        {ExpSubdomain, ExpDomain} = case ExpSubdomainDelegation of
+            true ->
+                Subdomain = maps:get(<<"subdomain">>, Data),
+                {Subdomain, <<Subdomain/binary, ".", OZDomain/binary>>};
+            false ->
+                {undefined, maps:get(<<"domain">>, Data)}
+        end,
+
+        % Logic returns the macaroon in deserialized format, and REST in serialized
+        MacaroonBin = case is_binary(Macaroon) of
+            true ->
+                Macaroon;
+            false ->
+                {ok, Serialized} = onedata_macaroons:serialize(Macaroon),
+                Serialized
+        end,
+        ?assertEqual(ok, oz_test_utils:call_oz(Config, provider_logic, verify_provider_identity, [
+            ?ROOT, ProviderId, MacaroonBin
+        ])),
         {ok, Provider} = oz_test_utils:get_provider(Config, ProviderId),
         ?assertEqual(ExpName, Provider#od_provider.name),
         ?assertEqual(ExpDomain, Provider#od_provider.domain),
         ?assertEqual(ExpSubdomainDelegation, Provider#od_provider.subdomain_delegation),
         ?assertEqual(ExpSubdomain, Provider#od_provider.subdomain),
-        % Latitude and longitude are optional, so default value might
-        % be set.
-        ?assert(Provider#od_provider.latitude =:= ExpLatitude orelse
-            Provider#od_provider.latitude =:= 0.0),
-        ?assert(Provider#od_provider.longitude =:= ExpLongitude orelse
-            Provider#od_provider.longitude =:= 0.0),
+        ?assertEqual(ExpLatitude, Provider#od_provider.latitude),
+        ?assertEqual(ExpLongitude, Provider#od_provider.longitude),
+
+        % check also provider_logic:get_url function
+        ExpProviderURL = str_utils:format_bin("https://~s", [ExpDomain]),
+        {ok, ProviderURL} = oz_test_utils:call_oz(
+            Config, provider_logic, get_url, [ProviderId]
+        ),
+        ?assertEqual(ProviderURL, ExpProviderURL),
+
+        % delete provider to avoid "subdomain occupied" errors
+        oz_test_utils:delete_provider(Config, ProviderId),
         true
     end,
+
+    %% Create provider with subdomain delegation turned off
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [root, nobody]
         },
         rest_spec = #rest_spec{
             method = post,
-            path = <<"/provider">>,
+            path = <<"/providers">>,
             expected_code = ?HTTP_200_OK,
-            expected_body = fun(Value) ->
-                Certificate = maps:get(<<"certificate">>, Value),
+            expected_body = ?OK_ENV(fun(_Env, Data) -> fun(Value) ->
+                Macaroon = maps:get(<<"macaroon">>, Value),
                 ProviderId = maps:get(<<"providerId">>, Value),
-                VerifyFun(ProviderId, Certificate)
+                VerifyFun(ProviderId, Macaroon, Data)
             end
+            end)
         },
         logic_spec = #logic_spec{
             operation = create,
             module = provider_logic,
             function = create,
             args = [client, data],
-            expected_result = ?OK_TERM(fun({ProviderId, Certificate}) ->
-                VerifyFun(ProviderId, Certificate)
+            expected_result = ?OK_ENV(fun(_Env, Data) ->
+                ?OK_TERM(fun({ProviderId, Macaroon}) ->
+                    VerifyFun(ProviderId, Macaroon, Data)
+                end)
             end)
         },
+        % TODO gs
         data_spec = #data_spec{
-            required = [<<"clientName">>, <<"domain">>, <<"subdomainDelegation">>, <<"csr">>],
+            required = [
+                <<"clientName">>, <<"domain">>, <<"subdomainDelegation">>
+            ],
             optional = [<<"latitude">>, <<"longitude">>],
             correct_values = #{
                 <<"clientName">> => [ExpName],
-                <<"domain">> => [ExpDomain],
-                <<"subdomainDelegation">> => [ExpSubdomainDelegation],
-                <<"csr">> => [CSR],
-                <<"latitude">> => [ExpLatitude],
-                <<"longitude">> => [ExpLongitude]
+                <<"domain">> => [<<"multilevel.provider-domain.org">>],
+                <<"subdomainDelegation">> => [false],
+                <<"latitude">> => [rand:uniform() * 90],
+                <<"longitude">> => [rand:uniform() * 180]
             },
             bad_values = [
                 {<<"clientName">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"clientName">>)},
@@ -152,9 +208,6 @@ create_test(Config) ->
                 {<<"domain">>, <<"trailing-.hyphen">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
                 {<<"subdomainDelegation">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
                 {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
-                {<<"csr">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"csr">>)},
-                {<<"csr">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"csr">>)},
-                {<<"csr">>, <<"wrong-csr">>, ?ERROR_BAD_DATA(<<"csr">>)},
                 {<<"latitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"latitude">>)},
                 {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
                 {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
@@ -168,69 +221,23 @@ create_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-%% Create provider with subdomain delegation turned on
-create_with_subdomain_test(Config) ->
-    {_, CSRFile, _} = oz_test_utils:generate_provider_cert_files(),
-    {ok, CSR} = file:read_file(CSRFile),
-    ExpName = <<"ProvName">>,
-    ExpLatitude = 50.0,
-    ExpLongitude = -24.8,
-    ExpSubdomainDelegation = true,
-    ExpSubdomain = <<"prov-sub">>,
-    ExpIPs = [<<"2.4.6.8">>, <<"255.253.251.2">>],
-    {ok, OZDomainString} = oz_test_utils:call_oz(Config,
-        application, get_env, [oz_worker, http_domain]),
-    OZDomain = list_to_binary(OZDomainString),
-    ExpDomain = <<ExpSubdomain/binary, ".", OZDomain/binary>>,
-
-    VerifyFun = fun(ProviderId, Certificate) ->
-        true = is_binary(Certificate),
-        {ok, Provider} = oz_test_utils:get_provider(Config, ProviderId),
-        ?assertEqual(ExpName, Provider#od_provider.name),
-        ?assertEqual(ExpDomain, Provider#od_provider.domain),
-        ?assertEqual(ExpSubdomainDelegation, Provider#od_provider.subdomain_delegation),
-        ?assertEqual(ExpSubdomain, Provider#od_provider.subdomain),
-
-        % delete provider to avoid "subdomain occupied" errors
-        oz_test_utils:delete_provider(Config, ProviderId),
-        true
-    end,
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [root, nobody]
-        },
-        rest_spec = #rest_spec{
-            method = post,
-            path = <<"/provider">>,
-            expected_code = ?HTTP_200_OK,
-            expected_body = fun(Value) ->
-                Certificate = maps:get(<<"certificate">>, Value),
-                ProviderId = maps:get(<<"providerId">>, Value),
-                VerifyFun(ProviderId, Certificate)
-            end},
-        logic_spec = #logic_spec{
-            operation = create,
-            module = provider_logic,
-            function = create,
-            args = [client, data],
-            expected_result = ?OK_TERM(fun({ProviderId, Certificate}) ->
-                VerifyFun(ProviderId, Certificate)
-            end)
-        },
+    %% Create provider with subdomain delegation turned on
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
         data_spec = #data_spec{
-            required = [<<"clientName">>, <<"subdomain">>, <<"ipList">>,
-                        <<"subdomainDelegation">>, <<"csr">>],
+            required = [
+                <<"clientName">>, <<"subdomain">>, <<"ipList">>,
+                <<"subdomainDelegation">>
+            ],
             optional = [<<"latitude">>, <<"longitude">>],
             correct_values = #{
                 <<"clientName">> => [ExpName],
-                <<"subdomainDelegation">> => [ExpSubdomainDelegation],
-                <<"subdomain">> => [ExpSubdomain],
-                <<"ipList">> => [ExpIPs],
-                <<"csr">> => [CSR],
-                <<"latitude">> => [ExpLatitude],
-                <<"longitude">> => [ExpLongitude]
+                <<"subdomainDelegation">> => [true],
+                <<"subdomain">> => [<<"prov-sub">>],
+                <<"ipList">> => [[<<"2.4.6.8">>, <<"255.253.251.2">>]],
+                <<"latitude">> => [rand:uniform() * 90],
+                <<"longitude">> => [rand:uniform() * 180]
             },
             bad_values = [
                 {<<"subdomain">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"subdomain">>)},
@@ -241,61 +248,114 @@ create_with_subdomain_test(Config) ->
                 {<<"subdomain">>, <<"trailingdot.">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
                 {<<"subdomain">>, <<"multi.part">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
                 {<<"subdomain">>, <<"https://protocol">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
-                {<<"subdomainDelegation">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
-                {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
                 {<<"ipList">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
                 {<<"ipList">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
                 {<<"ipList">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)}
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 get_test(Config) ->
-    % Create a provider manually
-    {KeyFile1, CSRFile1, CertFile1} = oz_test_utils:generate_provider_cert_files(),
-    {ok, CSR} = file:read_file(CSRFile1),
-    ExpName = <<"Provider 1">>,
-    ExpDomain = <<"domain.com">>,
-    ExpLatitude = 14.78,
-    ExpLongitude = -106.12,
-    {ok, {P1, Certificate}} = oz_test_utils:create_provider(Config, #{
-        <<"clientName">> => ExpName,
+    ExpName = ?PROVIDER_NAME1,
+    ExpDomain = ?DOMAIN,
+    ExpLatitude = rand:uniform() * 90,
+    ExpLongitude = rand:uniform() * 180,
+    ProviderDetails = #{
+        <<"name">> => ExpName,
         <<"domain">> => ExpDomain,
-        <<"subdomainDelegation">> => false,
-        <<"csr">> => CSR,
         <<"latitude">> => ExpLatitude,
         <<"longitude">> => ExpLongitude
-    }),
-    ok = file:write_file(CertFile1, Certificate),
-    % Create a second provider
-    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P2">>
+    },
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ProviderDetails#{<<"subdomainDelegation">> => false}
     ),
-    % Create two users, grant one of them the privilege to list providers.
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST
     ]),
 
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    SupportSize = oz_test_utils:minimum_support_size(Config),
+    {ok, S1} = oz_test_utils:support_space(Config, P1, S1, SupportSize),
 
-    ExpBody = #{
-        <<"name">> => ExpName,
-        <<"clientName">> => ExpName,
-        <<"domain">> => ExpDomain,
-        <<"online">> => false,
-        <<"latitude">> => ExpLatitude,
-        <<"longitude">> => ExpLongitude
+    ExpDetails = ProviderDetails#{
+        <<"clientName">> => ?PROVIDER_NAME1,
+        <<"online">> => true
     },
-    ApiTestSpec = #api_test_spec{
+
+    % Get and check private data
+    GetPrivateDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
+                {provider, P1, P1Macaroon}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
                 {user, Admin},
-                {provider, P1, KeyFile1, CertFile1},
-                {provider, P2, KeyFile2, CertFile2}
+                {user, NonAdmin},
+                {provider, P2, P2Macaroon}
+            ]
+        },
+        logic_spec = #logic_spec{
+            operation = get,
+            module = provider_logic,
+            function = get,
+            args = [client, P1],
+            expected_result = ?OK_TERM(
+                fun(#od_provider{
+                    name = Name, subdomain_delegation = false,
+                    domain = Domain, subdomain = undefined,
+                    latitude = Latitude, longitude = Longitude,
+                    spaces = Spaces, eff_users = EffUsers, eff_groups = #{}
+                }) ->
+                    ?assertEqual(Name, ExpName),
+                    ?assertEqual(Domain, ExpDomain),
+                    ?assertEqual(Latitude, ExpLatitude),
+                    ?assertEqual(Longitude, ExpLongitude),
+                    ?assertEqual(Spaces, #{S1 => SupportSize}),
+                    ?assertEqual(EffUsers, #{U1 => [{od_space, S1}]})
+                end)
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = od_provider, id = P1, aspect = instance},
+            expected_result = ?OK_MAP(#{
+                <<"online">> => true,
+                <<"name">> => ExpName, <<"domain">> => ExpDomain,
+                <<"effectiveGroups">> => [], <<"effectiveUsers">> => [U1],
+                <<"latitude">> => ExpLatitude, <<"longitude">> => ExpLongitude,
+                <<"spaces">> => #{S1 => SupportSize},
+                <<"subdomain">> => <<"undefined">>,
+                <<"subdomainDelegation">> => false,
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = oz_test_utils:decode_gri(
+                        Config, EncodedGri
+                    ),
+                    ?assertEqual(P1, Id)
+                end
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
+
+    % Get and check protected data
+    GetProtectedDataApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U1},
+                {user, Admin},
+                {provider, P2, P2Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -306,91 +366,106 @@ get_test(Config) ->
             method = get,
             path = [<<"/providers/">>, P1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpBody#{<<"providerId">> => P1}
+            expected_body = ExpDetails#{<<"providerId">> => P1}
         },
         logic_spec = #logic_spec{
             operation = get,
             module = provider_logic,
             function = get_protected_data,
             args = [client, P1],
-            expected_result = ?OK_MAP(ExpBody)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    % Provider 2 was not able to get data of provider 1, but if they support a
-    % common space, it should gain access.
-    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, <<"space">>),
-    {ok, Macaroon1} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S1),
-    {ok, Macaroon2} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S1),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, ?PROVIDER(P1), P1, Macaroon1,
-        oz_test_utils:minimum_support_size(Config)
-    ),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, ?PROVIDER(P2), P2, Macaroon2,
-        oz_test_utils:minimum_support_size(Config)
-    ),
-    ApiTestSpec2 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                {provider, P1, KeyFile1, CertFile1},
-                {provider, P2, KeyFile2, CertFile2}
-            ],
-            unauthorized = [nobody],
-            forbidden = [{user, NonAdmin}]
+            expected_result = ?OK_MAP(ExpDetails)
         },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/spaces/">>, S1, <<"/providers/">>, P1],
-            expected_code = ?HTTP_200_OK,
-            expected_body = ExpBody#{<<"providerId">> => P1}
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{
+                type = od_provider, id = P1,
+                aspect = instance, scope = protected
+            },
+            expected_result = ?OK_MAP(ExpDetails#{
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = oz_test_utils:decode_gri(
+                        Config, EncodedGri
+                    ),
+                    ?assertEqual(P1, Id)
+                end
+            })
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
 
 
-    % Provider should be also able to retrieve this info using another path,
-    % without id (id is deduced from authorization)
-    ApiTestSpec3 = #api_test_spec{
+get_self_test(Config) ->
+    ProviderDetails = ?PROVIDER_DETAILS(?PROVIDER_NAME1),
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ProviderDetails#{<<"subdomainDelegation">> => false}
+    ),
+
+    ExpDetails = ProviderDetails#{
+        <<"clientName">> => ?PROVIDER_NAME1,
+        <<"online">> => false
+    },
+    ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [{provider, P1, KeyFile1, CertFile1}]
+            correct = [{provider, P1, P1Macaroon}]
         },
         rest_spec = #rest_spec{
             method = get,
             path = <<"/provider">>,
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpBody#{<<"providerId">> => P1}
+            expected_body = ExpDetails#{<<"providerId">> => P1}
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{
+                type = od_provider, id = ?SELF,
+                aspect = instance, scope = protected
+            },
+            expected_result = ?OK_MAP(ExpDetails#{
+                <<"online">> => true,
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = oz_test_utils:decode_gri(
+                        Config, EncodedGri
+                    ),
+                    ?assertEqual(P1, Id)
+                end
+            })
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 list_test(Config) ->
     % Make sure that providers created in other tests are deleted.
     ok = oz_test_utils:delete_all_entities(Config),
+
     % Register some providers
-    {ok, {P1, KeyFile, CertFile}} = oz_test_utils:create_provider_and_certs(
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, <<"P1">>
     ),
-    {ok, {P2, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P2">>),
-    {ok, {P3, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P3">>),
-    {ok, {P4, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P4">>),
-    {ok, {P5, _, _}} = oz_test_utils:create_provider_and_certs(Config, <<"P5">>),
+    {ok, {P2, _}} = oz_test_utils:create_provider(Config, <<"P2">>),
+    {ok, {P3, _}} = oz_test_utils:create_provider(Config, <<"P3">>),
+    {ok, {P4, _}} = oz_test_utils:create_provider(Config, <<"P4">>),
+    {ok, {P5, _}} = oz_test_utils:create_provider(Config, <<"P5">>),
     ExpProviders = [P1, P2, P3, P4, P5],
+
     % Create two users, grant one of them the privilege to list providers.
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST
     ]),
 
-
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, {user, Admin}],
+            correct = [
+                root,
+                {user, Admin}
+            ],
             unauthorized = [nobody],
-            forbidden = [{user, NonAdmin}, {provider, P1, KeyFile, CertFile}]
+            forbidden = [
+                {user, NonAdmin},
+                {provider, P1, P1Macaroon}
+            ]
         },
         rest_spec = #rest_spec{
             method = get,
@@ -405,45 +480,74 @@ list_test(Config) ->
             args = [client],
             expected_result = ?OK_LIST(ExpProviders)
         }
+        % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % check also space_logic:exist function
+    lists:foreach(
+        fun(ProviderId) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, provider_logic, exists, [ProviderId])
+            )
+        end, ExpProviders
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, provider_logic, exists, [<<"asdiucyaie827346w">>])
+    ).
 
 
 update_test(Config) ->
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
-    ),
-    ExpName = <<"New Prov name">>,
-    ExpDomain = <<"127.0.0.1">>, % not changed - it is done in the domain_config aspect
-    ExpLatitude = -12.87645,
-    ExpLongitude = -4.44,
+    Name = ?PROVIDER_NAME1,
+    Latitude = rand:uniform() * 90,
+    Longitude = rand:uniform() * 180,
+    ProviderDetails = #{
+        <<"name">> => Name, <<"domain">> => ?DOMAIN,
+        <<"subdomainDelegation">> => false,
+        <<"latitude">> => Latitude, <<"longitude">> => Longitude
+    },
+
+    EnvSetUpFun = fun() ->
+        {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+            Config, ProviderDetails
+        ),
+        #{providerId => P1, providerClient => {provider, P1, P1Macaroon}}
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{providerId := ProvId} = _Env, Data) ->
+        {ok, Provider} = oz_test_utils:get_provider(Config, ProvId),
+        {ExpName, ExpLatitude, ExpLongitude} = case ShouldSucceed of
+            false ->
+                {Name, Latitude, Longitude};
+            true ->
+                {
+                    maps:get(<<"clientName">>, Data, Name),
+                    maps:get(<<"latitude">>, Data, Latitude),
+                    maps:get(<<"longitude">>, Data, Longitude)
+                }
+        end,
+        ?assertEqual(ExpName, Provider#od_provider.name),
+        ?assertEqual(ExpLatitude, Provider#od_provider.latitude),
+        ?assertEqual(ExpLongitude, Provider#od_provider.longitude)
+    end,
+
     ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [root, {provider, P1, KeyFile1, CertFile1}]
-            % No need to check other clients - this endpoint is dedicated to the
-            % provider that presents it certs.
-            % root client is only checked in logic tests
+        client_spec = ClientSpec = #client_spec{
+            correct = [
+                root,
+                providerClient
+            ]
         },
         rest_spec = #rest_spec{
             method = patch,
             path = <<"/provider">>,
             expected_code = ?HTTP_204_NO_CONTENT
         },
-        logic_spec = #logic_spec{
-            operation = update,
-            module = provider_logic,
-            function = update,
-            args = [client, P1, data],
-            expected_result = ?OK
-        },
-        data_spec = #data_spec{
-            at_least_one = [
-                <<"clientName">>, <<"latitude">>, <<"longitude">>
-            ],
+        data_spec = DataSpec = #data_spec{
+            at_least_one = [<<"clientName">>, <<"latitude">>, <<"longitude">>],
             correct_values = #{
-                <<"clientName">> => [ExpName],
-                <<"latitude">> => [ExpLatitude],
-                <<"longitude">> => [ExpLongitude]
+                <<"clientName">> => [?PROVIDER_NAME2],
+                <<"latitude">> => [rand:uniform() * 90],
+                <<"longitude">> => [rand:uniform() * 180]
             },
             bad_values = [
                 {<<"clientName">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"clientName">>)},
@@ -461,663 +565,581 @@ update_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-    {ok, Provider} = oz_test_utils:get_provider(Config, P1),
-    ?assertEqual(ExpName, Provider#od_provider.name),
-    ?assertEqual(ExpDomain, Provider#od_provider.domain),
-    ?assertEqual(ExpLatitude, Provider#od_provider.latitude),
-    ?assertEqual(ExpLongitude, Provider#od_provider.longitude).
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+    )),
+
+    % Check that clients can't make request on behalf of other client
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_PROVIDERS_LIST
+    ]),
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+    ApiTestSpec2 = #api_test_spec{
+        client_spec = ClientSpec#client_spec{
+            unauthorized = [nobody],
+            forbidden = [
+                {user, Admin},
+                {provider, P2, P2Macaroon}
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = provider_logic,
+            function = update,
+            args = [client, providerId, data],
+            expected_result = ?OK
+        },
+        gs_spec = #gs_spec{
+            operation = update,
+            gri = #gri{type = od_provider, id = providerId, aspect = instance},
+            expected_result = ?OK
+        },
+        data_spec = DataSpec
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
+    )).
 
 
 delete_test(Config) ->
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
     ),
-    % Check REST endpoint (logic endpoint will be checked in later tests)
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [{provider, P1, KeyFile1, CertFile1}]
-            % No need to check other clients - this endpoint is dedicated to the
-            % provider that presents it certs.
-            % root client is only checked in logic tests
-        },
-        rest_spec = #rest_spec{
-            method = delete,
-            path = <<"/provider">>,
-            % TODO VFS-2918
-%%            expected_code = ?HTTP_204_NO_CONTENT
-            expected_code = ?HTTP_202_ACCEPTED
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    % There is also an admin endpoint for deleting providers, same provider
-    % should also be able to use it, but other providers should not.
-    % Correct clients must be checked one by one, as an entity cannot be
-    % deleted multiple times.
-    % Create two users, grant one of them the privilege to remove providers.
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_DELETE
     ]),
 
-    % Create one provider per every correct client to check all of them (REST)
-    {ok, {P3, _KeyFile3, _CertFile3}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P3">>
-    ),
-    {ok, {P4, KeyFile4, CertFile4}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P4">>
-    ),
-    RestProvidersAndClients = [
-        {P3, {user, Admin}},
-        {P4, {provider, P4, KeyFile4, CertFile4}}
-    ],
-    lists:foreach(
-        fun({Provider, CorrectClient}) ->
-            ApiTestSpec2 = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [CorrectClient]
-                },
-                rest_spec = #rest_spec{
-                    method = delete,
-                    path = [<<"/providers/">>, Provider],
-                    % TODO VFS-2918
-%%                    expected_code = ?HTTP_204_NO_CONTENT
-                    expected_code = ?HTTP_202_ACCEPTED
-                }
-            },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
-        end, RestProvidersAndClients),
+    EnvSetUpFun = fun() ->
+        {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+            Config, ?PROVIDER_NAME1
+        ),
+        #{providerId => P1, providerClient => {provider, P1, P1Macaroon}}
+    end,
+    DeleteEntityFun = fun(#{providerId := ProviderId} = _Env) ->
+        oz_test_utils:delete_provider(Config, ProviderId)
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId} = _Env, _) ->
+        {ok, Providers} = oz_test_utils:list_providers(Config),
+        ?assertEqual(lists:member(ProviderId, Providers), not ShouldSucceed)
+    end,
 
-    % Create one provider per every correct client to check all of them (logic)
-    {ok, {P5, _KeyFile5, _CertFile5}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P5">>
-    ),
-    {ok, {P6, _KeyFile6, _CertFile6}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P6">>
-    ),
-    {ok, {P7, KeyFile7, CertFile7}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P7">>
-    ),
-    LogicProvidersAndClients = [
-        {P5, root},
-        {P6, {user, Admin}},
-        {P7, {provider, P7, KeyFile7, CertFile7}}
-    ],
-    lists:foreach(
-        fun({Provider, CorrectClient}) ->
-            ApiTestSpec2 = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [CorrectClient]
-                },
-                logic_spec = #logic_spec{
-                    operation = delete,
-                    module = provider_logic,
-                    function = delete,
-                    args = [client, Provider],
-                    expected_result = ?OK
-                }
-            },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
-        end, LogicProvidersAndClients),
-
-    % Make sure that unauthorized and forbidden clients cannot delete providers
-    {ok, {P8, KeyFile8, CertFile8}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P5">>
-    ),
-    {ok, {P9, KeyFile9, CertFile9}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P9">>
-    ),
-    ApiTestSpec3 = #api_test_spec{
-        client_spec = #client_spec{
-            unauthorized = [nobody],
-            forbidden = [
-                {user, NonAdmin},
-                {provider, P9, KeyFile9, CertFile9}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = delete,
-            path = [<<"/providers/">>, P8]
-        },
-        logic_spec = #logic_spec{
-            operation = delete,
-            module = provider_logic,
-            function = delete,
-            args = [client, P8]
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
-
-    % Make sure that provider cannot be deleted twice (P1 is already deleted)
-    ApiTestSpec4 = #api_test_spec{
+    ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                nobody,
-                {user, Admin},
+                {user, Admin}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
                 {user, NonAdmin},
-                {provider, P8, KeyFile8, CertFile8}
+                {provider, P2, P2Macaroon}
             ]
         },
         rest_spec = #rest_spec{
             method = delete,
-            path = [<<"/providers/">>, P1],
-            expected_code = ?HTTP_404_NOT_FOUND
+            path = [<<"/providers/">>, providerId],
+            expected_code = ?HTTP_202_ACCEPTED
         },
         logic_spec = #logic_spec{
-            operation = delete,
             module = provider_logic,
             function = delete,
-            args = [client, P1],
-            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+            args = [client, providerId],
+            expected_result = ?OK
         }
+        % TODO VFS-3902
+%%        gs_spec = #gs_spec{
+%%            operation = delete,
+%%            gri = #gri{type = od_provider, id = providerId, aspect = instance},
+%%            expected_result = ?OK
+%%        }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)).
+    ?assert(api_test_scenarios:run_scenario(delete_entity,
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
+    )),
+
+    % Also check that provider can delete himself
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{correct = [providerClient]}
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
+    )).
 
 
+delete_self_test(Config) ->
+    EnvSetUpFun = fun() ->
+        {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+            Config, ?PROVIDER_NAME1
+        ),
+        #{providerId => P1, providerClient => {provider, P1, P1Macaroon}}
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId} = _Env, _) ->
+        {ok, Providers} = oz_test_utils:list_providers(Config),
+        ?assertEqual(lists:member(ProviderId, Providers), not ShouldSucceed)
+    end,
 
-get_eff_users_test(Config) ->
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [providerClient]
+        },
+        rest_spec = #rest_spec{
+            method = delete,
+            path = <<"/provider">>,
+            expected_code = ?HTTP_202_ACCEPTED
+        }
+        % TODO VFS-3902
+%%        gs_spec = #gs_spec{
+%%            operation = delete,
+%%            gri = #gri{type = od_provider, id = ?SELF, aspect = instance},
+%%            expected_result = ?OK
+%%        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+    )).
+
+
+list_eff_users_test(Config) ->
+    {
+        {P1, P1Macaroon}, _S1, _Groups, Users, {U1, U2, NonAdmin}
+    } = api_test_scenarios:create_provider_eff_users_env(Config),
+
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
     ),
-    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
-    ),
-    % Create two users, grant one of them the privilege to list users.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST_USERS
     ]),
 
-    ListApiTestSpec = #api_test_spec{
+    [{U3, _}, {U4, _}, {U5, _}, {U6, _}] = Users,
+    ExpUsers = [U1, U2, U3, U4, U5, U6],
+
+    ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
                 {user, Admin},
-                {provider, P1, KeyFile1, CertFile1}
+                {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
-            forbidden = [{provider, P2, KeyFile2, CertFile2}, {user, NonAdmin}]
+            forbidden = [
+                {user, U1},
+                {user, U2},
+                {user, NonAdmin},
+                {provider, P2, P2Macaroon}
+            ]
         },
         rest_spec = #rest_spec{
             method = get,
             path = [<<"/providers/">>, P1, <<"/effective_users">>],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"users">> => []}
+            expected_body = #{<<"users">> => ExpUsers}
         },
         logic_spec = #logic_spec{
-            operation = get,
             module = provider_logic,
             function = get_eff_users,
             args = [client, P1],
-            expected_result = ?OK_LIST([])
+            expected_result = ?OK_LIST(ExpUsers)
         }
+        % TODO gs
     },
-    GetApiTestSpecGenerator = fun(ExcludeOrInclude, UserId, UserName) ->
-        ClientSpec = case ExcludeOrInclude of
-            include ->
-                #client_spec{
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % check also space_logic:has_eff_user function
+    lists:foreach(
+        fun(UserId) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, provider_logic, has_eff_user, [P1, UserId])
+            )
+        end, ExpUsers
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, provider_logic, has_eff_user, [P1, <<"asdiucyaie827346w">>])
+    ).
+
+
+get_eff_user_test(Config) ->
+    {
+        {P1, P1Macaroon}, S1, _Groups, EffUsers, {U1, U2, NonAdmin}
+    } = api_test_scenarios:create_provider_eff_users_env(Config),
+
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+    {ok, S1} = oz_test_utils:support_space(
+        Config, P2, S1, oz_test_utils:minimum_support_size(Config)
+    ),
+
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_PROVIDERS_LIST_USERS
+    ]),
+
+    lists:foreach(
+        fun({UserId, UserDetails}) ->
+            ExpDetails = UserDetails#{
+                <<"emailList">> => [],
+                <<"linkedAccounts">> => []
+            },
+            ExpDetailsWithoutAlias = maps:remove(<<"alias">>, ExpDetails),
+
+            ApiTestSpec = #api_test_spec{
+                client_spec = #client_spec{
                     correct = [
                         root,
                         {user, Admin},
-                        {provider, P1, KeyFile1, CertFile1}
+                        {provider, P1, P1Macaroon}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
+                        {user, U1},
+                        {user, U2},
                         {user, NonAdmin},
-                        {provider, P2, KeyFile2, CertFile2}
+                        {provider, P2, P2Macaroon}
                     ]
-                };
-            exclude ->
-                % All clients should receive 404 when asking for non-existent
-                % resource.
-                #client_spec{
-                    correct = [
-                        root,
-                        {user, Admin},
-                        {user, NonAdmin},
-                        nobody,
-                        {provider, P1, KeyFile1, CertFile1},
-                        {provider, P2, KeyFile2, CertFile2}
-                    ]
+                },
+                rest_spec = #rest_spec{
+                    method = get,
+                    path = [
+                        <<"/providers/">>, P1, <<"/effective_users/">>, UserId
+                    ],
+                    expected_code = ?HTTP_200_OK,
+                    expected_body = ExpDetails#{<<"userId">> => UserId}
+                },
+                logic_spec = #logic_spec{
+                    module = provider_logic,
+                    function = get_eff_user,
+                    args = [client, P1, UserId],
+                    expected_result = ?OK_MAP(ExpDetails)
+                },
+                gs_spec = #gs_spec{
+                    operation = get,
+                    gri = #gri{
+                        type = od_user, id = UserId,
+                        aspect = instance, scope = protected
+                    },
+                    auth_hint = ?THROUGH_PROVIDER(P1),
+                    expected_result = ?OK_MAP(ExpDetailsWithoutAlias#{
+                        <<"gri">> => fun(EncodedGri) ->
+                            #gri{id = Id} = oz_test_utils:decode_gri(
+                                Config, EncodedGri
+                            ),
+                            ?assertEqual(Id, UserId)
+                        end
+                    })
                 }
-        end,
-        ExpBodyContains = #{
-            <<"name">> => UserName
-        },
-        {ExpectedRestCode, ExpectedRestBody} = case ExcludeOrInclude of
-            include ->
-                {?HTTP_200_OK, {contains, ExpBodyContains#{<<"userId">> => UserId}}};
-            exclude ->
-                {?HTTP_404_NOT_FOUND, undefined}
-        end,
-        ExpectedLogicResult = case ExcludeOrInclude of
-            include ->
-                ?OK_MAP_CONTAINS(ExpBodyContains);
-            exclude ->
-                ?ERROR_REASON(?ERROR_NOT_FOUND)
-        end,
-        #api_test_spec{
-            client_spec = ClientSpec,
-            rest_spec = #rest_spec{
-                method = get,
-                path = [<<"/providers/">>, P1, <<"/effective_users/">>, UserId],
-                expected_code = ExpectedRestCode,
-                expected_body = ExpectedRestBody
             },
-            logic_spec = #logic_spec{
-                operation = get,
-                module = provider_logic,
-                function = get_eff_user,
-                args = [client, P1, UserId],
-                expected_result = ExpectedLogicResult
-            }
-        }
-    end,
-    CreateRelationFuns = [
-        fun() ->
-            [{S1, _}, {S2, _}, {S3, _}] =
-                oz_test_utils:create_and_support_3_spaces(Config, P1),
-            % Create two users for every space
-            {include, lists:foldl(
-                fun({Counter, Space}, AccMap) ->
-                    UserName = str_utils:format_bin("u~B", [Counter]),
-                    {ok, User} = oz_test_utils:create_user(
-                        Config, #od_user{name = UserName}
-                    ),
-                    {ok, User} = oz_test_utils:space_add_user(Config, Space, User),
-                    AccMap#{User => UserName}
-                end, #{}, lists:zip(lists:seq(1, 6), [S1, S2, S3, S1, S2, S3])
-            )}
-        end,
-        fun() ->
-            [{S4, _}, {S5, _}, {S6, _}] =
-                oz_test_utils:create_and_support_3_spaces(Config, P1),
-            % Create two groups for every space and three users for every group
-            {include, lists:foldl(
-                fun({Counter, Space}, AccMap) ->
-                    UserName1 = str_utils:format_bin("u1@g~B", [Counter]),
-                    {ok, User1} = oz_test_utils:create_user(
-                        Config, #od_user{name = UserName1}
-                    ),
-                    UserName2 = str_utils:format_bin("u2@g~B", [Counter]),
-                    {ok, User2} = oz_test_utils:create_user(
-                        Config, #od_user{name = UserName2}
-                    ),
-                    GroupName = str_utils:format_bin("g~B", [Counter]),
-                    {ok, Group} = oz_test_utils:create_group(
-                        Config, ?USER(User1), GroupName
-                    ),
-                    {ok, User2} = oz_test_utils:group_add_user(Config, Group, User2),
-                    {ok, Group} = oz_test_utils:space_add_group(Config, Space, Group),
-                    AccMap#{User1 => UserName1, User2 => UserName2}
-                end, #{}, lists:zip(lists:seq(1, 6), [S4, S5, S6, S4, S5, S6])
-            )}
-        end,
-        fun() ->
-            % User via nested groups
-            {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, <<"space">>),
-            {ok, Macaroon1} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S1),
-            {ok, S1} = oz_test_utils:support_space(
-                Config, ?PROVIDER(P1), P1, Macaroon1,
-                oz_test_utils:minimum_support_size(Config)
-            ),
-            {ok, TopGroup} = oz_test_utils:create_group(Config, ?ROOT, <<"gr">>),
-            {ok, TopGroup} = oz_test_utils:space_add_group(Config, S1, TopGroup),
-            {ok, BottomGroup} = oz_test_utils:create_group(Config, ?ROOT, <<"gr">>),
-            {ok, BottomGroup} = oz_test_utils:group_add_group(
-                Config, TopGroup, BottomGroup
-            ),
-            UserName = <<"un">>,
-            {ok, User} = oz_test_utils:create_user(
-                Config, #od_user{name = UserName}
-            ),
-            {ok, User} = oz_test_utils:group_add_user(Config, BottomGroup, User),
-            {include, #{User => UserName}}
-        end,
-        fun() ->
-            % Make sure that other users cannot be reached this way
-            {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-            {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-            {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-            {exclude, #{U1 => [], U2 => [], U3 => []}}
-        end
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-    ],
-    ?assert(api_test_scenarios:run_scenario(get_relations, [
-        Config, ListApiTestSpec, GetApiTestSpecGenerator, CreateRelationFuns
-    ])).
+        end, EffUsers
+    ).
 
 
-get_eff_groups_test(Config) ->
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+list_eff_groups_test(Config) ->
+    {
+        {P1, P1Macaroon}, _S1, Groups, _Users, {U1, U2, NonAdmin}
+    } = api_test_scenarios:create_provider_eff_users_env(Config),
+
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
     ),
-    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
-    ),
-    % Create two users, grant one of them the privilege to list groups.
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST_GROUPS
     ]),
 
-    ListApiTestSpec = #api_test_spec{
+    [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}, {G6, _}] = Groups,
+    ExpGroups = [G1, G2, G3, G4, G5, G6],
+
+    ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
                 {user, Admin},
-                {provider, P1, KeyFile1, CertFile1}
+                {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
-            forbidden = [{provider, P2, KeyFile2, CertFile2}, {user, NonAdmin}]
+            forbidden = [
+                {user, U1},
+                {user, U2},
+                {user, NonAdmin},
+                {provider, P2, P2Macaroon}
+            ]
         },
         rest_spec = #rest_spec{
             method = get,
             path = [<<"/providers/">>, P1, <<"/effective_groups">>],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"groups">> => []}
+            expected_body = #{<<"groups">> => ExpGroups}
         },
         logic_spec = #logic_spec{
-            operation = get,
             module = provider_logic,
             function = get_eff_groups,
             args = [client, P1],
-            expected_result = ?OK_LIST([])
+            expected_result = ?OK_LIST(ExpGroups)
         }
+        % TODO gs
     },
-    GetApiTestSpecGenerator = fun(ExcludeOrInclude, GroupId, GroupName) ->
-        ClientSpec = case ExcludeOrInclude of
-            include ->
-                #client_spec{
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % check also space_logic:has_eff_group function
+    lists:foreach(
+        fun(GroupId) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, provider_logic, has_eff_group, [P1, GroupId])
+            )
+        end, ExpGroups
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, provider_logic, has_eff_group, [P1, <<"asdiucyaie827346w">>])
+    ).
+
+
+get_eff_group_test(Config) ->
+    {
+        {P1, P1Macaroon}, S1, EffGroups, _Users, {U1, U2, NonAdmin}
+    } = api_test_scenarios:create_provider_eff_users_env(Config),
+
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+    {ok, S1} = oz_test_utils:support_space(
+        Config, P2, S1, oz_test_utils:minimum_support_size(Config)
+    ),
+
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_PROVIDERS_LIST_GROUPS
+    ]),
+
+    lists:foreach(
+        fun({GroupId, GroupDetails}) ->
+            GroupDetailsBinary = GroupDetails#{
+                <<"type">> => atom_to_binary(
+                    maps:get(<<"type">>, GroupDetails), utf8
+                )
+            },
+
+            ApiTestSpec = #api_test_spec{
+                client_spec = #client_spec{
                     correct = [
                         root,
                         {user, Admin},
-                        {provider, P1, KeyFile1, CertFile1}
+                        {provider, P1, P1Macaroon}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
-                        {provider, P2, KeyFile2, CertFile2},
-                        {user, NonAdmin}
-                    ]
-                };
-            exclude ->
-                % All clients should receive 404 when asking for non-existent
-                % resource.
-                #client_spec{
-                    correct = [
-                        root,
-                        {user, Admin},
+                        {user, U1},
+                        {user, U2},
                         {user, NonAdmin},
-                        nobody,
-                        {provider, P1, KeyFile1, CertFile1},
-                        {provider, P2, KeyFile2, CertFile2}
+                        {provider, P2, P2Macaroon}
                     ]
+                },
+                rest_spec = #rest_spec{
+                    method = get,
+                    path = [
+                        <<"/providers/">>, P1, <<"/effective_groups/">>, GroupId
+                    ],
+                    expected_code = ?HTTP_200_OK,
+                    expected_body = GroupDetailsBinary#{
+                        <<"groupId">> => GroupId
+                    }
+                },
+                logic_spec = #logic_spec{
+                    module = provider_logic,
+                    function = get_eff_group,
+                    args = [client, P1, GroupId],
+                    expected_result = ?OK_MAP(GroupDetails)
+                },
+                gs_spec = #gs_spec{
+                    operation = get,
+                    gri = #gri{
+                        type = od_group, id = GroupId,
+                        aspect = instance, scope = protected
+                    },
+                    auth_hint = ?THROUGH_PROVIDER(P1),
+                    expected_result = ?OK_MAP(GroupDetailsBinary#{
+                        <<"gri">> => fun(EncodedGri) ->
+                            #gri{id = Id} = oz_test_utils:decode_gri(
+                                Config, EncodedGri
+                            ),
+                            ?assertEqual(Id, GroupId)
+                        end
+                    })
                 }
-        end,
-        ExpBodyContains = #{
-            <<"name">> => GroupName
-        },
-        {ExpectedRestCode, ExpectedRestBody} = case ExcludeOrInclude of
-            include ->
-                {?HTTP_200_OK, {contains, ExpBodyContains#{<<"groupId">> => GroupId}}};
-            exclude ->
-                {?HTTP_404_NOT_FOUND, undefined}
-        end,
-        ExpectedLogicResult = case ExcludeOrInclude of
-            include ->
-                ?OK_MAP_CONTAINS(ExpBodyContains);
-            exclude ->
-                ?ERROR_REASON(?ERROR_NOT_FOUND)
-        end,
-        #api_test_spec{
-            client_spec = ClientSpec,
-            rest_spec = #rest_spec{
-                method = get,
-                path = [<<"/providers/">>, P1, <<"/effective_groups/">>, GroupId],
-                expected_code = ExpectedRestCode,
-                expected_body = ExpectedRestBody
             },
-            logic_spec = #logic_spec{
-                operation = get,
-                module = provider_logic,
-                function = get_eff_group,
-                args = [client, P1, GroupId],
-                expected_result = ExpectedLogicResult
-            }
-        }
-    end,
-    CreateRelationFuns = [
-        fun() ->
-            [{S1, _}, {S2, _}, {S3, _}] =
-                oz_test_utils:create_and_support_3_spaces(Config, P1),
-            [{S4, _}, {S5, _}, {S6, _}] =
-                oz_test_utils:create_and_support_3_spaces(Config, P1),
-            % Create two groups for every space
-            {include, lists:foldl(
-                fun({Counter, Space}, AccMap) ->
-                    GroupName = str_utils:format_bin("g~B", [Counter]),
-                    {ok, Group} = oz_test_utils:create_group(
-                        Config, ?ROOT, GroupName
-                    ),
-                    {ok, Group} = oz_test_utils:space_add_group(Config, Space, Group),
-                    AccMap#{Group => GroupName}
-                end, #{}, lists:zip(lists:seq(1, 6), [S1, S2, S3, S4, S5, S6])
-            )}
-        end,
-        fun() ->
-            % Nested groups
-            {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, <<"space">>),
-            {ok, Macaroon1} = oz_test_utils:space_invite_provider_token(Config, ?ROOT, S1),
-            {ok, S1} = oz_test_utils:support_space(
-                Config, ?PROVIDER(P1), P1, Macaroon1,
-                oz_test_utils:minimum_support_size(Config)
-            ),
-            TopGroupName = <<"tgn">>,
-            {ok, TopGroup} = oz_test_utils:create_group(
-                Config, ?ROOT, TopGroupName
-            ),
-            {ok, TopGroup} = oz_test_utils:space_add_group(Config, S1, TopGroup),
-            BottomGroupName = <<"bgn">>,
-            {ok, BottomGroup} = oz_test_utils:create_group(
-                Config, ?ROOT, BottomGroupName
-            ),
-            {ok, BottomGroup} = oz_test_utils:group_add_group(
-                Config, TopGroup, BottomGroup
-            ),
-            {include, #{TopGroup => TopGroupName, BottomGroup => BottomGroupName}}
-        end,
-        fun() ->
-            % Make sure that other users cannot be reached this way
-            {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, <<"other">>),
-            {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, <<"other">>),
-            {ok, G3} = oz_test_utils:create_group(Config, ?ROOT, <<"other">>),
-            {exclude, #{G1 => [], G2 => [], G3 => []}}
-        end
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
-    ],
-    ?assert(api_test_scenarios:run_scenario(get_relations, [
-        Config, ListApiTestSpec, GetApiTestSpecGenerator, CreateRelationFuns
-    ])).
+        end, EffGroups
+    ).
 
 
-get_spaces_test(Config) ->
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
-    ),
-    % Create two users, grant one of them the privilege to list spaces.
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+list_spaces_test(Config) ->
+    {
+        {P1, P1Macaroon}, {P2, P2Macaroon},
+        [{S1, _}, {S2, _}, {S3, _}, {S4, _}, {S5, _}]
+    } = create_2_providers_and_5_supported_spaces(Config),
+
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
         ?OZ_PROVIDERS_LIST_SPACES
     ]),
 
-    ListApiTestSpec = #api_test_spec{
+    ExpSpaces = [S1, S2, S3, S4, S5],
+    ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, {user, Admin}, {provider, P1, KeyFile1, CertFile1}],
+            correct = [
+                root,
+                {user, Admin},
+                {provider, P1, P1Macaroon}
+            ],
             unauthorized = [nobody],
-            forbidden = [{user, NonAdmin}]
+            forbidden = [
+                {user, NonAdmin},
+                {provider, P2, P2Macaroon}
+            ]
         },
         rest_spec = #rest_spec{
             method = get,
             path = [<<"/providers/">>, P1, <<"/spaces">>],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"spaces">> => []}
+            expected_body = #{<<"spaces">> => ExpSpaces}
         },
         logic_spec = #logic_spec{
             operation = get,
             module = provider_logic,
             function = get_spaces,
             args = [client, P1],
-            expected_result = ?OK_LIST([])
+            expected_result = ?OK_LIST(ExpSpaces)
         }
+        % TODO gs
     },
-    GetApiTestSpecGenerator = fun(ExcludeOrInclude, SpaceId, SpaceName) ->
-        ClientSpec = case ExcludeOrInclude of
-            include ->
-                #client_spec{
-                    correct = [
-                        root,
-                        {user, Admin},
-                        {provider, P1, KeyFile1, CertFile1}
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = [{user, NonAdmin}]
-                };
-            exclude ->
-                % All clients should receive 404 when asking for non-existent
-                % resource.
-                #client_spec{
-                    correct = [
-                        root,
-                        {user, Admin},
-                        {provider, P1, KeyFile1, CertFile1},
-                        {user, NonAdmin}
-                    ]
-                }
-        end,
-        ExpBodyContains = #{
-            <<"name">> => SpaceName
-        },
-        {ExpectedRestCode, ExpectedRestBody} = case ExcludeOrInclude of
-            include ->
-                {?HTTP_200_OK, {contains, ExpBodyContains#{<<"spaceId">> => SpaceId}}};
-            exclude ->
-                {?HTTP_404_NOT_FOUND, undefined}
-        end,
-        ExpectedLogicResult = case ExcludeOrInclude of
-            include ->
-                ?OK_MAP_CONTAINS(ExpBodyContains);
-            exclude ->
-                ?ERROR_REASON(?ERROR_NOT_FOUND)
-        end,
-        #api_test_spec{
-            client_spec = ClientSpec,
-            rest_spec = #rest_spec{
-                method = get,
-                path = [<<"/providers/">>, P1, <<"/spaces/">>, SpaceId],
-                expected_code = ExpectedRestCode,
-                expected_body = ExpectedRestBody
-            },
-            logic_spec = #logic_spec{
-                operation = get,
-                module = provider_logic,
-                function = get_space,
-                args = [client, P1, SpaceId],
-                expected_result = ExpectedLogicResult
-            }
-        }
-    end,
-    CreateRelationFuns = [
-        fun() ->
-            ExpSpaces = oz_test_utils:create_and_support_3_spaces(Config, P1),
-            {include, maps:from_list(ExpSpaces)}
-        end,
-        fun() ->
-            % Make sure that other users cannot be reached this way
-            {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, <<"other">>),
-            {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, <<"other">>),
-            {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, <<"other">>),
-            {exclude, #{S1 => [], S2 => [], S3 => []}}
-        end
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
-    ],
-    ?assert(api_test_scenarios:run_scenario(get_relations, [
-        Config, ListApiTestSpec, GetApiTestSpecGenerator, CreateRelationFuns
-    ])),
 
-    % Check endpoint dedicated for providers
-    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P2">>
-    ),
-    ListApiTestSpec2 = #api_test_spec{
+list_self_spaces_test(Config) ->
+    {
+        {P1, P1Macaroon}, _,
+        [{S1, _}, {S2, _}, {S3, _}, {S4, _}, {S5, _}]
+    } = create_2_providers_and_5_supported_spaces(Config),
+
+    ExpSpaces = [S1, S2, S3, S4, S5],
+    ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [{provider, P2, KeyFile2, CertFile2}]
+            correct = [{provider, P1, P1Macaroon}]
         },
         rest_spec = #rest_spec{
             method = get,
             path = <<"/provider/spaces">>,
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"spaces">> => []}
+            expected_body = #{<<"spaces">> => ExpSpaces}
         }
     },
-    GetApiTestSpecGenerator2 = fun(ExcludeOrInclude, SpaceId, SpaceName) ->
-        ExpBodyContains = #{
-            <<"name">> => SpaceName
-        },
-        {ExpectedRestCode, ExpectedRestBody} = case ExcludeOrInclude of
-            include ->
-                {?HTTP_200_OK, {contains, ExpBodyContains#{<<"spaceId">> => SpaceId}}};
-            exclude ->
-                {?HTTP_404_NOT_FOUND, undefined}
-        end,
-        #api_test_spec{
-            client_spec = #client_spec{
-                correct = [{provider, P2, KeyFile2, CertFile2}]
-            },
-            rest_spec = #rest_spec{
-                method = get,
-                path = [<<"/provider/spaces/">>, SpaceId],
-                expected_code = ExpectedRestCode,
-                expected_body = ExpectedRestBody
-            }
-        }
-    end,
-    CreateRelationFuns2 = [
-        fun() ->
-            ExpSpaces = oz_test_utils:create_and_support_3_spaces(Config, P2),
-            {include, maps:from_list(ExpSpaces)}
-        end,
-        fun() ->
-            % Make sure that other users cannot be reached this way
-            {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, <<"other">>),
-            {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, <<"other">>),
-            {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, <<"other">>),
-            {exclude, #{S1 => [], S2 => [], S3 => []}}
-        end
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
-    ],
-    ?assert(api_test_scenarios:run_scenario(get_relations, [
-        Config, ListApiTestSpec2, GetApiTestSpecGenerator2, CreateRelationFuns2
-    ])).
+
+get_space_test(Config) ->
+    {
+        {P1, P1Macaroon}, {P2, P2Macaroon}, Spaces
+    } = create_2_providers_and_5_supported_spaces(Config),
+
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_PROVIDERS_LIST_SPACES
+    ]),
+
+    lists:foreach(
+        fun({SpaceId, SpaceDetails}) ->
+            ApiTestSpec = #api_test_spec{
+                client_spec = #client_spec{
+                    correct = [
+                        root,
+                        {user, Admin},
+                        {provider, P1, P1Macaroon}
+                    ],
+                    unauthorized = [nobody],
+                    forbidden = [
+                        {user, NonAdmin},
+                        {provider, P2, P2Macaroon}
+                    ]
+                },
+                rest_spec = #rest_spec{
+                    method = get,
+                    path = [<<"/providers/">>, P1, <<"/spaces/">>, SpaceId],
+                    expected_code = ?HTTP_200_OK,
+                    expected_body = SpaceDetails#{<<"spaceId">> => SpaceId}
+                },
+                logic_spec = #logic_spec{
+                    operation = get,
+                    module = provider_logic,
+                    function = get_space,
+                    args = [client, P1, SpaceId],
+                    expected_result = ?OK_MAP(SpaceDetails)
+                },
+                gs_spec = #gs_spec{
+                    operation = get,
+                    gri = #gri{
+                        type = od_space, id = SpaceId,
+                        aspect = instance, scope = protected
+                    },
+                    auth_hint = ?THROUGH_PROVIDER(P1),
+                    expected_result = ?OK_MAP(SpaceDetails#{
+                        <<"gri">> => fun(EncodedGri) ->
+                            #gri{id = Id} = oz_test_utils:decode_gri(
+                                Config, EncodedGri
+                            ),
+                            ?assertEqual(Id, SpaceId)
+                        end
+                    })
+                }
+            },
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+
+        end, Spaces
+    ).
+
+
+get_self_space_test(Config) ->
+    {
+        {P1, P1Macaroon}, _, Spaces
+    } = create_2_providers_and_5_supported_spaces(Config),
+
+    lists:foreach(
+        fun({SpaceId, SpaceDetails}) ->
+            ApiTestSpec = #api_test_spec{
+                client_spec = #client_spec{
+                    correct = [{provider, P1, P1Macaroon}]
+                },
+                rest_spec = #rest_spec{
+                    method = get,
+                    path = [<<"/provider/spaces/">>, SpaceId],
+                    expected_code = ?HTTP_200_OK,
+                    expected_body = SpaceDetails#{<<"spaceId">> => SpaceId}
+                }
+            },
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+
+        end, Spaces
+    ).
 
 
 support_space_test(Config) ->
-    % TODO VFS-2918
-%%    RestPrefix = rest_test_utils:get_rest_api_prefix(Config),
     MinSupportSize = oz_test_utils:minimum_support_size(Config),
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME1
     ),
-    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P2">>
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
     ),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), <<"S1">>),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, BadMacaroon1} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
     {ok, BadTokenType1} = token_logic:serialize(BadMacaroon1),
 
@@ -1137,31 +1159,35 @@ support_space_test(Config) ->
         {ok, #od_space{
             providers = Providers
         }} = oz_test_utils:get_space(Config, SpaceId),
-        maps:is_key(P1, Providers) orelse maps:is_key(P2, Providers)
+
+        % Test also provider_logic:supports_space fun
+        DoesP1Supports = oz_test_utils:call_oz(
+            Config, provider_logic, supports_space, [P1, SpaceId]
+        ) andalso maps:is_key(P1, Providers),
+        DoesP2Supports = oz_test_utils:call_oz(
+            Config, provider_logic, supports_space, [P2, SpaceId]
+        ) andalso maps:is_key(P2, Providers),
+
+        DoesP1Supports orelse DoesP2Supports
     end,
 
     % Check only REST first
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             % Both providers are correct clients, as this is an endpoint
-            % dedicated for provider that presents a cert
+            % dedicated for provider that presents its authorization
             correct = [
                 root,
-                {provider, P1, KeyFile1, CertFile1},
-                {provider, P2, KeyFile2, CertFile2}
+                {provider, P1, P1Macaroon},
+                {provider, P2, P2Macaroon}
             ]
         },
         rest_spec = #rest_spec{
             method = post,
             path = <<"/provider/spaces/support">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(Headers) ->
-                % TODO VFS-2918
-%%                PrefLen = size(RestPrefix),
-%%                <<RestPrefix:PrefLen/binary, "/provider/spaces/", SpaceId/binary>> =
-%%                    maps:get(<<"location">>, Headers),
-%%                VerifyFun(SpaceId)
-                <<"/provider/spaces/", SpaceId/binary>> = maps:get(<<"location">>, Headers),
+            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
+                <<"/provider/spaces/", SpaceId/binary>> = Location,
                 VerifyFun(SpaceId)
             end
         },
@@ -1173,7 +1199,7 @@ support_space_test(Config) ->
                     % (this value is reused multiple times as many cases of
                     % the api test must be checked).
                     {ok, Space} = oz_test_utils:create_space(
-                        Config, ?USER(U1), <<"space">>
+                        Config, ?USER(U1), ?SPACE_NAME2
                     ),
                     {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
                         Config, ?USER(U1), Space
@@ -1194,19 +1220,24 @@ support_space_test(Config) ->
         client_spec = #client_spec{
             % Only provider 1 is authorized to perform support operation on
             % behalf of provider 1.
-            correct = [root, {provider, P1, KeyFile1, CertFile1}],
+            correct = [
+                root,
+                {provider, P1, P1Macaroon}
+            ],
             unauthorized = [nobody],
-            forbidden = [{user, U1}, {provider, P2, KeyFile2, CertFile2}]
+            forbidden = [
+                {user, U1},
+                {provider, P2, P2Macaroon}
+            ]
         },
+        rest_spec = undefined,
         logic_spec = #logic_spec{
-            operation = create,
             module = provider_logic,
             function = support_space,
             args = [client, P1, data],
             expected_result = ?OK_TERM(VerifyFun)
-        },
-        rest_spec = undefined
-        % data_spec is inherited from ApiTestSpec
+        }
+        % TODO gs
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
@@ -1243,35 +1274,40 @@ support_space_test(Config) ->
 
 update_support_size_test(Config) ->
     MinSupportSize = oz_test_utils:minimum_support_size(Config),
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(Config, <<"P1">>),
-    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(Config, <<"P2">>),
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME1
+    ),
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), <<"space">>),
-    {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
-        Config, ?USER(U1), S1
-    ),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, ?PROVIDER(P1), P1, Macaroon, MinSupportSize
-    ),
 
-    % Reused in all specs
-    BadValues = [
-        {<<"size">>, <<"binary">>, ?ERROR_BAD_VALUE_INTEGER(<<"size">>)},
-        {<<"size">>, 0, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
-        {<<"size">>, -1000, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
-        {<<"size">>, MinSupportSize - 1, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
-    ],
+    EnvSetUpFun = fun() ->
+        {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+        {ok, S1} = oz_test_utils:support_space(Config, P1, S1, MinSupportSize),
+        {ok, S1} = oz_test_utils:support_space(Config, P2, S1, MinSupportSize),
+        #{spaceId => S1}
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, Data) ->
+        {ok, #od_space{
+            providers = #{P1 := SupportSize}
+        }} = oz_test_utils:get_space(Config, SpaceId),
+
+        ExpSupportSize = case ShouldSucceed of
+            true -> maps:get(<<"size">>, Data);
+            false -> MinSupportSize
+        end,
+        ?assertEqual(SupportSize, ExpSupportSize)
+    end,
 
     % Check only REST first
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            % This is an endpoint dedicated for the provider that presents
-            % its certs, no need to check other providers
-            correct = [root, {provider, P1, KeyFile1, CertFile1}]
+            correct = [{provider, P1, P1Macaroon}]
         },
         rest_spec = #rest_spec{
             method = patch,
-            path = [<<"/provider/spaces/">>, S1],
+            path = [<<"/provider/spaces/">>, spaceId],
             expected_code = ?HTTP_204_NO_CONTENT
         },
         data_spec = #data_spec{
@@ -1279,143 +1315,122 @@ update_support_size_test(Config) ->
             correct_values = #{
                 <<"size">> => [MinSupportSize]
             },
-            bad_values = BadValues
+            bad_values = [
+                {<<"size">>, <<"binary">>, ?ERROR_BAD_VALUE_INTEGER(<<"size">>)},
+                {<<"size">>, 0, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+                {<<"size">>, -1000, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+                {<<"size">>, MinSupportSize - 1, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
+            ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+    )),
 
     % Check logic endpoints - here we have to specify provider Id, so
     % different clients will be authorized.
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
-            % Only provider 1 is authorized to perform change support size
-            % operation on behalf of provider 1.
-            correct = [root, {provider, P1, KeyFile1, CertFile1}],
+            correct = [
+                root,
+                {provider, P1, P1Macaroon}
+            ],
             unauthorized = [nobody],
-            forbidden = [{user, U1}, {provider, P2, KeyFile2, CertFile2}]
+            forbidden = [
+                {user, U1},
+                {provider, P2, P2Macaroon}
+            ]
         },
+        rest_spec = undefined,
         logic_spec = #logic_spec{
-            operation = update,
             module = provider_logic,
             function = update_support_size,
-            args = [client, P1, S1, data],
+            args = [client, P1, spaceId, data],
             expected_result = ?OK
-        },
-        rest_spec = undefined
-        % data_spec is inherited from ApiTestSpec
+        }
+        % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
+    )).
 
 
 revoke_support_test(Config) ->
     MinSupportSize = oz_test_utils:minimum_support_size(Config),
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME1
     ),
-    {ok, {P2, KeyFile2, CertFile2}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P2">>
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
     ),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), <<"space">>),
-    {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
-        Config, ?USER(U1), S1
-    ),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, ?PROVIDER(P1), P1, Macaroon, MinSupportSize
-    ),
+
+    EnvSetUpFun = fun() ->
+        {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+        {ok, S1} = oz_test_utils:support_space(Config, P1, S1, MinSupportSize),
+        {ok, S1} = oz_test_utils:support_space(Config, P2, S1, MinSupportSize),
+        #{spaceId => S1}
+    end,
+    DeleteEntityFun = fun(#{spaceId := SpaceId} = _Env) ->
+        oz_test_utils:unsupport_space(Config, P1, SpaceId)
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _Data) ->
+        {ok, #od_space{
+            providers = Providers
+        }} = oz_test_utils:get_space(Config, SpaceId),
+        ?assertEqual(not ShouldSucceed, maps:is_key(P1, Providers))
+    end,
 
     % Check only REST first, and only one correct client at once as a space
     % can only be unsupported once.
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             % This is an endpoint dedicated for the provider that presents
-            % its certs, no need to check other providers
-            correct = [{provider, P1, KeyFile1, CertFile1}]
+            % its authorization, no need to check other providers
+            correct = [{provider, P1, P1Macaroon}]
         },
-        rest_spec = RestSpec = #rest_spec{
+        rest_spec = #rest_spec{
             method = delete,
-            path = [<<"/provider/spaces/">>, S1],
+            path = [<<"/provider/spaces/">>, spaceId],
             % TODO VFS-2918
 %%            expected_code = ?HTTP_204_NO_CONTENT
             expected_code = ?HTTP_202_ACCEPTED
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    % Second attempt to unsupport the same space should return 404
-    ApiTestSpec2 = ApiTestSpec#api_test_spec{
-        rest_spec = RestSpec#rest_spec{
-            expected_code = ?HTTP_404_NOT_FOUND
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+    ?assert(api_test_scenarios:run_scenario(delete_entity,
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
+    )),
 
     % Check logic endpoint (here provider id must be provided)
     % Check all correct clients one by one
-    CorrectClients = [root, {provider, P1, KeyFile1, CertFile1}],
-    lists:foreach(
-        fun(CorrectClient) ->
-            % Support the space again
-            {ok, Macaroon2} = oz_test_utils:space_invite_provider_token(
-                Config, ?USER(U1), S1
-            ),
-            {ok, S1} = oz_test_utils:support_space(
-                Config, ?PROVIDER(P1), P1, Macaroon2, MinSupportSize
-            ),
-            % First check clients that should fail
-            ApiTestSpec3 = ApiTestSpec#api_test_spec{
-                client_spec = #client_spec{
-                    unauthorized = [nobody],
-                    forbidden = [
-                        {user, U1},
-                        {provider, P2, KeyFile2, CertFile2}
-                    ]
-                },
-                rest_spec = undefined,
-                logic_spec = #logic_spec{
-                    operation = delete,
-                    module = provider_logic,
-                    function = revoke_support,
-                    args = [client, P1, S1],
-                    expected_result = ?OK
-                }
-            },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
-            % Now clients that should succeed
-            ApiTestSpec4 = ApiTestSpec3#api_test_spec{
-                client_spec = #client_spec{
-                    correct = [CorrectClient]
-                }
-            },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec4))
-        end, CorrectClients),
-
-    % Check if unsupporting the space again via logic returns not found error.
-    ApiTestSpec5 = ApiTestSpec#api_test_spec{
+    ApiTestSpec2 = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                nobody,
                 root,
+                {provider, P1, P1Macaroon}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
                 {user, U1},
-                {provider, P1, KeyFile1, CertFile1},
-                {provider, P2, KeyFile2, CertFile2}
+                {provider, P2, P2Macaroon}
             ]
         },
-        rest_spec = undefined,
         logic_spec = #logic_spec{
-            operation = delete,
             module = provider_logic,
             function = revoke_support,
-            args = [client, P1, S1],
-            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+            args = [client, P1, spaceId],
+            expected_result = ?OK
         }
+        % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec5)).
+    ?assert(api_test_scenarios:run_scenario(delete_entity,
+        [Config, ApiTestSpec2, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
+    )).
 
 
 check_my_ports_test(Config) ->
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME1
     ),
     CorrectData = #{
         <<"undefined">> => <<"http://url1.com">>,
@@ -1434,11 +1449,11 @@ check_my_ports_test(Config) ->
     % http_client is mocked in init_per_testcase to return proper values.
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, nobody, {provider, P1, KeyFile1, CertFile1}]
+            correct = [root, nobody, {provider, P1, P1Macaroon}]
         },
         rest_spec = #rest_spec{
             method = post,
-            path = <<"/provider/test/check_my_ports">>,
+            path = <<"/provider/public/check_my_ports">>,
             expected_code = ?HTTP_200_OK,
             % Convert atoms to binaries in expected body for REST
             expected_body = maps:map(fun(_, ValAtom) ->
@@ -1446,7 +1461,6 @@ check_my_ports_test(Config) ->
             end, ExpectedBody)
         },
         logic_spec = #logic_spec{
-            operation = create,
             module = provider_logic,
             function = check_my_ports,
             args = [client, data],
@@ -1454,6 +1468,7 @@ check_my_ports_test(Config) ->
                 Result =:= ExpectedBody
             end)
         },
+        % TODO gs
         data_spec = #data_spec{
             required = RequiredKeys,
             correct_values = maps:map(
@@ -1466,19 +1481,23 @@ check_my_ports_test(Config) ->
 
 
 check_my_ip_test(Config) ->
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME1
     ),
     ClientIP = list_to_binary(os:cmd("hostname -i") -- "\n"),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, nobody, {provider, P1, KeyFile1, CertFile1}]
+            correct = [
+                root,
+                nobody,
+                {provider, P1, P1Macaroon}
+            ]
         },
         % This endpoint makes sense only via REST
         rest_spec = #rest_spec{
             method = get,
-            path = <<"/provider/test/check_my_ip">>,
+            path = <<"/provider/public/check_my_ip">>,
             expected_code = ?HTTP_200_OK,
             expected_body = json_utils:encode_map(ClientIP)
         }
@@ -1486,35 +1505,104 @@ check_my_ip_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
-update_subdomaindomain_test(Config) ->
-    ExpSubdomain = <<"proper-subdomain">>,
-    ExpIPs = [{1,2,3,4}, <<"5.6.7.8">>],
-
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+map_group_test(Config) ->
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME1
     ),
-    % Test enabling subdomain delegation
-    Delegated_ApiTestSpec = #api_test_spec{
+    MappedGroupHash = idp_group_mapping:group_spec_to_db_id(?MAPPED_GROUP_SPEC),
+
+    ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, {provider, P1, KeyFile1, CertFile1}],
-            unauthorized = [nobody]
+            correct = [
+                {provider, P1, P1Macaroon}
+            ]
         },
-        rest_spec = undefined,
-        logic_spec = #logic_spec{
-            operation = update,
-            module = provider_logic,
-            function = update_domain_config,
-            args = [client, P1, data],
-            expected_result = ?OK
+        rest_spec = #rest_spec{
+            method = post,
+            path = <<"/provider/public/map_idp_group">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"groupId">> => MappedGroupHash}
         },
         data_spec = #data_spec{
+            required = [<<"idp">>, <<"groupId">>],
+            correct_values = #{
+                <<"idp">> => [?MAP_GROUP_TEST_AUTH_BIN],
+                <<"groupId">> => [<<"group1">>]
+            },
+            bad_values = [
+                {<<"idp">>, bad_bool, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"idp">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+update_subdomain_test(Config) ->
+    {ok, OZDomainString} = oz_test_utils:get_oz_domain(Config),
+    OZDomain = list_to_binary(OZDomainString),
+    Subdomain = <<"proper-subdomain">>,
+    IPs = [<<"1.2.3.4">>, <<"5.6.7.8">>],
+
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+
+    EnvSetUpFun = fun() ->
+        {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+            Config, ?PROVIDER_NAME1
+        ),
+        #{providerId => P1, providerClient => {provider, P1, P1Macaroon}}
+    end,
+    EnvTearDownFun = fun(#{providerId := ProviderId} = _Env) ->
+        % delete provider to avoid "subdomain occupied" errors
+        oz_test_utils:delete_provider(Config, ProviderId)
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId} = _Env, _) ->
+        {ExpSubdomain, ExpDomain} = case ShouldSucceed of
+            false -> {undefined, <<"127.0.0.1">>}; % as set in create_provider
+            true -> {Subdomain, <<Subdomain/binary, ".", OZDomain/binary>>}
+        end,
+        {ok, Provider} = oz_test_utils:get_provider(Config, ProviderId),
+        ?assertEqual(ExpDomain, Provider#od_provider.domain),
+        ?assertEqual(ExpSubdomain, Provider#od_provider.subdomain),
+        ?assertEqual(ShouldSucceed, Provider#od_provider.subdomain_delegation),
+        true
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                providerClient
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {provider, P2, P2Macaroon}
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = provider_logic,
+            function = update_domain_config,
+            args = [client, providerId, data],
+            expected_result = ?OK
+        },
+        gs_spec = #gs_spec{
+            operation = update,
+            gri = #gri{
+                type = od_provider, id = providerId, aspect = domain_config
+            },
+            expected_result = ?OK
+        },
+        data_spec = DataSpec = #data_spec{
             required = [
                 <<"subdomainDelegation">>, <<"subdomain">>, <<"ipList">>
             ],
             correct_values = #{
                 <<"subdomainDelegation">> => [true],
-                <<"subdomain">> => [ExpSubdomain],
-                <<"ipList">> => [ExpIPs]
+                <<"subdomain">> => [Subdomain],
+                <<"ipList">> => [IPs]
             },
             bad_values = [
                 {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
@@ -1528,139 +1616,119 @@ update_subdomaindomain_test(Config) ->
                 {<<"subdomain">>, <<"https://protocol">>, ?ERROR_BAD_VALUE_SUBDOMAIN},
                 {<<"ipList">>, [atom], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
                 {<<"ipList">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"ipList">>, [{256,256,256,256}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"ipList">>, [{-1,-1,-1,-1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
-                {<<"ipList">>, [{1,1,1,1,1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
                 {<<"ipList">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)}
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, Delegated_ApiTestSpec)),
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, VerifyEndFun
+    )),
 
-    % Test disabling subdomain delegation
-    ExpDomain = <<"provider.domain.org">>,
-    Undelegated_ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [root, {provider, P1, KeyFile1, CertFile1}],
-            unauthorized = [nobody]
-        },
-        rest_spec = undefined,
-        logic_spec = #logic_spec{
-            operation = update,
-            module = provider_logic,
-            function = update_domain_config,
-            args = [client, P1, data],
-            expected_result = ?OK
-        },
-        data_spec = #data_spec{
-            required = [
-                <<"subdomainDelegation">>, <<"domain">>
-            ],
-            correct_values = #{
-                <<"subdomainDelegation">> => [false],
-                <<"domain">> => [ExpDomain]
-            },
+    % Logic can also accept IPs as tuples,
+    % check if they are also properly validated.
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        gs_spec = undefined,
+        data_spec = DataSpec#data_spec{
             bad_values = [
-                {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
-                {<<"domain">>, <<"https://hasprotocol">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)}
+                {<<"ipList">>, [{256, 256, 256, 256}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ipList">>, [{-1, -1, -1, -1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
+                {<<"ipList">>, [{1, 1, 1, 1, 1}], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)}
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, Undelegated_ApiTestSpec)),
-    {ok, Provider} = oz_test_utils:get_provider(Config, P1),
-    ?assertEqual(ExpDomain, Provider#od_provider.domain),
-    ?assertEqual(undefined, Provider#od_provider.subdomain),
-    ?assertEqual(false, Provider#od_provider.subdomain_delegation),
-    ok.
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec2, EnvSetUpFun, EnvTearDownFun, VerifyEndFun
+    )).
 
 
 update_domain_test(Config) ->
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+    Subdomain = <<"prov-sub">>,
+    ProviderDetails = #{
+        <<"name">> => ?PROVIDER_NAME1,
+        <<"subdomain">> => Subdomain,
+        <<"ipList">> => [<<"2.4.6.8">>, <<"255.253.251.2">>],
+        <<"subdomainDelegation">> => true
+    },
+    {ok, OZDomainString} = oz_test_utils:get_oz_domain(Config),
+    OZDomain = list_to_binary(OZDomainString),
+
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
     ),
 
-    NewDomain = <<"changed.pl">>,
+    EnvSetUpFun = fun() ->
+        {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+            Config, ProviderDetails
+        ),
+        #{providerId => P1, providerClient => {provider, P1, P1Macaroon}}
+    end,
+    EnvTearDownFun = fun(#{providerId := ProviderId} = _Env) ->
+        % delete provider to avoid "subdomain occupied" errors
+        oz_test_utils:delete_provider(Config, ProviderId)
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId} = _Env, Data) ->
+        {ExpSubdomain, ExpDomain} = case ShouldSucceed of
+            true -> {undefined, maps:get(<<"domain">>, Data)};
+            false -> {Subdomain, <<Subdomain/binary, ".", OZDomain/binary>>}
+        end,
+        {ok, Provider} = oz_test_utils:get_provider(Config, ProviderId),
+        ?assertEqual(ExpDomain, Provider#od_provider.domain),
+        ?assertEqual(ExpSubdomain, Provider#od_provider.subdomain),
+        ?assertEqual(not ShouldSucceed, Provider#od_provider.subdomain_delegation),
+        true
+    end,
+
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, {provider, P1, KeyFile1, CertFile1}],
-            unauthorized = [nobody]
+            correct = [
+                root,
+                providerClient
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {provider, P2, P2Macaroon}
+            ]
         },
-        rest_spec = undefined,
         logic_spec = #logic_spec{
-            operation = update,
             module = provider_logic,
             function = update_domain_config,
-            args = [client, P1, data],
+            args = [client, providerId, data],
+            expected_result = ?OK
+        },
+        gs_spec = #gs_spec{
+            operation = update,
+            gri = #gri{
+                type = od_provider, id = providerId, aspect = domain_config
+            },
             expected_result = ?OK
         },
         data_spec = #data_spec{
-            required = [
-                <<"subdomainDelegation">>, <<"domain">>
-            ],
+            required = [<<"subdomainDelegation">>, <<"domain">>],
             correct_values = #{
                 <<"subdomainDelegation">> => [false],
-                <<"domain">> => [NewDomain]
+                <<"domain">> => [<<"changed.pl">>, <<"172.17.0.5">>]
             },
             bad_values = [
-                {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
-                {<<"domain">>, <<"https://hasprotocol">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)}
+                {<<"subdomainDelegation">>, bad_bool,
+                    ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                {<<"domain">>, <<"https://hasprotocol">>,
+                    ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)}
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-    {ok, Provider} = oz_test_utils:get_provider(Config, P1),
-    ?assertEqual(NewDomain, Provider#od_provider.domain),
-    ?assertEqual(undefined, Provider#od_provider.subdomain),
-    ?assertEqual(false, Provider#od_provider.subdomain_delegation),
-    ok.
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, VerifyEndFun
+    )).
 
 
-% Ensure provider domain can be set to an IP address
-update_domain_to_ip_address_test(Config) ->
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
-    ),
-
-    NewDomain = <<"172.17.0.5">>,
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [root, {provider, P1, KeyFile1, CertFile1}],
-            unauthorized = [nobody]
-        },
-        rest_spec = undefined,
-        logic_spec = #logic_spec{
-            operation = update,
-            module = provider_logic,
-            function = update_domain_config,
-            args = [client, P1, data],
-            expected_result = ?OK
-        },
-        data_spec = #data_spec{
-            required = [
-                <<"subdomainDelegation">>, <<"domain">>
-            ],
-            correct_values = #{
-                <<"subdomainDelegation">> => [false],
-                <<"domain">> => [NewDomain]
-            },
-            bad_values = []
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-    {ok, Provider} = oz_test_utils:get_provider(Config, P1),
-    ?assertEqual(NewDomain, Provider#od_provider.domain),
-    ?assertEqual(undefined, Provider#od_provider.subdomain),
-    ?assertEqual(false, Provider#od_provider.subdomain_delegation),
-    ok.
-
-
-%% Test getting aspect "domain_config"
 get_domain_config_test(Config) ->
-
     % Test without delegated subdomain
 
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME1
+    ),
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
     ),
 
     % Create two users, grant one of them the privilege to list providers.
@@ -1671,7 +1739,7 @@ get_domain_config_test(Config) ->
         ?OZ_PROVIDERS_LIST
     ]),
 
-    ExpDomain = <<"127.0.0.1">>, % as set in create_provider_and_certs
+    ExpDomain = <<"127.0.0.1">>, % as set in create_provider
     ExpBody = #{
         <<"subdomainDelegation">> => false,
         <<"domain">> => ExpDomain
@@ -1680,29 +1748,41 @@ get_domain_config_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {provider, P1, KeyFile1, CertFile1}
+                {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, Admin},
-                {user, NonAdmin}
+                {user, NonAdmin},
+                {provider, P2, P2Macaroon}
             ]
         },
-        rest_spec = undefined,
-        logic_spec = #logic_spec{
-            operation = get,
+        logic_spec = LogicSpec = #logic_spec{
             module = provider_logic,
             function = get_domain_config,
             args = [client, P1],
             expected_result = ?OK_MAP(ExpBody)
+        },
+        gs_spec = GsSpec = #gs_spec{
+            operation = get,
+            gri = #gri{type = od_provider, id = P1, aspect = domain_config},
+            expected_result = ?OK_MAP(ExpBody#{
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = oz_test_utils:decode_gri(
+                        Config, EncodedGri
+                    ),
+                    ?assertEqual(Id, P1)
+                end
+            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % test enabled subdomain delegation
     ExpSubdomain = <<"subdomain">>,
-    ExpIPs = [{5,8,2,4}, {10,12,255,255}],
-    {ok, OZDomain} = oz_test_utils:get_domain(Config),
+    ExpIPs = [{5, 8, 2, 4}, {10, 12, 255, 255}],
+    ExpIPsBin = [<<"5.8.2.4">>, <<"10.12.255.255">>],
+    {ok, OZDomain} = oz_test_utils:get_oz_domain(Config),
     ExpDomain2 = <<ExpSubdomain/binary, ".", (list_to_binary(OZDomain))/binary>>,
 
     oz_test_utils:enable_subdomain_delegation(Config, P1, ExpSubdomain, ExpIPs),
@@ -1713,55 +1793,121 @@ get_domain_config_test(Config) ->
         <<"ipList">> => ExpIPs,
         <<"subdomain">> => ExpSubdomain
     },
-    ApiTestSpec2 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {provider, P1, KeyFile1, CertFile1}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, Admin},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = undefined,
-        logic_spec = #logic_spec{
-            operation = get,
-            module = provider_logic,
-            function = get_domain_config,
-            args = [client, P1],
-            expected_result = ?OK_MAP(ExpBody2)
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        logic_spec = LogicSpec#logic_spec{expected_result = ?OK_MAP(ExpBody2)},
+        gs_spec = GsSpec#gs_spec{
+            expected_result = ?OK_MAP(ExpBody2#{
+                <<"ipList">> => ExpIPsBin,
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = oz_test_utils:decode_gri(
+                        Config, EncodedGri
+                    ),
+                    ?assertEqual(Id, P1)
+                end
+            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 get_current_time_test(Config) ->
-    {ok, {P1, KeyFile1, CertFile1}} = oz_test_utils:create_provider_and_certs(
-        Config, <<"P1">>
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME1
     ),
 
+    GRI = #gri{type = od_provider, id = undefined, aspect = current_time},
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            correct = [root, nobody, {provider, P1, KeyFile1, CertFile1}]
+            correct = [
+                root,
+                nobody,
+                {provider, P1, P1Macaroon}
+            ]
         },
         rest_spec = #rest_spec{
             method = get,
-            path = <<"/provider/test/get_current_time">>,
+            path = <<"/provider/public/get_current_time">>,
             expected_code = ?HTTP_200_OK,
             expected_body = fun(Value) ->
                 maps:get(<<"timeMillis">>, Value) > 0
             end
         },
         logic_spec = #logic_spec{
-            operation = get,
             module = provider_logic,
             function = get_current_time,
             args = [client],
             expected_result = ?OK_TERM(fun(Result) ->
                 Result > 0
             end)
+        }
+        % TODO gs
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+verify_provider_identity_test(Config) ->
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME1
+    ),
+    {ok, {P2, _}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+
+    {ok, DeserializedMacaroon} = onedata_macaroons:deserialize(P1Macaroon),
+    Timestamp = oz_test_utils:call_oz(
+        Config, time_utils, cluster_time_seconds, []
+    ),
+    MacaroonNoAuth = onedata_macaroons:add_caveat(
+        DeserializedMacaroon, ?AUTHORIZATION_NONE_CAVEAT
+    ),
+    MacaroonNotExpired = onedata_macaroons:add_caveat(
+        MacaroonNoAuth, ?TIME_CAVEAT(Timestamp, 100)
+    ),
+    MacaroonExpired = onedata_macaroons:add_caveat(
+        MacaroonNoAuth, ?TIME_CAVEAT(Timestamp - 200, 100)
+    ),
+    {ok, MacaroonNoAuthBin} = onedata_macaroons:serialize(MacaroonNoAuth),
+    {ok, MacaroonNotExpiredBin} = onedata_macaroons:serialize(MacaroonNotExpired),
+    {ok, MacaroonExpiredBin} = onedata_macaroons:serialize(MacaroonExpired),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                nobody,
+                {provider, P1, P1Macaroon}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = <<"/provider/public/verify_provider_identity">>,
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
+        logic_spec = #logic_spec{
+            module = provider_logic,
+            function = verify_provider_identity,
+            args = [client, P1, data],
+            expected_result = ?OK
+        },
+        % TODO gs
+        data_spec = #data_spec{
+            required = [
+                <<"providerId">>, <<"macaroon">>
+            ],
+            correct_values = #{
+                <<"providerId">> => [P1],
+                <<"macaroon">> => [MacaroonNoAuthBin, MacaroonNotExpiredBin]
+            },
+            bad_values = [
+                {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"providerId">>)},
+                {<<"providerId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"providerId">>)},
+                {<<"providerId">>, <<"sdfagh2345qwefg">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
+                {<<"providerId">>, P2, ?ERROR_BAD_MACAROON},
+
+                {<<"macaroon">>, <<"">>, ?ERROR_BAD_VALUE_TOKEN(<<"macaroon">>)},
+                {<<"macaroon">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"macaroon">>)},
+                {<<"macaroon">>, MacaroonExpiredBin, ?ERROR_BAD_MACAROON}
+            ]
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -1770,6 +1916,7 @@ get_current_time_test(Config) ->
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
+
 
 init_per_suite(Config) ->
     ssl:start(),
@@ -1800,7 +1947,26 @@ init_per_testcase(check_my_ports_test, Config) ->
                     meck:passthrough([Url, Headers, Body, Options])
             end
         end),
-    Config;
+    init_per_testcase(default, Config);
+init_per_testcase(map_group_test, Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_new(Nodes, auth_config),
+    ok = test_utils:mock_expect(
+        Nodes, auth_config, has_group_mapping_enabled, fun(_) -> true end
+    ),
+    ok = test_utils:mock_expect(Nodes, auth_config, get_auth_providers,
+        fun() -> [?MAP_GROUP_TEST_AUTH | meck:passthrough([])] end
+    ),
+    ok = test_utils:mock_expect(Nodes, auth_config, get_provider_module,
+        fun(_) -> ?MAP_GROUP_TEST_AUTH_MODULE end
+    ),
+    ok = test_utils:mock_new(
+        Nodes, ?MAP_GROUP_TEST_AUTH_MODULE, [passthrough, non_strict]
+    ),
+    ok = test_utils:mock_expect(Nodes, ?MAP_GROUP_TEST_AUTH_MODULE,
+        normalized_membership_spec, fun(_) -> ?MAPPED_MEMBERSHIP_SPEC end
+    ),
+    init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
     Config.
 
@@ -1808,7 +1974,12 @@ init_per_testcase(_, Config) ->
 end_per_testcase(check_my_ports_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_unload(Nodes, http_client),
-    ok;
+    end_per_testcase(default, Config);
+end_per_testcase(map_group_test, Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_unload(Nodes, auth_config),
+    test_utils:mock_unload(Nodes, ?MAP_GROUP_TEST_AUTH_MODULE),
+    end_per_testcase(default, Config);
 end_per_testcase(_, _Config) ->
     ok.
 
@@ -1817,3 +1988,32 @@ end_per_testcase(_, _Config) ->
 %%% Helper functions
 %%%===================================================================
 
+
+create_2_providers_and_5_supported_spaces(Config) ->
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME1
+    ),
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+    SupportSize = oz_test_utils:minimum_support_size(Config),
+
+    Spaces = lists:map(
+        fun(_) ->
+            Name = ?UNIQUE_STRING,
+            {ok, SpaceId} = oz_test_utils:create_space(Config, ?ROOT, Name),
+            {ok, SpaceId} = oz_test_utils:support_space(
+                Config, P1, SpaceId, SupportSize
+            ),
+            {ok, SpaceId} = oz_test_utils:support_space(
+                Config, P2, SpaceId, SupportSize
+            ),
+            SpaceDetails = #{
+                <<"name">> => Name,
+                <<"providers">> => #{P1 => SupportSize, P2 => SupportSize}
+            },
+            {SpaceId, SpaceDetails}
+        end, lists:seq(1, 5)
+    ),
+
+    {{P1, P1Macaroon}, {P2, P2Macaroon}, Spaces}.

@@ -30,7 +30,7 @@
 -type diff() :: datastore_doc:diff(record()).
 
 -type subdomain() :: binary().
--export_type([id/0, record/0]).
+-export_type([id/0, record/0, doc/0]).
 -export_type([subdomain/0]).
 
 -define(CTX, #{model => ?MODULE}).

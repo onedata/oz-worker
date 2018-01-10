@@ -14,7 +14,7 @@
 
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
@@ -85,7 +85,7 @@ init_per_suite(Config) ->
             IP
         end, IPstrings),
 
-        {ok, ZoneDomain} = oz_test_utils:get_domain(NewConfig),
+        {ok, ZoneDomain} = oz_test_utils:get_oz_domain(NewConfig),
         [{oz_domain, ZoneDomain}, {oz_ips, lists:sort(IPs)} | NewConfig]
     end,
     [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]}| Config].
@@ -136,7 +136,7 @@ dns_state_stores_provider_data_test(Config) ->
     ProviderIPs = ?PROVIDER_IPS1,
 
     %% when
-    {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(
         Config, ProviderName),
     oz_test_utils:enable_subdomain_delegation(
         Config, ProviderId, SubdomainBin, ProviderIPs),
@@ -168,7 +168,7 @@ dns_server_resolves_delegated_subdomain_test(Config) ->
     FullDomain = Subdomain ++ "." ++ OZDomain,
 
     %% when
-    {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(Config, Name),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, Name),
     oz_test_utils:enable_subdomain_delegation(
         Config, ProviderId, SubdomainBin, ProviderIPs),
 
@@ -200,7 +200,7 @@ dns_server_resolves_changed_subdomain_test(Config) ->
     FullDomain2 = Subdomain2 ++ "." ++ OZDomain,
 
     %% when
-    {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(Config, Name),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, Name),
     oz_test_utils:enable_subdomain_delegation(
         Config, ProviderId, SubdomainBin1, ProviderIPs),
 
@@ -291,8 +291,8 @@ update_fails_on_duplicated_subdomain_test(Config) ->
     StaticSubdomain = <<"test">>,
 
     set_dns_config(Config, static_entries, [{StaticSubdomain, [{1,1,1,1}]}]),
-    {ok, {P1, _, _}} = oz_test_utils:create_provider_and_certs(Config, Name1),
-    {ok, {P2, _, _}} = oz_test_utils:create_provider_and_certs(Config, Name2),
+    {ok, {P1, _}} = oz_test_utils:create_provider(Config, Name1),
+    {ok, {P2, _}} = oz_test_utils:create_provider(Config, Name2),
 
 
     oz_test_utils:enable_subdomain_delegation(Config, P1, SubdomainBin, []),
@@ -373,7 +373,7 @@ static_subdomain_does_not_shadow_provider_subdomain_test(Config) ->
     FullDomain = Subdomain ++ "." ++ OZDomain,
 
     % provider uses a subdomain
-    {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(Config,
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config,
         ProviderName),
     oz_test_utils:enable_subdomain_delegation(
         Config, ProviderId, SubdomainBin, ProviderIPs1),
@@ -410,7 +410,7 @@ dns_server_does_not_resolve_removed_subdomain_test(Config) ->
     DomainBin = list_to_binary(Domain),
 
     %% when
-    {ok, {ProviderId, _, _}} = oz_test_utils:create_provider_and_certs(Config, Name),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, Name),
     oz_test_utils:enable_subdomain_delegation(
         Config, ProviderId, SubdomainBin, ProviderIPs),
 

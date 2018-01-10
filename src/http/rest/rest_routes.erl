@@ -829,6 +829,15 @@ share_routes() -> [
 -spec provider_routes() -> [{binary(), #rest_req{}}].
 provider_routes() -> [
     {<<"/providers">>, #rest_req{
+        method = post,
+        b_gri = #b_gri{type = od_provider, aspect = instance}
+    }},
+    {<<"/providers/dev">>, #rest_req{
+        method = post,
+        b_gri = #b_gri{type = od_provider, aspect = instance_dev}
+    }},
+
+    {<<"/providers">>, #rest_req{
         method = get,
         b_gri = #b_gri{type = od_provider, aspect = list}
     }},
@@ -871,11 +880,6 @@ provider_routes() -> [
         b_gri = #b_gri{type = od_space, id = ?BINDING(sid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_PROVIDER(?BINDING(id))
     }},
-
-    {<<"/provider">>, #rest_req{
-        method = post,
-        b_gri = #b_gri{type = od_provider, aspect = instance}
-    }},
     {<<"/provider">>, #rest_req{
         method = get,
         b_gri = #b_gri{type = od_provider, id = ?CLIENT_ID, aspect = instance, scope = protected}
@@ -887,11 +891,6 @@ provider_routes() -> [
     {<<"/provider">>, #rest_req{
         method = delete,
         b_gri = #b_gri{type = od_provider, id = ?CLIENT_ID, aspect = instance}
-    }},
-
-    {<<"/provider_dev">>, #rest_req{
-        method = post,
-        b_gri = #b_gri{type = od_provider, aspect = instance_dev}
     }},
 
     {<<"/provider/spaces">>, #rest_req{
@@ -916,21 +915,25 @@ provider_routes() -> [
         b_gri = #b_gri{type = od_provider, id = ?CLIENT_ID, aspect = {space, ?BINDING(sid)}}
     }},
 
-    {<<"/provider/test/check_my_ip">>, #rest_req{
+    {<<"/provider/public/check_my_ip">>, #rest_req{
         method = get,
         b_gri = #b_gri{type = od_provider, aspect = {check_my_ip, ?CLIENT_IP}}
     }},
-    {<<"/provider/test/get_current_time">>, #rest_req{
-        method = get,
-        b_gri = #b_gri{type = od_provider, aspect = current_time}
-    }},
-    {<<"/provider/test/check_my_ports">>, #rest_req{
+    {<<"/provider/public/check_my_ports">>, #rest_req{
         method = post,
         b_gri = #b_gri{type = od_provider, aspect = check_my_ports}
     }},
-    {<<"/provider/test/map_idp_group">>, #rest_req{
+    {<<"/provider/public/get_current_time">>, #rest_req{
+        method = get,
+        b_gri = #b_gri{type = od_provider, aspect = current_time}
+    }},
+    {<<"/provider/public/map_idp_group">>, #rest_req{
         method = post,
         b_gri = #b_gri{type = od_provider, aspect = map_idp_group}
+    }},
+    {<<"/provider/public/verify_provider_identity">>, #rest_req{
+        method = post,
+        b_gri = #b_gri{type = od_provider, aspect = verify_provider_identity}
     }}
 ].
 

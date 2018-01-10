@@ -53,7 +53,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -define(ENTITY_GRAPH_LOCK, entity_graph).
 -define(STATE_KEY, <<"entity_graph_state">>).

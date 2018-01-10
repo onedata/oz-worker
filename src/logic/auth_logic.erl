@@ -54,7 +54,7 @@ authenticate_user(Identifier) ->
             M2 = macaroon:add_first_party_caveat(M,
                 ["time < ", integer_to_binary(time_utils:cluster_time_seconds() + ExpirationSecs)]),
 
-            case token_utils:serialize62(M2) of
+            case onedata_macaroons:serialize(M2) of
                 {ok, _} = Serialized -> Serialized;
                 {error, _} = Error -> Error
             end;
@@ -97,7 +97,7 @@ gen_token(UserId) ->
     }}),
     Identifier = binary_to_list(Doc#document.key),
     M = create_macaroon(Secret, str_utils:to_binary(Identifier), Caveats),
-    {ok, Token} = token_utils:serialize62(M),
+    {ok, Token} = onedata_macaroons:serialize(M),
     Token.
 
 %%--------------------------------------------------------------------
@@ -121,7 +121,7 @@ gen_token(UserId, _ProviderId) ->
     }}),
     CaveatId = binary_to_list(CaveatDoc#document.key),
     M2 = macaroon:add_third_party_caveat(M, Location, CaveatKey, CaveatId),
-    {ok, Token} = token_utils:serialize62(M2),
+    {ok, Token} = onedata_macaroons:serialize(M2),
     Token.
 
 %%--------------------------------------------------------------------

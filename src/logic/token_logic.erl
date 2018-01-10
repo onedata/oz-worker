@@ -43,7 +43,7 @@
 %%--------------------------------------------------------------------
 -spec serialize(macaroon:macaroon()) -> {ok, Token :: binary()} | {error, term()}.
 serialize(Macaroon) ->
-    token_utils:serialize62(Macaroon).
+    onedata_macaroons:serialize(Macaroon).
 
 
 %%--------------------------------------------------------------------
@@ -54,7 +54,7 @@ serialize(Macaroon) ->
 -spec deserialize(Token :: binary()) ->
     {ok, macaroon:macaroon()} | {error, macaroon_invalid}.
 deserialize(Token) ->
-    token_utils:deserialize(Token).
+    onedata_macaroons:deserialize(Token).
 
 
 %%--------------------------------------------------------------------

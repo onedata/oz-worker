@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -485,11 +485,17 @@ list_eff_groups_test(Config) ->
         _EffUsers, {U1, U2, NonAdmin}
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_SPACES_LIST_GROUPS
+    ]),
+
     ExpGroups = [G1, G2, G3, G4, G5, G6],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
+                {user, Admin},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -532,6 +538,11 @@ get_eff_group_test(Config) ->
         S1, EffGroups, _EffUsers, {U1, U2, NonAdmin}
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_SPACES_LIST_GROUPS
+    ]),
+
     lists:foreach(
         fun({GroupId, GroupDetails}) ->
             GroupDetailsBinary = GroupDetails#{
@@ -543,6 +554,7 @@ get_eff_group_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
+                        {user, Admin},
                         {user, U2}
                     ],
                     unauthorized = [nobody],
@@ -620,6 +632,10 @@ get_eff_group_privileges_test(Config) ->
         Config, ?SPACE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_SPACES_LIST_GROUPS
+    ]),
 
     % User whose eff privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
@@ -679,6 +695,7 @@ get_eff_group_privileges_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
+                {user, Admin},
                 {user, NonAdmin}
             ]
         },

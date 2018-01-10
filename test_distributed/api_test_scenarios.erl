@@ -17,7 +17,7 @@
 -include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -export([run_scenario/2]).
 -export([delete_entity/5]).
@@ -39,6 +39,7 @@
     create_eff_parent_groups_env/1,
     create_eff_child_groups_env/1,
     create_space_eff_users_env/1,
+    create_provider_eff_users_env/1,
     create_hservice_eff_users_env/1,
     create_handle_eff_users_env/1,
     create_eff_spaces_env/1,
@@ -837,7 +838,7 @@ create_space_eff_users_env(Config) ->
 
     {
         [{G1, _} | _] = Groups, Users
-    } = api_test_scenarios:create_eff_child_groups_env(Config),
+    } = create_eff_child_groups_env(Config),
 
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
@@ -854,6 +855,46 @@ create_space_eff_users_env(Config) ->
     {ok, G1} = oz_test_utils:space_add_group(Config, S1, G1),
 
     {S1, Groups, Users, {U1, U2, NonAdmin}}.
+
+
+create_provider_eff_users_env(Config) ->
+    %% Create environment with following relations:
+    %%
+    %%                Provider
+    %%                    |
+    %%                  Space
+    %%                 /  |  \
+    %%                /   |   \
+    %%     [~space_view]  |  [space_view]
+    %%           /        |        \
+    %%        User1     Group1    User2
+    %%                 /      \
+    %%                /        \
+    %%             Group6     Group2
+    %%              /         /    \
+    %%           User6       /     User3
+    %%                    Group3
+    %%                    /    \
+    %%                   /      \
+    %%                Group4  Group5
+    %%                 /          \
+    %%               User4      User5
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {
+        S1, Groups, Users, {U1, U2, NonAdmin}
+    } = create_space_eff_users_env(Config),
+
+    {ok, {P1, Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+    {ok, S1} = oz_test_utils:support_space(
+        Config, P1, S1, oz_test_utils:minimum_support_size(Config)
+    ),
+
+    {{P1, Macaroon}, S1, Groups, Users, {U1, U2, NonAdmin}}.
 
 
 create_hservice_eff_users_env(Config) ->
@@ -999,7 +1040,7 @@ create_eff_spaces_env(Config) ->
             {ok, SpaceId} = oz_test_utils:group_create_space(
                 Config, GroupId, SpaceDetails
             ),
-            {SpaceId, SpaceDetails#{<<"providersSupports">> => #{}}}
+            {SpaceId, SpaceDetails#{<<"providers">> => #{}}}
         end, [G1, G2, G4, G5, G5]
     ),
 
@@ -1041,7 +1082,7 @@ create_eff_providers_env(Config) ->
         fun(_) ->
             ProviderName = ?UNIQUE_STRING,
             ProvDetails = ?PROVIDER_DETAILS(ProviderName),
-            {ok, {ProvId, _, _}} = oz_test_utils:create_provider_and_certs(
+            {ok, {ProvId, _}} = oz_test_utils:create_provider(
                 Config, ProvDetails#{<<"subdomainDelegation">> => false}
             ),
             {ProvId, ProvDetails#{
@@ -1056,7 +1097,7 @@ create_eff_providers_env(Config) ->
             {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
                 Config, ?ROOT, SpaceId
             ),
-            {ok, Token} = token_utils:serialize62(Macaroon),
+            {ok, Token} = onedata_macaroons:serialize(Macaroon),
             {ok, SpaceId} = oz_test_utils:support_space(
                 Config, ?ROOT, ProvId, Token,
                 oz_test_utils:minimum_support_size(Config)

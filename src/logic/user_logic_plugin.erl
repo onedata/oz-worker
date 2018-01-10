@@ -20,7 +20,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/utils/utils.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -export([fetch_entity/1, operation_supported/3]).
 -export([create/1, get/2, update/1, delete/1]).
@@ -309,7 +309,7 @@ delete(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}}) ->
     }});
 
 delete(#el_req{gri = #gri{id = UserId, aspect = {client_token, TokenId}}}) ->
-    {ok, Macaroon} = token_utils:deserialize(TokenId),
+    {ok, Macaroon} = onedata_macaroons:deserialize(TokenId),
     Identifier = macaroon:identifier(Macaroon),
     onedata_auth:delete(Identifier),
     {ok, _} = od_user:update(UserId, fun(User = #od_user{client_tokens = Tokens}) ->

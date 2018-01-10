@@ -154,14 +154,15 @@
 -define(SUB_DOMAIN, <<"prov-sub">>).
 -define(PROVIDER_NAME1, <<"provider1">>).
 -define(PROVIDER_NAME2, <<"provider2">>).
--define(PROVIDER_DETAILS(ProviderName),
+-define(PROVIDER_DETAILS(ProviderName, Domain),
     #{
         <<"name">> => ProviderName,
-        <<"domain">> => ?DOMAIN,
+        <<"domain">> => Domain,
         <<"latitude">> => rand:uniform() * 90,
         <<"longitude">> => rand:uniform() * 180
     }
 ).
+-define(PROVIDER_DETAILS(ProviderName), ?PROVIDER_DETAILS(ProviderName, ?DOMAIN)).
 
 %% Example test data for handle services
 -define(HANDLE_SERVICE_NAME1, <<"LifeWatch DataCite">>).

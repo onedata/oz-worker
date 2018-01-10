@@ -59,15 +59,15 @@ create_response(#gri{aspect = join}, AuthHint, {not_fetched, #gri{id = SpaceId}}
     rest_translator:created_reply(LocationTokens);
 
 create_response(#gri{aspect = invite_user_token}, _, {data, Macaroon}) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 
 create_response(#gri{aspect = invite_group_token}, _, {data, Macaroon}) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 
 create_response(#gri{aspect = invite_provider_token}, _, {data, Macaroon}) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 
 create_response(#gri{id = SpaceId, aspect = {user, UserId}}, _, {not_fetched, #gri{id = UserId}, _}) ->
@@ -91,15 +91,15 @@ create_response(#gri{id = SpaceId, aspect = {group, GrId}}, _, {not_fetched, #gr
     #rest_resp{}.
 % TODO VFS-2918
 get_response(#gri{aspect = deprecated_invite_user_token}, Macaroon) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 % TODO VFS-2918
 get_response(#gri{aspect = deprecated_invite_group_token}, Macaroon) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 % TODO VFS-2918
 get_response(#gri{aspect = deprecated_invite_provider_token}, Macaroon) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 
 get_response(#gri{id = undefined, aspect = list}, Spaces) ->

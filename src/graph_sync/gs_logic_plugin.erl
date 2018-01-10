@@ -17,12 +17,12 @@
 -include("datastore/oz_datastore_models.hrl").
 -include("entity_logic.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 %% API
--export([authorize_by_session_cookie/1, authorize_by_token/1, authorize_by_macaroons/2]).
--export([authorize_by_basic_auth/1, authorize_by_provider_cert/1]).
+-export([authorize_by_session_cookie/1, authorize_by_token/1]).
+-export([authorize_by_macaroons/2, authorize_by_basic_auth/1]).
 -export([client_to_identity/1, root_client/0, guest_client/0]).
 -export([client_connected/2, client_disconnected/2]).
 -export([is_authorized/5]).
@@ -62,11 +62,11 @@ authorize_by_session_cookie(SessionCookie) ->
 authorize_by_token(Token) ->
     case auth_utils:authorize_by_oauth_provider(Token) of
         {true, Client} ->
-            {ok, Client};
+            {true, Client};
         false ->
             authorize_by_macaroons(Token, <<"">>);
-        {error, {bad_access_token, ProviderId}} ->
-            ?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(ProviderId)
+        {error, _} = Error ->
+            Error
     end.
 
 
@@ -80,12 +80,7 @@ authorize_by_token(Token) ->
     DischargeMacaroons :: [binary()]) ->
     false | {true, gs_protocol:client()} | {error, term()}.
 authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
-    case auth_utils:authorize_by_macaroons(Macaroon, DischargeMacaroons) of
-        {true, Client} ->
-            {ok, Client};
-        {error, _} ->
-            ?ERROR_BAD_MACAROON
-    end.
+    auth_utils:authorize_by_macaroons(Macaroon, DischargeMacaroons).
 
 
 %%--------------------------------------------------------------------
@@ -98,29 +93,7 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
 -spec authorize_by_basic_auth(UserPasswdB64 :: binary()) ->
     false | {true, gs_protocol:client()} | {error, term()}.
 authorize_by_basic_auth(UserPasswdB64) ->
-    case auth_utils:authorize_by_basic_auth(UserPasswdB64) of
-        {true, Client} ->
-            {ok, Client};
-        {error, _} ->
-            ?ERROR_BAD_BASIC_CREDENTIALS
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Tries to authorize requesting client by provider certificate. Will be called
-%% only if a certificate was sent in the request.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_provider_cert(PeerCert :: public_key:der_encoded()) ->
-    false | {true, gs_protocol:client()} | {error, term()}.
-authorize_by_provider_cert(PeerCert) ->
-    case auth_utils:authorize_by_provider_certs(PeerCert) of
-        {true, Client} ->
-            {true, Client};
-        {error, bad_cert} ->
-            ?ERROR_UNAUTHORIZED
-    end.
+    auth_utils:authorize_by_basic_auth(UserPasswdB64).
 
 
 %%--------------------------------------------------------------------

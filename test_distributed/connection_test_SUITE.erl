@@ -30,10 +30,10 @@ all() -> ?ALL([rest_api_connection_test, datastore_connection_test]).
 
 rest_api_connection_test(Config) ->
     [Node1 | _] = ?config(oz_worker_nodes, Config),
-    {ok, RestPort} = rpc:call(Node1, application, get_env, [?APP_NAME, rest_port]),
+    {ok, RestPort} = rpc:call(Node1, application, get_env, [?APP_NAME, gui_port]),
     {ok, Domain} = test_utils:get_env(Node1, ?APP_NAME, http_domain),
-    URL = str_utils:format("https://~s:~B/provider/test/check_my_ip", [str_utils:to_list(Domain), RestPort]),
-    Opts = [{ssl_options, [{cacerts, oz_test_utils:rest_ca_certs(Config)}]}],
+    URL = str_utils:format("https://~s:~B/provider/public/check_my_ip", [str_utils:to_list(Domain), RestPort]),
+    Opts = [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}],
     ?assertMatch({ok, _, _, _}, http_client:get(URL, #{}, <<>>, Opts)).
 
 datastore_connection_test(Config) ->

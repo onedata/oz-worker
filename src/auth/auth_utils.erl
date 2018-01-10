@@ -16,6 +16,7 @@
 -include("gui/common.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("esaml/include/esaml.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 %% API
 
@@ -23,7 +24,6 @@
 -export([
     authorize_by_oauth_provider/1,
     authorize_by_macaroons/2,
-    authorize_by_provider_certs/1,
     authorize_by_basic_auth/1
 ]).
 
@@ -79,7 +79,7 @@ authorize_by_oauth_provider(AccessToken) ->
                 ProviderId, AccessTokenNoPrefix
             ) of
                 {error, bad_access_token} ->
-                    {error, {bad_access_token, ProviderId}};
+                    ?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(ProviderId);
                 {_, #document{key = UserId}} ->
                     {true, #client{type = user, id = UserId}}
             end
@@ -95,59 +95,38 @@ authorize_by_oauth_provider(AccessToken) ->
     DischargeMacaroons :: binary() | [macaroon:macaroon()]) ->
     {true, #client{}} | {error, term()}.
 authorize_by_macaroons(Macaroon, DischargeMacaroons) when is_binary(Macaroon) ->
-    case token_utils:deserialize(Macaroon) of
+    case onedata_macaroons:deserialize(Macaroon) of
         {ok, DeserializedMacaroon} ->
             authorize_by_macaroons(DeserializedMacaroon, DischargeMacaroons);
         {error, _} ->
-            {error, bad_macaroon}
+            ?ERROR_BAD_MACAROON
     end;
 authorize_by_macaroons(Macaroon, <<"">>) ->
     authorize_by_macaroons(Macaroon, []);
 authorize_by_macaroons(Macaroon, [Bin | _] = DischMacaroons) when is_binary(Bin) ->
     try
         DeserializedDischMacaroons = [
-            begin {ok, DM} = token_utils:deserialize(S), DM end || S <- DischMacaroons
+            begin {ok, DM} = onedata_macaroons:deserialize(S), DM end || S <- DischMacaroons
         ],
         authorize_by_macaroons(Macaroon, DeserializedDischMacaroons)
     catch
         _:_ ->
-            {error, bad_macaroon}
+            ?ERROR_BAD_MACAROON
     end;
 authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
-    %% @todo: VFS-1869
     %% Pass empty string as providerId because we do
     %% not expect the macaroon to have provider caveat
-    %% (it is an authorization code for client).
-    case auth_logic:validate_token(<<>>, Macaroon,
-        DischargeMacaroons, <<"">>, undefined) of
+    %% (this is an authorization code for client).
+    case auth_logic:validate_token(<<>>, Macaroon, DischargeMacaroons, <<"">>, undefined) of
         {ok, UserId} ->
-            Client = #client{type = user, id = UserId},
-            {true, Client};
-        {error, _} = Error ->
-            Error
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Tries to authenticate client by provider certs.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_provider_certs(PeerCertDer :: public_key:der_encoded()) ->
-    {true, #client{}} | {error, bad_cert}.
-authorize_by_provider_certs(PeerCert) ->
-    case worker_proxy:call(ozpca_worker, {verify_provider, PeerCert}) of
-        {ok, ProviderId} ->
-            % Make sure that provider exists - the client might hold a valid
-            % certificate, but for a provider that has been removed.
-            case provider_logic:exists(ProviderId) of
-                true -> {true, #client{type = provider, id = ProviderId}};
-                false -> {error, bad_cert}
-            end;
-        {error, {bad_cert, Reason}} ->
-            ?warning("Attempted authentication with "
-            "bad peer certificate: ~p", [Reason]),
-            {error, bad_cert}
+            {true, #client{type = user, id = UserId}};
+        _ ->
+            case macaroon_logic:verify_provider_auth(Macaroon) of
+                {ok, ProviderId} ->
+                    {true, #client{type = provider, id = ProviderId}};
+                {error, _} ->
+                    ?ERROR_BAD_MACAROON
+            end
     end.
 
 
@@ -166,7 +145,7 @@ authorize_by_basic_auth(UserPasswdB64) ->
             Client = #client{type = user, id = UserId},
             {true, Client};
         _ ->
-            {error, bad_credentials}
+            ?ERROR_BAD_BASIC_CREDENTIALS
     end.
 
 

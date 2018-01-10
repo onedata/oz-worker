@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -163,7 +163,7 @@ join_parent_test(Config) ->
                     {ok, Macaroon} = oz_test_utils:group_invite_group_token(
                         Config, ?ROOT, G1
                     ),
-                    {ok, Token} = token_utils:serialize62(Macaroon),
+                    {ok, Token} = onedata_macaroons:serialize(Macaroon),
                     Token
                 end]
             },
@@ -306,6 +306,11 @@ list_eff_parents_test(Config) ->
         [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}], {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_parent_groups_env(Config),
 
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_GROUPS_LIST_GROUPS
+    ]),
+
     ExpGroups = [G2, G3, G4, G5],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -316,6 +321,7 @@ list_eff_parents_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, U2},
+                {user, Admin},
                 {user, NonAdmin}
             ]
         },
@@ -353,6 +359,11 @@ get_eff_parent_details_test(Config) ->
         [{G1, _} | EffParents], {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_parent_groups_env(Config),
 
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+        ?OZ_GROUPS_LIST_GROUPS
+    ]),
+
     lists:foreach(
         fun({GroupId, GroupDetails}) ->
             ExpType = maps:get(<<"type">>, GroupDetails, role),
@@ -366,6 +377,7 @@ get_eff_parent_details_test(Config) ->
                     ],
                     unauthorized = [nobody],
                     forbidden = [
+                        {user, Admin},
                         {user, NonAdmin}
                     ]
                 },

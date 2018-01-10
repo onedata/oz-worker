@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -252,7 +252,7 @@ join_space_test(Config) ->
                     {ok, Macaroon} = oz_test_utils:space_invite_user_token(
                         Config, ?ROOT, SpaceId
                     ),
-                    {ok, Token} = token_utils:serialize62(Macaroon),
+                    {ok, Token} = onedata_macaroons:serialize(Macaroon),
                     Token
                 end]
             },
@@ -301,7 +301,7 @@ get_space_test(Config) ->
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
-    ExpDetails = #{<<"name">> => ?SPACE_NAME1, <<"providersSupports">> => #{}},
+    ExpDetails = #{<<"name">> => ?SPACE_NAME1, <<"providers">> => #{}},
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -450,7 +450,7 @@ set_default_space_test(Config) ->
             },
             bad_values = [
                 {<<"spaceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"spaceId">>)},
+                    ?ERROR_BAD_VALUE_EMPTY(<<"spaceId">>)},
                 {<<"spaceId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"spaceId">>)},
                 {<<"spaceId">>, S1,
@@ -898,7 +898,7 @@ get_eff_space_test(Config) ->
     } = api_test_scenarios:create_eff_spaces_env(Config),
 
     {ok, S6} = oz_test_utils:create_space(Config, ?USER(U2), ?SPACE_NAME1),
-    S6Details = #{<<"name">> => ?SPACE_NAME1, <<"providersSupports">> => #{}},
+    S6Details = #{<<"name">> => ?SPACE_NAME1, <<"providers">> => #{}},
     {ok, U1} = oz_test_utils:space_add_user(Config, S6, U1),
 
     NewEffSpacesList = [{S6, S6Details} | EffSpacesList],
