@@ -14,7 +14,7 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 
 -export([create_response/3, get_response/2]).

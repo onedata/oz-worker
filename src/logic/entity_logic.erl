@@ -23,7 +23,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 % Some of the types are just aliases for types from gs_protocol, this is
 % for better readability of logic modules.
@@ -776,6 +776,8 @@ check_value(_, {relation_exists, ChType, ChId, ParType, ParId, VerifyFun}, _Key,
         false ->
             throw(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId))
     end;
+check_value(token, any, _Key, _Macaroon) ->
+    ok;
 check_value(token, TokenType, Key, Macaroon) ->
     case token_logic:validate(Macaroon, TokenType) of
         ok ->

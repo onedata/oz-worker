@@ -28,6 +28,14 @@
 -spec routes() -> [{binary(), #rest_req{}}].
 routes() -> [
     {<<"/providers">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_provider, aspect = instance}
+    }},
+    {<<"/providers/dev">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_provider, aspect = instance_dev}
+    }},
+    {<<"/providers">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_provider, aspect = list}
     }},
@@ -107,20 +115,26 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_provider, id = ?CLIENT_ID, aspect = {space, ?BINDING(sid)}}
     }},
-    {<<"/provider/test/check_my_ip">>, #rest_req{
+    {<<"/provider/public/check_my_ip">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_provider, aspect = {check_my_ip, ?CLIENT_IP}}
     }},
-    {<<"/provider/test/get_current_time">>, #rest_req{
-        method = 'GET',
-        b_gri = #b_gri{type = od_provider, aspect = current_time}
-    }},
-    {<<"/provider/test/check_my_ports">>, #rest_req{
+    {<<"/provider/public/check_my_ports">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_provider, aspect = check_my_ports}
     }},
-    {<<"/provider/test/map_idp_group">>, #rest_req{
+    {<<"/provider/public/get_current_time">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_provider, aspect = current_time}
+    }},
+    {<<"/provider/public/map_idp_group">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_provider, aspect = map_idp_group}
+    }},
+    {<<"/provider/public/verify_provider_identity">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_provider, aspect = verify_provider_identity}
     }}
+
+
 ].

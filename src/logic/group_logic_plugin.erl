@@ -19,7 +19,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 
 -export([fetch_entity/1, operation_supported/3]).

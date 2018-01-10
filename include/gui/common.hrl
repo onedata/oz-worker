@@ -21,9 +21,6 @@
 % Endpoint for viewing public shares
 -define(PUBLIC_SHARE_ENDPOINT, "/share").
 
-% Endpoint for viewing public CA certificate
--define(PUBLIC_CA_ENDPOINT, "/public-ca").
-
 % URL (relative) pointing to login page.
 -define(LOGIN_PAGE, "/#/home/login").
 

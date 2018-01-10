@@ -15,7 +15,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -export([response/1]).
 
@@ -78,6 +78,15 @@ translate(?ERROR_MALFORMED_DATA) ->
 translate(?ERROR_BAD_MACAROON) ->
     {?HTTP_401_UNAUTHORIZED,
         <<"Provided authorization token is not valid">>
+    };
+translate(?ERROR_MACAROON_EXPIRED) ->
+    {?HTTP_401_UNAUTHORIZED,
+        <<"Provided authorization token has expired">>
+    };
+translate(?ERROR_MACAROON_TTL_TO_LONG(MaxTtl)) ->
+    {?HTTP_401_UNAUTHORIZED,
+        <<"Provided authorization token has too open TTL (it must not exceed ~B seconds)">>,
+        [MaxTtl]
     };
 translate(?ERROR_BAD_BASIC_CREDENTIALS) ->
     {?HTTP_401_UNAUTHORIZED,

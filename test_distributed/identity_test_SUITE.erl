@@ -184,7 +184,7 @@ get_public_key_rest(OzNode, ID) ->
     RestAddress = get_rest_address(OzNode),
     EncodedID = binary_to_list(http_utils:url_encode(ID)),
     Endpoint = RestAddress ++ "/publickey/" ++ EncodedID,
-    Opts = [{ssl_options, [{cacerts, rest_ca_certs(OzNode)}]}],
+    Opts = [{ssl_options, [{cacerts, ca_certs(OzNode)}]}],
     Response = http_client:request(get, Endpoint, #{}, [], Opts),
 
     ?assertMatch({ok, 200, _ResponseHeaders, _}, Response),
@@ -200,7 +200,7 @@ update_public_key_rest(OzNode, ID, PublicKey) ->
     Encoded = identity_utils:encode(PublicKey),
     Body = json_utils:encode([{<<"publicKey">>, Encoded}]),
     Headers = #{<<"content-type">> => <<"application/json">>},
-    Opts = [{ssl_options, [{cacerts, rest_ca_certs(OzNode)}]}],
+    Opts = [{ssl_options, [{cacerts, ca_certs(OzNode)}]}],
     Response = http_client:request(patch, Endpoint, Headers, Body, Opts),
     ?assertMatch({ok, 204, _, _}, Response).
 
@@ -214,7 +214,7 @@ register_provider_rest(OzNode, ID, PublicKey) ->
         {<<"domain">>, <<"127.0.0.1">>}
     ]),
     Headers = #{<<"content-type">> => <<"application/json">>},
-    Opts = [{ssl_options, [{cacerts, rest_ca_certs(OzNode)}]}],
+    Opts = [{ssl_options, [{cacerts, ca_certs(OzNode)}]}],
     Response = http_client:request(post, Endpoint, Headers, Body, Opts),
     ?assertMatch({ok, 204, _, _}, Response).
 
@@ -226,16 +226,13 @@ get_rest_address(OzNode) ->
     RestAddress.
 
 get_rest_port(Node) ->
-    {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_NAME, rest_port]),
+    {ok, RestPort} = rpc:call(Node, application, get_env, [?APP_NAME, gui_port]),
     RestPort.
 
 get_rest_api_prefix(Node) ->
     {ok, RestAPIPrefix} = rpc:call(Node, application, get_env, [?APP_NAME, rest_api_prefix]),
     RestAPIPrefix.
 
-rest_ca_certs(OzNode) ->
+ca_certs(OzNode) ->
     {ok, CaCertsDir} = rpc:call(OzNode, application, get_env, [?APP_NAME, cacerts_dir]),
-    CaCertsDer = rpc:call(OzNode, cert_utils, load_ders_in_dir, [CaCertsDir]),
-    ZoneCaCertPath = rpc:call(OzNode, ozpca, oz_ca_path, []),
-    ZoneCaCertDers = rpc:call(OzNode, cert_utils, load_ders, [ZoneCaCertPath]),
-    ZoneCaCertDers ++ CaCertsDer.
+    rpc:call(OzNode, cert_utils, load_ders_in_dir, [CaCertsDir]).

@@ -69,7 +69,6 @@ db_nodes() ->
 -spec listeners() -> Listeners :: [atom()].
 listeners() -> [
     oz_redirector_listener,
-    rest_listener,
     gui_listener |
         node_manager:cluster_worker_listeners() -- [redirector_listener]
 ].
@@ -82,10 +81,6 @@ listeners() -> [
 -spec modules_with_args() -> Models :: [{atom(), [any()]}].
 modules_with_args() ->
     Base = [
-        {singleton, ozpca_worker, [
-            {supervisor_flags, ozpca_worker:supervisor_flags()},
-            {supervisor_children_spec, [ozpca_worker:supervisor_children_spec()]}
-        ]},
         {gs_worker, [
             {supervisor_flags, gs_worker:supervisor_flags()}
         ]}
@@ -123,7 +118,6 @@ before_init([]) ->
 %%--------------------------------------------------------------------
 -spec on_cluster_initialized(Nodes :: [node()]) -> Result :: ok | {error, Reason :: term()}.
 on_cluster_initialized(Nodes) ->
-    ozpca:ensure_oz_ca_cert_present(Nodes),
     maybe_generate_web_cert(Nodes).
 
 %%--------------------------------------------------------------------

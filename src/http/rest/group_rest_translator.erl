@@ -48,11 +48,11 @@ create_response(#gri{aspect = join} = Gri, AuthHint, Result) ->
     create_response(Gri#gri{aspect = instance}, AuthHint, Result);
 
 create_response(#gri{aspect = invite_user_token}, _, {data, Macaroon}) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 
 create_response(#gri{aspect = invite_group_token}, _, {data, Macaroon}) ->
-    {ok, Token} = token_utils:serialize62(Macaroon),
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 
 create_response(#gri{id = GroupId, aspect = {user, UserId}}, _, {not_fetched, #gri{id = UserId}, _}) ->

@@ -20,7 +20,7 @@
 -include_lib("ctool/include/global_definitions.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("cluster_worker/include/api_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -export([fetch_entity/1, operation_supported/3]).
 -export([create/1, get/2, update/1, delete/1]).
@@ -60,6 +60,7 @@ operation_supported(create, instance_dev, private) -> true;
 operation_supported(create, support, private) -> true;
 operation_supported(create, check_my_ports, private) -> true;
 operation_supported(create, map_idp_group, private) -> true;
+operation_supported(create, verify_provider_identity, private) -> true;
 
 operation_supported(get, list, private) -> true;
 
@@ -92,88 +93,81 @@ operation_supported(_, _, _) -> false.
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     Data = Req#el_req.data,
     Name = maps:get(<<"name">>, Data),
-    CSR = maps:get(<<"csr">>, Data),
     Latitude = maps:get(<<"latitude">>, Data, 0.0),
     Longitude = maps:get(<<"longitude">>, Data, 0.0),
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
 
     ProviderId = datastore_utils:gen_key(),
-    case worker_proxy:call(ozpca_worker, {sign_provider_req, ProviderId, CSR}) of
-        {error, bad_csr} ->
-            ?ERROR_BAD_DATA(<<"csr">>);
-        {ok, {ProviderCertPem, Serial}} ->
-            {Domain, Subdomain} = case SubdomainDelegation of
-                false ->
-                    {maps:get(<<"domain">>, Data), undefined};
-                true ->
-                    ReqSubdomain = maps:get(<<"subdomain">>, Data),
-                    IPs = maps:get(<<"ipList">>, Data),
-                    case dns_state:set_delegation_config(ProviderId, ReqSubdomain, IPs) of
-                        ok ->
-                            {dns_config:build_fqdn_from_subdomain(ReqSubdomain),
-                             ReqSubdomain};
-                        {error, subdomain_exists} ->
-                            throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>))
-                    end
-                end,
+    {Macaroon, Identity} = macaroon_logic:create_provider_root_macaroon(ProviderId),
 
-            Provider = #od_provider{
-                name = Name, subdomain_delegation = SubdomainDelegation,
-                domain = Domain, subdomain = Subdomain,
-                serial = Serial, latitude = Latitude, longitude = Longitude},
+    {Domain, Subdomain} = case SubdomainDelegation of
+        false ->
+            {maps:get(<<"domain">>, Data), undefined};
+        true ->
+            ReqSubdomain = maps:get(<<"subdomain">>, Data),
+            IPs = maps:get(<<"ipList">>, Data),
+            case dns_state:set_delegation_config(ProviderId, ReqSubdomain, IPs) of
+                ok ->
+                    {dns_config:build_fqdn_from_subdomain(ReqSubdomain), ReqSubdomain};
+                {error, subdomain_exists} ->
+                    throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>))
+            end
+    end,
 
-            case od_provider:create(#document{key = ProviderId, value = Provider}) of
-                {ok, _} -> ok;
-                _Error ->
-                    dns_state:remove_delegation_config(ProviderId),
-                    throw(?ERROR_INTERNAL_SERVER_ERROR)
-            end,
-            {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, ProviderCertPem}}}
-    end;
+    Provider = #od_provider{
+        name = Name, root_macaroon = Identity,
+        subdomain_delegation = SubdomainDelegation,
+        domain = Domain, subdomain = Subdomain,
+        latitude = Latitude, longitude = Longitude
+    },
+
+    case od_provider:create(#document{key = ProviderId, value = Provider}) of
+        {ok, _} -> ok;
+        _Error ->
+            dns_state:remove_delegation_config(ProviderId),
+            throw(?ERROR_INTERNAL_SERVER_ERROR)
+    end,
+    {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) ->
     Data = Req#el_req.data,
     Name = maps:get(<<"name">>, Data),
-    CSR = maps:get(<<"csr">>, Data),
     Latitude = maps:get(<<"latitude">>, Data, 0.0),
     Longitude = maps:get(<<"longitude">>, Data, 0.0),
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
     UUID = maps:get(<<"uuid">>, Data, undefined),
 
     ProviderId = UUID,
-    case worker_proxy:call(ozpca_worker, {sign_provider_req, ProviderId, CSR}) of
-        {error, bad_csr} ->
-            ?ERROR_BAD_DATA(<<"csr">>);
-        {ok, {ProviderCertPem, Serial}} ->
+    {Macaroon, Identity} = macaroon_logic:create_provider_root_macaroon(ProviderId),
 
-            {Domain, Subdomain} = case SubdomainDelegation of
-                false ->
-                    {maps:get(<<"domain">>, Data), undefined};
-                true ->
-                    ReqSubdomain = maps:get(<<"subdomain">>, Data),
-                    IPs = maps:get(<<"ipList">>, Data),
-                    case dns_state:set_delegation_config(ProviderId, ReqSubdomain, IPs) of
-                        ok ->
-                            {dns_config:build_fqdn_from_subdomain(ReqSubdomain),
-                             ReqSubdomain};
-                        {error, subdomain_exists} ->
-                            throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>))
-                    end
-                end,
+    {Domain, Subdomain} = case SubdomainDelegation of
+        false ->
+            {maps:get(<<"domain">>, Data), undefined};
+        true ->
+            ReqSubdomain = maps:get(<<"subdomain">>, Data),
+            IPs = maps:get(<<"ipList">>, Data),
+            case dns_state:set_delegation_config(ProviderId, ReqSubdomain, IPs) of
+                ok ->
+                    {dns_config:build_fqdn_from_subdomain(ReqSubdomain), ReqSubdomain};
+                {error, subdomain_exists} ->
+                    throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>))
+            end
+    end,
 
-            Provider = #od_provider{
-                name = Name, subdomain_delegation = SubdomainDelegation,
-                domain = Domain, subdomain = Subdomain,
-                serial = Serial, latitude = Latitude, longitude = Longitude},
+    Provider = #od_provider{
+        name = Name, root_macaroon = Identity,
+        subdomain_delegation = SubdomainDelegation,
+        domain = Domain, subdomain = Subdomain,
+        latitude = Latitude, longitude = Longitude
+    },
 
-            case od_provider:create(#document{key = ProviderId, value = Provider}) of
-                {ok, _} -> ok;
-                Error ->
-                    dns_state:remove_delegation_config(ProviderId),
-                    throw(Error)
-            end,
-            {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, ProviderCertPem}}}
-    end;
+    case od_provider:create(#document{key = ProviderId, value = Provider}) of
+        {ok, _} -> ok;
+        _Error ->
+            dns_state:remove_delegation_config(ProviderId),
+            throw(?ERROR_INTERNAL_SERVER_ERROR)
+    end,
+    {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
 
 create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     SupportSize = maps:get(<<"size">>, Data),
@@ -198,7 +192,16 @@ create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
     MembershipSpec = auth_utils:normalize_membership_spec(
         binary_to_atom(ProviderId, latin1), GroupId),
     GroupSpec = idp_group_mapping:membership_spec_to_group_spec(MembershipSpec),
-    {ok, {data, idp_group_mapping:group_spec_to_db_id(GroupSpec)}}.
+    {ok, {data, idp_group_mapping:group_spec_to_db_id(GroupSpec)}};
+
+create(#el_req{gri = #gri{aspect = verify_provider_identity}, data = Data}) ->
+    ProviderId = maps:get(<<"providerId">>, Data),
+    Macaroon = maps:get(<<"macaroon">>, Data),
+    case macaroon_logic:verify_provider_identity(Macaroon) of
+        {ok, ProviderId} -> ok;
+        {ok, _OtherProvider} -> ?ERROR_BAD_MACAROON;
+        Error -> Error
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -329,6 +332,8 @@ update(Req = #el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     ok = dns_state:remove_delegation_config(ProviderId),
+    {ok, #od_provider{root_macaroon = RootMacaroon}} = fetch_entity(ProviderId),
+    ok = macaroon_auth:delete(RootMacaroon),
     entity_graph:delete_with_relations(od_provider, ProviderId),
     % Force disconnect the provider (if connected)
     case provider_connection:get_connection_ref(ProviderId) of
@@ -380,6 +385,9 @@ authorize(#el_req{operation = create, gri = #gri{aspect = check_my_ports}}, _) -
     true;
 
 authorize(#el_req{operation = create, gri = #gri{aspect = map_idp_group}}, _) ->
+    true;
+
+authorize(#el_req{operation = create, gri = #gri{aspect = verify_provider_identity}}, _) ->
     true;
 
 authorize(#el_req{operation = create, gri = #gri{aspect = instance}}, _) ->
@@ -487,7 +495,6 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance},
     data = Data}) ->
     Required = #{
         <<"name">> => {binary, non_empty},
-        <<"csr">> => {binary, non_empty},
         <<"subdomainDelegation">> => {boolean, any}
     },
     Common = #{
@@ -503,7 +510,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance},
                     <<"subdomain">> => {binary, subdomain},
                     <<"ipList">> => {list_of_ipv4_addresses, any}
                 }
-             };
+            };
         false ->
             Common#{
                 required => Required#{<<"domain">> => {binary, domain}}
@@ -516,7 +523,6 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
     data = Data}) ->
     Required = #{
         <<"name">> => {binary, non_empty},
-        <<"csr">> => {binary, non_empty},
         <<"uuid">> => {binary, non_empty},
         <<"subdomainDelegation">> => {boolean, any}
     },
@@ -533,7 +539,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
                     <<"subdomain">> => {binary, subdomain},
                     <<"ipList">> => {list_of_ipv4_addresses, any}
                 }
-             };
+            };
         false ->
             Common#{
                 required => Required#{<<"domain">> => {binary, domain}}
@@ -561,6 +567,15 @@ validate(#el_req{operation = create, gri = #gri{aspect = map_idp_group}}) -> #{
     }
 };
 
+validate(#el_req{operation = create, gri = #gri{aspect = verify_provider_identity}}) -> #{
+    required => #{
+        <<"providerId">> => {binary, {exists, fun(ProviderId) ->
+            provider_logic:exists(ProviderId) end}
+        },
+        <<"macaroon">> => {token, any}
+    }
+};
+
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, non_empty},
@@ -576,17 +591,17 @@ validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = domain_config},
-                 data = Data}) ->
+    data = Data}) ->
     case maps:get(<<"subdomainDelegation">>, Data, undefined) of
         true -> #{required => #{
-                <<"subdomainDelegation">> => {boolean, any},
-                <<"subdomain">> => {binary, subdomain},
-                <<"ipList">> => {list_of_ipv4_addresses, any}
-            }};
+            <<"subdomainDelegation">> => {boolean, any},
+            <<"subdomain">> => {binary, subdomain},
+            <<"ipList">> => {list_of_ipv4_addresses, any}
+        }};
         false -> #{required => #{
-                <<"subdomainDelegation">> => {boolean, any},
-                <<"domain">> => {binary, domain}
-            }};
+            <<"subdomainDelegation">> => {boolean, any},
+            <<"domain">> => {binary, domain}
+        }};
         _ ->
             #{required => #{<<"subdomainDelegation">> => {boolean, any}}}
     end.
