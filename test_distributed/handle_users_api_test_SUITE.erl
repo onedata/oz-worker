@@ -108,8 +108,10 @@ add_user_test(Config) ->
             method = put,
             path = [<<"/handles/">>, HandleId, <<"/users/">>, U3],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                ExpLocation = <<"/handles/", HandleId/binary, "/users/", U3/binary>>,
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                ExpLocation = ?URL(Config,
+                    [<<"/handles/">>, HandleId, <<"/users/">>, U3]
+                ),
                 ?assertEqual(ExpLocation, Location),
                 true
             end

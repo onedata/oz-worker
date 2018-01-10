@@ -112,10 +112,10 @@ add_group_test(Config) ->
             method = put,
             path = [<<"/handle_services/">>, HService, <<"/groups/">>, G1],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                ExpLocation = <<
-                    "/handle_services/", HService/binary, "/groups/", G1/binary
-                >>,
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                ExpLocation = ?URL(Config,
+                    [<<"/handle_services/">>, HService, <<"/groups/">>, G1]
+                ),
                 ?assertEqual(ExpLocation, Location),
                 true
             end

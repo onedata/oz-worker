@@ -366,7 +366,7 @@ get_test(Config) ->
             args = [client, P1],
             expected_result = ?OK_MAP(ExpDetails)
         },
-        gs_spec = GsSpec = #gs_spec{
+        gs_spec = #gs_spec{
             operation = get,
             gri = #gri{
                 type = od_provider, id = P1,
@@ -1177,8 +1177,9 @@ support_space_test(Config) ->
             method = post,
             path = <<"/provider/spaces/support">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                <<"/provider/spaces/", SpaceId/binary>> = Location,
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                BaseURL = ?URL(Config, [<<"/provider/spaces/">>]),
+                [SpaceId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(SpaceId)
             end
         },

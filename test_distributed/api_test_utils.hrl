@@ -105,6 +105,17 @@
     >>
 ).
 
+-define(URL(__Config, __PathTokens),
+    begin
+        {ok, __Domain} = oz_test_utils:get_oz_domain(__Config),
+        {ok, __RestAPIPrefix} = oz_test_utils:get_rest_api_prefix(__Config),
+        __OzURL = str_utils:format_bin(
+            "https://~s~s", [__Domain, __RestAPIPrefix]
+        ),
+        str_utils:join_binary([__OzURL | __PathTokens], <<"">>)
+    end
+).
+
 %% Example test data for users
 -define(USER_NAME1, <<"user1">>).
 -define(USER_NAME2, <<"user2">>).

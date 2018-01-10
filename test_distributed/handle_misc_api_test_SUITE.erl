@@ -190,8 +190,9 @@ create_test(Config) ->
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_Env, Data) ->
                 HService = maps:get(<<"handleServiceId">>, Data),
-                fun(#{<<"location">> := Location} = _Headers) ->
-                    <<"/handles/", HandleId/binary>> = Location,
+                fun(#{<<"Location">> := Location} = _Headers) ->
+                    BaseURL = ?URL(Config, [<<"/user/handles/">>]),
+                    [HandleId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(HandleId, HService)
                 end
             end)

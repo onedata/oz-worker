@@ -93,8 +93,9 @@ create_test(Config) ->
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, DataSet) ->
                 ExpType = maps:get(<<"type">>, DataSet, role),
-                fun(#{<<"location">> := Location} = _Headers) ->
-                    <<"/groups/", GroupId/binary>> = Location,
+                BaseURL = ?URL(Config, [<<"/user/groups/">>]),
+                fun(#{<<"Location">> := Location} = _Headers) ->
+                    [GroupId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(GroupId, ExpType)
                 end
             end)

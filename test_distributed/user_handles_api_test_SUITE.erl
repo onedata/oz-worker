@@ -170,8 +170,9 @@ create_handle_test(Config) ->
             method = post,
             path = <<"/user/handles">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                <<"/user/handles/", HandleId/binary>> = Location,
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                BaseURL = ?URL(Config, [<<"/user/handles/">>]),
+                [HandleId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(HandleId)
             end
         },

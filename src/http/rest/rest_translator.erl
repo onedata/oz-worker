@@ -13,6 +13,7 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
+-include("registered_names.hrl").
 
 -export([response/2]).
 
@@ -81,14 +82,16 @@ ok_no_content_reply() ->
 created_reply([<<"/", Path/binary>> | Tail]) ->
     created_reply([Path | Tail]);
 created_reply(PathTokens) ->
-    % TODO VFS-2918 do not add rest prefix for now
-%%    {ok, RestPrefix} = application:get_env(?APP_NAME, rest_api_prefix), https://, http_domain
-    RestPrefix = "/",
-    LocationHeader = #{
-        % TODO VFS-2918
-%%        <<"Location">> => filename:join([RestPrefix | PathTokens])
-        <<"location">> => filename:join([RestPrefix | PathTokens])
-    },
+    {ok, Domain} = application:get_env(?APP_NAME, http_domain),
+    DomainBin = list_to_binary(Domain),
+    {ok, RestPrefix} = application:get_env(?APP_NAME, rest_api_prefix),
+    % Make sure there is no leading slash (so path can be used for joining url)
+    FullPath = case filename:join([RestPrefix | PathTokens]) of
+        <<"/", Path/binary>> -> Path;
+        Path -> Path
+    end,
+    Location = <<"https://", DomainBin/binary, "/", FullPath/binary>>,
+    LocationHeader = #{<<"Location">> => Location},
     #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
 
 

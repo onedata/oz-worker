@@ -108,7 +108,12 @@ add_user_test(Config) ->
         rest_spec = #rest_spec{
             method = put,
             path = [<<"/spaces/">>, S1, <<"/users/">>, U2],
-            expected_code = ?HTTP_201_CREATED
+            expected_code = ?HTTP_201_CREATED,
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                ExpLocation = ?URL(Config, [<<"/spaces/">>, S1, <<"/users/">>, U2]),
+                ?assertEqual(ExpLocation, Location),
+                true
+            end
         },
         logic_spec = #logic_spec{
             module = space_logic,

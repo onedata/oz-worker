@@ -167,8 +167,9 @@ create_test(Config) ->
             method = post,
             path = <<"/shares">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                <<"/shares/", ShareId/binary>> = Location,
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                BaseURL = ?URL(Config, [<<"/shares/">>]),
+                [ShareId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(ShareId)
             end
         },

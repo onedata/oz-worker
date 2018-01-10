@@ -158,8 +158,9 @@ create_handle_service_test(Config) ->
             method = post,
             path = <<"/user/handle_services">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                <<"/user/handle_services/", HServiceId/binary>> = Location,
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                BaseURL = ?URL(Config, [<<"/user/handle_services/">>]),
+                [HServiceId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(HServiceId)
             end
         },
