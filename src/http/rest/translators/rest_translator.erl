@@ -83,14 +83,9 @@ created_reply([<<"/", Path/binary>> | Tail]) ->
     created_reply([Path | Tail]);
 created_reply(PathTokens) ->
     {ok, Domain} = application:get_env(?APP_NAME, http_domain),
-    DomainBin = list_to_binary(Domain),
     {ok, RestPrefix} = application:get_env(?APP_NAME, rest_api_prefix),
-    % Make sure there is no leading slash (so path can be used for joining url)
-    FullPath = case filename:join([RestPrefix | PathTokens]) of
-        <<"/", Path/binary>> -> Path;
-        Path -> Path
-    end,
-    Location = <<"https://", DomainBin/binary, "/", FullPath/binary>>,
+    Path = filename:join([RestPrefix | PathTokens]),
+    Location = str_utils:format_bin("https://~s~s", [Domain, Path]),
     LocationHeader = #{<<"Location">> => Location},
     #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
 
