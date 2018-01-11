@@ -91,8 +91,9 @@ create_test(Config) ->
             method = post,
             path = <<"/spaces">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                <<"/spaces/", SpaceId/binary>> = Location,
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                BaseURL = ?URL(Config, [<<"/user/spaces/">>]),
+                [SpaceId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(SpaceId)
             end
         },
@@ -459,7 +460,7 @@ delete_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/spaces/">>, spaceId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = space_logic,
@@ -738,10 +739,7 @@ get_provider_test(Config) ->
         Config, P2, S1, oz_test_utils:minimum_support_size(Config)
     ),
 
-    ExpDetails = ProviderDetails#{
-        <<"clientName">> => ?PROVIDER_NAME1,
-        <<"online">> => false
-    },
+    ExpDetails = ProviderDetails#{<<"online">> => false},
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -850,7 +848,7 @@ leave_provider_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/spaces/">>, S1, <<"/providers/">>, providerId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = space_logic,

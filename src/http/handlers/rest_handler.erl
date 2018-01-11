@@ -19,7 +19,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
--type method() :: get | post | put | patch | delete.
+-type method() :: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'.
 -type binding() :: {binding, atom()} | client_id | client_ip.
 -type bound_gri() :: #b_gri{}.
 -type bound_auth_hint() :: undefined | {
@@ -83,7 +83,7 @@ init({_, http}, _Req, _Opts) ->
 rest_init(Req, Opts) ->
     {MethodBin, _} = cowboy_req:method(Req),
     Method = binary_to_method(MethodBin),
-    % If given method is not allowed, it in not in the map. Such request
+    % If given method is not allowed, it is not in the map. Such request
     % will stop execution on allowed_methods/2 callback. Use undefined if
     % the method does not exist.
     RestReq = maps:get(Method, Opts, undefined),
@@ -236,14 +236,14 @@ delete_resource(Req, State) ->
 -spec rest_routes() -> [{binary(), module(), maps:map()}].
 rest_routes() ->
     AllRoutes = lists:flatten([
-        rest_routes:user_routes(),
-        rest_routes:group_routes(),
-        rest_routes:space_routes(),
-        rest_routes:share_routes(),
-        rest_routes:provider_routes(),
-        rest_routes:handle_service_routes(),
-        rest_routes:handle_routes(),
-        rest_routes:identity_routes()
+        user_routes:routes(),
+        group_routes:routes(),
+        space_routes:routes(),
+        share_routes:routes(),
+        provider_routes:routes(),
+        handle_service_routes:routes(),
+        handle_routes:routes(),
+        identity_routes:routes()
     ]),
     % Aggregate routes that share the same path
     AggregatedRoutes = lists:foldl(
@@ -576,11 +576,11 @@ get_data(Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec binary_to_method(BinMethod :: binary()) -> method().
-binary_to_method(<<"POST">>) -> post;
-binary_to_method(<<"PUT">>) -> put;
-binary_to_method(<<"GET">>) -> get;
-binary_to_method(<<"PATCH">>) -> patch;
-binary_to_method(<<"DELETE">>) -> delete.
+binary_to_method(<<"POST">>) -> 'POST';
+binary_to_method(<<"PUT">>) -> 'PUT';
+binary_to_method(<<"GET">>) -> 'GET';
+binary_to_method(<<"PATCH">>) -> 'PATCH';
+binary_to_method(<<"DELETE">>) -> 'DELETE'.
 
 
 %%--------------------------------------------------------------------
@@ -591,11 +591,11 @@ binary_to_method(<<"DELETE">>) -> delete.
 %% @end
 %%--------------------------------------------------------------------
 -spec method_to_binary(Method :: method()) -> binary().
-method_to_binary(post) -> <<"POST">>;
-method_to_binary(put) -> <<"PUT">>;
-method_to_binary(get) -> <<"GET">>;
-method_to_binary(patch) -> <<"PATCH">>;
-method_to_binary(delete) -> <<"DELETE">>.
+method_to_binary('POST') -> <<"POST">>;
+method_to_binary('PUT') -> <<"PUT">>;
+method_to_binary('GET') -> <<"GET">>;
+method_to_binary('PATCH') -> <<"PATCH">>;
+method_to_binary('DELETE') -> <<"DELETE">>.
 
 
 %%--------------------------------------------------------------------
@@ -606,8 +606,8 @@ method_to_binary(delete) -> <<"DELETE">>.
 %% @end
 %%--------------------------------------------------------------------
 -spec method_to_operation(method()) -> entity_logic:operation().
-method_to_operation(post) -> create;
-method_to_operation(put) -> create;
-method_to_operation(get) -> get;
-method_to_operation(patch) -> update;
-method_to_operation(delete) -> delete.
+method_to_operation('POST') -> create;
+method_to_operation('PUT') -> create;
+method_to_operation('GET') -> get;
+method_to_operation('PATCH') -> update;
+method_to_operation('DELETE') -> delete.

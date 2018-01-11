@@ -39,6 +39,7 @@
     delete_oz_privileges/2
 ]).
 -export([
+    create_parent_group/4, create_parent_group/3,
     create_space/3,
     create_handle_service/5, create_handle_service/3,
     create_handle/6, create_handle/3,
@@ -304,6 +305,38 @@ delete_oz_privileges(Client, GroupId) ->
         client = Client,
         gri = #gri{type = od_group, id = GroupId, aspect = oz_privileges}
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new parent group document in database based on group name and type.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_parent_group(Client :: entity_logic:client(), GroupId :: od_group:id(),
+    Name :: binary(), Type :: od_group:type()) -> {ok, od_group:id()} | {error, term()}.
+create_parent_group(Client, GroupId, Name, Type) ->
+    create_parent_group(Client, GroupId, #{<<"name">> => Name, <<"type">> => Type}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new parent group document in database. Has two variants:
+%% 1) Group Name is given explicitly (the new group will be of default type)
+%% 2) Group name is provided in a proper Data object, group type is optional.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_parent_group(Client :: entity_logic:client(), GroupId :: od_group:id(),
+    NameOrData :: binary() | #{}) -> {ok, od_space:id()} | {error, term()}.
+create_parent_group(Client, GroupId, Name) when is_binary(Name) ->
+    create_parent_group(Client, GroupId, #{<<"name">> => Name});
+create_parent_group(Client, GroupId, Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_group, id = undefined, aspect = instance},
+        auth_hint = ?AS_GROUP(GroupId),
+        data = Data
+    })).
 
 
 %%--------------------------------------------------------------------

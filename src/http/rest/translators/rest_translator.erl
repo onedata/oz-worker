@@ -13,6 +13,7 @@
 -author("Lukasz Opiola").
 
 -include("rest.hrl").
+-include("registered_names.hrl").
 
 -export([response/2]).
 
@@ -81,14 +82,11 @@ ok_no_content_reply() ->
 created_reply([<<"/", Path/binary>> | Tail]) ->
     created_reply([Path | Tail]);
 created_reply(PathTokens) ->
-    % TODO VFS-2918 do not add rest prefix for now
-%%    {ok, RestPrefix} = application:get_env(?APP_NAME, rest_api_prefix),
-    RestPrefix = "/",
-    LocationHeader = #{
-        % TODO VFS-2918
-%%        <<"Location">> => filename:join([RestPrefix | PathTokens])
-        <<"location">> => filename:join([RestPrefix | PathTokens])
-    },
+    {ok, Domain} = application:get_env(?APP_NAME, http_domain),
+    {ok, RestPrefix} = application:get_env(?APP_NAME, rest_api_prefix),
+    Path = filename:join([RestPrefix | PathTokens]),
+    Location = str_utils:format_bin("https://~s~s", [Domain, Path]),
+    LocationHeader = #{<<"Location">> => Location},
     #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
 
 
@@ -109,9 +107,7 @@ updated_reply() ->
 %%--------------------------------------------------------------------
 -spec deleted_reply() -> #rest_resp{}.
 deleted_reply() ->
-    % TODO VFS-2918
-%%    #rest_resp{code = ?HTTP_204_NO_CONTENT}.
-    #rest_resp{code = ?HTTP_202_ACCEPTED}.
+    #rest_resp{code = ?HTTP_204_NO_CONTENT}.
 
 %%%===================================================================
 %%% Internal functions

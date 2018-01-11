@@ -98,8 +98,9 @@ create_test(Config) ->
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_Env, Data) ->
                 ExpProperties = maps:get(<<"serviceProperties">>, Data),
-                fun(#{<<"location">> := Location} = _Headers) ->
-                    <<"/handle_services/", HServiceId/binary>> = Location,
+                fun(#{<<"Location">> := Location} = _Headers) ->
+                    BaseURL = ?URL(Config, [<<"/user/handle_services/">>]),
+                    [HServiceId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(HServiceId, ExpProperties)
                 end
             end)
@@ -485,7 +486,7 @@ delete_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/handle_services/">>, hserviceId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = handle_service_logic,

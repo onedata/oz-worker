@@ -6,10 +6,10 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc This module handles translation of entity logic results concerning
-%%% handle entities into REST responses.
+%%% space entities into REST responses.
 %%% @end
 %%%-------------------------------------------------------------------
--module(handle_rest_translator).
+-module(space_rest_translator).
 -behaviour(rest_translator_behaviour).
 -author("Lukasz Opiola").
 
@@ -32,27 +32,38 @@
     Result :: {data, term()} | {fetched, entity_logic:gri(), term()} |
     {not_fetched, entity_logic:gri()} |
     {not_fetched, entity_logic:gri(), entity_logic:auth_hint()}) -> #rest_resp{}.
-create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched, #gri{id = HandleId}}) ->
+create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched, #gri{id = SpaceId}}) ->
     LocationTokens = case AuthHint of
         ?AS_USER(_UserId) ->
-            % TODO VFS-2918
-%%        [<<"user">>, <<"handles">>, HandleId]
-            [<<"handles">>, HandleId];
+            [<<"user">>, <<"spaces">>, SpaceId];
         ?AS_GROUP(GroupId) ->
-            [<<"groups">>, GroupId, <<"handles">>, HandleId];
-        _ ->
-            [<<"handles">>, HandleId]
+            [<<"groups">>, GroupId, <<"spaces">>, SpaceId]
     end,
     rest_translator:created_reply(LocationTokens);
 
-create_response(#gri{id = HandleId, aspect = {user, UserId}}, _, {not_fetched, #gri{id = UserId}, _}) ->
+create_response(#gri{aspect = join} = Gri, AuthHint, Result) ->
+    create_response(Gri#gri{aspect = instance}, AuthHint, Result);
+
+create_response(#gri{aspect = invite_user_token}, _, {data, Macaroon}) ->
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    rest_translator:ok_body_reply(#{<<"token">> => Token});
+
+create_response(#gri{aspect = invite_group_token}, _, {data, Macaroon}) ->
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    rest_translator:ok_body_reply(#{<<"token">> => Token});
+
+create_response(#gri{aspect = invite_provider_token}, _, {data, Macaroon}) ->
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    rest_translator:ok_body_reply(#{<<"token">> => Token});
+
+create_response(#gri{id = SpaceId, aspect = {user, UserId}}, _, {not_fetched, #gri{id = UserId}, _}) ->
     rest_translator:created_reply(
-        [<<"handles">>, HandleId, <<"users">>, UserId]
+        [<<"spaces">>, SpaceId, <<"users">>, UserId]
     );
 
-create_response(#gri{id = HandleId, aspect = {group, GroupId}}, _, {not_fetched, #gri{id = GroupId}, _}) ->
+create_response(#gri{id = SpaceId, aspect = {group, GrId}}, _, {not_fetched, #gri{id = GrId}, _}) ->
     rest_translator:created_reply(
-        [<<"handles">>, HandleId, <<"groups">>, GroupId]
+        [<<"spaces">>, SpaceId, <<"groups">>, GrId]
     ).
 
 
@@ -64,19 +75,12 @@ create_response(#gri{id = HandleId, aspect = {group, GroupId}}, _, {not_fetched,
 %%--------------------------------------------------------------------
 -spec get_response(entity_logic:gri(), entity_logic:get_result()) ->
     #rest_resp{}.
-get_response(#gri{id = undefined, aspect = list}, Handles) ->
-    rest_translator:ok_body_reply(#{<<"handles">> => Handles});
+get_response(#gri{id = undefined, aspect = list}, Spaces) ->
+    rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
 
-get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleData) ->
-    Timestamp = maps:get(<<"timestamp">>, HandleData),
-    % Replace "publicHandle" with "handle" key
-    PublicHandle = maps:get(<<"publicHandle">>, HandleData),
-    NewData = maps:remove(<<"publicHandle">>, HandleData),
-    rest_translator:ok_body_reply(NewData#{
-        <<"handleId">> => HandleId,
-        <<"handle">> => PublicHandle,
-        <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp)
-    });
+get_response(#gri{id = SpaceId, aspect = instance, scope = _}, SpaceData) ->
+    % scope can be protected or shared
+    rest_translator:ok_body_reply(SpaceData#{<<"spaceId">> => SpaceId});
 
 get_response(#gri{aspect = users}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});
@@ -100,4 +104,11 @@ get_response(#gri{aspect = {group_privileges, _GroupId}}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
 get_response(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
-    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges}).
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
+
+get_response(#gri{aspect = shares}, Shares) ->
+    rest_translator:ok_body_reply(#{<<"shares">> => Shares});
+
+get_response(#gri{aspect = providers}, Providers) ->
+    rest_translator:ok_body_reply(#{<<"providers">> => Providers}).
+

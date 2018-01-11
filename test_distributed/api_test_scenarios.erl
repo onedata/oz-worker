@@ -1086,7 +1086,7 @@ create_eff_providers_env(Config) ->
                 Config, ProvDetails#{<<"subdomainDelegation">> => false}
             ),
             {ProvId, ProvDetails#{
-                <<"clientName">> => ProviderName,
+                <<"name">> => ProviderName,
                 <<"online">> => false
             }}
         end, lists:seq(1, 4)

@@ -81,23 +81,11 @@ get_response(#gri{aspect = groups}, Groups) ->
     rest_translator:ok_body_reply(#{<<"groups">> => Groups});
 
 get_response(#gri{aspect = eff_groups}, Groups) ->
-    % TODO VFS-2918
-    rest_translator:ok_body_reply(#{<<"effective_groups">> => Groups});
-%%    rest_handler:ok_body_reply(#{<<"groups">> => Groups});
+    rest_translator:ok_body_reply(#{<<"groups">> => Groups});
 
 
-get_response(#gri{id = UserId, aspect = spaces}, Spaces) ->
-    % TODO VFS-2918
-    DefaultSpace = case user_logic:get_default_space(?ROOT, UserId) of
-        {ok, SpaceId} -> SpaceId;
-        ?ERROR_NOT_FOUND -> undefined
-    end,
-    rest_translator:ok_body_reply(
-        #{
-            <<"spaces">> => Spaces,
-            % TODO VFS-2918
-            <<"default">> => DefaultSpace
-        });
+get_response(#gri{aspect = spaces}, Spaces) ->
+    rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
 
 get_response(#gri{aspect = eff_spaces}, Spaces) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});

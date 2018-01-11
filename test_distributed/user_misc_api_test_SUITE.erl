@@ -573,7 +573,7 @@ delete_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/users/">>, userId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = user_logic,
@@ -615,7 +615,7 @@ delete_self_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = <<"/user">>,
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         gs_spec = #gs_spec{
             operation = delete,
@@ -746,7 +746,7 @@ delete_client_token_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/user/client_tokens/">>, token],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         }
         % TODO gs
     },
@@ -974,7 +974,7 @@ unset_default_provider_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = <<"/user/default_provider">>,
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity, [
