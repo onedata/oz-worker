@@ -27,22 +27,36 @@
 %%--------------------------------------------------------------------
 -spec routes() -> [{binary(), #rest_req{}}].
 routes() -> [
-    {<<"/shares">>, #rest_req{
-        method = 'GET',
-        b_gri = #b_gri{type = od_share, aspect = list}
-    }},
+    %% Create share
+    %% This operation requires one of the following privileges:
+    %% - space_manage_shares
     {<<"/shares">>, #rest_req{
         method = 'POST',
-        b_gri = #b_gri{type = od_share, aspect = instance}
+        b_gri = #b_gri{type = od_share, id = undefined, aspect = instance}
     }},
+    %% List all shares
+    %% This operation requires one of the following privileges:
+    %% - oz_shares_list
+    {<<"/shares">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_share, id = undefined, aspect = list}
+    }},
+    %% Get share details
+    %% This operation does not require any specific privileges.
     {<<"/shares/:id">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_share, id = ?BINDING(id), aspect = instance, scope = private}
     }},
+    %% Modify share details
+    %% This operation requires one of the following privileges:
+    %% - space_manage_shares
     {<<"/shares/:id">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_share, id = ?BINDING(id), aspect = instance}
     }},
+    %% Remove share
+    %% This operation requires one of the following privileges:
+    %% - space_manage_shares
     {<<"/shares/:id">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_share, id = ?BINDING(id), aspect = instance}
