@@ -32,6 +32,7 @@
 ]).
 -export([
     list_parents_test/1,
+    create_parent_test/1,
     join_parent_test/1,
     leave_parent_test/1,
     get_parent_details_test/1,
@@ -42,6 +43,7 @@
 all() ->
     ?ALL([
         list_parents_test,
+        create_parent_test,
         join_parent_test,
         leave_parent_test,
         get_parent_details_test,
@@ -90,7 +92,7 @@ list_parents_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/parents">>],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"parent_groups">> => ExpGroups}
+            expected_body = #{<<"groups">> => ExpGroups}
         },
         logic_spec = #logic_spec{
             module = group_logic,
@@ -99,6 +101,104 @@ list_parents_test(Config) ->
             expected_result = ?OK_LIST(ExpGroups)
         }
         % TODO gs
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+create_parent_test(Config) ->
+    % create group with 2 users:
+    %   U2 has no privileges
+    %   U1 has all group privileges
+    {Child, U1, U2} = api_test_scenarios:create_basic_group_env(
+        Config, []
+    ),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    VerifyFun = fun(ParentId, Data) ->
+        {ok, Parent} = oz_test_utils:get_group(Config, ParentId),
+        ExpName = maps:get(<<"name">>, Data),
+        ExpType = maps:get(<<"type">>, Data, role),
+        ?assertEqual(ExpName, Parent#od_group.name),
+        ?assertEqual(ExpType, Parent#od_group.type),
+
+        {ok, Children} = oz_test_utils:group_get_children(Config, ParentId),
+        ?assert(lists:member(Child, Children)),
+        true
+    end,
+
+    AllPrivs = oz_test_utils:all_group_privileges(Config),
+    AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {user, U1},
+                {user, U2}
+            ],
+            forbidden = [{user, NonAdmin}]
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = [<<"/groups/">>, Child, <<"/parents/">>],
+            expected_code = ?HTTP_201_CREATED,
+            expected_headers = ?OK_ENV(fun(_, Data) ->
+                fun(#{<<"Location">> := Location} = _Headers) ->
+                    BaseURL = ?URL(Config, [<<"/groups/">>, Child, <<"/parents/">>]),
+                    [ParentId] = binary:split(Location, [BaseURL], [global, trim_all]),
+                    VerifyFun(ParentId, Data)
+                end
+            end)
+        },
+        logic_spec = #logic_spec{
+            module = group_logic,
+            function = create_parent_group,
+            args = [client, Child, data],
+            expected_result = ?OK_ENV(fun(_, Data) ->
+                ?OK_TERM(fun(ParentId) -> VerifyFun(ParentId, Data) end)
+            end)
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_group, aspect = instance},
+            auth_hint = ?AS_GROUP(Child),
+            expected_result = ?OK_ENV(fun(_, Data) ->
+                ExpName = maps:get(<<"name">>, Data),
+                ExpType = maps:get(<<"type">>, Data, role),
+                ?OK_MAP(#{
+                    <<"children">> => #{Child => AllPrivsBin},
+                    <<"effectiveChildren">> => #{Child => AllPrivsBin},
+                    <<"users">> => #{},
+                    <<"effectiveUsers">> => #{
+                        U1 => AllPrivsBin, U2 => AllPrivsBin
+                    },
+                    <<"name">> => ExpName,
+                    <<"parents">> => [],
+                    <<"spaces">> => [],
+                    <<"type">> => atom_to_binary(ExpType, utf8),
+                    <<"gri">> => fun(EncodedGri) ->
+                        #gri{id = Id} = oz_test_utils:decode_gri(
+                            Config, EncodedGri
+                        ),
+                        VerifyFun(Id, Data)
+                    end
+                })
+            end)
+        },
+        data_spec = #data_spec{
+            required = [<<"name">>],
+            optional = [<<"type">>],
+            correct_values = #{
+                <<"name">> => [fun() -> ?UNIQUE_STRING end],
+                <<"type">> => ?GROUP_TYPES
+            },
+            bad_values = [
+                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
+                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
+                {<<"type">>, kingdom,
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
+                {<<"type">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"type">>)}
+            ]
+        }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
@@ -138,10 +238,10 @@ join_parent_test(Config) ->
             path = [<<"/groups/">>, Child, <<"/parents/join">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{groupId := GroupId} = _Env, _) ->
-                fun(#{<<"location">> := Location} = _Headers) ->
-                    ExpLocation = <<
-                        "/groups/", Child/binary, "/nested/", GroupId/binary
-                    >>,
+                fun(#{<<"Location">> := Location} = _Headers) ->
+                    ExpLocation = ?URL(Config,
+                        [<<"/groups/">>, Child, <<"/parents/">>, GroupId]
+                    ),
                     ?assertMatch(ExpLocation, Location),
                     true
                 end
@@ -218,7 +318,7 @@ leave_parent_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/groups/">>, Child, <<"/parents/">>, groupId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = group_logic,
@@ -329,7 +429,7 @@ list_eff_parents_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/effective_parents">>],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"parents">> => ExpGroups}
+            expected_body = #{<<"groups">> => ExpGroups}
         },
         logic_spec = #logic_spec{
             module = group_logic,

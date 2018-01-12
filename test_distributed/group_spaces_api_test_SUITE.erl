@@ -191,13 +191,9 @@ create_space_test(Config) ->
             method = post,
             path = [<<"/groups/">>, G1, <<"/spaces">>],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                [GroupId, SpaceId] = binary:split(
-                    Location,
-                    [<<"/groups/">>, <<"/spaces/">>],
-                    [global, trim_all]
-                ),
-                ?assertEqual(GroupId, G1),
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                BaseURL = ?URL(Config, [<<"/groups/">>, G1, <<"/spaces/">>]),
+                [SpaceId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(SpaceId)
             end
         },
@@ -277,10 +273,10 @@ join_space_test(Config) ->
             path = [<<"/groups/">>, G1, <<"/spaces/join">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{spaceId := SpaceId} = _Env, _) ->
-                fun(#{<<"location">> := Location} = _Headers) ->
-                    ExpLocation = <<
-                        "/groups/", G1/binary, "/spaces/", SpaceId/binary
-                    >>,
+                fun(#{<<"Location">> := Location} = _Headers) ->
+                    ExpLocation = ?URL(Config,
+                        [<<"/groups/">>, G1, <<"/spaces/">>, SpaceId]
+                    ),
                     ?assertMatch(ExpLocation, Location),
                     true
                 end
@@ -357,7 +353,7 @@ leave_space_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/groups/">>, G1, <<"/spaces/">>, spaceId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = group_logic,

@@ -93,8 +93,9 @@ create_test(Config) ->
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, DataSet) ->
                 ExpType = maps:get(<<"type">>, DataSet, role),
-                fun(#{<<"location">> := Location} = _Headers) ->
-                    <<"/groups/", GroupId/binary>> = Location,
+                BaseURL = ?URL(Config, [<<"/user/groups/">>]),
+                fun(#{<<"Location">> := Location} = _Headers) ->
+                    [GroupId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(GroupId, ExpType)
                 end
             end)
@@ -489,7 +490,7 @@ delete_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/groups/">>, groupId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = group_logic,
@@ -645,7 +646,7 @@ delete_oz_privileges_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/groups/">>, G1, <<"/privileges">>],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = group_logic,

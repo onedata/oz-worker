@@ -6,10 +6,10 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc This module handles translation of entity logic results concerning
-%%% handle service entities into REST responses.
+%%% handle entities into REST responses.
 %%% @end
 %%%-------------------------------------------------------------------
--module(handle_service_rest_translator).
+-module(handle_rest_translator).
 -behaviour(rest_translator_behaviour).
 -author("Lukasz Opiola").
 
@@ -32,27 +32,25 @@
     Result :: {data, term()} | {fetched, entity_logic:gri(), term()} |
     {not_fetched, entity_logic:gri()} |
     {not_fetched, entity_logic:gri(), entity_logic:auth_hint()}) -> #rest_resp{}.
-create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched, #gri{id = HServiceId}}) ->
+create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched, #gri{id = HandleId}}) ->
     LocationTokens = case AuthHint of
         ?AS_USER(_UserId) ->
-            % TODO VFS-2918
-%%        [<<"user">>, <<"handles">>, HServiceId]
-            [<<"handle_services">>, HServiceId];
+            [<<"user">>, <<"handles">>, HandleId];
         ?AS_GROUP(GroupId) ->
-            [<<"groups">>, GroupId, <<"handle_services">>, HServiceId];
+            [<<"groups">>, GroupId, <<"handles">>, HandleId];
         _ ->
-            [<<"handle_services">>, HServiceId]
+            [<<"handles">>, HandleId]
     end,
     rest_translator:created_reply(LocationTokens);
 
-create_response(#gri{id = HServiceId, aspect = {user, UserId}}, _, {not_fetched, #gri{id = UserId}, _}) ->
+create_response(#gri{id = HandleId, aspect = {user, UserId}}, _, {not_fetched, #gri{id = UserId}, _}) ->
     rest_translator:created_reply(
-        [<<"handle_services">>, HServiceId, <<"users">>, UserId]
+        [<<"handles">>, HandleId, <<"users">>, UserId]
     );
 
-create_response(#gri{id = HServiceId, aspect = {group, GrId}}, _, {not_fetched, #gri{id = GrId}, _}) ->
+create_response(#gri{id = HandleId, aspect = {group, GroupId}}, _, {not_fetched, #gri{id = GroupId}, _}) ->
     rest_translator:created_reply(
-        [<<"handle_services">>, HServiceId, <<"groups">>, GrId]
+        [<<"handles">>, HandleId, <<"groups">>, GroupId]
     ).
 
 
@@ -64,11 +62,19 @@ create_response(#gri{id = HServiceId, aspect = {group, GrId}}, _, {not_fetched, 
 %%--------------------------------------------------------------------
 -spec get_response(entity_logic:gri(), entity_logic:get_result()) ->
     #rest_resp{}.
-get_response(#gri{id = undefined, aspect = list}, HServices) ->
-    rest_translator:ok_body_reply(#{<<"handle_services">> => HServices});
+get_response(#gri{id = undefined, aspect = list}, Handles) ->
+    rest_translator:ok_body_reply(#{<<"handles">> => Handles});
 
-get_response(#gri{id = HServiceId, aspect = instance, scope = protected}, HServiceData) ->
-    rest_translator:ok_body_reply(HServiceData#{<<"handleServiceId">> => HServiceId});
+get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleData) ->
+    Timestamp = maps:get(<<"timestamp">>, HandleData),
+    % Replace "publicHandle" with "handle" key
+    PublicHandle = maps:get(<<"publicHandle">>, HandleData),
+    NewData = maps:remove(<<"publicHandle">>, HandleData),
+    rest_translator:ok_body_reply(NewData#{
+        <<"handleId">> => HandleId,
+        <<"handle">> => PublicHandle,
+        <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp)
+    });
 
 get_response(#gri{aspect = users}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});
@@ -92,7 +98,4 @@ get_response(#gri{aspect = {group_privileges, _GroupId}}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
 get_response(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
-    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
-
-get_response(#gri{aspect = handles}, Handles) ->
-    rest_translator:ok_body_reply(#{<<"handles">> => Handles}).
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges}).

@@ -166,13 +166,9 @@ create_handle_test(Config) ->
             method = post,
             path = [<<"/groups/">>, G1, <<"/handles">>],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                [GroupId, HandleId] = binary:split(
-                    Location,
-                    [<<"/groups/">>, <<"/handles/">>],
-                    [trim_all, global]
-                ),
-                ?assertEqual(GroupId, G1),
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                BaseURL = ?URL(Config, [<<"/groups/">>, G1, <<"/handles/">>]),
+                [HandleId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(HandleId)
             end
         },
@@ -369,7 +365,7 @@ leave_handle_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/groups/">>, G1, <<"/handles/">>, handleId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = group_logic,

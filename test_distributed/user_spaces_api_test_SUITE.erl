@@ -99,10 +99,7 @@ list_spaces_test(Config) ->
             method = get,
             path = <<"/user/spaces">>,
             expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"default">> => <<"undefined">>,
-                <<"spaces">> => ExpSpaces
-            }
+            expected_body = #{<<"spaces">> => ExpSpaces}
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -157,10 +154,9 @@ create_space_test(Config) ->
             method = post,
             path = <<"/user/spaces">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                % TODO 2918
-%%                <<"/user/spaces/", SpaceId/binary>> = Location,
-                <<"/spaces/", SpaceId/binary>> = Location,
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                BaseURL = ?URL(Config, [<<"/user/spaces/">>]),
+                [SpaceId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(SpaceId)
             end
         },
@@ -238,9 +234,9 @@ join_space_test(Config) ->
             path = <<"/user/spaces/join">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{spaceId := SpaceId} = _Env, _) ->
-                fun(#{<<"location">> := Location} = _Headers) ->
-                    <<"/user/spaces/", Id/binary>> = Location,
-                    ?assertEqual(SpaceId, Id),
+                fun(#{<<"Location">> := Location} = _Headers) ->
+                    ExpLocation = ?URL(Config, [<<"/user/spaces/">>, SpaceId]),
+                    ?assertEqual(ExpLocation, Location),
                     true
                 end
             end)
@@ -381,7 +377,7 @@ leave_space_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/user/spaces/">>, spaceId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -591,7 +587,7 @@ unset_default_space_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = <<"/user/default_space">>,
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity, [
@@ -797,7 +793,7 @@ delete_space_alias_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/user/spaces/">>, S1, <<"/alias">>],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity, [

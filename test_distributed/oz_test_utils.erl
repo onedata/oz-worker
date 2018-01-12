@@ -23,6 +23,7 @@
     call_oz/4,
     get_env/3,
     get_oz_domain/1,
+    get_rest_api_prefix/1,
     get_rest_port/1,
     all_oz_privileges/1
 ]).
@@ -2036,6 +2037,16 @@ get_rest_port(Config) ->
 -spec get_oz_domain(Config :: term()) -> {ok, Domain :: string()}.
 get_oz_domain(Config) ->
     get_env(Config, ?APP_NAME, http_domain).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get rest api prefix.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_rest_api_prefix(Config :: term()) -> {ok, Prefix :: string()}.
+get_rest_api_prefix(Config) ->
+    get_env(Config, ?APP_NAME, rest_api_prefix).
 
 
 %%--------------------------------------------------------------------

@@ -103,7 +103,7 @@ list_children_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/children">>],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"nested_groups">> => ExpChildren}
+            expected_body = #{<<"groups">> => ExpChildren}
         },
         logic_spec = #logic_spec{
             module = group_logic,
@@ -269,8 +269,8 @@ add_child_test(Config) ->
             method = put,
             path = [<<"/groups/">>, G1, <<"/children/">>, G2],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                ExpLocation = <<"/groups/", G1/binary, "/children/", G2/binary>>,
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                ExpLocation = ?URL(Config, [<<"/groups/">>, G1, <<"/children/">>, G2]),
                 ?assertEqual(ExpLocation, Location),
                 true
             end
@@ -344,7 +344,7 @@ remove_child_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/groups/">>, G1, <<"/children/">>, groupId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = group_logic,
@@ -523,7 +523,7 @@ get_eff_children_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/effective_children">>],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"children">> => ExpGroups}
+            expected_body = #{<<"groups">> => ExpGroups}
         },
         logic_spec = #logic_spec{
             module = group_logic,

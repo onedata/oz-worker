@@ -112,10 +112,10 @@ add_group_test(Config) ->
             method = put,
             path = [<<"/handle_services/">>, HService, <<"/groups/">>, G1],
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                ExpLocation = <<
-                    "/handle_services/", HService/binary, "/groups/", G1/binary
-                >>,
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                ExpLocation = ?URL(Config,
+                    [<<"/handle_services/">>, HService, <<"/groups/">>, G1]
+                ),
                 ?assertEqual(ExpLocation, Location),
                 true
             end
@@ -189,7 +189,7 @@ remove_group_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/handle_services/">>, HService, <<"/groups/">>, groupId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = handle_service_logic,

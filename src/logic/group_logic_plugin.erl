@@ -55,15 +55,6 @@ fetch_entity(GroupId) ->
 %%--------------------------------------------------------------------
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
-operation_supported(create, {deprecated_user_privileges, _}, private) ->
-    true; % TODO VFS-2918
-operation_supported(create, {deprecated_child_privileges, _}, private) ->
-    true; % TODO VFS-2918
-operation_supported(get, deprecated_invite_user_token, private) ->
-    true; % TODO VFS-2918
-operation_supported(get, deprecated_invite_group_token, private) ->
-    true; % TODO VFS-2918
-
 operation_supported(create, invite_user_token, private) -> true;
 operation_supported(create, invite_group_token, private) -> true;
 
@@ -127,26 +118,6 @@ operation_supported(delete, {handle, _}, private) -> true.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(#el_req{gri = #gri{id = GroupId, aspect = {deprecated_user_privileges, UserId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data),
-    Operation = maps:get(<<"operation">>, Data, set),
-    entity_graph:update_relation(
-        od_user, UserId,
-        od_group, GroupId,
-        {Operation, Privileges}
-    ),
-    ok;
-% TODO VFS-2918
-create(#el_req{gri = #gri{id = ParentGroupId, aspect = {deprecated_child_privileges, ChildGroupId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data),
-    Operation = maps:get(<<"operation">>, Data, set),
-    entity_graph:update_relation(
-        od_group, ChildGroupId,
-        od_group, ParentGroupId,
-        {Operation, Privileges}
-    ),
-    ok;
-
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     Name = maps:get(<<"name">>, Req#el_req.data),
     Type = maps:get(<<"type">>, Req#el_req.data, role),
@@ -160,10 +131,10 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
                 od_group, GroupId,
                 privileges:group_admin()
             );
-        ?AS_GROUP(ParentGroupId) ->
+        ?AS_GROUP(ChildGroupId) ->
             entity_graph:add_relation(
+                od_group, ChildGroupId,
                 od_group, GroupId,
-                od_group, ParentGroupId,
                 privileges:group_admin()
             );
         _ ->
@@ -247,22 +218,6 @@ create(#el_req{gri = #gri{id = GrId, aspect = {child, ChGrId}}, data = Data}) ->
 %%--------------------------------------------------------------------
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
-get(Req = #el_req{gri = #gri{id = GrId, aspect = deprecated_invite_user_token}}, _) ->
-    {ok, Macaroon} = token_logic:create(
-        Req#el_req.client,
-        ?GROUP_INVITE_USER_TOKEN,
-        {od_group, GrId}
-    ),
-    {ok, Macaroon};
-% TODO VFS-2918
-get(Req = #el_req{gri = #gri{id = GrId, aspect = deprecated_invite_group_token}}, _) ->
-    {ok, Macaroon} = token_logic:create(
-        Req#el_req.client,
-        ?GROUP_INVITE_GROUP_TOKEN,
-        {od_group, GrId}
-    ),
-    {ok, Macaroon};
-
 get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, GroupDocs} = od_group:list(),
     {ok, [GroupId || #document{key = GroupId} <- GroupDocs]};
@@ -494,22 +449,6 @@ exists(#el_req{gri = #gri{id = Id}}, #od_group{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
-% TODO VFS-2918
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = deprecated_invite_user_token}}, Group) ->
-    authorize(Req#el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Group);
-
-% TODO VFS-2918
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = deprecated_invite_group_token}}, Group) ->
-    authorize(Req#el_req{operation = create, gri = #gri{aspect = invite_group_token}}, Group);
-
-% TODO VFS-2918
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {deprecated_user_privileges, Id}}}, Group) ->
-    authorize(Req#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}}, Group);
-
-% TODO VFS-2918
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {deprecated_child_privileges, Id}}}, Group) ->
-    authorize(Req#el_req{operation = update, gri = #gri{aspect = {child_privileges, Id}}}, Group);
-
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = oz_privileges}}, _) ->
     user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_VIEW_PRIVILEGES);
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_oz_privileges}}, _) ->
@@ -524,8 +463,9 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) -
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             true;
-        {?USER(_UserId), ?AS_GROUP(_)} ->
-            true; % TODO VFS-3351 ?GROUP_CREATE_GROUP
+        {?USER(UserId), ?AS_GROUP(ChildGroupId)} ->
+            % TODO VFS-3351 ?GROUP_CREATE_GROUP
+            auth_by_membership(UserId, ChildGroupId);
         _ -> false
     end;
 
@@ -686,14 +626,6 @@ authorize(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
-% TODO VFS-2918
-validate(#el_req{operation = create, gri = #gri{aspect = {deprecated_user_privileges, Id}}}) ->
-    validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}});
-
-% TODO VFS-2918
-validate(#el_req{operation = create, gri = #gri{aspect = {deprecated_child_privileges, Id}}}) ->
-    validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}});
-
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"name">> => {binary, non_empty}
@@ -785,9 +717,9 @@ validate(#el_req{operation = update, gri = #gri{aspect = oz_privileges}}) -> #{
 %% Returns if given user belongs to the group represented by entity.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_membership(od_user:id(), od_group:info()) -> boolean().
-auth_by_membership(UserId, #od_group{eff_users = EffUsers}) ->
-    maps:is_key(UserId, EffUsers).
+-spec auth_by_membership(od_user:id(), od_group:id() | od_group:info()) -> boolean().
+auth_by_membership(UserId, GroupOrId) ->
+    group_logic:has_eff_user(GroupOrId, UserId).
 
 
 %%--------------------------------------------------------------------

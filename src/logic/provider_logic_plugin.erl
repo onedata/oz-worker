@@ -92,12 +92,7 @@ operation_supported(_, _, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     Data = Req#el_req.data,
-    Name = case maps:get(<<"name">>, Data, undefined) of
-        undefined ->
-            maps:get(<<"clientName">>, Data);
-        N ->
-            N
-    end,
+    Name = maps:get(<<"name">>, Data),
     Latitude = maps:get(<<"latitude">>, Data, 0.0),
     Longitude = maps:get(<<"longitude">>, Data, 0.0),
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
@@ -136,12 +131,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) ->
     Data = Req#el_req.data,
-    Name = case maps:get(<<"name">>, Data, undefined) of
-        undefined ->
-            maps:get(<<"clientName">>, Data);
-        N ->
-            N
-    end,
+    Name = maps:get(<<"name">>, Data),
     Latitude = maps:get(<<"latitude">>, Data, 0.0),
     Longitude = maps:get(<<"longitude">>, Data, 0.0),
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
@@ -236,9 +226,7 @@ get(#el_req{gri = #gri{id = Id, aspect = instance, scope = protected}}, Provider
     {ok, #{
         <<"name">> => Name, <<"domain">> => Domain,
         <<"latitude">> => Latitude, <<"longitude">> => Longitude,
-        <<"online">> => provider_connection:is_online(Id),
-        % TODO VFS-2918
-        <<"clientName">> => Name
+        <<"online">> => provider_connection:is_online(Id)
     }};
 
 
@@ -288,8 +276,7 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = instance}, data = Data}) ->
             name = Name, latitude = Latitude, longitude = Longitude
         } = Provider,
         {ok, Provider#od_provider{
-            % TODO VFS-2918
-            name = maps:get(<<"name">>, Data, maps:get(<<"clientName">>, Data, Name)),
+            name = maps:get(<<"name">>, Data, Name),
             latitude = maps:get(<<"latitude">>, Data, Latitude),
             longitude = maps:get(<<"longitude">>, Data, Longitude)
         }}
@@ -507,17 +494,13 @@ authorize(_, _) ->
 validate(#el_req{operation = create, gri = #gri{aspect = instance},
     data = Data}) ->
     Required = #{
+        <<"name">> => {binary, non_empty},
         <<"subdomainDelegation">> => {boolean, any}
     },
     Common = #{
         optional => #{
             <<"latitude">> => {float, {between, -90, 90}},
             <<"longitude">> => {float, {between, -180, 180}}
-        },
-        % TODO VFS-2918
-        at_least_one => #{
-            <<"name">> => {binary, non_empty},
-            <<"clientName">> => {binary, non_empty}
         }
     },
     case maps:get(<<"subdomainDelegation">>, Data, undefined) of
@@ -539,6 +522,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance},
 validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
     data = Data}) ->
     Required = #{
+        <<"name">> => {binary, non_empty},
         <<"uuid">> => {binary, non_empty},
         <<"subdomainDelegation">> => {boolean, any}
     },
@@ -546,11 +530,6 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
         optional => #{
             <<"latitude">> => {float, {between, -90, 90}},
             <<"longitude">> => {float, {between, -180, 180}}
-        },
-        % TODO VFS-2918
-        at_least_one => #{
-            <<"name">> => {binary, non_empty},
-            <<"clientName">> => {binary, non_empty}
         }
     },
     case maps:get(<<"subdomainDelegation">>, Data, undefined) of
@@ -600,7 +579,6 @@ validate(#el_req{operation = create, gri = #gri{aspect = verify_provider_identit
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, non_empty},
-        <<"clientName">> => {binary, non_empty},
         <<"latitude">> => {float, {between, -90, 90}},
         <<"longitude">> => {float, {between, -180, 180}}
     }

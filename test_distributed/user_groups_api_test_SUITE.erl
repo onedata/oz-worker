@@ -144,10 +144,11 @@ create_group_test(Config) ->
             expected_headers = ?OK_ENV(fun(_, Data) ->
                     ExpName = maps:get(<<"name">>, Data),
                     ExpType = maps:get(<<"type">>, Data, role),
-                    fun(#{<<"location">> := Location} = _Headers) ->
-                        % TODO 2918
-%%                        <<"/user/groups/", GroupId/binary>> = Location,
-                        <<"/groups/", GroupId/binary>> = Location,
+                    BaseURL = ?URL(Config, [<<"/user/groups/">>]),
+                    fun(#{<<"Location">> := Location} = _Headers) ->
+                        [GroupId] = binary:split(
+                            Location, [BaseURL], [global, trim_all]
+                        ),
                         VerifyFun(GroupId, ExpName, ExpType)
                     end
                 end
@@ -246,9 +247,9 @@ join_group_test(Config) ->
             method = post,
             path = <<"/user/groups/join">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"location">> := Location} = _Headers) ->
-                <<"/user/groups/", GroupId/binary>> = Location,
-                ?assertEqual(GroupId, G1),
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                ExpLocation = ?URL(Config, [<<"/user/groups/">>, G1]),
+                ?assertEqual(ExpLocation, Location),
                 true
             end
         },
@@ -394,7 +395,7 @@ leave_group_test(Config) ->
         rest_spec = #rest_spec{
             method = delete,
             path = [<<"/user/groups/">>, groupId],
-            expected_code = ?HTTP_202_ACCEPTED
+            expected_code = ?HTTP_204_NO_CONTENT
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -443,7 +444,7 @@ list_eff_groups_test(Config) ->
             method = get,
             path = <<"/user/effective_groups">>,
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"effective_groups">> => ExpGroups}
+            expected_body = #{<<"groups">> => ExpGroups}
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
