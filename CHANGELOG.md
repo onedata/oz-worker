@@ -1,426 +1,64 @@
-# Release notes for project oz_worker
+# Release notes for project bamboos
 
 
 CHANGELOG
 ---------
 
-### 17.06.0-rc2
-
-* Releasing new version 17.06.0-rc2
-
-
-### 17.06.0-rc1
-
-* VFS-3458 Make sure user's connected accounts are popagated through subscriptions, use md5 rather than base64 to encode user and group ids coming from IdPs
-* VFS-3457 User base64 url rather than base64 in user id encoding
-* VFS-3448 Use single 'onedata' bucket
-* VFS-3457 Fix a bug in groups encoding from SAML assertions, do base64 of user ids from IdPs
-* VFS-3429 Update esaml reference to point to repo in onedata's github
-* Reconfigure couchbase pools
-* VFS-3376 Fix exemplary saml.config
-
-
-### 17.06.0-beta6
-
-* VFS-3376 Fix a bug making space aliases in subscriptions to not include effective spaces of users
-* VFS-3376 Add support for group mapping via OIDC and SAML
-* VFS-3415 Fix a routing bug causing public share links malfuntion
-* VFS-3224 Make sure that all unicode characters are properly decoded from SAML assertions
-* VFS-3224 Add a fix for Chrome/Safari getting stalled during SAML redirects
-* VFS-3224 Implement SAML login, add better error handling in login process
-
-
-### 17.06.0-beta4
-
-* VFS-3386 Create new users upon IdP login with id based on IdP name and user id in that IdP
-* VFS-3362 Update web-client
-
-
-### 17.06.0-beta3
-
-* VFS-3350 Make sure effective privileges are recomputed after creating new entities; remove deprecated privilege names
-* Releasing new version 17.06.0-beta2
-
-
-### 17.06.0-beta2
-
-* VFS-3342 Make sure user aliases in subscriptions are precomputed every time a space name changes, decrease changes intervals
-* VFS-3345 Updating GUI ref (development) - changed height of textarea in getting support modal - truncating long provider names in space details
-* VFS-3286 Cluster_worker update (update node monitoring logging)
-
-
-### 3.0.0-rc16
-
-* VFS-3217 Rename auth_rhea module to auth_keycloak module
-* VFS-3217 Add support for RHEA KeyCloak OpenID Connect
-
-
-### 3.0.0-rc15
-
-* VFS-3251 Updating GUI to 3.0.0-rc15
-* VFS-3245 Schedule effective graph refresh after entity deletion
-* VFS-3181 Add an RPC call to retrieve service version info
-* VFS-3181 Using GUI VFS-3172 with service version display
-* Add service version info to sessionDetails in GUI
-* VFS-3213 Update cberl reference
-* VFS-3213 Add libcouchbase package dependency
-* VFS-3146 Update models specyfications
-* VFS-3146 Update datastore models to use new datastore API
-* VFS-3132 Remove invalid paths from rest routes
-* VFS-3088 Integrate with new datastore
-
-
-### 3.0.0-rc14
-
-* HOTFIX fix a bug in REST routing
-
-
-### 3.0.0-rc13
-
-* VFS-3118 Change default env value for custom gui root
-* VFS-3097 Wait for effective graph synchronization after new space is created via GUI
-* VFS-3097 Allow using external access token to authorize REST operations
-
-
-### 3.0.0-rc12
-
-* VFS-3006 Remove annotations.
-* VFS-2719 Do not remove relations of entity being deleted, as this caused unnecessary db operations
-* VFS-2719 Trigger user subscriptions upon space rename
-* VFS-2719 Add authorization case for providers accessing shares
-* VFS-2719 Use a union of direct and effective relations in subscriptions for faster propagation
-* VFS-2719 Do not re-check provider connectivity if subscriptions channel is down
-* VFS-2719 Set default entity names to empty string
-* VFS-2719 Remove entity from dirty queue if it no longer exists
-* VFS-2496 Push new provider record after unsupport space
-* VFS-2496 Push new space record after unsupport space
-* VFS-2719 Migrate all calls to user_logic to new api
-* VFS-2719 Implement REST translators for all modules
-* VFS-2496 User real user id rather than 0 in gui backend
-* VFS-2882 Add group data backend
-* VFS-2719 Completed user REST routes
-* VFS-2882 Push providers upon group join that adds a space to user
-* VFS-2882 Add support for joining groups via gui
-* VFS-2898 Supervise ozpca process
-* VFS-2719 Add differentiation between unauthorized and forbidden in entity logic
-* VFS-2719 Use OZ hostname from app.config everywhere (rahter than from dns.config)
-* VFS-2719 Account oz privileges in effective graph
-* VFS-2719 Add support for collecting eff relationship intermediaries
-* VFs-2719 Create first placeholder for eff_graph logic
-* VFS-2496 Allow to set null default provider or space
-* VFS-2931 Reduce number of kept rotated log files
-* VFS-2883 Add space support sizes information per provider in space data backend
-* VFS-2883 Add space size to space record served by space data backend
-* VFS-2883 Add provider hostname to provider record served by proivder data backend
-
-
-### 3.0.0-rc11
-
-* VFS-2765 Add some error resistance when obtaining unexpected data from openid providers
-* VFS-2765 Update gui reference and adjust code to the new API
-* VFS-2765 Update cluster_worker reference
-* VFS-2765 Display first login info to users logging in via credentials
-* VFS-2733 Add REST routes to GUI listener
-* VFS-2733 Standarize app listeners
-
-
-### 3.0.0-rc10
-
-* VFS-2703 Update mocking
-* VFS-2703 Update datastore config
-* VFS-2720 Fix bug that did not allow providers to get provider data
-* VFS-2734 Add support for list_groups_of_provider OZ privilege
-* VFS-2734 Add tests for get users of provider privilege
-* VFS-2734 Add list spaces of provider privileges
-* VFS-2720 Add better test coverage for list_providers_of_space OZ privielges
-* VFS-2720 Add better test coverage for list_spaces and list_providers OZ privielges
-* VFS-2720 Update od_user and og_group record structures
-* VFS-2720 Do not generate all combinations of privileges in privileges tests as it takes too long
-* VFS-2720 Fix default provider redirection not working properly
-* VFS-2662 Fix a bug in change password, update gui ref and adjust the code to new API
-* VFS-2469 Use iso time format for serialization of timestamps, move serialization logic to ctool.
-* VFS-2667 Improve json encoder for DB operations
-* VFS-2593 - update ctool and cluster-worker,  use STRESS_TEST_BASE macro in stress test
-* VFS-2659 Disallow creation of spaces with empty names
-* VFS-2659 Make effective children in groups a list of Ids rather than pairs with privileges
-* VFS-2659 Fix public user record translator in subscriptions
-* VFS-2659 Adjust subscriptions tests to refactored models
-* VFS-2659 Rename some of the key records in db
-* VFS-2640 - move all error handling to oai_errors module
-* VFS-2659 Rename some records and record fields for consistency, add a lot of effective relations
-
-
-### 3.0.0-rc9
-
-* Releasing new version 3.0.0-rc9
-
-
-### 3.0.0-rc8
-
-* VFS-2625 Removing share's reference to handle is now not obligatory
-* VFS-2625 Fix handles not being properly retrieved via REST
-* VFS-2625 Use unencoded shalsh character in public handle field oh handle
-* VFS-2625 Add handle services and handles to user and group subscriptions
-* VFS-2625 Set default value of service properties in handle services to empty list
-* VFS-2625 Add tests for handle_services subscriptions
-* VFS-2625 Fix handle subscription tests
-* VFS-2625 Add tests for handles and handle_services subscriptions
-* VFS-2625 Add handle_services and handles to subscriptions
-
-
-### 3.0.0-rc7
-
-* VFS-2567 Rework space_record API in space data backend
-* VFS-2607 Fix a bug in group_logic can_view_public_data
-* VFS-2607 Fix a bug in group_logic has effective user
-* VFS-2607 Add public group type for groups that users do not have view data privs
-* VFS-2607 Allow viewing group details for users that have view privs in any space that contains the group
-* VFS-2607 Allow access to public data of groups and spaces for users without view privileges
-* VFS-2567 Check view permissions during space find in GUI backend
-* VFS-2607 Introduce env variable deciding about automatic first space creation
-* VFS-2567 Add verification of view perms in provider GUI backend
-* VFS-2607 Add better error reporting in REST user PATCH
-* VFS-2607 Add OIDC integration with EGI
-* VFS-2607 Fix onepanel users not being added to global groups
-* VFS-2548 Disable global groups by default
-* VFS-2548 Fix bugs in space name mapping mechanism, add CT tests verifying automatic space membership by global grups
-* VFS-2548 Add overwrite argument to set_space_name_mapping function
-* VFS-2548 Add mechanism for automatic groups in OZ
-* VFS-2469 Add modifying handles via proxy.
-* VFS-2469 Add registering and unregistering of handles via proxy.
-* VFS-2469 Update cluster_worker and cluster_manager, add loading of gen_server2 to relx.
-* VFS-2405 Treat share as different record than space, create corresponding modules
-* VFS-2405 Update share redirection path to provider
-* VFS-2407 Use separate record for shares rather then space
-* VFS-2469 Reorganize rest_modules_test_SUITE and add empty test mocks for handles management.
-* VFS-2397 Implement oai_handler
-
-
-### 3.0.0-rc6
-
-* VFS-2582 Using GUI fix for blank notifications
-* VFS-2390 Upgrade rebar to version 3
-
-
-### 3.0.0-rc5
-
-* VFS-2491 Add RPC call to join a space
-* VFS-2468 Add log level opt to location service script
-* VFS-2468 Add nodejs to packages requirements
-* VFS-2500 described location service config options
-* VFS-2309 no more bootstrap on testmaster
-* VFS-2309 adjusted location service to use node 4
-* VFS-2176 all 'A' DNS entries used as bootstrap nodes
-* VFS-2309 boostrap location service client on testmaster
-* VFS-2309 rest auth skeleton
-* VFS-2309 public keys retrieved from directly publishers
-* VFS-2309 refactoring: encoded key pased & utitlities separated
-* VFS-2309 identity verification in oz
-* VFS-2309 location service added
-
-
-### 3.0.0-rc4
-
-* VFS-2156 Change onepanel config env variables types
-* Disable openid providers in auth.config by default, leaving basicAuth only
-
-
-### 3.0.0-RC3
-
-* VFS-2156 Remove GUI files
-* VFS-2436 Allow modifying user alias via REST
-* VFS-2436 Disallow adding inexistent users or groups to spaces via REST admin endpoint
-* VFS-2154 Fix a mixup between privileges expressed in atoms and binaries in rest privileges tests
-* VFS-2154 Update privileges rest handler to accept patch rather than put
-* VFS-2154 Use all possible combinations of privs rather than random subset
-* VFS-2154 Major refactor of rest privileges test suite and some improvements to the tested code
-* VFS-2154 Further refinement of OZ API privileges tests, update oz-gui-default reference
-* VFS-2358 HOTFIX: Fix a badmatch in provider data backend
-* VFS-2358 Update comments concerning module APIs in space and provider data backends
-* Releasing new version 3.0.0-RC2
-* VFS-2154 Rework tests for OZ API, fix some bugs that were revealed by tests
-* VFS-2273 Handle macaroon verification errors
-* VFS-2358 Implement unsupport space functionality in GUI
-* VFS-2357 Add checks if taking away privileges works in OZ API REST
-* VFS-2269 Enable Symmetric Multiprocessing
-* VFS-2357 Add admin endpoints to add/remove users and groups from spaces, fix a couple of bugs
-* VFS-2359 Turn off HSTS by default, allow configuration via app.config, improve docs integration
-* VFS-2359 Add handler for serving static docs files located on another server
-* Releasing new version 3.0.0-RC1
-* VFS-2250 Use wrappers for macaroon serialization
-
-
-### 3.0.0-RC2
-
-* VFS-2357 Add checks if taking away privileges works in OZ API REST
-* VFS-2269 Enable Symmetric Multiprocessing
-* VFS-2357 Add integration tests for OZ API REST functionalities
-* VFS-2357 Add admin endpoints to add/remove users and groups from spaces, fix a couple of bugs
-* VFS-2351 onedata_auth is persistent
-* VFS-2359 Turn off HSTS by default, allow configuration via app.config, improve docs integration
-* VFS-2359 Add handler for serving static docs files located on another server
-
-
-### 3.0.0-RC1
-
-* VFS-2316 Update etls.
-* VFS-2250 Use wrappers for macaroon serialization
-* VFS-2121 Tests refactoring
-
-
-### 3.0.0-beta8
-
-* minor changes and improvements
-
-
-### 3.0.0-beta7
-
-* VFS-2225 Update GUI docker image
-* bugfix - cleaning changed users list
-
-
-### 3.0.0-beta6
-
-* Update erlang tls
-* VFS-2133 Rework google and indigo auth logic
-* VFS-2111 Integrate user management with onepanel
-* VFS-2111 Enable changing password only if user has basic auth enabled
-* VFS-2111 Add several funcitons to admin API - list spaces, list providers, list providers of space
-* VFS-2111 Add rest handler for OZ API privileges manipulation
-* Fix space name mapping after space removal
-* VFS-2111 Implement basic login backend
-* VFS-2111 allow basic auth in all user requests
-* VFS-2111 Allow using client token for authorization in REST, provider certs are no longer obligatory when not required, add REST API to get client_token
-* VFS-2111 Change values returned from rpc_backends to JSON objects rather than strings
-* VFS-2087 supported spaces are not public
-* VFS-2087 push provider updates to all
-
-
-### 3.0.0-beta5
-
-* VFS-2068 adjust to new webscoket adapter API
-* VFS-1987 concurrent refreshes and updates test
-* VFS-1987 subscriptions updates with nested groups of users groups
-* VFS-1987 set & get for nested group privileges
-* VFS-1987 get effective user in rest
-* VFS-1987 nested groups in global config (json)
-* VFS-1987 nested groups rest privileges
-* VFS-1987 nested groups in subscriptions
-* VFS-1987 effective groups in user document
-* VFS-1987 general graph traversal
-* VFS-1987 effective users in logic
-* VFS-1987 model changes
-
-
-### 3.0.0-beta4
-
-* Minor updates.
-
-
-### 3.0.0-beta3
-
-* VFS-1860 explicit default space added
-* VFS-1860 trimmed (with public data only) users are always pushed
-* VFS-1825 rework gui starting in zone up
-* VFS-1768: Do not allow provider drop above onezone modals
-* VFS-1768: Do not allow scroll bars on atlas
-* VFS-1607 Add space canonical name to get data response in user context.
-* VFS-1596 Update getting onedata user.
-* VFS-1607 Save space name mapping in user document.
-* VFS-1596 More detailed get_data for user.
-* VFS-1768: Spinners in login boxes
-* VFS-1770 fix disappearing client tokens
-
-
-### 3.0.0-beta1
-
-* VFS-1770 make sure provider is inoperable before displaying it
-* VFS-1768: Token copy button in modals; dynamic page titles
-* VFS-1521 remove providerId restriction on new tokens
-* VFS-1757 Change application ports availability checking procedure.
-* VFS-1792 moving privilages to ctool
-* VFS-1796 location as optional create args
-* VFS-1629 covered cache malfunctions
-* VFS-1629 covered fetching old changes from db
-* VFS-1629 limiting db fetch life
-* VFS-1629 connected provider to the OZ (over websocket)
-* VFS-1629 subscribtions over websocket
-* VFS-1629 sending info needed by op
-* VFS-1629 user subscriptions
-* VFS-1629 client subscriptions
-* VFS-1629 extracted outbox
-* VFS-1629 buffering outbox
-* VFS-1629 extraction of subscription handling
-* VFS-1629 introduction of modules: cache, subscribers, translator
-* VFS-1629 provider can obtain only spaces on his own
-* VFS-1629 subscriptions via rest
-
-
-### 3.0.0-alpha3
-
-* VFS-1638 enable simple auth mixins and adjust redirection pages after login
-* VFS-1672: New callbacks for login create
-* VFS-1672: Conditionally show/hide modals on onezone
-* VFS-1638 add support for custom GUI
-* VFS-1672: User dropdown on the right
-* VFS-1672: New homepage account dropdown style
-* VFS-1672: New rendering of social icons in onezone
-* VFS-1638 add real user credentials to backend
-* VFS-1672: Onezone panels
-* VFS-1638 differentiate between chosen provider and default provider
-* VFS-1672: Updated oneicons 1.3
-* VFS-1665 Pull in Macaroons.
-* VFS-1544 distributed gr is packaged via onezone repo
-* VFS-1672: Fixed main menu blinking on click
-* VFS-1544 uuids easier to use with http
-* VFS-1638 switch to hash based location service, use server backend for spaces and providers
-* VFS-1638 enable login for all oauth providers
-* VFS-1638 allow logging in with openid providers
-* VFS-1638 allow pages without .html extension to server index.html
-* VFS-1638 add new gui_livereload modes
-* VFS-1544 updating CW and adapting to refactored dns
-* VFS-1672: New routes and draft of onezone layout
-* VFS-1636: Red menu highlight on top (z dimension) of menu line
-* VFS-1638 add polling and watching options for gui livereload
-
-
-### 3.0.0-alpha2
-
-* VFS-1665 Pull in Macaroons.
-
-
-### 3.0.0-alpha
-
-* VFS-1622 Add openssl to package requirements.
-* VFS-1520-delete annotations from all ct_tests
-* VFS-1528 Remove deprecated use of erlang:now/0
-* VFS-1428 Add endpoint that allows for getting token issuer.
-* VFS-1378 adjust to the new ctool API
-* VFS-1223 add rest port to macaroon's location
-* VFS-1223 Handle empty macaroon-discharges header.
-* VFS-1223 Parse macaroons from HTTP headers.
-* VFS-1223 Implement first revision of macaroon-based auth.
-* VFS-1123 Use Macaroons for tokens.
-* itegrate ssl2
-* VFS-914, DNS server in GR supports aliases
-* VFS-914, add DNS to GR
-
-
-
-### 2.1.0
-
-* Better behaviour when GUI window is small
-* Provider instruction updated
-
-
-
-### 2.0.0
-
-* Support for spaces
-* Support for logging with Google, Facebook, Dropbox, Github and PL-Grid
-* User account management enabled
-* Support for tokens
-
+### 1.0.1
+
+* VFS-1571 Mount compilation caches by default in make.py .
+* VFS-1571 Add rebar 2.6.1 built with rebar_beam_cache.
+* VFS-1447 sys.config per app
+* VFS-1508 direct output from ember live build to log file in dev environment
+ to toggle gui livereload
+* VFS-1508 change owner of GUI tmp dir periodically rather than run ember build as user
+* VFS-1508 run livereload as user
+* VFS-1508 change build process of GUI to use ember-cli, add livereload
+
+
+### 1.0.0
+
+
+* VFS-1484 Add scripts for S3 storage setup.
+* VFS-1484 Add space-storage mapping mechanism to env configurator.
+* VFS-1411 Add Ceph storage helper.
+* Shared storage, system users and system groups for all provider nodes.
+* Run client docker in privileged mode - FUSE needs it.
+* VFS-1241, add makefile to bamboos
+* use couchbase 4.0
+* VFS-1149, add new endpoint for all messages count
+* VFS-1056 Do not sched privileges in make.py if we're already root.
+* VFS-1056 Use requests library for HTTP connections.
+* VFS-1056 Modify createJson.js to accept container names with multiple '_'.
+* VFS-1050 Adjustments for performance tests.
+* VFS-1052 Add onepanel dockerfile and setup script.
+* VFS-1008 Integrate riak into oneprovider.
+* VFS-1019 user & identity models first integration
+* VFS-1047 Save logs of oneprovider running in dockers.
+* VFS-1000 Decode subprocess pipe output into UTF-8 string.
+* VFS-1000 Add set_up_dns common function for python scripts.
+* VFS-1008 Create a riak docker.
+* VFS-1000, add common.py with utils
+* VFS-1010 Don't shed root privileges on non-Linux platforms.
+* VFS-1010 Run scripts in make.py as a running user.
+* VFS-1010 Cleanup scripts associated with running distributed tests.
+* VFS-1000 Add a first version of zone_up.
+* VFS-1000 Add a makefile, fetch required images automatically.
+* VFS-1000 Configure the cluster through gen_dev_args.json
+* VFS-1000 Implement a make.py script and improve cluster_up.
+* VFS-818 Copy authorization data for onepanel.
+* VFS-818 Add alias support.
+* VFS-797 Change from /bin/bash to /bin/sh.
+* VFS-797 Switch to onepanel_admin.
+* VFS-797 Registering in Global Registry.
+* VFS-797 Adding storage paths on cluster nodes.
+* VFS-797 Starting VeilCluster.
+* VFS-797 Installing VeilCluster RPM.
+* VFS-797 Starting Global Registry node.
+* VFS-797 Starting Global Registry DB nodes.
+* VFS-797 Add global_registry_setup script.
+* enable --no-check-certificate
+* allow to disable user creation
 
 
 ________
