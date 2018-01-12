@@ -12,6 +12,7 @@
 -author("Michal Zmuda").
 
 -include("registered_names.hrl").
+-include("gui/common.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("gui/include/gui.hrl").
 
@@ -72,6 +73,7 @@ start() ->
                 {'_', redirector_handler, []}
             ]},
             {'_', lists:flatten([
+                {?ZONE_VERSION_ENDPOINT, get_zone_version_handler, []},
                 {"/nagios/[...]", nagios_handler, []},
                 {"/share/:share_id", public_share_handler, []},
                 {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
