@@ -21,7 +21,7 @@
 -define(PROVIDER_ID_ENDPOINT, "/get_provider_id").
 
 % Endpoint at oneprovider to get its ID
--define(ZONE_VERSION_ENDPOINT, "/get_zone_version").
+-define(ZONE_VERSION_ENDPOINT, "/version").
 
 % Relative suffix of GUI address, leading to page with info about providers
 -define(BECOME_A_PROVIDER_URL, "/become_a_provider").

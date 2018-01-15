@@ -26,3 +26,5 @@ test_distributed/logs
 test_distributed/cover_tmp.spec
 _build
 compile_commands.json
+
+rel/vars.config

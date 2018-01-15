@@ -28,6 +28,8 @@ GIT_URL := $(shell if [ "${GIT_URL}" = "file:/" ]; then echo 'ssh://git@git.plgr
 ONEDATA_GIT_URL := $(shell if [ "${ONEDATA_GIT_URL}" = "" ]; then echo ${GIT_URL}; else echo ${ONEDATA_GIT_URL}; fi)
 export ONEDATA_GIT_URL
 
+BUILD_VERSION := $(subst $(shell git describe --tags --abbrev=0)-,,$(shell git describe --tags --long))
+
 .PHONY: test deps upgrade generate package
 
 all: test_rel
@@ -47,7 +49,7 @@ compile:
 	$(REBAR) compile
 
 ## Generates a production release
-generate: compile deps
+generate: template compile deps
 	$(REBAR) release $(OVERLAY_VARS)
 
 ## Generates a dev release
@@ -61,6 +63,9 @@ clean:
 distclean: clean
 	rm -rf location-service/node_modules
 	$(REBAR) clean --all
+
+template:
+	sed "s/{build_version, \".*\"}/{build_version, \"${BUILD_VERSION}\"}/" ./rel/vars.config.template > ./rel/vars.config
 
 ##
 ## Release targets
