@@ -34,7 +34,7 @@
 -type entity_id() :: undefined | od_user:id() | od_group:id() | od_space:id() |
 od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id().
 -type entity_type() :: od_user | od_group | od_space | od_share | od_provider |
-od_handle_service | od_handle | oz_privileges | owned_identity.
+od_handle_service | od_handle | oz_privileges.
 -type entity() :: undefined | #od_user{} | #od_group{} | #od_space{} |
 #od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}.
 -type aspect() :: gs_protocol:aspect().

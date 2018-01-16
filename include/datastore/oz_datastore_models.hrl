@@ -310,12 +310,6 @@
     connection_ref :: gs_server:conn_ref()
 }).
 
-% Info about identities, which are owned by this OZ
--record(owned_identity, {
-    id :: undefined | identity:id(),
-    encoded_public_key :: undefined | identity:encoded_public_key()
-}).
-
 % Token used to match together OIDC/SAML requests and responses and protect
 % against replay attacks. It is correlated with some state, defining for example
 % to which IdP the client was redirected.

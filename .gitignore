@@ -10,7 +10,6 @@ cluster_manager
 rel/*.rpm
 package
 package.tar.gz
-location-service/node_modules/
 
 *.iml
 *.sublime*

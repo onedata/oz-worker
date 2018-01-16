@@ -126,5 +126,4 @@ entity_type_to_translator(od_space) -> space_rest_translator;
 entity_type_to_translator(od_share) -> share_rest_translator;
 entity_type_to_translator(od_provider) -> provider_rest_translator;
 entity_type_to_translator(od_handle_service) -> handle_service_rest_translator;
-entity_type_to_translator(od_handle) -> handle_rest_translator;
-entity_type_to_translator(owned_identity) -> identity_rest_translator.
+entity_type_to_translator(od_handle) -> handle_rest_translator.

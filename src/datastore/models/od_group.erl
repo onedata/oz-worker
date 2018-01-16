@@ -21,7 +21,6 @@
 -export([entity_logic_plugin/0]).
 
 %% datastore_model callbacks
--export([get_prehooks/0]).
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
 
 -type id() :: binary().
@@ -137,16 +136,6 @@ entity_logic_plugin() ->
 %%%===================================================================
 %%% datastore_model callbacks
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of callbacks which will be called before each operation
-%% on datastore model.
-%% @end
-%%--------------------------------------------------------------------
--spec get_prehooks() -> [datastore_hooks:prehook()].
-get_prehooks() ->
-    record_location_hooks:get_prehooks().
 
 %%--------------------------------------------------------------------
 %% @doc

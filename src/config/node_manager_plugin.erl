@@ -80,18 +80,9 @@ listeners() -> [
 %%--------------------------------------------------------------------
 -spec modules_with_args() -> Models :: [{atom(), [any()]}].
 modules_with_args() ->
-    Base = [
-        {gs_worker, [
+        [{gs_worker, [
             {supervisor_flags, gs_worker:supervisor_flags()}
-        ]}
-    ],
-    case application:get_env(?APP_NAME, location_service_enabled) of
-        {ok, false} -> Base;
-        {ok, true} -> Base ++ [
-            {location_service_worker, []},
-            {identity_publisher_worker, []}
-        ]
-    end.
+        ]}].
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -128,16 +119,6 @@ on_cluster_initialized(Nodes) ->
 -spec after_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
 after_init([]) ->
     try
-        %% This cannot be started before all workers are up
-        %% and critical section is running
-        %% todo: once critical section works in worker init, move it there
-        case application:get_env(?APP_NAME, location_service_enabled) of
-            {ok, false} ->
-                ok;
-            {ok, true} ->
-                identity_publisher_worker:start_refreshing()
-        end,
-
         entity_graph:init_state(),
 
         % build dns zone on one node and broadcast to others
