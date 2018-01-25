@@ -83,8 +83,7 @@
 %% This record defines a user and is handled as a database document
 -record(od_user, {
     name = <<"">> :: od_user:name(),
-    login = <<"">> :: binary(),
-    alias = ?EMPTY_ALIAS :: binary(),
+    login = undefined :: binary() | undefined,
     email_list = [] :: [binary()],
     % Decides if this user can login via login:password, only users created in
     % onepanel are currently allowed to do that.

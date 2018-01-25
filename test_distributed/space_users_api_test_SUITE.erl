@@ -301,11 +301,10 @@ get_user_test(Config) ->
         ?OZ_SPACES_LIST_USERS
     ]),
 
-    ExpAlias = ExpLogin = ExpName = ?USER_NAME1,
+    ExpLogin = ExpName = ?USER_NAME1,
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{
         name = ExpName,
-        login = ExpLogin,
-        alias = ExpAlias
+        login = ExpLogin
     }),
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
     oz_test_utils:space_set_user_privileges(Config, S1, U3, revoke, [
@@ -313,7 +312,6 @@ get_user_test(Config) ->
     ]),
 
     ExpUserDetails = #{
-        <<"alias">> => ExpAlias,
         <<"login">> => ExpLogin,
         <<"name">> => ExpName
     },
@@ -579,8 +577,7 @@ get_eff_user_test(Config) ->
                         aspect = instance, scope = shared
                     },
                     auth_hint = ?THROUGH_SPACE(S1),
-                    expected_result = ?OK_MAP(
-                        (maps:remove(<<"alias">>, UserDetails))#{
+                    expected_result = ?OK_MAP(UserDetails#{
                             <<"gri">> => fun(EncodedGri) ->
                                 #gri{id = Id} = oz_test_utils:decode_gri(
                                     Config, EncodedGri

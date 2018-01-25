@@ -98,15 +98,8 @@
 -define(SUBDOMAIN_VALIDATION_REGEXP,
     <<"^([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$">>).
 
-% Definitions concerning aliases
-% Value in DB meaning that alias is not set.
--define(EMPTY_ALIAS, <<"">>).
 
 % Regexp to validate aliases - at least 5 alphanumeric chars
--define(ALIAS_VALIDATION_REGEXP, <<"^[a-z0-9]{5,}$">>).
-
-% String that will be put in front of uuid when a user does not have
-% an alias set. Aliases are not allowed to start with this string.
--define(NO_ALIAS_UUID_PREFIX, "uuid_").
+-define(LOGIN_VALIDATION_REGEXP, <<"^[a-z0-9A-Z_-]{3,}$">>).
 
 -endif.

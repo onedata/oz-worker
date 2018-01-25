@@ -78,7 +78,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 DefaultSpace = proplists:get_value(<<"default_space">>, Props),
                 UserInfo = #od_user{
                     name = UserId,
-                    alias = UserId,
+                    login = UserId,
                     email_list = [<<UserId/binary, "@gmail.com">>],
                     linked_accounts = [
                         #linked_account{provider_id = google,

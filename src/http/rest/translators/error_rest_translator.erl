@@ -207,15 +207,10 @@ translate(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key)) ->
     {?HTTP_400_BAD_REQUEST,
         {<<"Bad value: provided \"~s\" is of invalid type">>, [Key]}
     };
-translate(?ERROR_BAD_VALUE_ALIAS(Key)) ->
+translate(?ERROR_BAD_VALUE_LOGIN(Key)) ->
     {?HTTP_400_BAD_REQUEST, {
         <<"Bad value: provided \"~s\" must contain only digits or lowercase "
         "letters and be at least 5 characters long.">>, [Key]
-    }};
-translate(?ERROR_BAD_VALUE_ALIAS_WRONG_PREFIX(Key)) ->
-    {?HTTP_400_BAD_REQUEST, {
-        <<"Bad value: provided \"~s\" cannot start with '~s'">>,
-        [Key, ?NO_ALIAS_UUID_PREFIX]
     }};
 translate(?ERROR_BAD_VALUE_IDENTIFIER(Key)) ->
     {?HTTP_400_BAD_REQUEST, {

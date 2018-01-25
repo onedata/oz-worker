@@ -32,7 +32,7 @@
 -type name() :: binary().
 -type criterion() :: {linked_account, {ProviderId :: atom(), UserId :: binary()}} |
                      {email, binary()} |
-                     {alias, binary()}.
+                     {login, binary()}.
 -export_type([name/0]).
 
 -define(CTX, #{
@@ -127,9 +127,9 @@ get_by_criterion({email, Value}) ->
         {ok, [Doc | _]} ->
             {ok, Doc}
     end;
-get_by_criterion({alias, Value}) ->
-    Fun = fun(Doc = #document{value = #od_user{alias = Alias}}, Acc) ->
-        case Alias of
+get_by_criterion({login, Value}) ->
+    Fun = fun(Doc = #document{value = #od_user{login = Login}}, Acc) ->
+        case Login of
             Value -> {stop, [Doc | Acc]};
             _ -> {ok, Acc}
         end
@@ -191,7 +191,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    4.
+    5.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -285,7 +285,10 @@ get_record_struct(4) ->
         {email_list, [string]},
         {groups, [string]}
     ]}]},
-    {record, lists:keyreplace(linked_accounts, 1, Struct, LinkedAccStruct)}.
+    {record, lists:keyreplace(linked_accounts, 1, Struct, LinkedAccStruct)};
+get_record_struct(5) ->
+    {record, Struct} = get_record_struct(4),
+    {record, lists:keydelete(alias, 1, Struct)}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -394,35 +397,35 @@ upgrade_record(2, User) ->
         end, ConnectedAccounts
     ),
 
-    {3, #od_user{
-        name = Name,
-        login = Login,
-        alias = Alias,
-        email_list = EmailList,
-        basic_auth_enabled = BasicAuthEnabled,
-        linked_accounts = LinkedAccounts,
+    {3, {od_user,
+        Name,
+        Login,
+        Alias,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
 
-        default_space = DefaultSpace,
-        default_provider = DefaultProvider,
-        chosen_provider = ChosenProvider,
-        client_tokens = ClientTokens,
-        space_aliases = SpaceAliases,
+        DefaultSpace,
+        DefaultProvider,
+        ChosenProvider,
+        ClientTokens,
+        SpaceAliases,
 
-        oz_privileges = OzPrivileges,
-        eff_oz_privileges = EffOzPrivileges,
+        OzPrivileges,
+        EffOzPrivileges,
 
-        groups = Groups,
-        spaces = Spaces,
-        handle_services = HandleServices,
-        handles = Handles,
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
 
-        eff_groups = EffGroups,
-        eff_spaces = EffSpaces,
-        eff_providers = EffProviders,
-        eff_handle_services = EffHandleServices,
-        eff_handles = EffHandles,
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
 
-        top_down_dirty = TopDownDirty
+        TopDownDirty
     }};
 upgrade_record(3, User) ->
     {od_user,
@@ -469,10 +472,71 @@ upgrade_record(3, User) ->
         end, ConnectedAccounts
     ),
 
-    {4, #od_user{
+    {4, {od_user,
+        Name,
+        Login,
+        Alias,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+        ChosenProvider,
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    }};
+upgrade_record(4, User) ->
+    {od_user,
+        Name,
+        Login,
+        _Alias,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+        ChosenProvider,
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    } = User,
+
+    {5, #od_user{
         name = Name,
         login = Login,
-        alias = Alias,
         email_list = EmailList,
         basic_auth_enabled = BasicAuthEnabled,
         linked_accounts = LinkedAccounts,

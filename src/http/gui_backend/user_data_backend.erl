@@ -111,18 +111,15 @@ create_record(<<"user">>, _Data) ->
 %%--------------------------------------------------------------------
 -spec update_record(RsrcType :: binary(), Id :: binary(),
     Data :: proplists:proplist()) -> ok | gui_error:error_result().
-update_record(<<"user">>, UserId, [{<<"alias">>, NewAlias}]) ->
+update_record(<<"user">>, UserId, [{<<"alias">>, NewLogin}]) ->
     Client = ?USER(gui_session:get_user_id()),
-    case user_logic:update_alias(Client, UserId, NewAlias) of
+    case user_logic:update_login(Client, UserId, NewLogin) of
         ok ->
             ok;
-        ?ERROR_BAD_VALUE_ALIAS_WRONG_PREFIX(_) ->
+        ?ERROR_BAD_VALUE_LOGIN(_) ->
             gui_error:report_warning(
-                <<"Alias cannot start with \"", ?NO_ALIAS_UUID_PREFIX, "\".">>);
-        ?ERROR_BAD_VALUE_ALIAS(_) ->
-            gui_error:report_warning(
-                <<"Alias can contain only lowercase letters and digits, and "
-                "must be at least 5 characters long.">>);
+                <<"Alias can contain only letters, digits, _ or - and "
+                "must be at least 3 characters long.">>);
         ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(_) ->
             gui_error:report_warning(
                 <<"This alias is occupied by someone else. "
@@ -169,7 +166,7 @@ delete_record(<<"user">>, _Id) ->
 user_record(Client, UserId) ->
     {ok, #od_user{
         name = Name,
-        alias = UserAlias,
+        login = UserLogin,
         basic_auth_enabled = BasicAuthEnabled,
         linked_accounts = LinkedAccounts,
         client_tokens = ClientTokenIds,
@@ -179,7 +176,7 @@ user_record(Client, UserId) ->
         eff_spaces = EffSpaces,
         eff_providers = EffProviders
     }} = user_logic:get(Client, UserId),
-    Alias = alias_db_to_client(UserAlias),
+    Login = login_db_to_client(UserLogin),
     Authorizers = authorizers_db_to_client(LinkedAccounts),
     ClientTokens = client_tokens_db_to_client(ClientTokenIds),
     DefaultSpace = undefined_to_null(DefaultSpaceValue),
@@ -187,7 +184,7 @@ user_record(Client, UserId) ->
     [
         {<<"id">>, UserId},
         {<<"name">>, Name},
-        {<<"alias">>, Alias},
+        {<<"alias">>, Login},
         {<<"basicAuthEnabled">>, BasicAuthEnabled},
         {<<"authorizers">>, Authorizers},
         {<<"clienttokens">>, ClientTokens},
@@ -233,9 +230,9 @@ push_user_record_when_synchronized(UserId) ->
 %% Converts user alias in db format to client format.
 %% @end
 %%--------------------------------------------------------------------
--spec alias_db_to_client(UserAlias :: binary()) -> binary() | null.
-alias_db_to_client(?EMPTY_ALIAS) -> null;
-alias_db_to_client(Bin) when is_binary(Bin) -> Bin.
+-spec login_db_to_client(UserLogin :: binary() | undefined) -> binary() | null.
+login_db_to_client(undefined) -> null;
+login_db_to_client(Bin) when is_binary(Bin) -> Bin.
 
 
 %%--------------------------------------------------------------------

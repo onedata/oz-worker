@@ -783,7 +783,6 @@ get_eff_user_test(Config) ->
                 <<"emailList">> => [],
                 <<"linkedAccounts">> => []
             },
-            ExpDetailsWithoutAlias = maps:remove(<<"alias">>, ExpDetails),
 
             ApiTestSpec = #api_test_spec{
                 client_spec = #client_spec{
@@ -821,7 +820,7 @@ get_eff_user_test(Config) ->
                         aspect = instance, scope = protected
                     },
                     auth_hint = ?THROUGH_PROVIDER(P1),
-                    expected_result = ?OK_MAP(ExpDetailsWithoutAlias#{
+                    expected_result = ?OK_MAP(ExpDetails#{
                         <<"gri">> => fun(EncodedGri) ->
                             #gri{id = Id} = oz_test_utils:decode_gri(
                                 Config, EncodedGri

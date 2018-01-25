@@ -53,7 +53,7 @@ end).
     get_default_provider/2
 ]).
 -export([
-    update_name/3, update_alias/3, update/3,
+    update_name/3, update_login/3, update/3,
     update_oz_privileges/4, update_oz_privileges/3,
     set_default_space/3,
     set_space_alias/4,
@@ -366,18 +366,18 @@ update_name(Client, UserId, NewName) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates the alias of given user.
+%% Updates the login of given user.
 %% @end
 %%--------------------------------------------------------------------
--spec update_alias(Client :: entity_logic:client(), UserId :: od_user:id(),
-    NewAlias :: binary()) -> ok | {error, term()}.
-update_alias(Client, UserId, NewAlias) ->
-    update(Client, UserId, #{<<"alias">> => NewAlias}).
+-spec update_login(Client :: entity_logic:client(), UserId :: od_user:id(),
+    NewLogin :: entity_logic:login()) -> ok | {error, term()}.
+update_login(Client, UserId, NewLogin) ->
+    update(Client, UserId, #{<<"login">> => NewLogin}).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates information of given user (name and alias).
+%% Updates information of given user (name and login).
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Client :: entity_logic:client(), UserId :: od_user:id(),

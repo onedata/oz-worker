@@ -167,17 +167,15 @@ get_user_details_test(Config) ->
         ?OZ_GROUPS_LIST_USERS
     ]),
 
-    ExpAlias = ExpLogin = ExpName = <<"user1">>,
+    ExpLogin = ExpName = <<"user1">>,
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{
         name = ExpName,
-        login = ExpLogin,
-        alias = ExpAlias
+        login = ExpLogin
     }),
     {ok, U3} = oz_test_utils:group_add_user(Config, G1, U3),
     oz_test_utils:group_set_user_privileges(Config, G1, U3, set, []),
 
     ExpDetails = #{
-        <<"alias">> => ExpAlias,
         <<"login">> => ExpLogin,
         <<"name">> => ExpName
     },
@@ -597,8 +595,7 @@ get_eff_user_details_test(Config) ->
                         aspect = instance, scope = shared
                     },
                     auth_hint = ?THROUGH_GROUP(G1),
-                    expected_result = ?OK_MAP(
-                        (maps:remove(<<"alias">>, UserDetails))#{
+                    expected_result = ?OK_MAP(UserDetails#{
                             <<"gri">> => fun(EncodedGri) ->
                                 #gri{id = UId} = oz_test_utils:decode_gri(
                                     Config, EncodedGri
