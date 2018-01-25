@@ -77,7 +77,7 @@ start() ->
                 {certfile, CertFile},
                 {cacerts, CaCerts},
                 {verify, verify_peer},
-                {ciphers, ssl:cipher_suites() -- ssl_utils:weak_ciphers()}
+                {ciphers, ssl_utils:safe_ciphers()}
             ], cowboy_protocol,
             [
                 {env, [{dispatch, Dispatch}]}
