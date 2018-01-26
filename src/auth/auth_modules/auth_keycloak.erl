@@ -16,7 +16,7 @@
 -include("auth_common.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
--define(PROVIDER_ID, rhea).
+-define(IDENTITY_PROVIDER, rhea).
 
 %% API
 -export([get_redirect_url/1, validate_login/0, get_user_info/1]).
@@ -34,7 +34,7 @@
 -spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
 get_redirect_url(ConnectAccount) ->
     auth_oauth2_common:get_redirect_url(
-        ConnectAccount, ?PROVIDER_ID, ?MODULE
+        ConnectAccount, ?IDENTITY_PROVIDER, ?MODULE
     ).
 
 
@@ -46,7 +46,7 @@ get_redirect_url(ConnectAccount) ->
 -spec validate_login() -> {ok, #linked_account{}} | {error, term()}.
 validate_login() ->
     auth_oauth2_common:validate_login(
-        ?PROVIDER_ID, secret_over_http_post, access_token_in_header
+        ?IDENTITY_PROVIDER, secret_over_http_post, access_token_in_header
     ).
 
 
@@ -59,7 +59,7 @@ validate_login() ->
     {ok, #linked_account{}} | {error, bad_access_token}.
 get_user_info(AccessToken) ->
     auth_oauth2_common:get_user_info(
-        ?PROVIDER_ID, access_token_in_header, AccessToken
+        ?IDENTITY_PROVIDER, access_token_in_header, AccessToken
     ).
 
 %%--------------------------------------------------------------------
@@ -122,7 +122,7 @@ normalized_membership_spec(Group, Type, Structure) ->
 -spec normalized_membership_specs(proplists:proplist()) ->
     [idp_group_mapping:membership_spec()].
 normalized_membership_specs(Props) ->
-    Config = auth_config:get_auth_config(?PROVIDER_ID),
+    Config = auth_config:get_auth_config(?IDENTITY_PROVIDER),
     GroupMappingConfig = proplists:get_value(group_mapping, Config, []),
     AttributesConfig = proplists:get_value(attributes_to_map, GroupMappingConfig, []),
     lists:flatmap(fun({Attr, Type, Structure}) ->
@@ -145,7 +145,7 @@ normalized_membership_specs(Props) ->
 %%--------------------------------------------------------------------
 -spec vo_id() -> binary().
 vo_id() ->
-    GroupMappingConfig = auth_config:get_group_mapping_config(?PROVIDER_ID),
+    GroupMappingConfig = auth_config:get_group_mapping_config(?IDENTITY_PROVIDER),
     case proplists:get_value(vo_group_id, GroupMappingConfig) of
         undefined -> throw(no_vo_group_id_specified_in_config);
         VoId -> VoId

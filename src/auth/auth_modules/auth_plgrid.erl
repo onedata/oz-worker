@@ -17,7 +17,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
--define(PROVIDER_ID, plgrid).
+-define(IDENTITY_PROVIDER, plgrid).
 
 %% API
 -export([get_redirect_url/1, validate_login/0, get_user_info/1]).
@@ -58,7 +58,7 @@ get_redirect_url(ConnectAccount) ->
     catch
         Type:Message ->
             ?error_stacktrace("Cannot get redirect URL for ~p. ~p:~p",
-                [?PROVIDER_ID, Type, Message]),
+                [?IDENTITY_PROVIDER, Type, Message]),
             {error, {Type, Message}}
     end.
 
@@ -132,7 +132,7 @@ validate_login() ->
             end, [DN1, DN2, DN3]),
 
         ProvUserInfo = #linked_account{
-            provider_id = ?PROVIDER_ID,
+            idp = ?IDENTITY_PROVIDER,
             user_id = str_utils:to_binary(Login),
             login = Login,
             email_list = Emails,
@@ -168,7 +168,7 @@ get_user_info(_AccessToken) ->
 %%--------------------------------------------------------------------
 -spec plgrid_endpoint() -> binary().
 plgrid_endpoint() ->
-    XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_config:get_auth_config(?PROVIDER_ID)),
+    XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_config:get_auth_config(?IDENTITY_PROVIDER)),
     {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, #{
         <<"Accept">> => <<"application/xrds+xml;level=1, */*">>,
         <<"Connection">> => <<"close">>

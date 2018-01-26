@@ -24,9 +24,9 @@
 %% This record defines user's account info
 %% received from an SAML / openid / oauth provider.
 -record(linked_account, {
-    provider_id = undefined :: atom(),
+    idp = undefined :: atom(),
     user_id = <<"">> :: binary(),
-    login = <<"">> :: binary(),
+    login = <<"">> :: undefined | binary(),
     name = <<"">> :: binary(),
     email_list = [] :: [binary()],
     % A list of strings that do not change for each given group so that

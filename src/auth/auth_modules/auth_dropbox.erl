@@ -16,7 +16,7 @@
 -include("auth_common.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
--define(PROVIDER_ID, dropbox).
+-define(IDENTITY_PROVIDER, dropbox).
 
 %% API
 -export([get_redirect_url/1, validate_login/0, get_user_info/1]).
@@ -34,7 +34,7 @@
 get_redirect_url(ConnectAccount) ->
     try
         ParamsProplist = [
-            {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_ID)},
+            {<<"client_id">>, auth_config:get_provider_app_id(?IDENTITY_PROVIDER)},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"response_type">>, <<"code">>},
             {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
@@ -43,7 +43,7 @@ get_redirect_url(ConnectAccount) ->
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
-            ?error_stacktrace("Cannot get redirect URL for ~p", [?PROVIDER_ID]),
+            ?error_stacktrace("Cannot get redirect URL for ~p", [?IDENTITY_PROVIDER]),
             {error, {Type, Message}}
     end.
 
@@ -61,8 +61,8 @@ validate_login() ->
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         % Prepare basic auth code
-        AuthEncoded = base64:encode(<<(auth_config:get_provider_app_id(?PROVIDER_ID))/binary, ":",
-            (auth_config:get_provider_app_secret(?PROVIDER_ID))/binary>>),
+        AuthEncoded = base64:encode(<<(auth_config:get_provider_app_id(?IDENTITY_PROVIDER))/binary, ":",
+            (auth_config:get_provider_app_secret(?IDENTITY_PROVIDER))/binary>>),
         % Form access token request
         NewParamsProplist = [
             {<<"code">>, <<Code/binary>>},
@@ -104,7 +104,7 @@ get_user_info(AccessToken) ->
     % Parse received JSON
     UserInfoProplist = json_utils:decode(JSON),
     ProvUserInfo = #linked_account{
-        provider_id = ?PROVIDER_ID,
+        idp = ?IDENTITY_PROVIDER,
         user_id = auth_utils:get_value_binary(<<"uid">>, UserInfoProplist),
         email_list = auth_utils:extract_emails(UserInfoProplist),
         name = auth_utils:get_value_binary(<<"display_name">>, UserInfoProplist),
@@ -125,7 +125,7 @@ get_user_info(AccessToken) ->
 %%--------------------------------------------------------------------
 -spec authorize_endpoint() -> binary().
 authorize_endpoint() ->
-    proplists:get_value(authorize_endpoint, auth_config:get_auth_config(?PROVIDER_ID)).
+    proplists:get_value(authorize_endpoint, auth_config:get_auth_config(?IDENTITY_PROVIDER)).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -134,7 +134,7 @@ authorize_endpoint() ->
 %%--------------------------------------------------------------------
 -spec access_token_endpoint() -> binary().
 access_token_endpoint() ->
-    proplists:get_value(access_token_endpoint, auth_config:get_auth_config(?PROVIDER_ID)).
+    proplists:get_value(access_token_endpoint, auth_config:get_auth_config(?IDENTITY_PROVIDER)).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -143,4 +143,4 @@ access_token_endpoint() ->
 %%--------------------------------------------------------------------
 -spec user_info_endpoint() -> binary().
 user_info_endpoint() ->
-    proplists:get_value(user_info_endpoint, auth_config:get_auth_config(?PROVIDER_ID)).
+    proplists:get_value(user_info_endpoint, auth_config:get_auth_config(?IDENTITY_PROVIDER)).

@@ -1227,7 +1227,7 @@ linked_accounts_to_maps(LinkedAccounts) ->
     lists:map(
         fun(OAuthAccount) ->
             #linked_account{
-                provider_id = ProviderId,
+                idp = IdentityProvider,
                 user_id = UserId,
                 login = Login,
                 name = Name,
@@ -1235,7 +1235,7 @@ linked_accounts_to_maps(LinkedAccounts) ->
                 groups = Groups
             } = OAuthAccount,
             #{
-                <<"providerId">> => ProviderId,
+                <<"idp">> => IdentityProvider,
                 <<"userId">> => UserId,
                 <<"login">> => Login,
                 <<"name">> => Name,
@@ -1274,7 +1274,7 @@ onepanel_uid_to_system_uid(OnepanelUserId) ->
 -spec create_user_by_linked_account(#linked_account{}) ->
     {ok, UserId :: od_user:id()} | {error, not_found}.
 create_user_by_linked_account(LinkedAccount) ->
-    #linked_account{provider_id = IdPName, user_id = IdPUserId} = LinkedAccount,
+    #linked_account{idp = IdPName, user_id = IdPUserId} = LinkedAccount,
     UserId = idp_uid_to_system_uid(IdPName, IdPUserId),
     {ok, UserId} = create(#od_user{}, UserId),
     merge_linked_account(UserId, LinkedAccount),
@@ -1315,7 +1315,7 @@ merge_linked_account_unsafe(UserId, LinkedAccount) ->
         name = Name, email_list = Emails, linked_accounts = LinkedAccounts
     } = UserInfo}} = od_user:get(UserId),
     #linked_account{
-        provider_id = IdP, user_id = IdPUserId,
+        idp = IdP, user_id = IdPUserId,
         email_list = LinkedEmails, groups = NewGroups
     } = LinkedAccount,
     % If no name is specified, take the one provided with new info
@@ -1606,7 +1606,7 @@ setup_user(UserId, UserInfo) ->
 find_linked_account(#od_user{linked_accounts = LinkedAccounts}, IdP, IdPUserId) ->
     lists:foldl(
         fun
-            (LAcc = #linked_account{provider_id = PId, user_id = UId}, undefined)
+            (LAcc = #linked_account{idp = PId, user_id = UId}, undefined)
                 when PId =:= IdP, UId =:= IdPUserId ->
                 LAcc;
             (_Other, Found) ->

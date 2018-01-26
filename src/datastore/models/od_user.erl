@@ -143,8 +143,8 @@ get_by_criterion({login, Value}) ->
 get_by_criterion({linked_account, {ProviderID, UserID}}) ->
     Fun = fun(Doc = #document{value = #od_user{linked_accounts = Accounts}}, Acc) ->
         Found = lists:any(fun
-            (#linked_account{provider_id = PID, user_id = UID}) ->
-                case {PID, UID} of
+            (#linked_account{idp = IDP, user_id = UID}) ->
+                case {IDP, UID} of
                     {ProviderID, UserID} -> true;
                     _ -> false
                 end;
@@ -288,7 +288,15 @@ get_record_struct(4) ->
     {record, lists:keyreplace(linked_accounts, 1, Struct, LinkedAccStruct)};
 get_record_struct(5) ->
     {record, Struct} = get_record_struct(4),
-    {record, lists:keydelete(alias, 1, Struct)}.
+    LinkedAccStruct = {linked_accounts, [{record, [
+        {idp, atom},
+        {user_id, string},
+        {login, string},
+        {name, string},
+        {email_list, [string]},
+        {groups, [string]}
+    ]}]},
+    {record, lists:keydelete(alias, 1, lists:keyreplace(linked_accounts, 1, Struct, LinkedAccStruct))}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -461,13 +469,13 @@ upgrade_record(3, User) ->
 
     LinkedAccounts = lists:map(
         fun({linked_account, ProviderId, UserId, OALogin, OAName, OAEmails}) ->
-            #linked_account{
-                provider_id = ProviderId,
-                user_id = UserId,
-                login = OALogin,
-                name = OAName,
-                email_list = OAEmails,
-                groups = []
+            {linked_account,
+                ProviderId,
+                UserId,
+                OALogin,
+                OAName,
+                OAEmails,
+                []
             }
         end, ConnectedAccounts
     ),
@@ -534,12 +542,25 @@ upgrade_record(4, User) ->
         TopDownDirty
     } = User,
 
+    NewLinkedAccounts = lists:map(
+        fun({linked_account, ProviderId, UserId, OALogin, OAName, OAEmails, OAGroups}) ->
+            #linked_account{
+                idp = ProviderId,
+                user_id = UserId,
+                login = OALogin,
+                name = OAName,
+                email_list = OAEmails,
+                groups = OAGroups
+            }
+        end, LinkedAccounts
+    ),
+
     {5, #od_user{
         name = Name,
         login = Login,
         email_list = EmailList,
         basic_auth_enabled = BasicAuthEnabled,
-        linked_accounts = LinkedAccounts,
+        linked_accounts = NewLinkedAccounts,
 
         default_space = DefaultSpace,
         default_provider = DefaultProvider,

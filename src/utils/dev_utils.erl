@@ -81,7 +81,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
                     login = UserId,
                     email_list = [<<UserId/binary, "@gmail.com">>],
                     linked_accounts = [
-                        #linked_account{provider_id = google,
+                        #linked_account{idp = google,
                             user_id = <<UserId/binary, "#oauth_id">>,
                             login = <<UserId/binary, "#oauth_login">>,
                             name = UserId,

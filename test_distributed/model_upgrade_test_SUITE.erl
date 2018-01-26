@@ -301,21 +301,21 @@ user_record_4() -> {od_user,
     [<<"email1@email.com">>, <<"email2@email.com">>],
     true,
     [
-        #linked_account{
-            provider_id = google,
-            user_id = <<"user_id1">>,
-            login = <<"login1">>,
-            name = <<"name1">>,
-            email_list = [<<"email1@email.com">>],
-            groups = []
+        {linked_account,
+            google,
+            <<"user_id1">>,
+            <<"login1">>,
+            <<"name1">>,
+            [<<"email1@email.com">>],
+            []
         },
-        #linked_account{
-            provider_id = github,
-            user_id = <<"user_id2">>,
-            login = <<"login2">>,
-            name = <<"name2">>,
-            email_list = [<<"email2@email.com">>],
-            groups = []
+        {linked_account,
+            github,
+            <<"user_id2">>,
+            <<"login2">>,
+            <<"name2">>,
+            [<<"email2@email.com">>],
+            []
         }
     ],
     <<"default_space">>,
@@ -350,7 +350,7 @@ user_record_5() -> #od_user{
     basic_auth_enabled = true,
     linked_accounts = [
         #linked_account{
-            provider_id = google,
+            idp = google,
             user_id = <<"user_id1">>,
             login = <<"login1">>,
             name = <<"name1">>,
@@ -358,7 +358,7 @@ user_record_5() -> #od_user{
             groups = []
         },
         #linked_account{
-            provider_id = github,
+            idp = github,
             user_id = <<"user_id2">>,
             login = <<"login2">>,
             name = <<"name2">>,

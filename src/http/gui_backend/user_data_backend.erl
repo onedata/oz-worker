@@ -247,7 +247,7 @@ authorizers_db_to_client(LinkedAccounts) ->
     lists:foldl(
         fun(LinkedAccount, Acc) ->
             #linked_account{
-                provider_id = Provider,
+                idp = Provider,
                 email_list = Emails,
                 user_id = SubId} = LinkedAccount,
             ProviderBin = str_utils:to_binary(Provider),
