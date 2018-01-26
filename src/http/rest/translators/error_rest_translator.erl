@@ -209,8 +209,8 @@ translate(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key)) ->
     };
 translate(?ERROR_BAD_VALUE_LOGIN(Key)) ->
     {?HTTP_400_BAD_REQUEST, {
-        <<"Bad value: provided \"~s\" must contain only digits or lowercase "
-        "letters and be at least 5 characters long.">>, [Key]
+        <<"Bad value: provided \"~s\" must contain only digits, lowercase, _ or - "
+        "letters and be at least 3 characters long. To unset the login use null value.">>, [Key]
     }};
 translate(?ERROR_BAD_VALUE_IDENTIFIER(Key)) ->
     {?HTTP_400_BAD_REQUEST, {

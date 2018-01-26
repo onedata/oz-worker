@@ -245,7 +245,6 @@ get_test(Config) ->
         <<"name">> => ExpName,
         <<"login">> => ExpLogin,
         <<"emailList">> => ExpEmailList,
-        % TODO VFS-2918
         <<"linkedAccounts">> => []
     },
 
@@ -408,7 +407,6 @@ get_self_test(Config) ->
         <<"name">> => ExpName,
         <<"login">> => ExpLogin,
         <<"emailList">> => ExpEmailList,
-        % TODO VFS-2918
         <<"linkedAccounts">> => []
     },
 
@@ -456,7 +454,7 @@ update_test(Config) ->
     end,
     VerifyEndFun = fun(ShouldSucceed, #{userId := UserId} = _Env, Data) ->
         {ok, User} = oz_test_utils:get_user(Config, UserId),
-        {ExpName, ExpLogin} = case ShouldSucceed of
+        {ExpName, Login} = case ShouldSucceed of
             false ->
                 {?USER_NAME1, OwnedLogin};
             true ->
@@ -464,6 +462,10 @@ update_test(Config) ->
                     maps:get(<<"name">>, Data, ?USER_NAME1),
                     maps:get(<<"login">>, Data, OwnedLogin)
                 }
+        end,
+        ExpLogin = case Login of
+            null -> undefined;
+            _ -> Login
         end,
         ?assertEqual(ExpName, User#od_user.name),
         ?assertEqual(ExpLogin, User#od_user.login)
@@ -490,13 +492,13 @@ update_test(Config) ->
             at_least_one = [<<"name">>, <<"login">>],
             correct_values = #{
                 <<"name">> => [fun() -> ?UNIQUE_STRING end],
-                <<"login">> => [fun() -> ?UNIQUE_STRING end, OwnedLogin]
+                <<"login">> => [fun() -> ?UNIQUE_STRING end, OwnedLogin, null]
             },
             bad_values = [
                 {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
                 {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
-                {<<"login">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"login">>)},
-                {<<"login">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"login">>)},
+                {<<"login">>, <<"">>, ?ERROR_BAD_VALUE_LOGIN(<<"login">>)},
+                {<<"login">>, 1234, ?ERROR_BAD_VALUE_LOGIN(<<"login">>)},
                 {<<"login">>, UsedLogin,
                     ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"login">>)}
             ]
