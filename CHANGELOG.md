@@ -4,9 +4,19 @@
 CHANGELOG
 ---------
 
+### 17.06.0-rc9
+
+* VFS-4004 Update ctool to include safe ciphers in TLS
+* VFS-3951 add build_version env var for oz
+* VFS-3972 Fix attach-direct consoles in releases not being run with xterm terminal
+* VFS-3951 add rest endpoint for asking about oz version
+* VFS-3904 Optimize CA loop
+* VFS-3803 Add endpoint for providers returning zone time, include provider latitude and logitude in subscriptions
+
+
 ### 17.06.0-rc8
 
-* Releasing new version 17.06.0-rc7
+* Releasing new version 17.06.0-rc8
 
 
 ### 17.06.0-rc7
