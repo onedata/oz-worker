@@ -774,14 +774,13 @@ create_eff_child_groups_env(Config) ->
 
     Users = [{U1, _}, {U2, _}, {U3, _}, {U4, _}] = lists:map(
         fun(_) ->
-            Alias = Login = Name = ?UNIQUE_STRING,
+            Login = Name = ?UNIQUE_STRING,
             UserDetails = #{
-                <<"alias">> => Alias,
                 <<"login">> => Login,
                 <<"name">> => Name
             },
             {ok, UserId} = oz_test_utils:create_user(Config, #od_user{
-                name = Name, login = Login, alias = Alias
+                name = Name, login = Login
             }),
             {UserId, UserDetails}
         end, lists:seq(1, 4)

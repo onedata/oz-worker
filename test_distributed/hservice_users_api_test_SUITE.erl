@@ -253,11 +253,10 @@ get_user_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    ExpAlias = ExpLogin = ExpName = ?USER_NAME1,
+    ExpLogin = ExpName = ?USER_NAME1,
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{
         name = ExpName,
-        login = ExpLogin,
-        alias = ExpAlias
+        login = ExpLogin
     }),
     {ok, U3} = oz_test_utils:handle_service_add_user(Config, HService, U3),
     oz_test_utils:handle_service_set_user_privileges(Config, HService, U3,
@@ -265,7 +264,6 @@ get_user_test(Config) ->
     ),
 
     ExpUserDetails = #{
-        <<"alias">> => ExpAlias,
         <<"login">> => ExpLogin,
         <<"name">> => ExpName
     },
@@ -530,8 +528,7 @@ get_eff_user_test(Config) ->
                         aspect = instance, scope = shared
                     },
                     auth_hint = ?THROUGH_HANDLE_SERVICE(HService),
-                    expected_result = ?OK_MAP(
-                        (maps:remove(<<"alias">>, UserDetails))#{
+                    expected_result = ?OK_MAP(UserDetails#{
                             <<"gri">> => fun(EncodedGri) ->
                                 #gri{id = Id} = oz_test_utils:decode_gri(
                                     Config, EncodedGri

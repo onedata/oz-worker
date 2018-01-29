@@ -230,7 +230,7 @@ get_eff_oz_privileges(Client, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates information of given group (name and alias).
+%% Updates information of given group (name and type).
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Client :: entity_logic:client(), GroupId :: od_group:id(),

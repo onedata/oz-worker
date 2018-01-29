@@ -24,8 +24,8 @@
 %% This record defines user's account info
 %% received from an SAML / openid / oauth provider.
 -record(linked_account, {
-    provider_id = undefined :: atom(),
-    user_id = <<"">> :: binary(),
+    idp = undefined :: atom(),
+    subject_id = <<"">> :: binary(),
     login = <<"">> :: binary(),
     name = <<"">> :: binary(),
     email_list = [] :: [binary()],
@@ -83,20 +83,19 @@
 %% This record defines a user and is handled as a database document
 -record(od_user, {
     name = <<"">> :: od_user:name(),
-    login = <<"">> :: binary(),
-    alias = ?EMPTY_ALIAS :: binary(),
+    login = undefined :: od_user:login(),
     email_list = [] :: [binary()],
     % Decides if this user can login via login:password, only users created in
     % onepanel are currently allowed to do that.
     basic_auth_enabled = false :: boolean(),
     linked_accounts = [] :: [#linked_account{}],
-    default_space = undefined :: binary() | undefined,
+    default_space = undefined :: undefined | binary(),
     % This allows to remember the provider which was selected for user,
     % so DNS knows where to redirect
-    default_provider = undefined :: binary() | undefined,
+    default_provider = undefined :: undefined | binary(),
     % This allows to remember to which provider user is being redirected.
     % It is needed in DNS so it knows where to redirect.
-    chosen_provider = undefined :: binary() | undefined,
+    chosen_provider = undefined :: undefined | binary(),
     % List of user's client tokens
     client_tokens = [] :: [binary()],
     % List of user's aliases for spaces

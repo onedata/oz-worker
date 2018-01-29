@@ -53,7 +53,7 @@ end).
     get_default_provider/2
 ]).
 -export([
-    update_name/3, update_alias/3, update/3,
+    update_name/3, update_login/3, update/3,
     update_oz_privileges/4, update_oz_privileges/3,
     set_default_space/3,
     set_space_alias/4,
@@ -366,18 +366,18 @@ update_name(Client, UserId, NewName) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates the alias of given user.
+%% Updates the login of given user.
 %% @end
 %%--------------------------------------------------------------------
--spec update_alias(Client :: entity_logic:client(), UserId :: od_user:id(),
-    NewAlias :: binary()) -> ok | {error, term()}.
-update_alias(Client, UserId, NewAlias) ->
-    update(Client, UserId, #{<<"alias">> => NewAlias}).
+-spec update_login(Client :: entity_logic:client(), UserId :: od_user:id(),
+    NewLogin :: od_user:login()) -> ok | {error, term()}.
+update_login(Client, UserId, NewLogin) ->
+    update(Client, UserId, #{<<"login">> => NewLogin}).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates information of given user (name and alias).
+%% Updates information of given user (name and login).
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Client :: entity_logic:client(), UserId :: od_user:id(),
@@ -1227,16 +1227,16 @@ linked_accounts_to_maps(LinkedAccounts) ->
     lists:map(
         fun(OAuthAccount) ->
             #linked_account{
-                provider_id = ProviderId,
-                user_id = UserId,
+                idp = IdentityProvider,
+                subject_id = UserId,
                 login = Login,
                 name = Name,
                 email_list = EmailList,
                 groups = Groups
             } = OAuthAccount,
             #{
-                <<"providerId">> => ProviderId,
-                <<"userId">> => UserId,
+                <<"idp">> => IdentityProvider,
+                <<"subjectId">> => UserId,
                 <<"login">> => Login,
                 <<"name">> => Name,
                 <<"emailList">> => EmailList,
@@ -1274,7 +1274,7 @@ onepanel_uid_to_system_uid(OnepanelUserId) ->
 -spec create_user_by_linked_account(#linked_account{}) ->
     {ok, UserId :: od_user:id()} | {error, not_found}.
 create_user_by_linked_account(LinkedAccount) ->
-    #linked_account{provider_id = IdPName, user_id = IdPUserId} = LinkedAccount,
+    #linked_account{idp = IdPName, subject_id = IdPUserId} = LinkedAccount,
     UserId = idp_uid_to_system_uid(IdPName, IdPUserId),
     {ok, UserId} = create(#od_user{}, UserId),
     merge_linked_account(UserId, LinkedAccount),
@@ -1315,7 +1315,7 @@ merge_linked_account_unsafe(UserId, LinkedAccount) ->
         name = Name, email_list = Emails, linked_accounts = LinkedAccounts
     } = UserInfo}} = od_user:get(UserId),
     #linked_account{
-        provider_id = IdP, user_id = IdPUserId,
+        idp = IdP, subject_id = IdPUserId,
         email_list = LinkedEmails, groups = NewGroups
     } = LinkedAccount,
     % If no name is specified, take the one provided with new info
@@ -1606,7 +1606,7 @@ setup_user(UserId, UserInfo) ->
 find_linked_account(#od_user{linked_accounts = LinkedAccounts}, IdP, IdPUserId) ->
     lists:foldl(
         fun
-            (LAcc = #linked_account{provider_id = PId, user_id = UId}, undefined)
+            (LAcc = #linked_account{idp = PId, subject_id = UId}, undefined)
                 when PId =:= IdP, UId =:= IdPUserId ->
                 LAcc;
             (_Other, Found) ->

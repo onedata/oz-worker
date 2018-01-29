@@ -228,7 +228,6 @@ get_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{
         name = ExpName = <<"UserName">>,
         login = ExpLogin = <<"UserLogin">>,
-        alias = ExpAlias = <<"UserAlias">>,
         email_list = ExpEmailList = [<<"a@a.a">>, <<"b@b.b">>]
     }),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
@@ -246,11 +245,7 @@ get_test(Config) ->
         <<"name">> => ExpName,
         <<"login">> => ExpLogin,
         <<"emailList">> => ExpEmailList,
-        % TODO VFS-2918
         <<"linkedAccounts">> => []
-    },
-    ProtectedDataWithAlias = ProtectedData#{
-        <<"alias">> => ExpAlias
     },
 
     % Get and check private data
@@ -273,7 +268,7 @@ get_test(Config) ->
             args = [client, User],
             expected_result = ?OK_TERM(
                 fun(#od_user{
-                    name = Name, login = Login, alias = Alias,
+                    name = Name, login = Login,
                     email_list = EmailList,
                     basic_auth_enabled = false,
                     linked_accounts = [],
@@ -295,7 +290,6 @@ get_test(Config) ->
                 }) ->
                     ?assertEqual(ExpName, Name),
                     ?assertEqual(ExpLogin, Login),
-                    ?assertEqual(ExpAlias, Alias),
                     ?assertEqual(ExpEmailList, EmailList),
                     ?assertEqual(SpaceId, S1),
                     ?assertEqual(EffSpaces, #{S1 => [{od_user, User}]}),
@@ -346,13 +340,13 @@ get_test(Config) ->
             method = get,
             path = [<<"/users/">>, User],
             expected_code = ?HTTP_200_OK,
-            expected_body = ProtectedDataWithAlias#{<<"userId">> => User}
+            expected_body = ProtectedData#{<<"userId">> => User}
         },
         logic_spec = LogicSpec = #logic_spec{
             module = user_logic,
             function = get_protected_data,
             args = [client, User],
-            expected_result = ?OK_MAP(ProtectedDataWithAlias)
+            expected_result = ?OK_MAP(ProtectedData)
         },
         gs_spec = GsSpec = #gs_spec{
             operation = get,
@@ -378,8 +372,7 @@ get_test(Config) ->
             function = get_shared_data,
             expected_result = ?OK_MAP(#{
                 <<"name">> => ExpName,
-                <<"login">> => ExpLogin,
-                <<"alias">> => ExpAlias
+                <<"login">> => ExpLogin
             })
         },
         gs_spec = GsSpec#gs_spec{
@@ -405,7 +398,6 @@ get_self_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{
         name = ExpName = <<"Name">>,
         login = ExpLogin = <<"Login">>,
-        alias = ExpAlias = <<"Alias">>,
         email_list = ExpEmailList = [
             <<"em1@google.com">>, <<"em2@google.com">>
         ]
@@ -415,7 +407,6 @@ get_self_test(Config) ->
         <<"name">> => ExpName,
         <<"login">> => ExpLogin,
         <<"emailList">> => ExpEmailList,
-        % TODO VFS-2918
         <<"linkedAccounts">> => []
     },
 
@@ -425,10 +416,7 @@ get_self_test(Config) ->
             method = get,
             path = <<"/user">>,
             expected_code = ?HTTP_200_OK,
-            expected_body = ProtectedData#{
-                <<"userId">> => User,
-                <<"alias">> => ExpAlias
-            }
+            expected_body = ProtectedData#{<<"userId">> => User}
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -450,14 +438,14 @@ get_self_test(Config) ->
 
 
 update_test(Config) ->
-    UsedAlias = ?UNIQUE_STRING,
-    {ok, _U1} = oz_test_utils:create_user(Config, #od_user{alias = UsedAlias}),
+    UsedLogin = ?UNIQUE_STRING,
+    {ok, _U1} = oz_test_utils:create_user(Config, #od_user{login = UsedLogin}),
 
-    % Trying to set owned alias again should not raise any error
-    OwnedAlias = ?UNIQUE_STRING,
+    % Trying to set owned login again should not raise any error
+    OwnedLogin = ?UNIQUE_STRING,
     EnvSetUpFun = fun() ->
         {ok, User} = oz_test_utils:create_user(Config, #od_user{
-            name = ?USER_NAME1, alias = OwnedAlias
+            name = ?USER_NAME1, login = OwnedLogin
         }),
         #{userId => User}
     end,
@@ -466,17 +454,21 @@ update_test(Config) ->
     end,
     VerifyEndFun = fun(ShouldSucceed, #{userId := UserId} = _Env, Data) ->
         {ok, User} = oz_test_utils:get_user(Config, UserId),
-        {ExpName, ExpAlias} = case ShouldSucceed of
+        {ExpName, Login} = case ShouldSucceed of
             false ->
-                {?USER_NAME1, OwnedAlias};
+                {?USER_NAME1, OwnedLogin};
             true ->
                 {
                     maps:get(<<"name">>, Data, ?USER_NAME1),
-                    maps:get(<<"alias">>, Data, OwnedAlias)
+                    maps:get(<<"login">>, Data, OwnedLogin)
                 }
         end,
+        ExpLogin = case Login of
+            null -> undefined;
+            _ -> Login
+        end,
         ?assertEqual(ExpName, User#od_user.name),
-        ?assertEqual(ExpAlias, User#od_user.alias)
+        ?assertEqual(ExpLogin, User#od_user.login)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -497,19 +489,22 @@ update_test(Config) ->
             expected_result = ?OK
         },
         data_spec = #data_spec{
-            at_least_one = [<<"name">>, <<"alias">>],
+            at_least_one = [<<"name">>, <<"login">>],
             correct_values = #{
                 <<"name">> => [fun() -> ?UNIQUE_STRING end],
-                <<"alias">> => [fun() -> ?UNIQUE_STRING end, OwnedAlias]
+                <<"login">> => [fun() -> ?UNIQUE_STRING end, OwnedLogin, null]
             },
             bad_values = [
                 {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
                 {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
-                {<<"alias">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"alias">>)},
-                {<<"alias">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"alias">>)},
-                {<<"alias">>, <<"Resu1">>, ?ERROR_BAD_VALUE_ALIAS(<<"alias">>)},
-                {<<"alias">>, UsedAlias,
-                    ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"alias">>)}
+                {<<"login">>, <<"">>, ?ERROR_BAD_VALUE_LOGIN},
+                {<<"login">>, <<"_asd">>, ?ERROR_BAD_VALUE_LOGIN},
+                {<<"login">>, <<"-asd">>, ?ERROR_BAD_VALUE_LOGIN},
+                {<<"login">>, <<"asd_">>, ?ERROR_BAD_VALUE_LOGIN},
+                {<<"login">>, <<"verylongloginwithatleast15chars">>, ?ERROR_BAD_VALUE_LOGIN},
+                {<<"login">>, 1234, ?ERROR_BAD_VALUE_LOGIN},
+                {<<"login">>, UsedLogin,
+                    ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"login">>)}
             ]
         }
     },

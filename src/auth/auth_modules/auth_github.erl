@@ -19,7 +19,7 @@
 %% Used in header required by GitHub (probably for statistical purposes)
 -define(user_agent_name, "One Data").
 
--define(PROVIDER_ID, github).
+-define(IDENTITY_PROVIDER, github).
 
 %% API
 -export([get_redirect_url/1, validate_login/0, get_user_info/1]).
@@ -37,7 +37,7 @@
 get_redirect_url(ConnectAccount) ->
     try
         ParamsProplist = [
-            {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_ID)},
+            {<<"client_id">>, auth_config:get_provider_app_id(?IDENTITY_PROVIDER)},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"scope">>, <<"user,user:email">>},
             {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
@@ -46,7 +46,7 @@ get_redirect_url(ConnectAccount) ->
         {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
     catch
         Type:Message ->
-            ?error_stacktrace("Cannot get redirect URL for ~p", [?PROVIDER_ID]),
+            ?error_stacktrace("Cannot get redirect URL for ~p", [?IDENTITY_PROVIDER]),
             {error, {Type, Message}}
     end.
 
@@ -65,8 +65,8 @@ validate_login() ->
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         % Form access token request
         NewParamsProplist = [
-            {<<"client_id">>, auth_config:get_provider_app_id(?PROVIDER_ID)},
-            {<<"client_secret">>, auth_config:get_provider_app_secret(?PROVIDER_ID)},
+            {<<"client_id">>, auth_config:get_provider_app_id(?IDENTITY_PROVIDER)},
+            {<<"client_secret">>, auth_config:get_provider_app_secret(?IDENTITY_PROVIDER)},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"code">>, <<Code/binary>>}
         ],
@@ -119,8 +119,8 @@ get_user_info(AccessToken) ->
     % Parse received JSON
     JSONProplist = json_utils:decode(JSON),
     ProvUserInfo = #linked_account{
-        provider_id = ?PROVIDER_ID,
-        user_id = auth_utils:get_value_binary(<<"id">>, JSONProplist),
+        idp = ?IDENTITY_PROVIDER,
+        subject_id = auth_utils:get_value_binary(<<"id">>, JSONProplist),
         email_list = EmailList,
         name = auth_utils:get_value_binary(<<"name">>, JSONProplist),
         login = auth_utils:get_value_binary(<<"login">>, JSONProplist),
@@ -139,7 +139,7 @@ get_user_info(AccessToken) ->
 %%--------------------------------------------------------------------
 -spec authorize_endpoint() -> binary().
 authorize_endpoint() ->
-    proplists:get_value(authorize_endpoint, auth_config:get_auth_config(?PROVIDER_ID)).
+    proplists:get_value(authorize_endpoint, auth_config:get_auth_config(?IDENTITY_PROVIDER)).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -148,7 +148,7 @@ authorize_endpoint() ->
 %%--------------------------------------------------------------------
 -spec access_token_endpoint() -> binary().
 access_token_endpoint() ->
-    proplists:get_value(access_token_endpoint, auth_config:get_auth_config(?PROVIDER_ID)).
+    proplists:get_value(access_token_endpoint, auth_config:get_auth_config(?IDENTITY_PROVIDER)).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -157,7 +157,7 @@ access_token_endpoint() ->
 %%--------------------------------------------------------------------
 -spec user_info_endpoint() -> binary().
 user_info_endpoint() ->
-    proplists:get_value(user_info_endpoint, auth_config:get_auth_config(?PROVIDER_ID)).
+    proplists:get_value(user_info_endpoint, auth_config:get_auth_config(?IDENTITY_PROVIDER)).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -166,4 +166,4 @@ user_info_endpoint() ->
 %%--------------------------------------------------------------------
 -spec user_emails_endpoint() -> binary().
 user_emails_endpoint() ->
-    proplists:get_value(user_emails_endpoint, auth_config:get_auth_config(?PROVIDER_ID)).
+    proplists:get_value(user_emails_endpoint, auth_config:get_auth_config(?IDENTITY_PROVIDER)).

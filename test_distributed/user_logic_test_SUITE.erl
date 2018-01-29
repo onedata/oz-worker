@@ -175,7 +175,7 @@ change_password_test(Config) ->
 merge_groups_in_linked_accounts_test(Config) ->
     % Super groups are mocked in init per testcase
     % Start with linked acc with no groups
-    FirstLinkedAcc = #linked_account{provider_id = ?IDP, groups = []},
+    FirstLinkedAcc = #linked_account{idp = ?IDP, groups = []},
     {ok, UserId} = oz_test_utils:call_oz(
         Config, user_logic, create_user_by_linked_account, [FirstLinkedAcc]
     ),
@@ -184,7 +184,7 @@ merge_groups_in_linked_accounts_test(Config) ->
     ?assertEqual({ok, []}, oz_test_utils:user_get_eff_groups(Config, UserId)),
 
     % Try linked acc with a group
-    SecondLinkedAcc = #linked_account{provider_id = ?IDP, groups = [
+    SecondLinkedAcc = #linked_account{idp = ?IDP, groups = [
         <<"vo:test-vo/user:member">>
     ]},
     oz_test_utils:call_oz(
@@ -210,7 +210,7 @@ merge_groups_in_linked_accounts_test(Config) ->
     ?assertEqual({ok, []}, oz_test_utils:user_get_eff_groups(Config, UserId)),
 
     % Linked acc with two groups
-    ThirdLinkedAcc = #linked_account{provider_id = ?IDP, groups = [
+    ThirdLinkedAcc = #linked_account{idp = ?IDP, groups = [
         <<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role/user:admin">>,
         <<"vo:another-vo/ut:some-unit/tm:some-team/rl:other-role/user:manager">>
     ]},
@@ -270,7 +270,7 @@ merge_groups_in_linked_accounts_test(Config) ->
     )),
 
     % Linked acc the same as before but with one group removed
-    FourthLinkedAcc = #linked_account{provider_id = ?IDP, groups = [
+    FourthLinkedAcc = #linked_account{idp = ?IDP, groups = [
         <<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role/user:admin">>
     ]},
     oz_test_utils:call_oz(
@@ -329,7 +329,7 @@ merge_groups_in_linked_accounts_test(Config) ->
     )),
 
     % Linked acc from other provider
-    FifthLinkedAcc = #linked_account{provider_id = ?IDP_WITH_SUPERGROUP, groups = [
+    FifthLinkedAcc = #linked_account{idp = ?IDP_WITH_SUPERGROUP, groups = [
         <<"vo:example-vo/tm:new-team/user:manager">>,
         <<(?SUPERGROUP)/binary, "/user:member">>
     ]},
@@ -372,7 +372,7 @@ merge_groups_in_linked_accounts_test(Config) ->
     )),
 
     % Linked acc the same as above but without the super group
-    SixthLinkedAcc = #linked_account{provider_id = ?IDP_WITH_SUPERGROUP, groups = [
+    SixthLinkedAcc = #linked_account{idp = ?IDP_WITH_SUPERGROUP, groups = [
         <<"vo:example-vo/tm:new-team/user:manager">>
     ]},
     oz_test_utils:call_oz(
@@ -413,7 +413,7 @@ merge_groups_in_linked_accounts_test(Config) ->
 
     % Linked acc the same as above but user's privileges in the group
     % are downgraded to member.
-    SeventhLinkedAcc = #linked_account{provider_id = ?IDP_WITH_SUPERGROUP, groups = [
+    SeventhLinkedAcc = #linked_account{idp = ?IDP_WITH_SUPERGROUP, groups = [
         <<"vo:example-vo/tm:new-team/user:member">>
     ]},
     oz_test_utils:call_oz(

@@ -180,21 +180,17 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, User) ->
     {ok, User};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
     #od_user{
-        name = Name, login = Login, alias = Alias, email_list = EmailList,
+        name = Name, login = Login, email_list = EmailList,
         linked_accounts = LinkedAccounts
     } = User,
     {ok, #{
         <<"name">> => Name, <<"login">> => Login,
-        <<"alias">> => Alias, <<"emailList">> => EmailList,
+        <<"emailList">> => EmailList,
         <<"linkedAccounts">> => user_logic:linked_accounts_to_maps(LinkedAccounts)
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, User) ->
-    #od_user{name = Name, login = Login, alias = Alias} = User,
-    {ok, #{
-        <<"name">> => Name,
-        <<"login">> => Login,
-        <<"alias">> => Alias
-    }};
+    #od_user{name = Name, login = Login} = User,
+    {ok, #{<<"name">> => Name, <<"login">> => Login}};
 
 get(#el_req{gri = #gri{aspect = oz_privileges}}, User) ->
     {ok, User#od_user.oz_privileges};
@@ -241,32 +237,33 @@ get(#el_req{gri = #gri{aspect = eff_handles}}, User) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = UserId, aspect = instance}, data = Data}) ->
-    UserUpdateFun = fun(#od_user{name = OldName, alias = OldAlias} = User) ->
+    UserUpdateFun = fun(#od_user{name = OldName, login = OldLogin} = User) ->
         {ok, User#od_user{
             name = maps:get(<<"name">>, Data, OldName),
-            alias = maps:get(<<"alias">>, Data, OldAlias)
+            login = maps:get(<<"login">>, Data, OldLogin)
         }}
     end,
-    % If alias is specified, run update in synchronized block so no two
-    % identical aliases can be set
-    case maps:get(<<"alias">>, Data, undefined) of
+    % If login is specified and is not undefined (which is valid in case of
+    % removing login), run update in synchronized block so no two
+    % identical logins can be set
+    case maps:get(<<"login">>, Data, undefined) of
         undefined ->
             {ok, _} = od_user:update(UserId, UserUpdateFun),
             ok;
-        Alias ->
-            critical_section:run({alias, Alias}, fun() ->
-                % Check if this alias is occupied
-                case od_user:get_by_criterion({alias, Alias}) of
+        Login ->
+            critical_section:run({login, Login}, fun() ->
+                % Check if this login is occupied
+                case od_user:get_by_criterion({login, Login}) of
                     {ok, #document{key = UserId}} ->
-                        % DB returned the same user, so the alias was modified
+                        % DB returned the same user, so the login was modified
                         % but is identical, don't report errors.
                         {ok, _} = od_user:update(UserId, UserUpdateFun),
                         ok;
                     {ok, #document{}} ->
-                        % Alias is occupied by another user
-                        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"alias">>);
+                        % Login is occupied by another user
+                        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"login">>);
                     _ ->
-                        % Alias is not occupied, update user doc
+                        % Login is not occupied, update user doc
                         {ok, _} = od_user:update(UserId, UserUpdateFun),
                         ok
                 end
@@ -551,7 +548,7 @@ validate(#el_req{operation = create, gri = #gri{id = UserId, aspect = default_pr
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, non_empty},
-        <<"alias">> => {binary, alias}
+        <<"login">> => {login, login}
     }
 };
 

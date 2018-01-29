@@ -50,7 +50,7 @@ od_handle_service | od_handle | oz_privileges.
 -type update_result() :: ok | error().
 -type result() :: create_result() | get_result() | update_result() | delete_result().
 
--type type_validator() :: any | atom | list_of_atoms | binary |
+-type type_validator() :: any | atom | list_of_atoms | binary | login |
 list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
@@ -61,7 +61,7 @@ list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addre
 {not_exists, fun((entity_id()) -> boolean())} |
 {relation_exists, atom(), binary(), atom(), binary(), fun((entity_id()) -> boolean())} |
 token_logic:token_type() | % Compatible only with 'token' type validator
-alias.  % Compatible only with 'binary' type validator
+login.
 
 % The 'aspect' key word allows to validate the data provided in aspect
 % identifier.
@@ -633,6 +633,14 @@ check_type(token, Key, Token) when is_binary(Token) ->
 check_type(token, _Key, Macaroon) ->
     % Accept everything, it will be validated in check_value
     Macaroon;
+check_type(login, _Key, null) ->
+    undefined;
+check_type(login, _Key, undefined) ->
+    undefined;
+check_type(login, _Key, Binary) when is_binary(Binary) ->
+    Binary;
+check_type(login, _Key, _) ->
+    throw(?ERROR_BAD_VALUE_LOGIN);
 check_type(list_of_ipv4_addresses, Key, ListOfIPs) ->
     try
         lists:map(fun(IP) ->
@@ -789,18 +797,12 @@ check_value(token, TokenType, Key, Macaroon) ->
         bad_type ->
             throw(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key))
     end;
-check_value(_, alias, Key, Value) ->
-    RegExpValidation = (match =:= re:run(
-        Value, ?ALIAS_VALIDATION_REGEXP, [{capture, none}]
-    )),
-    case {Value, RegExpValidation} of
-        {?EMPTY_ALIAS, _} ->
-            throw(?ERROR_BAD_VALUE_EMPTY(Key));
-        {<<?NO_ALIAS_UUID_PREFIX, _/binary>>, _} ->
-            throw(?ERROR_BAD_VALUE_ALIAS_WRONG_PREFIX(Key));
-        {_, false} ->
-            throw(?ERROR_BAD_VALUE_ALIAS(Key));
-        {_, true} -> ok
+check_value(login, login, _Key, undefined) ->
+    ok;
+check_value(login, login, _Key, Value) ->
+    case re:run(Value, ?LOGIN_VALIDATION_REGEXP, [{capture, none}]) of
+        match -> ok;
+        _ -> throw(?ERROR_BAD_VALUE_LOGIN)
     end;
 check_value(TypeRule, ValueRule, Key, _) ->
     ?error("Unknown {type, value} rule: {~p, ~p} for key: ~p", [

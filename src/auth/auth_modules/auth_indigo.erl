@@ -17,7 +17,7 @@
 -include("auth_common.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
--define(PROVIDER_ID, indigo).
+-define(IDENTITY_PROVIDER, indigo).
 
 %% API
 -export([get_redirect_url/1, validate_login/0, get_user_info/1]).
@@ -35,7 +35,7 @@
 -spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
 get_redirect_url(ConnectAccount) ->
     auth_oauth2_common:get_redirect_url(
-        ConnectAccount, ?PROVIDER_ID, ?MODULE
+        ConnectAccount, ?IDENTITY_PROVIDER, ?MODULE
     ).
 
 
@@ -48,7 +48,7 @@ get_redirect_url(ConnectAccount) ->
     {ok, #linked_account{}} | {error, term()}.
 validate_login() ->
     auth_oauth2_common:validate_login(
-        ?PROVIDER_ID, secret_over_http_basic, access_token_in_url
+        ?IDENTITY_PROVIDER, secret_over_http_basic, access_token_in_url
     ).
 
 
@@ -61,7 +61,7 @@ validate_login() ->
     {ok, #linked_account{}} | {error, bad_access_token}.
 get_user_info(AccessToken) ->
     auth_oauth2_common:get_user_info(
-        ?PROVIDER_ID, access_token_in_url, AccessToken
+        ?IDENTITY_PROVIDER, access_token_in_url, AccessToken
     ).
 
 
@@ -101,7 +101,7 @@ normalized_membership_specs(Props) ->
 %%--------------------------------------------------------------------
 -spec vo_id() -> binary().
 vo_id() ->
-    GroupMappingConfig = auth_config:get_group_mapping_config(?PROVIDER_ID),
+    GroupMappingConfig = auth_config:get_group_mapping_config(?IDENTITY_PROVIDER),
     case proplists:get_value(vo_group_id, GroupMappingConfig) of
         undefined -> throw(no_vo_group_id_specified_in_config);
         VoId -> VoId

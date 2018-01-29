@@ -185,8 +185,8 @@ get_user_info(ProviderId, AccessTokenSendMethod, AccessToken, XRDS) ->
                     HandlerModule:normalized_membership_specs(JSONProplist)
             end,
             ProvUserInfo = #linked_account{
-                provider_id = ProviderId,
-                user_id = auth_utils:get_value_binary(<<"sub">>, JSONProplist),
+                idp = ProviderId,
+                subject_id = auth_utils:get_value_binary(<<"sub">>, JSONProplist),
                 login = auth_utils:get_value_binary(<<"login">>, JSONProplist),
                 name = auth_utils:get_value_binary(<<"name">>, JSONProplist),
                 email_list = auth_utils:extract_emails(JSONProplist),

@@ -30,10 +30,11 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
+-type login() :: undefined | binary().
 -type criterion() :: {linked_account, {ProviderId :: atom(), UserId :: binary()}} |
                      {email, binary()} |
-                     {alias, binary()}.
--export_type([name/0]).
+                     {login, login()}.
+-export_type([name/0, login/0]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -127,9 +128,9 @@ get_by_criterion({email, Value}) ->
         {ok, [Doc | _]} ->
             {ok, Doc}
     end;
-get_by_criterion({alias, Value}) ->
-    Fun = fun(Doc = #document{value = #od_user{alias = Alias}}, Acc) ->
-        case Alias of
+get_by_criterion({login, Value}) ->
+    Fun = fun(Doc = #document{value = #od_user{login = Login}}, Acc) ->
+        case Login of
             Value -> {stop, [Doc | Acc]};
             _ -> {ok, Acc}
         end
@@ -143,8 +144,8 @@ get_by_criterion({alias, Value}) ->
 get_by_criterion({linked_account, {ProviderID, UserID}}) ->
     Fun = fun(Doc = #document{value = #od_user{linked_accounts = Accounts}}, Acc) ->
         Found = lists:any(fun
-            (#linked_account{provider_id = PID, user_id = UID}) ->
-                case {PID, UID} of
+            (#linked_account{idp = IDP, subject_id = UID}) ->
+                case {IDP, UID} of
                     {ProviderID, UserID} -> true;
                     _ -> false
                 end;
@@ -191,7 +192,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    4.
+    5.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -285,7 +286,18 @@ get_record_struct(4) ->
         {email_list, [string]},
         {groups, [string]}
     ]}]},
-    {record, lists:keyreplace(linked_accounts, 1, Struct, LinkedAccStruct)}.
+    {record, lists:keyreplace(linked_accounts, 1, Struct, LinkedAccStruct)};
+get_record_struct(5) ->
+    {record, Struct} = get_record_struct(4),
+    LinkedAccStruct = {linked_accounts, [{record, [
+        {idp, atom},
+        {subject_id, string},
+        {login, string},
+        {name, string},
+        {email_list, [string]},
+        {groups, [string]}
+    ]}]},
+    {record, lists:keydelete(alias, 1, lists:keyreplace(linked_accounts, 1, Struct, LinkedAccStruct))}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -394,35 +406,35 @@ upgrade_record(2, User) ->
         end, ConnectedAccounts
     ),
 
-    {3, #od_user{
-        name = Name,
-        login = Login,
-        alias = Alias,
-        email_list = EmailList,
-        basic_auth_enabled = BasicAuthEnabled,
-        linked_accounts = LinkedAccounts,
+    {3, {od_user,
+        Name,
+        Login,
+        Alias,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
 
-        default_space = DefaultSpace,
-        default_provider = DefaultProvider,
-        chosen_provider = ChosenProvider,
-        client_tokens = ClientTokens,
-        space_aliases = SpaceAliases,
+        DefaultSpace,
+        DefaultProvider,
+        ChosenProvider,
+        ClientTokens,
+        SpaceAliases,
 
-        oz_privileges = OzPrivileges,
-        eff_oz_privileges = EffOzPrivileges,
+        OzPrivileges,
+        EffOzPrivileges,
 
-        groups = Groups,
-        spaces = Spaces,
-        handle_services = HandleServices,
-        handles = Handles,
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
 
-        eff_groups = EffGroups,
-        eff_spaces = EffSpaces,
-        eff_providers = EffProviders,
-        eff_handle_services = EffHandleServices,
-        eff_handles = EffHandles,
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
 
-        top_down_dirty = TopDownDirty
+        TopDownDirty
     }};
 upgrade_record(3, User) ->
     {od_user,
@@ -458,24 +470,98 @@ upgrade_record(3, User) ->
 
     LinkedAccounts = lists:map(
         fun({linked_account, ProviderId, UserId, OALogin, OAName, OAEmails}) ->
-            #linked_account{
-                provider_id = ProviderId,
-                user_id = UserId,
-                login = OALogin,
-                name = OAName,
-                email_list = OAEmails,
-                groups = []
+            {linked_account,
+                ProviderId,
+                UserId,
+                OALogin,
+                OAName,
+                OAEmails,
+                []
             }
         end, ConnectedAccounts
     ),
 
-    {4, #od_user{
+    {4, {od_user,
+        Name,
+        Login,
+        Alias,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+        ChosenProvider,
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    }};
+upgrade_record(4, User) ->
+    {od_user,
+        Name,
+        Login,
+        _Alias,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+        ChosenProvider,
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    } = User,
+
+    NewLinkedAccounts = lists:map(
+        fun({linked_account, ProviderId, UserId, OALogin, OAName, OAEmails, OAGroups}) ->
+            #linked_account{
+                idp = ProviderId,
+                subject_id = UserId,
+                login = OALogin,
+                name = OAName,
+                email_list = OAEmails,
+                groups = OAGroups
+            }
+        end, LinkedAccounts
+    ),
+
+    {5, #od_user{
         name = Name,
         login = Login,
-        alias = Alias,
         email_list = EmailList,
         basic_auth_enabled = BasicAuthEnabled,
-        linked_accounts = LinkedAccounts,
+        linked_accounts = NewLinkedAccounts,
 
         default_space = DefaultSpace,
         default_provider = DefaultProvider,
