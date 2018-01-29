@@ -28,9 +28,9 @@
 % SSL Opts used to connect to onepanel.
 % Onepanel is usually available under 127.0.0.1 or localhost, so hostname
 % verification should be omitted here (the cert signature is still checked).
--define(ONEPANEL_SSL_OPTS, begin
+-define(ONEPANEL_CONNECT_OPTS, begin
     {ok, __CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
-    [{ssl_options, [
+    [{recv_timeout, 10000}, {ssl_options, [
         {secure, only_verify_peercert},
         {cacerts, cert_utils:load_ders_in_dir(__CaCertsDir)}
     ]}]
@@ -1383,7 +1383,7 @@ is_email_occupied(UserId, Email) ->
 authenticate_by_basic_credentials(Login, Password) ->
     Headers = basic_auth_header(Login, Password),
     URL = get_onepanel_rest_user_url(Login),
-    RestCallResult = case http_client:get(URL, Headers, <<"">>, ?ONEPANEL_SSL_OPTS) of
+    RestCallResult = case http_client:get(URL, Headers, <<"">>, ?ONEPANEL_CONNECT_OPTS) of
         {ok, 200, _, JSON} ->
             json_utils:decode(JSON);
         {ok, 401, _, _} ->
@@ -1476,7 +1476,7 @@ change_user_password(Login, OldPassword, NewPassword) ->
         <<"currentPassword">> => OldPassword,
         <<"newPassword">> => NewPassword
     }),
-    case http_client:patch(URL, Headers, Body, ?ONEPANEL_SSL_OPTS) of
+    case http_client:patch(URL, Headers, Body, ?ONEPANEL_CONNECT_OPTS) of
         {ok, 204, _, _} ->
             ok;
         {ok, 401, _, _} ->
