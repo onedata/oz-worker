@@ -351,7 +351,7 @@ user_record_5() -> #od_user{
     linked_accounts = [
         #linked_account{
             idp = google,
-            user_id = <<"user_id1">>,
+            subject_id = <<"user_id1">>,
             login = <<"login1">>,
             name = <<"name1">>,
             email_list = [<<"email1@email.com">>],
@@ -359,7 +359,7 @@ user_record_5() -> #od_user{
         },
         #linked_account{
             idp = github,
-            user_id = <<"user_id2">>,
+            subject_id = <<"user_id2">>,
             login = <<"login2">>,
             name = <<"name2">>,
             email_list = [<<"email2@email.com">>],

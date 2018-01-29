@@ -50,8 +50,6 @@ od_handle_service | od_handle | oz_privileges.
 -type update_result() :: ok | error().
 -type result() :: create_result() | get_result() | update_result() | delete_result().
 
--type login() :: null | undefined | binary().
-
 -type type_validator() :: any | atom | list_of_atoms | binary | login |
 list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addresses.
 
@@ -93,8 +91,7 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
     result/0,
     type_validator/0,
     value_validator/0,
-    validity_verificator/0,
-    login/0
+    validity_verificator/0
 ]).
 
 % Internal record containing the request data and state.
@@ -642,8 +639,8 @@ check_type(login, _Key, undefined) ->
     undefined;
 check_type(login, _Key, Binary) when is_binary(Binary) ->
     Binary;
-check_type(login, Key, _) ->
-    throw(?ERROR_BAD_VALUE_LOGIN(Key));
+check_type(login, _Key, _) ->
+    throw(?ERROR_BAD_VALUE_LOGIN);
 check_type(list_of_ipv4_addresses, Key, ListOfIPs) ->
     try
         lists:map(fun(IP) ->
@@ -802,14 +799,10 @@ check_value(token, TokenType, Key, Macaroon) ->
     end;
 check_value(login, login, _Key, undefined) ->
     ok;
-check_value(login, login, Key, Value) ->
-    RegExpValidation = (match =:= re:run(
-        Value, ?LOGIN_VALIDATION_REGEXP, [{capture, none}]
-    )),
-    case {Value, RegExpValidation} of
-        {_, true} -> ok;
-        {_, false} ->
-            throw(?ERROR_BAD_VALUE_LOGIN(Key))
+check_value(login, login, _Key, Value) ->
+    case re:run(Value, ?LOGIN_VALIDATION_REGEXP, [{capture, none}]) of
+        match -> ok;
+        _ -> throw(?ERROR_BAD_VALUE_LOGIN)
     end;
 check_value(TypeRule, ValueRule, Key, _) ->
     ?error("Unknown {type, value} rule: {~p, ~p} for key: ~p", [

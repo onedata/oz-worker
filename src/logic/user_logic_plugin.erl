@@ -184,15 +184,13 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
         linked_accounts = LinkedAccounts
     } = User,
     {ok, #{
-        <<"name">> => Name, <<"login">> => gs_protocol:undefined_to_null(Login),
+        <<"name">> => Name, <<"login">> => Login,
         <<"emailList">> => EmailList,
         <<"linkedAccounts">> => user_logic:linked_accounts_to_maps(LinkedAccounts)
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, User) ->
     #od_user{name = Name, login = Login} = User,
-    {ok, #{
-        <<"name">> => Name, <<"login">> => gs_protocol:undefined_to_null(Login)
-    }};
+    {ok, #{<<"name">> => Name, <<"login">> => Login}};
 
 get(#el_req{gri = #gri{aspect = oz_privileges}}, User) ->
     {ok, User#od_user.oz_privileges};

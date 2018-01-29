@@ -120,7 +120,7 @@ get_user_info(AccessToken) ->
     JSONProplist = json_utils:decode(JSON),
     ProvUserInfo = #linked_account{
         idp = ?IDENTITY_PROVIDER,
-        user_id = auth_utils:get_value_binary(<<"id">>, JSONProplist),
+        subject_id = auth_utils:get_value_binary(<<"id">>, JSONProplist),
         email_list = EmailList,
         name = auth_utils:get_value_binary(<<"name">>, JSONProplist),
         login = auth_utils:get_value_binary(<<"login">>, JSONProplist),

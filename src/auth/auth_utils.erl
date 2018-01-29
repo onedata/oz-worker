@@ -515,7 +515,7 @@ saml_assertions_to_linked_account(IdPId, IdP, Attributes) ->
     end,
     #linked_account{
         idp = IdPId,
-        user_id = UserId,
+        subject_id = UserId,
         email_list = extract_emails(maps:get(email, AttributeMapping, undefined), Attributes),
         name = get_value_binary(maps:get(name, AttributeMapping, undefined), Attributes),
         login = get_value_binary(maps:get(login, AttributeMapping, undefined), Attributes),
@@ -531,7 +531,7 @@ saml_assertions_to_linked_account(IdPId, IdP, Attributes) ->
 %%--------------------------------------------------------------------
 -spec get_user_by_linked_account(#linked_account{}) -> {ok, #document{}} | {error, not_found}.
 get_user_by_linked_account(LinkedAccount) ->
-    #linked_account{idp = IdentityProvider, user_id = UserId} = LinkedAccount,
+    #linked_account{idp = IdentityProvider, subject_id = UserId} = LinkedAccount,
     case od_user:get_by_criterion({linked_account, {IdentityProvider, UserId}}) of
         {ok, #document{} = Doc} ->
             {ok, Doc};

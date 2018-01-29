@@ -133,7 +133,7 @@ validate_login() ->
 
         ProvUserInfo = #linked_account{
             idp = ?IDENTITY_PROVIDER,
-            user_id = str_utils:to_binary(Login),
+            subject_id = str_utils:to_binary(Login),
             login = Login,
             email_list = Emails,
             name = Name,

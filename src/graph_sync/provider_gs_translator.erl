@@ -83,7 +83,7 @@ translate_get(1, #gri{type = od_user, aspect = instance, scope = private}, User)
     } = User,
     #{
         <<"name">> => Name,
-        <<"login">> => Login,
+        <<"login">> => gs_protocol:undefined_to_null(Login),
         <<"emailList">> => EmailList,
         <<"linkedAccounts">> => user_logic:linked_accounts_to_maps(LinkedAccounts),
         <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
@@ -104,7 +104,7 @@ translate_get(1, #gri{type = od_user, aspect = instance, scope = protected}, Use
     } = User,
     #{
         <<"name">> => Name,
-        <<"login">> => Login,
+        <<"login">> => gs_protocol:undefined_to_null(Login),
         <<"emailList">> => EmailList,
         <<"linkedAccounts">> => LinkedAccountMaps
     };
@@ -116,7 +116,7 @@ translate_get(1, #gri{type = od_user, aspect = instance, scope = shared}, User) 
     } = User,
     #{
         <<"name">> => Name,
-        <<"login">> => Login
+        <<"login">> => gs_protocol:undefined_to_null(Login)
     };
 
 translate_get(1, #gri{type = od_group, aspect = instance, scope = private}, Group) ->

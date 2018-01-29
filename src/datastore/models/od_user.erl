@@ -30,10 +30,11 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
+-type login() :: undefined | binary().
 -type criterion() :: {linked_account, {ProviderId :: atom(), UserId :: binary()}} |
                      {email, binary()} |
-                     {login, binary()}.
--export_type([name/0]).
+                     {login, login()}.
+-export_type([name/0, login/0]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -143,7 +144,7 @@ get_by_criterion({login, Value}) ->
 get_by_criterion({linked_account, {ProviderID, UserID}}) ->
     Fun = fun(Doc = #document{value = #od_user{linked_accounts = Accounts}}, Acc) ->
         Found = lists:any(fun
-            (#linked_account{idp = IDP, user_id = UID}) ->
+            (#linked_account{idp = IDP, subject_id = UID}) ->
                 case {IDP, UID} of
                     {ProviderID, UserID} -> true;
                     _ -> false
@@ -290,7 +291,7 @@ get_record_struct(5) ->
     {record, Struct} = get_record_struct(4),
     LinkedAccStruct = {linked_accounts, [{record, [
         {idp, atom},
-        {user_id, string},
+        {subject_id, string},
         {login, string},
         {name, string},
         {email_list, [string]},
@@ -546,7 +547,7 @@ upgrade_record(4, User) ->
         fun({linked_account, ProviderId, UserId, OALogin, OAName, OAEmails, OAGroups}) ->
             #linked_account{
                 idp = ProviderId,
-                user_id = UserId,
+                subject_id = UserId,
                 login = OALogin,
                 name = OAName,
                 email_list = OAEmails,

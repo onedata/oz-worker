@@ -99,7 +99,8 @@
     <<"^([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$">>).
 
 
-% Regexp to validate aliases - at least 5 alphanumeric chars
--define(LOGIN_VALIDATION_REGEXP, <<"^[a-z0-9A-Z_-]{3,}$">>).
+% Regexp to validate logins. Login must be 3-15 characters long and composed of letters and digits,
+% dashes and underscores are allowed (but not at the beginning or the end).
+-define(LOGIN_VALIDATION_REGEXP, <<"^[a-z0-9A-Z][a-z0-9A-Z_-]{1,13}[a-z0-9A-Z]$">>).
 
 -endif.

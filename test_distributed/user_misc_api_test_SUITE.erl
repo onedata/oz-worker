@@ -497,8 +497,12 @@ update_test(Config) ->
             bad_values = [
                 {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
                 {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
-                {<<"login">>, <<"">>, ?ERROR_BAD_VALUE_LOGIN(<<"login">>)},
-                {<<"login">>, 1234, ?ERROR_BAD_VALUE_LOGIN(<<"login">>)},
+                {<<"login">>, <<"">>, ?ERROR_BAD_VALUE_LOGIN},
+                {<<"login">>, <<"_asd">>, ?ERROR_BAD_VALUE_LOGIN},
+                {<<"login">>, <<"-asd">>, ?ERROR_BAD_VALUE_LOGIN},
+                {<<"login">>, <<"asd_">>, ?ERROR_BAD_VALUE_LOGIN},
+                {<<"login">>, <<"verylongloginwithatleast15chars">>, ?ERROR_BAD_VALUE_LOGIN},
+                {<<"login">>, 1234, ?ERROR_BAD_VALUE_LOGIN},
                 {<<"login">>, UsedLogin,
                     ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"login">>)}
             ]

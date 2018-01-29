@@ -116,10 +116,12 @@ update_record(<<"user">>, UserId, [{<<"alias">>, NewLogin}]) ->
     case user_logic:update_login(Client, UserId, NewLogin) of
         ok ->
             ok;
-        ?ERROR_BAD_VALUE_LOGIN(_) ->
-            gui_error:report_warning(
-                <<"Alias can contain only letters, digits, _ or - and "
-                "must be at least 3 characters long.">>);
+        ?ERROR_BAD_VALUE_LOGIN ->
+            gui_error:report_warning(<<
+                "Alias must be 3-15 characters long and composed of letters and digits, "
+                "dashes and underscores are allowed (but not at the beginning or the end). "
+                "Use null value to unset the login. "
+            >>);
         ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(_) ->
             gui_error:report_warning(
                 <<"This alias is occupied by someone else. "
@@ -249,7 +251,7 @@ authorizers_db_to_client(LinkedAccounts) ->
             #linked_account{
                 idp = Provider,
                 email_list = Emails,
-                user_id = SubId} = LinkedAccount,
+                subject_id = SubId} = LinkedAccount,
             ProviderBin = str_utils:to_binary(Provider),
             SubIdBin = str_utils:to_binary(SubId),
             AccId = <<ProviderBin/binary, "#", SubIdBin/binary>>,

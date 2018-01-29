@@ -370,7 +370,7 @@ update_name(Client, UserId, NewName) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_login(Client :: entity_logic:client(), UserId :: od_user:id(),
-    NewLogin :: entity_logic:login()) -> ok | {error, term()}.
+    NewLogin :: od_user:login()) -> ok | {error, term()}.
 update_login(Client, UserId, NewLogin) ->
     update(Client, UserId, #{<<"login">> => NewLogin}).
 
@@ -1228,7 +1228,7 @@ linked_accounts_to_maps(LinkedAccounts) ->
         fun(OAuthAccount) ->
             #linked_account{
                 idp = IdentityProvider,
-                user_id = UserId,
+                subject_id = UserId,
                 login = Login,
                 name = Name,
                 email_list = EmailList,
@@ -1236,7 +1236,7 @@ linked_accounts_to_maps(LinkedAccounts) ->
             } = OAuthAccount,
             #{
                 <<"idp">> => IdentityProvider,
-                <<"userId">> => UserId,
+                <<"subjectId">> => UserId,
                 <<"login">> => Login,
                 <<"name">> => Name,
                 <<"emailList">> => EmailList,
@@ -1274,7 +1274,7 @@ onepanel_uid_to_system_uid(OnepanelUserId) ->
 -spec create_user_by_linked_account(#linked_account{}) ->
     {ok, UserId :: od_user:id()} | {error, not_found}.
 create_user_by_linked_account(LinkedAccount) ->
-    #linked_account{idp = IdPName, user_id = IdPUserId} = LinkedAccount,
+    #linked_account{idp = IdPName, subject_id = IdPUserId} = LinkedAccount,
     UserId = idp_uid_to_system_uid(IdPName, IdPUserId),
     {ok, UserId} = create(#od_user{}, UserId),
     merge_linked_account(UserId, LinkedAccount),
@@ -1315,7 +1315,7 @@ merge_linked_account_unsafe(UserId, LinkedAccount) ->
         name = Name, email_list = Emails, linked_accounts = LinkedAccounts
     } = UserInfo}} = od_user:get(UserId),
     #linked_account{
-        idp = IdP, user_id = IdPUserId,
+        idp = IdP, subject_id = IdPUserId,
         email_list = LinkedEmails, groups = NewGroups
     } = LinkedAccount,
     % If no name is specified, take the one provided with new info
@@ -1606,7 +1606,7 @@ setup_user(UserId, UserInfo) ->
 find_linked_account(#od_user{linked_accounts = LinkedAccounts}, IdP, IdPUserId) ->
     lists:foldl(
         fun
-            (LAcc = #linked_account{idp = PId, user_id = UId}, undefined)
+            (LAcc = #linked_account{idp = PId, subject_id = UId}, undefined)
                 when PId =:= IdP, UId =:= IdPUserId ->
                 LAcc;
             (_Other, Found) ->
