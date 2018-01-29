@@ -202,6 +202,9 @@
     subdomain_delegation = false :: boolean(),
     domain :: binary(),
     subdomain = undefined :: undefined | binary(),
+
+    admin_email :: undefined | binary(),
+
     latitude = 0.0 :: float(),
     longitude = 0.0 :: float(),
 

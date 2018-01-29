@@ -137,6 +137,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
     Latitude = maps:get(<<"latitude">>, Data, 0.0),
     Longitude = maps:get(<<"longitude">>, Data, 0.0),
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
+    AdminEmail = maps:get(<<"adminEmail">>, Data),
     UUID = maps:get(<<"uuid">>, Data, undefined),
 
     ProviderId = UUID,
@@ -160,7 +161,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
         name = Name, root_macaroon = Identity,
         subdomain_delegation = SubdomainDelegation,
         domain = Domain, subdomain = Subdomain,
-        latitude = Latitude, longitude = Longitude
+        latitude = Latitude, longitude = Longitude,
+        admin_email = AdminEmail
     },
 
     case od_provider:create(#document{key = ProviderId, value = Provider}) of
@@ -516,7 +518,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance},
     data = Data}) ->
     Required = #{
         <<"name">> => {binary, non_empty},
-        <<"subdomainDelegation">> => {boolean, any}
+        <<"subdomainDelegation">> => {boolean, any},
+        <<"adminEmail">> => {string, email}
     },
     Common = #{
         optional => #{
@@ -545,7 +548,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
     Required = #{
         <<"name">> => {binary, non_empty},
         <<"uuid">> => {binary, non_empty},
-        <<"subdomainDelegation">> => {boolean, any}
+        <<"subdomainDelegation">> => {boolean, any},
+        <<"adminEmail">> => {string, email}
     },
     Common = #{
         optional => #{
@@ -613,6 +617,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = verify_provider_identit
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, non_empty},
+        <<"adminEmail">> => {string, email},
         <<"latitude">> => {float, {between, -90, 90}},
         <<"longitude">> => {float, {between, -180, 180}}
     }

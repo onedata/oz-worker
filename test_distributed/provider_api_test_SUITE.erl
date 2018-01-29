@@ -118,6 +118,7 @@ create_test(Config) ->
     VerifyFun = fun(ProviderId, Macaroon, Data) ->
         ExpLatitude = maps:get(<<"latitude">>, Data, 0.0),
         ExpLongitude = maps:get(<<"longitude">>, Data, 0.0),
+        ExpAdminEmail = maps:get(<<"adminEmail">>, Data),
         ExpSubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
         {ExpSubdomain, ExpDomain} = case ExpSubdomainDelegation of
             true ->
@@ -143,6 +144,7 @@ create_test(Config) ->
         ?assertEqual(ExpDomain, Provider#od_provider.domain),
         ?assertEqual(ExpSubdomainDelegation, Provider#od_provider.subdomain_delegation),
         ?assertEqual(ExpSubdomain, Provider#od_provider.subdomain),
+        ?assertEqual(ExpAdminEmail, Provider#od_provider.admin_email),
         ?assertEqual(ExpLatitude, Provider#od_provider.latitude),
         ?assertEqual(ExpLongitude, Provider#od_provider.longitude),
 
@@ -195,6 +197,7 @@ create_test(Config) ->
                 <<"name">> => [ExpName],
                 <<"domain">> => [<<"multilevel.provider-domain.org">>],
                 <<"subdomainDelegation">> => [false],
+                <<"adminEmail">> => [<<"admin@onedata.org">>],
                 <<"latitude">> => [rand:uniform() * 90],
                 <<"longitude">> => [rand:uniform() * 180]
             },
@@ -208,6 +211,7 @@ create_test(Config) ->
                 {<<"domain">>, <<"trailing-.hyphen">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
                 {<<"subdomainDelegation">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
                 {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                {<<"adminEmail">>, <<"adminwithoutdomain">>},
                 {<<"latitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"latitude">>)},
                 {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
                 {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
