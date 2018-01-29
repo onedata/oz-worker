@@ -116,14 +116,14 @@ normalized_membership_spec(IdP, Group, Type, Structure) ->
 %%       last one: VO <- a <- b <- c <- user.
 %% @end
 %%--------------------------------------------------------------------
--spec normalized_membership_specs(auth_utils:idp(), proplists:proplist()) ->
+-spec normalized_membership_specs(auth_utils:idp(), maps:map()) ->
     [idp_group_mapping:membership_spec()].
-normalized_membership_specs(IdP, Props) ->
+normalized_membership_specs(IdP, Map) ->
     Config = auth_config:get_auth_config(IdP),
     GroupMappingConfig = proplists:get_value(group_mapping, Config, []),
     AttributesConfig = proplists:get_value(attributes_to_map, GroupMappingConfig, []),
     lists:flatmap(fun({Attr, Type, Structure}) ->
-        Groups = proplists:get_value(Attr, Props, []),
+        Groups = maps:get(Attr, Map, []),
         lists:map(fun(Group) ->
             GroupWithoutSlashes = case Structure of
                 {nested, <<"/">>} ->

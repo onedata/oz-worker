@@ -164,15 +164,14 @@ local_auth_endpoint() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Gets value from a proplist and converts it to binary, if needed.
+%% Gets value from a map and converts it to binary, if needed.
 %% Useful in auth_xxx modules which are required to return binaries in the
 %% #linked_account{} record.
 %% @end
 %%--------------------------------------------------------------------
--spec get_value_binary(Key :: term(), Proplist :: proplists:proplist()) ->
-    binary().
-get_value_binary(Key, Proplist) ->
-    case proplists:get_value(Key, Proplist, <<"">>) of
+-spec get_value_binary(Key :: term(), Map :: maps:map()) -> binary().
+get_value_binary(Key, Map) ->
+    case maps:get(Key, Map, <<"">>) of
         Bin when is_binary(Bin) ->
             Bin;
         Str when is_list(Str) ->
@@ -182,26 +181,25 @@ get_value_binary(Key, Proplist) ->
         Other ->
             str_utils:to_binary(Other)
     end.
+    
+%%--------------------------------------------------------------------
+%% @doc
+%% Extracts email list from a JSON map (standard for OpenId).
+%% @end
+%%--------------------------------------------------------------------
+-spec extract_emails(maps:map()) -> [binary()].
+extract_emails(JSON) ->
+    extract_emails(<<"email">>, JSON).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Extracts email list from a JSON proplist (standard for OpenId).
+%% Extracts email list from a JSON map (standard for OpenId).
 %% @end
 %%--------------------------------------------------------------------
--spec extract_emails(proplists:proplist()) -> [binary()].
-extract_emails(JSONProplist) ->
-    extract_emails(<<"email">>, JSONProplist).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Extracts email list from a JSON proplist (standard for OpenId).
-%% @end
-%%--------------------------------------------------------------------
--spec extract_emails(EmailKey :: term(), proplists:proplist()) -> [binary()].
-extract_emails(EmailKey, JSONProplist) ->
-    case get_value_binary(EmailKey, JSONProplist) of
+-spec extract_emails(EmailKey :: term(), maps:map()) -> [binary()].
+extract_emails(EmailKey, JSON) ->
+    case get_value_binary(EmailKey, JSON) of
         <<"">> -> [];
         Email -> [Email]
     end.
@@ -371,7 +369,7 @@ validate_saml_login() ->
                 case esaml_sp:validate_assertion(Xml, SP, IdP) of
                     {ok, #esaml_assertion{attributes = Attributes}} ->
                         ?info("Login attempt from IdP '~p', attributes: ~n~p~n", [IdPId, Attributes]),
-                        LinkedAccount = saml_assertions_to_linked_account(IdPId, IdP, Attributes),
+                        LinkedAccount = saml_assertions_to_linked_account(IdPId, IdP, maps:from_list(Attributes)),
                         validate_login_by_linked_account(LinkedAccount, StateInfo);
                     {error, Reason2} ->
                         % The request could not be validated
@@ -493,7 +491,7 @@ validate_state_token(StateToken) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec saml_assertions_to_linked_account(IdPId :: atom(), IdP :: #esaml_idp{},
-    Attributes :: proplists:proplist()) -> #linked_account{}.
+    Attributes :: maps:map()) -> #linked_account{}.
 saml_assertions_to_linked_account(IdPId, IdP, Attributes) ->
     #esaml_idp{attribute_mapping = AttributeMapping} = IdP,
     UserId = case get_value_binary(maps:get(id, AttributeMapping), Attributes) of
@@ -506,7 +504,7 @@ saml_assertions_to_linked_account(IdPId, IdP, Attributes) ->
         false ->
             [];
         true ->
-            GroupsAttr = proplists:get_value(
+            GroupsAttr = maps:get(
                 maps:get(groups, AttributeMapping, undefined),
                 Attributes, []
             ),

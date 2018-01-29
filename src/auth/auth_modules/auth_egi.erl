@@ -107,8 +107,8 @@ normalized_membership_spec(_, <<"urn:mace:egi.eu:", Group/binary>>) ->
 %% be mapped to the same specs.
 %% @end
 %%--------------------------------------------------------------------
--spec normalized_membership_specs(auth_utils:idp(), proplists:proplist()) ->
+-spec normalized_membership_specs(auth_utils:idp(), maps:map()) ->
     [idp_group_mapping:membership_spec()].
-normalized_membership_specs(_, Props) ->
-    Groups = proplists:get_value(<<"edu_person_entitlements">>, Props, []),
+normalized_membership_specs(_, Map) ->
+    Groups = maps:get(<<"edu_person_entitlements">>, Map, []),
     lists:map(fun(Group) -> normalized_membership_spec(egi, Group) end, Groups).

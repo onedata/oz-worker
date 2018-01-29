@@ -71,10 +71,10 @@ get_user_info(IdP, AccessToken) ->
 %% be mapped to the same specs.
 %% @end
 %%--------------------------------------------------------------------
--spec normalized_membership_specs(auth_utils:idp(), proplists:proplist()) ->
+-spec normalized_membership_specs(auth_utils:idp(), maps:map()) ->
     [idp_group_mapping:membership_spec()].
-normalized_membership_specs(IdP, Props) ->
-    Groups = proplists:get_value(<<"groups">>, Props, []),
+normalized_membership_specs(IdP, Map) ->
+    Groups = maps:get(<<"groups">>, Map, []),
     VoId = vo_id(IdP),
     lists:map(
         fun(Group) ->

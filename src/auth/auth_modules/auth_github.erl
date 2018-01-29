@@ -115,13 +115,13 @@ get_user_info(IdP, AccessToken) ->
         end, json_utils:decode(JSONEmails)),
 
     % Parse received JSON
-    JSONProplist = json_utils:decode(JSON),
+    JSONMap = json_utils:decode(JSON),
     ProvUserInfo = #linked_account{
         idp = IdP,
-        subject_id = auth_utils:get_value_binary(<<"id">>, JSONProplist),
+        subject_id = auth_utils:get_value_binary(<<"id">>, JSONMap),
         email_list = EmailList,
-        name = auth_utils:get_value_binary(<<"name">>, JSONProplist),
-        login = auth_utils:get_value_binary(<<"login">>, JSONProplist),
+        name = auth_utils:get_value_binary(<<"name">>, JSONMap),
+        login = auth_utils:get_value_binary(<<"login">>, JSONMap),
         groups = []
     },
     {ok, ProvUserInfo}.
