@@ -30,4 +30,7 @@
 % Endpoint at oneprovider to get its ID
 -define(PROVIDER_ID_ENDPOINT, "/get_provider_id").
 
+% Endpoint to get Onezone version
+-define(ZONE_VERSION_ENDPOINT, "/version").
+
 -endif.
