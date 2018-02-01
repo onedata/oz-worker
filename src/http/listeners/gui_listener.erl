@@ -73,6 +73,7 @@ start() ->
                 {'_', redirector_handler, []}
             ]},
             {'_', lists:flatten([
+                {?ZONE_VERSION_ENDPOINT, get_zone_version_handler, []},
                 {?NAGIOS_ENDPOINT, nagios_handler, []},
                 {?PUBLIC_SHARE_ENDPOINT ++ "/:share_id", public_share_handler, []},
                 {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
