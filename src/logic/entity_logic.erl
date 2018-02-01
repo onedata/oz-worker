@@ -740,8 +740,11 @@ check_value(binary, email, Key, <<"">>) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(binary, email, _Key, Value) ->
     case re:run(Value, ?EMAIL_VALIDATION_REGEXP, [{capture, none}]) of
-        match -> % Check length
-            ok
+        match ->
+            case byte_size(Value) > ?EMAIL_MAX_LENGTH of
+                true -> throw(?ERROR_BAD_VALUE_EMAIL);
+                false -> ok
+            end;
         _ -> throw(?ERROR_BAD_VALUE_EMAIL)
     end;
 

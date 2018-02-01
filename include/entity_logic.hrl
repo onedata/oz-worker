@@ -99,7 +99,10 @@
     <<"^([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$">>).
 
 -define(EMAIL_VALIDATION_REGEXP,
-    <<"^([a-zA-Z0-9\\-_\\.\\+]+@[a-zA-Z0-9\\-_\\.]*\\.[a-zA-Z0-9]+$">>).
+    <<"^[a-zA-Z0-9\\-_\\.\\+]+@[a-zA-Z0-9\\-_\\.]*\\.[a-zA-Z0-9]+$">>).
+
+% According to RFC 5321
+-define(EMAIL_MAX_LENGTH, 254).
 
 % Regexp to validate logins. Login must be 3-15 characters long and composed of letters and digits,
 % dashes and underscores are allowed (but not at the beginning or the end).

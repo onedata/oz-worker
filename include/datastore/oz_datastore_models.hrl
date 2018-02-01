@@ -198,12 +198,11 @@
 %% This record defines a provider who supports spaces and can be reached via url
 -record(od_provider, {
     name = <<"">> :: od_provider:name(),
+    admin_email :: undefined | binary(),
     root_macaroon :: undefined | macaroon_auth:id(),
     subdomain_delegation = false :: boolean(),
     domain :: binary(),
     subdomain = undefined :: undefined | binary(),
-
-    admin_email :: undefined | binary(),
 
     latitude = 0.0 :: float(),
     longitude = 0.0 :: float(),

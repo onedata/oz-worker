@@ -98,6 +98,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     Latitude = maps:get(<<"latitude">>, Data, 0.0),
     Longitude = maps:get(<<"longitude">>, Data, 0.0),
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
+    AdminEmail = maps:get(<<"adminEmail">>, Data),
 
     ProviderId = datastore_utils:gen_key(),
     {Macaroon, Identity} = macaroon_logic:create_provider_root_macaroon(ProviderId),
@@ -120,7 +121,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
         name = Name, root_macaroon = Identity,
         subdomain_delegation = SubdomainDelegation,
         domain = Domain, subdomain = Subdomain,
-        latitude = Latitude, longitude = Longitude
+        latitude = Latitude, longitude = Longitude,
+        admin_email = AdminEmail
     },
 
     case od_provider:create(#document{key = ProviderId, value = Provider}) of
@@ -137,8 +139,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
     Latitude = maps:get(<<"latitude">>, Data, 0.0),
     Longitude = maps:get(<<"longitude">>, Data, 0.0),
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
-    AdminEmail = maps:get(<<"adminEmail">>, Data),
     UUID = maps:get(<<"uuid">>, Data, undefined),
+    AdminEmail = maps:get(<<"adminEmail">>, Data),
 
     ProviderId = UUID,
     {Macaroon, Identity} = macaroon_logic:create_provider_root_macaroon(ProviderId),
@@ -287,10 +289,12 @@ get(#el_req{gri = #gri{aspect = current_time}}, _) ->
 update(#el_req{gri = #gri{id = ProviderId, aspect = instance}, data = Data}) ->
     {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
         #od_provider{
-            name = Name, latitude = Latitude, longitude = Longitude
+            name = Name, latitude = Latitude, longitude = Longitude,
+            admin_email = AdminEmail
         } = Provider,
         {ok, Provider#od_provider{
             name = maps:get(<<"name">>, Data, Name),
+            admin_email = maps:get(<<"adminEmail">>, Data, AdminEmail),
             latitude = maps:get(<<"latitude">>, Data, Latitude),
             longitude = maps:get(<<"longitude">>, Data, Longitude)
         }}
@@ -519,7 +523,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance},
     Required = #{
         <<"name">> => {binary, non_empty},
         <<"subdomainDelegation">> => {boolean, any},
-        <<"adminEmail">> => {string, email}
+        <<"adminEmail">> => {binary, email}
     },
     Common = #{
         optional => #{
@@ -549,7 +553,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
         <<"name">> => {binary, non_empty},
         <<"uuid">> => {binary, non_empty},
         <<"subdomainDelegation">> => {boolean, any},
-        <<"adminEmail">> => {string, email}
+        <<"adminEmail">> => {binary, email}
     },
     Common = #{
         optional => #{
@@ -617,7 +621,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = verify_provider_identit
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, non_empty},
-        <<"adminEmail">> => {string, email},
+        <<"adminEmail">> => {binary, email},
         <<"latitude">> => {float, {between, -90, 90}},
         <<"longitude">> => {float, {between, -180, 180}}
     }

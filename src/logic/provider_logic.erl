@@ -71,37 +71,36 @@
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a new provider document in database based on Name,
-%% Domain and CSR (Certificate Signing Request).
+%% Domain and AdminEmail.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client(), Name :: binary(),
-    Domain :: binary(), CSR :: binary()) ->
+    Domain :: binary(), AdminEmail :: binary()) ->
     {ok, od_provider:id()} | {error, term()}.
-create(Client, Name, Domain, CSR) ->
+create(Client, Name, Domain, AdminEmail) ->
     create(Client, #{
         <<"name">> => Name,
         <<"domain">> => Domain,
         <<"subdomainDelegation">> => false,
-        <<"csr">> => CSR
+        <<"adminEmail">> => AdminEmail
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a new provider document in database based on Name,
-%% Domain, CSR (Certificate Signing Request), Latitude and Longitude.
+%% Domain, AdminEmail, Latitude and Longitude.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client(), Name :: binary(),
-    Domain :: binary(), CSR :: binary(),
-    Latitude :: float(), Longitude :: float()) ->
-    {ok, od_provider:id()} | {error, term()}.
-create(Client, Name, Domain, CSR, Latitude, Longitude) ->
+    Domain :: binary(), AdminEmail :: binary(), Latitude :: float(),
+    Longitude :: float()) -> {ok, od_provider:id()} | {error, term()}.
+create(Client, Name, Domain, AdminEmail, Latitude, Longitude) ->
     create(Client, #{
         <<"name">> => Name,
         <<"domain">> => Domain,
         <<"subdomainDelegation">> => false,
-        <<"csr">> => CSR,
+        <<"adminEmail">> => AdminEmail,
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude
     }).

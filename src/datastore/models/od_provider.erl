@@ -171,12 +171,12 @@ get_record_struct(2) ->
 get_record_struct(3) ->
     {record, [
         {name, string},
+        {admin_email, string},
         % 'serial' field changes to 'root_macaroon'
         {root_macaroon, string},
         {subdomain_delegation, boolean},
         {domain, string},
         {subdomain, string},
-        {admin_email, string},
         {latitude, float},
         {longitude, float},
         {spaces, #{string => integer}},
@@ -246,6 +246,7 @@ upgrade_record(2, Provider) ->
     #{host := Domain} = url_utils:parse(RedirectionPoint),
     {3, #od_provider{
         name = Name,
+        admin_email = undefined,
         root_macaroon = undefined,
         domain = Domain,
         latitude = Latitude,
