@@ -44,7 +44,9 @@
 ]).
 -export([
     update_domain_config/3,
-    get_domain_config/2
+    get_domain_config/2,
+    set_dns_txt_record/4,
+    remove_dns_txt_record/3
 ]).
 -export([
     check_my_ports/2,
@@ -69,37 +71,36 @@
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a new provider document in database based on Name,
-%% Domain and CSR (Certificate Signing Request).
+%% Domain and AdminEmail.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client(), Name :: binary(),
-    Domain :: binary(), CSR :: binary()) ->
+    Domain :: binary(), AdminEmail :: binary()) ->
     {ok, od_provider:id()} | {error, term()}.
-create(Client, Name, Domain, CSR) ->
+create(Client, Name, Domain, AdminEmail) ->
     create(Client, #{
         <<"name">> => Name,
         <<"domain">> => Domain,
         <<"subdomainDelegation">> => false,
-        <<"csr">> => CSR
+        <<"adminEmail">> => AdminEmail
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a new provider document in database based on Name,
-%% Domain, CSR (Certificate Signing Request), Latitude and Longitude.
+%% Domain, AdminEmail, Latitude and Longitude.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client(), Name :: binary(),
-    Domain :: binary(), CSR :: binary(),
-    Latitude :: float(), Longitude :: float()) ->
-    {ok, od_provider:id()} | {error, term()}.
-create(Client, Name, Domain, CSR, Latitude, Longitude) ->
+    Domain :: binary(), AdminEmail :: binary(), Latitude :: float(),
+    Longitude :: float()) -> {ok, od_provider:id()} | {error, term()}.
+create(Client, Name, Domain, AdminEmail, Latitude, Longitude) ->
     create(Client, #{
         <<"name">> => Name,
         <<"domain">> => Domain,
         <<"subdomainDelegation">> => false,
-        <<"csr">> => CSR,
+        <<"adminEmail">> => AdminEmail,
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude
     }).
@@ -277,6 +278,36 @@ update_domain_config(Client, ProviderId, Data) ->
         gri = #gri{type = od_provider, id = ProviderId, aspect = domain_config},
         data = Data}).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets txt record for provider's subdomain
+%% @end
+%%--------------------------------------------------------------------
+-spec set_dns_txt_record(Client :: entity_logic:client(),
+    ProviderId :: od_provider:id(), Name :: binary(), Content :: binary()) ->
+    ok | {error, term()}.
+set_dns_txt_record(Client, ProviderId, Name, Content) ->
+    entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {dns_txt_record, Name}},
+        data = #{<<"content">> => Content}
+    }).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Remove txt record for provider's subdomain
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_dns_txt_record(Client :: entity_logic:client(),
+    ProviderId :: od_provider:id(), Name :: binary()) ->
+    ok | {error, term()}.
+remove_dns_txt_record(Client, ProviderId, Name) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {dns_txt_record, Name}}
+    }).
 
 %%--------------------------------------------------------------------
 %% @doc

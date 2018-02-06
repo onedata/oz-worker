@@ -1084,10 +1084,10 @@ create_eff_providers_env(Config) ->
             {ok, {ProvId, _}} = oz_test_utils:create_provider(
                 Config, ProvDetails#{<<"subdomainDelegation">> => false}
             ),
-            {ProvId, ProvDetails#{
+            {ProvId, maps:remove(<<"adminEmail">>, ProvDetails#{
                 <<"name">> => ProviderName,
                 <<"online">> => false
-            }}
+            })}
         end, lists:seq(1, 4)
     ),
 

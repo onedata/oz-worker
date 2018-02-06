@@ -54,6 +54,7 @@ od_handle_service | od_handle | oz_privileges.
 list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
+fun((term()) -> boolean()) |
 {not_lower_than, integer()} | {not_greater_than, integer()} |
 {between, integer(), integer()} |
 [term()] | % A list of accepted values
@@ -61,6 +62,8 @@ list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addre
 {not_exists, fun((entity_id()) -> boolean())} |
 {relation_exists, atom(), binary(), atom(), binary(), fun((entity_id()) -> boolean())} |
 token_logic:token_type() | % Compatible only with 'token' type validator
+subdomain | domain |
+email |
 login.
 
 % The 'aspect' key word allows to validate the data provided in aspect
@@ -731,6 +734,18 @@ check_value(binary, subdomain, _Key, Value) ->
                 _ -> throw(?ERROR_BAD_VALUE_SUBDOMAIN)
             end;
         _ -> throw(?ERROR_BAD_VALUE_SUBDOMAIN)
+    end;
+
+check_value(binary, email, Key, <<"">>) ->
+    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+check_value(binary, email, _Key, Value) ->
+    case re:run(Value, ?EMAIL_VALIDATION_REGEXP, [{capture, none}]) of
+        match ->
+            case byte_size(Value) > ?EMAIL_MAX_LENGTH of
+                true -> throw(?ERROR_BAD_VALUE_EMAIL);
+                false -> ok
+            end;
+        _ -> throw(?ERROR_BAD_VALUE_EMAIL)
     end;
 
 check_value(_, AllowedVals, Key, Vals) when is_list(AllowedVals) andalso is_list(Vals) ->

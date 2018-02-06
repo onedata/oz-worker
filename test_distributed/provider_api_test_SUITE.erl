@@ -107,8 +107,6 @@ all() ->
 %%% Test functions
 %%%===================================================================
 
-% TODO VFS-2918 (all tests) <<"clientName">> -> <<"name">>
-
 create_test(Config) ->
     ExpName = ?PROVIDER_NAME1,
 
@@ -118,6 +116,7 @@ create_test(Config) ->
     VerifyFun = fun(ProviderId, Macaroon, Data) ->
         ExpLatitude = maps:get(<<"latitude">>, Data, 0.0),
         ExpLongitude = maps:get(<<"longitude">>, Data, 0.0),
+        ExpAdminEmail = maps:get(<<"adminEmail">>, Data),
         ExpSubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
         {ExpSubdomain, ExpDomain} = case ExpSubdomainDelegation of
             true ->
@@ -143,6 +142,7 @@ create_test(Config) ->
         ?assertEqual(ExpDomain, Provider#od_provider.domain),
         ?assertEqual(ExpSubdomainDelegation, Provider#od_provider.subdomain_delegation),
         ?assertEqual(ExpSubdomain, Provider#od_provider.subdomain),
+        ?assertEqual(ExpAdminEmail, Provider#od_provider.admin_email),
         ?assertEqual(ExpLatitude, Provider#od_provider.latitude),
         ?assertEqual(ExpLongitude, Provider#od_provider.longitude),
 
@@ -188,13 +188,14 @@ create_test(Config) ->
         % TODO gs
         data_spec = #data_spec{
             required = [
-                <<"name">>, <<"domain">>, <<"subdomainDelegation">>
+                <<"name">>, <<"adminEmail">>, <<"domain">>, <<"subdomainDelegation">>
             ],
             optional = [<<"latitude">>, <<"longitude">>],
             correct_values = #{
                 <<"name">> => [ExpName],
                 <<"domain">> => [<<"multilevel.provider-domain.org">>],
                 <<"subdomainDelegation">> => [false],
+                <<"adminEmail">> => [?ADMIN_EMAIL],
                 <<"latitude">> => [rand:uniform() * 90],
                 <<"longitude">> => [rand:uniform() * 180]
             },
@@ -208,6 +209,7 @@ create_test(Config) ->
                 {<<"domain">>, <<"trailing-.hyphen">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
                 {<<"subdomainDelegation">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
                 {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                {<<"adminEmail">>, <<"adminwithoutdomain">>, ?ERROR_BAD_VALUE_EMAIL},
                 {<<"latitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"latitude">>)},
                 {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
                 {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
@@ -236,6 +238,7 @@ create_test(Config) ->
                 <<"subdomainDelegation">> => [true],
                 <<"subdomain">> => [<<"prov-sub">>],
                 <<"ipList">> => [[<<"2.4.6.8">>, <<"255.253.251.2">>]],
+                <<"adminEmail">> => [?ADMIN_EMAIL],
                 <<"latitude">> => [rand:uniform() * 90],
                 <<"longitude">> => [rand:uniform() * 180]
             },
@@ -253,23 +256,24 @@ create_test(Config) ->
                 {<<"ipList">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)}
             ]
         }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    }.
 
 
 get_test(Config) ->
     ExpName = ?PROVIDER_NAME1,
     ExpDomain = ?DOMAIN,
+    ExpAdminEmail = ?ADMIN_EMAIL,
     ExpLatitude = rand:uniform() * 90,
     ExpLongitude = rand:uniform() * 180,
-    ProviderDetails = #{
+    PrivateProviderDetails = #{
         <<"name">> => ExpName,
+        <<"adminEmail">> => ExpAdminEmail,
         <<"domain">> => ExpDomain,
         <<"latitude">> => ExpLatitude,
         <<"longitude">> => ExpLongitude
     },
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-        Config, ProviderDetails#{<<"subdomainDelegation">> => false}
+        Config, PrivateProviderDetails#{<<"subdomainDelegation">> => false}
     ),
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
@@ -285,8 +289,6 @@ get_test(Config) ->
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     SupportSize = oz_test_utils:minimum_support_size(Config),
     {ok, S1} = oz_test_utils:support_space(Config, P1, S1, SupportSize),
-
-    ExpDetails = ProviderDetails#{<<"online">> => true},
 
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{
@@ -312,15 +314,17 @@ get_test(Config) ->
                 fun(#od_provider{
                     name = Name, subdomain_delegation = false,
                     domain = Domain, subdomain = undefined,
+                    admin_email = AdminEmail,
                     latitude = Latitude, longitude = Longitude,
                     spaces = Spaces, eff_users = EffUsers, eff_groups = #{}
                 }) ->
-                    ?assertEqual(Name, ExpName),
-                    ?assertEqual(Domain, ExpDomain),
-                    ?assertEqual(Latitude, ExpLatitude),
-                    ?assertEqual(Longitude, ExpLongitude),
-                    ?assertEqual(Spaces, #{S1 => SupportSize}),
-                    ?assertEqual(EffUsers, #{U1 => [{od_space, S1}]})
+                    ?assertEqual(ExpName, Name),
+                    ?assertEqual(ExpDomain, Domain),
+                    ?assertEqual(ExpAdminEmail, AdminEmail),
+                    ?assertEqual(ExpLatitude, Latitude),
+                    ?assertEqual(ExpLongitude, Longitude),
+                    ?assertEqual(#{S1 => SupportSize}, Spaces),
+                    ?assertEqual(#{U1 => [{od_space, S1}]}, EffUsers)
                 end)
         },
         gs_spec = #gs_spec{
@@ -334,6 +338,7 @@ get_test(Config) ->
                 <<"spaces">> => #{S1 => SupportSize},
                 <<"subdomain">> => <<"undefined">>,
                 <<"subdomainDelegation">> => false,
+                <<"adminEmail">> => ExpAdminEmail,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -344,6 +349,10 @@ get_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
+
+    ExpProtectedDetails = maps:remove(<<"adminEmail">>, PrivateProviderDetails#{
+        <<"online">> => true
+    }),
 
     % Get and check protected data
     GetProtectedDataApiTestSpec = #api_test_spec{
@@ -363,14 +372,14 @@ get_test(Config) ->
             method = get,
             path = [<<"/providers/">>, P1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpDetails#{<<"providerId">> => P1}
+            expected_body = ExpProtectedDetails#{<<"providerId">> => P1}
         },
         logic_spec = #logic_spec{
             operation = get,
             module = provider_logic,
             function = get_protected_data,
             args = [client, P1],
-            expected_result = ?OK_MAP(ExpDetails)
+            expected_result = ?OK_MAP(ExpProtectedDetails)
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -378,7 +387,7 @@ get_test(Config) ->
                 type = od_provider, id = P1,
                 aspect = instance, scope = protected
             },
-            expected_result = ?OK_MAP(ExpDetails#{
+            expected_result = ?OK_MAP(ExpProtectedDetails#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -397,10 +406,10 @@ get_self_test(Config) ->
         Config, ProviderDetails#{<<"subdomainDelegation">> => false}
     ),
 
-    ExpDetails = ProviderDetails#{
+    ExpDetails = maps:remove(<<"adminEmail">>, ProviderDetails#{
         <<"name">> => ?PROVIDER_NAME1,
         <<"online">> => false
-    },
+    }),
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [{provider, P1, P1Macaroon}]
@@ -498,9 +507,10 @@ update_test(Config) ->
     Name = ?PROVIDER_NAME1,
     Latitude = rand:uniform() * 90,
     Longitude = rand:uniform() * 180,
+    AdminEmail = <<"email@domain.com">>,
     ProviderDetails = #{
-        <<"name">> => Name, <<"domain">> => ?DOMAIN,
-        <<"subdomainDelegation">> => false,
+        <<"name">> => Name, <<"adminEmail">> => AdminEmail,
+        <<"domain">> => ?DOMAIN, <<"subdomainDelegation">> => false,
         <<"latitude">> => Latitude, <<"longitude">> => Longitude
     },
 
@@ -512,17 +522,19 @@ update_test(Config) ->
     end,
     VerifyEndFun = fun(ShouldSucceed, #{providerId := ProvId} = _Env, Data) ->
         {ok, Provider} = oz_test_utils:get_provider(Config, ProvId),
-        {ExpName, ExpLatitude, ExpLongitude} = case ShouldSucceed of
+        {ExpName, ExpAdminEmail, ExpLatitude, ExpLongitude} = case ShouldSucceed of
             false ->
-                {Name, Latitude, Longitude};
+                {Name, AdminEmail, Latitude, Longitude};
             true ->
                 {
                     maps:get(<<"name">>, Data, Name),
+                    maps:get(<<"adminEmail">>, Data, AdminEmail),
                     maps:get(<<"latitude">>, Data, Latitude),
                     maps:get(<<"longitude">>, Data, Longitude)
                 }
         end,
         ?assertEqual(ExpName, Provider#od_provider.name),
+        ?assertEqual(ExpAdminEmail, Provider#od_provider.admin_email),
         ?assertEqual(ExpLatitude, Provider#od_provider.latitude),
         ?assertEqual(ExpLongitude, Provider#od_provider.longitude)
     end,
@@ -540,15 +552,18 @@ update_test(Config) ->
             expected_code = ?HTTP_204_NO_CONTENT
         },
         data_spec = DataSpec = #data_spec{
-            at_least_one = [<<"name">>, <<"latitude">>, <<"longitude">>],
+            at_least_one = [<<"name">>, <<"adminEmail">>, <<"latitude">>, <<"longitude">>],
             correct_values = #{
                 <<"name">> => [?PROVIDER_NAME2],
+                <<"adminEmail">> => [<<"new+email@gmail.com">>],
                 <<"latitude">> => [rand:uniform() * 90],
                 <<"longitude">> => [rand:uniform() * 180]
             },
             bad_values = [
                 {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
                 {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
+                {<<"adminEmail">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"adminEmail">>)},
+                {<<"adminEmail">>, <<"nodomain">>, ?ERROR_BAD_VALUE_EMAIL},
                 {<<"latitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"latitude">>)},
                 {<<"latitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
                 {<<"latitude">>, -90.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"latitude">>, -90, 90)},
@@ -1640,6 +1655,7 @@ update_domain_test(Config) ->
     Subdomain = <<"prov-sub">>,
     ProviderDetails = #{
         <<"name">> => ?PROVIDER_NAME1,
+        <<"adminEmail">> => <<"admin@onedata.org">>,
         <<"subdomain">> => Subdomain,
         <<"ipList">> => [<<"2.4.6.8">>, <<"255.253.251.2">>],
         <<"subdomainDelegation">> => true

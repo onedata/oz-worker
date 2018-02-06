@@ -739,7 +739,9 @@ get_provider_test(Config) ->
         Config, P2, S1, oz_test_utils:minimum_support_size(Config)
     ),
 
-    ExpDetails = ProviderDetails#{<<"online">> => false},
+    ExpDetails = maps:remove(<<"adminEmail">>, ProviderDetails#{
+        <<"online">> => false
+    }),
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [

@@ -206,6 +206,7 @@ translate_get(1, #gri{type = od_provider, id = Id, aspect = instance, scope = pr
         subdomain_delegation = SubdomainDelegation,
         domain = Domain,
         subdomain = Subdomain,
+        admin_email = AdminEmail,
         latitude = Latitude,
         longitude = Longitude,
 
@@ -218,6 +219,8 @@ translate_get(1, #gri{type = od_provider, id = Id, aspect = instance, scope = pr
         <<"subdomainDelegation">> => SubdomainDelegation,
         <<"domain">> => Domain,
         <<"subdomain">> => Subdomain,
+
+        <<"adminEmail">> => AdminEmail,
 
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,

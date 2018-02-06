@@ -34,6 +34,8 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec build_domain(Subdomain :: domain(), Domain :: domain()) -> domain().
+build_domain(<<>>, Domain) ->
+    Domain;
 build_domain(Subdomain, Domain) ->
     <<Subdomain/binary, ".", Domain/binary>>.
 
@@ -105,9 +107,10 @@ build_config(OneZoneIPs) ->
         [build_record_a(Domain, IP) || IP <- IPs]
     end, DomainsToIPS),
     NSRecords = [build_record_ns(OneZoneDomain, NSHost) || NSHost <- NSDomains],
+    TxtRecords = lists:map(fun build_record_txt/1, get_txt_entries(OneZoneDomain)),
     SOARecord = build_record_soa(OneZoneDomain, AdminEmail, PrimaryNS),
 
-    {OneZoneDomain, <<>>, [SOARecord | NSRecords ++ ARecords]}.
+    {OneZoneDomain, <<>>, [SOARecord | NSRecords ++ ARecords ++ TxtRecords]}.
 
 
 %%%===================================================================
@@ -152,6 +155,19 @@ build_provider_domains(OneZoneDomain) ->
     SubdomainsIPs = dns_state:get_subdomains_to_ips(),
     [{build_domain(Subdomain, OneZoneDomain), IPs}
      || {Subdomain, IPs} <- maps:to_list(SubdomainsIPs)].
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Get all TXT entries. Convert their values to strings
+%% as expected by erldns.
+%% @end
+%%--------------------------------------------------------------------
+get_txt_entries(OneZoneDomain) ->
+    SubdomainToRecord = dns_state:get_txt_records(),
+    [{build_domain(Name, OneZoneDomain), binary:bin_to_list(Content)}
+        || {Name, Content} <- SubdomainToRecord].
 
 
 %%--------------------------------------------------------------------
@@ -248,6 +264,19 @@ build_record_ns(Domain, NSDomain) ->
         type = ?DNS_TYPE_NS,
         ttl = get_env(ns_ttl, 120),
         data = #dns_rrdata_ns{dname = NSDomain}
+    }.
+
+
+-spec build_record_txt({domain(), binary()}) -> #dns_rr{}.
+build_record_txt({Domain, Content}) ->
+    build_record_txt(Domain, Content).
+-spec build_record_txt(domain(), binary()) -> #dns_rr{}.
+build_record_txt(Domain, Content) ->
+    #dns_rr{
+        name = Domain,
+        type = ?DNS_TYPE_TXT,
+        ttl = get_env(txt_ttl, 120),
+        data = #dns_rrdata_txt{txt = Content}
     }.
 
 

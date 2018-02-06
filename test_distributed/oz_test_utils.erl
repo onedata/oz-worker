@@ -1131,6 +1131,7 @@ get_share_public_url(Config, ShareId) ->
 create_provider(Config, Name) when is_binary(Name) ->
     create_provider(Config, #{
         <<"name">> => Name,
+        <<"adminEmail">> => <<"admin@onedata.org">>,
         <<"domain">> => <<"127.0.0.1">>,
         <<"subdomainDelegation">> => false,
         <<"latitude">> => 0.0,

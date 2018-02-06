@@ -35,7 +35,10 @@
     dns_server_duplicates_ns_records_test/1,
     dns_server_resolves_static_subdomains_test/1,
     static_subdomain_does_not_shadow_provider_subdomain_test/1,
-    dns_server_does_not_resolve_removed_subdomain_test/1
+    dns_server_does_not_resolve_removed_subdomain_test/1,
+    dns_resolves_txt_record/1,
+    txt_record_forbidden_without_subdomain_delegation/1,
+    dns_does_not_resolve_removed_txt_record_test/1
 ]).
 
 
@@ -49,7 +52,10 @@ all() -> ?ALL([
     dns_server_duplicates_ns_records_test,
     dns_server_resolves_static_subdomains_test,
     static_subdomain_does_not_shadow_provider_subdomain_test,
-    dns_server_does_not_resolve_removed_subdomain_test
+    dns_server_does_not_resolve_removed_subdomain_test,
+    dns_resolves_txt_record,
+    txt_record_forbidden_without_subdomain_delegation,
+    dns_does_not_resolve_removed_txt_record_test
 ]).
 
 -define(DNS_ASSERT_RETRY_COUNT, 7).
@@ -60,9 +66,9 @@ all() -> ?ALL([
 %%%===================================================================
 -define(PROVIDER_NAME1, <<"test_provider">>).
 -define(PROVIDER_NAME2, <<"second_provider">>).
--define(PROVIDER_IPS1, lists:sort([{240,1,1,0}, {240,1,1,1}, {240,1,1,2}])).
--define(PROVIDER_IPS2, lists:sort([{241,1,1,0}, {241,1,1,1}, {241,1,1,2}])).
--define(STATIC_SUBDOMAIN_IPS1, lists:sort([{1,2,3,4}, {5,6,7,8}])).
+-define(PROVIDER_IPS1, lists:sort([{240, 1, 1, 0}, {240, 1, 1, 1}, {240, 1, 1, 2}])).
+-define(PROVIDER_IPS2, lists:sort([{241, 1, 1, 0}, {241, 1, 1, 1}, {241, 1, 1, 2}])).
+-define(STATIC_SUBDOMAIN_IPS1, lists:sort([{1, 2, 3, 4}, {5, 6, 7, 8}])).
 -define(STATIC_SUBDOMAIN_IPS2, lists:sort([{122, 255, 255, 32}])).
 -define(PROVIDER_SUBDOMAIN1, "provsub").
 -define(PROVIDER_SUBDOMAIN2, "other-provsub").
@@ -78,8 +84,8 @@ init_per_suite(Config) ->
     Posthook = fun(NewConfig) ->
         Nodes = ?config(oz_worker_nodes, NewConfig),
         IPstrings = lists:map(fun binary_to_list/1,
-                              lists:map(fun test_utils:get_docker_ip/1,
-                                        Nodes)),
+            lists:map(fun test_utils:get_docker_ip/1,
+                Nodes)),
         IPs = lists:map(fun(IPstring) ->
             {ok, IP} = inet:parse_ipv4strict_address(IPstring),
             IP
@@ -88,7 +94,7 @@ init_per_suite(Config) ->
         {ok, ZoneDomain} = oz_test_utils:get_oz_domain(NewConfig),
         [{oz_domain, ZoneDomain}, {oz_ips, lists:sort(IPs)} | NewConfig]
     end,
-    [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]}| Config].
+    [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
@@ -277,7 +283,6 @@ dns_server_duplicates_ns_records_test(Config) ->
     end, NSDomainsIPs).
 
 
-
 %%--------------------------------------------------------------------
 %% @doc
 %% A subdomain must not be set for a provider if the subdomain is
@@ -290,7 +295,7 @@ update_fails_on_duplicated_subdomain_test(Config) ->
     SubdomainBin = <<?PROVIDER_SUBDOMAIN1>>,
     StaticSubdomain = <<"test">>,
 
-    set_dns_config(Config, static_entries, [{StaticSubdomain, [{1,1,1,1}]}]),
+    set_dns_config(Config, static_entries, [{StaticSubdomain, [{1, 1, 1, 1}]}]),
     {ok, {P1, _}} = oz_test_utils:create_provider(Config, Name1),
     {ok, {P2, _}} = oz_test_utils:create_provider(Config, Name2),
 
@@ -298,9 +303,9 @@ update_fails_on_duplicated_subdomain_test(Config) ->
     oz_test_utils:enable_subdomain_delegation(Config, P1, SubdomainBin, []),
 
     Data = #{
-      <<"subdomainDelegation">> => true,
-      <<"subdomain">> => SubdomainBin,
-      <<"ipList">> => []},
+        <<"subdomainDelegation">> => true,
+        <<"subdomain">> => SubdomainBin,
+        <<"ipList">> => []},
 
     % subdomain used by another provider
     ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
@@ -337,7 +342,7 @@ dns_server_resolves_static_subdomains_test(Config) ->
     SubdomainsIPs = lists:zipwith(fun(Domain, IPs) ->
         {list_to_binary(Domain), IPs}
     end, Subdomains, StaticIPs),
-    DomainsIPs  = lists:zipwith(fun(Domain, IPs) ->
+    DomainsIPs = lists:zipwith(fun(Domain, IPs) ->
         {Domain ++ "." ++ OZDomain, IPs}
     end, Subdomains, StaticIPs),
 
@@ -350,7 +355,6 @@ dns_server_resolves_static_subdomains_test(Config) ->
     lists:foreach(fun({Domain, IPs}) ->
         assert_dns_answer(OZIPs, Domain, a, IPs)
     end, DomainsIPs).
-
 
 
 %%--------------------------------------------------------------------
@@ -425,6 +429,76 @@ dns_server_does_not_resolve_removed_subdomain_test(Config) ->
     assert_dns_answer(OZIPs, DomainBin, a, []).
 
 
+dns_resolves_txt_record(Config) ->
+    OZIPs = ?config(oz_ips, Config),
+    OZDomain = ?config(oz_domain, Config),
+
+    Name = ?PROVIDER_NAME1,
+    Subdomain = ?PROVIDER_SUBDOMAIN1,
+    SubdomainBin = <<?PROVIDER_SUBDOMAIN1>>,
+    FullDomain = Subdomain ++ "." ++ OZDomain,
+
+    RecordContent = <<"special_letsencrypt_token">>,
+    RecordName = <<"acme_validation">>,
+    RecordFQDN = binary_to_list(RecordName) ++ "." ++ FullDomain,
+
+    {ok, {P1, _}} = oz_test_utils:create_provider(Config, Name),
+
+    oz_test_utils:enable_subdomain_delegation(Config, P1, SubdomainBin, []),
+
+    ?assertMatch(ok,
+        oz_test_utils:call_oz(Config,
+            provider_logic, set_dns_txt_record, [#client{type = root}, P1, RecordName, RecordContent])
+    ),
+
+    assert_dns_answer(OZIPs, RecordFQDN, txt, [[binary_to_list(RecordContent)]]).
+
+
+txt_record_forbidden_without_subdomain_delegation(Config) ->
+    Name = ?PROVIDER_NAME1,
+
+    RecordContent = <<"special_letsencrypt_token">>,
+    RecordName = <<"acme_validation">>,
+
+    {ok, {P1, _}} = oz_test_utils:create_provider(Config, Name),
+
+
+    ?assertMatch(?ERROR_SUBDOMAIN_DELEGATION_DISABLED,
+        oz_test_utils:call_oz(Config,
+            provider_logic, set_dns_txt_record, [#client{type = root}, P1, RecordName, RecordContent])
+    ).
+
+
+dns_does_not_resolve_removed_txt_record_test(Config) ->
+    OZIPs = ?config(oz_ips, Config),
+    OZDomain = ?config(oz_domain, Config),
+
+    Name = ?PROVIDER_NAME1,
+    Subdomain = ?PROVIDER_SUBDOMAIN1,
+    SubdomainBin = <<?PROVIDER_SUBDOMAIN1>>,
+    FullDomain = Subdomain ++ "." ++ OZDomain,
+
+    RecordContent = <<"special_letsencrypt_token">>,
+    RecordName = <<"acme_validation">>,
+    RecordFQDN = binary_to_list(RecordName) ++ "." ++ FullDomain,
+
+    {ok, {P1, _}} = oz_test_utils:create_provider(Config, Name),
+
+    oz_test_utils:enable_subdomain_delegation(Config, P1, SubdomainBin, []),
+
+    ?assertMatch(ok, oz_test_utils:call_oz(Config,
+            provider_logic, set_dns_txt_record, [#client{type = root}, P1, RecordName, RecordContent])
+    ),
+
+    assert_dns_answer(OZIPs, RecordFQDN, txt, [[binary_to_list(RecordContent)]]),
+
+    ?assertMatch(ok, oz_test_utils:call_oz(Config,
+            provider_logic, remove_dns_txt_record, [#client{type = root}, P1, RecordName])
+    ),
+
+    assert_dns_answer(OZIPs, RecordFQDN, txt, []).
+
+
 %%%===================================================================
 %%% Utils
 %%%===================================================================
@@ -465,12 +539,12 @@ assert_dns_answer(Servers, Query, Type, Expected, Attempts) ->
         % displays ~20 seconds delay before returning updated results
         try
             ?assertEqual(SortedExpected,
-                         lists:sort(inet_res:lookup(Query, any, Type, Opts)),
-                         Attempts, ?DNS_ASSERT_RETRY_DELAY)
+                lists:sort(inet_res:lookup(Query, any, Type, Opts)),
+                Attempts, ?DNS_ASSERT_RETRY_DELAY)
         catch error:{assertEqual_failed, _} = Error ->
             ct:print("DNS query type ~p to server ~p for name ~p "
-                     "returned incorrect results in ~p attempts.",
-                     [Type, Server, Query, Attempts]),
+            "returned incorrect results in ~p attempts.",
+                [Type, Server, Query, Attempts]),
             erlang:error(Error)
         end
     end, Servers).
