@@ -57,8 +57,7 @@ start() ->
         % Get certs
         {ok, KeyFile} = application:get_env(?APP_NAME, web_key_file),
         {ok, CertFile} = application:get_env(?APP_NAME, web_cert_file),
-        {ok, CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
-        CaCerts = cert_utils:load_ders_in_dir(CaCertsDir),
+        {ok, ChainFile} = application:get_env(?APP_NAME, web_cert_chain_file),
 
         % Initialize auth handler
         auth_config:load_auth_config(),
@@ -85,15 +84,22 @@ start() ->
 
         % Call gui init, which will call init on all modules that might need state.
         gui:init(),
+
+        SslOpts = [
+            {port, GuiPort},
+            {keyfile, KeyFile},
+            {certfile, CertFile},
+            {ciphers, ssl_utils:safe_ciphers()}],
+
+        SslOptsWithChain = case filelib:is_regular(ChainFile) of
+            true -> [{cacertfile, ChainFile} | SslOpts];
+            _ -> SslOpts
+        end,
+
         % Start the listener for web gui and nagios handler
         {ok, _} = ranch:start_listener(?gui_https_listener, GuiNbAcceptors,
-            ranch_ssl, [
-                {port, GuiPort},
-                {keyfile, KeyFile},
-                {certfile, CertFile},
-                {cacerts, CaCerts},
-                {ciphers, ssl_utils:safe_ciphers()}
-            ], cowboy_protocol, [
+            ranch_ssl, SslOptsWithChain,
+            cowboy_protocol, [
                 {env, [{dispatch, Dispatch}]},
                 {max_keepalive, MaxKeepAlive},
                 {timeout, Timeout},
