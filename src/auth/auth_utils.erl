@@ -349,7 +349,7 @@ validate_saml_login() ->
     try
         SP = saml_config:get_sp_config(),
         % Check url params for state parameter and validate it
-        {ok, PostVals, _} = cowboy_req:body_qs(gui_ctx:get_cowboy_req(), [{length, 128000}]),
+        {ok, PostVals, _} = cowboy_req:read_urlencoded_body(gui_ctx:get_cowboy_req(), #{length => 128000}),
         SAMLEncoding = proplists:get_value(<<"SAMLEncoding">>, PostVals),
         SAMLResponse = proplists:get_value(<<"SAMLResponse">>, PostVals),
         StateToken = proplists:get_value(<<"RelayState">>, PostVals),

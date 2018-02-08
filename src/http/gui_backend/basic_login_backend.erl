@@ -35,7 +35,7 @@
 page_init() ->
     Req = gui_ctx:get_cowboy_req(),
     try
-        {<<"Basic ", UserAndPassword/binary>>, _} =
+        <<"Basic ", UserAndPassword/binary>> =
             cowboy_req:header(<<"authorization">>, Req),
         [User, Passwd] = binary:split(base64:decode(UserAndPassword), <<":">>),
         case user_logic:authenticate_by_basic_credentials(User, Passwd) of

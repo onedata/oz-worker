@@ -11,13 +11,17 @@
 -module(oai_handler).
 -author("Jakub Kudzia").
 
+-behaviour(cowboy_rest).
+
 -include("http/handlers/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %%% API
--export([init/3, rest_init/2, allowed_methods/2, content_types_accepted/2,
+-export([
+    init/2, allowed_methods/2, content_types_accepted/2,
     content_types_provided/2, accept_resource/2, provide_resource/2,
-    generate_response_date_element/0]).
+    generate_response_date_element/0
+]).
 
 
 %%%===================================================================
@@ -29,22 +33,11 @@
 %%% Upgrade the protocol to cowboy_rest.
 %%% @end
 %%%--------------------------------------------------------------------
--spec init({TransportName :: atom(), ProtocolName :: http},
-    Req :: cowboy_req:req(), Opts :: any()) ->
-    {upgrade, protocol, cowboy_rest}.
-init({_, http}, _Req, _Opts) ->
-    {upgrade, protocol, cowboy_rest}.
+-spec init(Req :: cowboy_req:req(), Opts :: any()) ->
+    {cowboy_rest, cowboy_req:req(), any()}.
+init(Req, Opts) ->
+    {cowboy_rest, Req, Opts}.
 
-
-%%%--------------------------------------------------------------------
-%%% @doc Cowboy callback function.
-%%% Initialize the state for this request.
-%%% @end
-%%%--------------------------------------------------------------------
--spec rest_init(Req :: cowboy_req:req(), Opts :: any()) ->
-    {ok, cowboy_req:req(), any()}.
-rest_init(Req, Opts) ->
-    {ok, Req, Opts}.
 
 %%%--------------------------------------------------------------------
 %%% @doc Cowboy callback function.
@@ -55,6 +48,7 @@ rest_init(Req, Opts) ->
     {[binary()], cowboy_req:req(), any()}.
 allowed_methods(Req, State) ->
     {[<<"GET">>, <<"POST">>], Req, State}.
+
 
 %%%--------------------------------------------------------------------
 %%% @doc Cowboy callback function.
@@ -71,6 +65,7 @@ allowed_methods(Req, State) ->
 content_types_provided(Req, State) ->
     {[{<<"text/xml">>, provide_resource}], Req, State}.
 
+
 %%%--------------------------------------------------------------------
 %%% @doc Cowboy callback function.
 %%% Return the list of content-types the resource accepts.
@@ -86,20 +81,22 @@ content_types_provided(Req, State) ->
 content_types_accepted(Req, State) ->
     {[{<<"application/x-www-form-urlencoded">>, accept_resource}], Req, State}.
 
+
 %%%--------------------------------------------------------------------
 %%% @doc Cowboy callback function.
-%%% Return the response body.%% @end
+%%% Return the response body.
+%%% @end
 %%%--------------------------------------------------------------------
 -spec provide_resource(Req :: cowboy_req:req(), State :: any()) ->
-    {iodata() | halt, cowboy_req:req(), any()}.
+    {iodata() | stop, cowboy_req:req(), any()}.
 provide_resource(Req, State) ->
-    {QueryString, Req1} = cowboy_req:qs_vals(Req),
+    QueryString = cowboy_req:parse_qs(Req),
     try
-        {ResponseBody, Req2} = handle_request(QueryString, Req1),
+        {ResponseBody, Req2} = handle_request(QueryString, Req),
         {ResponseBody, Req2, State}
     catch
-        throw:{halt, ReqE} ->
-            {halt, ReqE, State}
+        throw:{stop, ReqE} ->
+            {stop, ReqE, State}
     end.
 
 %%%--------------------------------------------------------------------
@@ -108,16 +105,16 @@ provide_resource(Req, State) ->
 %%% @end
 %%%--------------------------------------------------------------------
 -spec accept_resource(Req :: cowboy_req:req(), State :: any()) ->
-    {{true | halt, URL :: binary()} | boolean(), cowboy_req:req(), any()}.
+    {{true | stop, URL :: binary()} | boolean(), cowboy_req:req(), any()}.
 accept_resource(Req, State) ->
-    {ok, QS, Req1} = cowboy_req:body_qs(Req),
+    {ok, QS, Req1} = cowboy_req:read_urlencoded_body(Req),
     try
         {ResponseBody, Req2} = handle_request(QS, Req1),
         Req3 = cowboy_req:set_resp_body(ResponseBody, Req2),
         {true, Req3, State}
     catch
-        throw:{halt, ReqE} ->
-            {halt, ReqE, State}
+        throw:{stop, ReqE} ->
+            {stop, ReqE, State}
     end.
 
 
@@ -144,8 +141,8 @@ handle_request(QueryString, Req) ->
             oai_errors:handle(Error);
         ErrorType:Error ->
             ?error_stacktrace("Unhandled exception in OAI-PMH request ~p:~p", [ErrorType, Error]),
-            {ok, ReqE} = cowboy_req:reply(500, [], [], Req),
-            throw({halt, ReqE})
+            ReqE = cowboy_req:reply(500, Req),
+            throw({stop, ReqE})
     end,
 
     RequestElement = case Response of
@@ -261,16 +258,5 @@ generate_request_element(Req) ->
     ParsedArgs :: [proplists:property()], Req :: cowboy_req:req()) ->
     {request, binary(), [proplists:property()]}.
 generate_request_element(ParsedArgs, Req) ->
-    {Path, Req2} = cowboy_req:path(Req),
-    {URL, _Req3} = cowboy_req:host_url(Req2),
-    BaseURL = <<URL/binary, Path/binary>>,
-    {request, BaseURL, ParsedArgs}.
-
-
-
-
-
-
-
-
-
+    URL = iolist_to_binary(cowboy_req:uri(Req, #{qs => undefined})),
+    {request, URL, ParsedArgs}.

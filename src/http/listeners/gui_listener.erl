@@ -48,7 +48,6 @@ port() ->
 start() ->
     try
         % Get gui config
-        GuiPort = port(),
         {ok, GuiNbAcceptors} =
             application:get_env(?APP_NAME, gui_https_acceptors),
         {ok, Timeout} = application:get_env(?APP_NAME, gui_socket_timeout),
@@ -73,7 +72,7 @@ start() ->
                 {'_', redirector_handler, []}
             ]},
             {'_', lists:flatten([
-                {?ZONE_VERSION_ENDPOINT, get_zone_version_handler, []},
+                {?ZONE_VERSION_ENDPOINT, zone_version_handler, []},
                 {?NAGIOS_ENDPOINT, nagios_handler, []},
                 {?PUBLIC_SHARE_ENDPOINT ++ "/:share_id", public_share_handler, []},
                 {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
@@ -86,21 +85,22 @@ start() ->
         % Call gui init, which will call init on all modules that might need state.
         gui:init(),
         % Start the listener for web gui and nagios handler
-        {ok, _} = ranch:start_listener(?gui_https_listener, GuiNbAcceptors,
-            ranch_ssl, [
-                {port, GuiPort},
+        {ok, _} = cowboy:start_tls(?gui_https_listener,
+            [
+                {port, port()},
+                {num_acceptors, GuiNbAcceptors},
                 {keyfile, KeyFile},
                 {certfile, CertFile},
                 {cacerts, CaCerts},
                 {ciphers, ssl_utils:safe_ciphers()}
-            ], cowboy_protocol, [
-                {env, [{dispatch, Dispatch}]},
-                {max_keepalive, MaxKeepAlive},
-                {timeout, Timeout},
+            ], #{
+                env => #{dispatch => Dispatch},
+                max_keepalive => MaxKeepAlive,
+                request_timeout => Timeout,
                 % On every request, add headers that improve
                 % security to the response
-                {onrequest, fun gui:response_headers/1}
-            ]),
+                onrequest => fun gui:response_headers/1
+            }),
         ok
     catch
         _Type:Error ->
@@ -116,10 +116,10 @@ start() ->
 %%--------------------------------------------------------------------
 -spec stop() -> ok | {error, Reason :: term()}.
 stop() ->
-    case catch ranch:stop_listener(?gui_https_listener) of
-        (ok) ->
+    case cowboy:stop_listener(?gui_https_listener) of
+        ok ->
             ok;
-        (Error) ->
+        {error, Error} ->
             ?error("Error on stopping listener ~p: ~p", [?gui_https_listener, Error]),
             {error, redirector_stop_error}
     end.

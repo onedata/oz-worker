@@ -27,7 +27,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec handle({oai_error_code(), binary()} | oai_error_code() | term()) ->
-    oai_error() | {halt, cowboy_req:req(), any()}.
+    oai_error() | {stop, cowboy_req:req(), any()}.
 handle({missing_key, <<"verb">>}) ->
     ?BAD_VERB(<<"The verb argument is missing.">>);
 handle({missing_key, Keys}) ->

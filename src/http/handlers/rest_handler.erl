@@ -12,6 +12,8 @@
 -module(rest_handler).
 -author("Lukasz Opiola").
 
+-behaviour(cowboy_rest).
+
 -include("rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
@@ -40,13 +42,11 @@
 
 %% cowboy rest handler API
 -export([
-    init/3,
-    rest_init/2,
+    init/2,
     allowed_methods/2,
+
     content_types_accepted/2,
     content_types_provided/2,
-    resource_exists/2,
-    forbidden/2,
     is_authorized/2,
     accept_resource/2,
     provide_resource/2,
@@ -63,32 +63,20 @@
 
 %%--------------------------------------------------------------------
 %% @doc Cowboy callback function.
-%% Upgrade the protocol to cowboy_rest.
-%% @end
-%%--------------------------------------------------------------------
--spec init({TransportName :: atom(), ProtocolName :: http},
-    Req :: cowboy_req:req(), Opts :: any()) ->
-    {upgrade, protocol, cowboy_rest}.
-init({_, http}, _Req, _Opts) ->
-    {upgrade, protocol, cowboy_rest}.
-
-
-%%--------------------------------------------------------------------
-%% @doc Cowboy callback function.
 %% Initialize the state for this request.
 %% @end
 %%--------------------------------------------------------------------
--spec rest_init(Req :: cowboy_req:req(), Opts :: opts()) ->
-    {ok, cowboy_req:req(), #state{}}.
-rest_init(Req, Opts) ->
-    {MethodBin, _} = cowboy_req:method(Req),
+-spec init(Req :: cowboy_req:req(), Opts :: opts()) ->
+    {cowboy_rest, cowboy_req:req(), #state{}}.
+init(#{method := MethodBin} = Req, Opts) ->
     Method = binary_to_method(MethodBin),
     % If given method is not allowed, it is not in the map. Such request
     % will stop execution on allowed_methods/2 callback. Use undefined if
     % the method does not exist.
-    RestReq = maps:get(Method, Opts, undefined),
-    AllowedMethods = maps:keys(Opts),
-    {ok, Req, #state{rest_req = RestReq, allowed_methods = AllowedMethods}}.
+    {cowboy_rest, Req, #state{
+        rest_req = maps:get(Method, Opts, undefined),
+        allowed_methods = maps:keys(Opts)
+    }}.
 
 
 %%--------------------------------------------------------------------
@@ -99,8 +87,7 @@ rest_init(Req, Opts) ->
 -spec allowed_methods(Req :: cowboy_req:req(), State :: #state{}) ->
     {[binary()], cowboy_req:req(), #state{}}.
 allowed_methods(Req, #state{allowed_methods = AllowedMethods} = State) ->
-    BinMethods = [method_to_binary(M) || M <- AllowedMethods],
-    {BinMethods, Req, State}.
+    {[method_to_binary(M) || M <- AllowedMethods], Req, State}.
 
 
 %%--------------------------------------------------------------------
@@ -137,18 +124,6 @@ content_types_provided(Req, State) ->
 
 %%--------------------------------------------------------------------
 %% @doc Cowboy callback function.
-%% Return whether the resource exists.
-%% @end
-%%--------------------------------------------------------------------
--spec resource_exists(Req :: cowboy_req:req(), State :: #state{}) ->
-    {boolean(), cowboy_req:req(), #state{}}.
-resource_exists(Req, State) ->
-    % Always return true - this is checked by entity_logic later.
-    {true, Req, State}.
-
-
-%%--------------------------------------------------------------------
-%% @doc Cowboy callback function.
 %% Return whether the user is authorized to perform the action.
 %% NOTE: The name and description of this function is actually misleading;
 %% 401 Unauthorized is returned when there's been an *authentication* error,
@@ -172,27 +147,14 @@ is_authorized(Req, State) ->
     catch
         throw:Error ->
             RestResp = error_rest_translator:response(Error),
-            {halt, send_response(RestResp, Req), State};
+            {stop, send_response(RestResp, Req), State};
         Type:Message ->
             ?error_stacktrace("Unexpected error in ~p:is_authorized - ~p:~p", [
                 ?MODULE, Type, Message
             ]),
             RestResp = error_rest_translator:response(?ERROR_INTERNAL_SERVER_ERROR),
-            {halt, send_response(RestResp, Req), State}
+            {stop, send_response(RestResp, Req), State}
     end.
-
-
-%%--------------------------------------------------------------------
-%% @doc Cowboy callback function.
-%% Return whether access to the resource is forbidden.
-%% @see is_authorized/2
-%% @end
-%%--------------------------------------------------------------------
--spec forbidden(Req :: cowboy_req:req(), State :: #state{}) ->
-    {boolean(), cowboy_req:req(), #state{}}.
-forbidden(Req, State) ->
-    % Always return false - this is checked by entity_logic later.
-    {false, Req, State}.
 
 
 %%--------------------------------------------------------------------
@@ -201,7 +163,7 @@ forbidden(Req, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec accept_resource(Req :: cowboy_req:req(), State :: #state{}) ->
-    {halt, cowboy_req:req(), #state{}}.
+    {stop, cowboy_req:req(), #state{}}.
 accept_resource(Req, State) ->
     process_request(Req, State).
 
@@ -212,7 +174,7 @@ accept_resource(Req, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec provide_resource(Req :: cowboy_req:req(), State :: #state{}) ->
-    {halt, cowboy_req:req(), #state{}}.
+    {stop, cowboy_req:req(), #state{}}.
 provide_resource(Req, State) ->
     process_request(Req, State).
 
@@ -223,7 +185,7 @@ provide_resource(Req, State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_resource(Req :: cowboy_req:req(), State :: #state{}) ->
-    {halt, cowboy_req:req(), #state{}}.
+    {stop, cowboy_req:req(), #state{}}.
 delete_resource(Req, State) ->
     process_request(Req, State).
 
@@ -246,8 +208,7 @@ rest_routes() ->
     ]),
     % Aggregate routes that share the same path
     AggregatedRoutes = lists:foldl(
-        fun({Path, RestReq}, AccProps) ->
-            #rest_req{method = Method} = RestReq,
+        fun({Path, #rest_req{method = Method} = RestReq}, AccProps) ->
             RoutesForPath = proplists:get_value(Path, AccProps, #{}),
             lists:keystore(
                 Path, 1, AccProps,
@@ -277,7 +238,7 @@ rest_routes() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec process_request(Req :: cowboy_req:req(), State :: #state{}) ->
-    {halt, NewReq :: cowboy_req:req(), NewState :: #state{}}.
+    {stop, NewReq :: cowboy_req:req(), NewState :: #state{}}.
 process_request(Req, State) ->
     try
         #state{client = Client, rest_req = #rest_req{
@@ -302,17 +263,17 @@ process_request(Req, State) ->
             data = Data
         },
         RestResp = call_entity_logic_and_translate_response(ElReq),
-        {halt, send_response(RestResp, Req2), State}
+        {stop, send_response(RestResp, Req2), State}
     catch
         throw:Error ->
             ErrorResp = error_rest_translator:response(Error),
-            {halt, send_response(ErrorResp, Req), State};
+            {stop, send_response(ErrorResp, Req), State};
         Type:Message ->
             ?error_stacktrace("Unexpected error in ~p:process_request - ~p:~p", [
                 ?MODULE, Type, Message
             ]),
-            {ok, NewReq} = cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req),
-            {halt, NewReq, State}
+            NewReq = cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req),
+            {stop, NewReq, State}
     end.
 
 %%--------------------------------------------------------------------
@@ -324,15 +285,13 @@ process_request(Req, State) ->
 -spec send_response(RestResp :: #rest_resp{}, Req :: cowboy_req:req()) ->
     NewReq :: cowboy_req:req().
 send_response(#rest_resp{code = Code, headers = Headers, body = Body}, Req) ->
-    HeadersList = maps:to_list(Headers),
     RespBody = case Body of
         {binary, Bin} ->
             Bin;
         Map ->
             json_utils:encode_map(Map)
     end,
-    {ok, Req2} = cowboy_req:reply(Code, HeadersList, RespBody, Req),
-    Req2.
+    cowboy_req:reply(Code, Headers, RespBody, Req).
 
 
 %%--------------------------------------------------------------------
@@ -378,12 +337,10 @@ resolve_auth_hint_bindings(undefined, _Client, _Req) ->
 -spec resolve_bindings(binding() | {atom(), binding()} | term(),
     entity_logic:client(), cowboy_req:req()) -> binary() | {atom(), binary()}.
 resolve_bindings(?BINDING(Key), _Client, Req) ->
-    {Binding, _} = cowboy_req:binding(Key, Req),
-    Binding;
+    cowboy_req:binding(Key, Req);
 resolve_bindings(?CLIENT_ID, #client{id = Id}, _Req) ->
     Id;
-resolve_bindings(?CLIENT_IP, _Client, Req) ->
-    {{Ip, _Port}, _} = cowboy_req:peer(Req),
+resolve_bindings(?CLIENT_IP, _Client, #{peer := {Ip, _Port}} = _Req) ->
     list_to_binary(inet_parse:ntoa(Ip));
 resolve_bindings({Atom, PossibleBinding}, Client, Req) when is_atom(Atom) ->
     {Atom, resolve_bindings(PossibleBinding, Client, Req)};
@@ -450,9 +407,9 @@ authorize(Req, [AuthMethod | Rest]) ->
     false | {true, #client{}}.
 authorize_by_oauth_provider(Req) ->
     case cowboy_req:header(<<"x-auth-token">>, Req) of
-        {undefined, _} ->
+        undefined ->
             false;
-        {AccessToken, _} ->
+        AccessToken ->
             case auth_utils:authorize_by_oauth_provider(AccessToken) of
                 false ->
                     false;
@@ -473,8 +430,7 @@ authorize_by_oauth_provider(Req) ->
 -spec authorize_by_basic_auth(Req :: cowboy_req:req()) ->
     false | {true, #client{}}.
 authorize_by_basic_auth(Req) ->
-    {Header, _} = cowboy_req:header(<<"authorization">>, Req),
-    case Header of
+    case cowboy_req:header(<<"authorization">>, Req) of
         <<"Basic ", UserPasswdB64/binary>> ->
             case auth_utils:authorize_by_basic_auth(UserPasswdB64) of
                 {true, Client} ->
@@ -522,8 +478,8 @@ authorize_by_macaroons(Req) ->
     {Macaroon :: binary() | undefined, DischargeMacaroons :: [binary()]} |
     no_return().
 parse_macaroons_from_headers(Req) ->
-    {MacaroonHeader, _} = cowboy_req:header(<<"macaroon">>, Req),
-    {XAuthTokenHeader, _} = cowboy_req:header(<<"x-auth-token">>, Req),
+    MacaroonHeader = cowboy_req:header(<<"macaroon">>, Req),
+    XAuthTokenHeader = cowboy_req:header(<<"x-auth-token">>, Req),
     % X-Auth-Token is an alias for macaroon header, check if any of them
     % is given.
     SerializedMacaroon = case MacaroonHeader of
@@ -534,11 +490,11 @@ parse_macaroons_from_headers(Req) ->
     end,
 
     DischargeMacaroons = case cowboy_req:header(<<"discharge-macaroons">>, Req) of
-        {undefined, _} ->
+        undefined ->
             [];
-        {<<"">>, _} ->
+        <<"">> ->
             [];
-        {SerializedDischarges, _} ->
+        SerializedDischarges ->
             binary:split(SerializedDischarges, <<" ">>, [global])
     end,
 
@@ -555,7 +511,7 @@ parse_macaroons_from_headers(Req) ->
 -spec get_data(Req :: cowboy_req:req()) ->
     {Data :: entity_logic:data(), cowboy_req:req()}.
 get_data(Req) ->
-    {ok, Body, Req2} = cowboy_req:body(Req),
+    {ok, Body, Req2} = cowboy_req:read_body(Req),
     Data = try
         case Body of
             <<"">> -> #{};
