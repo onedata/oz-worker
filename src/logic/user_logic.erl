@@ -28,13 +28,12 @@
 % SSL Opts used to connect to onepanel.
 % Onepanel is usually available under 127.0.0.1 or localhost, so hostname
 % verification should be omitted here (the cert signature is still checked).
--define(ONEPANEL_CONNECT_OPTS, begin
-    {ok, __CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
-    [{recv_timeout, 10000}, {ssl_options, [
+-define(ONEPANEL_CONNECT_OPTS, [
+    {recv_timeout, 10000}, {ssl_options, [
         {secure, only_verify_peercert},
-        {cacerts, cert_utils:load_ders_in_dir(__CaCertsDir)}
-    ]}]
-end).
+        {cacerts, gui_listener:get_cert_chain()}
+    ]}
+]).
 
 -export([
     create/1, create/2,

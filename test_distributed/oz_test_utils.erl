@@ -1979,8 +1979,7 @@ unmock_handle_proxy(Config) ->
 %%--------------------------------------------------------------------
 -spec gui_ca_certs(Config :: term()) -> [public_key:der_encoded()].
 gui_ca_certs(Config) ->
-    {ok, CaCertsDir} = call_oz(Config, application, get_env, [?APP_NAME, cacerts_dir]),
-    call_oz(Config, cert_utils, load_ders_in_dir, [CaCertsDir]).
+    call_oz(Config, gui_listener, get_cert_chain, []).
 
 
 %%--------------------------------------------------------------------
