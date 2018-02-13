@@ -527,7 +527,7 @@ delete_with_relations(EntityType, EntityId) ->
         % Remove the entity itself (synchronize with other process which might
         % be updating the entity)
         ok = sync_on_entity(EntityType, EntityId, fun() ->
-            EntityType:delete(EntityId)
+            EntityType:force_delete(EntityId)
         end),
         schedule_refresh(),
         ensure_up_to_date(),
