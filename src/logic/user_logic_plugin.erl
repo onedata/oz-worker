@@ -62,8 +62,6 @@ operation_supported(create, default_space, private) -> true;
 operation_supported(create, {space_alias, _}, private) -> true;
 operation_supported(create, default_provider, private) -> true;
 
-operation_supported(get, deprecated_default_space, private) -> true;
-
 operation_supported(get, list, private) -> true;
 
 operation_supported(get, instance, private) -> true;
@@ -117,16 +115,12 @@ operation_supported(_, _, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(#el_req{gri = #gri{id = UserId, aspect = deprecated_default_space}, data = #{<<"spaceId">> := SpaceId}}) ->
-    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
-        {ok, User#od_user{default_space = SpaceId}}
-    end),
-    ok;
-
 create(#el_req{gri = #gri{aspect = authorize}, data = Data}) ->
     Identifier = maps:get(<<"identifier">>, Data),
     case auth_logic:authenticate_user(Identifier) of
         {ok, DischargeMacaroonToken} ->
+            % TODO VFS-3835 the macaroon should be serialized in translator
+            % rather than here
             {ok, {data, DischargeMacaroonToken}};
         _ ->
             ?ERROR_BAD_VALUE_IDENTIFIER(<<"identifier">>)
@@ -169,9 +163,6 @@ create(#el_req{gri = #gri{id = UserId, aspect = default_provider}, data = Data})
 %%--------------------------------------------------------------------
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
-get(#el_req{gri = #gri{aspect = deprecated_default_space}}, User) ->
-    {ok, User#od_user.default_space};
-
 get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, UserDocs} = od_user:list(),
     {ok, [UserId || #document{key = UserId} <- UserDocs]};
@@ -498,15 +489,6 @@ authorize(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
-validate(#el_req{operation = create, gri = #gri{id = UserId, aspect = deprecated_default_space}}) ->
-    #{
-        required => #{
-            <<"spaceId">> => {binary, {exists, fun(SpaceId) ->
-                space_logic:has_eff_user(SpaceId, UserId)
-            end}}
-        }
-    };
-
 validate(#el_req{operation = create, gri = #gri{aspect = authorize}}) -> #{
     required => #{
         <<"identifier">> => {binary, non_empty}
@@ -529,7 +511,7 @@ validate(#el_req{operation = create, gri = #gri{id = UserId, aspect = {space_ali
     #{
         required => #{
             {aspect, <<"spaceId">>} => {any, {relation_exists,
-                od_user, UserId, od_space, SpaceId, fun({space_alias, SpId}) ->
+                od_user, UserId, od_space, SpaceId, fun(SpId) ->
                     space_logic:has_eff_user(SpId, UserId)
                 end}},
             <<"alias">> => {binary, non_empty}

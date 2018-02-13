@@ -15,7 +15,7 @@
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
--export([create/1, save/1, get/1, exists/1, update/2, delete/1, list/0]).
+-export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([actual_timestamp/0]).
@@ -95,10 +95,13 @@ update(HandleId, Diff) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Deletes handle by ID.
+%% WARNING: Must not be used directly, as deleting a handle that still has
+%% relations to other entities will cause serious inconsistencies in database.
+%% To safely delete a handle use handle_logic.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(id()) -> ok | {error, term()}.
-delete(HandleId) ->
+-spec force_delete(id()) -> ok | {error, term()}.
+force_delete(HandleId) ->
     datastore_model:delete(?CTX, HandleId).
 
 %%--------------------------------------------------------------------

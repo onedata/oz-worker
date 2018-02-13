@@ -729,6 +729,8 @@ prepare_client({user, User}, Env) when is_atom(User) ->
     {user, maps:get(User, Env, User)};
 prepare_client({user, User, Macaroon}, Env) when is_atom(User) ->
     {user, maps:get(User, Env, User), Macaroon};
+prepare_client({provider, Provider, Macaroon}, Env) when is_atom(Provider) orelse is_atom(Macaroon) ->
+    {provider, maps:get(Provider, Env, Provider), maps:get(Macaroon, Env, Macaroon)};
 prepare_client(Client, Env) when is_atom(Client) ->
     maps:get(Client, Env, Client);
 prepare_client(Client, _Env) ->

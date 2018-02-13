@@ -507,7 +507,7 @@ authorize_by_macaroons(Req) ->
                 {true, Client} ->
                     {true, Client};
                 {error, _} ->
-                    throw(?ERROR_BAD_MACAROON)
+                    throw(?ERROR_UNAUTHORIZED)
             end
     end.
 

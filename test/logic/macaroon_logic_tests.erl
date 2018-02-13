@@ -78,20 +78,20 @@ teardown(_) ->
 
 create_provider_auth() ->
     ProviderId = <<"12345">>,
-    {_Macaroon, Identifier} = macaroon_logic:create_provider_root_macaroon(ProviderId),
+    {ok, {_Macaroon, Identifier}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
     {ok, _} = macaroon_auth:get(Identifier).
 
 
 verify_provider_auth() ->
     ProviderId = <<"12345">>,
-    {Macaroon, _Identifier} = macaroon_logic:create_provider_root_macaroon(ProviderId),
-    {OtherMacaroon, _Identifier2} = macaroon_logic:create_provider_root_macaroon(<<"other-provider">>),
+    {ok, {Macaroon, _Identifier}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
+    {ok, {OtherMacaroon, _Identifier2}} = macaroon_logic:create_provider_root_macaroon(<<"other-provider">>),
 
     ?assertEqual({ok, ProviderId}, macaroon_logic:verify_provider_auth(Macaroon)),
     ?assertNotEqual({ok, ProviderId}, macaroon_logic:verify_provider_auth(OtherMacaroon)),
 
     MacaroonWithAuthNone = onedata_macaroons:add_caveat(Macaroon, ?AUTHORIZATION_NONE_CAVEAT),
-    ?assertEqual(?ERROR_BAD_MACAROON, macaroon_logic:verify_provider_auth(MacaroonWithAuthNone)),
+    ?assertEqual(?ERROR_MACAROON_INVALID, macaroon_logic:verify_provider_auth(MacaroonWithAuthNone)),
 
     MacaroonWithTTL = onedata_macaroons:add_caveat(Macaroon,
         ?TIME_CAVEAT(time_utils:cluster_time_seconds(), 10)
@@ -113,13 +113,13 @@ verify_provider_auth() ->
     MacaroonWithTTLAndNoAuth = onedata_macaroons:add_caveat(MacaroonWithTTL,
         ?AUTHORIZATION_NONE_CAVEAT
     ),
-    ?assertEqual(?ERROR_BAD_MACAROON, macaroon_logic:verify_provider_auth(MacaroonWithTTLAndNoAuth)).
+    ?assertEqual(?ERROR_MACAROON_INVALID, macaroon_logic:verify_provider_auth(MacaroonWithTTLAndNoAuth)).
 
 
 verify_provider_identity() ->
     ProviderId = <<"12345">>,
-    {Macaroon, _Identifier} = macaroon_logic:create_provider_root_macaroon(ProviderId),
-    {OtherMacaroon, _Identifier2} = macaroon_logic:create_provider_root_macaroon(<<"other-provider">>),
+    {ok, {Macaroon, _Identifier}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
+    {ok, {OtherMacaroon, _Identifier2}} = macaroon_logic:create_provider_root_macaroon(<<"other-provider">>),
 
     ?assertEqual({ok, ProviderId}, macaroon_logic:verify_provider_identity(Macaroon)),
     ?assertNotEqual({ok, ProviderId}, macaroon_logic:verify_provider_identity(OtherMacaroon)),
@@ -148,4 +148,3 @@ verify_provider_identity() ->
         ?AUTHORIZATION_NONE_CAVEAT
     ),
     ?assertEqual({ok, ProviderId}, macaroon_logic:verify_provider_identity(MacaroonWithTTLAndNoAuth)).
-

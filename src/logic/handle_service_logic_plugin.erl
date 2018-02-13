@@ -394,7 +394,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
 
 validate(#el_req{operation = create, gri = #gri{aspect = {user, _}}}) -> #{
     required => #{
-        {aspect, <<"userId">>} => {any, {exists, fun({user, UserId}) ->
+        {aspect, <<"userId">>} => {any, {exists, fun(UserId) ->
             user_logic:exists(UserId) end}
         }
     },
@@ -405,7 +405,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = {user, _}}}) -> #{
 
 validate(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) -> #{
     required => #{
-        {aspect, <<"groupId">>} => {any, {exists, fun({group, GroupId}) ->
+        {aspect, <<"groupId">>} => {any, {exists, fun(GroupId) ->
             group_logic:exists(GroupId) end}
         }
     },
