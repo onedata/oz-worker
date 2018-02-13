@@ -35,14 +35,14 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec create_provider_root_macaroon(od_provider:id()) ->
-    {macaroon:macaroon(), macaroon_auth:id()}.
+    {ok, {macaroon:macaroon(), macaroon_auth:id()}}.
 create_provider_root_macaroon(ProviderId) ->
     Secret = generate_secret(),
     {ok, Identifier} = macaroon_auth:create(
         Secret, authorization, ?PROVIDER(ProviderId)
     ),
     Macaroon = create(Identifier, Secret, []),
-    {Macaroon, Identifier}.
+    {ok, {Macaroon, Identifier}}.
 
 
 %%--------------------------------------------------------------------
@@ -54,7 +54,7 @@ create_provider_root_macaroon(ProviderId) ->
     {ok, od_provider:id()} | {error, term()}.
 verify_provider_auth(Macaroon) ->
     Timestamp = time_utils:cluster_time_seconds(),
-    verify_provider(Macaroon, [
+    verify_provider_issuer(Macaroon, [
         ?TIME_CAVEAT(Timestamp, ?MAX_PROVIDER_MACAROON_TTL)
     ]).
 
@@ -69,7 +69,7 @@ verify_provider_auth(Macaroon) ->
     {ok, od_provider:id()} | {error, term()}.
 verify_provider_identity(Macaroon) ->
     Timestamp = time_utils:cluster_time_seconds(),
-    verify_provider(Macaroon, [
+    verify_provider_issuer(Macaroon, [
         ?TIME_CAVEAT(Timestamp, ?MAX_PROVIDER_MACAROON_TTL),
         ?AUTHORIZATION_NONE_CAVEAT
     ]).
@@ -85,18 +85,28 @@ create(Identifier, Secret, Caveats) ->
     onedata_macaroons:create(Domain, Secret, Identifier, Caveats).
 
 
--spec verify_provider(macaroon:macaroon(), [onedata_macaroons:caveat()]) ->
+-spec verify_provider_issuer(macaroon:macaroon(), [onedata_macaroons:caveat()]) ->
     {ok, od_provider:id()} | {error, term()}.
-verify_provider(Macaroon, Caveats) ->
+verify_provider_issuer(Macaroon, Caveats) ->
+    case verify_issuer(Macaroon, Caveats) of
+        {ok, ?PROVIDER(ProviderId)} -> {ok, ProviderId};
+        {ok, _} -> ?ERROR_MACAROON_INVALID;
+        Error = {error, _} -> Error
+    end.
+
+
+-spec verify_issuer(macaroon:macaroon(), [onedata_macaroons:caveat()]) ->
+    {ok, macaroon_auth:issuer()} | {error, term()}.
+verify_issuer(Macaroon, Caveats) ->
     Identifier = macaroon:identifier(Macaroon),
     case macaroon_auth:get(Identifier) of
-        {ok, #macaroon_auth{secret = Secret, type = authorization, issuer = ?PROVIDER(ProviderId)}} ->
+        {ok, #macaroon_auth{secret = Secret, type = authorization, issuer = Issuer}} ->
             case onedata_macaroons:verify(Macaroon, Secret, [], Caveats) of
-                ok -> {ok, ProviderId};
+                ok -> {ok, Issuer};
                 Error = {error, _} -> Error
             end;
         _ ->
-            ?ERROR_BAD_MACAROON
+            ?ERROR_MACAROON_INVALID
     end.
 
 

@@ -101,7 +101,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     AdminEmail = maps:get(<<"adminEmail">>, Data),
 
     ProviderId = datastore_utils:gen_key(),
-    {Macaroon, Identity} = macaroon_logic:create_provider_root_macaroon(ProviderId),
+    {ok, {Macaroon, Identity}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
 
     {Domain, Subdomain} = case SubdomainDelegation of
         false ->
@@ -143,7 +143,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
     AdminEmail = maps:get(<<"adminEmail">>, Data),
 
     ProviderId = UUID,
-    {Macaroon, Identity} = macaroon_logic:create_provider_root_macaroon(ProviderId),
+    {ok, {Macaroon, Identity}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
 
     {Domain, Subdomain} = case SubdomainDelegation of
         false ->
@@ -586,13 +586,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
 
 validate(#el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}) -> #{
     required => #{
-        % reimplement nonempty binary check as normal validators
-        % do not accept {aspect, _} tuple
-        {aspect, <<"recordName">>} => {any, fun
-            ({dns_txt_record, <<>>}) -> false;
-            ({dns_txt_record, Name}) when is_binary(Name) -> true;
-            (_) -> false
-        end},
+        {aspect, <<"recordName">>} => {binary, non_empty},
         <<"content">> => {binary, non_empty}
     }
 };

@@ -62,31 +62,38 @@ translate(?ERROR_NOT_IMPLEMENTED) ->
 translate(?ERROR_NOT_SUPPORTED) ->
     ?HTTP_501_NOT_IMPLEMENTED;
 
+translate(?ERROR_NOT_FOUND) ->
+    ?HTTP_404_NOT_FOUND;
+
 translate(?ERROR_UNAUTHORIZED) ->
     ?HTTP_401_UNAUTHORIZED;
 
 translate(?ERROR_FORBIDDEN) ->
     ?HTTP_403_FORBIDDEN;
 
-translate(?ERROR_NOT_FOUND) ->
-    ?HTTP_404_NOT_FOUND;
+% Errors connected with macaroons
+translate(?ERROR_BAD_MACAROON) ->
+    {?HTTP_400_BAD_REQUEST,
+        <<"Provided authorization token could not be understood by the server">>
+    };
+translate(?ERROR_MACAROON_INVALID) ->
+    {?HTTP_400_BAD_REQUEST,
+        <<"Provided authorization token is not valid">>
+    };
+translate(?ERROR_MACAROON_EXPIRED) ->
+    {?HTTP_400_BAD_REQUEST,
+        <<"Provided authorization token has expired">>
+    };
+translate(?ERROR_MACAROON_TTL_TO_LONG(MaxTtl)) ->
+    {?HTTP_400_BAD_REQUEST,
+        <<"Provided authorization token has too open TTL (it must not exceed ~B seconds)">>,
+        [MaxTtl]
+    };
+
 % Errors connected with bad data
 translate(?ERROR_MALFORMED_DATA) ->
     {?HTTP_400_BAD_REQUEST,
         <<"Provided data could not be understood by the server">>
-    };
-translate(?ERROR_BAD_MACAROON) ->
-    {?HTTP_401_UNAUTHORIZED,
-        <<"Provided authorization token is not valid">>
-    };
-translate(?ERROR_MACAROON_EXPIRED) ->
-    {?HTTP_401_UNAUTHORIZED,
-        <<"Provided authorization token has expired">>
-    };
-translate(?ERROR_MACAROON_TTL_TO_LONG(MaxTtl)) ->
-    {?HTTP_401_UNAUTHORIZED,
-        <<"Provided authorization token has too open TTL (it must not exceed ~B seconds)">>,
-        [MaxTtl]
     };
 translate(?ERROR_BAD_BASIC_CREDENTIALS) ->
     {?HTTP_401_UNAUTHORIZED,

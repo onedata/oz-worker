@@ -656,7 +656,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = invite_group_token}}) -
 
 validate(#el_req{operation = create, gri = #gri{aspect = {user, _}}}) -> #{
     required => #{
-        {aspect, <<"userId">>} => {any, {exists, fun({user, UserId}) ->
+        {aspect, <<"userId">>} => {any, {exists, fun(UserId) ->
             user_logic:exists(UserId) end}
         }
     },
@@ -667,7 +667,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = {user, _}}}) -> #{
 
 validate(#el_req{operation = create, gri = #gri{aspect = {child, _}}}) -> #{
     required => #{
-        {aspect, <<"groupId">>} => {any, {exists, fun({child, ChildId}) ->
+        {aspect, <<"groupId">>} => {any, {exists, fun(ChildId) ->
             group_logic:exists(ChildId) end}
         }
     },
