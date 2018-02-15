@@ -52,7 +52,7 @@ serialize(Macaroon) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec deserialize(Token :: binary()) ->
-    {ok, macaroon:macaroon()} | {error, macaroon_invalid}.
+    {ok, macaroon:macaroon()} | {error, term()}.
 deserialize(Token) ->
     onedata_macaroons:deserialize(Token).
 

@@ -49,9 +49,6 @@ create_response(#gri{aspect = client_tokens}, _, {fetched, _, Token}) ->
 %%--------------------------------------------------------------------
 -spec get_response(entity_logic:gri(), entity_logic:get_result()) ->
     #rest_resp{}.
-get_response(#gri{aspect = deprecated_default_space}, SpaceId) ->
-    rest_translator:ok_body_reply(#{<<"spaceId">> => SpaceId});
-
 get_response(#gri{id = undefined, aspect = list}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});
 

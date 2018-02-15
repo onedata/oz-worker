@@ -21,6 +21,7 @@
 
 %% listener_behaviour callbacks
 -export([port/0, start/0, stop/0, healthcheck/0]).
+-export([get_cert_chain/0]).
 
 -define(gui_https_listener, https).
 
@@ -56,8 +57,7 @@ start() ->
         % Get certs
         {ok, KeyFile} = application:get_env(?APP_NAME, web_key_file),
         {ok, CertFile} = application:get_env(?APP_NAME, web_cert_file),
-        {ok, CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
-        CaCerts = cert_utils:load_ders_in_dir(CaCertsDir),
+        {ok, ChainFile} = application:get_env(?APP_NAME, web_cert_chain_file),
 
         % Initialize auth handler
         auth_config:load_auth_config(),
@@ -84,16 +84,23 @@ start() ->
 
         % Call gui init, which will call init on all modules that might need state.
         gui:init(),
+
+        SslOpts = [
+            {port, port()},
+            {num_acceptors, GuiNbAcceptors},
+            {keyfile, KeyFile},
+            {certfile, CertFile},
+            {ciphers, ssl_utils:safe_ciphers()}
+        ],
+
+        SslOptsWithChain = case filelib:is_regular(ChainFile) of
+            true -> [{cacertfile, ChainFile} | SslOpts];
+            _ -> SslOpts
+        end,
+
         % Start the listener for web gui and nagios handler
-        {ok, _} = cowboy:start_tls(?gui_https_listener,
-            [
-                {port, port()},
-                {num_acceptors, GuiNbAcceptors},
-                {keyfile, KeyFile},
-                {certfile, CertFile},
-                {cacerts, CaCerts},
-                {ciphers, ssl_utils:safe_ciphers()}
-            ], #{
+        {ok, _} = cowboy:start_tls(?gui_https_listener, SslOptsWithChain,
+            #{
                 env => #{dispatch => Dispatch},
                 max_keepalive => MaxKeepAlive,
                 request_timeout => Timeout,
@@ -133,12 +140,24 @@ stop() ->
 -spec healthcheck() -> ok | {error, server_not_responding}.
 healthcheck() ->
     Endpoint = str_utils:format_bin("https://127.0.0.1:~B", [port()]),
-    {ok, CaCertsDir} = application:get_env(?APP_NAME, cacerts_dir),
-    CaCerts = cert_utils:load_ders_in_dir(CaCertsDir),
-    Opts = [{ssl_options, [{secure, only_verify_peercert}, {cacerts, CaCerts}]}],
+    Opts = [{ssl_options, [{secure, only_verify_peercert}, {cacerts, get_cert_chain()}]}],
     case http_client:get(Endpoint, #{}, <<>>, Opts) of
         {ok, _, _, _} -> ok;
         _ -> {error, server_not_responding}
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns intermediate CA chain for the web cert used in gui listener.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_cert_chain() -> [public_key:der_encoded()].
+get_cert_chain() ->
+    {ok, ChainFile} = application:get_env(?APP_NAME, web_cert_chain_file),
+    case filelib:is_regular(ChainFile) of
+        true -> cert_utils:load_ders(ChainFile);
+        _ -> []
     end.
 
 %%%===================================================================

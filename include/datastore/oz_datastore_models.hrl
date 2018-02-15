@@ -198,10 +198,12 @@
 %% This record defines a provider who supports spaces and can be reached via url
 -record(od_provider, {
     name = <<"">> :: od_provider:name(),
+    admin_email :: undefined | binary(),
     root_macaroon :: undefined | macaroon_auth:id(),
     subdomain_delegation = false :: boolean(),
     domain :: binary(),
     subdomain = undefined :: undefined | binary(),
+
     latitude = 0.0 :: float(),
     longitude = 0.0 :: float(),
 
@@ -291,7 +293,8 @@
 -record(dns_state, {
     subdomain_to_provider = #{} :: #{dns_state:subdomain() => od_provider:id()},
     provider_to_subdomain = #{} :: #{od_provider:id() => dns_state:subdomain()},
-    provider_to_ips = #{} :: #{od_provider:id() => [inet:ipv4_address()]}
+    provider_to_ips = #{} :: #{od_provider:id() => [inet:ipv4_address()]},
+    provider_to_txt_records = #{} :: #{od_provider:id() => [{binary(), binary()}]}
 }).
 
 -record(entity_graph_state, {

@@ -54,6 +54,7 @@ od_handle_service | od_handle | oz_privileges.
 list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
+fun((term()) -> boolean()) |
 {not_lower_than, integer()} | {not_greater_than, integer()} |
 {between, integer(), integer()} |
 [term()] | % A list of accepted values
@@ -61,6 +62,8 @@ list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addre
 {not_exists, fun((entity_id()) -> boolean())} |
 {relation_exists, atom(), binary(), atom(), binary(), fun((entity_id()) -> boolean())} |
 token_logic:token_type() | % Compatible only with 'token' type validator
+subdomain | domain |
+email |
 login.
 
 % The 'aspect' key word allows to validate the data provided in aspect
@@ -487,9 +490,12 @@ ensure_valid(State) ->
     {true, NewData :: data()} | false.
 transform_and_check_value({aspect, Key}, Data, Validator) ->
     {TypeRule, ValueRule} = maps:get({aspect, Key}, Validator),
-    Value = maps:get(aspect, Data),
-    NewValue = transform_and_check_value(TypeRule, ValueRule, Key, Value),
-    {true, Data#{aspect => NewValue}};
+    %% Aspect validator supports only aspects that are tuples
+    {_, Value} = maps:get(aspect, Data),
+    % Ignore the returned value - the check will throw in case the value is
+    % not valid
+    transform_and_check_value(TypeRule, ValueRule, Key, Value),
+    {true, Data};
 transform_and_check_value(Key, Data, Validator) ->
     case maps:get(Key, Data, undefined) of
         undefined ->
@@ -623,16 +629,18 @@ check_type(json, _Key, JSON) when is_map(JSON) ->
     JSON;
 check_type(json, Key, _) ->
     throw(?ERROR_BAD_VALUE_JSON(Key));
+check_type(token, Key, <<>>) ->
+    throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_type(token, Key, Token) when is_binary(Token) ->
     case token_logic:deserialize(Token) of
-        {ok, Macaroon} ->
-            Macaroon;
-        {error, macaroon_invalid} ->
-            throw(?ERROR_BAD_VALUE_TOKEN(Key))
+        {ok, Macaroon} -> Macaroon;
+        ?ERROR_BAD_MACAROON -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
     end;
-check_type(token, _Key, Macaroon) ->
-    % Accept everything, it will be validated in check_value
-    Macaroon;
+check_type(token, Key, Macaroon) ->
+    case macaroon:is_macaroon(Macaroon) of
+        true -> Macaroon;
+        false -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
+    end;
 check_type(login, _Key, null) ->
     undefined;
 check_type(login, _Key, undefined) ->
@@ -731,6 +739,18 @@ check_value(binary, subdomain, _Key, Value) ->
                 _ -> throw(?ERROR_BAD_VALUE_SUBDOMAIN)
             end;
         _ -> throw(?ERROR_BAD_VALUE_SUBDOMAIN)
+    end;
+
+check_value(binary, email, Key, <<"">>) ->
+    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+check_value(binary, email, _Key, Value) ->
+    case re:run(Value, ?EMAIL_VALIDATION_REGEXP, [{capture, none}]) of
+        match ->
+            case byte_size(Value) > ?EMAIL_MAX_LENGTH of
+                true -> throw(?ERROR_BAD_VALUE_EMAIL);
+                false -> ok
+            end;
+        _ -> throw(?ERROR_BAD_VALUE_EMAIL)
     end;
 
 check_value(_, AllowedVals, Key, Vals) when is_list(AllowedVals) andalso is_list(Vals) ->

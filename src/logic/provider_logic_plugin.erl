@@ -61,6 +61,7 @@ operation_supported(create, support, private) -> true;
 operation_supported(create, check_my_ports, private) -> true;
 operation_supported(create, map_idp_group, private) -> true;
 operation_supported(create, verify_provider_identity, private) -> true;
+operation_supported(create, {dns_txt_record, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
 
@@ -80,6 +81,7 @@ operation_supported(update, domain_config, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {space, _}, private) -> true;
+operation_supported(delete, {dns_txt_record, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -96,9 +98,10 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     Latitude = maps:get(<<"latitude">>, Data, 0.0),
     Longitude = maps:get(<<"longitude">>, Data, 0.0),
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
+    AdminEmail = maps:get(<<"adminEmail">>, Data),
 
     ProviderId = datastore_utils:gen_key(),
-    {Macaroon, Identity} = macaroon_logic:create_provider_root_macaroon(ProviderId),
+    {ok, {Macaroon, Identity}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
 
     {Domain, Subdomain} = case SubdomainDelegation of
         false ->
@@ -118,7 +121,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
         name = Name, root_macaroon = Identity,
         subdomain_delegation = SubdomainDelegation,
         domain = Domain, subdomain = Subdomain,
-        latitude = Latitude, longitude = Longitude
+        latitude = Latitude, longitude = Longitude,
+        admin_email = AdminEmail
     },
 
     case od_provider:create(#document{key = ProviderId, value = Provider}) of
@@ -136,9 +140,10 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
     Longitude = maps:get(<<"longitude">>, Data, 0.0),
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
     UUID = maps:get(<<"uuid">>, Data, undefined),
+    AdminEmail = maps:get(<<"adminEmail">>, Data),
 
     ProviderId = UUID,
-    {Macaroon, Identity} = macaroon_logic:create_provider_root_macaroon(ProviderId),
+    {ok, {Macaroon, Identity}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
 
     {Domain, Subdomain} = case SubdomainDelegation of
         false ->
@@ -158,7 +163,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
         name = Name, root_macaroon = Identity,
         subdomain_delegation = SubdomainDelegation,
         domain = Domain, subdomain = Subdomain,
-        latitude = Latitude, longitude = Longitude
+        latitude = Latitude, longitude = Longitude,
+        admin_email = AdminEmail
     },
 
     case od_provider:create(#document{key = ProviderId, value = Provider}) of
@@ -184,6 +190,16 @@ create(Req = #el_req{gri = #gri{aspect = check_my_ports}}) ->
         {ok, {data, test_connection(Req#el_req.data)}}
     catch _:_ ->
         ?ERROR_INTERNAL_SERVER_ERROR
+    end;
+
+create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}, data = Data}) ->
+    case fetch_entity(ProviderId) of
+        {ok, #od_provider{subdomain_delegation = true}} ->
+            #{<<"content">> := Content} = Data,
+            ok = dns_state:set_txt_record(ProviderId, RecordName, Content);
+        {ok, #od_provider{subdomain_delegation = false}} ->
+            ?ERROR_SUBDOMAIN_DELEGATION_DISABLED;
+        Error -> Error
     end;
 
 create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
@@ -273,10 +289,12 @@ get(#el_req{gri = #gri{aspect = current_time}}, _) ->
 update(#el_req{gri = #gri{id = ProviderId, aspect = instance}, data = Data}) ->
     {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
         #od_provider{
-            name = Name, latitude = Latitude, longitude = Longitude
+            name = Name, latitude = Latitude, longitude = Longitude,
+            admin_email = AdminEmail
         } = Provider,
         {ok, Provider#od_provider{
             name = maps:get(<<"name">>, Data, Name),
+            admin_email = maps:get(<<"adminEmail">>, Data, AdminEmail),
             latitude = maps:get(<<"latitude">>, Data, Latitude),
             longitude = maps:get(<<"longitude">>, Data, Longitude)
         }}
@@ -344,7 +362,10 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
     entity_graph:remove_relation(
         od_space, SpaceId, od_provider, ProviderId
-    ).
+    );
+
+delete(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}}) ->
+    ok = dns_state:remove_txt_record(ProviderId, RecordName).
 
 
 %%--------------------------------------------------------------------
@@ -397,6 +418,9 @@ authorize(#el_req{operation = create, gri = #gri{aspect = instance_dev}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, _) ->
+    auth_by_self(Req);
+
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
     auth_by_self(Req);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = {check_my_ip, _}}}, _) ->
@@ -474,6 +498,9 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, _) -
     auth_by_self(Req) orelse
         user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_PROVIDERS_DELETE);
 
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
+    auth_by_self(Req);
+
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, _) ->
     auth_by_self(Req);
 
@@ -495,7 +522,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance},
     data = Data}) ->
     Required = #{
         <<"name">> => {binary, non_empty},
-        <<"subdomainDelegation">> => {boolean, any}
+        <<"subdomainDelegation">> => {boolean, any},
+        <<"adminEmail">> => {binary, email}
     },
     Common = #{
         optional => #{
@@ -524,7 +552,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
     Required = #{
         <<"name">> => {binary, non_empty},
         <<"uuid">> => {binary, non_empty},
-        <<"subdomainDelegation">> => {boolean, any}
+        <<"subdomainDelegation">> => {boolean, any},
+        <<"adminEmail">> => {binary, email}
     },
     Common = #{
         optional => #{
@@ -555,6 +584,13 @@ validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     }
 };
 
+validate(#el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}) -> #{
+    required => #{
+        {aspect, <<"recordName">>} => {binary, non_empty},
+        <<"content">> => {binary, non_empty}
+    }
+};
+
 validate(#el_req{operation = create, gri = #gri{aspect = check_my_ports}}) -> #{
 };
 
@@ -579,6 +615,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = verify_provider_identit
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, non_empty},
+        <<"adminEmail">> => {binary, email},
         <<"latitude">> => {float, {between, -90, 90}},
         <<"longitude">> => {float, {between, -180, 180}}
     }

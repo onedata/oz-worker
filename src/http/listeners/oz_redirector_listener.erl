@@ -74,7 +74,6 @@ start() ->
             max_keepalive => 1,
             request_timeout => timer:seconds(Timeout)
         }),
-    ?critical("~n~nASD~n~n~p~n~n", [Result]),
     case Result of
         {ok, _} -> ok;
         _ -> Result
