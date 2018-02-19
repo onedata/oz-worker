@@ -4,6 +4,20 @@
 CHANGELOG
 ---------
 
+### 18.02.0-beta1
+
+* VFS-3978 Do not distribute test CA with oz-worker
+* VFS-3751 Authorize providers using macaroons rather than certificates
+* VFS-3751 Remove OZ CA
+* VFS-3579 Generate OZ CA cert on startup if not present, add endpoint for publishing public CA to providers
+* VFS-3279 Implement new synchronization channel between OP and OZ (Graph Sync)
+* VFS-3730 Separate trusted CAs from certificate chain
+* VFS-3765 Add admin email to oneprovider data
+* VFS-3526 Reimplement DNS server to support OZ subdomains
+* Refactor datastore models to integrate them with new datastore
+* Change links storing model to use dedicated links tree for each provider
+
+
 ### 17.06.2
 
 * Releasing new version 17.06.2
