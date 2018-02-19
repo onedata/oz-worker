@@ -4,6 +4,67 @@
 CHANGELOG
 ---------
 
+### 17.06.2
+
+* Releasing new version 17.06.2
+
+
+### 17.06.1
+
+* Releasing new version 17.06.1
+
+
+### 17.06.0-rc9
+
+* VFS-4004 Update ctool to include safe ciphers in TLS
+* VFS-3951 add build_version env var for oz
+* VFS-3972 Fix attach-direct consoles in releases not being run with xterm terminal
+* VFS-3951 add rest endpoint for asking about oz version
+* VFS-3904 Optimize CA loop
+* VFS-3803 Add endpoint for providers returning zone time, include provider latitude and logitude in subscriptions
+
+
+### 17.06.0-rc8
+
+* Releasing new version 17.06.0-rc8
+
+
+### 17.06.0-rc7
+
+* VFS-3826 Add richer configuration options for Keycloak group mapping
+* Updating GUI, including: VFS-3710 - VFS-3710 Using binary prefixes for size units (IEC format: MiB, GiB, TiB, etc.)
+* Updating GUI, including: VFS-3669 - VFS-3669 Added a refresh token button on each tab of space support modal
+* VFS-3783 Move state tokens from single-node ETS to datastore
+* VFS-3772 Accept all VOs in EGI OIDC group mapping
+
+
+### 17.06.0-rc6
+
+* Releasing new version 17.06.0-rc6
+
+
+### 17.06.0-rc5
+
+* Releasing new version 17.06.0-rc5
+
+
+### 17.06.0-rc4
+
+* Releasing new version 17.06.0-rc4
+
+
+### 17.06.0-rc3
+
+* VFS-3455 Updating GUI ref
+* VFS-3594 Add missing validation rules for group token creation operations
+* VFS-3594 Fix a validation error during group token creation via POST and an error during user password change
+* VFS-3567 Store missing documents in datastore cache
+* VFS-3449 add endpoint for mapping groups
+* VFS-3556 Update esaml reference to support AES-CBC-256 encryption in SAML
+* VFS-3512 Update oz-gui-default reference
+* VFS-3473 Add support for HTTP-POST binding in SAML
+
+
 ### 17.06.0-rc2
 
 * Releasing new version 17.06.0-rc2
