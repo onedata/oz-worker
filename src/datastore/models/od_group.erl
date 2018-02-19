@@ -15,7 +15,7 @@
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
--export([create/1, save/1, get/1, exists/1, update/2, update/3, delete/1]).
+-export([create/1, save/1, get/1, exists/1, update/2, update/3, force_delete/1]).
 -export([list/0]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
@@ -100,10 +100,13 @@ update(GroupId, Diff, Default) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Deletes group by ID.
+%% WARNING: Must not be used directly, as deleting a group that still has
+%% relations to other entities will cause serious inconsistencies in database.
+%% To safely delete a group use group_logic.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(id()) -> ok | {error, term()}.
-delete(GroupId) ->
+-spec force_delete(id()) -> ok | {error, term()}.
+force_delete(GroupId) ->
     datastore_model:delete(?CTX, GroupId).
 
 %%--------------------------------------------------------------------
