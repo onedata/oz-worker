@@ -103,10 +103,7 @@ start() ->
             #{
                 env => #{dispatch => Dispatch},
                 max_keepalive => MaxKeepAlive,
-                request_timeout => Timeout,
-                % On every request, add headers that improve
-                % security to the response
-                onrequest => fun gui:response_headers/1
+                request_timeout => Timeout
             }),
         ok
     catch
