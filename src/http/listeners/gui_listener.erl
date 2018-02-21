@@ -176,13 +176,4 @@ static_routes() ->
         {ok, []} -> DefRoot;
         {ok, _} -> CustomRoot
     end,
-
-    Routes = [{"/[...]", gui_static_handler, {dir, DocRoot}}],
-
-    case application:get_env(?APP_NAME, gui_docs_proxy_enabled) of
-        {ok, true} ->
-            {ok, DocsPath} = application:get_env(?APP_NAME, gui_docs_static_root),
-            [{DocsPath ++ "/[...]", static_docs_handler, []} | Routes];
-        _ ->
-            Routes
-    end.
+    [{"/[...]", gui_static_handler, {dir, DocRoot}}].
