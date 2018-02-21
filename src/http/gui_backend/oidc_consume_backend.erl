@@ -56,7 +56,7 @@ page_init() ->
             gui_ctx:set_resp_cookie(
                 <<"authentication_error">>,
                 atom_to_binary(ErrorId, utf8),
-                [{path, <<"/">>}]
+                #{path => <<"/">>}
             ),
             <<?LOGIN_PAGE>>
     end,
