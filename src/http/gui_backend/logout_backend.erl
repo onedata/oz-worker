@@ -31,5 +31,6 @@
 %%--------------------------------------------------------------------
 -spec page_init() -> gui_html_handler:page_init_result().
 page_init() ->
+    ?info("User ~p logged out", [gui_session:get_user_id()]),
     gui_session:log_out(),
     {redirect_relative, <<"/">>}.
