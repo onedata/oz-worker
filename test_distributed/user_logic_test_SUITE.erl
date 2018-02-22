@@ -29,6 +29,7 @@
     init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
+    basic_auth_cache_test/1,
     basic_auth_login_test/1,
     automatic_group_membership_test/1,
     change_password_test/1,
@@ -37,6 +38,7 @@
 
 all() ->
     ?ALL([
+        basic_auth_cache_test,
         basic_auth_login_test,
         automatic_group_membership_test,
         change_password_test,
@@ -46,6 +48,63 @@ all() ->
 %%%===================================================================
 %%% Test functions
 %%%===================================================================
+
+% Check if basic auth login endpoint works.
+basic_auth_cache_test(Config) ->
+    Login = <<"user1">>,
+    Password = <<"password1">>,
+    IncorrectPassword = <<"password2">>,
+
+    lists:foreach(
+        % As basic auth cache is node specific,
+        % it should be tested on each node individually
+        fun(Node) ->
+            Nodes = [Node],
+            set_env_on_nodes(
+                Nodes, ?APP_NAME, onepanel_rest_url, appmock_mocked_endpoint(Config)
+            ),
+            TempConf = lists:map(
+                fun
+                    ({oz_worker_nodes, _}) -> {oz_worker_nodes, Nodes};
+                    (Val) -> Val
+                end, Config
+            ),
+
+            % Make sure there is no cached record for given user
+            ?assertMatch({error, not_found}, oz_test_utils:call_oz(
+                TempConf, basic_auth_cache, get, [Login, Password])
+            ),
+
+            % After calling authenticating function, fetched resource should be cached
+            ?assertMatch({ok, _, _}, oz_test_utils:call_oz(
+                TempConf, user_logic, authenticate_by_basic_credentials, [Login, Password]
+            )),
+            ?assertMatch({ok, _}, oz_test_utils:call_oz(
+                TempConf, basic_auth_cache, get, [Login, Password])
+            ),
+
+            % It should be still valid after only 2 seconds and should expire after 5 seconds overall
+            timer:sleep(timer:seconds(2)),
+            ?assertMatch({ok, _}, oz_test_utils:call_oz(
+                TempConf, basic_auth_cache, get, [Login, Password])
+            ),
+            timer:sleep(timer:seconds(3)),
+            ?assertMatch({error, not_found}, oz_test_utils:call_oz(
+                TempConf, basic_auth_cache, get, [Login, Password])
+            ),
+
+            % Authenticating with incorrect credentials should fail with nothing cached
+            ?assertMatch({error, _}, oz_test_utils:call_oz(
+                TempConf, user_logic, authenticate_by_basic_credentials, [Login, IncorrectPassword]
+            )),
+            ?assertMatch({error, not_found}, oz_test_utils:call_oz(
+                TempConf, basic_auth_cache, get, [Login, Password])
+            )
+
+        end, ?config(oz_worker_nodes, Config)
+    ),
+    ok.
+
 
 % Check if basic auth login endpoint works.
 basic_auth_login_test(Config) ->
