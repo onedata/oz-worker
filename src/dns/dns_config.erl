@@ -16,7 +16,7 @@
 -include_lib("dns/include/dns.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([build_config/1, build_config/0, insert_config/1]).
+-export([build_config/0, insert_config/1]).
 -export([build_domain/2, build_fqdn_from_subdomain/1]).
 
 -type domain() :: binary().
@@ -59,25 +59,15 @@ build_fqdn_from_subdomain(Subdomain) ->
 insert_config(Config) ->
     ok = erldns_zone_cache:put_zone(Config).
 
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Builds dns config with up to date data.
-%% @end
-%%--------------------------------------------------------------------
--spec build_config() -> dns_config().
-build_config() ->
-    build_config(get_onezone_ips()).
-
-
 %%--------------------------------------------------------------------
 %% @doc
 %% Builds dns config with up to date data, using provided IPs
 %% for OneZone.
 %% @end
 %%--------------------------------------------------------------------
--spec build_config(OneZoneIPs :: [inet:ip4_address()]) -> dns_config().
-build_config(OneZoneIPs) ->
+-spec build_config() -> dns_config().
+build_config() ->
+    OneZoneIPs = node_manager:get_cluster_ips(),
     OneZoneDomain = get_onezone_domain(),
     AdminEmail = get_env(soa_admin_mailbox),
 
@@ -116,19 +106,6 @@ build_config(OneZoneIPs) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Returns IPs of all OneZone nodes.
-%% @end
-%%--------------------------------------------------------------------
--spec get_onezone_ips() -> [inet:ip4_address()].
-get_onezone_ips() ->
-    {ok, NodesIPs} = node_manager:get_cluster_nodes_ips(),
-    {_, IPs} = lists:unzip(NodesIPs),
-    IPs.
-
 
 %%--------------------------------------------------------------------
 %% @private
