@@ -277,7 +277,7 @@ get(#el_req{gri = #gri{aspect = {check_my_ip, ClientIP}}}, _) ->
     {ok, ClientIP};
 
 get(#el_req{gri = #gri{aspect = current_time}}, _) ->
-    {ok, time_utils:cluster_time_milli_seconds()}.
+    {ok, time_utils:cluster_time_millis()}.
 
 
 %%--------------------------------------------------------------------
