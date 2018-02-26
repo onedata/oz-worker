@@ -90,7 +90,10 @@ start() ->
             {num_acceptors, GuiNbAcceptors},
             {keyfile, KeyFile},
             {certfile, CertFile},
-            {ciphers, ssl_utils:safe_ciphers()}
+            {ciphers, ssl_utils:safe_ciphers()},
+            {connection_type, supervisor},
+            {next_protocols_advertised, [<<"http/1.1">>]},
+            {alpn_preferred_protocols, [<<"http/1.1">>]}
         ],
 
         SslOptsWithChain = case filelib:is_regular(ChainFile) of
@@ -99,12 +102,14 @@ start() ->
         end,
 
         % Start the listener for web gui and nagios handler
-        {ok, _} = cowboy:start_tls(?gui_https_listener, SslOptsWithChain,
-            #{
+        {ok, _} = ranch:start_listener(?gui_https_listener, ranch_ssl,
+            SslOptsWithChain, cowboy_tls, #{
                 env => #{dispatch => Dispatch},
                 max_keepalive => MaxKeepAlive,
-                request_timeout => Timeout
-            }),
+                request_timeout => Timeout,
+                connection_type => supervisor
+            }
+        ),
         ok
     catch
         _Type:Error ->
