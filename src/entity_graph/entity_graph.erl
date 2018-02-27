@@ -116,7 +116,6 @@ eff_relation(entity_id()) | eff_relation_with_attrs(entity_id(), attributes()) |
 -export([remove_relation/4]).
 -export([delete_with_relations/2]).
 -export([update_oz_privileges/4]).
--export([mark_dirty/2, mark_dirty/5, is_dirty/2]).
 
 %%%===================================================================
 %%% API
@@ -168,9 +167,8 @@ verify_state_of_all_entities() ->
                                     ?info("Scheduling ~p refresh of dirty entity: ~p", [
                                         Direction, EntityType:to_string(EntityId)
                                     ]),
-                                    update_state(
-                                        Direction, true, EntityType, EntityId,
-                                        get_priority(Direction, Entity)
+                                    update_dirty_queue(
+                                        Direction, true, EntityType, EntityId
                                     );
                                 false ->
                                     ok
@@ -285,7 +283,7 @@ add_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
             true ->
                 ?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId);
             false ->
-                {ok, mark_dirty(bottom_up, true, ParType, ParId, add_child(
+                {ok, mark_record_dirty(bottom_up, true, add_child(
                     Parent, ChType, ChId, ChAttrs
                 ))}
         end
@@ -295,19 +293,30 @@ add_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
             true ->
                 ?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId);
             false ->
-                {ok, mark_dirty(top_down, true, ChType, ChId, add_parent(
+                {ok, mark_record_dirty(top_down, true, add_parent(
                     Child, ParType, ParId, ParAttrs
                 ))}
         end
     end,
     ParentRevertFun = fun(Parent) ->
-        {ok, mark_dirty(bottom_up, true, ParType, ParId, remove_child(
+        {ok, mark_record_dirty(bottom_up, true, remove_child(
             Parent, ChType, ChId
         ))}
     end,
-    Result = case update_entity_sync(ParType, ParId, ParentUpdateFun) of
+
+    ParentSync = fun() ->
+        update_dirty_queue(bottom_up, true, ParType, ParId),
+        update_entity(ParType, ParId, ParentUpdateFun)
+    end,
+
+    ChildSync = fun() ->
+        update_dirty_queue(top_down, true, ChType, ChId),
+        update_entity(ChType, ChId, ChildUpdateFun)
+    end,
+
+    Result = case sync_on_entity(ParType, ParId, ParentSync) of
         ok ->
-            case update_entity_sync(ChType, ChId, ChildUpdateFun) of
+            case sync_on_entity(ChType, ChId, ChildSync) of
                 ok ->
                     ok;
                 ?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId) ->
@@ -317,7 +326,9 @@ add_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
                 Err1 ->
                     % Some other error, we have to attempt reverting the
                     % relation in parent.
-                    update_entity_sync(ParType, ParId, ParentRevertFun),
+                    sync_on_entity(ParType, ParId, fun() ->
+                        update_entity(ParType, ParId, ParentRevertFun)
+                    end),
                     Err1
             end;
         Err2 ->
@@ -382,7 +393,7 @@ update_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
             false ->
                 ?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId);
             true ->
-                {ok, mark_dirty(bottom_up, true, ParType, ParId, update_child(
+                {ok, mark_record_dirty(bottom_up, true, update_child(
                     Parent, ChType, ChId, ChAttrs
                 ))}
         end
@@ -392,14 +403,25 @@ update_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
             false ->
                 ?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId);
             true ->
-                {ok, mark_dirty(top_down, true, ChType, ChId, update_parent(
+                {ok, mark_record_dirty(top_down, true, update_parent(
                     Child, ParType, ParId, ParAttrs
                 ))}
         end
     end,
-    Result = case update_entity_sync(ParType, ParId, ParentUpdateFun) of
+
+    ParentSync = fun() ->
+        update_dirty_queue(bottom_up, true, ParType, ParId),
+        update_entity(ParType, ParId, ParentUpdateFun)
+    end,
+
+    ChildSync = fun() ->
+        update_dirty_queue(top_down, true, ChType, ChId),
+        update_entity(ChType, ChId, ChildUpdateFun)
+    end,
+
+    Result = case sync_on_entity(ParType, ParId, ParentSync) of
         ok ->
-            update_entity_sync(ChType, ChId, ChildUpdateFun);
+            sync_on_entity(ChType, ChId, ChildSync);
         Error ->
             Error
     end,
@@ -426,7 +448,7 @@ remove_relation(ChType, ChId, ParType, ParId) ->
             false ->
                 {error, relation_does_not_exist};
             true ->
-                {ok, mark_dirty(bottom_up, true, ParType, ParId, remove_child(
+                {ok, mark_record_dirty(bottom_up, true, remove_child(
                     Parent, ChType, ChId
                 ))}
         end
@@ -436,13 +458,24 @@ remove_relation(ChType, ChId, ParType, ParId) ->
             false ->
                 {error, relation_does_not_exist};
             true ->
-                {ok, mark_dirty(top_down, true, ChType, ChId, remove_parent(
+                {ok, mark_record_dirty(top_down, true, remove_parent(
                     Child, ParType, ParId
                 ))}
         end
     end,
-    Result1 = update_entity_sync(ParType, ParId, ParentUpdateFun),
-    Result2 = update_entity_sync(ChType, ChId, ChildUpdateFun),
+
+    ParentSync = fun() ->
+        update_dirty_queue(bottom_up, true, ParType, ParId),
+        update_entity(ParType, ParId, ParentUpdateFun)
+    end,
+
+    ChildSync = fun() ->
+        update_dirty_queue(top_down, true, ChType, ChId),
+        update_entity(ChType, ChId, ChildUpdateFun)
+    end,
+
+    Result1 = sync_on_entity(ParType, ParId, ParentSync),
+    Result2 = sync_on_entity(ChType, ChId, ChildSync),
     schedule_refresh(),
     case {Result1, Result2} of
         {{error, relation_does_not_exist}, {error, relation_does_not_exist}} ->
@@ -481,10 +514,13 @@ delete_with_relations(EntityType, EntityId) ->
             fun(ParType, ParentIds) ->
                 lists:foreach(
                     fun(ParId) ->
-                        update_entity_sync(ParType, ParId, fun(Parent) ->
-                            {ok, mark_dirty(bottom_up, true, ParType, ParId, remove_child(
-                                Parent, EntityType, EntityId
-                            ))}
+                        sync_on_entity(ParType, ParId, fun() ->
+                            update_dirty_queue(bottom_up, true, ParType, ParId),
+                            update_entity(ParType, ParId, fun(Parent) ->
+                                {ok, mark_record_dirty(bottom_up, true, remove_child(
+                                    Parent, EntityType, EntityId
+                                ))}
+                            end)
                         end)
                     end, ParentIds)
             end, IndependentParents),
@@ -492,10 +528,13 @@ delete_with_relations(EntityType, EntityId) ->
             fun(ChType, ChIds) ->
                 lists:foreach(
                     fun(ChId) ->
-                        update_entity_sync(ChType, ChId, fun(Child) ->
-                            {ok, mark_dirty(top_down, true, ChType, ChId, remove_parent(
-                                Child, EntityType, EntityId
-                            ))}
+                        sync_on_entity(ChType, ChId, fun() ->
+                            update_dirty_queue(top_down, true, ChType, ChId),
+                            update_entity(ChType, ChId, fun(Child) ->
+                                {ok, mark_record_dirty(top_down, true, remove_parent(
+                                    Child, EntityType, EntityId
+                                ))}
+                            end)
                         end)
                     end, ChIds)
             end, IndependentChildren),
@@ -551,88 +590,26 @@ delete_with_relations(EntityType, EntityId) ->
     Operation :: privileges_operation(),
     Privileges :: [privileges:oz_privilege()]) -> ok.
 update_oz_privileges(EntityType, EntityId, Operation, Privileges) ->
-    ok = update_entity_sync(EntityType, EntityId, fun(Entity) ->
-        OzPrivileges = get_oz_privileges(Entity),
-        NewOzPrivileges = case Operation of
-            set ->
-                privileges:from_list(Privileges);
-            grant ->
-                privileges:union(OzPrivileges, Privileges);
-            revoke ->
-                privileges:subtract(OzPrivileges, Privileges)
-        end,
-        {ok, mark_dirty(top_down, true, EntityType, EntityId, update_oz_privileges(
-            Entity, NewOzPrivileges))}
+    sync_on_entity(EntityType, EntityId, fun() ->
+        update_dirty_queue(top_down, true, EntityType, EntityId),
+        ok = update_entity(EntityType, EntityId, fun(Entity) ->
+            OzPrivileges = get_oz_privileges(Entity),
+            NewOzPrivileges = case Operation of
+                set ->
+                    privileges:from_list(Privileges);
+                grant ->
+                    privileges:union(OzPrivileges, Privileges);
+                revoke ->
+                    privileges:subtract(OzPrivileges, Privileges)
+            end,
+            {ok, mark_record_dirty(top_down, true, update_oz_privileges(
+                Entity, NewOzPrivileges)
+            )}
+        end)
     end),
     schedule_refresh(),
     ensure_up_to_date(),
     ok.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Marks given entity as dirty (in all directions) and returns updated entity
-%% record (it still needs to be saved to datastore).
-%% If an entity is already marked as dirty, it's priority is updated.
-%% @end
-%%--------------------------------------------------------------------
--spec mark_dirty(EntityId :: entity_id(), Entity :: entity()) -> entity().
-mark_dirty(EntityId, #od_user{} = User) ->
-    mark_dirty(top_down, true, od_user, EntityId, User);
-mark_dirty(EntityId, #od_group{} = Group) ->
-    mark_dirty(bottom_up, true, od_group, EntityId, Group),
-    mark_dirty(top_down, true, od_group, EntityId, Group);
-mark_dirty(EntityId, #od_space{} = Space) ->
-    mark_dirty(bottom_up, true, od_space, EntityId, Space),
-    mark_dirty(top_down, true, od_space, EntityId, Space);
-mark_dirty(_EntityId, #od_share{} = Share) ->
-    Share;
-mark_dirty(EntityId, #od_provider{} = Provider) ->
-    mark_dirty(bottom_up, true, od_provider, EntityId, Provider);
-mark_dirty(EntityId, #od_handle_service{} = HService) ->
-    mark_dirty(bottom_up, true, od_handle_service, EntityId, HService);
-mark_dirty(EntityId, #od_handle{} = Handle) ->
-    mark_dirty(bottom_up, true, od_handle, EntityId, Handle).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Marks given entity as dirty (in given direction) and returns updated entity
-%% record (it still needs to be saved to datastore).
-%% If an entity is already marked as dirty, it's priority is updated.
-%% @end
-%%--------------------------------------------------------------------
--spec mark_dirty(Direction :: direction(), Flag :: boolean(),
-    EntityType :: entity_type(), EntityId :: entity_id(),
-    Entity :: entity()) -> entity().
-% Shares do not take part in eff graph recomputation
-mark_dirty(_, _, _, _, #od_share{} = Entity) ->
-    Entity;
-% Handles are children towards shares only, modifying this relation should
-% not cause graph recalculation.
-mark_dirty(top_down, _, _, _, #od_handle{} = Entity) ->
-    Entity;
-mark_dirty(Direction, Flag, EntityType, EntityId, Entity) ->
-    Priority = get_priority(Direction, Entity),
-    update_state(Direction, Flag, EntityType, EntityId, Priority),
-    set_dirty_flag(Direction, Flag, Entity).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Predicate telling if given record is dirty in given direction.
-%% @end
-%%--------------------------------------------------------------------
--spec is_dirty(Direction :: direction(), Entity :: entity()) -> boolean().
-is_dirty(top_down, #od_user{top_down_dirty = Flag}) -> Flag;
-is_dirty(top_down, #od_group{top_down_dirty = Flag}) -> Flag;
-is_dirty(bottom_up, #od_group{bottom_up_dirty = Flag}) -> Flag;
-is_dirty(top_down, #od_space{top_down_dirty = Flag}) -> Flag;
-is_dirty(bottom_up, #od_space{bottom_up_dirty = Flag}) -> Flag;
-is_dirty(bottom_up, #od_provider{bottom_up_dirty = Flag}) -> Flag;
-is_dirty(bottom_up, #od_handle_service{bottom_up_dirty = Flag}) -> Flag;
-is_dirty(bottom_up, #od_handle{bottom_up_dirty = Flag}) -> Flag;
-is_dirty(_, _) -> false.
 
 
 %%%===================================================================
@@ -663,10 +640,17 @@ get_state() ->
 %% (direction-wise).
 %% @end
 %%--------------------------------------------------------------------
--spec update_state(Direction :: direction(), Flag :: boolean(),
-    EntityType :: entity_type(), EntityId :: entity_id(),
-    Priority :: integer()) -> ok.
-update_state(Direction, Flag, EntityType, EntityId, Priority) ->
+-spec update_dirty_queue(Direction :: direction(), Flag :: boolean(),
+    EntityType :: entity_type(), EntityId :: entity_id()) -> ok.
+update_dirty_queue(_, _, od_share, _) ->
+    % Shares do not take part in eff graph recomputation
+    ok;
+update_dirty_queue(top_down, _, od_handle, _) ->
+    % Handles are children towards shares only, modifying this relation should
+    % not cause graph recalculation.
+    ok;
+update_dirty_queue(Direction, Flag, EntityType, EntityId) ->
+    Priority = get_priority(Direction, EntityType),
     {ok, _} = entity_graph_state:update(?STATE_KEY, fun(EffGraphState) ->
         #entity_graph_state{
             bottom_up_dirty = BottomUpDirty,
@@ -744,14 +728,16 @@ refresh_entity_graph(#entity_graph_state{bottom_up_dirty = [First | _]}) ->
     {_Priority, EntityType, EntityId} = First,
     % Make sure that the entity is not modified during the whole update
     sync_on_entity(EntityType, EntityId, fun() ->
-        refresh_entity(bottom_up, EntityType, EntityId)
+        refresh_entity(bottom_up, EntityType, EntityId),
+        update_dirty_queue(bottom_up, false, EntityType, EntityId)
     end),
     refresh_entity_graph(get_state());
 refresh_entity_graph(#entity_graph_state{top_down_dirty = [First | _]}) ->
     {_Priority, EntityType, EntityId} = First,
     % Make sure that the entity is not modified during the whole update
     sync_on_entity(EntityType, EntityId, fun() ->
-        refresh_entity(top_down, EntityType, EntityId)
+        refresh_entity(top_down, EntityType, EntityId),
+        update_dirty_queue(top_down, false, EntityType, EntityId)
     end),
     refresh_entity_graph(get_state());
 refresh_entity_graph(#entity_graph_state{}) ->
@@ -775,8 +761,7 @@ refresh_entity(Direction, EntityType, EntityId) ->
         {ok, #document{value = Entity}} ->
             refresh_entity(Direction, EntityType, EntityId, Entity);
         {error, not_found} ->
-            % The entity no longer exists - remove it from the dirty queue.
-            update_state(Direction, false, EntityType, EntityId, 0),
+            % The entity no longer exists - treat as successfully refreshed.
             ok
     end.
 
@@ -819,8 +804,9 @@ refresh_entity(Direction, EntityType, EntityId, Entity) ->
                 fun({NType, NList}) ->
                     lists:foreach(
                         fun(NId) ->
+                            update_dirty_queue(Direction, true, NType, NId),
                             NType:update(NId, fun(Ent) ->
-                                {ok, mark_dirty(Direction, true, NType, NId, Ent)}
+                                {ok, mark_record_dirty(Direction, true, Ent)}
                             end)
                         end, NList)
                 end, maps:to_list(Successors))
@@ -828,10 +814,9 @@ refresh_entity(Direction, EntityType, EntityId, Entity) ->
     % Update the record marking it not dirty and setting newly calculated
     % effective relations.
     {ok, _} = EntityType:update(EntityId, fun(Ent) ->
-        NewRecord = mark_dirty(Direction, false, EntityType, EntityId, update_eff_relations(
+        {ok, mark_record_dirty(Direction, false, update_eff_relations(
             Direction, Ent, AggregatedEffRelations
-        )),
-        {ok, NewRecord}
+        ))}
     end),
     ?debug("Entity refreshed: ~p", [EntityType:to_string(EntityId)]),
     ok.
@@ -842,32 +827,24 @@ refresh_entity(Direction, EntityType, EntityId, Entity) ->
 %% @doc
 %% Priorities for entities during effective graph recomputation.
 %% For bottom-up:
-%%    1) groups (sorted by children num)
+%%    1) groups
 %%    2) spaces, handles and handle_services
 %%    3) providers
 %% For top-down:
 %%    1) spaces
-%%    2) groups (sorted by parents num)
+%%    2) groups
 %%    3) users
 %% @end
 %%--------------------------------------------------------------------
--spec get_priority(Direction :: direction(), Entity :: entity()) -> integer().
-get_priority(bottom_up, #od_group{children = Children}) ->
-    maps:size(Children);
-get_priority(bottom_up, #od_space{}) ->
-    1000000000;
-get_priority(bottom_up, #od_handle_service{}) ->
-    1000000000;
-get_priority(bottom_up, #od_handle{}) ->
-    1000000000;
-get_priority(bottom_up, #od_provider{}) ->
-    1000000001;
-get_priority(top_down, #od_space{}) ->
-    -1;
-get_priority(top_down, #od_group{parents = Parents}) ->
-    length(Parents);
-get_priority(top_down, #od_user{}) ->
-    1000000000.
+-spec get_priority(direction(), entity_type()) -> integer().
+get_priority(bottom_up, od_group) -> 0;
+get_priority(bottom_up, od_space) -> 1;
+get_priority(bottom_up, od_handle_service) -> 1;
+get_priority(bottom_up, od_handle) -> 1;
+get_priority(bottom_up, od_provider) -> 2;
+get_priority(top_down, od_space) -> 0;
+get_priority(top_down, od_group) -> 1;
+get_priority(top_down, od_user) -> 2.
 
 
 %%--------------------------------------------------------------------
@@ -876,24 +853,48 @@ get_priority(top_down, #od_user{}) ->
 %% Sets dirty flag in given entity record, depending on direction.
 %% @end
 %%--------------------------------------------------------------------
--spec set_dirty_flag(Direction :: direction(), Flag :: boolean(),
+-spec mark_record_dirty(Direction :: direction(), Flag :: boolean(),
     Entity :: entity()) -> entity().
-set_dirty_flag(bottom_up, Flag, #od_group{} = Group) ->
+mark_record_dirty(_, _, #od_share{} = Entity) ->
+    % Shares do not take part in eff graph recomputation
+    Entity;
+mark_record_dirty(bottom_up, Flag, #od_group{} = Group) ->
     Group#od_group{bottom_up_dirty = Flag};
-set_dirty_flag(bottom_up, Flag, #od_space{} = Space) ->
+mark_record_dirty(bottom_up, Flag, #od_space{} = Space) ->
     Space#od_space{bottom_up_dirty = Flag};
-set_dirty_flag(bottom_up, Flag, #od_provider{} = Provider) ->
+mark_record_dirty(bottom_up, Flag, #od_provider{} = Provider) ->
     Provider#od_provider{bottom_up_dirty = Flag};
-set_dirty_flag(bottom_up, Flag, #od_handle_service{} = HandleService) ->
+mark_record_dirty(bottom_up, Flag, #od_handle_service{} = HandleService) ->
     HandleService#od_handle_service{bottom_up_dirty = Flag};
-set_dirty_flag(bottom_up, Flag, #od_handle{} = Handle) ->
+mark_record_dirty(bottom_up, Flag, #od_handle{} = Handle) ->
     Handle#od_handle{bottom_up_dirty = Flag};
-set_dirty_flag(top_down, Flag, #od_user{} = User) ->
+mark_record_dirty(top_down, _, #od_handle{} = Entity) ->
+    % Handles are children towards shares only, modifying this relation should
+    % not cause graph recalculation.
+    Entity;
+mark_record_dirty(top_down, Flag, #od_user{} = User) ->
     User#od_user{top_down_dirty = Flag};
-set_dirty_flag(top_down, Flag, #od_group{} = Group) ->
+mark_record_dirty(top_down, Flag, #od_group{} = Group) ->
     Group#od_group{top_down_dirty = Flag};
-set_dirty_flag(top_down, Flag, #od_space{} = Space) ->
+mark_record_dirty(top_down, Flag, #od_space{} = Space) ->
     Space#od_space{top_down_dirty = Flag}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate telling if given record is dirty in given direction.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_dirty(Direction :: direction(), Entity :: entity()) -> boolean().
+is_dirty(top_down, #od_user{top_down_dirty = Flag}) -> Flag;
+is_dirty(top_down, #od_group{top_down_dirty = Flag}) -> Flag;
+is_dirty(bottom_up, #od_group{bottom_up_dirty = Flag}) -> Flag;
+is_dirty(top_down, #od_space{top_down_dirty = Flag}) -> Flag;
+is_dirty(bottom_up, #od_space{bottom_up_dirty = Flag}) -> Flag;
+is_dirty(bottom_up, #od_provider{bottom_up_dirty = Flag}) -> Flag;
+is_dirty(bottom_up, #od_handle_service{bottom_up_dirty = Flag}) -> Flag;
+is_dirty(bottom_up, #od_handle{bottom_up_dirty = Flag}) -> Flag;
+is_dirty(_, _) -> false.
 
 
 %%--------------------------------------------------------------------
@@ -1751,20 +1752,16 @@ ordsets_union(ListA, ListB) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Updates an entity synchronously (sequentially with another synced operations).
+%% Updates an entity using given update function.
 %% @end
 %%--------------------------------------------------------------------
--spec update_entity_sync(EntityType :: entity_type(), EntityId :: entity_id(),
+-spec update_entity(EntityType :: entity_type(), EntityId :: entity_id(),
     UpdateFun :: fun((entity()) -> entity())) -> ok | {error, term()}.
-update_entity_sync(EntityType, EntityId, UpdateFun) ->
-    sync_on_entity(EntityType, EntityId, fun() ->
-        case EntityType:update(EntityId, UpdateFun) of
-            {ok, _} ->
-                ok;
-            Error ->
-                Error
-        end
-    end).
+update_entity(EntityType, EntityId, UpdateFun) ->
+    case EntityType:update(EntityId, UpdateFun) of
+        {ok, _} -> ok;
+        Error -> Error
+    end.
 
 
 %%--------------------------------------------------------------------
