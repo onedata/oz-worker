@@ -1380,34 +1380,13 @@ is_email_occupied(UserId, Email) ->
     Password :: binary()) ->
     {ok, UserDoc :: #document{}, FirstLogin :: boolean()} | {error, term()}.
 authenticate_by_basic_credentials(Login, Password) ->
-    Headers = basic_auth_header(Login, Password),
-    URL = get_onepanel_rest_user_url(Login),
-    RestCallResult = case http_client:get(URL, Headers, <<"">>, ?ONEPANEL_CONNECT_OPTS) of
-        {ok, 200, _, JSON} ->
-            json_utils:decode(JSON);
-        {ok, 401, _, _} ->
-            {error, <<"Invalid login or password">>};
-        {ok, _, _, ErrorJSON} when size(ErrorJSON) > 0 ->
-            try
-                ErrorProps = json_utils:decode(ErrorJSON),
-                Message = proplists:get_value(<<"description">>, ErrorProps,
-                    <<"Invalid login or password">>),
-                {error, Message}
-            catch _:_ ->
-                {error, bad_request}
-            end;
-        {ok, _, _, _} ->
-            {error, bad_request};
-        {error, Error} ->
-            {error, Error}
-    end,
-    case RestCallResult of
+    case get_or_fetch_user_info(Login, Password) of
         {error, Reason} ->
             {error, Reason};
         Props ->
-            OnepanelUserId = proplists:get_value(<<"userId">>, Props),
+            OnepanelUserId = maps:get(<<"userId">>, Props),
             UserId = onepanel_uid_to_system_uid(OnepanelUserId),
-            UserRole = proplists:get_value(<<"userRole">>, Props),
+            UserRole = maps:get(<<"userRole">>, Props),
             {UserDocument, FirstLogin} = case od_user:get(UserId) of
                 {error, not_found} ->
                     UserRecord = #od_user{
@@ -1547,6 +1526,56 @@ get_onepanel_rest_user_url(Login) ->
         application:get_env(?APP_NAME, onepanel_users_endpoint),
     <<(str_utils:to_binary(OnepanelRESTURL))/binary,
         (str_utils:to_binary(OnepanelGetUsersEndpoint))/binary, Login/binary>>.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns user info fetched directly from Onepanel.
+%% @end
+%%--------------------------------------------------------------------
+-spec fetch_user_info(Login :: binary(), Password :: binary()) ->
+    maps:map() | {error, term()}.
+fetch_user_info(Login, Password) ->
+    Headers = basic_auth_header(Login, Password),
+    URL = get_onepanel_rest_user_url(Login),
+    case http_client:get(URL, Headers, <<"">>, ?ONEPANEL_CONNECT_OPTS) of
+        {ok, 200, _, JSON} ->
+            UserInfo = json_utils:decode_map(JSON),
+            basic_auth_cache:save(Login, Password, UserInfo),
+            UserInfo;
+        {ok, 401, _, _} ->
+            {error, <<"Invalid login or password">>};
+        {ok, _, _, ErrorJSON} when size(ErrorJSON) > 0 ->
+            try
+                ErrorProps = json_utils:decode(ErrorJSON),
+                Message = proplists:get_value(<<"description">>, ErrorProps,
+                <<"Invalid login or password">>),
+                {error, Message}
+            catch _:_ ->
+                {error, bad_request}
+            end;
+        {ok, _, _, _} ->
+            {error, bad_request};
+        {error, Error} ->
+            {error, Error}
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns user info fetched from cache or, if not found, Onepanel.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_or_fetch_user_info(Login :: binary(), Password :: binary()) ->
+    maps:map() | {error, term()}.
+get_or_fetch_user_info(Login, Password) ->
+    case basic_auth_cache:get(Login, Password) of
+        {error, not_found} -> fetch_user_info(Login, Password);
+        {error, Reason} -> {error, Reason};
+        {ok, UserInfo} -> UserInfo
+    end.
 
 
 %%--------------------------------------------------------------------
