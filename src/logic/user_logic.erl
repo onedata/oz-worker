@@ -1384,9 +1384,9 @@ authenticate_by_basic_credentials(Login, Password) ->
         {error, Reason} ->
             {error, Reason};
         Props ->
-            OnepanelUserId = proplists:get_value(<<"userId">>, Props),
+            OnepanelUserId = maps:get(<<"userId">>, Props),
             UserId = onepanel_uid_to_system_uid(OnepanelUserId),
-            UserRole = proplists:get_value(<<"userRole">>, Props),
+            UserRole = maps:get(<<"userRole">>, Props),
             {UserDocument, FirstLogin} = case od_user:get(UserId) of
                 {error, not_found} ->
                     UserRecord = #od_user{
@@ -1535,13 +1535,13 @@ get_onepanel_rest_user_url(Login) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_user_info(Login :: binary(), Password :: binary()) ->
-    proplists:proplist() | {error, term()}.
+    maps:map() | {error, term()}.
 fetch_user_info(Login, Password) ->
     Headers = basic_auth_header(Login, Password),
     URL = get_onepanel_rest_user_url(Login),
     case http_client:get(URL, Headers, <<"">>, ?ONEPANEL_CONNECT_OPTS) of
         {ok, 200, _, JSON} ->
-            UserInfo = json_utils:decode(JSON),
+            UserInfo = json_utils:decode_map(JSON),
             basic_auth_cache:save(Login, Password, UserInfo),
             UserInfo;
         {ok, 401, _, _} ->
@@ -1569,7 +1569,7 @@ fetch_user_info(Login, Password) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_or_fetch_user_info(Login :: binary(), Password :: binary()) ->
-    proplists:proplist() | {error, term()}.
+    maps:map() | {error, term()}.
 get_or_fetch_user_info(Login, Password) ->
     case basic_auth_cache:get(Login, Password) of
         {error, not_found} -> fetch_user_info(Login, Password);

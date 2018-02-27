@@ -47,7 +47,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec get(Login :: binary(), Password :: binary()) ->
-    {ok, proplists:proplist()} | {error, term()}.
+    {ok, maps:map()} | {error, term()}.
 get(Login, Password) ->
     Now = time_utils:system_time_millis(),
     case datastore_model:get(?CTX, Login) of
@@ -70,8 +70,8 @@ get(Login, Password) ->
 %% Saves user info.
 %% @end
 %%--------------------------------------------------------------------
--spec save(Login :: binary(), Password :: binary(),
-    UserInfo :: proplists:proplist()) -> ok | {error, term()}.
+-spec save(Login :: binary(), Password :: binary(), UserInfo :: maps:map()) ->
+    ok | {error, term()}.
 save(Login, Password, UserInfo) ->
     Doc = #document{key = Login, value = #basic_auth_cache{
         password_hash = onedata_passwords:create_hash(Password),

@@ -320,11 +320,11 @@
     state_info = #{} :: state_token:state_info()
 }).
 
-%% Identity containing user_id
+%% Record used to cache authorization via basic auth credentials
 -record(basic_auth_cache, {
     expires :: non_neg_integer(),
     password_hash :: binary(),
-    props :: proplists:proplist()
+    props :: maps:map()
 }).
 
 -endif.
