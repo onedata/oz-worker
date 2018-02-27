@@ -16,7 +16,6 @@
 -include_lib("cluster_worker/include/elements/node_manager/node_manager.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
--include_lib("cluster_worker/include/global_definitions.hrl").
 
 %% node_manager_plugin_default callbacks
 -export([app_name/0, cm_nodes/0, db_nodes/0]).

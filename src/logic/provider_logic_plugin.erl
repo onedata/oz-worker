@@ -303,38 +303,41 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = instance}, data = Data}) ->
     ok;
 
 update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}) ->
-    Result = od_provider:update(ProviderId, fun(Provider) ->
-        case maps:get(<<"subdomainDelegation">>, Data) of
+    % prevent race condition with simultanous updates
+    critical_section:run({domain_config_update, ProviderId}, fun() ->
+        Result = case maps:get(<<"subdomainDelegation">>, Data) of
             false ->
-                Domain = maps:get(<<"domain">>, Data),
                 dns_state:remove_delegation_config(ProviderId),
-                {ok, Provider#od_provider{
-                    subdomain_delegation = false,
-                    domain = Domain,
-                    subdomain = undefined
-                }};
+                Domain = maps:get(<<"domain">>, Data),
+                od_provider:update(ProviderId, fun(Provider) ->
+                    {ok, Provider#od_provider{
+                        subdomain_delegation = false,
+                        domain = Domain,
+                        subdomain = undefined
+                    }}
+                end);
             true ->
                 Subdomain = maps:get(<<"subdomain">>, Data),
+                FQDN = dns_config:build_fqdn_from_subdomain(Subdomain),
                 IPs = maps:get(<<"ipList">>, Data),
                 case dns_state:set_delegation_config(ProviderId, Subdomain, IPs) of
                     ok ->
-                        FQDN = dns_config:build_fqdn_from_subdomain(Subdomain),
-                        {ok, Provider#od_provider{
-                            subdomain_delegation = true,
-                            domain = FQDN,
-                            subdomain = Subdomain
-                        }};
+                        od_provider:update(ProviderId, fun(Provider) ->
+                            {ok, Provider#od_provider{
+                                subdomain_delegation = true,
+                                domain = FQDN,
+                                subdomain = Subdomain
+                            }}
+                        end);
                     {error, subdomain_exists} ->
                         ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>)
                 end
+        end,
+        case Result of
+            {ok, _} -> ok;
+            Error -> Error
         end
-    end),
-    case Result of
-        {ok, _} ->
-            ok;
-        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>) = Error ->
-            Error
-    end;
+    end);
 
 update(Req = #el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
     NewSupportSize = maps:get(<<"size">>, Req#el_req.data),
