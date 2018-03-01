@@ -187,11 +187,11 @@ invalidate_token(Identifier) when is_binary(Identifier) ->
 %% For example, where to redirect the user after login.
 %% @end
 %%--------------------------------------------------------------------
--spec generate_state_token(HandlerModule :: atom(), ConnectAccount :: boolean()) ->
+-spec generate_state_token(auth_utils:idp(), ConnectAccount :: boolean()) ->
     state_token:id().
-generate_state_token(HandlerModule, ConnectAccount) ->
+generate_state_token(IdP, ConnectAccount) ->
     StateInfo = #{
-        module => HandlerModule,
+        idp => IdP,
         connect_account => ConnectAccount,
         % Right now this always redirects to main page, although
         % might be used in the future.

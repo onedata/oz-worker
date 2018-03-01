@@ -69,6 +69,6 @@ handle(<<"getLoginEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
                 {<<"formData">>, null}
             ]};
         _ ->
-            ProviderId = binary_to_atom(ProviderBin, utf8),
-            auth_utils:get_redirect_url(ProviderId, false)
+            IdP = binary_to_atom(ProviderBin, utf8),
+            auth_utils:get_redirect_url(IdP, false)
     end.

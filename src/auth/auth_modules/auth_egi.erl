@@ -17,11 +17,9 @@
 -include("auth_common.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
--define(IDENTITY_PROVIDER, egi).
-
 %% API
--export([get_redirect_url/1, validate_login/0, get_user_info/1]).
--export([normalized_membership_specs/1, normalized_membership_spec/1]).
+-export([get_redirect_url/2, validate_login/1, get_user_info/2]).
+-export([normalized_membership_specs/2, normalized_membership_spec/2]).
 
 %%%===================================================================
 %%% API functions
@@ -32,10 +30,9 @@
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
-get_redirect_url(ConnectAccount) ->
-    auth_oauth2_common:get_redirect_url(
-        ConnectAccount, ?IDENTITY_PROVIDER, ?MODULE).
+-spec get_redirect_url(auth_utils:idp(), boolean()) -> {ok, binary()} | {error, term()}.
+get_redirect_url(IdP, ConnectAccount) ->
+    auth_oauth2_common:get_redirect_url(ConnectAccount, IdP).
 
 
 %%--------------------------------------------------------------------
@@ -43,11 +40,11 @@ get_redirect_url(ConnectAccount) ->
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login() ->
+-spec validate_login(auth_utils:idp()) ->
     {ok, #linked_account{}} | {error, term()}.
-validate_login() ->
+validate_login(IdP) ->
     auth_oauth2_common:validate_login(
-        ?IDENTITY_PROVIDER, secret_over_http_basic, access_token_in_url
+        IdP, secret_over_http_basic, access_token_in_url
     ).
 
 
@@ -56,11 +53,11 @@ validate_login() ->
 %% Retrieves user info from oauth provider based on access token.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_info(AccessToken :: binary()) ->
+-spec get_user_info(auth_utils:idp(), AccessToken :: binary()) ->
     {ok, #linked_account{}} | {error, bad_access_token}.
-get_user_info(AccessToken) ->
+get_user_info(IdP, AccessToken) ->
     auth_oauth2_common:get_user_info(
-        ?IDENTITY_PROVIDER, access_token_in_url, AccessToken
+        IdP, access_token_in_url, AccessToken
     ).
 
 %%--------------------------------------------------------------------
@@ -69,8 +66,9 @@ get_user_info(AccessToken) ->
 %% IdP.
 %% @end
 %%--------------------------------------------------------------------
--spec normalized_membership_spec(binary()) -> idp_group_mapping:membership_spec().
-normalized_membership_spec(<<"urn:mace:egi.eu:", Group/binary>>) ->
+-spec normalized_membership_spec(auth_utils:idp(), binary()) ->
+    idp_group_mapping:membership_spec().
+normalized_membership_spec(_, <<"urn:mace:egi.eu:", Group/binary>>) ->
     % Strip out the prefix standard for EGI
 
     [GroupStructureEncoded, Vo] = binary:split(Group, <<"@">>),
@@ -109,8 +107,8 @@ normalized_membership_spec(<<"urn:mace:egi.eu:", Group/binary>>) ->
 %% be mapped to the same specs.
 %% @end
 %%--------------------------------------------------------------------
--spec normalized_membership_specs(proplists:proplist()) ->
+-spec normalized_membership_specs(auth_utils:idp(), proplists:proplist()) ->
     [idp_group_mapping:membership_spec()].
-normalized_membership_specs(Props) ->
+normalized_membership_specs(_, Props) ->
     Groups = proplists:get_value(<<"edu_person_entitlements">>, Props, []),
-    lists:map(fun normalized_membership_spec/1, Groups).
+    lists:map(fun(Group) -> normalized_membership_spec(egi, Group) end, Groups).

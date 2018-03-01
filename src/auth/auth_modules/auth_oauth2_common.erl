@@ -17,7 +17,7 @@
 
 %% API
 -export([
-    get_redirect_url/3,
+    get_redirect_url/2,
     validate_login/3,
     get_user_info/3, get_user_info/4
 ]).
@@ -31,13 +31,13 @@
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec get_redirect_url(boolean(), ProviderId :: atom(),
-    HandlerModule :: atom()) -> {ok, binary()} | {error, term()}.
-get_redirect_url(ConnectAccount, ProviderId, HandlerModule) ->
+-spec get_redirect_url(boolean(), auth_utils:idp()) ->
+    {ok, binary()} | {error, term()}.
+get_redirect_url(ConnectAccount, IdP) ->
     try
         ParamsProplist = [
             {<<"client_id">>,
-                auth_config:get_provider_app_id(ProviderId)},
+                auth_config:get_provider_app_id(IdP)},
             {<<"response_type">>,
                 <<"code">>},
             {<<"scope">>,
@@ -45,15 +45,15 @@ get_redirect_url(ConnectAccount, ProviderId, HandlerModule) ->
             {<<"redirect_uri">>,
                 auth_utils:local_auth_endpoint()},
             {<<"state">>,
-                auth_logic:generate_state_token(HandlerModule, ConnectAccount)}
+                auth_logic:generate_state_token(IdP, ConnectAccount)}
         ],
         Params = http_utils:proplist_to_url_params(ParamsProplist),
-        AuthorizeEndpoint = authorize_endpoint(get_xrds(ProviderId)),
+        AuthorizeEndpoint = authorize_endpoint(get_xrds(IdP)),
         {ok, <<AuthorizeEndpoint/binary, "?", Params/binary>>}
     catch
         Type:Message ->
             ?error_stacktrace("Cannot get redirect URL for ~p",
-                [ProviderId]),
+                [IdP]),
             {error, {Type, Message}}
     end.
 
@@ -63,18 +63,18 @@ get_redirect_url(ConnectAccount, ProviderId, HandlerModule) ->
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login(ProviderId :: atom(),
+-spec validate_login(auth_utils:idp(),
     SecretSendMethod :: secret_over_http_basic | secret_over_http_post,
     AccessTokenSendMethod :: access_token_in_url | access_token_in_header) ->
     {ok, #linked_account{}} | {error, term()}.
-validate_login(ProviderId, SecretSendMethod, AccessTokenSendMethod) ->
+validate_login(IdP, SecretSendMethod, AccessTokenSendMethod) ->
     try
         % Retrieve URL params
         ParamsProplist = gui_ctx:get_url_params(),
         % Parse out code parameter
         Code = proplists:get_value(<<"code">>, ParamsProplist),
-        ClientId = auth_config:get_provider_app_id(ProviderId),
-        ClientSecret = auth_config:get_provider_app_secret(ProviderId),
+        ClientId = auth_config:get_provider_app_id(IdP),
+        ClientSecret = auth_config:get_provider_app_secret(IdP),
         % Form access token request
         % Check which way we should send secret - HTTP Basic or POST
         SecretPostParams = case SecretSendMethod of
@@ -107,7 +107,7 @@ validate_login(ProviderId, SecretSendMethod, AccessTokenSendMethod) ->
             <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
         },
         % Send request to access token endpoint
-        XRDS = get_xrds(ProviderId),
+        XRDS = get_xrds(IdP),
         {ok, 200, _, ResponseBinary} = http_client:post(
             access_token_endpoint(XRDS),
             Headers,
@@ -118,11 +118,11 @@ validate_login(ProviderId, SecretSendMethod, AccessTokenSendMethod) ->
         Response = json_utils:decode(ResponseBinary),
         AccessToken = proplists:get_value(<<"access_token">>, Response),
 
-        get_user_info(ProviderId, AccessTokenSendMethod, AccessToken, XRDS)
+        get_user_info(IdP, AccessTokenSendMethod, AccessToken, XRDS)
     catch
         Type:Message ->
             ?debug_stacktrace("Error in OpenID validate_login (~p) - ~p:~p",
-                [ProviderId, Type, Message]),
+                [IdP, Type, Message]),
             {error, {Type, Message}}
     end.
 
@@ -132,13 +132,13 @@ validate_login(ProviderId, SecretSendMethod, AccessTokenSendMethod) ->
 %% Retrieves user info for given OpenID provider and access token.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_info(ProviderId :: atom(),
+-spec get_user_info(auth_utils:idp(),
     AccessTokenSendMethod :: access_token_in_url | access_token_in_header,
     AccessToken :: binary()) ->
     {ok, #linked_account{}} | {error, bad_access_token}.
-get_user_info(ProviderId, AccessTokenSendMethod, AccessToken) ->
-    XRDS = get_xrds(ProviderId),
-    get_user_info(ProviderId, AccessTokenSendMethod, AccessToken, XRDS).
+get_user_info(IdP, AccessTokenSendMethod, AccessToken) ->
+    XRDS = get_xrds(IdP),
+    get_user_info(IdP, AccessTokenSendMethod, AccessToken, XRDS).
 
 
 %%--------------------------------------------------------------------
@@ -148,12 +148,12 @@ get_user_info(ProviderId, AccessTokenSendMethod, AccessToken) ->
 %% avoid repeating requests).
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_info(ProviderId :: atom(),
+-spec get_user_info(auth_utils:idp(),
     AccessTokenSendMethod :: access_token_in_url | access_token_in_header,
     AccessToken :: binary(),
     XRDS :: proplists:proplist()) ->
     {ok, #linked_account{}} | {error, bad_access_token}.
-get_user_info(ProviderId, AccessTokenSendMethod, AccessToken, XRDS) ->
+get_user_info(IdP, AccessTokenSendMethod, AccessToken, XRDS) ->
     UserInfoEndpoint = user_info_endpoint(XRDS),
 
     URL = case AccessTokenSendMethod of
@@ -177,15 +177,15 @@ get_user_info(ProviderId, AccessTokenSendMethod, AccessToken, XRDS) ->
         {ok, 200, _, Body} ->
             % Parse JSON with user info
             JSONProplist = json_utils:decode(Body),
-            UserGroups = case auth_config:has_group_mapping_enabled(ProviderId) of
+            UserGroups = case auth_config:has_group_mapping_enabled(IdP) of
                 false ->
                     [];
                 true ->
-                    HandlerModule = auth_config:get_provider_module(ProviderId),
-                    HandlerModule:normalized_membership_specs(JSONProplist)
+                    HandlerModule = auth_config:get_provider_module(IdP),
+                    HandlerModule:normalized_membership_specs(IdP, JSONProplist)
             end,
             ProvUserInfo = #linked_account{
-                idp = ProviderId,
+                idp = IdP,
                 subject_id = auth_utils:get_value_binary(<<"sub">>, JSONProplist),
                 login = auth_utils:get_value_binary(<<"login">>, JSONProplist),
                 name = auth_utils:get_value_binary(<<"name">>, JSONProplist),
@@ -209,9 +209,9 @@ get_user_info(ProviderId, AccessTokenSendMethod, AccessToken, XRDS) ->
 %% of openid provider (endpoints etc).
 %% @end
 %%--------------------------------------------------------------------
--spec get_xrds(ProviderId :: atom()) -> proplists:proplist().
-get_xrds(ProviderId) ->
-    ProviderConfig = auth_config:get_auth_config(ProviderId),
+-spec get_xrds(IdP :: atom()) -> proplists:proplist().
+get_xrds(IdP) ->
+    ProviderConfig = auth_config:get_auth_config(IdP),
     XRDSEndpoint = proplists:get_value(xrds_endpoint, ProviderConfig),
     Opts = [{follow_redirect, true}, {max_redirect, 5}],
     {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, #{}, <<>>, Opts),

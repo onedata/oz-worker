@@ -18,6 +18,9 @@
 -include_lib("esaml/include/esaml.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
+-type idp() :: atom().
+-export_type([idp/0]).
+
 %% API
 
 % Authenticating based on various credentials
@@ -72,14 +75,14 @@ authorize_by_oauth_provider(AccessToken) ->
     case MatchingProviders of
         [] ->
             false;
-        [{ProviderId, TokPrefix} | _] ->
+        [{IdP, TokPrefix} | _] ->
             Len = byte_size(TokPrefix),
             <<TokPrefix:Len/binary, AccessTokenNoPrefix/binary>> = AccessToken,
             case auth_utils:acquire_user_by_external_access_token(
-                ProviderId, AccessTokenNoPrefix
+                IdP, AccessTokenNoPrefix
             ) of
                 {error, bad_access_token} ->
-                    ?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(ProviderId);
+                    ?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(IdP);
                 {_, #document{key = UserId}} ->
                     {true, #client{type = user, id = UserId}}
             end
@@ -122,8 +125,8 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
             {true, #client{type = user, id = UserId}};
         _ ->
             case macaroon_logic:verify_provider_auth(Macaroon) of
-                {ok, ProviderId} ->
-                    {true, #client{type = provider, id = ProviderId}};
+                {ok, IdP} ->
+                    {true, #client{type = provider, id = IdP}};
                 {error, _} ->
                     ?ERROR_BAD_MACAROON
             end
@@ -219,12 +222,12 @@ get_all_idps() ->
 %% Returns super group identifier for given IdP, or undefined.
 %% @end
 %%--------------------------------------------------------------------
--spec get_super_group(ProviderId :: atom()) ->
+-spec get_super_group(idp()) ->
     undefined | idp_group_mapping:group_spec().
-get_super_group(ProviderId) ->
-    case lists:member(ProviderId, auth_config:get_auth_providers()) of
-        true -> auth_config:get_super_group(ProviderId);
-        false -> saml_config:get_super_group(ProviderId)
+get_super_group(IdP) ->
+    case lists:member(IdP, auth_config:get_auth_providers()) of
+        true -> auth_config:get_super_group(IdP);
+        false -> saml_config:get_super_group(IdP)
     end.
 
 
@@ -239,20 +242,20 @@ get_super_group(ProviderId) ->
 %% that defines what request should be performed to redirect to login page.
 %% @end
 %%--------------------------------------------------------------------
--spec get_redirect_url(ProviderId :: atom(), ConnectAccount :: boolean()) ->
+-spec get_redirect_url(idp(), ConnectAccount :: boolean()) ->
     {ok, proplists:proplist()} | {error, term()}.
-get_redirect_url(ProviderId, ConnectAccount) ->
-    case lists:member(ProviderId, auth_config:get_auth_providers()) of
+get_redirect_url(IdP, ConnectAccount) ->
+    case lists:member(IdP, auth_config:get_auth_providers()) of
         true ->
-            HandlerModule = auth_config:get_provider_module(ProviderId),
-            {ok, Url} = HandlerModule:get_redirect_url(ConnectAccount),
+            HandlerModule = auth_config:get_provider_module(IdP),
+            {ok, Url} = HandlerModule:get_redirect_url(IdP, ConnectAccount),
             {ok, [
                 {<<"method">>, <<"get">>},
                 {<<"url">>, Url},
                 {<<"formData">>, null}
             ]};
         false ->
-            get_saml_redirect_url(ProviderId, ConnectAccount)
+            get_saml_redirect_url(IdP, ConnectAccount)
     end.
 
 
@@ -261,12 +264,12 @@ get_redirect_url(ProviderId, ConnectAccount) ->
 %% via SAML based on provider id as specified in saml.config.
 %% @end
 %%--------------------------------------------------------------------
--spec get_saml_redirect_url(ProviderId :: atom(), ConnectAccount :: boolean()) ->
+-spec get_saml_redirect_url(idp(), ConnectAccount :: boolean()) ->
     {ok, proplists:proplist()} | {error, term()}.
-get_saml_redirect_url(ProviderId, ConnectAccount) ->
+get_saml_redirect_url(IdP, ConnectAccount) ->
     IdpConfig = #esaml_idp{
         preferred_sso_binding = PreferredSSOBinding
-    } = saml_config:get_idp_config(ProviderId),
+    } = saml_config:get_idp_config(IdP),
     LoginLocation = case PreferredSSOBinding of
         http_redirect ->
             IdpConfig#esaml_idp.metadata#esaml_idp_metadata.redirect_login_location;
@@ -274,10 +277,10 @@ get_saml_redirect_url(ProviderId, ConnectAccount) ->
             IdpConfig#esaml_idp.metadata#esaml_idp_metadata.post_login_location
     end,
     case LoginLocation of
-        undefined -> throw({cannot_resolve_sso_url_for_provider, ProviderId});
+        undefined -> throw({cannot_resolve_sso_url_for_provider, IdP});
         _ -> ok
     end,
-    State = auth_logic:generate_state_token(ProviderId, ConnectAccount),
+    State = auth_logic:generate_state_token(IdP, ConnectAccount),
     SP = saml_config:get_sp_config(),
     AuthNReq = esaml_sp:generate_authn_request(LoginLocation, SP),
     case PreferredSSOBinding of
@@ -313,10 +316,11 @@ validate_oidc_login() ->
         ParamsProplist = gui_ctx:get_url_params(),
         StateToken = proplists:get_value(<<"state">>, ParamsProplist),
         StateInfo = validate_state_token(StateToken),
-        Module = maps:get(module, StateInfo),
+        IdP = maps:get(idp, StateInfo),
+        HandlerModule = auth_config:get_provider_module(IdP),
 
         % Validate the request and gather user info
-        case Module:validate_login() of
+        case HandlerModule:validate_login(IdP) of
             {ok, LinkedAccount} ->
                 validate_login_by_linked_account(LinkedAccount, StateInfo);
             {error, bad_access_token} ->
@@ -354,7 +358,7 @@ validate_saml_login() ->
         SAMLResponse = proplists:get_value(<<"SAMLResponse">>, PostVals),
         StateToken = proplists:get_value(<<"RelayState">>, PostVals),
         StateInfo = validate_state_token(StateToken),
-        IdPId = maps:get(module, StateInfo),
+        IdPId = maps:get(idp, StateInfo),
 
         IdP = saml_config:get_idp_config(IdPId),
 
@@ -389,12 +393,12 @@ validate_saml_login() ->
 %% WRITEME
 %% @end
 %%-------------------------------------------------------------------
--spec normalize_membership_spec(ProviderId :: atom(), GroupIds :: binary()) ->
+-spec normalize_membership_spec(idp(), GroupIds :: binary()) ->
     idp_group_mapping:membership_spec().
-normalize_membership_spec(ProviderId, GroupId) ->
-    case lists:member(ProviderId, auth_config:get_auth_providers()) of
-        true -> auth_config:normalize_membership_spec(ProviderId, GroupId);
-        false -> saml_config:normalize_membership_spec(ProviderId, GroupId)
+normalize_membership_spec(IdP, GroupId) ->
+    case lists:member(IdP, auth_config:get_auth_providers()) of
+        true -> auth_config:normalize_membership_spec(IdP, GroupId);
+        false -> saml_config:normalize_membership_spec(IdP, GroupId)
     end.
 
 %%-------------------------------------------------------------------
@@ -402,11 +406,11 @@ normalize_membership_spec(ProviderId, GroupId) ->
 %% Returns whether given provider has group mapping enabled.
 %% @end
 %%-------------------------------------------------------------------
--spec has_group_mapping_enabled(ProviderId :: atom()) -> boolean().
-has_group_mapping_enabled(ProviderId) ->
-    case lists:member(ProviderId, auth_config:get_auth_providers()) of
-        true -> auth_config:has_group_mapping_enabled(ProviderId);
-        false -> saml_config:has_group_mapping_enabled(ProviderId)
+-spec has_group_mapping_enabled(idp()) -> boolean().
+has_group_mapping_enabled(IdP) ->
+    case lists:member(IdP, auth_config:get_auth_providers()) of
+        true -> auth_config:has_group_mapping_enabled(IdP);
+        false -> saml_config:has_group_mapping_enabled(IdP)
     end.
 
 %%%===================================================================
@@ -572,11 +576,11 @@ acquire_user_by_linked_account(LinkedAccount) ->
 %% In both cases, returns the user id.
 %% @end
 %%--------------------------------------------------------------------
--spec acquire_user_by_external_access_token(ProviderId :: atom(), AccessToken :: binary()) ->
+-spec acquire_user_by_external_access_token(idp(), AccessToken :: binary()) ->
     {exists | created, UserDoc :: #document{}} | {error, bad_access_token}.
-acquire_user_by_external_access_token(ProviderId, AccessToken) ->
-    Module = auth_config:get_provider_module(ProviderId),
-    case Module:get_user_info(AccessToken) of
+acquire_user_by_external_access_token(IdP, AccessToken) ->
+    Module = auth_config:get_provider_module(IdP),
+    case Module:get_user_info(IdP, AccessToken) of
         {ok, LinkedAccount} ->
             acquire_user_by_linked_account(LinkedAccount);
         {error, bad_access_token} ->

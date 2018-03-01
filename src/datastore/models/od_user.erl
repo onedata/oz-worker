@@ -31,7 +31,7 @@
 
 -type name() :: binary().
 -type login() :: undefined | binary().
--type criterion() :: {linked_account, {ProviderId :: atom(), UserId :: binary()}} |
+-type criterion() :: {linked_account, {auth_utils:idp(), UserId :: binary()}} |
                      {email, binary()} |
                      {login, login()}.
 -export_type([name/0, login/0]).
