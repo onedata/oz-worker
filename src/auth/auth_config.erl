@@ -133,7 +133,7 @@ get_provider_app_secret(ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_providers_with_auth_delegation() ->
-    [{ProviderId :: atom(), Prefix :: binary()}].
+    [{auth_utils:idp(), Prefix :: binary()}].
 get_providers_with_auth_delegation() ->
     application:get_env(?APP_NAME, auth_delegation_providers, []).
 
@@ -175,8 +175,8 @@ get_super_group(ProviderId) ->
 %% Normalizes group membership specs for given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec normalize_membership_spec(ProviderId :: atom(), GroupId :: binary()) ->
+-spec normalize_membership_spec(auth_utils:idp(), GroupId :: binary()) ->
     idp_group_mapping:membership_spec().
-normalize_membership_spec(ProviderId, GroupId) ->
-    HandlerModule = ?MODULE:get_provider_module(ProviderId),
-    HandlerModule:normalized_membership_spec(GroupId).
+normalize_membership_spec(Idp, GroupId) ->
+    HandlerModule = ?MODULE:get_provider_module(Idp),
+    HandlerModule:normalized_membership_spec(Idp, GroupId).

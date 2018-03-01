@@ -24,7 +24,8 @@
 %% - if this was signing in or connecting next account to the profile.
 %% @end
 %%--------------------------------------------------------------------
--callback get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
+-callback get_redirect_url(auth_utils:idp(), boolean()) ->
+    {ok, binary()} | {error, term()}.
 
 %%--------------------------------------------------------------------
 %% @doc Validates login request that came back from the provider.
@@ -35,7 +36,7 @@
 %% or error and its description otherwise.
 %% @end
 %%--------------------------------------------------------------------
--callback validate_login() ->
+-callback validate_login(auth_utils:idp()) ->
     {ok, #linked_account{}} | {error, term()}.
 
 
@@ -45,5 +46,5 @@
 %% Retrieves user info from oauth provider based on access token.
 %% @end
 %%--------------------------------------------------------------------
--callback get_user_info(AccessToken :: binary()) ->
+-callback get_user_info(auth_utils:idp(), AccessToken :: binary()) ->
     {ok, #linked_account{}} | {error, bad_access_token}.

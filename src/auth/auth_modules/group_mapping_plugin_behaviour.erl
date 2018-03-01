@@ -24,5 +24,5 @@
 %% be mapped to the same specs.
 %% @end
 %%--------------------------------------------------------------------
--callback normalized_membership_specs(proplists:proplist()) ->
+-callback normalized_membership_specs(auth_utils:idp(), proplists:proplist()) ->
     [idp_group_mapping:membership_spec()].

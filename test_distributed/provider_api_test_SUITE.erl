@@ -1974,7 +1974,7 @@ init_per_testcase(map_group_test, Config) ->
         Nodes, ?MAP_GROUP_TEST_AUTH_MODULE, [passthrough, non_strict]
     ),
     ok = test_utils:mock_expect(Nodes, ?MAP_GROUP_TEST_AUTH_MODULE,
-        normalized_membership_spec, fun(_) -> ?MAPPED_MEMBERSHIP_SPEC end
+        normalized_membership_spec, fun(_, _) -> ?MAPPED_MEMBERSHIP_SPEC end
     ),
     init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->

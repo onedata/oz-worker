@@ -16,11 +16,9 @@
 -include("auth_common.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
--define(IDENTITY_PROVIDER, rhea).
-
 %% API
--export([get_redirect_url/1, validate_login/0, get_user_info/1]).
--export([normalized_membership_specs/1, normalized_membership_spec/1]).
+-export([get_redirect_url/2, validate_login/1, get_user_info/2]).
+-export([normalized_membership_specs/2, normalized_membership_spec/2]).
 
 %%%===================================================================
 %%% API functions
@@ -31,11 +29,10 @@
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
-get_redirect_url(ConnectAccount) ->
-    auth_oauth2_common:get_redirect_url(
-        ConnectAccount, ?IDENTITY_PROVIDER, ?MODULE
-    ).
+-spec get_redirect_url(auth_utils:idp(), boolean()) ->
+    {ok, binary()} | {error, term()}.
+get_redirect_url(IdP, ConnectAccount) ->
+    auth_oauth2_common:get_redirect_url(ConnectAccount, IdP).
 
 
 %%--------------------------------------------------------------------
@@ -43,10 +40,10 @@ get_redirect_url(ConnectAccount) ->
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login() -> {ok, #linked_account{}} | {error, term()}.
-validate_login() ->
+-spec validate_login(auth_utils:idp()) -> {ok, #linked_account{}} | {error, term()}.
+validate_login(IdP) ->
     auth_oauth2_common:validate_login(
-        ?IDENTITY_PROVIDER, secret_over_http_post, access_token_in_header
+        IdP, secret_over_http_post, access_token_in_header
     ).
 
 
@@ -55,22 +52,22 @@ validate_login() ->
 %% Retrieves user info from oauth provider based on access token.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_info(AccessToken :: binary()) ->
+-spec get_user_info(auth_utils:idp(), AccessToken :: binary()) ->
     {ok, #linked_account{}} | {error, bad_access_token}.
-get_user_info(AccessToken) ->
+get_user_info(IdP, AccessToken) ->
     auth_oauth2_common:get_user_info(
-        ?IDENTITY_PROVIDER, access_token_in_header, AccessToken
+        IdP, access_token_in_header, AccessToken
     ).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @equiv normalized_membership_spec(Group, team, {nested, <<"/">>})
+%% @equiv normalized_membership_spec(IdP, Group, team, {nested, <<"/">>})
 %% @end
 %%--------------------------------------------------------------------
--spec normalized_membership_spec(Group :: binary()) ->
+-spec normalized_membership_spec(auth_utils:idp(), Group :: binary()) ->
     idp_group_mapping:membership_spec().
-normalized_membership_spec(Group) ->
-    normalized_membership_spec(Group, team, {nested, <<"/">>}).
+normalized_membership_spec(IdP, Group) ->
+    normalized_membership_spec(IdP, Group, team, {nested, <<"/">>}).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -78,11 +75,11 @@ normalized_membership_spec(Group) ->
 %% IdP, complying with specification in idp_group_mapping module.
 %% @end
 %%--------------------------------------------------------------------
--spec normalized_membership_spec(Group :: binary(), od_group:type(),
+-spec normalized_membership_spec(auth_utils:idp(), Group :: binary(), od_group:type(),
     Structure :: flat | {nested, SplitWith :: binary()}) ->
     idp_group_mapping:membership_spec().
-normalized_membership_spec(Group, Type, Structure) ->
-    VoId = vo_id(),
+normalized_membership_spec(IdP, Group, Type, Structure) ->
+    VoId = vo_id(IdP),
     TypeStr = idp_group_mapping:type_to_str(Type),
     GroupSpec = case Structure of
         flat ->
@@ -119,16 +116,27 @@ normalized_membership_spec(Group, Type, Structure) ->
 %%       last one: VO <- a <- b <- c <- user.
 %% @end
 %%--------------------------------------------------------------------
--spec normalized_membership_specs(proplists:proplist()) ->
+-spec normalized_membership_specs(auth_utils:idp(), proplists:proplist()) ->
     [idp_group_mapping:membership_spec()].
-normalized_membership_specs(Props) ->
-    Config = auth_config:get_auth_config(?IDENTITY_PROVIDER),
+normalized_membership_specs(IdP, Props) ->
+    Config = auth_config:get_auth_config(IdP),
     GroupMappingConfig = proplists:get_value(group_mapping, Config, []),
     AttributesConfig = proplists:get_value(attributes_to_map, GroupMappingConfig, []),
     lists:flatmap(fun({Attr, Type, Structure}) ->
         Groups = proplists:get_value(Attr, Props, []),
         lists:map(fun(Group) ->
-            normalized_membership_spec(Group, Type, Structure)
+            GroupWithoutSlashes = case Structure of
+                {nested, <<"/">>} ->
+                    Group;
+                _ ->
+                    % Otherwise we need to make sure that there are no slashes
+                    % in the group name, as it would break the group spec format.
+                    str_utils:join_binary(
+                        binary:split(Group, <<"/">>, [global, trim_all]),
+                        <<"-">>
+                    )
+            end,
+            normalized_membership_spec(IdP, GroupWithoutSlashes, Type, Structure)
         end, Groups)
     end, AttributesConfig).
 
@@ -143,9 +151,9 @@ normalized_membership_specs(Props) ->
 %% Returns the group Id for KeyCloak VO.
 %% @end
 %%--------------------------------------------------------------------
--spec vo_id() -> binary().
-vo_id() ->
-    GroupMappingConfig = auth_config:get_group_mapping_config(?IDENTITY_PROVIDER),
+-spec vo_id(auth_utils:idp()) -> binary().
+vo_id(IdP) ->
+    GroupMappingConfig = auth_config:get_group_mapping_config(IdP),
     case proplists:get_value(vo_group_id, GroupMappingConfig) of
         undefined -> throw(no_vo_group_id_specified_in_config);
         VoId -> VoId

@@ -52,8 +52,8 @@ handle(<<"changePassword">>, Props) ->
     end;
 
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
-    ProviderId = binary_to_atom(ProviderBin, utf8),
-    auth_utils:get_redirect_url(ProviderId, true);
+    IdP = binary_to_atom(ProviderBin, utf8),
+    auth_utils:get_redirect_url(IdP, true);
 
 handle(<<"getTokenProviderSupportSpace">>, [{<<"spaceId">>, SpaceId}]) ->
     Client = ?USER(gui_session:get_user_id()),

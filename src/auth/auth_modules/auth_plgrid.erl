@@ -17,10 +17,8 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
--define(IDENTITY_PROVIDER, plgrid).
-
 %% API
--export([get_redirect_url/1, validate_login/0, get_user_info/1]).
+-export([get_redirect_url/2, validate_login/1, get_user_info/2]).
 
 %%%===================================================================
 %%% API functions
@@ -31,11 +29,11 @@
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
-get_redirect_url(ConnectAccount) ->
+-spec get_redirect_url(auth_utils:idp(), boolean()) -> {ok, binary()} | {error, term()}.
+get_redirect_url(IdP, ConnectAccount) ->
     try
         HostName = http_utils:fully_qualified_url(gui_ctx:get_requested_hostname()),
-        RedirectURI = <<(auth_utils:local_auth_endpoint())/binary, "?state=", (auth_logic:generate_state_token(?MODULE, ConnectAccount))/binary>>,
+        RedirectURI = <<(auth_utils:local_auth_endpoint())/binary, "?state=", (auth_logic:generate_state_token(IdP, ConnectAccount))/binary>>,
 
         ParamsProplist = [
             {<<"openid.mode">>, <<"checkid_setup">>},
@@ -54,11 +52,11 @@ get_redirect_url(ConnectAccount) ->
             {<<"openid.ext1.if_available">>, <<"dn1,dn2,dn3,teams">>}
         ],
         Params = http_utils:proplist_to_url_params(ParamsProplist),
-        {ok, <<(plgrid_endpoint())/binary, "?", Params/binary>>}
+        {ok, <<(plgrid_endpoint(IdP))/binary, "?", Params/binary>>}
     catch
         Type:Message ->
             ?error_stacktrace("Cannot get redirect URL for ~p. ~p:~p",
-                [?IDENTITY_PROVIDER, Type, Message]),
+                [IdP, Type, Message]),
             {error, {Type, Message}}
     end.
 
@@ -67,15 +65,15 @@ get_redirect_url(ConnectAccount) ->
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login() ->
+-spec validate_login(auth_utils:idp()) ->
     {ok, #linked_account{}} | {error, term()}.
-validate_login() ->
+validate_login(IdP) ->
     try
         % Retrieve URL params
         ParamsProplist = gui_ctx:get_url_params(),
         % Make sure received endpoint is really the PLGrid endpoint
         ReceivedEndpoint = proplists:get_value(<<"openid.op_endpoint">>, ParamsProplist),
-        true = (plgrid_endpoint() =:= ReceivedEndpoint),
+        true = (plgrid_endpoint(IdP) =:= ReceivedEndpoint),
 
         % 'openid.signed' contains parameters that must be contained in validation request
         Signed = proplists:get_value(<<"openid.signed">>, ParamsProplist),
@@ -132,7 +130,7 @@ validate_login() ->
             end, [DN1, DN2, DN3]),
 
         ProvUserInfo = #linked_account{
-            idp = ?IDENTITY_PROVIDER,
+            idp = IdP,
             subject_id = str_utils:to_binary(Login),
             login = Login,
             email_list = Emails,
@@ -153,8 +151,8 @@ validate_login() ->
 %% Retrieves user info from oauth provider based on access token.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_info(AccessToken :: binary()) -> no_return().
-get_user_info(_AccessToken) ->
+-spec get_user_info(auth_utils:idp(), AccessToken :: binary()) -> no_return().
+get_user_info(_IdP, _AccessToken) ->
     error(unsupported).
 
 %%%===================================================================
@@ -166,9 +164,9 @@ get_user_info(_AccessToken) ->
 %% @doc Provider endpoint, where users are redirected for authorization.
 %% @end
 %%--------------------------------------------------------------------
--spec plgrid_endpoint() -> binary().
-plgrid_endpoint() ->
-    XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_config:get_auth_config(?IDENTITY_PROVIDER)),
+-spec plgrid_endpoint(auth_utils:idp()) -> binary().
+plgrid_endpoint(IdP) ->
+    XRDSEndpoint = proplists:get_value(xrds_endpoint, auth_config:get_auth_config(IdP)),
     {ok, 200, _, XRDS} = http_client:get(XRDSEndpoint, #{
         <<"Accept">> => <<"application/xrds+xml;level=1, */*">>,
         <<"Connection">> => <<"close">>

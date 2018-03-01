@@ -16,10 +16,8 @@
 -include("auth_common.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
--define(IDENTITY_PROVIDER, facebook).
-
 %% API
--export([get_redirect_url/1, validate_login/0, get_user_info/1]).
+-export([get_redirect_url/2, validate_login/1, get_user_info/2]).
 
 %%%===================================================================
 %%% API functions
@@ -30,20 +28,20 @@
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec get_redirect_url(boolean()) -> {ok, binary()} | {error, term()}.
-get_redirect_url(ConnectAccount) ->
+-spec get_redirect_url(auth_utils:idp(), boolean()) -> {ok, binary()} | {error, term()}.
+get_redirect_url(IdP, ConnectAccount) ->
     try
         ParamsProplist = [
-            {<<"client_id">>, auth_config:get_provider_app_id(?IDENTITY_PROVIDER)},
+            {<<"client_id">>, auth_config:get_provider_app_id(IdP)},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"scope">>, <<"email">>},
-            {<<"state">>, auth_logic:generate_state_token(?MODULE, ConnectAccount)}
+            {<<"state">>, auth_logic:generate_state_token(IdP, ConnectAccount)}
         ],
         Params = http_utils:proplist_to_url_params(ParamsProplist),
-        {ok, <<(authorize_endpoint())/binary, "?", Params/binary>>}
+        {ok, <<(authorize_endpoint(IdP))/binary, "?", Params/binary>>}
     catch
         Type:Message ->
-            ?error_stacktrace("Cannot get redirect URL for ~p", [?IDENTITY_PROVIDER]),
+            ?error_stacktrace("Cannot get redirect URL for ~p", [IdP]),
             {error, {Type, Message}}
     end.
 
@@ -52,9 +50,9 @@ get_redirect_url(ConnectAccount) ->
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login() ->
+-spec validate_login(auth_utils:idp()) ->
     {ok, #linked_account{}} | {error, term()}.
-validate_login() ->
+validate_login(IdP) ->
     try
         % Retrieve URL params
         ParamsProplist = gui_ctx:get_url_params(),
@@ -62,14 +60,14 @@ validate_login() ->
         Code = proplists:get_value(<<"code">>, ParamsProplist),
         % Form access token request
         NewParamsProplist = [
-            {<<"client_id">>, auth_config:get_provider_app_id(?IDENTITY_PROVIDER)},
-            {<<"client_secret">>, auth_config:get_provider_app_secret(?IDENTITY_PROVIDER)},
+            {<<"client_id">>, auth_config:get_provider_app_id(IdP)},
+            {<<"client_secret">>, auth_config:get_provider_app_secret(IdP)},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"code">>, <<Code/binary>>}
         ],
         % Convert proplist to params string
         Params = http_utils:proplist_to_url_params(NewParamsProplist),
-        URL = <<(access_token_endpoint())/binary, "?", Params/binary>>,
+        URL = <<(access_token_endpoint(IdP))/binary, "?", Params/binary>>,
         % Send request to Facebook endpoint
         {ok, 200, _, Response} = http_client:get(URL, #{
             <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
@@ -78,7 +76,7 @@ validate_login() ->
         % Parse out received access token
         AccessToken = maps:get(<<"access_token">>, json_utils:decode_map(Response)),
 
-        get_user_info(AccessToken)
+        get_user_info(IdP, AccessToken)
     catch
         Type:Message ->
             ?debug_stacktrace("Error in ~p:validate_login - ~p:~p", [?MODULE, Type, Message]),
@@ -91,10 +89,10 @@ validate_login() ->
 %% Retrieves user info from oauth provider based on access token.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_info(AccessToken :: binary()) ->
+-spec get_user_info(auth_utils:idp(), AccessToken :: binary()) ->
     {ok, #linked_account{}} | {error, bad_access_token}.
-get_user_info(AccessToken) ->
-    UserInfoUrl = <<(user_info_endpoint())/binary,
+get_user_info(IdP, AccessToken) ->
+    UserInfoUrl = <<(user_info_endpoint(IdP))/binary,
         "?access_token=", AccessToken/binary,
         "&fields=email,name">>,
     % Send request to Facebook endpoint
@@ -105,7 +103,7 @@ get_user_info(AccessToken) ->
     % Parse received JSON
     JSONProplist = json_utils:decode(JSON),
     ProvUserInfo = #linked_account{
-        idp = ?IDENTITY_PROVIDER,
+        idp = IdP,
         subject_id = auth_utils:get_value_binary(<<"id">>, JSONProplist),
         email_list = auth_utils:extract_emails(JSONProplist),
         name = auth_utils:get_value_binary(<<"name">>, JSONProplist),
@@ -122,24 +120,24 @@ get_user_info(AccessToken) ->
 %% @doc Provider endpoint, where users are redirected for authorization.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_endpoint() -> binary().
-authorize_endpoint() ->
-    proplists:get_value(authorize_endpoint, auth_config:get_auth_config(?IDENTITY_PROVIDER)).
+-spec authorize_endpoint(auth_utils:idp()) -> binary().
+authorize_endpoint(IdP) ->
+    proplists:get_value(authorize_endpoint, auth_config:get_auth_config(IdP)).
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc Provider endpoint, where access token is acquired.
 %% @end
 %%--------------------------------------------------------------------
--spec access_token_endpoint() -> binary().
-access_token_endpoint() ->
-    proplists:get_value(access_token_endpoint, auth_config:get_auth_config(?IDENTITY_PROVIDER)).
+-spec access_token_endpoint(auth_utils:idp()) -> binary().
+access_token_endpoint(IdP) ->
+    proplists:get_value(access_token_endpoint, auth_config:get_auth_config(IdP)).
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc Provider endpoint, where user info is acquired.
 %% @end
 %%--------------------------------------------------------------------
--spec user_info_endpoint() -> binary().
-user_info_endpoint() ->
-    proplists:get_value(user_info_endpoint, auth_config:get_auth_config(?IDENTITY_PROVIDER)).
+-spec user_info_endpoint(auth_utils:idp()) -> binary().
+user_info_endpoint(IdP) ->
+    proplists:get_value(user_info_endpoint, auth_config:get_auth_config(IdP)).
