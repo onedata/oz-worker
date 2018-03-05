@@ -33,4 +33,7 @@
 % Endpoint to get Onezone version
 -define(ZONE_VERSION_ENDPOINT, "/version").
 
+% Endpoint to get Onezone configuration
+-define(CONFIGURATION_ENDPOINT, "/configuration").
+
 -endif.

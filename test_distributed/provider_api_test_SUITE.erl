@@ -159,6 +159,10 @@ create_test(Config) ->
     end,
 
     %% Create provider with subdomain delegation turned off
+    Nodes = ?config(oz_worker_nodes, Config),
+    rpc:multicall(Nodes, application, set_env, [
+        ?APP_NAME, subdomain_delegation_enabled, false
+    ]),
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [root, nobody]
@@ -207,6 +211,7 @@ create_test(Config) ->
                 {<<"domain">>, <<"domain.com:443">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
                 {<<"domain">>, <<".leadingdot">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
                 {<<"domain">>, <<"trailing-.hyphen">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
+                {<<"subdomainDelegation">>, true, ?ERROR_SUBDOMAIN_DELEGATION_DISABLED},
                 {<<"subdomainDelegation">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
                 {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
                 {<<"adminEmail">>, <<"adminwithoutdomain">>, ?ERROR_BAD_VALUE_EMAIL},
@@ -226,10 +231,13 @@ create_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     %% Create provider with subdomain delegation turned on
+    rpc:multicall(Nodes, application, set_env, [
+        ?APP_NAME, subdomain_delegation_enabled, true
+    ]),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         data_spec = #data_spec{
             required = [
-                <<"name">>, <<"subdomain">>, <<"ipList">>,
+                <<"name">>, <<"subdomain">>, <<"ipList">>, <<"adminEmail">>,
                 <<"subdomainDelegation">>
             ],
             optional = [<<"latitude">>, <<"longitude">>],
@@ -256,7 +264,8 @@ create_test(Config) ->
                 {<<"ipList">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)}
             ]
         }
-    }.
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 get_test(Config) ->
@@ -1662,6 +1671,7 @@ update_domain_test(Config) ->
     },
     {ok, OZDomainString} = oz_test_utils:get_oz_domain(Config),
     OZDomain = list_to_binary(OZDomainString),
+    Nodes = ?config(oz_worker_nodes, Config),
 
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
@@ -1671,9 +1681,19 @@ update_domain_test(Config) ->
         {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
             Config, ProviderDetails
         ),
+
+        % Disable subdomain delegation in onezone to test
+        % ERROR_SUBDOMAIN_DELEGATON_DISABLED
+        rpc:multicall(Nodes, application, set_env, [
+            ?APP_NAME, subdomain_delegation_enabled, false
+        ]),
+
         #{providerId => P1, providerClient => {provider, P1, P1Macaroon}}
     end,
     EnvTearDownFun = fun(#{providerId := ProviderId} = _Env) ->
+        rpc:multicall(Nodes, application, set_env, [
+            ?APP_NAME, subdomain_delegation_enabled, true
+        ]),
         % delete provider to avoid "subdomain occupied" errors
         oz_test_utils:delete_provider(Config, ProviderId)
     end,
@@ -1722,6 +1742,8 @@ update_domain_test(Config) ->
             bad_values = [
                 {<<"subdomainDelegation">>, bad_bool,
                     ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                {<<"subdomainDelegation">>, true,
+                    ?ERROR_SUBDOMAIN_DELEGATION_DISABLED},
                 {<<"domain">>, <<"https://hasprotocol">>,
                     ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)}
             ]
