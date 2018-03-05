@@ -16,6 +16,7 @@
 
 -include("tokens.hrl").
 -include("entity_logic.hrl").
+-include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -519,7 +520,11 @@ authorize(_, _) ->
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
 validate(#el_req{operation = create, gri = #gri{aspect = instance},
-    data = Data}) ->
+    data = Data}
+) ->
+    {ok, SubdomainDelegationEnabled} = application:get_env(
+        ?APP_NAME, subdomain_delegation_enabled
+    ),
     Required = #{
         <<"name">> => {binary, non_empty},
         <<"subdomainDelegation">> => {boolean, any},
@@ -533,12 +538,17 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance},
     },
     case maps:get(<<"subdomainDelegation">>, Data, undefined) of
         true ->
-            Common#{
-                required => Required#{
-                    <<"subdomain">> => {binary, subdomain},
-                    <<"ipList">> => {list_of_ipv4_addresses, any}
-                }
-            };
+            case SubdomainDelegationEnabled of
+                false ->
+                    throw(?ERROR_SUBDOMAIN_DELEGATION_DISABLED);
+                true ->
+                    Common#{
+                        required => Required#{
+                            <<"subdomain">> => {binary, subdomain},
+                            <<"ipList">> => {list_of_ipv4_addresses, any}
+                        }
+                    }
+            end;
         false ->
             Common#{
                 required => Required#{<<"domain">> => {binary, domain}}
@@ -548,7 +558,11 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance},
     end;
 
 validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
-    data = Data}) ->
+    data = Data}
+) ->
+    {ok, SubdomainDelegationEnabled} = application:get_env(
+        ?APP_NAME, subdomain_delegation_enabled
+    ),
     Required = #{
         <<"name">> => {binary, non_empty},
         <<"uuid">> => {binary, non_empty},
@@ -563,12 +577,17 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
     },
     case maps:get(<<"subdomainDelegation">>, Data, undefined) of
         true ->
-            Common#{
-                required => Required#{
-                    <<"subdomain">> => {binary, subdomain},
-                    <<"ipList">> => {list_of_ipv4_addresses, any}
-                }
-            };
+            case SubdomainDelegationEnabled of
+                false ->
+                    throw(?ERROR_SUBDOMAIN_DELEGATION_DISABLED);
+                true ->
+                    Common#{
+                        required => Required#{
+                            <<"subdomain">> => {binary, subdomain},
+                            <<"ipList">> => {list_of_ipv4_addresses, any}
+                        }
+                    }
+            end;
         false ->
             Common#{
                 required => Required#{<<"domain">> => {binary, domain}}
