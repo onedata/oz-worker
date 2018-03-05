@@ -648,12 +648,23 @@ validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
 
 validate(#el_req{operation = update, gri = #gri{aspect = domain_config},
     data = Data}) ->
+    {ok, SubdomainDelegationEnabled} = application:get_env(
+        ?APP_NAME, subdomain_delegation_enabled
+    ),
     case maps:get(<<"subdomainDelegation">>, Data, undefined) of
-        true -> #{required => #{
-            <<"subdomainDelegation">> => {boolean, any},
-            <<"subdomain">> => {binary, subdomain},
-            <<"ipList">> => {list_of_ipv4_addresses, any}
-        }};
+        true ->
+            case SubdomainDelegationEnabled of
+                false ->
+                    throw(?ERROR_SUBDOMAIN_DELEGATION_DISABLED);
+                true ->
+                    #{
+                        required => #{
+                            <<"subdomainDelegation">> => {boolean, any},
+                            <<"subdomain">> => {binary, subdomain},
+                            <<"ipList">> => {list_of_ipv4_addresses, any}
+                        }
+                    }
+            end;
         false -> #{required => #{
             <<"subdomainDelegation">> => {boolean, any},
             <<"domain">> => {binary, domain}

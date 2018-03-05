@@ -1671,6 +1671,7 @@ update_domain_test(Config) ->
     },
     {ok, OZDomainString} = oz_test_utils:get_oz_domain(Config),
     OZDomain = list_to_binary(OZDomainString),
+    Nodes = ?config(oz_worker_nodes, Config),
 
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
@@ -1680,9 +1681,19 @@ update_domain_test(Config) ->
         {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
             Config, ProviderDetails
         ),
+
+        % Disable subdomain delegation in onezone to test
+        % ERROR_SUBDOMAIN_DELEGATON_DISABLED
+        rpc:multicall(Nodes, application, set_env, [
+            ?APP_NAME, subdomain_delegation_enabled, false
+        ]),
+
         #{providerId => P1, providerClient => {provider, P1, P1Macaroon}}
     end,
     EnvTearDownFun = fun(#{providerId := ProviderId} = _Env) ->
+        rpc:multicall(Nodes, application, set_env, [
+            ?APP_NAME, subdomain_delegation_enabled, true
+        ]),
         % delete provider to avoid "subdomain occupied" errors
         oz_test_utils:delete_provider(Config, ProviderId)
     end,
@@ -1731,6 +1742,8 @@ update_domain_test(Config) ->
             bad_values = [
                 {<<"subdomainDelegation">>, bad_bool,
                     ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
+                {<<"subdomainDelegation">>, true,
+                    ?ERROR_SUBDOMAIN_DELEGATION_DISABLED},
                 {<<"domain">>, <<"https://hasprotocol">>,
                     ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)}
             ]
