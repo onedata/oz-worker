@@ -4,6 +4,20 @@
 CHANGELOG
 ---------
 
+### 18.02.0-beta2
+
+* VFS-4172 Do not set subdomain on update when delegation is disabled
+* VFS-4172 add configuration endpoint
+* VFS-4148 Allow for multiple entries with the same handler module in auth.config
+* VFS-4095 use map instead of proplists
+* VFS-4095 add cache for user info fetched from onepanel
+* disable http2
+* VFS-4130 Update ctool, adjust to new time_utils API
+* VFS-4087 Rework entity graph to avoid nested record updates
+* VFS-4119 Remove static docs proxy
+* VFS-3704 update cowboy to version 2.2.2
+
+
 ### 18.02.0-beta1
 
 * VFS-3978 Do not distribute test CA with oz-worker
