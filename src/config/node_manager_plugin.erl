@@ -22,7 +22,6 @@
 -export([listeners/0, modules_with_args/0]).
 -export([before_init/1, on_cluster_initialized/1, after_init/1]).
 -export([handle_call/3, handle_cast/2]).
--export([check_node_ip_address/0]).
 
 -export([reconcile_dns_config/0]).
 
@@ -182,24 +181,6 @@ handle_cast(Request, State) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Overrides {@link node_manager_plugin_default:check_node_ip_address/0}.
-%% @end
-%%--------------------------------------------------------------------
--spec check_node_ip_address() -> inet:ip4_address().
-check_node_ip_address() ->
-    case application:get_env(?APP_NAME, external_ip, undefined) of
-        undefined ->
-            ?alert_stacktrace("Cannot check external IP of node, defaulting to 127.0.0.1"),
-            {127, 0, 0, 1};
-        IP ->
-            {ok, Address} = inet_parse:ipv4_address(str_utils:to_list(IP)),
-            ?info("External IP: ~p", [Address]),
-            Address
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Trigger broadcasting dns update from this node
 %% @end
 %%--------------------------------------------------------------------
@@ -207,7 +188,6 @@ check_node_ip_address() ->
 reconcile_dns_config() ->
     DedicatedNode = get_dns_dedicated_node(),
     gen_server2:cast({?NODE_MANAGER_NAME, DedicatedNode}, broadcast_dns_config).
-
 
 
 %%--------------------------------------------------------------------
@@ -232,10 +212,9 @@ get_dns_dedicated_node() ->
 -spec broadcast_dns_config() -> ok | error.
 broadcast_dns_config() ->
     try
-        {ok, NodesIPs} = node_manager:get_cluster_nodes_ips(),
-        {Nodes, IPs} = lists:unzip(NodesIPs),
-        DnsConfig = dns_config:build_config(IPs),
+        DnsConfig = dns_config:build_config(),
 
+        {ok, Nodes} = node_manager:get_cluster_nodes(),
         lists:map(fun(Node) ->
             case Node == node() of
                 true -> ok = dns_config:insert_config(DnsConfig);
