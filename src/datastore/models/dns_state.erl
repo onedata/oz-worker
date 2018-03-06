@@ -244,7 +244,12 @@ get_record_struct(1) ->
 -spec is_subdomain_reserved(subdomain()) -> boolean().
 is_subdomain_reserved(Subdomain) ->
     {ok, DnsConf} = application:get_env(?APP_NAME, dns),
-    {Static, _} = lists:unzip(proplists:get_value(static_entries, DnsConf, [])),
+
+    % Get all reserved values
+    Static = lists:flatmap(fun(Config) ->
+        proplists:get_keys(proplists:get_value(Config, DnsConf, []))
+    end, [static_a_records, static_ns_records, static_txt_records,
+        static_mx_records, static_cname_records]),
 
     % subdomains "ns" or "nsX" where X is a number are reserved for nameserver.
     lists:member(Subdomain, Static) orelse

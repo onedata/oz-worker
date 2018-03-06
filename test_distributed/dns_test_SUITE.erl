@@ -101,7 +101,7 @@ end_per_suite(_Config) ->
     ok.
 
 end_per_testcase(static_subdomain_does_not_shadow_provider_subdomain_test, Config) ->
-    set_dns_config(Config, static_entries, []),
+    set_dns_config(Config, static_a_records, []),
     oz_test_utils:delete_all_entities(Config),
     ok;
 
@@ -248,7 +248,23 @@ dns_server_resolves_ns_records_test(Config) ->
     % all NS records have associated A records
     lists:foreach(fun({Domain, IPs}) ->
         assert_dns_answer(OZIPs, Domain, a, IPs)
-    end, NSDomainsIPs).
+    end, NSDomainsIPs),
+
+    StaticSubdomain = "sub",
+    StaticFQDN = StaticSubdomain ++ "." ++ OZDomain,
+    StaticNS1 = "ns1." ++ StaticFQDN,
+    StaticNS2 = "ns2." ++ StaticFQDN,
+
+    % add static entries
+    set_dns_config(Config, static_ns_records, [{
+        list_to_binary(StaticSubdomain),
+        [list_to_binary(StaticNS1), list_to_binary(StaticNS2)]
+    }]),
+
+    ?assertEqual(ok, oz_test_utils:call_oz(Config,
+        node_manager_plugin, reconcile_dns_config, [])),
+
+    assert_dns_answer(OZIPs, StaticFQDN, ns, [StaticNS1, StaticNS2]).
 
 
 %%--------------------------------------------------------------------
@@ -294,8 +310,11 @@ update_fails_on_duplicated_subdomain_test(Config) ->
     Name2 = ?PROVIDER_NAME2,
     SubdomainBin = <<?PROVIDER_SUBDOMAIN1>>,
     StaticSubdomain = <<"test">>,
+    StaticNSSubdomain = <<"test">>,
 
-    set_dns_config(Config, static_entries, [{StaticSubdomain, [{1, 1, 1, 1}]}]),
+    set_dns_config(Config, static_a_records, [{StaticSubdomain, [{1, 1, 1, 1}]}]),
+    % ns records should also block setting subdomain
+    set_dns_config(Config, static_ns_records, [{StaticNSSubdomain, [StaticNSSubdomain]}]),
     {ok, {P1, _}} = oz_test_utils:create_provider(Config, Name1),
     {ok, {P2, _}} = oz_test_utils:create_provider(Config, Name2),
 
@@ -325,6 +344,13 @@ update_fails_on_duplicated_subdomain_test(Config) ->
     ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
         oz_test_utils:call_oz(Config,
             provider_logic, update_domain_config, [#client{type = root}, P2, Data3])
+    ),
+
+    % subdomain configured in app config for ns server
+    Data4 = Data#{<<"subdomain">> := StaticNSSubdomain},
+    ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
+        oz_test_utils:call_oz(Config,
+            provider_logic, update_domain_config, [#client{type = root}, P2, Data4])
     ).
 
 
@@ -337,7 +363,7 @@ dns_server_resolves_static_subdomains_test(Config) ->
     OZIPs = ?config(oz_ips, Config),
     OZDomain = ?config(oz_domain, Config),
 
-    Subdomains = ["mail", "test"],
+    Subdomains = ["subdomain-one", "test"],
     StaticIPs = [?STATIC_SUBDOMAIN_IPS1, ?STATIC_SUBDOMAIN_IPS2],
     SubdomainsIPs = lists:zipwith(fun(Domain, IPs) ->
         {list_to_binary(Domain), IPs}
@@ -346,7 +372,7 @@ dns_server_resolves_static_subdomains_test(Config) ->
         {Domain ++ "." ++ OZDomain, IPs}
     end, Subdomains, StaticIPs),
 
-    set_dns_config(Config, static_entries, SubdomainsIPs),
+    set_dns_config(Config, static_a_records, SubdomainsIPs),
 
     % force dns update
     ?assertEqual(ok, oz_test_utils:call_oz(Config,
@@ -383,7 +409,7 @@ static_subdomain_does_not_shadow_provider_subdomain_test(Config) ->
         Config, ProviderId, SubdomainBin, ProviderIPs1),
 
     % subdomain is set as static entry statically
-    set_dns_config(Config, static_entries, [{SubdomainBin, StaticIPs}]),
+    set_dns_config(Config, static_a_records, [{SubdomainBin, StaticIPs}]),
 
     % DNS update is sent
     ?assertEqual(ok, oz_test_utils:call_oz(Config,
