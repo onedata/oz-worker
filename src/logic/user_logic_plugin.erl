@@ -276,11 +276,13 @@ update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = Data}) ->
 delete(#el_req{gri = #gri{id = UserId, aspect = instance}}) ->
     % Invalidate auth tokens
     auth_logic:invalidate_user_tokens(UserId),
-    % Invalidate client tokens
+    % Invalidate basic auth cache and client tokens
     {ok, #document{
         value = #od_user{
+            login = Login,
             client_tokens = Tokens
         }}} = od_user:get(UserId),
+    basic_auth_cache:delete(Login),
     lists:foreach(
         fun(Token) ->
             {ok, Macaroon} = token_logic:deserialize(Token),

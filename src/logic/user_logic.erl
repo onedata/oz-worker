@@ -1456,6 +1456,8 @@ change_user_password(Login, OldPassword, NewPassword) ->
     }),
     case http_client:patch(URL, Headers, Body, ?ONEPANEL_CONNECT_OPTS) of
         {ok, 204, _, _} ->
+            % Invalidate basic auth cache
+            basic_auth_cache:delete(Login),
             ok;
         {ok, 401, _, _} ->
             {error, <<"Invalid password">>};
