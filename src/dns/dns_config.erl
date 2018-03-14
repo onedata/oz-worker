@@ -201,7 +201,7 @@ build_onezone_ns_entries(OneZoneIPs) ->
 build_txt_records() ->
     OneZoneDomain = get_onezone_domain(),
     ProviderEntries = dns_state:get_txt_records(),
-    StaticEntries = filter_shadowed_entries(get_env(static_txt_records, [])),
+    StaticEntries = get_env(static_txt_records, []),
 
     lists:map(fun({Name, Content}) ->
         Domain = build_domain(Name, OneZoneDomain),
@@ -218,7 +218,7 @@ build_txt_records() ->
 -spec build_mx_records() -> [#dns_rr{}].
 build_mx_records() ->
     OneZoneDomain = get_onezone_domain(),
-    StaticEntries = filter_shadowed_entries(get_env(static_mx_records, [])),
+    StaticEntries = get_env(static_mx_records, []),
 
     lists:map(fun({Subdomain, Mailserver, Preference}) ->
         Domain = build_domain(Subdomain, OneZoneDomain),

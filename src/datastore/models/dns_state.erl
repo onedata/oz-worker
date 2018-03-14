@@ -248,11 +248,13 @@ is_subdomain_reserved(Subdomain) ->
     % Get all reserved values
     Static = lists:flatmap(fun(Config) ->
         proplists:get_keys(proplists:get_value(Config, DnsConf, []))
-    end, [static_a_records, static_ns_records, static_txt_records,
-        static_mx_records, static_cname_records]),
+    end, [static_a_records, static_ns_records, static_cname_records]),
+    Static2 = lists:map(fun({_Name, Value, _Preference}) ->
+        Value
+    end, proplists:get_value(static_mx_records, DnsConf, [])) ++ Static,
 
     % subdomains "ns" or "nsX" where X is a number are reserved for nameserver.
-    lists:member(Subdomain, Static) orelse
+    lists:member(Subdomain, Static2) orelse
         match == re:run(Subdomain, <<"^ns[0-9]*$">>, [{capture, none}]).
 
 
