@@ -60,6 +60,7 @@ build_fqdn_from_subdomain(Subdomain) ->
 insert_config(Config) ->
     ok = erldns_zone_cache:put_zone(Config).
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Builds dns config with up to date data, using provided IPs

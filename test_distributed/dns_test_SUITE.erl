@@ -14,6 +14,7 @@
 
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("kernel/src/inet_dns.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -33,7 +34,7 @@
     update_fails_on_duplicated_subdomain_test/1,
     dns_server_resolves_ns_records_test/1,
     dns_server_duplicates_ns_records_test/1,
-    dns_server_resolves_static_subdomains_test/1,
+    dns_server_resolves_static_records/1,
     static_subdomain_does_not_shadow_provider_subdomain_test/1,
     dns_server_does_not_resolve_removed_subdomain_test/1,
     dns_resolves_txt_record/1,
@@ -50,7 +51,7 @@ all() -> ?ALL([
     update_fails_on_duplicated_subdomain_test,
     dns_server_resolves_ns_records_test,
     dns_server_duplicates_ns_records_test,
-    dns_server_resolves_static_subdomains_test,
+    dns_server_resolves_static_records,
     static_subdomain_does_not_shadow_provider_subdomain_test,
     dns_server_does_not_resolve_removed_subdomain_test,
     dns_resolves_txt_record,
@@ -101,7 +102,11 @@ end_per_suite(_Config) ->
     ok.
 
 end_per_testcase(static_subdomain_does_not_shadow_provider_subdomain_test, Config) ->
-    set_dns_config(Config, static_a_records, []),
+    lists:foreach(fun(Env) ->
+        set_dns_config(Config, Env, [])
+    end, [static_a_records, static_ns_records, static_mx_records,
+        static_txt_records, static_cname_records]),
+
     oz_test_utils:delete_all_entities(Config),
     ok;
 
@@ -248,23 +253,7 @@ dns_server_resolves_ns_records_test(Config) ->
     % all NS records have associated A records
     lists:foreach(fun({Domain, IPs}) ->
         assert_dns_answer(OZIPs, Domain, a, IPs)
-    end, NSDomainsIPs),
-
-    StaticSubdomain = "sub",
-    StaticFQDN = StaticSubdomain ++ "." ++ OZDomain,
-    StaticNS1 = "ns1." ++ StaticFQDN,
-    StaticNS2 = "ns2." ++ StaticFQDN,
-
-    % add static entries
-    set_dns_config(Config, static_ns_records, [{
-        list_to_binary(StaticSubdomain),
-        [list_to_binary(StaticNS1), list_to_binary(StaticNS2)]
-    }]),
-
-    ?assertEqual(ok, oz_test_utils:call_oz(Config,
-        node_manager_plugin, reconcile_dns_config, [])),
-
-    assert_dns_answer(OZIPs, StaticFQDN, ns, [StaticNS1, StaticNS2]).
+    end, NSDomainsIPs).
 
 
 %%--------------------------------------------------------------------
@@ -354,33 +343,40 @@ update_fails_on_duplicated_subdomain_test(Config) ->
     ).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% DNS server should resolve subdomains configured in application config.
-%% @end
-%%--------------------------------------------------------------------
-dns_server_resolves_static_subdomains_test(Config) ->
+
+dns_server_resolves_static_records(Config) ->
     OZIPs = ?config(oz_ips, Config),
     OZDomain = ?config(oz_domain, Config),
 
-    Subdomains = ["subdomain-one", "test"],
-    StaticIPs = [?STATIC_SUBDOMAIN_IPS1, ?STATIC_SUBDOMAIN_IPS2],
-    SubdomainsIPs = lists:zipwith(fun(Domain, IPs) ->
-        {list_to_binary(Domain), IPs}
-    end, Subdomains, StaticIPs),
-    DomainsIPs = lists:zipwith(fun(Domain, IPs) ->
-        {Domain ++ "." ++ OZDomain, IPs}
-    end, Subdomains, StaticIPs),
+    Records = [
+        {txt, static_txt_records,
+            [{<<"txt">>, <<"txt-value">>}],
+            {"txt." ++ OZDomain, [["txt-value"]]}},
+        {a, static_a_records,
+            [{<<"a">>, ?PROVIDER_IPS1}], {"a." ++ OZDomain, ?PROVIDER_IPS1}},
+        {mx, static_mx_records,
+            [{<<"mx">>, <<"mx-value">>, 10}],
+            {"mx." ++ OZDomain, [{10, "mx-value"}]}
+            },
+        {cname, static_cname_records,
+            [{<<"cname">>, <<"cname-value">>}],
+            {"cname." ++ OZDomain, ["cname-value"]}
+        },
+        {ns, static_ns_records,
+            [{<<"ns">>, [<<"ns1-value">>, <<"ns2-value">>]}],
+            {"ns."++OZDomain, ["ns1-value", "ns2-value"]}}
+    ],
 
-    set_dns_config(Config, static_a_records, SubdomainsIPs),
-
-    % force dns update
+    lists:foreach(fun({_, Env, Entries, _}) ->
+        set_dns_config(Config, Env, Entries)
+    end, Records),
     ?assertEqual(ok, oz_test_utils:call_oz(Config,
         node_manager_plugin, reconcile_dns_config, [])),
 
-    lists:foreach(fun({Domain, IPs}) ->
-        assert_dns_answer(OZIPs, Domain, a, IPs)
-    end, DomainsIPs).
+    lists:foreach(fun({Type, _, _, {Query, Expected}}) ->
+        assert_dns_answer(OZIPs, Query, Type, Expected)
+    end, Records).
+
 
 
 %%--------------------------------------------------------------------
@@ -565,15 +561,35 @@ assert_dns_answer(Servers, Query, Type, Expected, Attempts) ->
         % displays ~20 seconds delay before returning updated results
         try
             ?assertEqual(SortedExpected,
-                lists:sort(inet_res:lookup(Query, any, Type, Opts)),
+                filter_response(Type, inet_res:resolve(Query, any, Type, Opts)),
                 Attempts, ?DNS_ASSERT_RETRY_DELAY)
-        catch error:{assertEqual_failed, _} = Error ->
+        catch error:{Reason, _} = Error
+            when Reason =:= assertEqual_failed orelse Reason =:= assertMatch_failed ->
             ct:print("DNS query type ~p to server ~p for name ~p "
             "returned incorrect results in ~p attempts.",
                 [Type, Server, Query, Attempts]),
+
             erlang:error(Error)
         end
-    end, Servers).
+    end, [hd(Servers)]).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Filters results of inet_res:resolve by record type and returns it sorted.
+%% @end
+%%--------------------------------------------------------------------
+-spec filter_response(Type :: atom(), Response :: {ok, #dns_rec{}} | {error, _}) ->
+    [inet_res:dns_data()].
+filter_response(_, {error, _}) -> [];
+filter_response(Type, {ok, Response}) ->
+    #dns_rec{anlist = Anlist, arlist = Arlist, nslist = Nslist} = Response,
+    Filtered = lists:filtermap(fun
+        (Record) when Record#dns_rr.type =:= Type -> {true, Record#dns_rr.data};
+        (_) -> false
+        end, Anlist ++ Arlist ++ Nslist),
+    lists:sort(Filtered).
 
 
 %%--------------------------------------------------------------------
