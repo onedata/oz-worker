@@ -56,6 +56,7 @@ fetch_entity(ProviderId) ->
 %%--------------------------------------------------------------------
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
+operation_supported(create, provider_registration_token, private) -> true;
 operation_supported(create, instance, private) -> true;
 operation_supported(create, instance_dev, private) -> true;
 operation_supported(create, support, private) -> true;
@@ -101,6 +102,17 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
     AdminEmail = maps:get(<<"adminEmail">>, Data),
 
+    ProviderRegistrationPolicy = application:get_env(
+        ?APP_NAME, provider_registration_policy, open
+    ),
+    case ProviderRegistrationPolicy of
+        open ->
+            ok;
+        strict ->
+            Token = maps:get(<<"token">>, Data),
+            {ok, {od_provider, undefined}} = token_logic:consume(Token)
+    end,
+
     ProviderId = datastore_utils:gen_key(),
     {ok, {Macaroon, Identity}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
 
@@ -143,6 +155,17 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
     UUID = maps:get(<<"uuid">>, Data, undefined),
     AdminEmail = maps:get(<<"adminEmail">>, Data),
 
+    ProviderRegistrationPolicy = application:get_env(
+        ?APP_NAME, provider_registration_policy, open
+    ),
+    case ProviderRegistrationPolicy of
+        open ->
+            ok;
+        strict ->
+            Token = maps:get(<<"token">>, Data),
+            {ok, {od_provider, undefined}} = token_logic:consume(Token)
+    end,
+
     ProviderId = UUID,
     {ok, {Macaroon, Identity}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
 
@@ -175,6 +198,14 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
             throw(?ERROR_INTERNAL_SERVER_ERROR)
     end,
     {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
+
+create(Req = #el_req{gri = #gri{id = undefined, aspect = provider_registration_token}}) ->
+    {ok, Macaroon} = token_logic:create(
+        Req#el_req.client,
+        ?OZ_INVITE_PROVIDER_TOKEN,
+        {od_provider, undefined}
+    ),
+    {ok, {data, Macaroon}};
 
 create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     SupportSize = maps:get(<<"size">>, Data),
@@ -418,6 +449,9 @@ authorize(#el_req{operation = create, gri = #gri{aspect = verify_provider_identi
 authorize(#el_req{operation = create, gri = #gri{aspect = instance}}, _) ->
     true;
 
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = provider_registration_token}}, _) ->
+    user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_PROVIDERS_INVITE);
+
 authorize(#el_req{operation = create, gri = #gri{aspect = instance_dev}}, _) ->
     true;
 
@@ -525,14 +559,24 @@ authorize(_, _) ->
 validate(#el_req{operation = create, gri = #gri{aspect = instance},
     data = Data}
 ) ->
-    {ok, SubdomainDelegationEnabled} = application:get_env(
-        ?APP_NAME, subdomain_delegation_enabled
+    SubdomainDelegationEnabled = application:get_env(
+        ?APP_NAME, subdomain_delegation_enabled, true
     ),
-    Required = #{
+    ProviderRegistrationPolicy = application:get_env(
+        ?APP_NAME, provider_registration_policy, open
+    ),
+
+    AlwaysRequired = #{
         <<"name">> => {binary, non_empty},
         <<"subdomainDelegation">> => {boolean, any},
         <<"adminEmail">> => {binary, email}
     },
+    Required = case ProviderRegistrationPolicy of
+        open ->
+            AlwaysRequired;
+        strict ->
+            AlwaysRequired#{<<"token">> => {token, ?OZ_INVITE_PROVIDER_TOKEN}}
+    end,
     Common = #{
         optional => #{
             <<"latitude">> => {float, {between, -90, 90}},
@@ -563,15 +607,25 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance},
 validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
     data = Data}
 ) ->
-    {ok, SubdomainDelegationEnabled} = application:get_env(
-        ?APP_NAME, subdomain_delegation_enabled
+    SubdomainDelegationEnabled = application:get_env(
+        ?APP_NAME, subdomain_delegation_enabled, true
     ),
-    Required = #{
+    ProviderRegistrationPolicy = application:get_env(
+        ?APP_NAME, provider_registration_policy, open
+    ),
+
+    AlwaysRequired = #{
         <<"name">> => {binary, non_empty},
         <<"uuid">> => {binary, non_empty},
         <<"subdomainDelegation">> => {boolean, any},
         <<"adminEmail">> => {binary, email}
     },
+    Required = case ProviderRegistrationPolicy of
+        open ->
+            AlwaysRequired;
+        strict ->
+            AlwaysRequired#{<<"token">> => {token, ?OZ_INVITE_PROVIDER_TOKEN}}
+    end,
     Common = #{
         optional => #{
             <<"latitude">> => {float, {between, -90, 90}},
@@ -598,6 +652,10 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
         _ ->
             Common#{required => Required}
     end;
+
+validate(#el_req{operation = create, gri = #gri{aspect = provider_registration_token}}) ->
+    #{
+    };
 
 validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     required => #{
@@ -651,8 +709,8 @@ validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
 
 validate(#el_req{operation = update, gri = #gri{aspect = domain_config},
     data = Data}) ->
-    {ok, SubdomainDelegationEnabled} = application:get_env(
-        ?APP_NAME, subdomain_delegation_enabled
+    SubdomainDelegationEnabled = application:get_env(
+        ?APP_NAME, subdomain_delegation_enabled, true
     ),
     case maps:get(<<"subdomainDelegation">>, Data, undefined) of
         true ->

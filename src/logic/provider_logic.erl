@@ -21,6 +21,7 @@
 -define(PLUGIN, provider_logic_plugin).
 
 -export([
+    create_provider_registration_token/1,
     create/4, create/6, create/2, create_dev/2
 ]).
 -export([
@@ -231,6 +232,21 @@ delete(Client, ProviderId) ->
         client = Client,
         gri = #gri{type = od_provider, id = ProviderId, aspect = instance}
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a provider invite token, which can be used by any provider to join Onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_provider_registration_token(Client :: entity_logic:client()) ->
+    {ok, macaroon:macaroon()} | {error, term()}.
+create_provider_registration_token(Client) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_provider, aspect = provider_registration_token}
+    })).
 
 
 %%--------------------------------------------------------------------
