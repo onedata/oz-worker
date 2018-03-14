@@ -429,7 +429,10 @@ ensure_valid(State) ->
     % Artificially add 'aspect' key to Data to simplify validation code.
     % This key word allows to verify if data provided in aspect identifier
     % is valid.
-    DataWithAspect = Data#{aspect => Aspect},
+    DataWithAspect = case Data of
+        undefined -> #{aspect => Aspect};
+        _ -> Data#{aspect => Aspect}
+    end,
     % Start with required parameters. Transform the data if needed, fail when
     % any key is missing or cannot be validated.
     Data2 = lists:foldl(

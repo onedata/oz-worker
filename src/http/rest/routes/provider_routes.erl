@@ -44,6 +44,13 @@ routes() -> [
         method = 'POST',
         b_gri = #b_gri{type = od_provider, aspect = instance_dev}
     }},
+    %% Create provider registration token
+    %% This operation requires one of the following privileges:
+    %% - oz_providers_invite
+    {<<"/providers/token">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_provider, id = undefined, aspect = provider_registration_token}
+    }},
     %% Get provider details
     %% This operation requires one of the following privileges:
     %% - oz_providers_list

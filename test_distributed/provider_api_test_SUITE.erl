@@ -47,6 +47,7 @@
     update_test/1,
     delete_test/1,
     delete_self_test/1,
+    create_provider_registration_token_test/1,
 
     list_eff_users_test/1,
     get_eff_user_test/1,
@@ -80,6 +81,7 @@ all() ->
         update_test,
         delete_test,
         delete_self_test,
+        create_provider_registration_token_test,
 
         list_eff_users_test,
         get_eff_user_test,
@@ -230,11 +232,50 @@ create_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
+    %% Create provider with provider registration policy set to strict
+    rpc:multicall(Nodes, application, set_env, [
+        ?APP_NAME, provider_registration_policy, strict
+    ]),
+    ApiTestSpec2 = #api_test_spec{
+        data_spec = #data_spec{
+            required = [
+                <<"name">>, <<"token">>, <<"adminEmail">>,
+                <<"domain">>, <<"subdomainDelegation">>
+            ],
+            optional = [<<"latitude">>, <<"longitude">>],
+            correct_values = #{
+                <<"name">> => [ExpName],
+                <<"token">> => [fun(_Env) ->
+                    {ok, Macaroon} = oz_test_utils:create_provider_registration_token(
+                        Config, ?ROOT
+                    ),
+                    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+                    Token
+                end],
+                <<"domain">> => [<<"multilevel.provider-domain.org">>],
+                <<"subdomainDelegation">> => [false],
+                <<"adminEmail">> => [?ADMIN_EMAIL],
+                <<"latitude">> => [rand:uniform() * 90],
+                <<"longitude">> => [rand:uniform() * 180]
+            },
+            bad_values = [
+                {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
+                {<<"token">>, <<"123qwe">>,
+                    ?ERROR_BAD_VALUE_TOKEN(<<"token">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+    rpc:multicall(Nodes, application, set_env, [
+        ?APP_NAME, provider_registration_policy, open
+    ]),
+
     %% Create provider with subdomain delegation turned on
     rpc:multicall(Nodes, application, set_env, [
         ?APP_NAME, subdomain_delegation_enabled, true
     ]),
-    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+    ApiTestSpec3 = ApiTestSpec#api_test_spec{
         data_spec = #data_spec{
             required = [
                 <<"name">>, <<"subdomain">>, <<"ipList">>, <<"adminEmail">>,
@@ -265,7 +306,7 @@ create_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
 
 
 get_test(Config) ->
@@ -722,6 +763,43 @@ delete_self_test(Config) ->
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )).
+
+
+create_provider_registration_token_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, U1, set, [?OZ_PROVIDERS_INVITE]),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    VerifyFun = api_test_scenarios:collect_unique_tokens_fun(),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U1}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U2},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = <<"/providers/token">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = fun(#{<<"token">> := Token}) -> VerifyFun(Token) end
+        },
+        logic_spec = #logic_spec{
+            module = provider_logic,
+            function = create_provider_registration_token,
+            args = [client],
+            expected_result = ?OK_TERM(VerifyFun)
+        }
+        % TODO gs
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 list_eff_users_test(Config) ->
