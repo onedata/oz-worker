@@ -156,6 +156,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
                 od_group, GroupId,
                 Privileges
             );
+        ?AS_GROUP(GroupId) ->
+            throw(?ERROR_ENTITY_CANNOT_JOIN_ITSELF(od_group, GroupId));
         ?AS_GROUP(ChildGroupId) ->
             entity_graph:add_relation(
                 od_group, ChildGroupId,

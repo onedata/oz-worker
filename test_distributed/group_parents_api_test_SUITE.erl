@@ -212,6 +212,14 @@ join_parent_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
+    CreateTokenForItselfFun = fun() ->
+        {ok, Macaroon} = oz_test_utils:group_invite_group_token(
+            Config, ?ROOT, Child
+        ),
+        {ok, Token} = onedata_macaroons:serialize(Macaroon),
+        Token
+    end,
+
     EnvSetUpFun = fun() ->
         {ok, Group} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME2),
         #{groupId => Group}
@@ -269,6 +277,8 @@ join_parent_test(Config) ->
             },
             bad_values = [
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"token">>, CreateTokenForItselfFun,
+                    ?ERROR_ENTITY_CANNOT_JOIN_ITSELF(od_group, Child)},
                 {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
                 {<<"token">>, <<"123qwe">>,
                     ?ERROR_BAD_VALUE_TOKEN(<<"token">>)}
