@@ -197,7 +197,7 @@ create_test(Config) ->
                 <<"name">>, <<"adminEmail">>, <<"domain">>, <<"subdomainDelegation">>
             ],
             optional = [<<"latitude">>, <<"longitude">>],
-            correct_values = #{
+            correct_values = CorrectValues = #{
                 <<"name">> => [ExpName],
                 <<"domain">> => [<<"multilevel.provider-domain.org">>],
                 <<"subdomainDelegation">> => [false],
@@ -243,20 +243,14 @@ create_test(Config) ->
                 <<"domain">>, <<"subdomainDelegation">>
             ],
             optional = [<<"latitude">>, <<"longitude">>],
-            correct_values = #{
-                <<"name">> => [ExpName],
+            correct_values = CorrectValues#{
                 <<"token">> => [fun(_Env) ->
                     {ok, Macaroon} = oz_test_utils:create_provider_registration_token(
                         Config, ?ROOT
                     ),
                     {ok, Token} = onedata_macaroons:serialize(Macaroon),
                     Token
-                end],
-                <<"domain">> => [<<"multilevel.provider-domain.org">>],
-                <<"subdomainDelegation">> => [false],
-                <<"adminEmail">> => [?ADMIN_EMAIL],
-                <<"latitude">> => [rand:uniform() * 90],
-                <<"longitude">> => [rand:uniform() * 180]
+                end]
             },
             bad_values = [
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},

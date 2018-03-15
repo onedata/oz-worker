@@ -278,7 +278,7 @@ join_parent_test(Config) ->
             bad_values = [
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
                 {<<"token">>, CreateTokenForItselfFun,
-                    ?ERROR_ENTITY_CANNOT_JOIN_ITSELF(od_group, Child)},
+                    ?ERROR_CANNOT_JOIN_GROUP_TO_ITSELF},
                 {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
                 {<<"token">>, <<"123qwe">>,
                     ?ERROR_BAD_VALUE_TOKEN(<<"token">>)}

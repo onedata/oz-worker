@@ -21,7 +21,7 @@
 %% Atoms representing types of valid tokens.
 -type token_type() :: ?GROUP_INVITE_USER_TOKEN | ?GROUP_INVITE_GROUP_TOKEN |
 ?SPACE_INVITE_USER_TOKEN | ?SPACE_INVITE_GROUP_TOKEN |
-?SPACE_SUPPORT_TOKEN | ?OZ_INVITE_PROVIDER_TOKEN.
+?SPACE_SUPPORT_TOKEN | ?PROVIDER_REGISTRATION_TOKEN.
 
 %% Atoms representing valid resource types.
 -type resource_type() :: od_user | od_group | od_space | od_provider.

@@ -236,7 +236,8 @@ delete(Client, ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a provider invite token, which can be used by any provider to join Onezone.
+%% Creates a provider registration token,
+%% which can be used by any provider to join Onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_provider_registration_token(Client :: entity_logic:client()) ->

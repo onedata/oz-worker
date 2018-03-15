@@ -108,7 +108,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     case ProviderRegistrationPolicy of
         open ->
             ok;
-        strict ->
+        restricted ->
             Token = maps:get(<<"token">>, Data),
             {ok, {od_provider, undefined}} = token_logic:consume(Token)
     end,
@@ -161,7 +161,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
     case ProviderRegistrationPolicy of
         open ->
             ok;
-        strict ->
+        restricted ->
             Token = maps:get(<<"token">>, Data),
             {ok, {od_provider, undefined}} = token_logic:consume(Token)
     end,
@@ -202,7 +202,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
 create(Req = #el_req{gri = #gri{id = undefined, aspect = provider_registration_token}}) ->
     {ok, Macaroon} = token_logic:create(
         Req#el_req.client,
-        ?OZ_INVITE_PROVIDER_TOKEN,
+        ?PROVIDER_REGISTRATION_TOKEN,
         {od_provider, undefined}
     ),
     {ok, {data, Macaroon}};
@@ -334,7 +334,7 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = instance}, data = Data}) ->
     ok;
 
 update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}) ->
-    % prevent race condition with simultanous updates
+    % prevent race condition with simultaneous updates
     critical_section:run({domain_config_update, ProviderId}, fun() ->
         Result = case maps:get(<<"subdomainDelegation">>, Data) of
             false ->
@@ -574,8 +574,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance},
     Required = case ProviderRegistrationPolicy of
         open ->
             AlwaysRequired;
-        strict ->
-            AlwaysRequired#{<<"token">> => {token, ?OZ_INVITE_PROVIDER_TOKEN}}
+        restricted ->
+            AlwaysRequired#{<<"token">> => {token, ?PROVIDER_REGISTRATION_TOKEN}}
     end,
     Common = #{
         optional => #{
@@ -623,8 +623,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
     Required = case ProviderRegistrationPolicy of
         open ->
             AlwaysRequired;
-        strict ->
-            AlwaysRequired#{<<"token">> => {token, ?OZ_INVITE_PROVIDER_TOKEN}}
+        restricted ->
+            AlwaysRequired#{<<"token">> => {token, ?PROVIDER_REGISTRATION_TOKEN}}
     end,
     Common = #{
         optional => #{

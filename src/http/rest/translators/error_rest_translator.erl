@@ -250,11 +250,8 @@ translate(?ERROR_CANNOT_DELETE_ENTITY(EntityType, EntityId)) ->
         <<"Cannot delete ~s, failed to delete some dependent relations">>,
         [EntityType:to_string(EntityId)]
     }};
-translate(?ERROR_ENTITY_CANNOT_JOIN_ITSELF(EntityType, EntityId)) ->
-    {?HTTP_400_BAD_REQUEST, {
-        <<"Entity ~s can not join itself.">>,
-        [EntityType:to_string(EntityId)]
-    }};
+translate(?ERROR_CANNOT_JOIN_GROUP_TO_ITSELF) ->
+    {?HTTP_400_BAD_REQUEST, <<"Groups cannot join themselves.">>};
 translate(?ERROR_SUBDOMAIN_DELEGATION_DISABLED) ->
     {?HTTP_400_BAD_REQUEST, <<"Subdomain delegation is currently disabled.">>};
 translate(?ERROR_BAD_VALUE_EMAIL) ->
