@@ -21,10 +21,10 @@
 %% Atoms representing types of valid tokens.
 -type token_type() :: ?GROUP_INVITE_USER_TOKEN | ?GROUP_INVITE_GROUP_TOKEN |
 ?SPACE_INVITE_USER_TOKEN | ?SPACE_INVITE_GROUP_TOKEN |
-?SPACE_SUPPORT_TOKEN.
+?SPACE_SUPPORT_TOKEN | ?PROVIDER_REGISTRATION_TOKEN.
 
 %% Atoms representing valid resource types.
--type resource_type() :: od_user | od_group | od_space.
+-type resource_type() :: od_user | od_group | od_space | od_provider.
 
 -export_type([token_type/0, resource_type/0]).
 
@@ -136,7 +136,7 @@ get_issuer(Macaroon) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec consume(Macaroon :: macaroon:macaroon()) ->
-    {ok, {resource_type(), binary()}}.
+    {ok, {resource_type(), undefined | binary()}}.
 consume(M) ->
     Identifier = macaroon:identifier(M),
     {ok, TokenDoc} = token:get(Identifier),

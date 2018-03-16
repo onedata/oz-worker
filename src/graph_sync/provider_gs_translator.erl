@@ -40,6 +40,8 @@ translate_create(1, #gri{aspect = invite_group_token}, Macaroon) ->
     translate_create(1, #gri{aspect = invite_user_token}, Macaroon);
 translate_create(1, #gri{aspect = invite_provider_token}, Macaroon) ->
     translate_create(1, #gri{aspect = invite_user_token}, Macaroon);
+translate_create(1, #gri{aspect = provider_registration_token}, Macaroon) ->
+    translate_create(1, #gri{aspect = invite_user_token}, Macaroon);
 translate_create(1, #gri{aspect = invite_user_token}, Macaroon) ->
     {ok, Token} = onedata_macaroons:serialize(Macaroon),
     Token;

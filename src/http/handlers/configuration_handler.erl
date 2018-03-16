@@ -5,7 +5,7 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc This module handles requests for current configuration of Onezone.
+%%% @doc This module handles requests asking for current configuration of Onezone.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(configuration_handler).
@@ -44,7 +44,13 @@ init(Req, State) ->
 
 -spec get_config() -> #{}.
 get_config() ->
-    {ok, SubdomainDelegationEnabled} = application:get_env(
-        ?APP_NAME, subdomain_delegation_enabled
+    SubdomainDelegationEnabled = application:get_env(
+        ?APP_NAME, subdomain_delegation_enabled, true
     ),
-    #{<<"subdomainDelegationEnabled">> => SubdomainDelegationEnabled}.
+    ProviderRegistrationPolicy = application:get_env(
+        ?APP_NAME, provider_registration_policy, open
+    ),
+    #{
+        <<"subdomainDelegationEnabled">> => SubdomainDelegationEnabled,
+        <<"providerRegistrationPolicy">> => ProviderRegistrationPolicy
+    }.

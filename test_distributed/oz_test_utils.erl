@@ -127,6 +127,7 @@
 ]).
 -export([
     create_provider/2,
+    create_provider_registration_token/2,
     get_provider/2,
     list_providers/1,
     delete_provider/2,
@@ -1143,6 +1144,19 @@ create_provider(Config, Data) ->
     )),
     {ok, MacaroonBin} = onedata_macaroons:serialize(Macaroon),
     {ok, {ProviderId, MacaroonBin}}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a provider registration token.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_provider_registration_token(Config :: term(),
+    Client :: entity_logic:client()) -> {ok, macaroon:macaroon()}.
+create_provider_registration_token(Config, Client) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, provider_logic, create_provider_registration_token, [Client]
+    )).
 
 
 %%--------------------------------------------------------------------

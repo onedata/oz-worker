@@ -67,7 +67,7 @@ set_delegation_config(ProviderId, Subdomain, IPs) ->
                             [Subdomain, OtherProvider]),
                         {error, subdomain_exists};
                     false ->
-                        % remove old subdomain of provider beign updated before setting new
+                        % remove old subdomain of provider begin updated before setting new
                         DnsState2 = unset_subdomain(DnsState, ProviderId),
                         set_subdomain(DnsState2, ProviderId, Subdomain)
                 end,
@@ -142,7 +142,7 @@ set_txt_record(ProviderId, Name, Content) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Removes TXT record identifided by a provider and record name.
+%% Removes TXT record identified by a provider and record name.
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_txt_record(ProviderId :: od_provider:id(), Name :: binary()) -> ok.

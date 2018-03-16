@@ -47,6 +47,10 @@ create_response(#gri{id = undefined, aspect = instance_dev}, _, {fetched, #gri{i
         <<"macaroon">> => MacaroonBin
     });
 
+create_response(#gri{aspect = provider_registration_token}, _, {data, Macaroon}) ->
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    rest_translator:ok_body_reply(#{<<"token">> => Token});
+
 create_response(#gri{aspect = support}, _, {not_fetched, #gri{id = SpaceId}}) ->
     rest_translator:created_reply([<<"provider">>, <<"spaces">>, SpaceId]);
 

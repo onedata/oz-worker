@@ -19,5 +19,6 @@
 -define(SPACE_INVITE_USER_TOKEN, space_invite_user_token).
 -define(SPACE_INVITE_GROUP_TOKEN, space_invite_group_token).
 -define(SPACE_SUPPORT_TOKEN, space_support_token).
+-define(PROVIDER_REGISTRATION_TOKEN, provider_registration_token).
 
 -endif.
