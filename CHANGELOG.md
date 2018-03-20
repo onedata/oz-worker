@@ -4,6 +4,24 @@
 CHANGELOG
 ---------
 
+### 18.02.0-beta3
+
+* VFS-4171 Fixed oz-worker CentOS deps
+* VFS-4171 Add folly and libcouchbase libevent plugin deps
+* Updating GUI, including: VFS-4027 * VFS-4027 Added support for peta-, exa-, zetta- and yottabytes
+* VFS-3715 add case checking that group cannot join itself
+* VFS-3744 Do not treat TXT records as reserved subdomain
+* VFS-4096 add tests for provider registration token
+* VFS-3744 Update tests for static dns records
+* VFS-3744 Insert static entries from app config into dns
+* VFS-4096 add optional enforcement of tokens when registering providers
+* VFS-4213 Move saml and auth configs to /etc from /var/lib
+* invalidate basic auth cache for given user on his deletion
+* VFS-4054 Remove nested datastore update from domain config update
+* VFS-4054 Make default external ip undefined
+* VFS-4054 Rely on cluster worker to store external IP
+
+
 ### 18.02.0-beta2
 
 * VFS-4172 Do not set subdomain on update when delegation is disabled
