@@ -25,6 +25,8 @@ class ProviderWorkerConfigurator:
         if 'oz_domain' in sys_config:
             oz_hostname = worker.cluster_domain(sys_config['oz_domain'], uid)
             sys_config['oz_domain'] = oz_hostname
+        sys_config[
+            'interprovider_connections_security'] = 'only_verify_peercert'
         return cfg
 
     def pre_start_commands(self, domain):
@@ -66,23 +68,31 @@ class ProviderWorkerConfigurator:
             if isinstance(config['os_config']['storages'][0], basestring):
                 posix_storages = config['os_config']['storages']
             else:
-                posix_storages = [s['name'] for s in
-                                  config['os_config']['storages']
-                                  if s['type'] == 'posix']
+                posix_storages = [{
+                    'name': s['name'],
+                    'readonly': s.get('readonly', False)
+                } for s in config['os_config']['storages'] if
+                    s['type'] == 'posix']
         else:
             posix_storages = []
 
         extra_volumes = []
         for s in posix_storages:
-            if not (storages_dockers and s in storages_dockers['posix'].keys()):
-                v = common.volume_for_storage(s)
+            name = s['name']
+            readonly = s['readonly']
+            if not storages_dockers:
+                storages_dockers = {'posix': {}}
+            if name not in storages_dockers['posix'].keys():
+                v = common.volume_for_storage(name, readonly)
                 (host_path, docker_path, mode) = v
-                if not storages_dockers:
-                    storages_dockers = {'posix': {}}
-                storages_dockers['posix'][s] = {"host_path": host_path, "docker_path": docker_path}
+                storages_dockers['posix'][name] = {
+                    "host_path": host_path,
+                    "docker_path": docker_path,
+                    "mode": mode
+                }
             else:
-                d = storages_dockers['posix'][s]
-                v = (d['host_path'], d['docker_path'], 'rw')
+                d = storages_dockers['posix'][name]
+                v = (d['host_path'], d['docker_path'], d['mode'])
 
             extra_volumes.append(v)
 
@@ -97,7 +107,7 @@ class ProviderWorkerConfigurator:
         return 1024
 
     def couchbase_buckets(self):
-        return {"default": 512}
+        return {"onedata": 1024}
 
     def app_name(self):
         return "op_worker"
@@ -106,10 +116,13 @@ class ProviderWorkerConfigurator:
         return "provider_domains"
 
     def domain_env_name(self):
-        return "provider_domain"
+        return "test_web_cert_domain"
 
     def nodes_list_attribute(self):
         return "op_worker_nodes"
+
+    def has_dns_server(self):
+        return False
 
 
 def create_storages(storages, op_nodes, op_config, bindir, storages_dockers):
@@ -117,7 +130,9 @@ def create_storages(storages, op_nodes, op_config, bindir, storages_dockers):
     script_names = {'posix': 'create_posix_storage.escript',
                     's3': 'create_s3_storage.escript',
                     'ceph': 'create_ceph_storage.escript',
-                    'swift': 'create_swift_storage.escript'}
+                    'swift': 'create_swift_storage.escript',
+                    'glusterfs': 'create_glusterfs_storage.escript',
+                    'nulldevice': 'create_nulldevice_storage.escript'}
     pwd = common.get_script_dir()
     for script_name in script_names.values():
         command = ['cp', os.path.join(pwd, script_name),
@@ -139,16 +154,17 @@ def create_storages(storages, op_nodes, op_config, bindir, storages_dockers):
         if storage['type'] in ['posix', 'nfs']:
             st_path = storage['name']
             command = ['escript', script_paths['posix'], cookie,
-                       first_node, storage['name'], st_path]
+                       first_node, storage['name'], st_path,
+                       'canonical']
             assert 0 is docker.exec_(container, command, tty=True,
                                      stdout=sys.stdout, stderr=sys.stderr)
         elif storage['type'] == 'ceph':
             config = storages_dockers['ceph'][storage['name']]
             pool = storage['pool'].split(':')[0]
             command = ['escript', script_paths['ceph'], cookie,
-                       first_node, storage['name'], "ceph",
+                       first_node, storage['name'], 'ceph',
                        config['host_name'], pool, config['username'],
-                       config['key']]
+                       config['key'], 'true', 'flat']
             assert 0 is docker.exec_(container, command, tty=True,
                                      stdout=sys.stdout, stderr=sys.stderr)
         elif storage['type'] == 's3':
@@ -156,23 +172,38 @@ def create_storages(storages, op_nodes, op_config, bindir, storages_dockers):
             command = ['escript', script_paths['s3'], cookie,
                        first_node, storage['name'], config['host_name'],
                        config.get('scheme', 'http'), storage['bucket'],
-                       config['access_key'], config['secret_key'],
-                       config.get('iam_request_scheme', 'https'),
-                       config.get('iam_host', 'iam.amazonaws.com')]
+                       config['access_key'], config['secret_key'], 'true',
+                       'flat']
             assert 0 is docker.exec_(container, command, tty=True,
                                      stdout=sys.stdout, stderr=sys.stderr)
-
         elif storage['type'] == 'swift':
             config = storages_dockers['swift'][storage['name']]
             command = ['escript', script_paths['swift'], cookie,
                        first_node, storage['name'],
                        'http://{0}:{1}/v2.0/tokens'.format(config['host_name'],
-                                                    config['keystone_port']),
+                                                           config[
+                                                               'keystone_port']),
                        storage['container'], config['tenant_name'],
-                       config['user_name'], config['password']]
+                       config['user_name'], config['password'], 'true', 'flat']
             assert 0 is docker.exec_(container, command, tty=True,
                                      stdout=sys.stdout, stderr=sys.stderr)
-
+        elif storage['type'] == 'glusterfs':
+            config = storages_dockers['glusterfs'][storage['name']]
+            command = ['escript', script_paths['glusterfs'], cookie,
+                       first_node, storage['name'], storage['volume'],
+                       config['host_name'], str(config['port']),
+                       config['transport'],
+                       config['mountpoint'],
+                       'cluster.write-freq-threshold=100;', 'true', 'flat']
+            assert 0 is docker.exec_(container, command, tty=True,
+                                     stdout=sys.stdout, stderr=sys.stderr)
+        elif storage['type'] == 'nulldevice':
+            command = ['escript', script_paths['nulldevice'], cookie,
+                       first_node, storage['name'], storage['latencyMin'],
+                       storage['latencyMax'], storage['timeoutProbability'],
+                       storage['filter'], 'true', 'canonical']
+            assert 0 is docker.exec_(container, command, tty=True,
+                                     stdout=sys.stdout, stderr=sys.stderr)
         else:
             raise RuntimeError(
                 'Unknown storage type: {}'.format(storage['type']))
