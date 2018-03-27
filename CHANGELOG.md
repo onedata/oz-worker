@@ -4,6 +4,16 @@
 CHANGELOG
 ---------
 
+### 18.02.0-beta5
+
+* Releasing new version 18.02.0-beta5
+
+
+### 18.02.0-beta4
+
+* Updated cberl ref
+
+
 ### 18.02.0-beta3
 
 * VFS-4171 Fixed oz-worker CentOS deps
