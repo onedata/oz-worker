@@ -228,7 +228,8 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}
     case fetch_entity(ProviderId) of
         {ok, #od_provider{subdomain_delegation = true}} ->
             #{<<"content">> := Content} = Data,
-            ok = dns_state:set_txt_record(ProviderId, RecordName, Content);
+            TTL = maps:get(<<"ttl">>, Data, undefined),
+            ok = dns_state:set_txt_record(ProviderId, RecordName, Content, TTL);
         {ok, #od_provider{subdomain_delegation = false}} ->
             ?ERROR_SUBDOMAIN_DELEGATION_DISABLED;
         Error -> Error
@@ -668,6 +669,9 @@ validate(#el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}) 
     required => #{
         {aspect, <<"recordName">>} => {binary, non_empty},
         <<"content">> => {binary, non_empty}
+    },
+    optional => #{
+        <<"ttl">> => {integer, {not_lower_than, 0}}
     }
 };
 

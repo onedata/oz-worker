@@ -203,9 +203,16 @@ build_txt_records() ->
     ProviderEntries = dns_state:get_txt_records(),
     StaticEntries = get_env(static_txt_records, []),
 
-    lists:map(fun({Name, Content}) ->
-        Domain = build_domain(Name, OneZoneDomain),
-        build_record_txt(Domain, Content)
+    lists:map(fun
+        ({Name, {Content, undefined}}) ->
+            Domain = build_domain(Name, OneZoneDomain),
+            build_record_txt(Domain, Content);
+        ({Name, {Content, TTL}}) ->
+            Domain = build_domain(Name, OneZoneDomain),
+            build_record_txt(Domain, Content, TTL);
+        ({Name, Content}) ->
+            Domain = build_domain(Name, OneZoneDomain),
+            build_record_txt(Domain, Content)
     end, ProviderEntries ++ StaticEntries).
 
 
@@ -328,13 +335,26 @@ build_record_ns(Name, Nameserver) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec build_record_txt(domain(), binary() | string()) -> #dns_rr{}.
-build_record_txt(Domain, Content) when is_binary(Content) ->
-    build_record_txt(Domain, binary:bin_to_list(Content));
 build_record_txt(Domain, Content) ->
+    build_record_txt(Domain, Content, get_env(txt_ttl, 120)).
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Builds a TXT record for erldns with provided TTL.
+%% Binary content will be converted to string (list) as required
+%% by erl_dns.
+%% @end
+%%--------------------------------------------------------------------
+-spec build_record_txt(Domain :: domain(), Content :: binary() | string(),
+    TTL :: non_neg_integer()) -> #dns_rr{}.
+build_record_txt(Domain, Content, TTL) when is_binary(Content) ->
+    build_record_txt(Domain, binary:bin_to_list(Content), TTL);
+build_record_txt(Domain, Content, TTL) ->
     #dns_rr{
         name = Domain,
         type = ?DNS_TYPE_TXT,
-        ttl = get_env(txt_ttl, 120),
+        ttl = TTL,
         data = #dns_rrdata_txt{txt = Content}
     }.
 
