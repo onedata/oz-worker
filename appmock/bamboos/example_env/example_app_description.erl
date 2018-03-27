@@ -54,15 +54,13 @@ rest_mocks() -> [
     % It contains most useful functions to get information about incoming requests.
     % They can be used inside response functions.
     #rest_mock{port = 443, path = <<"/[:binding/[...]]">>,
-        response = fun(Req, _State) ->
+        response = fun(Req, ReqBody, _State) ->
             Headers = req:headers(Req),
             ContentType = req:header(<<"content-type">>, Req),
             Host = req:host(Req),
             Peer = req:peer(Req),
             Path = req:path(Req),
             Binding = req:binding(binding, Req),
-            Body = req:body(Req),
-            PostParams = req:post_params(Req),
             ResponseBody = str_utils:format_bin(
                 "Your request contained:~n" ++
                     "Host:        ~s~n" ++
@@ -71,9 +69,8 @@ rest_mocks() -> [
                     "Peer:        ~p~n" ++
                     "ContentType: ~p~n" ++
                     "Headers:     ~p~n" ++
-                    "Body:        ~p~n" ++
-                    "PostParams:  ~p~n",
-                [Host, Path, Binding, Peer, ContentType, Headers, Body, PostParams]),
+                    "Body:        ~p~n",
+                [Host, Path, Binding, Peer, ContentType, Headers, ReqBody]),
             {#rest_response{body = ResponseBody, content_type = <<"text/plain">>}, whatever}
         end,
         initial_state = whatever}
@@ -95,6 +92,6 @@ tcp_server_mocks() -> [
         % counter - the endpoint will ignore the content of incoming requests and only count them.
         %    This mode is as fast as it gets.
         % NOTE: in history mode, it is also possible to check the count of all received requests.
-        type = history
+        type = counter
     }
 ].
