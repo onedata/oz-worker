@@ -42,6 +42,22 @@
                   "type": "swift",
                   "name": "swift",
                   "container": "swift"
+                },
+                {
+                  "type": "glusterfs",
+                  "name": "someGluster",
+                  "volume": "data",
+                  "transport": "tcp",
+                  "mountpoint": "/DIR1/DIR2",
+                  "xlatorOptions": ""
+                },
+                {
+                  "type": "nulldevice",
+                  "name": "someNullDevice",
+                  "latencyMin": 0,
+                  "latencyMax": 0,
+                  "timeoutProbability": 0.0,
+                  "filter": "*"
                 }
             ],
             "users": [
@@ -100,8 +116,7 @@
                             "db_nodes": [
                                 "dbnode1"
                             ],
-                            "oz_domain": "oz1",
-                            "verify_oz_cert": false
+                            "oz_domain": "oz1"
                         }
                     },
                     "storage": {

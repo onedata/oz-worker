@@ -3,15 +3,24 @@
 
 -export([main/1]).
 
-main([Cookie, Node, Name, MountPoint, StoragePathType]) ->
+main([Cookie, Node, Name, Volume, Hostname, Port, Transport, MountPoint, XlatorOptions,
+    Insecure, StoragePathType]) ->
+
     erlang:set_cookie(node(), list_to_atom(Cookie)),
     NodeAtom = list_to_atom(Node),
 
-    UserCtx = safe_call(NodeAtom, helper, new_posix_user_ctx, [0, 0]),
-    Helper = safe_call(NodeAtom, helper, new_posix_helper, [
-        list_to_binary(MountPoint),
-        #{},
+    UserCtx = safe_call(NodeAtom, helper, new_glusterfs_user_ctx, [0, 0]),
+    Helper = safe_call(NodeAtom, helper, new_glusterfs_helper, [
+        list_to_binary(Volume),
+        list_to_binary(Hostname),
+        #{
+            <<"port">> => list_to_binary(Port),
+            <<"transport">> => list_to_binary(Transport),
+            <<"mountPoint">> => list_to_binary(MountPoint),
+            <<"xlatorOptions">> => list_to_binary(XlatorOptions)
+        },
         UserCtx,
+        list_to_atom(Insecure),
         list_to_binary(StoragePathType)
     ]),
 
