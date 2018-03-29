@@ -12,6 +12,9 @@ import argparse
 import os
 import platform
 import sys
+import time
+
+from environment.common import HOST_STORAGE_PATH, remove_dockers_and_volumes
 from environment import docker
 import glob
 import xml.etree.ElementTree as ElementTree
@@ -53,7 +56,7 @@ parser = argparse.ArgumentParser(
 parser.add_argument(
     '--image', '-i',
     action='store',
-    default='onedata/worker',
+    default='onedata/worker:v57',
     help='Docker image to use as a test master.',
     dest='image')
 
@@ -86,10 +89,34 @@ parser.add_argument(
     action='store_true'
 )
 
+parser.add_argument(
+    '--env-file', '-e',
+    action='store',
+    default=None,
+    help="path to description of test environment in .json file",
+    dest='env_file')
+
+parser.add_argument(
+    '--docker-name',
+    action='store',
+    help="Name of docker container where tests will be running",
+    dest='docker_name',
+    default='test_run_docker_{}'.format(int(time.time()))
+)    
+
+parser.add_argument(
+    '--no-etc-passwd',
+    action='store_true',
+    help="Do not mount /etc/passwd to container, warning: some tests may not work",
+    dest='no_etc_passwd'
+)    
+
 [args, pass_args] = parser.parse_known_args()
 
 command = '''
 import os, subprocess, sys, stat
+
+{additional_code}
 
 if {shed_privileges}:
     os.environ['HOME'] = '/tmp'
@@ -99,9 +126,7 @@ if {shed_privileges}:
     os.setregid({gid}, {gid})
     os.setreuid({uid}, {uid})
 
-{additional_code}
-
-command = ['py.test'] + {args} + ['--test-type={test_type}'] + ['{test_dir}'] + ['--junitxml={report_path}']
+command = ['py.test'] + ['--test-type={test_type}'] + ['{test_dir}'] + ['--docker-name', '{docker_name}'] + {args} + {env_file} + ['--junitxml={report_path}']
 ret = subprocess.call(command)
 sys.exit(ret)
 '''
@@ -116,24 +141,48 @@ with open('/etc/hosts', 'a') as f:
 """)
 '''.format(etc_hosts_content=get_local_etc_hosts_entries())
 
+if '--getting-started' in pass_args:
+    additional_code += """
+with open('/etc/sudoers.d/all', 'w+') as file:
+    file.write("\\nALL       ALL = (ALL) NOPASSWD: ALL\\n")
+"""
+
 command = command.format(
     args=pass_args,
     uid=os.geteuid(),
     gid=os.getegid(),
     test_dir=args.test_dir,
+    docker_name=args.docker_name,
     shed_privileges=(platform.system() == 'Linux'),
     report_path=args.report_path,
     test_type=args.test_type,
-    additional_code=additional_code)
+    additional_code=additional_code,
+    env_file=["--env-file={}".format(args.env_file)] if args.env_file else "[]"
+)
 
+# 128MB or more required for chrome tests to run with xvfb
+run_params = ['--shm-size=128m']
+
+remove_dockers_and_volumes()
+
+reflect=[(script_dir, 'rw'),
+         ('/var/run/docker.sock', 'rw'),
+         (HOST_STORAGE_PATH, 'rw')]
+
+if not args.no_etc_passwd:
+    reflect.extend([('/etc/passwd', 'ro')])
+         
 ret = docker.run(tty=True,
                  rm=True,
                  interactive=True,
+                 name=args.docker_name,
                  workdir=script_dir,
-                 reflect=[(script_dir, 'rw'),
-                          ('/var/run/docker.sock', 'rw')],
+                 reflect = reflect,
+                 volumes=[(os.path.join(os.path.expanduser('~'),
+                                        '.docker'), '/tmp/.docker', 'rw')],
                  image=args.image,
-                 command=['python', '-c', command])
+                 command=['python', '-c', command],
+                 run_params=run_params)
 
 if ret != 0 and not skipped_test_exists(args.report_path):
     ret = 0

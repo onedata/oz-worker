@@ -44,6 +44,16 @@ init(Req, State) ->
 
 -spec get_config() -> #{}.
 get_config() ->
+    {_AppId, _AppName, AppVersion} = lists:keyfind(
+        ?APP_NAME, 1, application:loaded_applications()
+    ),
+    BuildVersion = application:get_env(
+        ?APP_NAME, build_version, <<"unknown">>
+    ),
+    CompatibleOpVersions = application:get_env(
+        ?APP_NAME, compatible_op_versions, []
+    ),
+    CompatibleOpVersionsBin = [list_to_binary(V) || V <- CompatibleOpVersions],
     SubdomainDelegationEnabled = application:get_env(
         ?APP_NAME, subdomain_delegation_enabled, true
     ),
@@ -51,6 +61,9 @@ get_config() ->
         ?APP_NAME, provider_registration_policy, open
     ),
     #{
+        <<"version">> => list_to_binary(AppVersion),
+        <<"build">> => list_to_binary(BuildVersion),
+        <<"compatibleOneproviderVersions">> => CompatibleOpVersionsBin,
         <<"subdomainDelegationEnabled">> => SubdomainDelegationEnabled,
         <<"providerRegistrationPolicy">> => ProviderRegistrationPolicy
     }.

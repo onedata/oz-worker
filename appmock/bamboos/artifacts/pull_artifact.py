@@ -8,13 +8,14 @@ __author__ = "Jakub Kudzia"
 __copyright__ = "Copyright (C) 2016 ACK CYFRONET AGH"
 __license__ = "This software is released under the MIT license cited in " \
               "LICENSE.txt"
+
 import argparse
 from paramiko import SSHClient, AutoAddPolicy
+from scp import SCPClient
+import signal
+import sys
 
-from scp import SCPClient, SCPException
-
-from artifact_utils import lock_file, unlock_file, artifact_path, \
-    ARTIFACTS_EXT, DEFAULT_BRANCH
+from artifact_utils import artifact_path, ARTIFACTS_EXT, DEFAULT_BRANCH
 
 
 def download_specific_or_develop(ssh, plan, branch):
@@ -31,12 +32,12 @@ def download_specific_or_develop(ssh, plan, branch):
     :return None
     """
     download_artifact_safe(
-            ssh, plan, branch=branch,
-            exception_handler=download_develop_artifact,
-            exception_handler_args=(ssh, plan),
-            exception_log=
-            "Artifact of plan {0}, specific for branch {1} not found"
-            ", pulling artifact from branch develop.".format(plan, branch))
+        ssh, plan, branch=branch,
+        exception_handler=download_develop_artifact,
+        exception_handler_args=(ssh, plan),
+        exception_log=
+        "Artifact of plan {0}, specific for branch {1} not found"
+        ", pulling artifact from branch develop.".format(plan, branch))
 
 
 def download_develop_artifact(ssh, plan):
@@ -49,12 +50,12 @@ def download_develop_artifact(ssh, plan):
     :return None
     """
     download_artifact_safe(
-            ssh, plan, DEFAULT_BRANCH,
-            exception_log="Pulling artifact of plan {}, from branch develop "
-                          "failed.".format(plan))
+        ssh, plan, DEFAULT_BRANCH,
+        exception_log="Pulling artifact of plan {}, from branch develop "
+                      "failed.".format(plan))
 
 
-def download_artifact_safe(ssh, plan, branch, exception_handler=None, 
+def download_artifact_safe(ssh, plan, branch, exception_handler=None,
                            exception_handler_args=(), exception_log=""):
     """
     Downloads artifact from repo. Locks file while it's being downloaded.
@@ -76,16 +77,19 @@ def download_artifact_safe(ssh, plan, branch, exception_handler=None,
     :type exception_log: str
     :return None
     """
-    file_name = artifact_path(plan, branch)
-    lock_file(ssh, file_name)
+
+    def signal_handler(_signum, _frame):
+        ssh.connect(args.hostname, port=args.port, username=args.username)
+        sys.exit(1)
+
+    signal.signal(signal.SIGINT, signal_handler)
+
     try:
         download_artifact(ssh, plan, branch)
-    except SCPException:
+    except:
         print exception_log
         if exception_handler:
             exception_handler(*exception_handler_args)
-    finally:
-        unlock_file(ssh, file_name)
 
 
 def download_artifact(ssh, plan, branch):
@@ -105,44 +109,44 @@ def download_artifact(ssh, plan, branch):
 
 
 parser = argparse.ArgumentParser(
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-        description='Push build artifacts.')
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+    description='Push build artifacts.')
 
 parser.add_argument(
-        '--hostname', '-hn',
-        action='store',
-        help='Hostname of artifacts repository',
-        dest='hostname',
-        required=True)
+    '--hostname', '-hn',
+    action='store',
+    help='Hostname of artifacts repository',
+    dest='hostname',
+    required=True)
 
 parser.add_argument(
-        '--port', '-p',
-        action='store',
-        type=int,
-        help='SSH port to connect to',
-        dest='port',
-        required=True)
+    '--port', '-p',
+    action='store',
+    type=int,
+    help='SSH port to connect to',
+    dest='port',
+    required=True)
 
 parser.add_argument(
-        '--username', '-u',
-        action='store',
-        help='The username to authenticate as',
-        dest='username',
-        required=True)
+    '--username', '-u',
+    action='store',
+    help='The username to authenticate as',
+    dest='username',
+    required=True)
 
 parser.add_argument(
-        '--branch', '-b',
-        action='store',
-        help='Name of current git branch',
-        dest='branch',
-        required=True)
+    '--branch', '-b',
+    action='store',
+    help='Name of current git branch',
+    dest='branch',
+    required=True)
 
 parser.add_argument(
-        '--plan', '-pl',
-        action='store',
-        help='Name of current bamboo plan',
-        dest='plan',
-        required=True)
+    '--plan', '-pl',
+    action='store',
+    help='Name of current bamboo plan',
+    dest='plan',
+    required=True)
 
 args = parser.parse_args()
 

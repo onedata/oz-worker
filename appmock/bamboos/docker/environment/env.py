@@ -12,16 +12,16 @@ import copy
 import json
 import time
 from . import appmock, client, common, zone_worker, cluster_manager, \
-    worker, provider_worker, cluster_worker, docker, dns, storages, panel, \
-    location_service_bootstrap
+    worker, provider_worker, cluster_worker, docker, dns, storages, panel
 
 
 def default(key):
-    return {'image': 'onedata/worker',
+    return {'image': 'onedata/worker:v57',
             'ceph_image': 'onedata/ceph',
             's3_image': 'onedata/s3proxy',
             'swift_image': 'onedata/dockswift',
             'nfs_image': 'erezhorev/dockerized_nfs_server',
+            'glusterfs_image': 'gluster/gluster-centos:gluster3u7_centos7',
             'bin_am': '{0}/appmock'.format(os.getcwd()),
             'bin_oz': '{0}/oz_worker'.format(os.getcwd()),
             'bin_op_worker': '{0}/op_worker'.format(os.getcwd()),
@@ -36,6 +36,7 @@ def default(key):
 def up(config_path, image=default('image'), ceph_image=default('ceph_image'),
        s3_image=default('s3_image'), nfs_image=default('nfs_image'),
        swift_image=default('swift_image'),
+       glusterfs_image=default('glusterfs_image'),
        bin_am=default('bin_am'), bin_oz=default('bin_oz'),
        bin_cluster_manager=default('bin_cluster_manager'),
        bin_op_worker=default('bin_op_worker'),
@@ -70,9 +71,6 @@ def up(config_path, image=default('image'), ceph_image=default('ceph_image'),
         # so that dockers that start after can immediately see the domains.
         dns.maybe_restart_with_configuration('auto', uid, output)
 
-    ls_nodes = location_service_bootstrap.up_nodes(image, bin_oz, config, uid, logdir)
-    output['docker_ids'].extend(ls_nodes)
-
     # Start provider cluster instances
     setup_worker(zone_worker, bin_oz, 'zone_domains',
                  bin_cluster_manager, config, config_path, dns_server, image,
@@ -81,7 +79,7 @@ def up(config_path, image=default('image'), ceph_image=default('ceph_image'),
     # Start storages
     storages_dockers, storages_dockers_ids = \
         storages.start_storages(config, config_path, ceph_image, s3_image,
-                                nfs_image, swift_image, image, uid)
+                                nfs_image, swift_image, glusterfs_image, image, uid)
     output['storages'] = storages_dockers
 
     # Start onepanel instances
@@ -155,7 +153,7 @@ echo $?'''
         command = command.format(json.dumps(env_configurator_input), True, True)
         env_configurator_dir = os.path.abspath(env_configurator_dir)
         docker_output = docker.run(
-            image='onedata/builder',
+            image='onedata/builder:v60',
             interactive=True,
             tty=True,
             rm=True,
