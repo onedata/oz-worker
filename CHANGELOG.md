@@ -6,7 +6,10 @@ CHANGELOG
 
 ### 18.02.0-beta5
 
-* Releasing new version 18.02.0-beta5
+* VFS-4272 Check forward compatibility during OP connections to OZ
+* VFS-4267 Updated package dependencies for cberl
+* VFS-4296 Fixed meck entry
+* VFS-4267 Adjust code to erl 20, update deps
 
 
 ### 18.02.0-beta4
