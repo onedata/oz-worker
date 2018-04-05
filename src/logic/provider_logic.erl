@@ -47,6 +47,7 @@
     update_domain_config/3,
     get_domain_config/2,
     set_dns_txt_record/4,
+    set_dns_txt_record/5,
     remove_dns_txt_record/3
 ]).
 -export([
@@ -297,18 +298,30 @@ update_domain_config(Client, ProviderId, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Sets txt record for provider's subdomain
+%% Sets txt record for provider's subdomain with default TTL.
 %% @end
 %%--------------------------------------------------------------------
 -spec set_dns_txt_record(Client :: entity_logic:client(),
     ProviderId :: od_provider:id(), Name :: binary(), Content :: binary()) ->
     ok | {error, term()}.
 set_dns_txt_record(Client, ProviderId, Name, Content) ->
+    set_dns_txt_record(Client, ProviderId, Name, Content, undefined).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets txt record for provider's subdomain with given TTL.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_dns_txt_record(Client :: entity_logic:client(),
+    ProviderId :: od_provider:id(), Name :: binary(), Content :: binary(),
+    TTL :: dns_state:ttl()) ->
+    ok | {error, term()}.
+set_dns_txt_record(Client, ProviderId, Name, Content, TTL) ->
     entity_logic:handle(#el_req{
         operation = create,
         client = Client,
         gri = #gri{type = od_provider, id = ProviderId, aspect = {dns_txt_record, Name}},
-        data = #{<<"content">> => Content}
+        data = #{<<"content">> => Content, <<"ttl">> => TTL}
     }).
 
 %%--------------------------------------------------------------------
