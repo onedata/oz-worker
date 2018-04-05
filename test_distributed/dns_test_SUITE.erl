@@ -461,7 +461,9 @@ dns_resolves_txt_record(Config) ->
     FullDomain = Subdomain ++ "." ++ OZDomain,
 
     RecordContent = <<"special_letsencrypt_token">>,
+    RecordContent2 = <<"changed ttl">>,
     RecordName = <<"acme_validation">>,
+    RecordName2 = <<"custom_ttl">>,
     RecordFQDN = binary_to_list(RecordName) ++ "." ++ FullDomain,
 
     {ok, {P1, _}} = oz_test_utils:create_provider(Config, Name),
@@ -471,6 +473,11 @@ dns_resolves_txt_record(Config) ->
     ?assertMatch(ok,
         oz_test_utils:call_oz(Config,
             provider_logic, set_dns_txt_record, [#client{type = root}, P1, RecordName, RecordContent])
+    ),
+    ?assertMatch(ok,
+        oz_test_utils:call_oz(Config,
+            provider_logic, set_dns_txt_record, [#client{type = root}, P1, RecordName2,
+                RecordContent2, 10])
     ),
 
     assert_dns_answer(OZIPs, RecordFQDN, txt, [[binary_to_list(RecordContent)]]).
