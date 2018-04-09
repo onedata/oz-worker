@@ -103,7 +103,10 @@ allowed_methods(Req, #state{allowed_methods = AllowedMethods} = State) ->
     Params :: '*' | [{binary(), binary()}],
     AcceptResource :: atom().
 content_types_accepted(Req, State) ->
-    {[{<<"application/json">>, accept_resource}], Req, State}.
+    case cowboy_req:has_body(Req) of
+        true -> {[{<<"application/json">>, accept_resource}], Req, State};
+        false -> {[{'*', accept_resource}], Req, State}
+    end.
 
 
 %%--------------------------------------------------------------------
