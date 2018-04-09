@@ -289,7 +289,7 @@ send_response(#rest_resp{code = Code, headers = Headers, body = Body}, Req) ->
         {binary, Bin} ->
             Bin;
         Map ->
-            json_utils:encode_map(Map)
+            json_utils:encode(Map)
     end,
     cowboy_req:reply(Code, Headers, RespBody, Req).
 
@@ -515,7 +515,7 @@ get_data(Req) ->
     Data = try
         case Body of
             <<"">> -> #{};
-            _ -> json_utils:decode_map(Body)
+            _ -> json_utils:decode(Body)
         end
     catch _:_ ->
         throw(?ERROR_MALFORMED_DATA)

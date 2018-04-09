@@ -1590,7 +1590,7 @@ check_my_ip_test(Config) ->
             method = get,
             path = <<"/provider/public/check_my_ip">>,
             expected_code = ?HTTP_200_OK,
-            expected_body = json_utils:encode_map(ClientIP)
+            expected_body = json_utils:encode(ClientIP)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).

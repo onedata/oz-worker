@@ -448,12 +448,12 @@ run_gs_test(Config, GsSpec, Client, Data, DescFmt, Env, ExpError) ->
 % fully jsonify error and dejsonify it
 error_to_gs_expectations(Config, ErrorType) ->
     ProtoVer = hd(oz_test_utils:get_gs_supported_proto_verions(Config)),
-    ErrorJson = json_utils:encode_map(oz_test_utils:call_oz(
+    ErrorJson = json_utils:encode(oz_test_utils:call_oz(
         Config, gs_protocol_errors, error_to_json, [ProtoVer, ErrorType]
     )),
     oz_test_utils:call_oz(
         Config, gs_protocol_errors, json_to_error,
-        [ProtoVer, json_utils:decode_map(ErrorJson)]
+        [ProtoVer, json_utils:decode(ErrorJson)]
     ).
 
 

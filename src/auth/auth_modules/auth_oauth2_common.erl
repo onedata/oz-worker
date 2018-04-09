@@ -116,7 +116,7 @@ validate_login(IdP, SecretSendMethod, AccessTokenSendMethod) ->
 
         % Parse out received access token and form a user info request
         Response = json_utils:decode(ResponseBinary),
-        AccessToken = proplists:get_value(<<"access_token">>, Response),
+        AccessToken = maps:get(<<"access_token">>, Response, undefined),
 
         get_user_info(IdP, AccessTokenSendMethod, AccessToken, XRDS)
     catch
@@ -151,7 +151,7 @@ get_user_info(IdP, AccessTokenSendMethod, AccessToken) ->
 -spec get_user_info(auth_utils:idp(),
     AccessTokenSendMethod :: access_token_in_url | access_token_in_header,
     AccessToken :: binary(),
-    XRDS :: proplists:proplist()) ->
+    XRDS :: maps:map()) ->
     {ok, #linked_account{}} | {error, bad_access_token}.
 get_user_info(IdP, AccessTokenSendMethod, AccessToken, XRDS) ->
     UserInfoEndpoint = user_info_endpoint(XRDS),
@@ -176,20 +176,20 @@ get_user_info(IdP, AccessTokenSendMethod, AccessToken, XRDS) ->
     case Response of
         {ok, 200, _, Body} ->
             % Parse JSON with user info
-            JSONProplist = json_utils:decode(Body),
+            JSONMap = json_utils:decode(Body),
             UserGroups = case auth_config:has_group_mapping_enabled(IdP) of
                 false ->
                     [];
                 true ->
                     HandlerModule = auth_config:get_provider_module(IdP),
-                    HandlerModule:normalized_membership_specs(IdP, JSONProplist)
+                    HandlerModule:normalized_membership_specs(IdP, JSONMap)
             end,
             ProvUserInfo = #linked_account{
                 idp = IdP,
-                subject_id = auth_utils:get_value_binary(<<"sub">>, JSONProplist),
-                login = auth_utils:get_value_binary(<<"login">>, JSONProplist),
-                name = auth_utils:get_value_binary(<<"name">>, JSONProplist),
-                email_list = auth_utils:extract_emails(JSONProplist),
+                subject_id = auth_utils:get_value_binary(<<"sub">>, JSONMap),
+                login = auth_utils:get_value_binary(<<"login">>, JSONMap),
+                name = auth_utils:get_value_binary(<<"name">>, JSONMap),
+                email_list = auth_utils:extract_emails(JSONMap),
                 groups = UserGroups
             },
             {ok, ProvUserInfo};
@@ -209,7 +209,7 @@ get_user_info(IdP, AccessTokenSendMethod, AccessToken, XRDS) ->
 %% of openid provider (endpoints etc).
 %% @end
 %%--------------------------------------------------------------------
--spec get_xrds(IdP :: atom()) -> proplists:proplist().
+-spec get_xrds(IdP :: atom()) -> maps:map().
 get_xrds(IdP) ->
     ProviderConfig = auth_config:get_auth_config(IdP),
     XRDSEndpoint = proplists:get_value(xrds_endpoint, ProviderConfig),
@@ -223,9 +223,9 @@ get_xrds(IdP) ->
 %% Provider endpoint, where users are redirected for authorization.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_endpoint(XRDS :: proplists:proplist()) -> binary().
+-spec authorize_endpoint(XRDS :: maps:map()) -> binary().
 authorize_endpoint(XRDS) ->
-    proplists:get_value(<<"authorization_endpoint">>, XRDS).
+    maps:get(<<"authorization_endpoint">>, XRDS, undefined).
 
 
 %%--------------------------------------------------------------------
@@ -234,9 +234,9 @@ authorize_endpoint(XRDS) ->
 %% Provider endpoint, where access token is acquired.
 %% @end
 %%--------------------------------------------------------------------
--spec access_token_endpoint(XRDS :: proplists:proplist()) -> binary().
+-spec access_token_endpoint(XRDS :: maps:map()) -> binary().
 access_token_endpoint(XRDS) ->
-    proplists:get_value(<<"token_endpoint">>, XRDS).
+    maps:get(<<"token_endpoint">>, XRDS, undefined).
 
 
 %%--------------------------------------------------------------------
@@ -245,6 +245,6 @@ access_token_endpoint(XRDS) ->
 %% Provider endpoint, where user info is acquired.
 %% @end
 %%--------------------------------------------------------------------
--spec user_info_endpoint(XRDS :: proplists:proplist()) -> binary().
+-spec user_info_endpoint(XRDS :: maps:map()) -> binary().
 user_info_endpoint(XRDS) ->
-    proplists:get_value(<<"userinfo_endpoint">>, XRDS).
+    maps:get(<<"userinfo_endpoint">>, XRDS, undefined).
