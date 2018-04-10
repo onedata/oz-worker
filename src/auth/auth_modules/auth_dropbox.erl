@@ -76,8 +76,8 @@ validate_login(IdP) ->
             <<"Authorization">> => <<"Basic ", AuthEncoded/binary>>
         }, Params),
 
-        JSONProplist = json_utils:decode(Response),
-        AccessToken = proplists:get_value(<<"access_token">>, JSONProplist),
+        JSONMap = json_utils:decode(Response),
+        AccessToken = maps:get(<<"access_token">>, JSONMap),
 
         get_user_info(IdP, AccessToken)
     catch
@@ -101,13 +101,13 @@ get_user_info(IdP, AccessToken) ->
     }, <<"">>),
 
     % Parse received JSON
-    UserInfoProplist = json_utils:decode(JSON),
+    UserInfoMap = json_utils:decode(JSON),
     ProvUserInfo = #linked_account{
         idp = IdP,
-        subject_id = auth_utils:get_value_binary(<<"uid">>, UserInfoProplist),
-        email_list = auth_utils:extract_emails(UserInfoProplist),
-        name = auth_utils:get_value_binary(<<"display_name">>, UserInfoProplist),
-        login = auth_utils:get_value_binary(<<"login">>, UserInfoProplist),
+        subject_id = auth_utils:get_value_binary(<<"uid">>, UserInfoMap),
+        email_list = auth_utils:extract_emails(UserInfoMap),
+        name = auth_utils:get_value_binary(<<"display_name">>, UserInfoMap),
+        login = auth_utils:get_value_binary(<<"login">>, UserInfoMap),
         groups = []
     },
     {ok, ProvUserInfo}.

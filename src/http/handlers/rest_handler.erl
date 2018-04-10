@@ -103,7 +103,10 @@ allowed_methods(Req, #state{allowed_methods = AllowedMethods} = State) ->
     Params :: '*' | [{binary(), binary()}],
     AcceptResource :: atom().
 content_types_accepted(Req, State) ->
-    {[{<<"application/json">>, accept_resource}], Req, State}.
+    case cowboy_req:has_body(Req) of
+        true -> {[{<<"application/json">>, accept_resource}], Req, State};
+        false -> {[{'*', accept_resource}], Req, State}
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -289,7 +292,7 @@ send_response(#rest_resp{code = Code, headers = Headers, body = Body}, Req) ->
         {binary, Bin} ->
             Bin;
         Map ->
-            json_utils:encode_map(Map)
+            json_utils:encode(Map)
     end,
     cowboy_req:reply(Code, Headers, RespBody, Req).
 
@@ -515,7 +518,7 @@ get_data(Req) ->
     Data = try
         case Body of
             <<"">> -> #{};
-            _ -> json_utils:decode_map(Body)
+            _ -> json_utils:decode(Body)
         end
     catch _:_ ->
         throw(?ERROR_MALFORMED_DATA)

@@ -1450,7 +1450,7 @@ change_user_password(Login, OldPassword, NewPassword) ->
         <<"content-type">> => <<"application/json">>
     },
     URL = get_onepanel_rest_user_url(Login),
-    Body = json_utils:encode_map(#{
+    Body = json_utils:encode(#{
         <<"currentPassword">> => OldPassword,
         <<"newPassword">> => NewPassword
     }),
@@ -1463,8 +1463,8 @@ change_user_password(Login, OldPassword, NewPassword) ->
             {error, <<"Invalid password">>};
         {ok, _, _, ErrorJSON} when size(ErrorJSON) > 0 ->
             try
-                ErrorProps = json_utils:decode(ErrorJSON),
-                Message = proplists:get_value(<<"description">>, ErrorProps,
+                ErrorMap = json_utils:decode(ErrorJSON),
+                Message = maps:get(<<"description">>, ErrorMap,
                     <<"Cannot change password">>),
                 {error, Message}
             catch _:_ ->
@@ -1543,15 +1543,15 @@ fetch_user_info(Login, Password) ->
     URL = get_onepanel_rest_user_url(Login),
     case http_client:get(URL, Headers, <<"">>, ?ONEPANEL_CONNECT_OPTS) of
         {ok, 200, _, JSON} ->
-            UserInfo = json_utils:decode_map(JSON),
+            UserInfo = json_utils:decode(JSON),
             basic_auth_cache:save(Login, Password, UserInfo),
             UserInfo;
         {ok, 401, _, _} ->
             {error, <<"Invalid login or password">>};
         {ok, _, _, ErrorJSON} when size(ErrorJSON) > 0 ->
             try
-                ErrorProps = json_utils:decode(ErrorJSON),
-                Message = proplists:get_value(<<"description">>, ErrorProps,
+                ErrorMap = json_utils:decode(ErrorJSON),
+                Message = maps:get(<<"description">>, ErrorMap,
                 <<"Invalid login or password">>),
                 {error, Message}
             catch _:_ ->

@@ -100,7 +100,7 @@ check_rest_call(Config, ArgsMap) ->
             Bin3 when is_binary(Bin3) ->
                 Bin3;
             Map3 when is_map(Map3) ->
-                json_utils:encode_map(Map3)
+                json_utils:encode(Map3)
         end,
         ReqOpts = maps:get(opts, RequestMap, []),
         ReqURL = maps:get(url, RequestMap, get_oz_url(Config)),
@@ -238,7 +238,7 @@ check_rest_call(Config, ArgsMap) ->
             undefined ->
                 ok;
             Fun2 when is_function(Fun2, 1) ->
-                ActualBodyMap = json_utils:decode_map(RespBody),
+                ActualBodyMap = json_utils:decode(RespBody),
                 Result2 = try
                     Fun2(ActualBodyMap)
                 catch
@@ -277,7 +277,7 @@ check_rest_call(Config, ArgsMap) ->
                         }})
                 end;
             Map4 when is_map(Map4) ->
-                ActualBodyMap = json_utils:decode_map(RespBody),
+                ActualBodyMap = json_utils:decode(RespBody),
                 case compare_maps(ActualBodyMap, ExpBody) of
                     true ->
                         ok;
@@ -287,7 +287,7 @@ check_rest_call(Config, ArgsMap) ->
                         }})
                 end;
             {contains, ExpContainsMap} when is_map(ExpContainsMap) ->
-                ActualBodyMap = json_utils:decode_map(RespBody),
+                ActualBodyMap = json_utils:decode(RespBody),
                 case contains_map(ActualBodyMap, ExpContainsMap) of
                     true ->
                         ok;
@@ -318,7 +318,7 @@ check_rest_call(Config, ArgsMap) ->
         % Something wrong, return details. If assert is used, the test will fail
         % and properly display the point of failure.
         throw:{Type, Actual, Expected, {Code, Headers, Body}} ->
-            BodyMap = try json_utils:decode_map(Body) catch _:_ -> Body end,
+            BodyMap = try json_utils:decode(Body) catch _:_ -> Body end,
             {
                 Type,
                 {got, Actual},

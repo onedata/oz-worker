@@ -219,7 +219,8 @@ broadcast_dns_config() ->
             case Node == node() of
                 true -> ok = dns_config:insert_config(DnsConfig);
                 false -> ok = gen_server2:call({?NODE_MANAGER_NAME, Node},
-                                               {update_dns_config, DnsConfig})
+                                               {update_dns_config, DnsConfig},
+                                               timer:seconds(30))
             end
         end, Nodes),
         ok

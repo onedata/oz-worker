@@ -108,7 +108,7 @@ translate(?ERROR_MISSING_REQUIRED_VALUE(Key)) ->
         {<<"Missing required value: ~s">>, [Key]}
     };
 translate(?ERROR_MISSING_AT_LEAST_ONE_VALUE(Keys)) ->
-    KeysList = str_utils:join_binary(maps:keys(Keys), <<", ">>),
+    KeysList = str_utils:join_binary(Keys, <<", ">>),
     {?HTTP_400_BAD_REQUEST,
         {<<"Missing data, you must provide at least one of: ">>, [KeysList]}
     };

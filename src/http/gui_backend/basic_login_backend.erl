@@ -60,7 +60,7 @@ page_init() ->
                         ProviderURL
                 end,
                 JSONHeader = #{<<"content-type">> => <<"application/json">>},
-                Body = json_utils:encode_map(#{<<"url">> => URL}),
+                Body = json_utils:encode(#{<<"url">> => URL}),
                 {reply, 200, JSONHeader, Body};
             {error, Binary} when is_binary(Binary) ->
                 {reply, 401, #{}, Binary};
