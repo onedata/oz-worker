@@ -6,6 +6,8 @@ CHANGELOG
 
 ### 18.02.0-beta5
 
+* VFS-3130 Allowed empty body in rest requests
+* VFS-3703 Switched from mochiweb json parsing to jiffy
 * VFS-4272 Check forward compatibility during OP connections to OZ
 * VFS-4267 Updated package dependencies for cberl
 * VFS-4296 Fixed meck entry
