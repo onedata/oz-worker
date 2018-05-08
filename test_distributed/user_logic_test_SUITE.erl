@@ -522,7 +522,7 @@ init_per_suite(Config) ->
     hackney:start(),
     Posthook = fun(NewConfig) ->
         Nodes = ?config(oz_worker_nodes, NewConfig),
-        set_env_on_nodes(Nodes, web_client, force_insecure_connections, true),
+        set_env_on_nodes(Nodes, ctool, force_insecure_connections, true),
         NewConfig
     end,
     [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]} | Config].
