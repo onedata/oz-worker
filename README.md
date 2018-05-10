@@ -16,9 +16,11 @@ The main objective of *oz-worker* is to provide logic for coordinating the *Onep
 * docker client > 1.10
 * python >= 2.7
 
+
 ## Building
-To build *oz-worker* use the provided build script:
+To build *oz-worker* make sure submodules are initialized and use the provided build script:
 ```
+make submodules
 ./make.py
 ```
 
