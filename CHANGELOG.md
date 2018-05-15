@@ -4,6 +4,17 @@
 CHANGELOG
 ---------
 
+### 18.02.0-rc2
+
+* VFS-4446 Enabled git archive submodules
+* VFS-4446 Updated jiffy ref
+* VFS-4446 Updated dockers.config
+* VFS-4446 Updated jiffy ref
+* VFS-4295 Changed subtrees to submodules
+* Update cluster_worker to enable links listing with neg offset
+* VFS-4408 Removed web_client references
+
+
 ### 18.02.0-rc1
 
 * VFS-2021 Added dockers.config
