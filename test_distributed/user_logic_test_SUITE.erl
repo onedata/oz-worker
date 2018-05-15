@@ -106,7 +106,7 @@ basic_auth_cache_test(Config) ->
 % Check if basic auth login endpoint works.
 basic_auth_login_test(Config) ->
     % To resolve user details, OZ asks onepanel via a REST endpoint. In this
-    % test, onepanel is mocked http_client.
+    % test, onepanel is simulated by mocking http_client.
     Nodes = ?config(oz_worker_nodes, Config),
     {ok, Domain} = test_utils:get_env(hd(Nodes), ?APP_NAME, http_domain),
     % now just try to log in into OZ using basic auth endpoint and
@@ -196,11 +196,11 @@ change_password_test(Config) ->
     % Appmock's app description contains change password endpoint that
     % accepts (user3:password3) credentials for user with id userId3
     % Try to change password of userId3. First, use wrong password.
-%    ?assertEqual({error, <<"Invalid password">>}, rpc:call(
-%        Node, user_logic, change_user_password, [
-%            <<"user3">>, <<"bad_password">>, <<"new_password">>
-%        ]
-%    )),
+    ?assertEqual({error, <<"Invalid password">>}, rpc:call(
+        Node, user_logic, change_user_password, [
+            <<"user3">>, <<"bad_password">>, <<"new_password">>
+        ]
+    )),
     % Now with correct credentials
     ?assertEqual(ok, rpc:call(
         Node, user_logic, change_user_password, [
@@ -525,17 +525,10 @@ init_per_testcase(merge_groups_in_linked_accounts_test, Config) ->
             end
         end),
     Config;
-init_per_testcase(basic_auth_cache_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, http_client, [passthrough]),
-    ok = mock_onepanel_rest_get(Nodes),
-    Config;
-init_per_testcase(basic_auth_login_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, http_client, [passthrough]),
-    ok = mock_onepanel_rest_get(Nodes),
-    Config;
-init_per_testcase(automatic_group_membership_test, Config) ->
+init_per_testcase(Case, Config) when 
+Case =:= basic_auth_cache_test;
+Case =:= basic_auth_login_test;
+Case =:= automatic_group_membership_test ->
     Nodes = ?config(oz_worker_nodes, Config),
     ok = test_utils:mock_new(Nodes, http_client, [passthrough]),
     ok = mock_onepanel_rest_get(Nodes),
@@ -553,16 +546,11 @@ end_per_testcase(merge_groups_in_linked_accounts_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     % Used in merge_groups_in_linked_accounts_test
     test_utils:mock_unload(Nodes, auth_utils);
-end_per_testcase(basic_auth_cache_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, http_client);
-end_per_testcase(basic_auth_login_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, http_client);
-end_per_testcase(automatic_group_membership_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, http_client);
-end_per_testcase(change_password_test, Config) ->
+end_per_testcase(Case, Config) when
+Case =:= basic_auth_cache_test;
+Case =:= basic_auth_login_test;
+Case =:= change_password_test;
+Case =:= automatic_group_membership_test ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_unload(Nodes, http_client);
 end_per_testcase(_, _) ->
@@ -580,8 +568,9 @@ end_per_suite(_Config) ->
 mock_onepanel_rest_get(Nodes) ->
     ok = test_utils:mock_expect(Nodes, http_client, get,
         fun(Url, Headers, Body, Options) ->
-            case is_tuple(binary:match(Url, <<"9443/api/v3/onepanel/users">>)) of
-                true ->
+            case binary:match(Url, <<"9443/api/v3/onepanel/users">>) of
+                nomatch -> meck:passthrough([Url, Headers, Body, Options]);
+                _ ->
                     <<"Basic ", UserAndPassword/binary>> = 
                         maps:get(<<"Authorization">>, Headers),
                     [User, Passwd] =
@@ -600,8 +589,7 @@ mock_onepanel_rest_get(Nodes) ->
                             }),
                             {ok, 200, #{}, ResponseBody};
                         _ -> {ok, 401, #{}, <<"">>}
-                    end;
-                _ -> meck:passthrough([Url, Headers, Body, Options])
+                    end
             end
         end),
     ok.
@@ -609,8 +597,9 @@ mock_onepanel_rest_get(Nodes) ->
 mock_onepanel_rest_patch(Nodes) ->
     ok = test_utils:mock_expect(Nodes, http_client, patch,
         fun(Url, Headers, Body, Options) ->
-            case is_tuple(binary:match(Url, <<"9443/api/v3/onepanel/users">>)) of
-                true ->
+            case binary:match(Url, <<"9443/api/v3/onepanel/users">>) of
+                nomatch -> meck:passthrough([Url, Headers, Body, Options]);
+                _ ->
                     <<"Basic ", UserAndPassword/binary>> = 
                         maps:get(<<"Authorization">>, Headers),
                     [User, Passwd] =
@@ -631,8 +620,7 @@ mock_onepanel_rest_patch(Nodes) ->
                                     {ok, 204, #{}, <<"">>}
                             end;
                         _ -> {ok, 401, #{}, <<"">>}
-                    end;
-                _ -> meck:passthrough([Url, Headers, Body, Options])
+                    end
             end
         end),
     ok.
