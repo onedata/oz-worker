@@ -83,6 +83,7 @@ test_rel: generate_dev cm_rel appmock_rel
 
 cm_rel:
 	mkdir -p cluster_manager/bamboos/gen_dev
+	make -C $(LIB_DIR)/cluster_manager/ submodules
 	cp -rf $(LIB_DIR)/cluster_manager/bamboos/gen_dev cluster_manager/bamboos
 	printf "\n{base_dir, \"$(BASE_DIR)/cluster_manager/_build\"}." >> $(LIB_DIR)/cluster_manager/rebar.config
 	make -C $(LIB_DIR)/cluster_manager/ rel
