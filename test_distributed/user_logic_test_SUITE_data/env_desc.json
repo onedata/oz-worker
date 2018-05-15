@@ -64,16 +64,5 @@
                 }
             }
         }
-    },
-    "appmock_domains": {
-        "onepanel": {
-            "appmock": {
-                "node1": {
-                    "sys.config": {
-                        "app_description_file": "./onepanel_mock_description.erl.cfg"
-                    }
-                }
-            }
-        }
     }
 }
