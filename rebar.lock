@@ -104,7 +104,7 @@
  {<<"jiffy">>,
   {git,"https://github.com/bkryza/jiffy.git",
        {ref,"a449ec1ecd7b5ea95e675b5bafdfa9a2a3fdface"}},
-  1},
+  0},
  {<<"jsx">>,
   {git,"git://github.com/talentdeficit/jsx.git",
        {ref,"45ffea21a6863c58fb7da1f937e868916ff68b27"}},
