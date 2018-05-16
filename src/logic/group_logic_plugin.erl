@@ -630,7 +630,7 @@ authorize(_, _) ->
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
-        <<"name">> => {binary, non_empty}
+        <<"name">> => {binary, name}
     },
     optional => #{
         <<"type">> => {atom, [organization, unit, team, role]}
@@ -680,7 +680,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = {child, _}}}) -> #{
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
-        <<"name">> => {binary, non_empty},
+        <<"name">> => {binary, name},
         <<"type">> => {atom, [organization, unit, team, role]}
     }
 };

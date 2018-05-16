@@ -162,11 +162,10 @@ create_group_test(Config) ->
                 <<"type">> => ?GROUP_TYPES
             },
             bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
                 {<<"type">>, kingdom,
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
                 {<<"type">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"type">>)}
+                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]
         }
     },

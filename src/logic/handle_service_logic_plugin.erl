@@ -386,7 +386,7 @@ authorize(_, _) ->
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
-        <<"name">> => {binary, non_empty},
+        <<"name">> => {binary, name},
         <<"proxyEndpoint">> => {binary, non_empty},
         <<"serviceProperties">> => {json, non_empty}
     }
@@ -416,7 +416,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) -> #{
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
-        <<"name">> => {binary, non_empty},
+        <<"name">> => {binary, name},
         <<"proxyEndpoint">> => {binary, non_empty},
         <<"serviceProperties">> => {json, non_empty}
     }

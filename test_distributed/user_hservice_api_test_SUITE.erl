@@ -176,14 +176,13 @@ create_handle_service_test(Config) ->
                 <<"serviceProperties">> => [ExpProperties]
             },
             bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
                 {<<"proxyEndpoint">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"proxyEndpoint">>)},
                 {<<"serviceProperties">>, 1234,
                     ?ERROR_BAD_VALUE_JSON(<<"serviceProperties">>)},
                 {<<"serviceProperties">>, #{},
                     ?ERROR_BAD_VALUE_EMPTY(<<"serviceProperties">>)}
+                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]
         }
     },

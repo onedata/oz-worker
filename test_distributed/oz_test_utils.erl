@@ -1880,7 +1880,7 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
 %%--------------------------------------------------------------------
 -spec create_3_nested_groups(Config :: term(), TestUser :: od_user:id()) -> ok.
 create_3_nested_groups(Config, TestUser) ->
-    create_3_nested_groups(Config, TestUser, <<"gr">>, <<"gr">>, <<"gr">>).
+    create_3_nested_groups(Config, TestUser, <<"group">>, <<"group">>, <<"group">>).
 
 
 %%--------------------------------------------------------------------

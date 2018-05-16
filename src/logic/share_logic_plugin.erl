@@ -223,7 +223,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"shareId">> => {binary, {not_exists, fun(Value) ->
             not share_logic:exists(Value)
         end}},
-        <<"name">> => {binary, non_empty},
+        <<"name">> => {binary, name},
         <<"rootFileId">> => {binary, non_empty},
         <<"spaceId">> => {binary, {exists, fun(Value) ->
             space_logic:exists(Value)
@@ -233,7 +233,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     required => #{
-        <<"name">> => {binary, non_empty}
+        <<"name">> => {binary, name}
     }
 }.
 

@@ -64,7 +64,8 @@ fun((term()) -> boolean()) |
 token_logic:token_type() | % Compatible only with 'token' type validator
 subdomain | domain |
 email |
-login.
+login |
+name | user_name.
 
 % The 'aspect' key word allows to validate the data provided in aspect
 % identifier.
@@ -826,6 +827,16 @@ check_value(login, login, _Key, Value) ->
     case re:run(Value, ?LOGIN_VALIDATION_REGEXP, [{capture, none}]) of
         match -> ok;
         _ -> throw(?ERROR_BAD_VALUE_LOGIN)
+    end;
+check_value(binary, name, _Key, Value) ->
+    case re:run(Value, ?NAME_VALIDATION_REGEXP, [{capture, none}, unicode, ucp]) of
+        match -> ok;
+        _ -> throw(?ERROR_BAD_VALUE_NAME)
+    end;
+check_value(binary, user_name,_Key, Value) ->
+    case re:run(Value, ?USER_NAME_VALIDATION_REGEXP, [{capture, none}, unicode, ucp]) of
+        match -> ok;
+        _ -> throw(?ERROR_BAD_VALUE_USER_NAME)
     end;
 check_value(TypeRule, ValueRule, Key, _) ->
     ?error("Unknown {type, value} rule: {~p, ~p} for key: ~p", [

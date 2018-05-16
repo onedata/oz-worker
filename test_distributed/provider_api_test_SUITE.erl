@@ -110,7 +110,7 @@ all() ->
 %%%===================================================================
 
 create_test(Config) ->
-    ExpName = ?PROVIDER_NAME1,
+    ExpName = ?CORRECT_NAME,
 
     {ok, OZDomainString} = oz_test_utils:get_oz_domain(Config),
     OZDomain = list_to_binary(OZDomainString),
@@ -206,8 +206,6 @@ create_test(Config) ->
                 <<"longitude">> => [rand:uniform() * 180]
             },
             bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
                 {<<"domain">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"domain">>)},
                 {<<"domain">>, <<"https://domain.com">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
                 {<<"domain">>, <<"domain.com:443">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
@@ -227,6 +225,7 @@ create_test(Config) ->
                 {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
                 {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
                 {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)}
+                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]
         }
     },
@@ -490,12 +489,12 @@ list_test(Config) ->
 
     % Register some providers
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-        Config, <<"P1">>
+        Config, <<"PROV1">>
     ),
-    {ok, {P2, _}} = oz_test_utils:create_provider(Config, <<"P2">>),
-    {ok, {P3, _}} = oz_test_utils:create_provider(Config, <<"P3">>),
-    {ok, {P4, _}} = oz_test_utils:create_provider(Config, <<"P4">>),
-    {ok, {P5, _}} = oz_test_utils:create_provider(Config, <<"P5">>),
+    {ok, {P2, _}} = oz_test_utils:create_provider(Config, <<"PROV2">>),
+    {ok, {P3, _}} = oz_test_utils:create_provider(Config, <<"PROV3">>),
+    {ok, {P4, _}} = oz_test_utils:create_provider(Config, <<"PROV4">>),
+    {ok, {P5, _}} = oz_test_utils:create_provider(Config, <<"PROV5">>),
     ExpProviders = [P1, P2, P3, P4, P5],
 
     % Create two users, grant one of them the privilege to list providers.
@@ -598,14 +597,12 @@ update_test(Config) ->
         data_spec = DataSpec = #data_spec{
             at_least_one = [<<"name">>, <<"adminEmail">>, <<"latitude">>, <<"longitude">>],
             correct_values = #{
-                <<"name">> => [?PROVIDER_NAME2],
+                <<"name">> => [?CORRECT_NAME],
                 <<"adminEmail">> => [<<"new+email@gmail.com">>],
                 <<"latitude">> => [rand:uniform() * 90],
                 <<"longitude">> => [rand:uniform() * 180]
             },
             bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
                 {<<"adminEmail">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"adminEmail">>)},
                 {<<"adminEmail">>, <<"nodomain">>, ?ERROR_BAD_VALUE_EMAIL},
                 {<<"latitude">>, <<"ASDASD">>, ?ERROR_BAD_VALUE_FLOAT(<<"latitude">>)},
@@ -618,6 +615,7 @@ update_test(Config) ->
                 {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
                 {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
                 {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)}
+                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]
         }
     },

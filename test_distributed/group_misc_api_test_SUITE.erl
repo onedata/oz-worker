@@ -73,7 +73,7 @@ create_test(Config) ->
 
     VerifyFun = fun(GroupId, ExpType) ->
         {ok, Group} = oz_test_utils:get_group(Config, GroupId),
-        ?assertEqual(?GROUP_NAME1, Group#od_group.name),
+        ?assertEqual(?CORRECT_NAME, Group#od_group.name),
         ?assertEqual(ExpType, Group#od_group.type),
         true
     end,
@@ -113,15 +113,14 @@ create_test(Config) ->
             required = [<<"name">>],
             optional = [<<"type">>],
             correct_values = #{
-                <<"name">> => [?GROUP_NAME1],
+                <<"name">> => [?CORRECT_NAME],
                 <<"type">> => ?GROUP_TYPES
             },
             bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
                 {<<"type">>, kingdom,
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
                 {<<"type">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"type">>)}
+                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]
         }
     },
@@ -143,7 +142,7 @@ create_test(Config) ->
             expected_result = ?OK_ENV(fun(_, DataSet) ->
                 ExpType = maps:get(<<"type">>, DataSet, role),
                 ?OK_MAP_CONTAINS(#{
-                    <<"name">> => ?GROUP_NAME1,
+                    <<"name">> => ?CORRECT_NAME,
                     <<"type">> => atom_to_binary(ExpType, utf8),
                     <<"gri">> => fun(EncodedGri) ->
                         #gri{id = Id} = oz_test_utils:decode_gri(
@@ -436,15 +435,14 @@ update_test(Config) ->
         data_spec = #data_spec{
             at_least_one = [<<"name">>, <<"type">>],
             correct_values = #{
-                <<"name">> => [fun() -> ?UNIQUE_STRING end],
+                <<"name">> => [?CORRECT_NAME],
                 <<"type">> => [?GROUP_TYPE2]
             },
             bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
                 {<<"type">>, kingdom,
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"type">>, ?GROUP_TYPES)},
                 {<<"type">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"type">>)}
+                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]
         }
     },
