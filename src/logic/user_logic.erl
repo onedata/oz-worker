@@ -1271,13 +1271,12 @@ onepanel_uid_to_system_uid(OnepanelUserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_user_by_linked_account(#linked_account{}) ->
-    {ok, UserId :: od_user:id()} | {error, not_found}.
+    {ok, od_user:doc()} | {error, not_found}.
 create_user_by_linked_account(LinkedAccount) ->
     #linked_account{idp = IdPName, subject_id = IdPUserId} = LinkedAccount,
     UserId = idp_uid_to_system_uid(IdPName, IdPUserId),
     {ok, UserId} = create(#od_user{}, UserId),
-    merge_linked_account(UserId, LinkedAccount),
-    {ok, UserId}.
+    merge_linked_account(UserId, LinkedAccount).
 
 
 %%--------------------------------------------------------------------
@@ -1287,7 +1286,7 @@ create_user_by_linked_account(LinkedAccount) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec merge_linked_account(UserId :: od_user:id(),
-    LinkedAccount :: #linked_account{}) -> ok.
+    LinkedAccount :: #linked_account{}) -> {ok, od_user:doc()}.
 merge_linked_account(UserId, LinkedAccount) ->
     % The update cannot be done in one transaction, because linked account
     % merging causes adding/removing the user from groups, which modifies user
@@ -1308,7 +1307,7 @@ merge_linked_account(UserId, LinkedAccount) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec merge_linked_account_unsafe(UserId :: od_user:id(),
-    LinkedAccount :: #linked_account{}) -> ok.
+    LinkedAccount :: #linked_account{}) -> {ok, od_user:doc()}.
 merge_linked_account_unsafe(UserId, LinkedAccount) ->
     {ok, #document{value = #od_user{
         name = Name, email_list = Emails, linked_accounts = LinkedAccounts
@@ -1335,14 +1334,13 @@ merge_linked_account_unsafe(UserId, LinkedAccount) ->
     % Coalesce user groups
     idp_group_mapping:coalesce_groups(IdP, UserId, OldGroups, NewGroups),
     % Return updated user info
-    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
+    od_user:update(UserId, fun(User = #od_user{}) ->
         {ok, User#od_user{
             name = NewName,
             email_list = NewEmails,
             linked_accounts = NewLinkedAccs
         }}
-    end),
-    ok.
+    end).
 
 
 %%--------------------------------------------------------------------
