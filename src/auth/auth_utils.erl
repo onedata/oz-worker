@@ -437,11 +437,9 @@ validate_login_by_linked_account(LinkedAccount, StateInfo) ->
             % Standard login, check if there is an account belonging to the user
             case acquire_user_by_linked_account(LinkedAccount) of
                 {exists, #document{key = UserId}} ->
-                    user_logic:merge_linked_account(UserId, LinkedAccount),
                     gui_session:log_in(UserId),
                     {redirect, RedirectAfterLogin};
                 {created, #document{key = UserId}} ->
-                    user_logic:merge_linked_account(UserId, LinkedAccount),
                     gui_session:log_in(UserId),
                     gui_session:put_value(firstLogin, true),
                     new_user
@@ -455,11 +453,12 @@ validate_login_by_linked_account(LinkedAccount, StateInfo) ->
                     % The account is used on some other profile, cannot proceed
                     {error, ?error_auth_account_already_linked_to_another_user};
                 {ok, #document{key = UserId}} ->
-                    % The account is used on some other profile, cannot proceed
+                    % The account is already linked to this user, report error
                     {error, ?error_auth_account_already_linked_to_current_user};
-                _ ->
-                    % Not found = ok, get the user and add new provider info
+                {error, not_found} ->
+                    % Not found -> ok, add new linked account to the user
                     user_logic:merge_linked_account(UserId, LinkedAccount),
+                    entity_graph:ensure_up_to_date(),
                     {redirect, <<?PAGE_AFTER_LOGIN, "?expand_accounts=true">>}
             end
     end.
@@ -533,9 +532,11 @@ saml_assertions_to_linked_account(IdPId, IdP, Attributes) ->
 %%--------------------------------------------------------------------
 -spec get_user_by_linked_account(#linked_account{}) -> {ok, #document{}} | {error, not_found}.
 get_user_by_linked_account(LinkedAccount) ->
-    #linked_account{idp = IdentityProvider, subject_id = UserId} = LinkedAccount,
-    case od_user:get_by_criterion({linked_account, {IdentityProvider, UserId}}) of
-        {ok, #document{} = Doc} ->
+    #linked_account{idp = IdP, subject_id = SubjectId} = LinkedAccount,
+    case od_user:get_by_criterion({linked_account, {IdP, SubjectId}}) of
+        {ok, #document{key = UserId}} ->
+            {ok, Doc} = user_logic:merge_linked_account(UserId, LinkedAccount),
+            entity_graph:ensure_up_to_date(),
             {ok, Doc};
         {error, Reason} ->
             {error, Reason}
@@ -558,9 +559,8 @@ acquire_user_by_linked_account(LinkedAccount) ->
         {ok, #document{} = Doc} ->
             {exists, Doc};
         {error, not_found} ->
-            {ok, UserId} = user_logic:create_user_by_linked_account(LinkedAccount),
+            {ok, Doc} = user_logic:create_user_by_linked_account(LinkedAccount),
             entity_graph:ensure_up_to_date(),
-            {ok, Doc} = od_user:get(UserId),
             {created, Doc}
     end.
 
