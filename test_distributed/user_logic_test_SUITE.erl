@@ -222,7 +222,7 @@ merge_groups_in_linked_accounts_test(Config) ->
     % Super groups are mocked in init per testcase
     % Start with linked acc with no groups
     FirstLinkedAcc = #linked_account{idp = ?IDP, groups = []},
-    {ok, UserId} = oz_test_utils:call_oz(
+    {ok, #document{key = UserId}} = oz_test_utils:call_oz(
         Config, user_logic, create_user_by_linked_account, [FirstLinkedAcc]
     ),
     ?assert(has_linked_accounts(Config, UserId, [FirstLinkedAcc])),
@@ -510,6 +510,10 @@ init_per_suite(Config) ->
     Posthook = fun(NewConfig) ->
         Nodes = ?config(oz_worker_nodes, NewConfig),
         set_env_on_nodes(Nodes, ctool, force_insecure_connections, true),
+        % Sleep a while before mocking http_client (which is done in
+        % init_per_testcase) - otherwise meck's reloading and purging the module
+        % can cause the oz-worker application to crash.
+        timer:sleep(5000),
         NewConfig
     end,
     [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]} | Config].
