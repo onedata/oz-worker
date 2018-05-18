@@ -568,7 +568,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance},
     ),
 
     AlwaysRequired = #{
-        <<"name">> => {binary, non_empty},
+        <<"name">> => {binary, name},
         <<"subdomainDelegation">> => {boolean, any},
         <<"adminEmail">> => {binary, email}
     },
@@ -698,7 +698,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = verify_provider_identit
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
-        <<"name">> => {binary, non_empty},
+        <<"name">> => {binary, name},
         <<"adminEmail">> => {binary, email},
         <<"latitude">> => {float, {between, -90, 90}},
         <<"longitude">> => {float, {between, -180, 180}}

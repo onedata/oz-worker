@@ -491,12 +491,10 @@ update_test(Config) ->
         data_spec = #data_spec{
             at_least_one = [<<"name">>, <<"login">>],
             correct_values = #{
-                <<"name">> => [fun() -> ?UNIQUE_STRING end],
+                <<"name">> => [?CORRECT_USER_NAME],
                 <<"login">> => [fun() -> ?UNIQUE_STRING end, OwnedLogin, null]
             },
             bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
                 {<<"login">>, <<"">>, ?ERROR_BAD_VALUE_LOGIN},
                 {<<"login">>, <<"_asd">>, ?ERROR_BAD_VALUE_LOGIN},
                 {<<"login">>, <<"-asd">>, ?ERROR_BAD_VALUE_LOGIN},
@@ -504,7 +502,11 @@ update_test(Config) ->
                 {<<"login">>, <<"verylongloginwithatleast15chars">>, ?ERROR_BAD_VALUE_LOGIN},
                 {<<"login">>, 1234, ?ERROR_BAD_VALUE_LOGIN},
                 {<<"login">>, UsedLogin,
-                    ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"login">>)}
+                    ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"login">>)},
+                {<<"name">>, <<"a_d">>, ?ERROR_BAD_VALUE_USER_NAME},
+                {<<"name">>, <<"_ad">>, ?ERROR_BAD_VALUE_USER_NAME},
+                {<<"name">>, <<"ad_">>, ?ERROR_BAD_VALUE_USER_NAME}
+                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_USER_NAME)
             ]
         }
     },

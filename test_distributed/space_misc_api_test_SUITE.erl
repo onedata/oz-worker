@@ -75,7 +75,7 @@ create_test(Config) ->
 
     VerifyFun = fun(SpaceId) ->
         {ok, Space} = oz_test_utils:get_space(Config, SpaceId),
-        ?assertEqual(?SPACE_NAME1, Space#od_space.name),
+        ?assertEqual(?CORRECT_NAME, Space#od_space.name),
         true
     end,
 
@@ -105,11 +105,8 @@ create_test(Config) ->
         },
         data_spec = #data_spec{
             required = [<<"name">>],
-            correct_values = #{<<"name">> => [?SPACE_NAME1]},
-            bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)}
-            ]
+            correct_values = #{<<"name">> => [?CORRECT_NAME]},
+            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -128,7 +125,7 @@ create_test(Config) ->
             gri = #gri{type = od_space, aspect = instance},
             auth_hint = ?AS_USER(U1),
             expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?SPACE_NAME1,
+                <<"name">> => ?CORRECT_NAME,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -358,7 +355,7 @@ update_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     EnvSetUpFun = fun() ->
-        {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+        {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?CORRECT_NAME),
         oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
             ?SPACE_UPDATE
         ]),
@@ -371,8 +368,8 @@ update_test(Config) ->
     VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, Data) ->
         {ok, Space} = oz_test_utils:get_space(Config, SpaceId),
         ExpName = case ShouldSucceed of
-            false -> ?SPACE_NAME1;
-            true -> maps:get(<<"name">>, Data, ?SPACE_NAME1)
+            false -> ?CORRECT_NAME;
+            true -> maps:get(<<"name">>, Data, ?CORRECT_NAME)
         end,
         ?assertEqual(ExpName, Space#od_space.name)
     end,
@@ -408,12 +405,9 @@ update_test(Config) ->
         data_spec = #data_spec{
             at_least_one = [<<"name">>],
             correct_values = #{
-                <<"name">> => [fun() -> ?UNIQUE_STRING end]
+                <<"name">> => [?CORRECT_NAME]
             },
-            bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)}
-            ]
+            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
         }
     },
     ?assert(api_test_utils:run_tests(

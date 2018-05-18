@@ -531,7 +531,7 @@ validate(#el_req{operation = create, gri = #gri{id = UserId, aspect = default_pr
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
-        <<"name">> => {binary, non_empty},
+        <<"name">> => {binary, user_name},
         <<"login">> => {login, login}
     }
 };

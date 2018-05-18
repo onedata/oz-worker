@@ -134,7 +134,7 @@ create_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     ExpShareDetails = #od_share{
-        name = ?SHARE_NAME1, space = S1, root_file = ?ROOT_FILE_ID
+        name = ?CORRECT_NAME, space = S1, root_file = ?ROOT_FILE_ID
     },
     VerifyFun = fun(ShareId) ->
         {ok, Share} = oz_test_utils:get_share(Config, ShareId),
@@ -146,8 +146,6 @@ create_test(Config) ->
     BadDataValues = [
         {<<"shareId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"shareId">>)},
         {<<"shareId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"shareId">>)},
-        {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
-        {<<"name">>, 1233, ?ERROR_BAD_VALUE_BINARY(<<"name">>)},
         {<<"rootFileId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"rootFileId">>)},
         {<<"rootFileId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"rootFileId">>)}
     ],
@@ -184,7 +182,7 @@ create_test(Config) ->
             gri = #gri{type = od_share, aspect = instance},
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"handleId">> => null,
-                <<"name">> => ?SHARE_NAME1,
+                <<"name">> => ?CORRECT_NAME,
                 <<"rootFileId">> => ?ROOT_FILE_ID,
                 <<"spaceId">> => S1,
                 <<"gri">> => fun(EncodedGri) ->
@@ -201,15 +199,15 @@ create_test(Config) ->
             ],
             correct_values = #{
                 <<"shareId">> => [fun() -> ?UNIQUE_STRING end],
-                <<"name">> => [?SHARE_NAME1],
+                <<"name">> => [?CORRECT_NAME],
                 <<"rootFileId">> => [?ROOT_FILE_ID],
                 <<"spaceId">> => [S1]
             },
-            bad_values = [
-                {<<"spaceId">>, <<"">>, ?ERROR_FORBIDDEN},
-                {<<"spaceId">>, <<"asdq4ewfs">>, ?ERROR_FORBIDDEN}
-                | BadDataValues
-            ]
+            bad_values = lists:append([
+                [{<<"spaceId">>, <<"">>, ?ERROR_FORBIDDEN},
+                {<<"spaceId">>, <<"asdq4ewfs">>, ?ERROR_FORBIDDEN}],
+                BadDataValues,
+                ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)])
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -390,11 +388,8 @@ update_test(Config) ->
         },
         data_spec = #data_spec{
             required = [<<"name">>],
-            correct_values = #{<<"name">> => [fun() -> ?UNIQUE_STRING end]},
-            bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)}
-            ]
+            correct_values = #{<<"name">> => [?CORRECT_NAME]},
+            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
         }
     },
     ?assert(api_test_utils:run_tests(

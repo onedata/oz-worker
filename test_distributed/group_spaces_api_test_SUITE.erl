@@ -229,10 +229,7 @@ create_space_test(Config) ->
         data_spec = #data_spec{
             required = [<<"name">>],
             correct_values = #{<<"name">> => [?SPACE_NAME1]},
-            bad_values = [
-                {<<"name">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"name">>)},
-                {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)}
-            ]
+            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).

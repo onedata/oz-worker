@@ -216,9 +216,19 @@ translate(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key)) ->
     };
 translate(?ERROR_BAD_VALUE_LOGIN) ->
     {?HTTP_400_BAD_REQUEST, <<
-        "Bad value: provided login must be 3-15 characters long and composed of letters and digits, "
-        "dashes and underscores are allowed (but not at the beginning or the end). "
+        "Bad value: provided login must be 3-15 characters long and composed of letters and digits."
+        "Dashes and underscores are allowed (but not at the beginning or the end). "
         "Use null value to unset the login."
+    >>};
+translate(?ERROR_BAD_VALUE_NAME) ->
+    {?HTTP_400_BAD_REQUEST, <<
+        "Bad value: Name must be 3-50 characters long and composed of UTF-8 letters, digits, brackets and underscores."
+        "Dashes, spaces and dots are allowed (but not at the beginning or the end)."
+    >>};
+translate(?ERROR_BAD_VALUE_USER_NAME) ->
+    {?HTTP_400_BAD_REQUEST, <<
+        "Bad value: User name must be 3-50 characters long and composed of UTF-8 letters and digits."
+        "Dashes, spaces, dots, commas and apostrophes are allowed (but not at the beginning or the end). "
     >>};
 translate(?ERROR_BAD_VALUE_IDENTIFIER(Key)) ->
     {?HTTP_400_BAD_REQUEST, {

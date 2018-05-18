@@ -108,4 +108,11 @@
 % dashes and underscores are allowed (but not at the beginning or the end).
 -define(LOGIN_VALIDATION_REGEXP, <<"^[a-z0-9A-Z][a-z0-9A-Z_-]{1,13}[a-z0-9A-Z]$">>).
 
+% Regexp to validate names. Name must be 3-50 characters long and composed of UTF-8 letters, digits, brackets and underscores.
+% Dashes, spaces and dots are allowed (but not at the beginning or the end).
+-define(NAME_VALIDATION_REGEXP, <<"^[)(\\w][)(.\\w- ]{1,48}[)(\\w]$">>).
+
+% Regexp to validate user names. User name must be 3-50 characters long and composed of UTF-8 letters and digits.
+% Dashes, spaces, dots, commas and apostrophes are allowed (but not at the beginning or the end).
+-define(USER_NAME_VALIDATION_REGEXP,  <<"^[\\pL\\pNd][\\pL\\pNd ',.-]{1,48}[\\pL\\pNd.]$">>).
 -endif.
