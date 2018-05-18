@@ -705,13 +705,12 @@ delete_test(Config) ->
             function = delete,
             args = [client, providerId],
             expected_result = ?OK
+        },
+        gs_spec = #gs_spec{
+            operation = delete,
+            gri = #gri{type = od_provider, id = providerId, aspect = instance},
+            expected_result = ?OK
         }
-        % TODO VFS-3902
-%%        gs_spec = #gs_spec{
-%%            operation = delete,
-%%            gri = #gri{type = od_provider, id = providerId, aspect = instance},
-%%            expected_result = ?OK
-%%        }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]

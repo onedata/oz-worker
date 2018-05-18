@@ -391,7 +391,12 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     entity_graph:delete_with_relations(od_provider, ProviderId),
     % Force disconnect the provider (if connected)
     case provider_connection:get_connection_ref(ProviderId) of
-        {ok, ConnRef} -> gs_server:terminate_connection(ConnRef);
+        {ok, ConnRef} ->
+            spawn(fun() ->
+                % Make sure client received message of successful deletion before connection termination
+                timer:sleep(5000),
+                gs_server:terminate_connection(ConnRef) end),
+            ok;
         _ -> ok
     end;
 
