@@ -4,6 +4,15 @@
 CHANGELOG
 ---------
 
+### 18.02.0-rc3
+
+* VFS-4005 Added name validators
+* VFS-4431 Cleanup dependencies, update meck to stabilize user_logic tests
+* Fix groups not being merged when using external IdP token for authorization
+* VFS-4292 Removed appmock
+* 4292 Changed appmock to mocked http_client
+
+
 ### 18.02.0-rc2
 
 * VFS-4446 Enabled git archive submodules
