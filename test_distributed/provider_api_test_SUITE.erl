@@ -69,7 +69,8 @@
     update_domain_test/1,
     get_domain_config_test/1,
     get_current_time_test/1,
-    verify_provider_identity_test/1
+    verify_provider_identity_test/1,
+    same_domain_test/1
 ]).
 
 all() ->
@@ -102,7 +103,8 @@ all() ->
         update_subdomain_test,
         update_domain_test,
         get_domain_config_test,
-        get_current_time_test
+        get_current_time_test,
+        same_domain_test
     ]).
 
 %%%===================================================================
@@ -305,7 +307,7 @@ create_test(Config) ->
 
 get_test(Config) ->
     ExpName = ?PROVIDER_NAME1,
-    ExpDomain = ?DOMAIN,
+    ExpDomain = ?UNIQUE_DOMAIN,
     ExpAdminEmail = ?ADMIN_EMAIL,
     ExpLatitude = rand:uniform() * 90,
     ExpLongitude = rand:uniform() * 180,
@@ -554,13 +556,13 @@ update_test(Config) ->
     AdminEmail = <<"email@domain.com">>,
     ProviderDetails = #{
         <<"name">> => Name, <<"adminEmail">> => AdminEmail,
-        <<"domain">> => ?DOMAIN, <<"subdomainDelegation">> => false,
+        <<"subdomainDelegation">> => false,
         <<"latitude">> => Latitude, <<"longitude">> => Longitude
     },
 
     EnvSetUpFun = fun() ->
         {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-            Config, ProviderDetails
+            Config, ProviderDetails#{<<"domain">> => ?UNIQUE_DOMAIN}
         ),
         #{providerId => P1, providerClient => {provider, P1, P1Macaroon}}
     end,
@@ -745,13 +747,12 @@ delete_self_test(Config) ->
             method = delete,
             path = <<"/provider">>,
             expected_code = ?HTTP_204_NO_CONTENT
+        },
+        gs_spec = #gs_spec{
+            operation = delete,
+            gri = #gri{type = od_provider, id = ?SELF, aspect = instance},
+            expected_result = ?OK
         }
-        % TODO VFS-3902
-%%        gs_spec = #gs_spec{
-%%            operation = delete,
-%%            gri = #gri{type = od_provider, id = ?SELF, aspect = instance},
-%%            expected_result = ?OK
-%%        }
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
@@ -1638,9 +1639,11 @@ update_subdomain_test(Config) ->
         Config, ?PROVIDER_NAME2
     ),
 
+    Domain = ?UNIQUE_DOMAIN,
+
     EnvSetUpFun = fun() ->
         {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-            Config, ?PROVIDER_NAME1
+            Config, ?PROVIDER_DETAILS(?PROVIDER_NAME1, Domain)#{<<"subdomainDelegation">> => false}
         ),
         #{providerId => P1, providerClient => {provider, P1, P1Macaroon}}
     end,
@@ -1650,7 +1653,7 @@ update_subdomain_test(Config) ->
     end,
     VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId} = _Env, _) ->
         {ExpSubdomain, ExpDomain} = case ShouldSucceed of
-            false -> {undefined, <<"127.0.0.1">>}; % as set in create_provider
+            false -> {undefined, Domain};
             true -> {Subdomain, <<Subdomain/binary, ".", OZDomain/binary>>}
         end,
         {ok, Provider} = oz_test_utils:get_provider(Config, ProviderId),
@@ -1828,11 +1831,13 @@ update_domain_test(Config) ->
 get_domain_config_test(Config) ->
     % Test without delegated subdomain
 
+    ExpDomain = ?UNIQUE_DOMAIN,
+
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_NAME1
+        Config, ?PROVIDER_DETAILS(?PROVIDER_NAME1, ExpDomain)#{<<"subdomainDelegation">> => false}
     ),
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_NAME2
+        Config, ?PROVIDER_DETAILS(?PROVIDER_NAME2, ?UNIQUE_DOMAIN)#{<<"subdomainDelegation">> => false}
     ),
 
     % Create two users, grant one of them the privilege to list providers.
@@ -1843,7 +1848,6 @@ get_domain_config_test(Config) ->
         ?OZ_PROVIDERS_LIST
     ]),
 
-    ExpDomain = <<"127.0.0.1">>, % as set in create_provider
     ExpBody = #{
         <<"subdomainDelegation">> => false,
         <<"domain">> => ExpDomain
@@ -2014,6 +2018,72 @@ verify_provider_identity_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+same_domain_test(Config) ->
+    ProviderDetails =  ?PROVIDER_DETAILS(?PROVIDER_NAME1, ?DOMAIN)#{<<"subdomainDelegation">> => false},
+    {ok, _} = oz_test_utils:create_provider(
+        Config, ProviderDetails),
+
+    %% Fail to create provider with existing domain
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, nobody]
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = <<"/providers">>,
+            expected_code = ?HTTP_400_BAD_REQUEST
+        },
+        logic_spec = #logic_spec{
+            operation = create,
+            module = provider_logic,
+            function = create,
+            args = [client, data],
+            expected_result = ?ERROR_REASON(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>))
+        },
+        data_spec = #data_spec{
+            required = [
+                <<"name">>, <<"adminEmail">>, <<"domain">>, <<"subdomainDelegation">>
+            ],
+            correct_values = #{
+                <<"name">> => [?PROVIDER_NAME2],
+                <<"subdomainDelegation">> => [false],
+                <<"domain">> => [?DOMAIN],
+                <<"adminEmail">> => [?ADMIN_EMAIL]
+            }
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ProviderDetails#{<<"name">> => ?PROVIDER_NAME2, <<"domain">> => ?UNIQUE_DOMAIN}),
+
+    %% Fail to change provider domain to existing one
+    ApiTestSpec1 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P2, P2Macaroon}]
+        },
+        logic_spec = #logic_spec{
+            module = provider_logic,
+            function = update_domain_config,
+            args = [client, P2, data],
+            expected_result = ?ERROR_REASON(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>))
+        },
+        gs_spec = #gs_spec{
+            operation = update,
+            gri = #gri{type = od_provider, id = P2, aspect = domain_config},
+            expected_result = ?ERROR_REASON(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>))
+        },
+        data_spec = #data_spec{
+            required = [<<"domain">>, <<"subdomainDelegation">>],
+            correct_values = #{
+                <<"subdomainDelegation">> => [false],
+                <<"domain">> => [?DOMAIN]
+            }
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec1)).
 
 
 %%%===================================================================
