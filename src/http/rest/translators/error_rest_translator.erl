@@ -222,12 +222,12 @@ translate(?ERROR_BAD_VALUE_LOGIN) ->
     >>};
 translate(?ERROR_BAD_VALUE_NAME) ->
     {?HTTP_400_BAD_REQUEST, <<
-        "Bad value: Name must be 3-50 characters long and composed of UTF-8 letters, digits, brackets and underscores."
+        "Bad value: Name must be 2-50 characters long and composed of UTF-8 letters, digits, brackets and underscores."
         "Dashes, spaces and dots are allowed (but not at the beginning or the end)."
     >>};
 translate(?ERROR_BAD_VALUE_USER_NAME) ->
     {?HTTP_400_BAD_REQUEST, <<
-        "Bad value: User name must be 3-50 characters long and composed of UTF-8 letters and digits."
+        "Bad value: User name must be 2-50 characters long and composed of UTF-8 letters and digits."
         "Dashes, spaces, dots, commas and apostrophes are allowed (but not at the beginning or the end). "
     >>};
 translate(?ERROR_BAD_VALUE_IDENTIFIER(Key)) ->

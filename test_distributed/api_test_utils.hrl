@@ -264,7 +264,7 @@
 
 -define(BAD_VALUES_NAME(Error),
     [{<<"name">>, <<"">>, Error},
-    {<<"name">>, <<"as">>, Error},
+    {<<"name">>, <<"a">>, Error},
     {<<"name">>, <<"-asd">>, Error},
     {<<"name">>, <<"/asd">>, Error},
     {<<"name">>, <<":asd">>, Error},
