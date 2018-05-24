@@ -158,6 +158,7 @@
 -define(LATITUDE, 23.10).
 -define(LONGITUDE, 44.44).
 -define(DOMAIN, <<"multilevel.provider-domain.org">>).
+-define(UNIQUE_DOMAIN, ?UNIQUE_STRING).
 -define(SUB_DOMAIN, <<"prov-sub">>).
 -define(ADMIN_EMAIL, <<"admin@onedata.org">>).
 -define(PROVIDER_NAME1, <<"provider1">>).
@@ -171,7 +172,7 @@
         <<"longitude">> => rand:uniform() * 180
     }
 ).
--define(PROVIDER_DETAILS(ProviderName), ?PROVIDER_DETAILS(ProviderName, ?DOMAIN)).
+-define(PROVIDER_DETAILS(ProviderName), ?PROVIDER_DETAILS(ProviderName, ?UNIQUE_DOMAIN)).
 
 %% Example test data for handle services
 -define(HANDLE_SERVICE_NAME1, <<"LifeWatch DataCite">>).

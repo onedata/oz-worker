@@ -15,6 +15,7 @@
 -include("graph_sync/oz_graph_sync.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
+-include("api_test_utils.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 
 
@@ -1133,7 +1134,7 @@ create_provider(Config, Name) when is_binary(Name) ->
     create_provider(Config, #{
         <<"name">> => Name,
         <<"adminEmail">> => <<"admin@onedata.org">>,
-        <<"domain">> => <<"127.0.0.1">>,
+        <<"domain">> => ?UNIQUE_DOMAIN,
         <<"subdomainDelegation">> => false,
         <<"latitude">> => 0.0,
         <<"longitude">> => 0.0

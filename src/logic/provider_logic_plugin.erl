@@ -130,21 +130,27 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
             end
     end,
 
-    Provider = #od_provider{
-        name = Name, root_macaroon = Identity,
-        subdomain_delegation = SubdomainDelegation,
-        domain = Domain, subdomain = Subdomain,
-        latitude = Latitude, longitude = Longitude,
-        admin_email = AdminEmail
-    },
+    critical_section:run({domain_config, Domain}, fun() ->
+        case is_domain_occupied(Domain) of
+            true -> ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
+            false ->
+                Provider = #od_provider{
+                    name = Name, root_macaroon = Identity,
+                    subdomain_delegation = SubdomainDelegation,
+                    domain = Domain, subdomain = Subdomain,
+                    latitude = Latitude, longitude = Longitude,
+                    admin_email = AdminEmail
+                },
 
-    case od_provider:create(#document{key = ProviderId, value = Provider}) of
-        {ok, _} -> ok;
-        _Error ->
-            dns_state:remove_delegation_config(ProviderId),
-            throw(?ERROR_INTERNAL_SERVER_ERROR)
-    end,
-    {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
+                case od_provider:create(#document{key = ProviderId, value = Provider}) of
+                    {ok, _} -> {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
+                    _Error ->
+                        dns_state:remove_delegation_config(ProviderId),
+                        ?ERROR_INTERNAL_SERVER_ERROR
+                end
+        end
+    end);
+
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) ->
     Data = Req#el_req.data,
@@ -183,21 +189,26 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
             end
     end,
 
-    Provider = #od_provider{
-        name = Name, root_macaroon = Identity,
-        subdomain_delegation = SubdomainDelegation,
-        domain = Domain, subdomain = Subdomain,
-        latitude = Latitude, longitude = Longitude,
-        admin_email = AdminEmail
-    },
+    critical_section:run({domain_config, Domain}, fun() ->
+        case is_domain_occupied(Domain) of
+            true -> ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
+            false ->
+                Provider = #od_provider{
+                    name = Name, root_macaroon = Identity,
+                    subdomain_delegation = SubdomainDelegation,
+                    domain = Domain, subdomain = Subdomain,
+                    latitude = Latitude, longitude = Longitude,
+                    admin_email = AdminEmail
+                },
+                case od_provider:create(#document{key = ProviderId, value = Provider}) of
+                    {ok, _} -> {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
+                    _Error ->
+                        dns_state:remove_delegation_config(ProviderId),
+                        ?ERROR_INTERNAL_SERVER_ERROR
+                end
+        end
+    end);
 
-    case od_provider:create(#document{key = ProviderId, value = Provider}) of
-        {ok, _} -> ok;
-        _Error ->
-            dns_state:remove_delegation_config(ProviderId),
-            throw(?ERROR_INTERNAL_SERVER_ERROR)
-    end,
-    {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = provider_registration_token}}) ->
     {ok, Macaroon} = token_logic:create(
@@ -341,13 +352,19 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}
             false ->
                 dns_state:remove_delegation_config(ProviderId),
                 Domain = maps:get(<<"domain">>, Data),
-                od_provider:update(ProviderId, fun(Provider) ->
-                    {ok, Provider#od_provider{
-                        subdomain_delegation = false,
-                        domain = Domain,
-                        subdomain = undefined
-                    }}
-                end);
+                critical_section:run({domain_config, Domain}, fun() ->
+                    case is_domain_occupied(Domain) of
+                        true -> ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
+                        false ->
+                            od_provider:update(ProviderId, fun(Provider) ->
+                                {ok, Provider#od_provider{
+                                    subdomain_delegation = false,
+                                    domain = Domain,
+                                    subdomain = undefined
+                                }}
+                            end)
+                        end
+                    end);
             true ->
                 Subdomain = maps:get(<<"subdomain">>, Data),
                 FQDN = dns_config:build_fqdn_from_subdomain(Subdomain),
@@ -391,7 +408,13 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     entity_graph:delete_with_relations(od_provider, ProviderId),
     % Force disconnect the provider (if connected)
     case provider_connection:get_connection_ref(ProviderId) of
-        {ok, ConnRef} -> gs_server:terminate_connection(ConnRef);
+        {ok, ConnRef} ->
+            spawn(fun() ->
+                % Make sure client receives message of successful deletion before connection termination
+                timer:sleep(5000),
+                gs_server:terminate_connection(ConnRef)
+            end),
+            ok;
         _ -> ok
     end;
 
@@ -828,3 +851,15 @@ get_min_support_size() ->
         oz_worker, minimum_space_support_size
     ),
     MinSupportSize.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Checks whether provider with given domain exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_domain_occupied(Domain :: binary()) -> true | false.
+is_domain_occupied(Domain) ->
+    {ok, Providers} = od_provider:list(),
+    lists:any(fun(P) -> P#document.value#od_provider.domain =:= Domain end, Providers).
