@@ -72,6 +72,9 @@ operation_supported(get, oz_privileges, private) -> true;
 operation_supported(get, eff_oz_privileges, private) -> true;
 
 operation_supported(get, client_tokens, private) -> true;
+operation_supported(get, {client_token, _}, private) -> true;
+operation_supported(get, linked_accounts, private) -> true;
+operation_supported(get, {linked_account, _}, private) -> true;
 operation_supported(get, default_space, private) -> true;
 operation_supported(get, {space_alias, _}, private) -> true;
 operation_supported(get, default_provider, private) -> true;
@@ -171,17 +174,17 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, User) ->
     {ok, User};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
     #od_user{
-        name = Name, login = Login, email_list = EmailList,
+        name = Name, alias = Alias, email_list = EmailList,
         linked_accounts = LinkedAccounts
     } = User,
     {ok, #{
-        <<"name">> => Name, <<"login">> => Login,
+        <<"name">> => Name, <<"alias">> => Alias,
         <<"emailList">> => EmailList,
         <<"linkedAccounts">> => user_logic:linked_accounts_to_maps(LinkedAccounts)
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, User) ->
-    #od_user{name = Name, login = Login} = User,
-    {ok, #{<<"name">> => Name, <<"login">> => Login}};
+    #od_user{name = Name, alias = Alias} = User,
+    {ok, #{<<"name">> => Name, <<"alias">> => Alias}};
 
 get(#el_req{gri = #gri{aspect = oz_privileges}}, User) ->
     {ok, User#od_user.oz_privileges};
@@ -190,6 +193,15 @@ get(#el_req{gri = #gri{aspect = eff_oz_privileges}}, User) ->
 
 get(#el_req{gri = #gri{aspect = client_tokens}}, User) ->
     {ok, User#od_user.client_tokens};
+
+get(#el_req{gri = #gri{aspect = {client_token, Id}}}, _User) ->
+    {ok, Id};
+
+get(#el_req{gri = #gri{aspect = linked_accounts}}, User) ->
+    {ok, User#od_user.linked_accounts};
+get(#el_req{gri = #gri{aspect = {linked_account, SubId}}}, User) ->
+    {ok, find_linked_account(SubId, User#od_user.linked_accounts)};
+
 get(#el_req{gri = #gri{aspect = default_space}}, User) ->
     {ok, User#od_user.default_space};
 get(#el_req{gri = #gri{aspect = {space_alias, SpaceId}}}, User) ->
@@ -228,33 +240,33 @@ get(#el_req{gri = #gri{aspect = eff_handles}}, User) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = UserId, aspect = instance}, data = Data}) ->
-    UserUpdateFun = fun(#od_user{name = OldName, login = OldLogin} = User) ->
+    UserUpdateFun = fun(#od_user{name = OldName, alias = OldAlias} = User) ->
         {ok, User#od_user{
             name = maps:get(<<"name">>, Data, OldName),
-            login = maps:get(<<"login">>, Data, OldLogin)
+            alias = maps:get(<<"alias">>, Data, OldAlias)
         }}
     end,
-    % If login is specified and is not undefined (which is valid in case of
-    % removing login), run update in synchronized block so no two
-    % identical logins can be set
-    case maps:get(<<"login">>, Data, undefined) of
+    % If alias is specified and is not undefined (which is valid in case of
+    % removing alias), run update in synchronized block so no two
+    % identical aliases can be set
+    case maps:get(<<"alias">>, Data, undefined) of
         undefined ->
             {ok, _} = od_user:update(UserId, UserUpdateFun),
             ok;
-        Login ->
-            critical_section:run({login, Login}, fun() ->
-                % Check if this login is occupied
-                case od_user:get_by_criterion({login, Login}) of
+        Alias ->
+            critical_section:run({alias, Alias}, fun() ->
+                % Check if this alias is occupied
+                case od_user:get_by_criterion({alias, Alias}) of
                     {ok, #document{key = UserId}} ->
-                        % DB returned the same user, so the login was modified
+                        % DB returned the same user, so the alias was modified
                         % but is identical, don't report errors.
                         {ok, _} = od_user:update(UserId, UserUpdateFun),
                         ok;
                     {ok, #document{}} ->
-                        % Login is occupied by another user
-                        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"login">>);
+                        % Alias is occupied by another user
+                        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"alias">>);
                     _ ->
-                        % Login is not occupied, update user doc
+                        % Alias is not occupied, update user doc
                         {ok, _} = od_user:update(UserId, UserUpdateFun),
                         ok
                 end
@@ -279,10 +291,10 @@ delete(#el_req{gri = #gri{id = UserId, aspect = instance}}) ->
     % Invalidate basic auth cache and client tokens
     {ok, #document{
         value = #od_user{
-            login = Login,
+            alias = Alias,
             client_tokens = Tokens
         }}} = od_user:get(UserId),
-    basic_auth_cache:delete(Login),
+    basic_auth_cache:delete(Alias),
     lists:foreach(
         fun(Token) ->
             {ok, Macaroon} = token_logic:deserialize(Token),
@@ -378,6 +390,9 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = shared}}, User) ->
 
 exists(#el_req{gri = #gri{aspect = {client_token, TokenId}}}, User) ->
     lists:member(TokenId, User#od_user.client_tokens);
+
+exists(#el_req{gri = #gri{aspect = {linked_account, SubId}}}, User) ->
+    find_linked_account(SubId, User#od_user.linked_accounts) /= undefined;
 
 exists(#el_req{gri = #gri{aspect = default_space}}, User) ->
     undefined =/= User#od_user.default_space;
@@ -532,7 +547,7 @@ validate(#el_req{operation = create, gri = #gri{id = UserId, aspect = default_pr
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, user_name},
-        <<"login">> => {login, login}
+        <<"alias">> => {alias, alias}
     }
 };
 
@@ -587,3 +602,19 @@ auth_by_oz_privilege(ElReq, User, Privilege) ->
         #el_req{client = ?USER(OtherUser)} ->
             auth_by_oz_privilege(OtherUser, Privilege)
     end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Finds a linked account in given list based on subject id.
+%% @end
+%%--------------------------------------------------------------------
+-spec find_linked_account(SubId :: binary(), [od_user:linked_account()]) ->
+    undefined | od_user:linked_account().
+find_linked_account(_, []) ->
+    undefined;
+find_linked_account(SubId, [Account = #linked_account{subject_id = SubId} | _]) ->
+    Account;
+find_linked_account(SubId, [_ | Rest]) ->
+    find_linked_account(SubId, Rest).

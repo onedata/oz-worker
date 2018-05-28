@@ -654,7 +654,7 @@ choose_provider_for_user(UserId) ->
     case DSProviders of
         List when length(List) > 0 ->
             % Default space has got some providers, random one
-            {ok, lists:nth(crypto:rand_uniform(1, length(DSProviders) + 1), DSProviders)};
+            {ok, lists:nth(rand:uniform(length(DSProviders)), DSProviders)};
         _ ->
             % Default space does not have a provider, look in other spaces
             ProviderIds = lists:foldl(
@@ -669,7 +669,7 @@ choose_provider_for_user(UserId) ->
                     {error, no_provider};
                 _ ->
                     % There are some providers for other spaces, random one
-                    {ok, lists:nth(crypto:rand_uniform(1, length(ProviderIds) + 1), ProviderIds)}
+                    {ok, lists:nth(rand:uniform(length(ProviderIds)), ProviderIds)}
             end
     end.
 

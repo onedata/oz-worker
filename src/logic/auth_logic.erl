@@ -12,19 +12,17 @@
 -module(auth_logic).
 -author("Konrad Zemek").
 
--include("auth_common.hrl").
--include("gui/common.hrl").
+-include("http/gui_paths.hrl").
 -include("registered_names.hrl").
+-include("datastore/oz_datastore_models.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
--include("datastore/oz_datastore_models.hrl").
--include("datastore/oz_datastore_models.hrl").
--include_lib("hackney/include/hackney_lib.hrl").
 
 % String that will be placed in macaroons' location field
 -define(MACAROONS_LOCATION, <<"onezone">>).
 
 %% API
--export([get_redirection_uri/2]).
+-export([get_redirection_uri/2, get_redirection_uri/3]).
 -export([gen_token/1, gen_token/2, validate_token/5,
     invalidate_token/1, invalidate_user_tokens/1,
     authenticate_user/1]).
@@ -46,7 +44,7 @@ authenticate_user(Identifier) ->
     case onedata_auth:get(Identifier) of
         {ok, #document{value = #onedata_auth{secret = Secret}}} ->
 
-            {ok, ExpirationSecs} = application:get_env(?APP_NAME,
+            {ok, ExpirationSecs} = oz_worker:get_env(
                 authentication_macaroon_expiration_seconds),
 
             Location = ?MACAROONS_LOCATION,
@@ -65,22 +63,35 @@ authenticate_user(Identifier) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Returns provider domain and a full URI to which the user should be
-%% redirected from the onezone. The redirection is part of the OpenID
-%% flow and the URI contains an Authorization token. The provider domain
-%% is useful to check connectivity before redirecting.
+%% @doc
+%% @equiv get_redirection_uri(UserId, ProviderId, <<"/">>).
 %% @end
 %%--------------------------------------------------------------------
 -spec get_redirection_uri(UserId :: binary(), ProviderId :: binary()) ->
     {ok, RedirectionUri :: binary()}.
 get_redirection_uri(UserId, ProviderId) ->
+    get_redirection_uri(UserId, ProviderId, <<"/">>).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the full URI to which the user should be redirected from the onezone.
+%% The redirection is part of the OpenID flow and the URI contains an
+%% Authorization token. RedirectPath is an absolute path in oneprovider GUI
+%% where user will be redirected upon successful login.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_redirection_uri(UserId :: binary(), ProviderId :: binary(),
+    RedirectPath :: binary()) ->
+    {ok, RedirectionUri :: binary()}.
+get_redirection_uri(UserId, ProviderId, RedirectPath) ->
     Token = gen_token(UserId, ProviderId),
-    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
-        {ok, User#od_user{chosen_provider = ProviderId}}
-    end),
     {ok, ProviderURL} = provider_logic:get_url(ProviderId),
-    URL = str_utils:format_bin("~s~s?code=~s", [
-        ProviderURL, ?provider_auth_endpoint, Token
+    URL = str_utils:format_bin("~s~s?code=~s&redirect-path=~s", [
+        ProviderURL,
+        ?PROVIDER_LOGIN_CONSUME_PATH_DEPRECATED,
+        Token,
+        http_utils:url_encode(RedirectPath)
     ]),
     {ok, URL}.
 
@@ -187,15 +198,15 @@ invalidate_token(Identifier) when is_binary(Identifier) ->
 %% For example, where to redirect the user after login.
 %% @end
 %%--------------------------------------------------------------------
--spec generate_state_token(auth_utils:idp(), ConnectAccount :: boolean()) ->
+-spec generate_state_token(auth_utils:idp(), LinkAccount :: boolean()) ->
     state_token:id().
-generate_state_token(IdP, ConnectAccount) ->
+generate_state_token(IdP, LinkAccount) ->
     StateInfo = #{
         idp => IdP,
-        connect_account => ConnectAccount,
+        link_account => LinkAccount,
         % Right now this always redirects to main page, although
         % might be used in the future.
-        redirect_after_login => <<?PAGE_AFTER_LOGIN>>
+        redirect_after_login => <<?AFTER_LOGIN_PAGE_PATH>>
     },
     {ok, Token} = state_token:create(StateInfo),
     Token.
@@ -224,7 +235,7 @@ lookup_state_token(Token) ->
 -spec create_macaroon(Secret :: iodata(), Identifier :: iodata(),
     Caveats :: [iodata()]) -> macaroon:macaroon().
 create_macaroon(Secret, Identifier, Caveats) ->
-    {ok, ExpirationSeconds} = application:get_env(?APP_NAME,
+    {ok, ExpirationSeconds} = oz_worker:get_env(
         authorization_macaroon_expiration_seconds),
     ExpirationTime = time_utils:cluster_time_seconds() + ExpirationSeconds,
 

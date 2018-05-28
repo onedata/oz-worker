@@ -90,9 +90,9 @@ content_types_accepted(Req, State) ->
 -spec provide_resource(Req :: cowboy_req:req(), State :: any()) ->
     {iodata() | stop, cowboy_req:req(), any()}.
 provide_resource(Req, State) ->
-    QueryString = cowboy_req:parse_qs(Req),
+    QueryParams = cowboy_req:parse_qs(Req),
     try
-        {ResponseBody, Req2} = handle_request(QueryString, Req),
+        {ResponseBody, Req2} = handle_request(QueryParams, Req),
         {ResponseBody, Req2, State}
     catch
         throw:{stop, ReqE} ->
@@ -131,10 +131,10 @@ accept_resource(Req, State) ->
 %%% returned.
 %%% @end
 %%%--------------------------------------------------------------------
--spec handle_request(QueryString :: [proplists:property()], Req :: cowboy_req:req()) -> tuple().
-handle_request(QueryString, Req) ->
+-spec handle_request(QueryParams :: [proplists:property()], Req :: cowboy_req:req()) -> tuple().
+handle_request(QueryParams, Req) ->
     Response = try
-        {Verb, ParsedArgs} = oai_parser:process_and_validate_args(QueryString),
+        {Verb, ParsedArgs} = oai_parser:process_and_validate_args(QueryParams),
         generate_response(Verb, ParsedArgs)
     catch
         throw:Error ->
@@ -148,7 +148,7 @@ handle_request(QueryString, Req) ->
     RequestElement = case Response of
         #oai_error{code = badVerb} -> generate_request_element(Req);
         #oai_error{code = badArgument} -> generate_request_element(Req);
-        _ -> generate_request_element(QueryString, Req)
+        _ -> generate_request_element(QueryParams, Req)
     end,
 
     ResponseDate = oai_handler:generate_response_date_element(),

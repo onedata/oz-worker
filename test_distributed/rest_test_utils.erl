@@ -340,11 +340,9 @@ get_oz_url(Config) ->
     % Resolve REST URLs of oz-worker nodes
     [Node | _] = ?config(oz_worker_nodes, Config),
     {ok, Domain} = test_utils:get_env(Node, ?APP_NAME, http_domain),
-    {ok, RestPort} = rpc:call(
-        Node, application, get_env, [?APP_NAME, gui_port]
-    ),
+    {ok, RestPort} = oz_test_utils:get_rest_port(Config),
     {ok, RestAPIPrefix} = rpc:call(
-        Node, application, get_env, [?APP_NAME, rest_api_prefix]
+        Node, oz_worker, get_env, [rest_api_prefix]
     ),
     str_utils:format_bin(
         "https://~s:~B~s", [Domain, RestPort, RestAPIPrefix]

@@ -54,10 +54,10 @@ get_response(#gri{id = undefined, aspect = list}, Users) ->
 
 get_response(#gri{id = UserId, aspect = instance, scope = _}, UserData) ->
     % scope can be protected or shared
-    Login = gs_protocol:undefined_to_null(maps:get(<<"login">>, UserData)),
+    Alias = gs_protocol:undefined_to_null(maps:get(<<"alias">>, UserData)),
     rest_translator:ok_body_reply(UserData#{
         <<"userId">> => UserId,
-        <<"login">> => Login
+        <<"alias">> => Alias
     });
 
 get_response(#gri{aspect = oz_privileges}, Privileges) ->

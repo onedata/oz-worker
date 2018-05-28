@@ -218,7 +218,7 @@ init_per_testcase(basic_auth_test, Config) ->
     ok = test_utils:mock_expect(Nodes, user_logic, authenticate_by_basic_credentials,
         fun
             (?CORRECT_LOGIN, ?CORRECT_PASSWORD) ->
-                {ok, UserDoc, false};
+                {ok, UserDoc};
             (?BAD_LOGIN, ?BAD_PASSWORD) ->
                 {error, <<"Invalid login or password">>};
             (_, _) ->

@@ -18,7 +18,7 @@
 -author("Lukasz Opiola").
 -behaviour(gui_route_plugin_behaviour).
 
--include("gui/common.hrl").
+-include("http/gui_paths.hrl").
 -include("auth_common.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -96,17 +96,17 @@
 route(<<"/do_logout">>) -> ?LOGOUT;
 route(<<"/do_login">>) -> ?BASIC_LOGIN;
 route(<<"/validate_login">>) -> ?OIDC_CONSUME_ENDPOINT;
-route(<<?SAML_METADATA_ENDPOINT>>) -> ?SAML_METADATA_BACKEND;
-route(<<?SAML_CONSUME_ENDPOINT>>) -> ?SAML_CONSUME_BACKEND;
+route(<<?SAML_METADATA_PATH>>) -> ?SAML_METADATA_BACKEND;
+route(<<?SAML_CONSUME_PATH>>) -> ?SAML_CONSUME_BACKEND;
 route(<<"/dev_login">>) ->
-    case application:get_env(?APP_NAME, dev_mode) of
+    case oz_worker:get_env(dev_mode) of
         {ok, true} ->
             ?DEV_LOGIN;
         _ ->
             ?INDEX
     end;
 route(<<"/validate_dev_login">>) ->
-    case application:get_env(?APP_NAME, dev_mode) of
+    case oz_worker:get_env(dev_mode) of
         {ok, true} ->
             ?VALIDATE_DEV_LOGIN;
         _ ->
@@ -157,13 +157,11 @@ public_rpc_backend() -> public_rpc_backend.
 -spec session_details() ->
     {ok, proplists:proplist()} | gui_error:error_result().
 session_details() ->
-    FirstLogin = gui_session:get_value(firstLogin, false),
     {_AppId, _AppName, AppVersion} = lists:keyfind(
         ?APP_NAME, 1, application:loaded_applications()
     ),
     Res = [
         {<<"userId">>, gui_session:get_user_id()},
-        {<<"firstLogin">>, FirstLogin},
         {<<"serviceVersion">>, str_utils:to_binary(AppVersion)}
     ],
     {ok, Res}.
@@ -216,5 +214,5 @@ error_500_html_file() ->
 %%--------------------------------------------------------------------
 -spec response_headers() -> [{Key :: binary(), Value :: binary()}].
 response_headers() ->
-    {ok, Headers} = application:get_env(?APP_NAME, gui_response_headers),
+    {ok, Headers} = oz_worker:get_env(gui_response_headers),
     Headers.

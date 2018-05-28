@@ -73,7 +73,7 @@ basic_auth_cache_test(Config) ->
             ),
 
             % After calling authenticating function, fetched resource should be cached
-            ?assertMatch({ok, _, _}, oz_test_utils:call_oz(
+            ?assertMatch({ok, _}, oz_test_utils:call_oz(
                 TempConf, user_logic, authenticate_by_basic_credentials, [Login, Password]
             )),
             ?assertMatch({ok, _}, oz_test_utils:call_oz(

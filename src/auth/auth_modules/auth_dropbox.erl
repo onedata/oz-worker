@@ -17,7 +17,7 @@
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
--export([get_redirect_url/2, validate_login/1, get_user_info/2]).
+-export([get_redirect_url/2, validate_login/2, get_user_info/2]).
 
 %%%===================================================================
 %%% API
@@ -30,13 +30,13 @@
 %%--------------------------------------------------------------------
 -spec get_redirect_url(auth_utils:idp(), boolean()) ->
     {ok, binary()} | {error, term()}.
-get_redirect_url(IdP, ConnectAccount) ->
+get_redirect_url(IdP, LinkAccount) ->
     try
         ParamsProplist = [
             {<<"client_id">>, auth_config:get_provider_app_id(IdP)},
             {<<"redirect_uri">>, auth_utils:local_auth_endpoint()},
             {<<"response_type">>, <<"code">>},
-            {<<"state">>, auth_logic:generate_state_token(IdP, ConnectAccount)}
+            {<<"state">>, auth_logic:generate_state_token(IdP, LinkAccount)}
         ],
         Params = http_utils:proplist_to_url_params(ParamsProplist),
         {ok, <<(authorize_endpoint(IdP))/binary, "?", Params/binary>>}
@@ -51,14 +51,12 @@ get_redirect_url(IdP, ConnectAccount) ->
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login(auth_utils:idp()) ->
+-spec validate_login(auth_utils:idp(), QueryParams :: proplists:proplist()) ->
     {ok, #linked_account{}} | {error, term()}.
-validate_login(IdP) ->
+validate_login(IdP, QueryParams) ->
     try
-        % Retrieve URL params
-        ParamsProplist = gui_ctx:get_url_params(),
         % Parse out code parameter
-        Code = proplists:get_value(<<"code">>, ParamsProplist),
+        Code = proplists:get_value(<<"code">>, QueryParams),
         % Prepare basic auth code
         AuthEncoded = base64:encode(<<(auth_config:get_provider_app_id(IdP))/binary, ":",
             (auth_config:get_provider_app_secret(IdP))/binary>>),

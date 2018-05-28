@@ -247,15 +247,15 @@ get_user_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    ExpLogin = ExpName = ?USER_NAME1,
+    ExpAlias = ExpName = ?USER_NAME1,
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{
         name = ExpName,
-        login = ExpLogin
+        alias = ExpAlias
     }),
     {ok, U3} = oz_test_utils:handle_add_user(Config, HandleId, U3),
 
     ExpUserDetails = #{
-        <<"login">> => ExpLogin,
+        <<"alias">> => ExpAlias,
         <<"name">> => ExpName
     },
     ApiTestSpec = #api_test_spec{
@@ -289,9 +289,8 @@ get_user_test(Config) ->
                 type = od_user, id = U3, aspect = instance, scope = shared
             },
             auth_hint = ?THROUGH_HANDLE(HandleId),
-            expected_result = ?OK_MAP(#{
-                <<"login">> => ExpLogin,
-                <<"name">> => ExpName,
+            expected_result = ?OK_MAP(ExpUserDetails#{
+                <<"login">> => ExpAlias, % TODO VFS-4506 deprecated, included for backward compatibility
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = UserId} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -516,6 +515,7 @@ get_eff_user_test(Config) ->
                     },
                     auth_hint = ?THROUGH_HANDLE(HandleId),
                     expected_result = ?OK_MAP(UserDetails#{
+                            <<"login">> => maps:get(<<"alias">>, UserDetails),
                             <<"gri">> => fun(EncodedGri) ->
                                 #gri{id = Id} = oz_test_utils:decode_gri(
                                     Config, EncodedGri

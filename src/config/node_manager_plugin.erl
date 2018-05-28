@@ -49,7 +49,7 @@ app_name() ->
 %%--------------------------------------------------------------------
 -spec cm_nodes() -> {ok, Nodes :: [atom()]} | undefined.
 cm_nodes() ->
-    application:get_env(?APP_NAME, cm_nodes).
+    oz_worker:get_env(cm_nodes).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -58,7 +58,7 @@ cm_nodes() ->
 %%--------------------------------------------------------------------
 -spec db_nodes() -> {ok, Nodes :: [atom()]} | undefined.
 db_nodes() ->
-    application:get_env(?APP_NAME, db_nodes).
+    oz_worker:get_env(db_nodes).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -67,9 +67,8 @@ db_nodes() ->
 %%--------------------------------------------------------------------
 -spec listeners() -> Listeners :: [atom()].
 listeners() -> [
-    oz_redirector_listener,
-    gui_listener |
-        node_manager:cluster_worker_listeners() -- [redirector_listener]
+    http_listener,
+    https_listener
 ].
 
 %%--------------------------------------------------------------------
@@ -79,9 +78,9 @@ listeners() -> [
 %%--------------------------------------------------------------------
 -spec modules_with_args() -> Models :: [{atom(), [any()]}].
 modules_with_args() ->
-        [{gs_worker, [
-            {supervisor_flags, gs_worker:supervisor_flags()}
-        ]}].
+    [{gs_worker, [
+        {supervisor_flags, gs_worker:supervisor_flags()}
+    ]}].
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -118,6 +117,8 @@ on_cluster_initialized(_Nodes) ->
 -spec after_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
 after_init([]) ->
     try
+        auth_config:load_auth_config(),
+
         entity_graph:init_state(),
 
         % build dns zone on one node and broadcast to others

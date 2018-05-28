@@ -1385,8 +1385,7 @@ has_eff_privilege(#od_group{eff_users = UsersPrivileges}, UserId, Privilege) ->
 %%--------------------------------------------------------------------
 -spec create_predefined_groups() -> ok.
 create_predefined_groups() ->
-    {ok, PredefinedGroups} =
-        application:get_env(?APP_NAME, predefined_groups),
+    {ok, PredefinedGroups} = oz_worker:get_env(predefined_groups),
     lists:foreach(
         fun(GroupMap) ->
             Id = maps:get(id, GroupMap),

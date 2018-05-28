@@ -222,7 +222,7 @@ rest_routes() ->
     % - prepend REST prefix to every route
     % - rest handler module must be added as second element to the tuples
     % - RoutesForPath will serve as Opts to rest handler init.
-    {ok, PrefixStr} = application:get_env(?APP_NAME, rest_api_prefix),
+    {ok, PrefixStr} = oz_worker:get_env(rest_api_prefix),
     Prefix = str_utils:to_binary(PrefixStr),
     lists:map(fun({Path, RoutesForPath}) ->
         {<<Prefix/binary, Path/binary>>, ?REST_HANDLER_MODULE, RoutesForPath}

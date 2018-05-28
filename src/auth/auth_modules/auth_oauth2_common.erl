@@ -18,7 +18,7 @@
 %% API
 -export([
     get_redirect_url/2,
-    validate_login/3,
+    validate_login/4,
     get_user_info/3, get_user_info/4
 ]).
 
@@ -33,7 +33,7 @@
 %%--------------------------------------------------------------------
 -spec get_redirect_url(boolean(), auth_utils:idp()) ->
     {ok, binary()} | {error, term()}.
-get_redirect_url(ConnectAccount, IdP) ->
+get_redirect_url(LinkAccount, IdP) ->
     try
         ParamsProplist = [
             {<<"client_id">>,
@@ -45,7 +45,7 @@ get_redirect_url(ConnectAccount, IdP) ->
             {<<"redirect_uri">>,
                 auth_utils:local_auth_endpoint()},
             {<<"state">>,
-                auth_logic:generate_state_token(IdP, ConnectAccount)}
+                auth_logic:generate_state_token(IdP, LinkAccount)}
         ],
         Params = http_utils:proplist_to_url_params(ParamsProplist),
         AuthorizeEndpoint = authorize_endpoint(get_xrds(IdP)),
@@ -63,16 +63,14 @@ get_redirect_url(ConnectAccount, IdP) ->
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login(auth_utils:idp(),
+-spec validate_login(auth_utils:idp(), QueryParams :: proplists:proplist(),
     SecretSendMethod :: secret_over_http_basic | secret_over_http_post,
     AccessTokenSendMethod :: access_token_in_url | access_token_in_header) ->
     {ok, #linked_account{}} | {error, term()}.
-validate_login(IdP, SecretSendMethod, AccessTokenSendMethod) ->
+validate_login(IdP, QueryParams, SecretSendMethod, AccessTokenSendMethod) ->
     try
-        % Retrieve URL params
-        ParamsProplist = gui_ctx:get_url_params(),
         % Parse out code parameter
-        Code = proplists:get_value(<<"code">>, ParamsProplist),
+        Code = proplists:get_value(<<"code">>, QueryParams),
         ClientId = auth_config:get_provider_app_id(IdP),
         ClientSecret = auth_config:get_provider_app_secret(IdP),
         % Form access token request

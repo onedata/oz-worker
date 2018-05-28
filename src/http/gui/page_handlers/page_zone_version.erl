@@ -1,24 +1,23 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C) 2016 ACK CYFRONET AGH
-%%% This software is released under the MIT license
+%%% @copyright (C) 2018 ACK CYFRONET AGH
+%%% This software is released under the MIT license 
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module implements page_backend_behaviour and is called
-%%% when logout page is visited.
+%%% This module implements dynamic_page_behaviour and is called
+%%% when zone version page is visited.
 %%% @end
 %%%-------------------------------------------------------------------
--module(logout_backend).
+-module(page_zone_version).
 -author("Lukasz Opiola").
--behaviour(page_backend_behaviour).
 
--include_lib("ctool/include/logging.hrl").
+-behaviour(dynamic_page_behaviour).
 
-%% API
--export([page_init/0]).
+-include("registered_names.hrl").
 
+-export([handle/2]).
 
 %%%===================================================================
 %%% API
@@ -26,11 +25,13 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link page_backend_behaviour} callback page_init/0.
+%% {@link dynamic_page_behaviour} callback handle/2.
 %% @end
 %%--------------------------------------------------------------------
--spec page_init() -> gui_html_handler:page_init_result().
-page_init() ->
-    ?info("User ~p logged out", [gui_session:get_user_id()]),
-    gui_session:log_out(),
-    {redirect_relative, <<"/">>}.
+-spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
+handle(<<"GET">>, Req) ->
+    cowboy_req:reply(200,
+        #{<<"content-type">> => <<"text/plain">>},
+        oz_worker:get_version(),
+        Req
+    ).

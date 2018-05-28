@@ -15,7 +15,8 @@
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
--export([create/1, get/1, update/2, delete/1]).
+-export([create/1, get/1, update/2, delete/1, list/0]).
+-export([session_ttl/0]).
 
 %% datastore_model callbacks
 -export([init/0]).
@@ -31,8 +32,11 @@
 
 -define(CTX, #{
     model => ?MODULE,
-    disc_driver => undefined
+    disc_driver => undefined,
+    fold_enabled => true
 }).
+
+-define(SESSION_TTL, oz_worker:get_env(session_ttl, 3600)).
 
 %%%===================================================================
 %%% API
@@ -40,14 +44,19 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates session and set access time.
+%% Creates a new session for given user.
 %% @end
 %%--------------------------------------------------------------------
--spec create(doc()) -> {ok, doc()} | {error, term()}.
-create(Doc = #document{value = Sess = #session{}}) ->
-    datastore_model:create(?CTX, Doc#document{
-        value = Sess#session{accessed = os:timestamp()}
-    }).
+-spec create(od_user:id()) -> {ok, id()} | {error, term()}.
+create(UserId) ->
+    Doc = #document{value = #session{
+        user_id = UserId, accessed = time_utils:cluster_time_millis()
+    }},
+    case datastore_model:create(?CTX, Doc) of
+        {ok, #document{key = SessionId}} -> {ok, SessionId};
+        {error, Reason} -> {error, Reason}
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -55,14 +64,22 @@ create(Doc = #document{value = Sess = #session{}}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get(id()) -> {ok, doc()} | {error, term()}.
-get(SessId) ->
-    case datastore_model:get(?CTX, SessId) of
-        {ok, Doc} ->
-            update(SessId, fun(Sess) -> {ok, Sess} end),
-            {ok, Doc};
+get(SessionId) ->
+    case datastore_model:get(?CTX, SessionId) of
+        {ok, _Doc} ->
+            update(SessionId, fun(Sess) -> {ok, Sess} end);
         {error, Reason} ->
             {error, Reason}
     end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes session by ID.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete(id()) -> ok | {error, term()}.
+delete(SessId) ->
+    datastore_model:delete(?CTX, SessId).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -73,19 +90,28 @@ get(SessId) ->
 update(SessId, Diff) ->
     datastore_model:update(?CTX, SessId, fun(Sess = #session{}) ->
         case Diff(Sess) of
-            {ok, Sess2} -> {ok, Sess2#session{accessed = os:timestamp()}};
+            {ok, Sess2} -> {ok, Sess2#session{accessed = time_utils:cluster_time_millis()}};
             {error, Reason} -> {error, Reason}
         end
     end).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes session by ID.
+%% Returns list of all sessions.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(id()) -> ok | {error, term()}.
-delete(SessId) ->
-    datastore_model:delete(?CTX, SessId).
+-spec list() -> {ok, [doc()]} | {error, term()}.
+list() ->
+    datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns session Time To Live in seconds.
+%% @end
+%%--------------------------------------------------------------------
+-spec session_ttl() -> integer().
+session_ttl() ->
+    ?SESSION_TTL.
 
 %%%===================================================================
 %%% datastore_model callbacks

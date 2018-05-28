@@ -12,16 +12,6 @@
 -ifndef(AUTH_COMMON_HRL).
 -define(AUTH_COMMON_HRL, 1).
 
-% SAML endpoints
--define(SAML_METADATA_ENDPOINT, "/saml/sp.xml").
--define(SAML_CONSUME_ENDPOINT, "/saml/consume").
-
-% Endpoint for OpenID / OAuth validation
--define(local_auth_endpoint, "/validate_login").
-
-% Endpoint for redirects to providers
--define(provider_auth_endpoint, "/validate_login.html").
-
 % Error atom indicating that there was an unexpected server error during login
 -define(error_auth_server_error, server_error).
 

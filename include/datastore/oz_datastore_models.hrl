@@ -83,19 +83,16 @@
 %% This record defines a user and is handled as a database document
 -record(od_user, {
     name = <<"">> :: od_user:name(),
-    login = undefined :: od_user:login(),
+    alias = undefined :: od_user:alias(),
     email_list = [] :: [binary()],
     % Decides if this user can login via login:password, only users created in
     % onepanel are currently allowed to do that.
     basic_auth_enabled = false :: boolean(),
-    linked_accounts = [] :: [#linked_account{}],
+    linked_accounts = [] :: [od_user:linked_account()],
+
     default_space = undefined :: undefined | binary(),
-    % This allows to remember the provider which was selected for user,
-    % so DNS knows where to redirect
     default_provider = undefined :: undefined | binary(),
-    % This allows to remember to which provider user is being redirected.
-    % It is needed in DNS so it knows where to redirect.
-    chosen_provider = undefined :: undefined | binary(),
+
     % List of user's client tokens
     client_tokens = [] :: [binary()],
     % List of user's aliases for spaces
@@ -262,9 +259,8 @@
 
 %% This record defines a GUI session
 -record(session, {
-    user_id = undefined :: od_user:id() | undefined,
-    memory = #{} :: session:memory(),
-    accessed = {0, 0, 0} :: erlang:timestamp()
+    user_id :: od_user:id(),
+    accessed = 0 :: non_neg_integer()
 }).
 
 %% This record defines a token that can be used by user to do something

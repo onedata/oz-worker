@@ -38,7 +38,7 @@
 %%--------------------------------------------------------------------
 -spec load_auth_config() -> ok | no_return().
 load_auth_config() ->
-    {ok, AuthConfigFile} = application:get_env(?APP_NAME, auth_config_file),
+    {ok, AuthConfigFile} = oz_worker:get_env(auth_config_file),
     Config = case file:consult(AuthConfigFile) of
         {ok, []} ->
             [];
@@ -78,7 +78,7 @@ load_auth_config() ->
 %%--------------------------------------------------------------------
 -spec get_auth_providers() -> [term()].
 get_auth_providers() ->
-    {ok, Config} = application:get_env(?APP_NAME, auth_config),
+    {ok, Config} = oz_worker:get_env(auth_config),
     lists:map(
         fun({ProviderId, _}) ->
             ProviderId
@@ -92,7 +92,7 @@ get_auth_providers() ->
 %%--------------------------------------------------------------------
 -spec get_auth_config(ProviderId :: atom()) -> [term()].
 get_auth_config(ProviderId) ->
-    {ok, Config} = application:get_env(?APP_NAME, auth_config),
+    {ok, Config} = oz_worker:get_env(auth_config),
     proplists:get_value(ProviderId, Config).
 
 
@@ -135,7 +135,7 @@ get_provider_app_secret(ProviderId) ->
 -spec get_providers_with_auth_delegation() ->
     [{auth_utils:idp(), Prefix :: binary()}].
 get_providers_with_auth_delegation() ->
-    application:get_env(?APP_NAME, auth_delegation_providers, []).
+    oz_worker:get_env(auth_delegation_providers, []).
 
 
 %%--------------------------------------------------------------------

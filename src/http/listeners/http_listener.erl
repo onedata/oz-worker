@@ -1,30 +1,33 @@
 %%%--------------------------------------------------------------------
-%%% @author Michal Zmuda
 %%% @author Jakub Kudzia
 %%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%--------------------------------------------------------------------
-%%% @doc This module is responsible for redirector listener starting and stopping.
+%%% @doc
+%%% @doc This module is responsible for starting and stopping
+%%% HTTP listener that serves OAI PMH requests and redirects clients
+%%% from HTTP to HTTPS in case of other requests.
 %%% @end
 %%%--------------------------------------------------------------------
--module(oz_redirector_listener).
--author("Tomasz Lichon").
--author("Michal Zmuda").
+-module(http_listener).
 -author("Jakub Kudzia").
 
--include_lib("cluster_worker/include/global_definitions.hrl").
+-behaviour(listener_behaviour).
+
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
-
-% Session logic module
--define(SESSION_LOGIC_MODULE, session_logic).
+-include_lib("cluster_worker/include/global_definitions.hrl").
 
 % Cowboy listener references
--define(HTTP_REDIRECTOR_LISTENER, http).
+-define(HTTP_LISTENER, http_listener).
 
--behaviour(listener_behaviour).
+% Listener config
+-define(PORT, oz_worker:get_env(http_server_port, 80)).
+-define(ACCEPTORS_NUM, oz_worker:get_env(http_acceptors, 10)).
+-define(REQUEST_TIMEOUT, oz_worker:get_env(http_request_timeout, timer:seconds(30))).
+
 
 %% listener_behaviour callbacks
 -export([port/0, start/0, stop/0, healthcheck/0]).
@@ -40,9 +43,7 @@
 %%--------------------------------------------------------------------
 -spec port() -> integer().
 port() ->
-    {ok, RedirectPort} = application:get_env(?CLUSTER_WORKER_APP_NAME,
-        http_redirect_port),
-    RedirectPort.
+    ?PORT.
 
 
 %%--------------------------------------------------------------------
@@ -52,27 +53,23 @@ port() ->
 %%--------------------------------------------------------------------
 -spec start() -> ok | {error, Reason :: term()}.
 start() ->
-    {ok, RedirectNbAcceptors} = application:get_env(?CLUSTER_WORKER_APP_NAME,
-        http_number_of_http_acceptors),
-    {ok, Timeout} = application:get_env(?CLUSTER_WORKER_APP_NAME,
-        http_socket_timeout_seconds),
-    {ok, OAI_PMH_PATH} = application:get_env(?APP_NAME, oai_pmh_api_prefix),
+    {ok, OAI_PMH_PATH} = oz_worker:get_env(oai_pmh_api_prefix),
 
     Dispatch = cowboy_router:compile([
         {'_', [
             {OAI_PMH_PATH ++ "/[...]", oai_handler, []},
-            {"/[...]", redirector_handler, []}
+            {"/[...]", redirector_handler, https_listener:port()}
         ]}
     ]),
-    Result = cowboy:start_clear(?HTTP_REDIRECTOR_LISTENER,
+    Result = cowboy:start_clear(?HTTP_LISTENER,
         [
             {port, port()},
-            {num_acceptors, RedirectNbAcceptors}
+            {num_acceptors, ?ACCEPTORS_NUM}
         ],
         #{
             env => #{dispatch => Dispatch},
             max_keepalive => 1,
-            request_timeout => timer:seconds(Timeout)
+            request_timeout => ?REQUEST_TIMEOUT
         }),
     case Result of
         {ok, _} -> ok;
@@ -87,12 +84,12 @@ start() ->
 %%--------------------------------------------------------------------
 -spec stop() -> ok | {error, Reason :: term()}.
 stop() ->
-    case cowboy:stop_listener(?HTTP_REDIRECTOR_LISTENER) of
+    case cowboy:stop_listener(?HTTP_LISTENER) of
         ok ->
             ok;
         {error, Error} ->
             ?error("Error on stopping listener ~p: ~p",
-                [?HTTP_REDIRECTOR_LISTENER, Error]),
+                [?HTTP_LISTENER, Error]),
             {error, redirector_stop_error}
     end.
 

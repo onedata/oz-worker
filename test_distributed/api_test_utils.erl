@@ -447,7 +447,7 @@ run_gs_test(Config, GsSpec, Client, Data, DescFmt, Env, ExpError) ->
 % To change atoms in error, it is required to
 % fully jsonify error and dejsonify it
 error_to_gs_expectations(Config, ErrorType) ->
-    ProtoVer = hd(oz_test_utils:get_gs_supported_proto_verions(Config)),
+    ProtoVer = hd(oz_test_utils:get_gs_supported_proto_versions(Config)),
     ErrorJson = json_utils:encode(oz_test_utils:call_oz(
         Config, gs_protocol_errors, error_to_json, [ProtoVer, ErrorType]
     )),
@@ -485,7 +485,7 @@ prepare_gs_client(Config, ExpIdentity, Authorization, Opts) ->
     }} = gs_client:start_link(
         oz_test_utils:get_gs_ws_url(Config),
         Authorization,
-        oz_test_utils:get_gs_supported_proto_verions(Config),
+        oz_test_utils:get_gs_supported_proto_versions(Config),
         fun(_) -> ok end,
         Opts
     ),

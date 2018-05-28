@@ -14,7 +14,6 @@
 -author("Wojciech Geisler").
 
 -include("datastore/oz_datastore_models.hrl").
--include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
@@ -297,7 +296,7 @@ upgrade_record(1, DnsState) ->
 %%--------------------------------------------------------------------
 -spec is_subdomain_reserved(subdomain()) -> boolean().
 is_subdomain_reserved(Subdomain) ->
-    {ok, DnsConf} = application:get_env(?APP_NAME, dns),
+    {ok, DnsConf} = oz_worker:get_env(dns),
 
     % Get all reserved values
     Static = lists:flatmap(fun(Config) ->

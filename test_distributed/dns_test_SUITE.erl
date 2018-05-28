@@ -608,7 +608,7 @@ filter_response(Type, {ok, Response}) ->
 -spec set_dns_config(Config :: term(), Key :: term(), Value :: term()) -> ok.
 set_dns_config(Config, Key, Value) ->
     OldConfig = oz_test_utils:call_oz(Config,
-        application, get_env, [?APP_NAME, dns, []]),
+        oz_worker, get_env, [dns, []]),
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:set_env(Nodes, ?APP_NAME, dns,
         lists:keystore(Key, 1, OldConfig, {Key, Value})).

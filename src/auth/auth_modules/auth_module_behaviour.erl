@@ -36,7 +36,7 @@
 %% or error and its description otherwise.
 %% @end
 %%--------------------------------------------------------------------
--callback validate_login(auth_utils:idp()) ->
+-callback validate_login(auth_utils:idp(), QueryParams :: proplists:proplist()) ->
     {ok, #linked_account{}} | {error, term()}.
 
 
