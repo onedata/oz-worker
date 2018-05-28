@@ -4,6 +4,13 @@
 CHANGELOG
 ---------
 
+### 18.02.0-rc4
+
+* VFS-4072 Provider registration disallowed when domain is occupied
+* VFS-3902 Fixed issue when deregistering provider with graph sync
+* VFS-4005 Changed validators to accept names 2 characters long
+
+
 ### 18.02.0-rc3
 
 * VFS-4005 Added name validators
