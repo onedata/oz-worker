@@ -25,7 +25,7 @@
 -export([supervisor_flags/0]).
 
 -define(GS_WORKER_SUP, gs_worker_sup).
--define(STREAM_HEALTHCHECK_INTERVAL, application:get_env(?APP_NAME,
+-define(STREAM_HEALTHCHECK_INTERVAL, oz_worker:get_env(
     gs_server_stream_healthcheck_interval, timer:seconds(5))).
 
 %%%===================================================================

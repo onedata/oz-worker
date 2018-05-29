@@ -19,7 +19,7 @@
 
 %% API
 -export([all/0]).
--export([init_per_suite/1, init_per_testcase/2, end_per_testcase/2]).
+-export([init_per_suite/1, init_per_testcase/2, end_per_testcase/2, end_per_suite/1]).
 -export([rest_api_connection_test/1, datastore_connection_test/1]).
 
 %%%===================================================================
@@ -30,9 +30,9 @@ all() -> ?ALL([rest_api_connection_test, datastore_connection_test]).
 
 rest_api_connection_test(Config) ->
     [Node1 | _] = ?config(oz_worker_nodes, Config),
-    {ok, RestPort} = rpc:call(Node1, application, get_env, [?APP_NAME, gui_port]),
+    {ok, RestPort} = oz_test_utils:get_rest_port(Config),
     {ok, Domain} = test_utils:get_env(Node1, ?APP_NAME, http_domain),
-    URL = str_utils:format("https://~s:~B/provider/public/check_my_ip", [str_utils:to_list(Domain), RestPort]),
+    URL = str_utils:format("https://~s:~B/provider/public/check_my_ip", [Domain, RestPort]),
     Opts = [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}],
     ?assertMatch({ok, _, _, _}, http_client:get(URL, #{}, <<>>, Opts)).
 
@@ -59,4 +59,7 @@ end_per_testcase(rest_api_connection_test, _Config) ->
     hackney:stop(),
     ssl:stop();
 end_per_testcase(_, _Config) ->
+    ok.
+
+end_per_suite(_) ->
     ok.

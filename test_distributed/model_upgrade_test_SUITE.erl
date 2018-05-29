@@ -73,7 +73,13 @@ user_upgrade_test(Config) ->
         Config, od_user, upgrade_record, [4, UserRecordVer4]
     ),
     ?assertEqual(5, Version5),
-    ?assertEqual(UserRecordVer5, user_record_5()).
+    ?assertEqual(UserRecordVer5, user_record_5()),
+
+    {Version6, UserRecordVer6} = oz_test_utils:call_oz(
+        Config, od_user, upgrade_record, [5, UserRecordVer5]
+    ),
+    ?assertEqual(6, Version6),
+    ?assertEqual(UserRecordVer6, user_record_6()).
 
 
 group_upgrade_test(Config) ->
@@ -343,9 +349,57 @@ user_record_4() -> {od_user,
     true
 }.
 
-user_record_5() -> #od_user{
+user_record_5() -> {od_user,
+    <<"name">>,
+    <<"login">>,
+    [<<"email1@email.com">>, <<"email2@email.com">>],
+    true,
+    [
+        #linked_account{
+            idp = google,
+            subject_id = <<"user_id1">>,
+            login = <<"login1">>,
+            name = <<"name1">>,
+            email_list = [<<"email1@email.com">>],
+            groups = []
+        },
+        #linked_account{
+            idp = github,
+            subject_id = <<"user_id2">>,
+            login = <<"login2">>,
+            name = <<"name2">>,
+            email_list = [<<"email2@email.com">>],
+            groups = []
+        }
+    ],
+    <<"default_space">>,
+    <<"default_provider">>,
+    <<"chosen_provider">>,
+    [<<"token1">>, <<"token2">>],
+    #{
+        <<"sp1">> => <<"sp1Name">>,
+        <<"sp2">> => <<"sp2Name">>
+    },
+    [
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
+        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
+    ],
+    [],
+    [<<"group1">>, <<"group2">>, <<"group3">>],
+    [<<"space1">>, <<"space2">>, <<"space3">>],
+    [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
+    [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    true
+}.
+
+user_record_6() -> #od_user{
     name = <<"name">>,
-    login = <<"login">>,
+    alias = <<"login">>,
     email_list = [<<"email1@email.com">>, <<"email2@email.com">>],
     basic_auth_enabled = true,
     linked_accounts = [
@@ -368,7 +422,6 @@ user_record_5() -> #od_user{
     ],
     default_space = <<"default_space">>,
     default_provider = <<"default_provider">>,
-    chosen_provider = <<"chosen_provider">>,
     client_tokens = [<<"token1">>, <<"token2">>],
     space_aliases = #{
         <<"sp1">> => <<"sp1Name">>,

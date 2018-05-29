@@ -45,5 +45,5 @@ git pull origin ${BRANCH}
 # Replace auth.config
 cd ${RUNNER_SCRIPT_DIR}
 echo "Replacing auth.config."
-cp _build/default/lib/onedev/auth.config _build/default/rel/oz_worker/data/auth.config
+cp _build/default/lib/onedev/auth.config _build/default/rel/oz_worker/etc/auth.config
 exit 0

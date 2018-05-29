@@ -78,7 +78,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 DefaultSpace = proplists:get_value(<<"default_space">>, Props),
                 UserInfo = #od_user{
                     name = UserId,
-                    login = UserId,
+                    alias = UserId,
                     email_list = [<<UserId/binary, "@gmail.com">>],
                     linked_accounts = [
                         #linked_account{idp = google,
@@ -90,15 +90,13 @@ set_up_test_entities(Users, Groups, Spaces) ->
                     ],
                     spaces = [],
                     default_space = DefaultSpace,
-                    groups = [],
-                    default_provider = undefined,
-                    chosen_provider = undefined
+                    groups = []
                 },
                 {ok, UserId} = create_user_with_uuid(UserInfo, UserId)
             end, Users),
 
         % Create groups
-        GroupCreators = lists:foldl(
+        lists:foldl(
             fun({GroupId, Props}, Acc) ->
                 UserList = proplists:get_value(<<"users">>, Props),
                 [GroupCreator | UsersToAdd] = UserList,
@@ -113,7 +111,6 @@ set_up_test_entities(Users, Groups, Spaces) ->
 
         lists:foreach(fun({GroupId, Props}) ->
             NestedGroups = proplists:get_value(<<"groups">>, Props, []),
-            GroupCreator = maps:get(GroupId, GroupCreators),
             lists:foreach(fun(NestedGroupId) ->
                 {ok, NestedGroupId} = group_logic:add_group(?ROOT, GroupId, NestedGroupId)
             end, NestedGroups)

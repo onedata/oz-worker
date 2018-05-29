@@ -11,8 +11,9 @@
 %%% @end
 %%%-------------------------------------------------------------------
 -module(provider_gs_translator).
--behaviour(gs_translator_behaviour).
 -author("Lukasz Opiola").
+
+-behaviour(gs_translator_behaviour).
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -20,12 +21,23 @@
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 %% API
--export([translate_create/3, translate_get/3]).
+-export([handshake_attributes/1, translate_create/3, translate_get/3]).
 
 
 %%%===================================================================
 %%% API
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns handshake response attributes for given client that has been
+%% authorized.
+%% @end
+%%--------------------------------------------------------------------
+-spec handshake_attributes(gs_protocol:client()) ->
+    gs_protocol:handshake_attributes().
+handshake_attributes(_) ->
+    undefined.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -65,14 +77,16 @@ translate_create(ProtocolVersion, GRI, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_get(gs_protocol:protocol_version(), gs_protocol:gri(),
-    Data :: term()) -> gs_protocol:data() | gs_protocol:error().
+    Data :: term()) ->
+    gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()} |
+    gs_protocol:error().
 translate_get(1, #gri{type = od_provider, aspect = current_time}, TimeMillis) ->
     #{<<"timeMillis">> => TimeMillis};
 
 translate_get(1, #gri{type = od_user, aspect = instance, scope = private}, User) ->
     #od_user{
         name = Name,
-        login = Login,
+        alias = Alias,
         email_list = EmailList,
         linked_accounts = LinkedAccounts,
         default_space = DefaultSpace,
@@ -85,7 +99,9 @@ translate_get(1, #gri{type = od_user, aspect = instance, scope = private}, User)
     } = User,
     #{
         <<"name">> => Name,
-        <<"login">> => gs_protocol:undefined_to_null(Login),
+        <<"alias">> => gs_protocol:undefined_to_null(Alias),
+        % TODO VFS-4506 deprecated, included for backward compatibility
+        <<"login">> => gs_protocol:undefined_to_null(Alias),
         <<"emailList">> => EmailList,
         <<"linkedAccounts">> => user_logic:linked_accounts_to_maps(LinkedAccounts),
         <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
@@ -100,13 +116,15 @@ translate_get(1, #gri{type = od_user, aspect = instance, scope = private}, User)
 translate_get(1, #gri{type = od_user, aspect = instance, scope = protected}, User) ->
     #{
         <<"name">> := Name,
-        <<"login">> := Login,
+        <<"alias">> := Alias,
         <<"emailList">> := EmailList,
         <<"linkedAccounts">> := LinkedAccountMaps
     } = User,
     #{
         <<"name">> => Name,
-        <<"login">> => gs_protocol:undefined_to_null(Login),
+        <<"alias">> => gs_protocol:undefined_to_null(Alias),
+        % TODO VFS-4506 deprecated, included for backward compatibility
+        <<"login">> => gs_protocol:undefined_to_null(Alias),
         <<"emailList">> => EmailList,
         <<"linkedAccounts">> => LinkedAccountMaps
     };
@@ -114,11 +132,13 @@ translate_get(1, #gri{type = od_user, aspect = instance, scope = protected}, Use
 translate_get(1, #gri{type = od_user, aspect = instance, scope = shared}, User) ->
     #{
         <<"name">> := Name,
-        <<"login">> := Login
+        <<"alias">> := Alias
     } = User,
     #{
         <<"name">> => Name,
-        <<"login">> => gs_protocol:undefined_to_null(Login)
+        <<"alias">> => gs_protocol:undefined_to_null(Alias),
+        % TODO VFS-4506 deprecated, included for backward compatibility
+        <<"login">> => gs_protocol:undefined_to_null(Alias)
     };
 
 translate_get(1, #gri{type = od_group, aspect = instance, scope = private}, Group) ->
@@ -200,6 +220,9 @@ translate_get(1, #gri{type = od_share, aspect = instance, scope = private}, Shar
     };
 
 translate_get(1, #gri{type = od_share, aspect = instance, scope = protected}, ShareData) ->
+    ShareData;
+
+translate_get(1, #gri{type = od_share, aspect = instance, scope = public}, ShareData) ->
     ShareData;
 
 translate_get(1, #gri{type = od_provider, id = Id, aspect = instance, scope = private}, Provider) ->

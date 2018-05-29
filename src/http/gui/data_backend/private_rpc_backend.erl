@@ -37,7 +37,7 @@
 handle(<<"changePassword">>, Props) ->
     UserId = gui_session:get_user_id(),
     {ok, #od_user{
-        login = Login
+        alias = Login
     }} = user_logic:get(?USER(UserId), UserId),
     OldPassword = proplists:get_value(<<"oldPassword">>, Props),
     NewPassword = proplists:get_value(<<"newPassword">>, Props),
@@ -53,7 +53,8 @@ handle(<<"changePassword">>, Props) ->
 
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     IdP = binary_to_atom(ProviderBin, utf8),
-    auth_utils:get_redirect_url(IdP, true);
+    {ok, Data} = auth_utils:get_redirect_url(IdP, true),
+    {ok, maps:to_list(Data)};
 
 handle(<<"getTokenProviderSupportSpace">>, [{<<"spaceId">>, SpaceId}]) ->
     Client = ?USER(gui_session:get_user_id()),

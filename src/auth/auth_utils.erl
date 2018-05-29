@@ -13,7 +13,7 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include("auth_common.hrl").
--include("gui/common.hrl").
+-include("http/gui_paths.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("esaml/include/esaml.hrl").
 -include_lib("ctool/include/api_errors.hrl").
@@ -40,8 +40,8 @@
     get_super_group/1,
     get_redirect_url/2,
     get_saml_redirect_url/2,
-    validate_oidc_login/0,
-    validate_saml_login/0,
+    validate_oidc_login/1,
+    validate_saml_login/1,
     get_user_by_linked_account/1,
     acquire_user_by_linked_account/1,
     acquire_user_by_external_access_token/2
@@ -144,7 +144,7 @@ authorize_by_basic_auth(UserPasswdB64) ->
     UserPasswd = base64:decode(UserPasswdB64),
     [User, Passwd] = binary:split(UserPasswd, <<":">>),
     case user_logic:authenticate_by_basic_credentials(User, Passwd) of
-        {ok, #document{key = UserId}, _} ->
+        {ok, #document{key = UserId}} ->
             Client = #client{type = user, id = UserId},
             {true, Client};
         _ ->
@@ -159,8 +159,8 @@ authorize_by_basic_auth(UserPasswdB64) ->
 %%--------------------------------------------------------------------
 -spec local_auth_endpoint() -> binary().
 local_auth_endpoint() ->
-    <<(http_utils:fully_qualified_url(gui_ctx:get_requested_hostname()))/binary,
-        ?local_auth_endpoint>>.
+    oz_worker:get_uri(<<?OIDC_CONSUME_PATH_DEPRECATED>>).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -181,7 +181,7 @@ get_value_binary(Key, Map) ->
         Other ->
             str_utils:to_binary(Other)
     end.
-    
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Extracts email list from a JSON map (standard for OpenId).
@@ -240,20 +240,20 @@ get_super_group(IdP) ->
 %% that defines what request should be performed to redirect to login page.
 %% @end
 %%--------------------------------------------------------------------
--spec get_redirect_url(idp(), ConnectAccount :: boolean()) ->
-    {ok, proplists:proplist()} | {error, term()}.
-get_redirect_url(IdP, ConnectAccount) ->
+-spec get_redirect_url(idp(), LinkAccount :: boolean()) ->
+    {ok, maps:map()} | {error, term()}.
+get_redirect_url(IdP, LinkAccount) ->
     case lists:member(IdP, auth_config:get_auth_providers()) of
         true ->
             HandlerModule = auth_config:get_provider_module(IdP),
-            {ok, Url} = HandlerModule:get_redirect_url(IdP, ConnectAccount),
-            {ok, [
-                {<<"method">>, <<"get">>},
-                {<<"url">>, Url},
-                {<<"formData">>, null}
-            ]};
+            {ok, Url} = HandlerModule:get_redirect_url(IdP, LinkAccount),
+            {ok, #{
+                <<"method">> => <<"get">>,
+                <<"url">> => Url,
+                <<"formData">> => null
+            }};
         false ->
-            get_saml_redirect_url(IdP, ConnectAccount)
+            get_saml_redirect_url(IdP, LinkAccount)
     end.
 
 
@@ -262,9 +262,9 @@ get_redirect_url(IdP, ConnectAccount) ->
 %% via SAML based on provider id as specified in saml.config.
 %% @end
 %%--------------------------------------------------------------------
--spec get_saml_redirect_url(idp(), ConnectAccount :: boolean()) ->
-    {ok, proplists:proplist()} | {error, term()}.
-get_saml_redirect_url(IdP, ConnectAccount) ->
+-spec get_saml_redirect_url(idp(), LinkAccount :: boolean()) ->
+    {ok, maps:map()} | {error, term()}.
+get_saml_redirect_url(IdP, LinkAccount) ->
     IdpConfig = #esaml_idp{
         preferred_sso_binding = PreferredSSOBinding
     } = saml_config:get_idp_config(IdP),
@@ -278,55 +278,56 @@ get_saml_redirect_url(IdP, ConnectAccount) ->
         undefined -> throw({cannot_resolve_sso_url_for_provider, IdP});
         _ -> ok
     end,
-    State = auth_logic:generate_state_token(IdP, ConnectAccount),
+    State = auth_logic:generate_state_token(IdP, LinkAccount),
     SP = saml_config:get_sp_config(),
     AuthNReq = esaml_sp:generate_authn_request(LoginLocation, SP),
     case PreferredSSOBinding of
         http_redirect ->
             Url = esaml_binding:encode_http_redirect(LoginLocation, AuthNReq, State),
-            {ok, [
-                {<<"method">>, <<"get">>},
-                {<<"url">>, Url},
-                {<<"formData">>, null}
-            ]};
+            {ok, #{
+                <<"method">> => <<"get">>,
+                <<"url">> => Url,
+                <<"formData">> => null
+            }};
         http_post ->
             FormData = maps:to_list(esaml_binding:encode_http_post_form_data(AuthNReq, State)),
-            {ok, [
-                {<<"method">>, <<"post">>},
-                {<<"url">>, iolist_to_binary(LoginLocation)},
-                {<<"formData">>, FormData}
-            ]}
+            {ok, #{
+                <<"method">> => <<"post">>,
+                <<"url">> => iolist_to_binary(LoginLocation),
+                <<"formData">> => FormData
+            }}
     end.
 
 
 %%--------------------------------------------------------------------
-%% @doc Function used to validate login by processing a redirect that came from
-%% an OIDC identity provider. Must be called from gui context to work. Returns one of the following:
-%% 1. atom 'new_user' if the login has been verified and a new user has been created
-%% 2. {redirect, URL} if the account already exists, to state where the user should be redirected now
-%% 3. {error, Description} if the validation failed or any other error occurred.
+%% @doc
+%% Function used to validate login by processing a redirect that came from
+%% an OIDC identity provider. Upon success, returns authenticated user id and
+%% the URL where the user should be redirected after login.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_oidc_login() -> new_user | {redirect, URL :: binary()} | {error, term()}.
-validate_oidc_login() ->
+-spec validate_oidc_login(cowboy_req:req()) ->
+    {ok, {od_user:id(), RedirectUrl :: binary()}} | {error, term()}.
+validate_oidc_login(Req) ->
     try
+        QueryParams = cowboy_req:parse_qs(Req),
         % Check url params for state parameter and validate it
-        ParamsProplist = gui_ctx:get_url_params(),
-        StateToken = proplists:get_value(<<"state">>, ParamsProplist),
+        StateToken = proplists:get_value(<<"state">>, QueryParams),
         StateInfo = validate_state_token(StateToken),
         IdP = maps:get(idp, StateInfo),
         HandlerModule = auth_config:get_provider_module(IdP),
 
         % Validate the request and gather user info
-        case HandlerModule:validate_login(IdP) of
+        case HandlerModule:validate_login(IdP, QueryParams) of
             {ok, LinkedAccount} ->
-                validate_login_by_linked_account(LinkedAccount, StateInfo);
+                validate_login_by_linked_account(Req, LinkedAccount, StateInfo);
             {error, bad_access_token} ->
                 {error, ?error_auth_access_token_invalid};
             {error, Reason} ->
                 % The request could not be validated
-                ?warning("Invalid login request via OIDC. Reason:~p~nRequest params:~n~p~nPOST params:~n~p",
-                    [Reason, ParamsProplist, gui_ctx:get_form_params()]),
+                ?warning("Invalid login request via OIDC. Reason:~p~nQuery params:~n~p",
+                    [Reason, QueryParams]
+                ),
                 {error, ?error_auth_invalid_request}
         end
     catch
@@ -340,21 +341,20 @@ validate_oidc_login() ->
 
 %%--------------------------------------------------------------------
 %% @doc Function used to validate login by processing a redirect that came from
-%% a SAML identity provider. Must be called from gui context to work. Returns one of the following:
-%% 1. atom 'new_user' if the login has been verified and a new user has been created
-%% 2. {redirect, URL} if the account already exists, to state where the user should be redirected now
-%% 3. {error, Description} if the validation failed or any other error occurred.
+%% a SAML identity provider. Upon success, returns authenticated user id and
+%% the URL where the user should be redirected after login.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_saml_login() -> new_user | {redirect, URL :: binary()} | {error, term()}.
-validate_saml_login() ->
+-spec validate_saml_login(cowboy_req:req()) ->
+    {ok, {od_user:id(), RedirectUrl :: binary()}} | {error, term()}.
+validate_saml_login(Req) ->
     try
+        {ok, PostBody, _} = cowboy_req:read_urlencoded_body(Req, #{length => 128000}),
         SP = saml_config:get_sp_config(),
         % Check url params for state parameter and validate it
-        {ok, PostVals, _} = cowboy_req:read_urlencoded_body(gui_ctx:get_cowboy_req(), #{length => 128000}),
-        SAMLEncoding = proplists:get_value(<<"SAMLEncoding">>, PostVals),
-        SAMLResponse = proplists:get_value(<<"SAMLResponse">>, PostVals),
-        StateToken = proplists:get_value(<<"RelayState">>, PostVals),
+        SAMLEncoding = proplists:get_value(<<"SAMLEncoding">>, PostBody),
+        SAMLResponse = proplists:get_value(<<"SAMLResponse">>, PostBody),
+        StateToken = proplists:get_value(<<"RelayState">>, PostBody),
         StateInfo = validate_state_token(StateToken),
         IdPId = maps:get(idp, StateInfo),
 
@@ -363,18 +363,18 @@ validate_saml_login() ->
         case (catch esaml_binding:decode_response(SAMLEncoding, SAMLResponse)) of
             {'EXIT', Reason1} ->
                 ?warning("Cannot decode SAML request. Reason:~p~nPOST params:~n~p",
-                    [Reason1, PostVals]),
+                    [Reason1, PostBody]),
                 {error, ?error_auth_invalid_request};
             Xml ->
                 case esaml_sp:validate_assertion(Xml, SP, IdP) of
                     {ok, #esaml_assertion{attributes = Attributes}} ->
                         ?info("Login attempt from IdP '~p', attributes: ~n~p~n", [IdPId, Attributes]),
                         LinkedAccount = saml_assertions_to_linked_account(IdPId, IdP, maps:from_list(Attributes)),
-                        validate_login_by_linked_account(LinkedAccount, StateInfo);
+                        validate_login_by_linked_account(Req, LinkedAccount, StateInfo);
                     {error, Reason2} ->
                         % The request could not be validated
                         ?warning("Invalid login request via SAML. Reason:~p~nPOST params:~n~p",
-                            [Reason2, PostVals]),
+                            [Reason2, PostBody]),
                         {error, ?error_auth_invalid_request}
                 end
         end
@@ -422,44 +422,38 @@ has_group_mapping_enabled(IdP) ->
 %% OIDC / SAML login.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login_by_linked_account(OriginalLinkedAccount :: #linked_account{},
+-spec validate_login_by_linked_account(cowboy_req:req(),
+    OriginalLinkedAccount :: #linked_account{},
     StateInfo :: state_token:state_info()) ->
-    new_user | {redirect, URL :: binary()} | {error, term()}.
-validate_login_by_linked_account(LinkedAccount, StateInfo) ->
-    ConnectAccount = maps:get(connect_account, StateInfo),
+    {ok, {od_user:id(), RedirectUrl :: binary()}} | {error, term()}.
+validate_login_by_linked_account(Req, LinkedAccount, StateInfo) ->
+    ShouldLinkAccount = maps:get(link_account, StateInfo),
     RedirectAfterLogin = maps:get(redirect_after_login, StateInfo),
-    case ConnectAccount of
+    case ShouldLinkAccount of
         false ->
-            case gui_session:is_logged_in() of
-                true -> gui_session:log_out();
-                false -> ok
-            end,
             % Standard login, check if there is an account belonging to the user
             case acquire_user_by_linked_account(LinkedAccount) of
                 {exists, #document{key = UserId}} ->
-                    gui_session:log_in(UserId),
-                    {redirect, RedirectAfterLogin};
+                    {ok, {UserId, RedirectAfterLogin}};
                 {created, #document{key = UserId}} ->
-                    gui_session:log_in(UserId),
-                    gui_session:put_value(firstLogin, true),
-                    new_user
+                    {ok, {UserId, ?AFTER_LOGIN_PAGE_PATH}}
             end;
         true ->
             % Account adding flow
             % Check if this account isn't connected to other profile
-            UserId = gui_session:get_user_id(),
+            {ok, UserId} = oz_gui_session:get_user_id(Req),
             case get_user_by_linked_account(LinkedAccount) of
-                {ok, #document{key = OtherUser}} when OtherUser /= UserId ->
-                    % The account is used on some other profile, cannot proceed
-                    {error, ?error_auth_account_already_linked_to_another_user};
                 {ok, #document{key = UserId}} ->
                     % The account is already linked to this user, report error
                     {error, ?error_auth_account_already_linked_to_current_user};
+                {ok, #document{key = _OtherUser}} ->
+                    % The account is used on some other profile, cannot proceed
+                    {error, ?error_auth_account_already_linked_to_another_user};
                 {error, not_found} ->
                     % Not found -> ok, add new linked account to the user
                     user_logic:merge_linked_account(UserId, LinkedAccount),
                     entity_graph:ensure_up_to_date(),
-                    {redirect, <<?PAGE_AFTER_LOGIN, "?expand_accounts=true">>}
+                    {ok, {UserId, <<?AFTER_LOGIN_PAGE_PATH, "?expand_accounts=true">>}}
             end
     end.
 

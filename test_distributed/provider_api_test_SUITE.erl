@@ -915,6 +915,7 @@ get_eff_user_test(Config) ->
                     },
                     auth_hint = ?THROUGH_PROVIDER(P1),
                     expected_result = ?OK_MAP(ExpDetails#{
+                        <<"login">> => maps:get(<<"alias">>, ExpDetails),
                         <<"gri">> => fun(EncodedGri) ->
                             #gri{id = Id} = oz_test_utils:decode_gri(
                                 Config, EncodedGri

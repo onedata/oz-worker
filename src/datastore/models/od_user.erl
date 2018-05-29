@@ -30,11 +30,12 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
--type login() :: undefined | binary().
+-type alias() :: undefined | binary().
+-type linked_account() :: #linked_account{}.
 -type criterion() :: {linked_account, {auth_utils:idp(), UserId :: binary()}} |
                      {email, binary()} |
-                     {login, login()}.
--export_type([name/0, login/0]).
+                     {alias, alias()}.
+-export_type([name/0, alias/0]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -131,9 +132,9 @@ get_by_criterion({email, Value}) ->
         {ok, [Doc | _]} ->
             {ok, Doc}
     end;
-get_by_criterion({login, Value}) ->
-    Fun = fun(Doc = #document{value = #od_user{login = Login}}, Acc) ->
-        case Login of
+get_by_criterion({alias, Value}) ->
+    Fun = fun(Doc = #document{value = #od_user{alias = Alias}}, Acc) ->
+        case Alias of
             Value -> {stop, [Doc | Acc]};
             _ -> {ok, Acc}
         end
@@ -195,7 +196,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    5.
+    6.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -300,7 +301,11 @@ get_record_struct(5) ->
         {email_list, [string]},
         {groups, [string]}
     ]}]},
-    {record, lists:keydelete(alias, 1, lists:keyreplace(linked_accounts, 1, Struct, LinkedAccStruct))}.
+    {record, lists:keydelete(alias, 1, lists:keyreplace(linked_accounts, 1, Struct, LinkedAccStruct))};
+get_record_struct(6) ->
+    {record, Struct} = get_record_struct(5),
+    % Remove chosen_provider field, rename login to alias
+    {record, lists:keydelete(chosen_provider, 1, lists:keyreplace(login, 1, Struct, {alias, string}))}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -559,16 +564,78 @@ upgrade_record(4, User) ->
         end, LinkedAccounts
     ),
 
-    {5, #od_user{
+    {5, {od_user,
+        Name,
+        Login,
+        EmailList,
+        BasicAuthEnabled,
+        NewLinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+        ChosenProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    }};
+upgrade_record(5, User) ->
+    {od_user,
+        Name,
+        Login,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+        _ChosenProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    } = User,
+
+    {6, #od_user{
         name = Name,
-        login = Login,
+        alias = Login,
         email_list = EmailList,
         basic_auth_enabled = BasicAuthEnabled,
-        linked_accounts = NewLinkedAccounts,
+        linked_accounts = LinkedAccounts,
 
         default_space = DefaultSpace,
         default_provider = DefaultProvider,
-        chosen_provider = ChosenProvider,
+
         client_tokens = ClientTokens,
         space_aliases = SpaceAliases,
 

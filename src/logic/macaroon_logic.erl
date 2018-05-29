@@ -18,7 +18,7 @@
 -include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/auth/onedata_macaroons.hrl").
 
--define(MAX_PROVIDER_MACAROON_TTL, application:get_env(?APP_NAME, max_provider_macaroon_ttl, 3600)).
+-define(MAX_PROVIDER_MACAROON_TTL, oz_worker:get_env(max_provider_macaroon_ttl, 3600)).
 
 -export([create_provider_root_macaroon/1]).
 -export([verify_provider_auth/1]).
@@ -81,8 +81,7 @@ verify_provider_identity(Macaroon) ->
 -spec create(macaroon_auth:id(), macaroon_auth:secret(), [onedata_macaroons:caveat()]) ->
     macaroon:macaroon().
 create(Identifier, Secret, Caveats) ->
-    {ok, Domain} = application:get_env(?APP_NAME, http_domain),
-    onedata_macaroons:create(Domain, Secret, Identifier, Caveats).
+    onedata_macaroons:create(oz_worker:get_domain(), Secret, Identifier, Caveats).
 
 
 -spec verify_provider_issuer(macaroon:macaroon(), [onedata_macaroons:caveat()]) ->

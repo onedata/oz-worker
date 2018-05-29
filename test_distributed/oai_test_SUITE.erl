@@ -1107,7 +1107,7 @@ get_oai_pmh_URL(Node) ->
     str_utils:format_bin("http://~s", [OZ_IP_1]).
 
 get_oai_pmh_api_path(Node) ->
-    {ok, OAIPrefix} = rpc:call(Node, application, get_env, [?APP_NAME, oai_pmh_api_prefix]),
+    {ok, OAIPrefix} = rpc:call(Node, oz_worker, get_env, [oai_pmh_api_prefix]),
     list_to_binary(OAIPrefix).
 
 prepare_querystring(Proplist) ->

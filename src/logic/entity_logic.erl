@@ -50,7 +50,7 @@ od_handle_service | od_handle | oz_privileges.
 -type update_result() :: ok | error().
 -type result() :: create_result() | get_result() | update_result() | delete_result().
 
--type type_validator() :: any | atom | list_of_atoms | binary | login |
+-type type_validator() :: any | atom | list_of_atoms | binary | alias |
 list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
@@ -64,7 +64,7 @@ fun((term()) -> boolean()) |
 token_logic:token_type() | % Compatible only with 'token' type validator
 subdomain | domain |
 email |
-login |
+alias |
 name | user_name.
 
 % The 'aspect' key word allows to validate the data provided in aspect
@@ -645,14 +645,14 @@ check_type(token, Key, Macaroon) ->
         true -> Macaroon;
         false -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
     end;
-check_type(login, _Key, null) ->
+check_type(alias, _Key, null) ->
     undefined;
-check_type(login, _Key, undefined) ->
+check_type(alias, _Key, undefined) ->
     undefined;
-check_type(login, _Key, Binary) when is_binary(Binary) ->
+check_type(alias, _Key, Binary) when is_binary(Binary) ->
     Binary;
-check_type(login, _Key, _) ->
-    throw(?ERROR_BAD_VALUE_LOGIN);
+check_type(alias, _Key, _) ->
+    throw(?ERROR_BAD_VALUE_ALIAS);
 check_type(list_of_ipv4_addresses, Key, ListOfIPs) ->
     try
         lists:map(fun(IP) ->
@@ -735,9 +735,8 @@ check_value(binary, subdomain, Key, <<"">>) ->
 check_value(binary, subdomain, _Key, Value) ->
     case re:run(Value, ?SUBDOMAIN_VALIDATION_REGEXP, [{capture, none}]) of
         match -> % Check length
-            {ok, OZDomain} = application:get_env(?APP_NAME, http_domain),
             % + 1 for the dot between subdomain and domain
-            DomainLength = size(Value) + length(OZDomain) + 1,
+            DomainLength = size(Value) + byte_size(oz_worker:get_domain()) + 1,
             case DomainLength =< ?MAX_DOMAIN_LENGTH of
                 true -> ok;
                 _ -> throw(?ERROR_BAD_VALUE_SUBDOMAIN)
@@ -821,12 +820,12 @@ check_value(token, TokenType, Key, Macaroon) ->
         bad_type ->
             throw(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key))
     end;
-check_value(login, login, _Key, undefined) ->
+check_value(alias, alias, _Key, undefined) ->
     ok;
-check_value(login, login, _Key, Value) ->
-    case re:run(Value, ?LOGIN_VALIDATION_REGEXP, [{capture, none}]) of
+check_value(alias, alias, _Key, Value) ->
+    case re:run(Value, ?ALIAS_VALIDATION_REGEXP, [{capture, none}]) of
         match -> ok;
-        _ -> throw(?ERROR_BAD_VALUE_LOGIN)
+        _ -> throw(?ERROR_BAD_VALUE_ALIAS)
     end;
 check_value(binary, name, _Key, Value) ->
     case re:run(Value, ?NAME_VALIDATION_REGEXP, [{capture, none}, unicode, ucp]) of

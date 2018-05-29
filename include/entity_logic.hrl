@@ -104,9 +104,9 @@
 % According to RFC 5321
 -define(EMAIL_MAX_LENGTH, 254).
 
-% Regexp to validate logins. Login must be 3-15 characters long and composed of letters and digits.
+% Regexp to validate aliases. Alias must be 2-15 characters long and composed of letters and digits.
 % Dashes and underscores are allowed (but not at the beginning or the end).
--define(LOGIN_VALIDATION_REGEXP, <<"^[a-z0-9A-Z][a-z0-9A-Z_-]{1,13}[a-z0-9A-Z]$">>).
+-define(ALIAS_VALIDATION_REGEXP, <<"^[a-z0-9A-Z][a-z0-9A-Z_-]{0,13}[a-z0-9A-Z]$">>).
 
 % Regexp to validate names. Name must be 2-50 characters long and composed of UTF-8 letters, digits, brackets and underscores.
 % Dashes, spaces and dots are allowed (but not at the beginning or the end).

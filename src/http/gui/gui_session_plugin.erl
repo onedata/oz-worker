@@ -60,12 +60,7 @@ cleanup() ->
 -spec create_session(UserId :: term(), CustomArgs :: [term()]) ->
     {ok, SessId :: binary()} | {error, term()}.
 create_session(UserId, _CustomArgs) ->
-    case session:create(#document{value = #session{user_id = UserId}}) of
-        {ok, #document{key = SessId}} ->
-            {ok, SessId};
-        {error, Reason} ->
-            {error, Reason}
-    end.
+    session:create(UserId).
 
 
 %%--------------------------------------------------------------------
@@ -76,9 +71,9 @@ create_session(UserId, _CustomArgs) ->
 -spec update_session(SessId :: binary(),
     MemoryUpdateFun :: fun((maps:map()) -> maps:map())) ->
     ok | {error, term()}.
-update_session(SessionId, MemoryUpdateFun) ->
-    SessionUpdateFun = fun(#session{memory = OldMemory} = Session) ->
-        {ok, Session#session{memory = MemoryUpdateFun(OldMemory)}}
+update_session(SessionId, _MemoryUpdateFun) ->
+    SessionUpdateFun = fun(#session{} = Session) ->
+        {ok, Session#session{}}
     end,
     case session:update(SessionId, SessionUpdateFun) of
         {ok, _} ->
@@ -97,8 +92,8 @@ update_session(SessionId, MemoryUpdateFun) ->
     {ok, Memory :: proplists:proplist()} | undefined.
 lookup_session(SessionId) ->
     case session:get(SessionId) of
-        {ok, #document{value = #session{memory = Memory}}} ->
-            {ok, Memory};
+        {ok, #document{value = #session{user_id = UserId}}} ->
+            {ok, #{gui_session_user_id => UserId}};
         _ ->
             undefined
     end.
@@ -124,7 +119,7 @@ delete_session(SessionId) ->
 %%--------------------------------------------------------------------
 -spec get_cookie_ttl() -> integer() | {error, term()}.
 get_cookie_ttl() ->
-    case application:get_env(?APP_NAME, gui_cookie_ttl_seconds) of
+    case oz_worker:get_env(gui_cookie_ttl_seconds) of
         {ok, Val} when is_integer(Val) ->
             Val;
         _ ->

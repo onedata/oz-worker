@@ -120,8 +120,8 @@
 -define(USER_NAME1, <<"user1">>).
 -define(USER_NAME2, <<"user2">>).
 -define(USER_NAME3, <<"user3">>).
--define(USER_LOGIN1, <<"login1">>).
--define(USER_LOGIN2, <<"login2">>).
+-define(USER_ALIAS1, <<"alias1">>).
+-define(USER_ALIAS2, <<"alias2">>).
 
 %% Example test data for groups
 -define(GROUP_NAME1, <<"group1">>).

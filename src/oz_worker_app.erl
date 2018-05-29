@@ -5,7 +5,7 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc Applicatin main app file
+%%% @doc Application main app file
 %%% @end
 %%%-------------------------------------------------------------------
 -module(oz_worker_app).

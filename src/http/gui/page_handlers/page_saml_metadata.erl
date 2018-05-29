@@ -1,24 +1,23 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C) 2017 ACK CYFRONET AGH
-%%% This software is released under the MIT license
+%%% @copyright (C) 2018 ACK CYFRONET AGH
+%%% This software is released under the MIT license 
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module implements page_backend_behaviour and is called
-%%% when /saml/sp.xml page is visited, returning SP metadata.
+%%% This module implements dynamic_page_behaviour and is called
+%%% when SAML metadata page is visited.
 %%% @end
 %%%-------------------------------------------------------------------
--module(saml_metadata_backend).
+-module(page_saml_metadata).
 -author("Lukasz Opiola").
--behaviour(page_backend_behaviour).
 
--include("gui/common.hrl").
--include_lib("ctool/include/logging.hrl").
+-behaviour(dynamic_page_behaviour).
 
-%% API
--export([page_init/0]).
+-include("registered_names.hrl").
+
+-export([handle/2]).
 
 %%%===================================================================
 %%% API
@@ -26,11 +25,15 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link page_backend_behaviour} callback page_init/|0.
+%% {@link dynamic_page_behaviour} callback handle/2.
 %% @end
 %%--------------------------------------------------------------------
--spec page_init() -> gui_html_handler:page_init_result().
-page_init() ->
+-spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
+handle(<<"GET">>, Req) ->
     SignedXml = esaml_sp:generate_metadata(saml_config:get_sp_config()),
     Metadata = xmerl:export([SignedXml], xmerl_xml),
-    {reply, 200, #{<<"Content-Type">> => <<"text/xml">>}, Metadata}.
+    cowboy_req:reply(200,
+        #{<<"content-type">> => <<"text/xml">>},
+        Metadata,
+        Req
+    ).

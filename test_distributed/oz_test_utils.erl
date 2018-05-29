@@ -197,7 +197,7 @@
 -export([
     create_session/3,
     get_gs_ws_url/1,
-    get_gs_supported_proto_verions/1,
+    get_gs_supported_proto_versions/1,
     decode_gri/2
 ]).
 
@@ -1994,7 +1994,7 @@ unmock_handle_proxy(Config) ->
 %%--------------------------------------------------------------------
 -spec gui_ca_certs(Config :: term()) -> [public_key:der_encoded()].
 gui_ca_certs(Config) ->
-    call_oz(Config, gui_listener, get_cert_chain, []).
+    call_oz(Config, https_listener, get_cert_chain_pems, []).
 
 
 %%--------------------------------------------------------------------
@@ -2041,7 +2041,7 @@ get_env(Config, Application, Name) ->
 %%--------------------------------------------------------------------
 -spec get_rest_port(Config :: term()) -> {ok, Port :: inet:port_number()}.
 get_rest_port(Config) ->
-    get_env(Config, ?APP_NAME, gui_port).
+    get_env(Config, ?APP_NAME, https_server_port).
 
 
 %%--------------------------------------------------------------------
@@ -2075,7 +2075,7 @@ get_gs_ws_url(Config) ->
     {ok, GsPort} = get_rest_port(Config),
     str_utils:format_bin(
         "wss://~s:~B/~s",
-        [ZoneDomain, GsPort, string:strip(?GRAPH_SYNC_WS_PATH, both, $/)]
+        [ZoneDomain, GsPort, string:strip(?PROVIDER_GRAPH_SYNC_WS_PATH, both, $/)]
     ).
 
 
@@ -2084,9 +2084,9 @@ get_gs_ws_url(Config) ->
 %% Get supported graph sync protocol versions.
 %% @end
 %%--------------------------------------------------------------------
--spec get_gs_supported_proto_verions(Config :: term()) ->
+-spec get_gs_supported_proto_versions(Config :: term()) ->
     SupportedVersions :: [integer()].
-get_gs_supported_proto_verions(Config) ->
+get_gs_supported_proto_versions(Config) ->
     ?assertMatch([_ | _], call_oz(
         Config, gs_protocol, supported_versions, [])
     ).

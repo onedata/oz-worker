@@ -82,11 +82,9 @@ ok_no_content_reply() ->
 created_reply([<<"/", Path/binary>> | Tail]) ->
     created_reply([Path | Tail]);
 created_reply(PathTokens) ->
-    {ok, Domain} = application:get_env(?APP_NAME, http_domain),
-    {ok, RestPrefix} = application:get_env(?APP_NAME, rest_api_prefix),
+    {ok, RestPrefix} = oz_worker:get_env(rest_api_prefix),
     Path = filename:join([RestPrefix | PathTokens]),
-    Location = str_utils:format_bin("https://~s~s", [Domain, Path]),
-    LocationHeader = #{<<"Location">> => Location},
+    LocationHeader = #{<<"Location">> => oz_worker:get_uri(Path)},
     #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
 
 

@@ -13,6 +13,7 @@
 -module(share_logic).
 -author("Lukasz Opiola").
 
+-include("http/gui_paths.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -178,8 +179,7 @@ exists(ShareId) ->
 %%--------------------------------------------------------------------
 -spec share_id_to_public_url(ShareId :: binary()) -> binary().
 share_id_to_public_url(ShareId) ->
-    {ok, OZHostname} = application:get_env(oz_worker, http_domain),
-    str_utils:format_bin("https://~s/share/~s", [OZHostname, ShareId]).
+    oz_worker:get_uri(filename:join(<<?PUBLIC_SHARE_PATH>>, ShareId)).
 
 
 %%--------------------------------------------------------------------
@@ -206,4 +206,6 @@ share_id_to_redirect_url(ShareId) ->
     end,
     ChosenProvider = lists:nth(rand:uniform(length(Choice)), Choice),
     {ok, ProviderURL} = provider_logic:get_url(ChosenProvider),
-    str_utils:format_bin("~s/#/public/shares/~s", [ProviderURL, ShareId]).
+    str_utils:format_bin("~s~s", [
+        ProviderURL, ?PROVIDER_PUBLIC_SHARE_PATH(ShareId)
+    ]).

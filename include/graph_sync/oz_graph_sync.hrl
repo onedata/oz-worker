@@ -16,7 +16,9 @@
 % Global worker identifier
 -define(GS_SERVER_WORKER_GLOBAL_NAME, graph_sync_server_worker).
 
--define(GRAPH_SYNC_WS_PATH, "/graph_sync/provider/").
+% Graph Sync endpoints
+-define(PROVIDER_GRAPH_SYNC_WS_PATH, "/graph_sync/provider").
+-define(GUI_GRAPH_SYNC_WS_PATH, "/graph_sync/gui").
 
 -endif.
 

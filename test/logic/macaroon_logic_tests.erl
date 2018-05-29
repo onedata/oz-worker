@@ -65,7 +65,7 @@ setup() ->
         time_utils:system_time_seconds()
     end),
 
-    application:set_env(?APP_NAME, http_domain, <<"dummy-location">>),
+    application:set_env(?APP_NAME, http_domain, "dummy-location.org"),
     application:set_env(?APP_NAME, max_provider_macaroon_ttl, ?MOCK_MAX_PROVIDER_MACAROON_TTL).
 
 teardown(_) ->

@@ -73,6 +73,7 @@ operation_supported(get, instance, protected) -> true;
 operation_supported(get, eff_users, private) -> true;
 operation_supported(get, eff_groups, private) -> true;
 operation_supported(get, spaces, private) -> true;
+operation_supported(get, user_spaces, private) -> true;
 operation_supported(get, domain_config, private) -> true;
 operation_supported(get, {check_my_ip, _}, private) -> true;
 operation_supported(get, current_time, private) -> true;
@@ -317,6 +318,14 @@ get(#el_req{gri = #gri{aspect = eff_groups}}, Provider) ->
 get(#el_req{gri = #gri{aspect = spaces}}, Provider) ->
     {ok, maps:keys(Provider#od_provider.spaces)};
 
+get(#el_req{client = ?USER(UserId), gri = #gri{aspect = user_spaces}}, Provider) ->
+    AllSpaces = maps:keys(Provider#od_provider.spaces),
+    {ok, UserSpaces} = user_logic:get_eff_spaces(?ROOT, UserId),
+    {ok, ordsets:intersection(
+        ordsets:from_list(AllSpaces),
+        ordsets:from_list(UserSpaces)
+    )};
+
 get(#el_req{gri = #gri{aspect = {check_my_ip, ClientIP}}}, _) ->
     {ok, ClientIP};
 
@@ -449,6 +458,12 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Provider
 exists(#el_req{gri = #gri{aspect = {space, SpaceId}}}, Provider) ->
     maps:is_key(SpaceId, Provider#od_provider.spaces);
 
+exists(#el_req{client = Client, gri = #gri{aspect = user_spaces}}, _) ->
+    case Client of
+        ?USER -> true;
+        _ -> false
+    end;
+
 % All other aspects exist if provider record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_provider{}) ->
     Id =/= undefined.
@@ -543,6 +558,12 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_groups}}, _) ->
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = spaces}}, _) ->
     auth_by_self(Req) orelse
         user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_PROVIDERS_LIST_SPACES);
+
+authorize(#el_req{client = Client, operation = get, gri = #gri{aspect = user_spaces}}, _) ->
+    case Client of
+        ?USER -> true;
+        _ -> false
+    end;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = domain_config}}, _) ->
     auth_by_self(Req);

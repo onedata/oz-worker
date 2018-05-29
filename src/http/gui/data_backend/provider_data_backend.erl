@@ -15,7 +15,7 @@
 -behaviour(data_backend_behaviour).
 
 -include("datastore/oz_datastore_models.hrl").
--include("gui/common.hrl").
+-include("http/gui_paths.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 % How many retries (with 1 sec interval) a provider should be checked until

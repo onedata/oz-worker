@@ -113,10 +113,10 @@ create_record(<<"user">>, _Data) ->
     Data :: proplists:proplist()) -> ok | gui_error:error_result().
 update_record(<<"user">>, UserId, [{<<"alias">>, NewLogin}]) ->
     Client = ?USER(gui_session:get_user_id()),
-    case user_logic:update_login(Client, UserId, NewLogin) of
+    case user_logic:update_alias(Client, UserId, NewLogin) of
         ok ->
             ok;
-        ?ERROR_BAD_VALUE_LOGIN ->
+        ?ERROR_BAD_VALUE_ALIAS ->
             gui_error:report_warning(<<
                 "Alias must be 3-15 characters long and composed of letters and digits, "
                 "dashes and underscores are allowed (but not at the beginning or the end). "
@@ -168,7 +168,7 @@ delete_record(<<"user">>, _Id) ->
 user_record(Client, UserId) ->
     {ok, #od_user{
         name = Name,
-        login = UserLogin,
+        alias = UserLogin,
         basic_auth_enabled = BasicAuthEnabled,
         linked_accounts = LinkedAccounts,
         client_tokens = ClientTokenIds,

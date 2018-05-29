@@ -214,11 +214,11 @@ translate(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key)) ->
     {?HTTP_400_BAD_REQUEST,
         {<<"Bad value: provided \"~s\" is of invalid type">>, [Key]}
     };
-translate(?ERROR_BAD_VALUE_LOGIN) ->
+translate(?ERROR_BAD_VALUE_ALIAS) ->
     {?HTTP_400_BAD_REQUEST, <<
-        "Bad value: provided login must be 3-15 characters long and composed of letters and digits."
+        "Bad value: provided alias must be 2-15 characters long and composed of letters and digits."
         "Dashes and underscores are allowed (but not at the beginning or the end). "
-        "Use null value to unset the login."
+        "Use null value to unset the alias."
     >>};
 translate(?ERROR_BAD_VALUE_NAME) ->
     {?HTTP_400_BAD_REQUEST, <<

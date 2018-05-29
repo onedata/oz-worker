@@ -18,7 +18,7 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
--define(STATE_TOKEN_TTL, application:get_env(?APP_NAME, state_token_ttl_secs, 300)).
+-define(STATE_TOKEN_TTL, oz_worker:get_env(state_token_ttl_secs, 300)).
 
 %% API
 -export([create/1]).

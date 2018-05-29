@@ -18,7 +18,7 @@
 -include_lib("xmerl/include/xmerl.hrl").
 
 %% API
--export([get_redirect_url/2, validate_login/1, get_user_info/2]).
+-export([get_redirect_url/2, validate_login/2, get_user_info/2]).
 
 %%%===================================================================
 %%% API functions
@@ -30,10 +30,11 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec get_redirect_url(auth_utils:idp(), boolean()) -> {ok, binary()} | {error, term()}.
-get_redirect_url(IdP, ConnectAccount) ->
+get_redirect_url(IdP, LinkAccount) ->
     try
-        HostName = http_utils:fully_qualified_url(gui_ctx:get_requested_hostname()),
-        RedirectURI = <<(auth_utils:local_auth_endpoint())/binary, "?state=", (auth_logic:generate_state_token(IdP, ConnectAccount))/binary>>,
+        AuthEndpoint = auth_utils:local_auth_endpoint(),
+        State = auth_logic:generate_state_token(IdP, LinkAccount),
+        RedirectURI = <<AuthEndpoint/binary, "?state=", State/binary>>,
 
         ParamsProplist = [
             {<<"openid.mode">>, <<"checkid_setup">>},
@@ -41,7 +42,7 @@ get_redirect_url(IdP, ConnectAccount) ->
             {<<"openid.return_to">>, RedirectURI},
             {<<"openid.claimed_id">>, <<"http://specs.openid.net/auth/2.0/identifier_select">>},
             {<<"openid.identity">>, <<"http://specs.openid.net/auth/2.0/identifier_select">>},
-            {<<"openid.realm">>, HostName},
+            {<<"openid.realm">>, oz_worker:get_url()},
             {<<"openid.sreg.required">>, <<"nickname,email,fullname">>},
             {<<"openid.ns.ext1">>, <<"http://openid.net/srv/ax/1.0">>},
             {<<"openid.ext1.mode">>, <<"fetch_request">>},
@@ -65,18 +66,16 @@ get_redirect_url(IdP, ConnectAccount) ->
 %% See function specification in auth_module_behaviour.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login(auth_utils:idp()) ->
+-spec validate_login(auth_utils:idp(), QueryParams :: proplists:proplist()) ->
     {ok, #linked_account{}} | {error, term()}.
-validate_login(IdP) ->
+validate_login(IdP, QueryParams) ->
     try
-        % Retrieve URL params
-        ParamsProplist = gui_ctx:get_url_params(),
         % Make sure received endpoint is really the PLGrid endpoint
-        ReceivedEndpoint = proplists:get_value(<<"openid.op_endpoint">>, ParamsProplist),
+        ReceivedEndpoint = proplists:get_value(<<"openid.op_endpoint">>, QueryParams),
         true = (plgrid_endpoint(IdP) =:= ReceivedEndpoint),
 
         % 'openid.signed' contains parameters that must be contained in validation request
-        Signed = proplists:get_value(<<"openid.signed">>, ParamsProplist),
+        Signed = proplists:get_value(<<"openid.signed">>, QueryParams),
         SignedArgsNoPrefix = binary:split(Signed, <<",">>, [global]),
         % Add 'openid.' prefix to all parameters
         % And add 'openid.sig' and 'openid.signed' params which are required for validation
@@ -88,7 +87,7 @@ validate_login(IdP) ->
         % Gather values for parameters that were signed
         NewParamsProplist = lists:map(
             fun(Key) ->
-                Value = case proplists:get_value(Key, ParamsProplist) of
+                Value = case proplists:get_value(Key, QueryParams) of
                     undefined ->
                         throw("Value for " ++ str_utils:to_list(Key) ++ " not found");
                     Val -> Val
@@ -109,21 +108,21 @@ validate_login(IdP) ->
         Response = <<"is_valid:true\n">>,
 
         % Gather user info
-        Login = get_signed_param(<<"openid.sreg.nickname">>, ParamsProplist, SignedArgs),
+        Login = get_signed_param(<<"openid.sreg.nickname">>, QueryParams, SignedArgs),
         % Login is also user id, cannot be empty
         true = (Login /= <<"">>),
-        Name = get_signed_param(<<"openid.sreg.fullname">>, ParamsProplist, SignedArgs),
+        Name = get_signed_param(<<"openid.sreg.fullname">>, QueryParams, SignedArgs),
         Emails =
-            case get_signed_param(<<"openid.sreg.email">>, ParamsProplist, SignedArgs) of
+            case get_signed_param(<<"openid.sreg.email">>, QueryParams, SignedArgs) of
                 <<>> -> [];
                 Email -> [Email]
             end,
 
         % TODO Teams and DNs are unused
-        _Teams = parse_teams(str_utils:to_list(get_signed_param(<<"openid.ext1.value.teams">>, ParamsProplist, SignedArgs))),
-        DN1 = get_signed_param(<<"openid.ext1.value.dn1">>, ParamsProplist, SignedArgs),
-        DN2 = get_signed_param(<<"openid.ext1.value.dn2">>, ParamsProplist, SignedArgs),
-        DN3 = get_signed_param(<<"openid.ext1.value.dn3">>, ParamsProplist, SignedArgs),
+        _Teams = parse_teams(str_utils:to_list(get_signed_param(<<"openid.ext1.value.teams">>, QueryParams, SignedArgs))),
+        DN1 = get_signed_param(<<"openid.ext1.value.dn1">>, QueryParams, SignedArgs),
+        DN2 = get_signed_param(<<"openid.ext1.value.dn2">>, QueryParams, SignedArgs),
+        DN3 = get_signed_param(<<"openid.ext1.value.dn3">>, QueryParams, SignedArgs),
         _DnList = lists:filter(
             fun(X) ->
                 (X /= [])

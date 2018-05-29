@@ -22,9 +22,6 @@
 %% datastore_model callbacks
 -export([get_ctx/0]).
 
--type record() :: #basic_auth_cache{}.
--type doc() :: datastore_doc:doc(record()).
-
 -define(CTX, #{
     model => ?MODULE,
     routing => local,

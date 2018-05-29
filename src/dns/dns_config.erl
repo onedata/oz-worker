@@ -48,7 +48,7 @@ build_domain(Subdomain, Domain) ->
 %%--------------------------------------------------------------------
 -spec build_fqdn_from_subdomain(Subdomain :: domain()) -> domain().
 build_fqdn_from_subdomain(Subdomain) ->
-    build_domain(Subdomain, get_onezone_domain()).
+    build_domain(Subdomain, oz_worker:get_domain()).
 
 
 %%--------------------------------------------------------------------
@@ -70,7 +70,7 @@ insert_config(Config) ->
 -spec build_config() -> dns_config().
 build_config() ->
     OneZoneIPs = node_manager:get_cluster_ips(),
-    OneZoneDomain = get_onezone_domain(),
+    OneZoneDomain = oz_worker:get_domain(),
     AdminEmail = get_env(soa_admin_mailbox),
 
     OnezoneNS = build_onezone_ns_entries(OneZoneIPs),
@@ -94,25 +94,13 @@ build_config() ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns OneZone domain.
-%% @end
-%%--------------------------------------------------------------------
--spec get_onezone_domain() -> domain().
-get_onezone_domain() ->
-    {ok, Host} = application:get_env(?APP_NAME, http_domain),
-    list_to_binary(Host).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
 %% Returns A records based on provider subdomains and entries in app config.
 %% @end
 %%--------------------------------------------------------------------
 -spec build_a_records(NSDomains :: [domain_entry()], OneZoneIPs :: [inet:ip4_address()]) ->
     [#dns_rr{}].
 build_a_records(NSDomains, OneZoneIPs) ->
-    OneZoneDomain = get_onezone_domain(),
+    OneZoneDomain = oz_worker:get_domain(),
 
     ProviderSubdomains = maps:to_list(dns_state:get_subdomains_to_ips()),
 
@@ -139,7 +127,7 @@ build_a_records(NSDomains, OneZoneIPs) ->
 %%--------------------------------------------------------------------
 -spec build_ns_records([domain_entry()]) -> [#dns_rr{}].
 build_ns_records(OneZoneNS) ->
-    OneZoneDomain = get_onezone_domain(),
+    OneZoneDomain = oz_worker:get_domain(),
 
     OnezoneRecords =
         [build_record_ns(OneZoneDomain, NSHost) || {NSHost, _} <- OneZoneNS],
@@ -168,7 +156,7 @@ build_ns_records(OneZoneNS) ->
 -spec build_onezone_ns_entries([inet:ip4_address()]) ->
     [domain_entry()].
 build_onezone_ns_entries(OneZoneIPs) ->
-    OneZoneDomain = get_onezone_domain(),
+    OneZoneDomain = oz_worker:get_domain(),
     NSIPs = lists:sort(OneZoneIPs),
 
     % ensure minimum number of NS subdomains is met
@@ -199,7 +187,7 @@ build_onezone_ns_entries(OneZoneIPs) ->
 %%--------------------------------------------------------------------
 -spec build_txt_records() -> [#dns_rr{}].
 build_txt_records() ->
-    OneZoneDomain = get_onezone_domain(),
+    OneZoneDomain = oz_worker:get_domain(),
     ProviderEntries = dns_state:get_txt_records(),
     StaticEntries = get_env(static_txt_records, []),
 
@@ -207,12 +195,12 @@ build_txt_records() ->
         ({Name, {Content, undefined}}) ->
             Domain = build_domain(Name, OneZoneDomain),
             build_record_txt(Domain, Content);
-        ({Name, {Content, TTL}}) ->
+        ({Name, {Value, TTL}}) ->
             Domain = build_domain(Name, OneZoneDomain),
-            build_record_txt(Domain, Content, TTL);
-        ({Name, Content}) ->
+            build_record_txt(Domain, Value, TTL);
+        ({Name, Value}) ->
             Domain = build_domain(Name, OneZoneDomain),
-            build_record_txt(Domain, Content)
+            build_record_txt(Domain, Value)
     end, ProviderEntries ++ StaticEntries).
 
 
@@ -224,7 +212,7 @@ build_txt_records() ->
 %%--------------------------------------------------------------------
 -spec build_mx_records() -> [#dns_rr{}].
 build_mx_records() ->
-    OneZoneDomain = get_onezone_domain(),
+    OneZoneDomain = oz_worker:get_domain(),
     StaticEntries = get_env(static_mx_records, []),
 
     lists:map(fun({Subdomain, Mailserver, Preference}) ->
@@ -240,7 +228,7 @@ build_mx_records() ->
 %%--------------------------------------------------------------------
 -spec build_cname_records() -> [#dns_rr{}].
 build_cname_records() ->
-    OneZoneDomain = get_onezone_domain(),
+    OneZoneDomain = oz_worker:get_domain(),
     StaticEntries = filter_shadowed_entries(get_env(static_cname_records, [])),
 
     lists:map(fun({Subdomain, Target}) ->
@@ -335,8 +323,8 @@ build_record_ns(Name, Nameserver) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec build_record_txt(domain(), binary() | string()) -> #dns_rr{}.
-build_record_txt(Domain, Content) ->
-    build_record_txt(Domain, Content, get_env(txt_ttl, 120)).
+build_record_txt(Domain, Value) ->
+    build_record_txt(Domain, Value, get_env(txt_ttl, 120)).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -346,16 +334,16 @@ build_record_txt(Domain, Content) ->
 %% by erl_dns.
 %% @end
 %%--------------------------------------------------------------------
--spec build_record_txt(Domain :: domain(), Content :: binary() | string(),
+-spec build_record_txt(Domain :: domain(), Value :: binary() | string(),
     TTL :: non_neg_integer()) -> #dns_rr{}.
-build_record_txt(Domain, Content, TTL) when is_binary(Content) ->
-    build_record_txt(Domain, binary:bin_to_list(Content), TTL);
-build_record_txt(Domain, Content, TTL) ->
+build_record_txt(Domain, Value, TTL) when is_binary(Value) ->
+    build_record_txt(Domain, binary:bin_to_list(Value), TTL);
+build_record_txt(Domain, Value, TTL) ->
     #dns_rr{
         name = Domain,
         type = ?DNS_TYPE_TXT,
         ttl = TTL,
-        data = #dns_rrdata_txt{txt = Content}
+        data = #dns_rrdata_txt{txt = Value}
     }.
 
 
@@ -399,7 +387,7 @@ build_record_cname(Name, Target) ->
 %%--------------------------------------------------------------------
 -spec get_env(Key :: atom()) -> term().
 get_env(Key) ->
-    Props = application:get_env(?APP_NAME, dns, []),
+    Props = oz_worker:get_env(dns, []),
     case proplists:get_value(Key, Props) of
         undefined ->
             ?error("Failed to fetch property \"~p\" from dns config.", [Key]),
@@ -416,5 +404,5 @@ get_env(Key) ->
 %%--------------------------------------------------------------------
 -spec get_env(Key :: atom(), Default :: term()) -> term().
 get_env(Key, Default) ->
-    Props = application:get_env(?APP_NAME, dns, []),
+    Props = oz_worker:get_env(dns, []),
     proplists:get_value(Key, Props, Default).

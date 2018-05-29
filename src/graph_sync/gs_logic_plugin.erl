@@ -14,6 +14,7 @@
 -behaviour(gs_logic_plugin_behaviour).
 -author("Lukasz Opiola").
 
+-include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("entity_logic.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -43,8 +44,8 @@
 -spec authorize_by_session_cookie(SessionCookie :: binary()) ->
     false | {true, gs_protocol:client()} | {error, term()}.
 authorize_by_session_cookie(SessionCookie) ->
-    case session:get(SessionCookie) of
-        {ok, #document{value = #session{user_id = UserId}}} ->
+    case oz_gui_session:get_user_id(SessionCookie) of
+        {ok, UserId} ->
             {true, ?USER(UserId)};
         _ ->
             ?ERROR_UNAUTHORIZED
@@ -201,6 +202,26 @@ is_authorized(Client, AuthHint, GRI, Operation, Entity) ->
     gs_protocol:rpc_result().
 handle_rpc(1, _, <<"authorizeUser">>, Args) ->
     user_logic:authorize(Args);
+handle_rpc(1, _, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdP}) ->
+    case oz_worker:get_env(dev_mode) of
+        {ok, true} ->
+            {ok, #{
+                <<"method">> => <<"get">>,
+                <<"url">> => <<"/dev_login">>,
+                <<"formData">> => null
+            }};
+        _ ->
+            LinkAccount = maps:get(<<"linkAccount">>, Data, false),
+            auth_utils:get_redirect_url(binary_to_atom(IdP, utf8), LinkAccount)
+    end;
+handle_rpc(1, ?USER(UserId), <<"getProviderRedirectURL">>, Args) ->
+    ProviderId = maps:get(<<"providerId">>, Args),
+    RedirectPath = case maps:get(<<"path">>, Args, <<"/">>) of
+        null -> <<"/">>;
+        P -> P
+    end,
+    {ok, URL} = auth_logic:get_redirection_uri(UserId, ProviderId, RedirectPath),
+    {ok, #{<<"url">> => URL}};
 handle_rpc(1, _, _, _) ->
     ?ERROR_RPC_UNDEFINED.
 
@@ -235,7 +256,8 @@ handle_graph_request(Client, AuthHint, GRI, Operation, Data, Entity) ->
 subscribable_resources(od_user) -> [
     {instance, private},
     {instance, protected},
-    {instance, shared}
+    {instance, shared},
+    {client_tokens, private}
 ];
 subscribable_resources(od_group) -> [
     {instance, private},
