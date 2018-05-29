@@ -31,8 +31,7 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/groups">>, #rest_req{
         method = 'POST',
-        b_gri = #b_gri{type = od_group, id = undefined, aspect = instance},
-        b_auth_hint = ?AS_USER(?CLIENT_ID)
+        b_gri = #b_gri{type = od_group, id = undefined, aspect = instance}
     }},
     %% List all groups
     %% This operation requires one of the following privileges:

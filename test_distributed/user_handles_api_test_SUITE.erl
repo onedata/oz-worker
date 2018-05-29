@@ -106,7 +106,8 @@ list_handles_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -215,7 +216,10 @@ create_handle_test(Config) ->
     % Check that regular client can't make request on behalf of other client
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
-            correct = [{user, U1}],
+            correct = [
+                {user, U1},
+                {admin, [?OZ_HANDLES_CREATE, ?OZ_USERS_ADD_RELATIONSHIPS]}
+            ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U2},
@@ -247,6 +251,9 @@ create_handle_test(Config) ->
                     VerifyFun(Id)
                 end
             })
+        },
+        data_spec = DataSpec#data_spec{
+            bad_values = []
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
@@ -256,13 +263,15 @@ create_handle_test(Config) ->
     % cause validation errors rather than authorization errors.
     RootApiTestSpec = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
-            correct = [root]
+            correct = [
+                root
+            ]
         },
         gs_spec = undefined,
         data_spec = DataSpec#data_spec{
             bad_values = [
                 {<<"handleServiceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
+                    ?ERROR_BAD_VALUE_EMPTY(<<"handleServiceId">>)},
                 {<<"handleServiceId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"handleServiceId">>)},
                 {<<"resourceType">>, <<"">>,
@@ -271,7 +280,7 @@ create_handle_test(Config) ->
                 {<<"resourceType">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
                 {<<"resourceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
+                    ?ERROR_BAD_VALUE_EMPTY(<<"resourceId">>)},
                 {<<"resourceId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceId">>)},
                 {<<"metadata">>, 1234,
@@ -323,6 +332,7 @@ get_handle_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLES_VIEW]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -388,6 +398,7 @@ leave_handle_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLES_REMOVE_RELATIONSHIPS, ?OZ_USERS_REMOVE_RELATIONSHIPS]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -437,7 +448,8 @@ list_eff_handles_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -500,6 +512,7 @@ get_eff_handle_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
+                        {admin, [?OZ_HANDLES_VIEW]},
                         {user, U1}
                     ],
                     unauthorized = [nobody],

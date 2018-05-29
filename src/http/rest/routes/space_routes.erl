@@ -31,8 +31,7 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/spaces">>, #rest_req{
         method = 'POST',
-        b_gri = #b_gri{type = od_space, id = undefined, aspect = instance},
-        b_auth_hint = ?AS_USER(?CLIENT_ID)
+        b_gri = #b_gri{type = od_space, id = undefined, aspect = instance}
     }},
     %% List all spaces
     %% This operation requires one of the following privileges:

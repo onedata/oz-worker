@@ -32,8 +32,7 @@ routes() -> [
     %% - oz_handle_services_create
     {<<"/handle_services">>, #rest_req{
         method = 'POST',
-        b_gri = #b_gri{type = od_handle_service, id = undefined, aspect = instance},
-        b_auth_hint = ?AS_USER(?CLIENT_ID)
+        b_gri = #b_gri{type = od_handle_service, id = undefined, aspect = instance}
     }},
     %% List handle services
     %% This operation requires one of the following privileges:

@@ -90,7 +90,8 @@ list_handles_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_GROUPS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -244,13 +245,15 @@ create_handle_test(Config) ->
     % in validation step not authorize
     RootApiTestSpec = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
-            correct = [root]
+            correct = [
+                root,
+                {admin, [?OZ_HANDLES_CREATE, ?OZ_GROUPS_ADD_RELATIONSHIPS]}
+            ]
         },
         rest_spec = undefined,
         gs_spec = undefined,
         data_spec = DataSpec#data_spec{
             bad_values = [
-                % one cannot check privileges of hs if it does not exist so 403
                 {<<"handleServiceId">>, <<"">>,
                     ?ERROR_BAD_VALUE_EMPTY(<<"handleServiceId">>)},
                 {<<"handleServiceId">>, 1234,
@@ -301,7 +304,8 @@ get_handle_details_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_HANDLES_VIEW]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -362,6 +366,7 @@ leave_handle_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_HANDLES_REMOVE_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -399,7 +404,8 @@ list_eff_handles_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_GROUPS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -447,7 +453,8 @@ get_eff_handle_details_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, U1}
+                        {user, U1},
+                        {admin, [?OZ_HANDLES_VIEW]}
                     ],
                     unauthorized = [nobody],
                     forbidden = [

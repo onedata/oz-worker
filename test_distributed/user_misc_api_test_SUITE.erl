@@ -233,10 +233,6 @@ get_test(Config) ->
         email_list = ExpEmailList = [<<"a@a.a">>, <<"b@b.b">>]
     }),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_USERS_LIST
-    ]),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     {ok, S1} = oz_test_utils:support_space(
@@ -261,7 +257,7 @@ get_test(Config) ->
             forbidden = [
                 {provider, P1, P1Macaroon},
                 {user, NonAdmin},
-                {user, Admin}
+                {admin, [?OZ_USERS_VIEW]}
             ]
         },
         logic_spec = #logic_spec{
@@ -330,7 +326,7 @@ get_test(Config) ->
             correct = [
                 root,
                 {user, User},
-                {user, Admin}
+                {admin, [?OZ_USERS_VIEW]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -523,6 +519,7 @@ update_test(Config) ->
     {ok, SomeUser} = oz_test_utils:create_user(Config, #od_user{}),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = ClientSpec#client_spec{
+            correct = [{admin, [?OZ_USERS_UPDATE]}],
             unauthorized = [nobody],
             forbidden = [{user, SomeUser}]
         },
@@ -544,10 +541,6 @@ update_test(Config) ->
 
 delete_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_USERS_DELETE
-    ]),
 
     EnvSetUpFun = fun() ->
         {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
@@ -565,7 +558,7 @@ delete_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_USERS_DELETE]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -1037,7 +1030,8 @@ list_eff_providers_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -1098,6 +1092,7 @@ get_eff_provider_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
+                        {admin, [?OZ_PROVIDERS_VIEW]},
                         {user, U2}
                     ],
                     unauthorized = [nobody],

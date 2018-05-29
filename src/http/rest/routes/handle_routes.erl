@@ -32,8 +32,7 @@ routes() -> [
     %% - handle_service_register_handle
     {<<"/handles">>, #rest_req{
         method = 'POST',
-        b_gri = #b_gri{type = od_handle, id = undefined, aspect = instance},
-        b_auth_hint = ?AS_USER(?CLIENT_ID)
+        b_gri = #b_gri{type = od_handle, id = undefined, aspect = instance}
     }},
     %% List handles
     %% This operation requires one of the following privileges:

@@ -80,7 +80,8 @@ list_parents_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_GROUPS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -132,6 +133,7 @@ create_parent_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
+                {admin, [?OZ_GROUPS_CREATE, ?OZ_GROUPS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
             forbidden = [
@@ -234,6 +236,7 @@ join_parent_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -317,7 +320,8 @@ leave_parent_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_GROUPS_REMOVE_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -363,7 +367,8 @@ get_parent_details_test(Config) ->
             correct = [
                 root,
                 {user, U1},
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_GROUPS_VIEW]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -416,22 +421,17 @@ list_eff_parents_test(Config) ->
         [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}], {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_parent_groups_env(Config),
 
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_GROUPS_LIST_GROUPS
-    ]),
-
     ExpGroups = [G2, G3, G4, G5],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_GROUPS_LIST_RELATIONSHIPS]},
                 {user, U1}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U2},
-                {user, Admin},
                 {user, NonAdmin}
             ]
         },
@@ -469,11 +469,6 @@ get_eff_parent_details_test(Config) ->
         [{G1, _} | EffParents], {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_parent_groups_env(Config),
 
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_GROUPS_LIST_GROUPS
-    ]),
-
     lists:foreach(
         fun({GroupId, GroupDetails}) ->
             ExpType = maps:get(<<"type">>, GroupDetails, role),
@@ -483,11 +478,11 @@ get_eff_parent_details_test(Config) ->
                     correct = [
                         root,
                         {user, U1},
-                        {user, U2}
+                        {user, U2},
+                        {admin, [?OZ_GROUPS_VIEW]}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
-                        {user, Admin},
                         {user, NonAdmin}
                     ]
                 },

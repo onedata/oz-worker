@@ -43,6 +43,9 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched,
     end,
     rest_translator:created_reply(LocationTokens);
 
+create_response(Gri=#gri{id = undefined, aspect = instance}, AuthHint, {fetched, #gri{id = HandleId}, _}) ->
+    create_response(Gri, AuthHint, {not_fetched, #gri{id = HandleId}});
+
 create_response(#gri{id = HandleId, aspect = {user, UserId}}, _, {not_fetched, #gri{id = UserId}, _}) ->
     rest_translator:created_reply(
         [<<"handles">>, HandleId, <<"users">>, UserId]
@@ -52,7 +55,6 @@ create_response(#gri{id = HandleId, aspect = {group, GroupId}}, _, {not_fetched,
     rest_translator:created_reply(
         [<<"handles">>, HandleId, <<"groups">>, GroupId]
     ).
-
 
 %%--------------------------------------------------------------------
 %% @doc

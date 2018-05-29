@@ -542,9 +542,13 @@ all_group_privileges(Config) ->
 -spec create_group(Config :: term(), Client :: entity_logic:client(),
     NameOrData :: od_group:name() | #{}) -> {ok, Id :: binary()}.
 create_group(Config, Client, NameOrData) ->
-    ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, create, [Client, NameOrData]
-    )).
+    Result = case Client of
+        ?USER(UserId) ->
+            call_oz(Config, user_logic, create_group, [Client, UserId, NameOrData]);
+        _ ->
+            call_oz(Config, group_logic, create, [Client, NameOrData])
+    end,
+    ?assertMatch({ok, _}, Result).
 
 
 %%--------------------------------------------------------------------
@@ -810,9 +814,14 @@ all_space_privileges(Config) ->
 -spec create_space(Config :: term(), Client :: entity_logic:client(),
     Name :: od_space:name()) -> {ok, od_space:id()}.
 create_space(Config, Client, Name) ->
-    ?assertMatch({ok, _}, call_oz(
-        Config, space_logic, create, [Client, Name]
-    )).
+    Result = case Client of
+        ?USER(UserId) ->
+            call_oz( Config, user_logic, create_space, [Client, UserId, Name]);
+        _ ->
+            call_oz(Config, space_logic, create, [Client, Name])
+    end,
+
+    ?assertMatch({ok, _}, Result).
 
 
 %%--------------------------------------------------------------------
@@ -1323,9 +1332,17 @@ set_provider_domain(Config, ProviderId, Domain) ->
     ServiceProperties :: od_handle_service:service_properties()) ->
     {ok, od_handle_service:id()}.
 create_handle_service(Config, Client, Name, ProxyEndpoint, ServiceProperties) ->
-    ?assertMatch({ok, _}, call_oz(Config, handle_service_logic, create, [
-        Client, Name, ProxyEndpoint, ServiceProperties
-    ])).
+    Result = case Client of
+                 ?USER(UserId) ->
+                     call_oz( Config, user_logic, create_handle_service, [
+                         Client, UserId, Name, ProxyEndpoint, ServiceProperties
+                     ]);
+                 _ ->
+                     call_oz(Config, handle_service_logic, create, [
+                         Client, Name, ProxyEndpoint, ServiceProperties
+                     ])
+             end,
+    ?assertMatch({ok, _}, Result).
 
 
 %%--------------------------------------------------------------------
@@ -1336,9 +1353,14 @@ create_handle_service(Config, Client, Name, ProxyEndpoint, ServiceProperties) ->
 -spec create_handle_service(Config :: term(), Client :: entity_logic:client(),
     Data :: maps:map()) -> {ok, od_handle_service:id()}.
 create_handle_service(Config, Client, Data) ->
-    ?assertMatch({ok, _}, call_oz(Config, handle_service_logic, create, [
-        Client, Data
-    ])).
+    Result = case Client of
+                 ?USER(UserId) ->
+                     call_oz( Config, user_logic, create_handle_service, [Client, UserId, Data]);
+                 _ ->
+                     call_oz(Config, handle_service_logic, create, [Client, Data])
+             end,
+    ?assertMatch({ok, _}, Result).
+
 
 
 %%--------------------------------------------------------------------
@@ -1546,9 +1568,17 @@ all_handle_privileges(Config) ->
     ResourceId :: od_handle:resource_id(), Metadata :: od_handle:metadata()) ->
     {ok, od_handle:id()}.
 create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId, Metadata) ->
-    ?assertMatch({ok, _}, call_oz(Config, handle_logic, create, [
-        Client, HandleServiceId, ResourceType, ResourceId, Metadata
-    ])).
+    Result = case Client of
+                 ?USER(UserId) ->
+                     call_oz( Config, user_logic, create_handle, [
+                         Client, UserId, HandleServiceId, ResourceType, ResourceId, Metadata
+                     ]);
+                 _ ->
+                     call_oz(Config, handle_logic, create, [
+                         Client, HandleServiceId, ResourceType, ResourceId, Metadata
+                     ])
+             end,
+    ?assertMatch({ok, _}, Result).
 
 
 %%--------------------------------------------------------------------
@@ -1559,9 +1589,13 @@ create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId, Metadat
 -spec create_handle(Config :: term(), Client :: entity_logic:client(),
     Data :: maps:map()) -> {ok, od_handle:id()}.
 create_handle(Config, Client, Data) ->
-    ?assertMatch({ok, _}, call_oz(Config, handle_logic, create, [
-        Client, Data
-    ])).
+    Result = case Client of
+                 ?USER(UserId) ->
+                     call_oz( Config, user_logic, create_handle, [Client, UserId, Data]);
+                 _ ->
+                     call_oz(Config, handle_logic, create, [Client, Data])
+             end,
+    ?assertMatch({ok, _}, Result).
 
 
 %%--------------------------------------------------------------------

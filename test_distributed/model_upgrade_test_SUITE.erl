@@ -213,7 +213,7 @@ user_record_1() -> {od_user,
         <<"sp2">> => <<"sp2Name">>
     },
     [  % oz_privileges
-        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS
     ],
     [],  % eff_oz_privileges
     [<<"group1">>, <<"group2">>, <<"group3">>],
@@ -261,7 +261,7 @@ user_record_2() -> {od_user,
     },
     [
         ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
-        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
+        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS
     ],
     [],
     [<<"group1">>, <<"group2">>, <<"group3">>],
@@ -308,7 +308,7 @@ user_record_3() -> {od_user,
     },
     [
         ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
-        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
+        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS
     ],
     [],
     [<<"group1">>, <<"group2">>, <<"group3">>],
@@ -357,7 +357,7 @@ user_record_4() -> {od_user,
     },
     [
         ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
-        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
+        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS
     ],
     [],
     [<<"group1">>, <<"group2">>, <<"group3">>],
@@ -405,7 +405,7 @@ user_record_5() -> {od_user,
     },
     [
         ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
-        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
+        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS
     ],
     [],
     [<<"group1">>, <<"group2">>, <<"group3">>],
@@ -452,7 +452,7 @@ user_record_6() -> #od_user{
     },
     oz_privileges = [
         ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
-        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
+        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS
     ],
     eff_oz_privileges = [],
     groups = [<<"group1">>, <<"group2">>, <<"group3">>],
@@ -471,7 +471,7 @@ group_record_1() -> {od_group,
     <<"name">>,
     role,
     [ % oz_privileges
-        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS
     ],
     [], % eff_oz_privileges
     [<<"parent1">>, <<"parent2">>],
@@ -501,7 +501,7 @@ group_record_1() -> {od_group,
 group_record_2() -> #od_group{
     name = <<"name">>,
     type = role,
-    oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS],
+    oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS],
     eff_oz_privileges = [],
 
     parents = [<<"parent1">>, <<"parent2">>],
@@ -533,7 +533,7 @@ group_record_2() -> #od_group{
 group_record_3() -> #od_group{
     name = <<"name">>,
     type = role,
-    oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS],
+    oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS],
     eff_oz_privileges = [],
 
     parents = [<<"parent1">>, <<"parent2">>],
