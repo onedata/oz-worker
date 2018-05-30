@@ -277,8 +277,8 @@ upgrade_record(1, DnsState) ->
         SubdomainToProvider,
         ProviderToSubdomain,
         ProviderToIPS,
-        lists:map(fun({Provider, Name}) ->
-            {Provider, Name, undefined}
+        maps:map(fun(_Provider, TxtRecords) ->
+            [{Name, Content, undefined} || {Name, Content} <- TxtRecords]
         end, ProviderToTxt)
     }}.
 
