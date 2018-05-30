@@ -21,7 +21,7 @@
 
 %% API
 -export([
-    all/0, init_per_suite/1
+    all/0, init_per_suite/1, end_per_suite/1
 ]).
 -export([
     user_upgrade_test/1,
@@ -30,7 +30,8 @@
     share_upgrade_test/1,
     provider_upgrade_test/1,
     handle_service_upgrade_test/1,
-    handle_upgrade_test/1
+    handle_upgrade_test/1,
+    dns_state_upgrade_test/1
 ]).
 
 %%%===================================================================
@@ -44,7 +45,8 @@ all() -> ?ALL([
     share_upgrade_test,
     provider_upgrade_test,
     handle_service_upgrade_test,
-    handle_upgrade_test
+    handle_upgrade_test,
+    dns_state_upgrade_test
 ]).
 
 
@@ -141,6 +143,16 @@ handle_upgrade_test(Config) ->
     ?assertEqual(NewRecord, new_handle_record()).
 
 
+dns_state_upgrade_test(Config) ->
+    OldDnsStateRecord = dns_state_record(1),
+    NewDnsStateRecord = dns_state_record(2),
+    {NewVersion, NewRecord} = oz_test_utils:call_oz(
+        Config, dns_state, upgrade_record, [1, OldDnsStateRecord]
+    ),
+    ?assertEqual(2, NewVersion),
+    ?assertEqual(NewRecord, NewDnsStateRecord).
+
+
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
@@ -148,6 +160,8 @@ handle_upgrade_test(Config) ->
 init_per_suite(Config) ->
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
+end_per_suite(_Config) ->
+    ok.
 
 %%%===================================================================
 %%% Record definitions
@@ -672,4 +686,24 @@ new_handle_record() -> #od_handle{
     eff_groups = #{},
 
     bottom_up_dirty = true
+}.
+
+dns_state_record(1) -> {dns_state,
+    #{<<"sub">> => <<"p1">>},
+    #{<<"p1">> => <<"sub">>},
+    #{<<"p1">> => [{1,2,3,4}, {192,168,192,1}]},
+    #{<<"p1">> => [
+        {<<"_acme-challenge">>, <<"token">>},
+        {<<"second">>, <<"value">>}
+    ]}
+};
+
+dns_state_record(2) -> {dns_state,
+    #{<<"sub">> => <<"p1">>},
+    #{<<"p1">> => <<"sub">>},
+    #{<<"p1">> => [{1,2,3,4}, {192,168,192,1}]},
+    #{<<"p1">> => [
+        {<<"_acme-challenge">>, <<"token">>, undefined},
+        {<<"second">>, <<"value">>, undefined}
+    ]}
 }.
