@@ -4,6 +4,12 @@
 CHANGELOG
 ---------
 
+### 18.02.0-rc5
+
+* VFS-3953 Hotfix for broken logout page
+* VFS-3953 Integrate new GUI static backend, refactor and tidy around the whole project
+
+
 ### 18.02.0-rc4
 
 * VFS-4072 Provider registration disallowed when domain is occupied
