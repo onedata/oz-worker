@@ -306,8 +306,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) -
             user_logic_plugin:auth_by_oz_privilege(UserId, ?OZ_HANDLE_SERVICES_CREATE);
 
         {?USER(UserId), ?AS_GROUP(GroupId)} ->
-            % TODO VFS-3351 ?GROUP_CREATE_HANDLE_SERVICE
-            user_logic:has_eff_group(UserId, GroupId) andalso
+            group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_CREATE_HANDLE_SERVICE) andalso
                 user_logic_plugin:auth_by_oz_privilege(UserId, ?OZ_HANDLE_SERVICES_CREATE);
 
         _ ->

@@ -343,6 +343,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) -
         {?USER(UserId), ?AS_GROUP(GroupId)} ->
             handle_service_logic:has_eff_group(HServiceId, GroupId) andalso
                 space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES) andalso
+                group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_CREATE_HANDLE) andalso
                 handle_service_logic:has_eff_privilege(HServiceId, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
 
         _ ->

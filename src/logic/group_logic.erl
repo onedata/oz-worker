@@ -47,6 +47,7 @@
     create_user_invite_token/2,
     create_group_invite_token/2,
 
+    create_child_group/3, create_child_group/4,
     join_group/3,
     join_space/3,
 
@@ -464,6 +465,41 @@ create_group_invite_token(Client, GroupId) ->
         client = Client,
         gri = #gri{type = od_group, id = GroupId, aspect = invite_group_token},
         data = #{}
+    })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new child group belonging to given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_child_group(Client :: entity_logic:client(),
+    ParentGroupId :: od_group:id(), Name :: binary(),
+    Type :: od_group:type()) -> {ok, od_group:id()} | {error, term()}.
+create_child_group(Client, ParentGroupId, Name, Type) ->
+    create_child_group(Client, ParentGroupId, #{
+        <<"name">> => Name, <<"type">> => Type
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new child group belonging to given group. Has two variants:
+%% 1) Group Name is given explicitly (the new group will be of default type)
+%% 2) Group name is provided in a proper Data object, group type is optional.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_child_group(Client :: entity_logic:client(),
+    ParentGroupId :: od_group:id(), NameOrData :: binary() | #{}) ->
+    {ok, od_group:id()} | {error, term()}.
+create_child_group(Client, ParentGroupId, Name) when is_binary(Name) ->
+    create_child_group(Client, ParentGroupId, #{<<"name">> => Name});
+create_child_group(Client, ParentGroupId, Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_group, id = ParentGroupId, aspect = child},
+        data = Data
     })).
 
 

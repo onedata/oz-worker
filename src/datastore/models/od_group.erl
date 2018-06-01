@@ -13,6 +13,7 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, update/3, force_delete/1]).
@@ -147,7 +148,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    3.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -185,22 +186,29 @@ get_record_struct(2) ->
         {type, atom},
         {oz_privileges, [atom]},
         {eff_oz_privileges, [atom]},
+
         {parents, [string]},
         {children, #{string => [atom]}},
         {eff_parents, #{string => [{atom, string}]}},
         {eff_children, #{string => {[atom], [{atom, string}]}}},
+
         {users, #{string => [atom]}},
         {spaces, [string]},
         {handle_services, [string]},
         {handles, [string]},
+
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_spaces, #{string => [{atom, string}]}},
         {eff_providers, #{string => [{atom, string}]}},
         {eff_handle_services, #{string => [{atom, string}]}},
         {eff_handles, #{string => [{atom, string}]}},
+
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
-    ]}.
+    ]};
+get_record_struct(3) ->
+    % The structure does not change, only the privileges are translated.
+    get_record_struct(2).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -237,27 +245,102 @@ upgrade_record(1, Group) ->
         _TopDownDirty,
         _BottomUpDirty
     } = Group,
-    {2, #od_group{
+    {2, {
+        od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        [],
+
+        Parents,
+        maps:from_list(Children),
+        #{},
+        #{},
+
+        maps:from_list(Users),
+        Spaces,
+        HandleServices,
+        Handles,
+
+        #{},
+        #{},
+        #{},
+        #{},
+        #{},
+
+        true,
+        true
+    }};
+upgrade_record(2, Group) ->
+    {
+        od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        _TopDownDirty,
+        _BottomUpDirty
+    } = Group,
+
+    TranslatePrivileges = fun(Privileges) ->
+        lists:map(fun(Privilege) ->
+            case Privilege of
+                group_invite_group -> ?GROUP_INVITE_CHILD;
+                group_remove_group -> ?GROUP_REMOVE_CHILD;
+                group_join_group -> ?GROUP_JOIN_PARENT;
+                group_leave_group -> ?GROUP_LEAVE_PARENT;
+                Other -> Other
+            end
+        end, Privileges)
+    end,
+
+    TranslateField = fun(Field) ->
+        maps:map(fun(_, Value) ->
+            case Value of
+                {Privs, Relation} -> {TranslatePrivileges(Privs), Relation};
+                Privs -> TranslatePrivileges(Privs)
+            end
+        end, Field)
+    end,
+
+    {3, #od_group{
         name = Name,
         type = Type,
         oz_privileges = OzPrivileges,
-        eff_oz_privileges = [],
+        eff_oz_privileges = EffOzPrivileges,
 
         parents = Parents,
-        children = maps:from_list(Children),
-        eff_parents = #{},
-        eff_children = #{},
+        children = TranslateField(Children),
+        eff_parents = EffParents,
+        eff_children = TranslateField(EffChildren),
 
-        users = maps:from_list(Users),
+        users = TranslateField(Users),
         spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles,
 
-        eff_users = #{},
-        eff_spaces = #{},
-        eff_providers = #{},
-        eff_handle_services = #{},
-        eff_handles = #{},
+        eff_users = TranslateField(EffUsers),
+        eff_spaces = EffSpaces,
+        eff_providers = EffProviders,
+        eff_handle_services = EffHandleServices,
+        eff_handles = EffHandles,
 
         top_down_dirty = true,
         bottom_up_dirty = true

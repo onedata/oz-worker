@@ -65,6 +65,7 @@
     delete_group/2,
 
     group_get_children/2,
+    group_get_parents/2,
     group_get_spaces/2,
     group_get_users/2,
     group_get_oz_privileges/2,
@@ -570,6 +571,19 @@ get_group(Config, GroupId) ->
 group_get_children(Config, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, group_logic, get_children, [?ROOT, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves group parents groups from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_get_parents(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [od_group:id()]}.
+group_get_parents(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, get_parents, [?ROOT, GroupId]
     )).
 
 

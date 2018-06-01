@@ -123,7 +123,7 @@ routes() -> [
     }},
     %% Remove user from group
     %% This operation requires one of the following privileges:
-    %% - group_remove_user,
+    %% - group_remove_user
     %% - oz_groups_remove_members
     {<<"/groups/:id/users/:uid">>, #rest_req{
         method = 'DELETE',
@@ -167,6 +167,14 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {eff_user_privileges, ?BINDING(uid)}}
     }},
+    %% Create new parent group for the current group
+    %% This operation requires one of the following privileges:
+    %% - group_create_parent
+    {<<"/groups/:id/parents">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_group, id = undefined, aspect = instance},
+        b_auth_hint = ?AS_GROUP(?BINDING(id))
+    }},
     %% List parent groups
     %% This operation requires one of the following privileges:
     %% - group_view
@@ -174,16 +182,9 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = parents}
     }},
-    %% Create new group for the current group
-    %% This operation does not require any specific privileges.
-    {<<"/groups/:id/parents">>, #rest_req{
-        method = 'POST',
-        b_gri = #b_gri{type = od_group, id = undefined, aspect = instance},
-        b_auth_hint = ?AS_GROUP(?BINDING(id))
-    }},
     %% Join parent group
     %% This operation requires one of the following privileges:
-    %% - group_join_group
+    %% - group_join_parent
     {<<"/groups/:id/parents/join">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_group, id = undefined, aspect = join},
@@ -199,7 +200,7 @@ routes() -> [
     }},
     %% Leave parent group
     %% This operation requires one of the following privileges:
-    %% - group_update
+    %% - group_leave_parent
     {<<"/groups/:id/parents/:pid">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {parent, ?BINDING(pid)}}
@@ -219,6 +220,14 @@ routes() -> [
         b_gri = #b_gri{type = od_group, id = ?BINDING(pid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
+    %% Create child group
+    %% This operation requires one of the following privileges:
+    %% - group_create_child
+    %% - oz_groups_add_members
+    {<<"/groups/:id/children">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = child}
+    }},
     %% Get subgroups
     %% This operation requires one of the following privileges:
     %% - group_view
@@ -229,7 +238,7 @@ routes() -> [
     }},
     %% Create child group invitation token
     %% This operation requires one of the following privileges:
-    %% - group_invite_group
+    %% - group_invite_child
     {<<"/groups/:id/children/token">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = invite_group_token}
@@ -252,7 +261,7 @@ routes() -> [
     }},
     %% Remove subgroup
     %% This operation requires one of the following privileges:
-    %% - group_remove_group
+    %% - group_remove_child
     %% - oz_groups_remove_members
     {<<"/groups/:id/children/:cid">>, #rest_req{
         method = 'DELETE',
@@ -366,6 +375,7 @@ routes() -> [
     }},
     %% Add group handle service
     %% This operation requires one of the following privileges:
+    %% - group_create_handle_service
     %% - oz_handle_services_create
     {<<"/groups/:id/handle_services">>, #rest_req{
         method = 'POST',
@@ -388,7 +398,7 @@ routes() -> [
     }},
     %% Remove group handle service
     %% This operation requires one of the following privileges:
-    %% - group_update
+    %% - group_leave_handle_service
     {<<"/groups/:id/handle_services/:hsid">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {handle_service, ?BINDING(hsid)}}
@@ -410,6 +420,7 @@ routes() -> [
     }},
     %% Create new group handle
     %% This operation requires one of the following privileges:
+    %% - group_create_handle
     %% - handle_service_register_handle
     {<<"/groups/:id/handles">>, #rest_req{
         method = 'POST',
@@ -433,7 +444,7 @@ routes() -> [
     }},
     %% Remove group handle
     %% This operation requires one of the following privileges:
-    %% - group_update
+    %% - group_leave_handle
     {<<"/groups/:id/handles/:hid">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {handle, ?BINDING(hid)}}

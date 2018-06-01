@@ -23,8 +23,8 @@
 
 % Listener config
 -define(PORT, oz_worker:get_env(https_server_port, 443)).
--define(ACCEPTORS_NUM, oz_worker:get_env(https_acceptors, 10)).
--define(REQUEST_TIMEOUT, oz_worker:get_env(https_request_timeout, timer:seconds(30))).
+-define(ACCEPTORS_NUM, oz_worker:get_env(https_acceptors, 100)).
+-define(REQUEST_TIMEOUT, oz_worker:get_env(https_request_timeout, timer:minutes(5))).
 -define(MAX_KEEPALIVE, oz_worker:get_env(https_max_keepalive, 30)).
 
 %% listener_behaviour callbacks

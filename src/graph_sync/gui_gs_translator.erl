@@ -181,14 +181,6 @@ translate_user(#gri{aspect = {linked_account, _}}, #linked_account{idp = IdP, em
         <<"emailList">> => Emails
     };
 
-translate_user(#gri{aspect = eff_providers}, Providers) ->
-    #{
-        <<"list">> => lists:map(
-            fun(ProviderId) ->
-                gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected})
-            end, Providers)
-    };
-
 translate_user(#gri{aspect = eff_groups}, Groups) ->
     #{
         <<"list">> => lists:map(
@@ -203,6 +195,14 @@ translate_user(#gri{aspect = eff_spaces}, Spaces) ->
             fun(SpaceId) ->
                 gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = protected})
             end, Spaces)
+    };
+
+translate_user(#gri{id = UserId, aspect = eff_providers}, Providers) ->
+    #{
+        <<"list">> => lists:map(
+            fun(ProviderId) ->
+                gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = {user_provider, UserId}})
+            end, Providers)
     }.
 
 
@@ -329,12 +329,12 @@ translate_space(#gri{aspect = providers, scope = private}, Providers) ->
 %%--------------------------------------------------------------------
 -spec translate_provider(gs_protocol:gri(), Data :: term()) ->
     gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()}.
-translate_provider(#gri{id = ProviderId, aspect = instance, scope = protected}, Provider) ->
+translate_provider(GRI = #gri{aspect = {user_provider, UserId}}, Provider) ->
     Provider#{
-        <<"spaceList">> => gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = user_spaces})
+        <<"spaceList">> => gs_protocol:gri_to_string(GRI#gri{aspect = {user_spaces, UserId}})
     };
 
-translate_provider(#gri{aspect = user_spaces}, Spaces) ->
+translate_provider(#gri{aspect = {user_spaces, _UserId}}, Spaces) ->
     #{
         <<"list">> => lists:map(
             fun(SpaceId) ->
