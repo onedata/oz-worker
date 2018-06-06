@@ -51,11 +51,6 @@ compile:
 generate: template compile deps
 	$(REBAR) release $(OVERLAY_VARS)
 
-## Generates a dev release
-generate_dev: generate
-	# Try to get developer auth.config
-	./get_dev_auth_config.sh
-
 clean:
 	$(REBAR) clean
 
@@ -79,7 +74,7 @@ submodules:
 
 rel: generate
 
-test_rel: generate_dev cm_rel
+test_rel: rel cm_rel
 
 cm_rel:
 	mkdir -p cluster_manager/bamboos/gen_dev
