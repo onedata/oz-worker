@@ -4,6 +4,11 @@
 CHANGELOG
 ---------
 
+### 18.02.0-rc7
+
+* VFS-4531 Do not include dev auth.config in test release
+
+
 ### 18.02.0-rc6
 
 * Releasing new version 18.02.0-rc6
