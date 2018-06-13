@@ -22,7 +22,7 @@
 -include_lib("ctool/include/utils/utils.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
--export([fetch_entity/1, operation_supported/3]).
+-export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, validate/1]).
 -export([auth_by_oz_privilege/2]).
@@ -111,6 +111,24 @@ operation_supported(delete, {handle, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Determines if given {Aspect, Scope} pair is subscribable, i.e. clients can
+%% subscribe to receive updates concerning the aspect of entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
+    boolean().
+is_subscribable(instance, _) -> true;
+is_subscribable(client_tokens, private) -> true;
+is_subscribable({client_token, _}, private) -> true;
+is_subscribable(linked_accounts, private) -> true;
+is_subscribable({linked_account, _}, private) -> true;
+is_subscribable(eff_groups, private) -> true;
+is_subscribable(eff_spaces, private) -> true;
+is_subscribable(eff_providers, private) -> true;
+is_subscribable(_, _) -> false.
 
 %%--------------------------------------------------------------------
 %% @doc

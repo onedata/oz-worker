@@ -365,13 +365,20 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_providers}
     }},
-    %% Get effective group's provider details
+    %% Get group's effective provider details
     %% This operation requires one of the following privileges:
     %% - group_view
     {<<"/groups/:id/effective_providers/:pid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
+    }},
+    %% Get spaces supported by groups's effective provider
+    %% This operation requires one of the following privileges:
+    %% - group_view
+    {<<"/groups/:id/effective_providers/:pid/spaces">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = {group_spaces, ?BINDING(id)}, scope = private}
     }},
     %% Add group handle service
     %% This operation requires one of the following privileges:

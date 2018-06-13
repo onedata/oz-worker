@@ -30,8 +30,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns handshake response attributes for given client that has been
-%% authorized.
+%% {@link gs_translator_behaviour} callback handshake_attributes/1.
 %% @end
 %%--------------------------------------------------------------------
 -spec handshake_attributes(gs_protocol:client()) ->
@@ -41,13 +40,12 @@ handshake_attributes(_) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates CREATE result to the format understood by client. Will be called
-%% only for requests that return {ok, {data, Data}}.
-%% For other results, translate_get is called.
+%% {@link gs_translator_behaviour} callback translate_create/3.
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_create(gs_protocol:protocol_version(), gs_protocol:gri(),
-    Data :: term()) -> gs_protocol:data() | gs_protocol:error().
+    Data :: term()) -> Result | fun((gs_protocol:client()) -> Result) when
+    Result :: gs_protocol:data() | gs_protocol:error().
 translate_create(1, #gri{aspect = invite_group_token}, Macaroon) ->
     translate_create(1, #gri{aspect = invite_user_token}, Macaroon);
 translate_create(1, #gri{aspect = invite_provider_token}, Macaroon) ->
@@ -72,13 +70,12 @@ translate_create(ProtocolVersion, GRI, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates GET result to the format understood by client. Should not include
-%% "gri" in the resulting json map, as it is included automatically.
+%% {@link gs_translator_behaviour} callback translate_get/3.
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_get(gs_protocol:protocol_version(), gs_protocol:gri(),
-    Data :: term()) ->
-    gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()} |
+    Data :: term()) -> Result | fun((gs_protocol:client()) -> Result) when
+    Result :: gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()} |
     gs_protocol:error().
 translate_get(1, #gri{type = od_provider, aspect = current_time}, TimeMillis) ->
     #{<<"timeMillis">> => TimeMillis};

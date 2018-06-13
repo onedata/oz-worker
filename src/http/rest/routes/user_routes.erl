@@ -298,12 +298,18 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = eff_providers}
     }},
-    %% Get effective provider details
+    %% Get user's effective provider details
     %% This operation does not require any specific privileges.
     {<<"/user/effective_providers/:pid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
+    }},
+    %% Get spaces supported by user's effective provider
+    %% This operation does not require any specific privileges.
+    {<<"/user/effective_providers/:pid/spaces">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = {user_spaces, ?CLIENT_ID}, scope = private}
     }},
     %% Add user handle service
     %% This operation requires one of the following privileges:

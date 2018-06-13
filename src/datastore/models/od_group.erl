@@ -300,23 +300,19 @@ upgrade_record(2, Group) ->
     } = Group,
 
     TranslatePrivileges = fun(Privileges) ->
-        lists:map(fun(Privilege) ->
-            case Privilege of
-                group_invite_group -> ?GROUP_INVITE_CHILD;
-                group_remove_group -> ?GROUP_REMOVE_CHILD;
-                group_join_group -> ?GROUP_JOIN_PARENT;
-                group_leave_group -> ?GROUP_LEAVE_PARENT;
-                Other -> Other
-            end
+        lists:map(fun
+            (group_invite_group) -> ?GROUP_INVITE_CHILD;
+            (group_remove_group) -> ?GROUP_REMOVE_CHILD;
+            (group_join_group) -> ?GROUP_JOIN_PARENT;
+            (group_leave_group) -> ?GROUP_LEAVE_PARENT;
+            (Other) -> Other
         end, Privileges)
     end,
 
     TranslateField = fun(Field) ->
-        maps:map(fun(_, Value) ->
-            case Value of
-                {Privs, Relation} -> {TranslatePrivileges(Privs), Relation};
-                Privs -> TranslatePrivileges(Privs)
-            end
+        maps:map(fun
+            (_, {Privs, Relation}) -> {TranslatePrivileges(Privs), Relation};
+            (_, Privs) -> TranslatePrivileges(Privs)
         end, Field)
     end,
 

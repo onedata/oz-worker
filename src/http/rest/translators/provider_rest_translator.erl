@@ -77,6 +77,12 @@ get_response(#gri{id = undefined, aspect = list}, Providers) ->
 get_response(#gri{id = ProviderId, aspect = instance, scope = protected}, ProviderData) ->
     rest_translator:ok_body_reply(ProviderData#{<<"providerId">> => ProviderId});
 
+get_response(#gri{aspect = {user_spaces, _}}, SpaceIds) ->
+    rest_translator:ok_body_reply(#{<<"spaces">> => SpaceIds});
+
+get_response(#gri{aspect = {group_spaces, _}}, SpaceIds) ->
+    rest_translator:ok_body_reply(#{<<"spaces">> => SpaceIds});
+
 get_response(#gri{aspect = eff_users}, UserIds) ->
     rest_translator:ok_body_reply(#{<<"users">> => UserIds});
 

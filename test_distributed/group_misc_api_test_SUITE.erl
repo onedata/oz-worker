@@ -42,7 +42,8 @@
     get_eff_oz_privileges_test/1,
 
     list_eff_providers_test/1,
-    get_eff_provider_details_test/1
+    get_eff_provider_test/1,
+    get_spaces_in_eff_provider_test/1
 ]).
 
 all() ->
@@ -58,7 +59,8 @@ all() ->
         get_eff_oz_privileges_test,
 
         list_eff_providers_test,
-        get_eff_provider_details_test
+        get_eff_provider_test,
+        get_spaces_in_eff_provider_test
     ]).
 
 
@@ -751,6 +753,7 @@ list_eff_providers_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
+                % U2 does not have the GROUP_VIEW privilege
                 {user, U2},
                 {user, NonAdmin}
             ]
@@ -784,7 +787,7 @@ list_eff_providers_test(Config) ->
     ).
 
 
-get_eff_provider_details_test(Config) ->
+get_eff_provider_test(Config) ->
     {
         EffProvidersList, _Spaces, [{G1, _} | _Groups], {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_providers_env(Config),
@@ -795,11 +798,12 @@ get_eff_provider_details_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, U2},
                         {user, U1}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
+                        % U2 does not have the GROUP_VIEW privilege
+                        {user, U2},
                         {user, NonAdmin}
                     ]
                 },
@@ -816,27 +820,71 @@ get_eff_provider_details_test(Config) ->
                     function = get_eff_provider,
                     args = [client, G1, ProvId],
                     expected_result = ?OK_MAP(ProvDetails)
-                },
-                gs_spec = #gs_spec{
-                    operation = get,
-                    gri = #gri{
-                        type = od_provider, id = ProvId,
-                        aspect = instance, scope = protected
-                    },
-                    auth_hint = ?THROUGH_GROUP(G1),
-                    expected_result = ?OK_MAP(ProvDetails#{
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
-                            ?assertEqual(Id, ProvId)
-                        end
-                    })
                 }
+                % @todo gs
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
 
         end, EffProvidersList
+    ).
+
+
+get_spaces_in_eff_provider_test(Config) ->
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_DETAILS(?UNIQUE_STRING)#{<<"subdomainDelegation">> => false}
+    ),
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?UNIQUE_STRING),
+    {ok, G2} = oz_test_utils:create_group(Config, ?USER(U2), ?UNIQUE_STRING),
+
+    {ok, S1_1} = oz_test_utils:create_space(Config, ?USER(U1), ?UNIQUE_STRING),
+    oz_test_utils:space_add_group(Config, S1_1, G1),
+    {ok, S1_2} = oz_test_utils:create_space(Config, ?USER(U1), ?UNIQUE_STRING),
+    oz_test_utils:space_add_group(Config, S1_2, G1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(U2), ?UNIQUE_STRING),
+    oz_test_utils:space_add_group(Config, S2, G2),
+
+    oz_test_utils:support_space(Config, ProviderId, S1_1),
+    oz_test_utils:support_space(Config, ProviderId, S1_2),
+    oz_test_utils:support_space(Config, ProviderId, S2),
+
+    AnotherUser = fun(User) -> case User of
+        U1 -> U2;
+        U2 -> U1
+    end end,
+
+    lists:foreach(
+        fun({ClientUserId, GroupId, GroupSpaces}) ->
+            ApiTestSpec = #api_test_spec{
+                client_spec = #client_spec{
+                    correct = [
+                        root,
+                        {user, ClientUserId}
+                    ],
+                    unauthorized = [nobody],
+                    forbidden = [
+                        {user, AnotherUser(ClientUserId)},
+                        {user, NonAdmin}
+                    ]
+                },
+                rest_spec = #rest_spec{
+                    method = get,
+                    path = [<<"/groups/">>, GroupId, <<"/effective_providers/">>, ProviderId, <<"/spaces">>],
+                    expected_code = ?HTTP_200_OK,
+                    expected_body = #{<<"spaces">> => GroupSpaces}
+                },
+                logic_spec = #logic_spec{
+                    module = group_logic,
+                    function = get_spaces_in_eff_provider,
+                    args = [client, GroupId, ProviderId],
+                    expected_result = ?OK_LIST(GroupSpaces)
+                }
+            },
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+        end, [{U1, G1, [S1_1, S1_2]}, {U2, G2, [S2]}]
     ).
 
 

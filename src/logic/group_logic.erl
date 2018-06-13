@@ -69,6 +69,7 @@
     get_space/3, get_eff_space/3,
 
     get_eff_providers/2, get_eff_provider/3,
+    get_spaces_in_eff_provider/3,
 
     get_handle_services/2, get_eff_handle_services/2,
     get_handle_service/3, get_eff_handle_service/3,
@@ -966,6 +967,22 @@ get_eff_provider(Client, GroupId, ProviderId) ->
         client = Client,
         gri = #gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of spaces supported by specific effective provider among
+%% effective providers of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_spaces_in_eff_provider(Client :: entity_logic:client(), GroupId :: od_group:id(),
+    ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
+get_spaces_in_eff_provider(Client, GroupId, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {group_spaces, GroupId}}
     }).
 
 

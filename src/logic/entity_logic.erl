@@ -210,7 +210,7 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = create}}) ->
                 {ok, {not_fetched, #gri{type = Type, id = Id}}} -> {Type, Id};
                 {ok, {not_fetched, #gri{type = Type, id = Id}, _}} -> {Type, Id}
             end,
-            ?info("~s has been created by client: ~s", [
+            ?debug("~s has been created by client: ~s", [
                 EntType:to_string(EntId),
                 client_to_string(Cl)
             ]),
@@ -247,7 +247,7 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = delete}}) ->
         {ok, #el_req{gri = #gri{type = Type, id = Id, aspect = instance}, client = Cl}} ->
             % If an entity instance is deleted, log an information about it
             % (it's a significant operation and this information might be useful).
-            ?info("~s has been deleted by client: ~s", [
+            ?debug("~s has been deleted by client: ~s", [
                 Type:to_string(Id),
                 client_to_string(Cl)
             ]),

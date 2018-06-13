@@ -35,6 +35,16 @@
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Determines if given {Aspect, Scope} pair is subscribable, i.e. clients can
+%% subscribe to receive updates concerning the aspect of entity.
+%% @end
+%%--------------------------------------------------------------------
+-callback is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
+    boolean().
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------

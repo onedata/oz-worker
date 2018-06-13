@@ -133,8 +133,7 @@
     get_provider/2,
     list_providers/1,
     delete_provider/2,
-    support_space/4,
-    support_space/5,
+    support_space/3, support_space/4, support_space/5,
     unsupport_space/3,
     enable_subdomain_delegation/4,
     set_provider_domain/3
@@ -563,7 +562,7 @@ get_group(Config, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves group children groups from onezone.
+%% Retrieves child groups of given group from onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec group_get_children(Config :: term(), GroupId :: od_group:id()) ->
@@ -576,7 +575,7 @@ group_get_children(Config, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves group parents groups from onezone.
+%% Retrieves parent groups of given group from onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec group_get_parents(Config :: term(), GroupId :: od_group:id()) ->
@@ -589,7 +588,7 @@ group_get_parents(Config, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves group spaces from onezone.
+%% Retrieves spaces of given group from onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec group_get_spaces(Config :: term(), GroupId :: od_group:id()) ->
@@ -602,7 +601,7 @@ group_get_spaces(Config, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves group users from onezone.
+%% Retrieves users of given group from onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec group_get_users(Config :: term(), GroupId :: od_group:id()) ->
@@ -1211,7 +1210,24 @@ delete_provider(Config, ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Supports a space by a provider based on space id.
+%% Supports a space by a provider based on space id (with default support size).
+%% @end
+%%--------------------------------------------------------------------
+-spec support_space(Config :: term(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) ->
+    {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
+support_space(Config, ProviderId, SpaceId) ->
+    {ok, Macaroon} = ?assertMatch({ok, _}, space_invite_provider_token(
+        Config, ?ROOT, SpaceId
+    )),
+    ?assertMatch({ok, _}, call_oz(Config, provider_logic, support_space, [
+        ?PROVIDER(ProviderId), ProviderId, Macaroon, minimum_support_size(Config)
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Supports a space by a provider based on space id and support size.
 %% @end
 %%--------------------------------------------------------------------
 -spec support_space(Config :: term(), ProviderId :: od_provider:id(),
@@ -1228,7 +1244,7 @@ support_space(Config, ProviderId, SpaceId, Size) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Supports a space by a provider based on token.
+%% Supports a space by a provider based on token and support size.
 %% @end
 %%--------------------------------------------------------------------
 -spec support_space(Config :: term(), Client :: entity_logic:client(),
@@ -1274,9 +1290,9 @@ all_handle_service_privileges(Config) ->
     IPs :: [inet:ip4_address()]) -> ok.
 enable_subdomain_delegation(Config, ProviderId, Subdomain, IPs) ->
     Data = #{
-      <<"subdomainDelegation">> => true,
-      <<"subdomain">> => Subdomain,
-      <<"ipList">> => IPs},
+        <<"subdomainDelegation">> => true,
+        <<"subdomain">> => Subdomain,
+        <<"ipList">> => IPs},
     ?assertMatch(ok, oz_test_utils:call_oz(Config,
         provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
 
@@ -1287,14 +1303,13 @@ enable_subdomain_delegation(Config, ProviderId, Subdomain, IPs) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec set_provider_domain(Config :: term(), ProviderId :: od_provider:od(),
-    Domain :: binary())  -> ok.
+    Domain :: binary()) -> ok.
 set_provider_domain(Config, ProviderId, Domain) ->
     Data = #{
-      <<"subdomainDelegation">> => false,
-      <<"domain">> => Domain},
+        <<"subdomainDelegation">> => false,
+        <<"domain">> => Domain},
     ?assertMatch(ok, oz_test_utils:call_oz(Config,
         provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
-
 
 
 %%--------------------------------------------------------------------
@@ -1466,7 +1481,6 @@ handle_service_set_user_privileges(
     )).
 
 
-
 %%--------------------------------------------------------------------
 %% @doc
 %% Adds a group to a handle service.
@@ -1500,7 +1514,7 @@ handle_service_remove_group(Config, HServiceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_service_set_group_privileges(Config :: term(),
-    HServiceId :: od_handle_service:id(), GroupId:: od_group:id(),
+    HServiceId :: od_handle_service:id(), GroupId :: od_group:id(),
     Operation :: entity_graph:privileges_operation(),
     Privileges :: [privileges:handle_service_privilege()]) -> ok.
 handle_service_set_group_privileges(
