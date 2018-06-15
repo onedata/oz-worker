@@ -85,12 +85,21 @@ user_upgrade_test(Config) ->
 
 
 group_upgrade_test(Config) ->
-    OldGroupRecord = old_group_record(),
-    {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, od_group, upgrade_record, [1, OldGroupRecord]
+    GroupRecordVer1 = group_record_1(),
+
+    {Version2, GroupRecordVer2} = oz_test_utils:call_oz(
+        Config, od_group, upgrade_record, [1, GroupRecordVer1]
     ),
-    ?assertEqual(2, NewVersion),
-    ?assertEqual(NewRecord, new_group_record()).
+    ?assertEqual(2, Version2),
+    ?assertEqual(GroupRecordVer2, group_record_2()),
+
+    {Version3, UserRecordVer3} = oz_test_utils:call_oz(
+        Config, od_group, upgrade_record, [2, GroupRecordVer2]
+    ),
+    ?assertEqual(3, Version3),
+    ?assertEqual(UserRecordVer3, group_record_3()).
+
+
 
 
 space_upgrade_test(Config) ->
@@ -458,7 +467,7 @@ user_record_6() -> #od_user{
     top_down_dirty = true
 }.
 
-old_group_record() -> {od_group,
+group_record_1() -> {od_group,
     <<"name">>,
     role,
     [ % oz_privileges
@@ -467,14 +476,14 @@ old_group_record() -> {od_group,
     [], % eff_oz_privileges
     [<<"parent1">>, <<"parent2">>],
     [
-        {<<"child1">>, [?GROUP_VIEW, ?GROUP_CREATE_SPACE, ?GROUP_INVITE_GROUP]},
-        {<<"child2">>, [?GROUP_UPDATE, ?GROUP_DELETE, ?GROUP_JOIN_GROUP]}
+        {<<"child1">>, [?GROUP_VIEW, ?GROUP_CREATE_SPACE, group_invite_group]},
+        {<<"child2">>, [?GROUP_UPDATE, ?GROUP_DELETE, group_remove_group]}
     ],
     [], % eff_parents
     [], % eff_children
     [
-        {<<"user1">>, [?GROUP_JOIN_GROUP, ?GROUP_CREATE_SPACE, ?GROUP_SET_PRIVILEGES]},
-        {<<"user2">>, [?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_REMOVE_GROUP]}
+        {<<"user1">>, [?GROUP_CREATE_SPACE, ?GROUP_SET_PRIVILEGES, group_join_group]},
+        {<<"user2">>, [?GROUP_UPDATE, ?GROUP_VIEW, group_leave_group]}
     ],
     [<<"space1">>, <<"space2">>, <<"space3">>],
     [<<"handle_service1">>],
@@ -489,7 +498,7 @@ old_group_record() -> {od_group,
     false  % bottom_up_dirty
 }.
 
-new_group_record() -> #od_group{
+group_record_2() -> #od_group{
     name = <<"name">>,
     type = role,
     oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS],
@@ -497,15 +506,47 @@ new_group_record() -> #od_group{
 
     parents = [<<"parent1">>, <<"parent2">>],
     children = #{
-        <<"child1">> => [?GROUP_VIEW, ?GROUP_CREATE_SPACE, ?GROUP_INVITE_GROUP],
-        <<"child2">> => [?GROUP_UPDATE, ?GROUP_DELETE, ?GROUP_JOIN_GROUP]
+        <<"child1">> => [?GROUP_VIEW, ?GROUP_CREATE_SPACE, group_invite_group],
+        <<"child2">> => [?GROUP_UPDATE, ?GROUP_DELETE, group_remove_group]
     },
     eff_parents = #{},
     eff_children = #{},
 
     users = #{
-        <<"user1">> => [?GROUP_JOIN_GROUP, ?GROUP_CREATE_SPACE, ?GROUP_SET_PRIVILEGES],
-        <<"user2">> => [?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_REMOVE_GROUP]
+        <<"user1">> => [?GROUP_CREATE_SPACE, ?GROUP_SET_PRIVILEGES, group_join_group],
+        <<"user2">> => [?GROUP_UPDATE, ?GROUP_VIEW, group_leave_group]
+    },
+    spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
+    handle_services = [<<"handle_service1">>],
+    handles = [<<"handle1">>, <<"handle2">>],
+
+    eff_users = #{},
+    eff_spaces = #{},
+    eff_providers = #{},
+    eff_handle_services = #{},
+    eff_handles = #{},
+
+    top_down_dirty = true,
+    bottom_up_dirty = true
+}.
+
+group_record_3() -> #od_group{
+    name = <<"name">>,
+    type = role,
+    oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS],
+    eff_oz_privileges = [],
+
+    parents = [<<"parent1">>, <<"parent2">>],
+    children = #{
+        <<"child1">> => [?GROUP_VIEW, ?GROUP_CREATE_SPACE, ?GROUP_INVITE_CHILD],
+        <<"child2">> => [?GROUP_UPDATE, ?GROUP_DELETE, ?GROUP_REMOVE_CHILD]
+    },
+    eff_parents = #{},
+    eff_children = #{},
+
+    users = #{
+        <<"user1">> => [?GROUP_CREATE_SPACE, ?GROUP_SET_PRIVILEGES, ?GROUP_JOIN_PARENT],
+        <<"user2">> => [?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_LEAVE_PARENT]
     },
     spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
     handle_services = [<<"handle_service1">>],

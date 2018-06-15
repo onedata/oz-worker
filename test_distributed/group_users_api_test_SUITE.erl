@@ -282,8 +282,8 @@ add_user_test(Config) ->
             required = [<<"privileges">>],
             correct_values = #{
                 <<"privileges">> => [
-                    [group_join_group, group_remove_group],
-                    [group_invite_user, group_view]
+                    [?GROUP_JOIN_PARENT, ?GROUP_REMOVE_CHILD],
+                    [?GROUP_INVITE_USER, ?GROUP_VIEW]
                 ]
             },
             bad_values = [

@@ -23,7 +23,7 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
--export([fetch_entity/1, operation_supported/3]).
+-export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, validate/1]).
 
@@ -73,7 +73,8 @@ operation_supported(get, instance, protected) -> true;
 operation_supported(get, eff_users, private) -> true;
 operation_supported(get, eff_groups, private) -> true;
 operation_supported(get, spaces, private) -> true;
-operation_supported(get, user_spaces, private) -> true;
+operation_supported(get, {user_spaces, _}, private) -> true;
+operation_supported(get, {group_spaces, _}, private) -> true;
 operation_supported(get, domain_config, private) -> true;
 operation_supported(get, {check_my_ip, _}, private) -> true;
 operation_supported(get, current_time, private) -> true;
@@ -87,6 +88,19 @@ operation_supported(delete, {space, _}, private) -> true;
 operation_supported(delete, {dns_txt_record, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Determines if given {Aspect, Scope} pair is subscribable, i.e. clients can
+%% subscribe to receive updates concerning the aspect of entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
+    boolean().
+is_subscribable(instance, _) -> true;
+is_subscribable({user_spaces, _}, private) -> true;
+is_subscribable(_, _) -> false.
 
 
 %%--------------------------------------------------------------------
@@ -144,7 +158,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
                 },
 
                 case od_provider:create(#document{key = ProviderId, value = Provider}) of
-                    {ok, _} -> {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
+                    {ok, _} ->
+                        {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
                     _Error ->
                         dns_state:remove_delegation_config(ProviderId),
                         ?ERROR_INTERNAL_SERVER_ERROR
@@ -202,7 +217,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
                     admin_email = AdminEmail
                 },
                 case od_provider:create(#document{key = ProviderId, value = Provider}) of
-                    {ok, _} -> {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
+                    {ok, _} ->
+                        {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
                     _Error ->
                         dns_state:remove_delegation_config(ProviderId),
                         ?ERROR_INTERNAL_SERVER_ERROR
@@ -318,12 +334,20 @@ get(#el_req{gri = #gri{aspect = eff_groups}}, Provider) ->
 get(#el_req{gri = #gri{aspect = spaces}}, Provider) ->
     {ok, maps:keys(Provider#od_provider.spaces)};
 
-get(#el_req{client = ?USER(UserId), gri = #gri{aspect = user_spaces}}, Provider) ->
+get(#el_req{gri = #gri{aspect = {user_spaces, UserId}}}, Provider) ->
     AllSpaces = maps:keys(Provider#od_provider.spaces),
     {ok, UserSpaces} = user_logic:get_eff_spaces(?ROOT, UserId),
     {ok, ordsets:intersection(
         ordsets:from_list(AllSpaces),
         ordsets:from_list(UserSpaces)
+    )};
+
+get(#el_req{gri = #gri{aspect = {group_spaces, GroupId}}}, Provider) ->
+    AllSpaces = maps:keys(Provider#od_provider.spaces),
+    {ok, GroupSpaces} = group_logic:get_eff_spaces(?ROOT, GroupId),
+    {ok, ordsets:intersection(
+        ordsets:from_list(AllSpaces),
+        ordsets:from_list(GroupSpaces)
     )};
 
 get(#el_req{gri = #gri{aspect = {check_my_ip, ClientIP}}}, _) ->
@@ -363,7 +387,8 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}
                 Domain = maps:get(<<"domain">>, Data),
                 critical_section:run({domain_config, Domain}, fun() ->
                     case is_domain_occupied(Domain) of
-                        true -> ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
+                        true ->
+                            ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
                         false ->
                             od_provider:update(ProviderId, fun(Provider) ->
                                 {ok, Provider#od_provider{
@@ -372,8 +397,8 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}
                                     subdomain = undefined
                                 }}
                             end)
-                        end
-                    end);
+                    end
+                end);
             true ->
                 Subdomain = maps:get(<<"subdomain">>, Data),
                 FQDN = dns_config:build_fqdn_from_subdomain(Subdomain),
@@ -458,11 +483,11 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Provider
 exists(#el_req{gri = #gri{aspect = {space, SpaceId}}}, Provider) ->
     maps:is_key(SpaceId, Provider#od_provider.spaces);
 
-exists(#el_req{client = Client, gri = #gri{aspect = user_spaces}}, _) ->
-    case Client of
-        ?USER -> true;
-        _ -> false
-    end;
+exists(#el_req{gri = #gri{aspect = {user_spaces, UserId}}}, Provider) ->
+    provider_logic:has_eff_user(Provider, UserId);
+
+exists(#el_req{gri = #gri{aspect = {group_spaces, GroupId}}}, Provider) ->
+    provider_logic:has_eff_group(Provider, GroupId);
 
 % All other aspects exist if provider record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_provider{}) ->
@@ -523,7 +548,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
 
         {?USER(UserId), ?THROUGH_GROUP(GroupId)} ->
             % Groups's membership in this provider is checked in 'exists'
-            group_logic:has_eff_user(GroupId, UserId);
+            group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_VIEW);
 
         {?PROVIDER(ProvId), ?THROUGH_SPACE(SpaceId)} ->
             % Space's support by subject provider is checked in 'exists'
@@ -559,11 +584,11 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = spaces}}, _) ->
     auth_by_self(Req) orelse
         user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_PROVIDERS_LIST_SPACES);
 
-authorize(#el_req{client = Client, operation = get, gri = #gri{aspect = user_spaces}}, _) ->
-    case Client of
-        ?USER -> true;
-        _ -> false
-    end;
+authorize(#el_req{client = ?USER(UserId), operation = get, gri = #gri{aspect = {user_spaces, UserId}}}, _) ->
+    true;
+
+authorize(#el_req{client = ?USER(UserId), operation = get, gri = #gri{aspect = {group_spaces, GroupId}}}, _) ->
+    group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = domain_config}}, _) ->
     auth_by_self(Req);
@@ -698,9 +723,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
             Common#{required => Required}
     end;
 
-validate(#el_req{operation = create, gri = #gri{aspect = provider_registration_token}}) ->
-    #{
-    };
+validate(#el_req{operation = create, gri = #gri{aspect = provider_registration_token}}) -> #{
+};
 
 validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     required => #{
@@ -883,4 +907,5 @@ get_min_support_size() ->
 -spec is_domain_occupied(Domain :: binary()) -> true | false.
 is_domain_occupied(Domain) ->
     {ok, Providers} = od_provider:list(),
-    lists:any(fun(P) -> P#document.value#od_provider.domain =:= Domain end, Providers).
+    lists:any(fun(P) ->
+        P#document.value#od_provider.domain =:= Domain end, Providers).

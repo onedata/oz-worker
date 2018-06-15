@@ -108,12 +108,18 @@ list_handle_services_test(Config) ->
 
 create_handle_service_test(Config) ->
     % create group with 2 users:
-    %   U1 gets all privileges
-    %   U2 gets none privileges
+    %   U2 gets ?GROUP_CREATE_HANDLE_SERVICE privilege
+    %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, oz_test_utils:all_group_privileges(Config)
+        Config, ?GROUP_CREATE_HANDLE_SERVICE
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    % Both users get the privilege, but U1 should be forbidden to create a
+    % handle service on behalf of the group as he lacks the
+    % ?GROUP_CREATE_HANDLE_SERVICE privilege.
+    oz_test_utils:user_set_oz_privileges(Config, U1, grant, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ]),
     oz_test_utils:user_set_oz_privileges(Config, U2, grant, [
         ?OZ_HANDLE_SERVICES_CREATE
     ]),
@@ -253,10 +259,10 @@ get_handle_service_details_test(Config) ->
 
 leave_handle_service_test(Config) ->
     % create group with 2 users:
-    %   U2 gets the GROUP_UPDATE privilege
+    %   U2 gets the GROUP_LEAVE_HANDLE_SERVICE privilege
     %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_UPDATE
+        Config, ?GROUP_LEAVE_HANDLE_SERVICE
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 

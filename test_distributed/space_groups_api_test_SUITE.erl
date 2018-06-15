@@ -381,7 +381,7 @@ get_group_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:space_add_group(Config, S1, G1),
 
     AllPrivs = oz_test_utils:all_space_privileges(Config),
-    InitialPrivs = [?SPACE_VIEW, ?SPACE_WRITE_DATA],
+    InitialPrivs = [?SPACE_VIEW, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
     SetPrivsFun = fun(Operation, Privs) ->
         oz_test_utils:space_set_group_privileges(
@@ -660,7 +660,7 @@ get_eff_group_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:group_add_user(Config, G4, U3),
 
     AllPrivs = oz_test_utils:all_space_privileges(Config),
-    InitialPrivs = [?SPACE_VIEW, ?SPACE_WRITE_DATA],
+    InitialPrivs = [?SPACE_VIEW, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
     SetPrivsFun = fun(Operation, Privs) ->

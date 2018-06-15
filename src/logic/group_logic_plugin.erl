@@ -22,7 +22,7 @@
 -include_lib("ctool/include/api_errors.hrl").
 
 
--export([fetch_entity/1, operation_supported/3]).
+-export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, validate/1]).
 
@@ -63,6 +63,7 @@ operation_supported(create, join, private) -> true;
 
 operation_supported(create, {user, _}, private) -> true;
 operation_supported(create, {child, _}, private) -> true;
+operation_supported(create, child, private) -> true;
 
 operation_supported(get, list, private) -> true;
 
@@ -110,6 +111,23 @@ operation_supported(delete, {child, _}, private) -> true;
 operation_supported(delete, {space, _}, private) -> true;
 operation_supported(delete, {handle_service, _}, private) -> true;
 operation_supported(delete, {handle, _}, private) -> true.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Determines if given {Aspect, Scope} pair is subscribable, i.e. clients can
+%% subscribe to receive updates concerning the aspect of entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
+    boolean().
+is_subscribable(instance, _) -> true;
+is_subscribable(users, private) -> true;
+is_subscribable(children, private) -> true;
+is_subscribable({user_privileges, _}, private) -> true;
+is_subscribable({child_privileges, _}, private) -> true;
+is_subscribable(spaces, private) -> true;
+is_subscribable(_, _) -> false.
 
 
 %%--------------------------------------------------------------------
@@ -167,6 +185,26 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
         _ ->
             ok
     end,
+    NewGRI = case lists:member(?GROUP_VIEW, Privileges) of
+        true ->
+            #gri{type = od_group, id = GroupId, aspect = instance, scope = private};
+        false ->
+            #gri{type = od_group, id = GroupId, aspect = instance, scope = protected}
+    end,
+    {ok, {not_fetched, NewGRI}};
+
+create(Req = #el_req{gri = #gri{id = ParentGroupId, aspect = child}}) ->
+    Name = maps:get(<<"name">>, Req#el_req.data),
+    Type = maps:get(<<"type">>, Req#el_req.data, role),
+    {ok, #document{key = GroupId}} = od_group:create(
+        #document{value = #od_group{name = Name, type = Type}}
+    ),
+    Privileges = privileges:group_user(),
+    entity_graph:add_relation(
+        od_group, GroupId,
+        od_group, ParentGroupId,
+        Privileges
+    ),
     NewGRI = case lists:member(?GROUP_VIEW, Privileges) of
         true ->
             #gri{type = od_group, id = GroupId, aspect = instance, scope = private};
@@ -466,8 +504,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) -
         {?USER(UserId), ?AS_USER(UserId)} ->
             true;
         {?USER(UserId), ?AS_GROUP(ChildGroupId)} ->
-            % TODO VFS-3351 ?GROUP_CREATE_GROUP
-            auth_by_membership(UserId, ChildGroupId);
+            auth_by_privilege(UserId, ChildGroupId, ?GROUP_CREATE_PARENT);
         _ -> false
     end;
 
@@ -476,18 +513,20 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
         {?USER(UserId), ?AS_USER(UserId)} ->
             true;
         {?USER(UserId), ?AS_GROUP(ChildGroupId)} ->
-%%            auth_by_privilege(UserId, ChildGroupId, ?GROUP_JOIN_PARENT); % TODO VFS-3351
-            auth_by_privilege(UserId, ChildGroupId, ?GROUP_JOIN_GROUP);
+            auth_by_privilege(UserId, ChildGroupId, ?GROUP_JOIN_PARENT);
         _ ->
             false
     end;
+
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = child}}, Group) ->
+    auth_by_privilege(Req, Group, ?GROUP_CREATE_CHILD) orelse
+        user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_GROUPS_ADD_MEMBERS);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_INVITE_USER);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_token}}, Group) ->
-%%    auth_by_privilege(Req, Group, ?GROUP_INVITE_CHILD); % TODO VFS-3351
-    auth_by_privilege(Req, Group, ?GROUP_INVITE_GROUP);
+    auth_by_privilege(Req, Group, ?GROUP_INVITE_CHILD);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, _}}}, _) ->
     user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_GROUPS_ADD_MEMBERS);
@@ -594,27 +633,23 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, Grou
     auth_by_privilege(Req, Group, ?GROUP_DELETE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {parent, _}}}, Group) ->
-    auth_by_privilege(Req, Group, ?GROUP_UPDATE);
-% TODO VFS-3351 ?GROUP_LEAVE_GROUP
+    auth_by_privilege(Req, Group, ?GROUP_LEAVE_PARENT);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_LEAVE_SPACE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {handle_service, _}}}, Group) ->
-    auth_by_privilege(Req, Group, ?GROUP_UPDATE);
-% TODO VFS-3351 ?GROUP_LEAVE_HANDLE_SERVICE
+    auth_by_privilege(Req, Group, ?GROUP_LEAVE_HANDLE_SERVICE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {handle, _}}}, Group) ->
-    auth_by_privilege(Req, Group, ?GROUP_UPDATE);
-% TODO VFS-3351 ?GROUP_LEAVE_HANDLE
+    auth_by_privilege(Req, Group, ?GROUP_LEAVE_HANDLE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {user, _}}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_REMOVE_USER) orelse
         user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_GROUPS_REMOVE_MEMBERS);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {child, _}}}, Group) ->
-    auth_by_privilege(Req, Group, ?GROUP_REMOVE_GROUP) orelse
-%%    auth_by_privilege(Req, Group, ?GROUP_REMOVE_CHILD) orelse % TODO VFS-3351
+    auth_by_privilege(Req, Group, ?GROUP_REMOVE_CHILD) orelse
         user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_GROUPS_REMOVE_MEMBERS);
 
 authorize(_, _) ->
@@ -651,13 +686,14 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
         }
     };
 
-validate(#el_req{operation = create, gri = #gri{aspect = invite_user_token}}) ->
-    #{
-    };
+validate(Req = #el_req{operation = create, gri = GRI = #gri{aspect = child}}) ->
+    validate(Req#el_req{gri = GRI#gri{aspect = instance}});
 
-validate(#el_req{operation = create, gri = #gri{aspect = invite_group_token}}) ->
-    #{
-    };
+validate(#el_req{operation = create, gri = #gri{aspect = invite_user_token}}) -> #{
+};
+
+validate(#el_req{operation = create, gri = #gri{aspect = invite_group_token}}) -> #{
+};
 
 validate(#el_req{operation = create, gri = #gri{aspect = {user, _}}}) -> #{
     required => #{
@@ -698,8 +734,8 @@ validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}})
         }
     };
 
-validate(#el_req{operation = update, gri = #gri{aspect = {child_privileges, Id}}}) ->
-    validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}});
+validate(Req = #el_req{operation = update, gri = GRI = #gri{aspect = {child_privileges, Id}}}) ->
+    validate(Req#el_req{operation = update, gri = GRI#gri{aspect = {user_privileges, Id}}});
 
 
 validate(#el_req{operation = update, gri = #gri{aspect = oz_privileges}}) -> #{

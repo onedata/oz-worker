@@ -20,7 +20,7 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
--export([fetch_entity/1, operation_supported/3]).
+-export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, validate/1]).
 
@@ -82,6 +82,18 @@ operation_supported(delete, {user, _}, private) -> true;
 operation_supported(delete, {group, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Determines if given {Aspect, Scope} pair is subscribable, i.e. clients can
+%% subscribe to receive updates concerning the aspect of entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
+    boolean().
+is_subscribable(instance, _) -> true;
+is_subscribable(_, _) -> false.
 
 
 %%--------------------------------------------------------------------
@@ -343,6 +355,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) -
         {?USER(UserId), ?AS_GROUP(GroupId)} ->
             handle_service_logic:has_eff_group(HServiceId, GroupId) andalso
                 space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES) andalso
+                group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_CREATE_HANDLE) andalso
                 handle_service_logic:has_eff_privilege(HServiceId, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
 
         _ ->

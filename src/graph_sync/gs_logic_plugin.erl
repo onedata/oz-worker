@@ -29,7 +29,7 @@
 -export([is_authorized/5]).
 -export([handle_rpc/4]).
 -export([handle_graph_request/6]).
--export([subscribable_resources/1]).
+-export([is_subscribable/1]).
 
 %%%===================================================================
 %%% API
@@ -37,8 +37,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to authorize requesting client by session cookie. Will be called only
-%% if a session cookie was sent in the request.
+%% {@link gs_translator_behaviour} callback authorize_by_session_cookie/1.
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize_by_session_cookie(SessionCookie :: binary()) ->
@@ -54,8 +53,7 @@ authorize_by_session_cookie(SessionCookie) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to authorize requesting client by X-Auth-Token. Will be called
-%% only if a token was sent in the request.
+%% {@link gs_translator_behaviour} callback authorize_by_token/1.
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize_by_token(Token :: binary()) ->
@@ -73,8 +71,7 @@ authorize_by_token(Token) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to authorize requesting client by macaroons. Will be called
-%% only if macaroons were sent in the request.
+%% {@link gs_translator_behaviour} callback authorize_by_macaroons/2.
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize_by_macaroons(Macaroon :: binary(),
@@ -86,9 +83,7 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to authorize requesting client by basic auth credentials. Will be
-%% called only if credentials were sent in the request, in the format
-%% b64(user:password).
+%% {@link gs_translator_behaviour} callback authorize_by_basic_auth/1.
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize_by_basic_auth(UserPasswdB64 :: binary()) ->
@@ -99,8 +94,7 @@ authorize_by_basic_auth(UserPasswdB64) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Converts client, which is an opaque term for gs_server, into identity of
-%% the client.
+%% {@link gs_translator_behaviour} callback client_to_identity/1.
 %% @end
 %%--------------------------------------------------------------------
 -spec client_to_identity(gs_protocol:client()) -> gs_protocol:identity().
@@ -111,9 +105,7 @@ client_to_identity(?PROVIDER(ProviderId)) -> {provider, ProviderId}.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the ROOT client as understood by gs_logic_plugin, i.e. a client that
-%% is authorized to do everything. ROOT client can be used only in internal
-%% code (i.e. cannot be accessed via any API).
+%% {@link gs_translator_behaviour} callback root_client/0.
 %% @end
 %%--------------------------------------------------------------------
 -spec root_client() -> gs_protocol:client().
@@ -123,8 +115,7 @@ root_client() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the GUEST client as understood by gs_logic_plugin, i.e. a client that
-%% was not identified as anyone and can only access public resources.
+%% {@link gs_translator_behaviour} callback guest_client/0.
 %% @end
 %%--------------------------------------------------------------------
 -spec guest_client() -> gs_protocol:client().
@@ -134,7 +125,7 @@ guest_client() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Callback called when a new client connects to the Graph Sync server.
+%% {@link gs_translator_behaviour} callback client_connected/2.
 %% @end
 %%--------------------------------------------------------------------
 -spec client_connected(gs_protocol:client(), gs_server:conn_ref()) -> ok.
@@ -157,7 +148,7 @@ client_connected(_, _) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Callback called when a client disconnects from the Graph Sync server.
+%% {@link gs_translator_behaviour} callback client_disconnected/2.
 %% @end
 %%--------------------------------------------------------------------
 -spec client_disconnected(gs_protocol:client(), gs_server:conn_ref()) -> ok.
@@ -177,7 +168,7 @@ client_disconnected(_, _) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Determines if given client is authorized to perform certain operation.
+%% {@link gs_translator_behaviour} callback is_authorized/5.
 %% @end
 %%--------------------------------------------------------------------
 -spec is_authorized(gs_protocol:client(), gs_protocol:auth_hint(),
@@ -194,7 +185,7 @@ is_authorized(Client, AuthHint, GRI, Operation, Entity) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Handles an RPC request and returns the result.
+%% {@link gs_translator_behaviour} callback handle_rpc/4.
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_rpc(gs_protocol:protocol_version(), gs_protocol:client(),
@@ -228,7 +219,7 @@ handle_rpc(1, _, _, _) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Handles a graph request and returns the result.
+%% {@link gs_translator_behaviour} callback handle_graph_request/6.
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_graph_request(gs_protocol:client(), gs_protocol:auth_hint(),
@@ -247,41 +238,11 @@ handle_graph_request(Client, AuthHint, GRI, Operation, Data, Entity) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the list of subscribable resources for given entity type, identified
-%% by {Aspect, Scope} pairs.
+%% {@link gs_translator_behaviour} callback is_subscribable/1.
 %% @end
 %%--------------------------------------------------------------------
--spec subscribable_resources(gs_protocol:entity_type()) ->
-    [{gs_protocol:aspect(), gs_protocol:scope()}].
-subscribable_resources(od_user) -> [
-    {instance, private},
-    {instance, protected},
-    {instance, shared},
-    {client_tokens, private}
-];
-subscribable_resources(od_group) -> [
-    {instance, private},
-    {instance, protected},
-    {instance, shared}
-];
-subscribable_resources(od_space) -> [
-    {instance, private},
-    {instance, protected}
-];
-subscribable_resources(od_share) -> [
-    {instance, private},
-    {instance, public}
-];
-subscribable_resources(od_provider) -> [
-    {instance, private},
-    {instance, protected}
-];
-subscribable_resources(od_handle_service) -> [
-    {instance, private},
-    {instance, protected}
-];
-subscribable_resources(od_handle) -> [
-    {instance, private},
-    {instance, public}
-].
+-spec is_subscribable(gs_protocol:gri()) -> boolean().
+is_subscribable(#gri{type = EntityType, aspect = Aspect, scope = Scope}) ->
+    ElPlugin = EntityType:entity_logic_plugin(),
+    ElPlugin:is_subscribable(Aspect, Scope).
 
