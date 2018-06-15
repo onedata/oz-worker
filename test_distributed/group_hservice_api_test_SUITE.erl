@@ -114,7 +114,7 @@ create_handle_service_test(Config) ->
         Config, ?GROUP_CREATE_HANDLE_SERVICE
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    % Both user get the privilege, but U1 should be forbidden to create a
+    % Both users get the privilege, but U1 should be forbidden to create a
     % handle service on behalf of the group as he lacks the
     % ?GROUP_CREATE_HANDLE_SERVICE privilege.
     oz_test_utils:user_set_oz_privileges(Config, U1, grant, [

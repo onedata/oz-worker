@@ -882,6 +882,7 @@ get_spaces_in_eff_provider_test(Config) ->
                     args = [client, GroupId, ProviderId],
                     expected_result = ?OK_LIST(GroupSpaces)
                 }
+                % @todo gs
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
         end, [{U1, G1, [S1_1, S1_2]}, {U2, G2, [S2]}]

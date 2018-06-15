@@ -373,7 +373,7 @@ routes() -> [
         b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
-    %% Get spaces supported by groups's effective provider
+    %% Get group's spaces that are supported by given effective provider
     %% This operation requires one of the following privileges:
     %% - group_view
     {<<"/groups/:id/effective_providers/:pid/spaces">>, #rest_req{
