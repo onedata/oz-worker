@@ -661,7 +661,7 @@ run_test_combinations(
         fun({Clients, DataSets, DescFmt, Error}) ->
             lists:foreach(
                 fun(Client) ->
-                    PreparedClient = prepare_client(Client, Environment),
+                    PreparedClient = prepare_client(Client, Environment, Config),
                     lists:foreach(
                         fun
                         % get and delete operations cannot
@@ -703,7 +703,7 @@ run_test_combinations(
                     Env = EnvSetUpFun(),
                     PreparedData = prepare_data(DataSet, Env),
                     RunTestFun(
-                        Config, Spec, prepare_client(Client, Env),
+                        Config, Spec, prepare_client(Client, Env, Config),
                         PreparedData, Description, Env, undefined
                     ),
                     VerifyFun(true, Env, PreparedData),
@@ -725,15 +725,19 @@ prepare_error(Data, Description, ExpError) ->
 
 
 % Converts placeholders in client into real data
-prepare_client({user, User}, Env) when is_atom(User) ->
+prepare_client({user, User}, Env, _Config) when is_atom(User) ->
     {user, maps:get(User, Env, User)};
-prepare_client({user, User, Macaroon}, Env) when is_atom(User) ->
+prepare_client({user, User, Macaroon}, Env, _Config) when is_atom(User) ->
     {user, maps:get(User, Env, User), Macaroon};
-prepare_client({provider, Provider, Macaroon}, Env) when is_atom(Provider) orelse is_atom(Macaroon) ->
+prepare_client({provider, Provider, Macaroon}, Env, _Config) when is_atom(Provider) orelse is_atom(Macaroon) ->
     {provider, maps:get(Provider, Env, Provider), maps:get(Macaroon, Env, Macaroon)};
-prepare_client(Client, Env) when is_atom(Client) ->
+prepare_client({admin, Privs}, _Env, Config) ->
+    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, Privs),
+    {user, Admin};
+prepare_client(Client, Env, _Config) when is_atom(Client) ->
     maps:get(Client, Env, Client);
-prepare_client(Client, _Env) ->
+prepare_client(Client, _Env, _Config) ->
     Client.
 
 

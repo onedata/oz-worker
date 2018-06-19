@@ -300,13 +300,35 @@ upgrade_record(2, Group) ->
     } = Group,
 
     TranslatePrivileges = fun(Privileges) ->
-        lists:map(fun
+        lists:usort(lists:flatten(lists:map(fun
             (group_invite_group) -> ?GROUP_INVITE_CHILD;
             (group_remove_group) -> ?GROUP_REMOVE_CHILD;
             (group_join_group) -> ?GROUP_JOIN_PARENT;
             (group_leave_group) -> ?GROUP_LEAVE_PARENT;
+            (group_view) -> [?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES];
+                                                
+            (oz_users_list) -> [?OZ_USERS_LIST, ?OZ_USERS_VIEW];
+                                                
+            (oz_groups_list) -> [?OZ_GROUPS_LIST, ?OZ_GROUPS_VIEW];
+            (oz_groups_list_users) -> ?OZ_GROUPS_LIST_RELATIONSHIPS;
+            (oz_groups_list_groups) -> ?OZ_GROUPS_LIST_RELATIONSHIPS;
+            (oz_groups_add_members) -> ?OZ_GROUPS_ADD_RELATIONSHIPS;
+            (oz_groups_remove_members) -> ?OZ_GROUPS_REMOVE_RELATIONSHIPS;
+                                                
+            (oz_spaces_list) -> [?OZ_SPACES_LIST, ?OZ_SPACES_VIEW];
+            (oz_spaces_list_users) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_list_groups) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_list_providers) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_add_members) -> ?OZ_SPACES_ADD_RELATIONSHIPS;
+            (oz_spaces_remove_members) -> ?OZ_SPACES_REMOVE_RELATIONSHIPS;
+                                                
+            (oz_providers_list) -> [?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_VIEW];
+            (oz_providers_list_users) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+            (oz_providers_list_groups) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+            (oz_providers_list_spaces) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+                                                
             (Other) -> Other
-        end, Privileges)
+        end, Privileges)))
     end,
 
     TranslateField = fun(Field) ->
@@ -319,8 +341,8 @@ upgrade_record(2, Group) ->
     {3, #od_group{
         name = Name,
         type = Type,
-        oz_privileges = OzPrivileges,
-        eff_oz_privileges = EffOzPrivileges,
+        oz_privileges = TranslatePrivileges(OzPrivileges),
+        eff_oz_privileges = TranslatePrivileges(EffOzPrivileges),
 
         parents = Parents,
         children = TranslateField(Children),

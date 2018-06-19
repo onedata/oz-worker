@@ -13,6 +13,7 @@
 -author("Michal Zmuda").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
@@ -196,7 +197,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    6.
+    7.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -305,7 +306,10 @@ get_record_struct(5) ->
 get_record_struct(6) ->
     {record, Struct} = get_record_struct(5),
     % Remove chosen_provider field, rename login to alias
-    {record, lists:keydelete(chosen_provider, 1, lists:keyreplace(login, 1, Struct, {alias, string}))}.
+    {record, lists:keydelete(chosen_provider, 1, lists:keyreplace(login, 1, Struct, {alias, string}))};
+get_record_struct(7) ->
+    % The structure does not change, only the privileges are translated.
+    get_record_struct(6).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -626,32 +630,115 @@ upgrade_record(5, User) ->
         TopDownDirty
     } = User,
 
-    {6, #od_user{
+    {6, {od_user,
+        Name,
+        Login,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    }};
+upgrade_record(6, User) ->
+    {od_user,
+        Name,
+        Alias,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        _TopDownDirty
+    } = User,
+    TranslatePrivileges = fun(Privileges) ->
+        lists:usort(lists:flatten(lists:map(fun
+            (oz_users_list) -> [?OZ_USERS_LIST, ?OZ_USERS_VIEW];
+
+            (oz_groups_list) -> [?OZ_GROUPS_LIST, ?OZ_GROUPS_VIEW];
+            (oz_groups_list_users) -> ?OZ_GROUPS_LIST_RELATIONSHIPS;
+            (oz_groups_list_groups) -> ?OZ_GROUPS_LIST_RELATIONSHIPS;
+            (oz_groups_add_members) -> ?OZ_GROUPS_ADD_RELATIONSHIPS;
+            (oz_groups_remove_members) -> ?OZ_GROUPS_REMOVE_RELATIONSHIPS;
+
+            (oz_spaces_list) -> [?OZ_SPACES_LIST, ?OZ_SPACES_VIEW];
+            (oz_spaces_list_users) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_list_groups) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_list_providers) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_add_members) -> ?OZ_SPACES_ADD_RELATIONSHIPS;
+            (oz_spaces_remove_members) -> ?OZ_SPACES_REMOVE_RELATIONSHIPS;
+
+            (oz_providers_list) -> [?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_VIEW];
+            (oz_providers_list_users) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+            (oz_providers_list_groups) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+            (oz_providers_list_spaces) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+
+            (Other) -> Other 
+        end, Privileges)))
+    end,
+
+    {7, #od_user{
         name = Name,
-        alias = Login,
+        alias = Alias,
         email_list = EmailList,
         basic_auth_enabled = BasicAuthEnabled,
         linked_accounts = LinkedAccounts,
-
+        
         default_space = DefaultSpace,
         default_provider = DefaultProvider,
-
+        
         client_tokens = ClientTokens,
         space_aliases = SpaceAliases,
-
-        oz_privileges = OzPrivileges,
-        eff_oz_privileges = EffOzPrivileges,
-
+        
+        oz_privileges = TranslatePrivileges(OzPrivileges),
+        eff_oz_privileges = TranslatePrivileges(EffOzPrivileges),
+        
         groups = Groups,
         spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles,
-
         eff_groups = EffGroups,
         eff_spaces = EffSpaces,
         eff_providers = EffProviders,
         eff_handle_services = EffHandleServices,
-        eff_handles = EffHandles,
-
-        top_down_dirty = TopDownDirty
+        eff_handles = EffHandles        
     }}.
+    

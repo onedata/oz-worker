@@ -1612,7 +1612,7 @@ setup_user(UserId, UserInfo) ->
                 Name ->
                     <<Name/binary, "'s space">>
             end,
-            {ok, SpaceId} = space_logic:create(?USER(UserId), SpaceName),
+            {ok, SpaceId} = user_logic:create_space(?USER(UserId), UserId, SpaceName),
             od_user:update(UserId, fun(User = #od_user{}) ->
                 {ok, User#od_user{default_space = SpaceId}}
             end);

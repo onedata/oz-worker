@@ -28,11 +28,11 @@
 -spec routes() -> [{binary(), #rest_req{}}].
 routes() -> [
     %% Create new group
-    %% This operation does not require any specific privileges.
+    %% This operation requires one of the following privileges:
+    %% - oz_groups_create
     {<<"/groups">>, #rest_req{
         method = 'POST',
-        b_gri = #b_gri{type = od_group, id = undefined, aspect = instance},
-        b_auth_hint = ?AS_USER(?CLIENT_ID)
+        b_gri = #b_gri{type = od_group, id = undefined, aspect = instance}
     }},
     %% List all groups
     %% This operation requires one of the following privileges:
@@ -43,7 +43,7 @@ routes() -> [
     }},
     %% Get group details
     %% This operation requires one of the following privileges:
-    %% - oz_groups_list
+    %% - oz_groups_view
     {<<"/groups/:id">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = instance, scope = protected}
@@ -51,6 +51,7 @@ routes() -> [
     %% Modify group details
     %% This operation requires one of the following privileges:
     %% - group_update
+    %% - oz_groups_update
     {<<"/groups/:id">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = instance}
@@ -58,6 +59,7 @@ routes() -> [
     %% Remove group
     %% This operation requires one of the following privileges:
     %% - group_delete
+    %% - oz_groups_delete
     {<<"/groups/:id">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = instance}
@@ -93,7 +95,7 @@ routes() -> [
     %% List group users
     %% This operation requires one of the following privileges:
     %% - group_view
-    %% - oz_groups_list_users
+    %% - oz_groups_list_relationships
     {<<"/groups/:id/users">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = users}
@@ -101,13 +103,15 @@ routes() -> [
     %% Create user invite token for group
     %% This operation requires one of the following privileges:
     %% - group_invite_user
+    %% - oz_groups_add_relationships
     {<<"/groups/:id/users/token">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = invite_user_token}
     }},
     %% Add user to group
     %% This operation requires one of the following privileges:
-    %% - oz_groups_add_members
+    %% - oz_groups_add_relationships
+    %% - oz_users_add_relationships
     {<<"/groups/:id/users/:uid">>, #rest_req{
         method = 'PUT',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {user, ?BINDING(uid)}}
@@ -115,7 +119,7 @@ routes() -> [
     %% Get group user details
     %% This operation requires one of the following privileges:
     %% - group_view,
-    %% - oz_groups_list_users
+    %% - oz_users_view
     {<<"/groups/:id/users/:uid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
@@ -124,14 +128,16 @@ routes() -> [
     %% Remove user from group
     %% This operation requires one of the following privileges:
     %% - group_remove_user
-    %% - oz_groups_remove_members
+    %% - oz_groups_remove_relationships
+    %% - oz_users_remove_relationships
     {<<"/groups/:id/users/:uid">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {user, ?BINDING(uid)}}
     }},
     %% List user's group privileges
     %% This operation requires one of the following privileges:
-    %% - group_view
+    %% - group_view_privileges
+    %% - oz_groups_view_privileges
     {<<"/groups/:id/users/:uid/privileges">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}
@@ -139,6 +145,7 @@ routes() -> [
     %% Set user's group privileges
     %% This operation requires one of the following privileges:
     %% - group_set_privileges
+    %% - oz_groups_set_privileges
     {<<"/groups/:id/users/:uid/privileges">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}
@@ -146,7 +153,7 @@ routes() -> [
     %% List effective group users
     %% This operation requires one of the following privileges:
     %% - group_view
-    %% - oz_groups_list_users
+    %% - oz_groups_list_relationships
     {<<"/groups/:id/effective_users">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_users}
@@ -154,7 +161,7 @@ routes() -> [
     %% Get effective group user details
     %% This operation requires one of the following privileges:
     %% - group_view
-    %% - oz_group_list_users
+    %% - oz_users_view
     {<<"/groups/:id/effective_users/:uid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
@@ -162,14 +169,17 @@ routes() -> [
     }},
     %% List user group privileges
     %% This operation requires one of the following privileges:
-    %% - group_view
+    %% - group_view_privileges
+    %% - oz_groups_view_privileges
     {<<"/groups/:id/effective_users/:uid/privileges">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {eff_user_privileges, ?BINDING(uid)}}
     }},
-    %% Create new parent group for the current group
+    %% Create a new parent group for given group
     %% This operation requires one of the following privileges:
     %% - group_create_parent
+    %% - oz_groups_add_relationships
+    %% - oz_groups_create
     {<<"/groups/:id/parents">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_group, id = undefined, aspect = instance},
@@ -178,6 +188,7 @@ routes() -> [
     %% List parent groups
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_groups_list_relationships
     {<<"/groups/:id/parents">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = parents}
@@ -185,6 +196,7 @@ routes() -> [
     %% Join parent group
     %% This operation requires one of the following privileges:
     %% - group_join_parent
+    %% - oz_groups_add_relationships
     {<<"/groups/:id/parents/join">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_group, id = undefined, aspect = join},
@@ -193,6 +205,7 @@ routes() -> [
     %% Get parent group details
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_groups_view
     {<<"/groups/:id/parents/:pid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(pid), aspect = instance, scope = protected},
@@ -201,6 +214,7 @@ routes() -> [
     %% Leave parent group
     %% This operation requires one of the following privileges:
     %% - group_leave_parent
+    %% - oz_groups_remove_relationships
     {<<"/groups/:id/parents/:pid">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {parent, ?BINDING(pid)}}
@@ -208,6 +222,7 @@ routes() -> [
     %% List effective parent groups
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_groups_list_relationships
     {<<"/groups/:id/effective_parents">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_parents}
@@ -215,6 +230,7 @@ routes() -> [
     %% Get effective parent group details
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_groups_view
     {<<"/groups/:id/effective_parents/:pid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(pid), aspect = instance, scope = protected},
@@ -223,7 +239,7 @@ routes() -> [
     %% Create child group
     %% This operation requires one of the following privileges:
     %% - group_create_child
-    %% - oz_groups_add_members
+    %% - oz_groups_add_relationships
     {<<"/groups/:id/children">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = child}
@@ -231,7 +247,7 @@ routes() -> [
     %% Get subgroups
     %% This operation requires one of the following privileges:
     %% - group_view
-    %% - oz_groups_list_groups
+    %% - oz_groups_list_relationships
     {<<"/groups/:id/children">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = children}
@@ -239,13 +255,14 @@ routes() -> [
     %% Create child group invitation token
     %% This operation requires one of the following privileges:
     %% - group_invite_child
+    %% - oz_groups_add_relationships
     {<<"/groups/:id/children/token">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = invite_group_token}
     }},
     %% Add child group
     %% This operation requires one of the following privileges:
-    %% - oz_groups_add_members
+    %% - oz_groups_add_relationships
     {<<"/groups/:id/children/:cid">>, #rest_req{
         method = 'PUT',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {child, ?BINDING(cid)}}
@@ -253,7 +270,7 @@ routes() -> [
     %% Get subgroup details
     %% This operation requires one of the following privileges:
     %% - group_view
-    %% - oz_groups_list_groups
+    %% - oz_groups_view
     {<<"/groups/:id/children/:cid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(cid), aspect = instance, scope = shared},
@@ -262,14 +279,15 @@ routes() -> [
     %% Remove subgroup
     %% This operation requires one of the following privileges:
     %% - group_remove_child
-    %% - oz_groups_remove_members
+    %% - oz_groups_remove_relationships
     {<<"/groups/:id/children/:cid">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {child, ?BINDING(cid)}}
     }},
     %% List child group privileges
     %% This operation requires one of the following privileges:
-    %% - group_view
+    %% - group_view_privileges
+    %% - oz_groups_view_privileges
     {<<"/groups/:id/children/:cid/privileges">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {child_privileges, ?BINDING(cid)}}
@@ -277,6 +295,7 @@ routes() -> [
     %% Set subgroup privileges
     %% This operation requires one of the following privileges:
     %% - group_set_privileges
+    %% - oz_groups_set_privileges
     {<<"/groups/:id/children/:cid/privileges">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {child_privileges, ?BINDING(cid)}}
@@ -284,7 +303,7 @@ routes() -> [
     %% Get effective child groups
     %% This operation requires one of the following privileges:
     %% - group_view
-    %% - oz_groups_list_groups
+    %% - oz_groups_list_relationships
     {<<"/groups/:id/effective_children">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_children}
@@ -292,7 +311,7 @@ routes() -> [
     %% Get effective child group details
     %% This operation requires one of the following privileges:
     %% - group_view
-    %% - oz_group_list_groups
+    %% - oz_groups_view
     {<<"/groups/:id/effective_children/:cid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(cid), aspect = instance, scope = shared},
@@ -300,14 +319,17 @@ routes() -> [
     }},
     %% List effective child group privileges
     %% This operation requires one of the following privileges:
-    %% - group_view
+    %% - group_view_privileges
+    %% - oz_groups_view_privileges
     {<<"/groups/:id/effective_children/:cid/privileges">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {eff_child_privileges, ?BINDING(cid)}}
     }},
-    %% Create new space for group
+    %% Create a new space for given group
     %% This operation requires one of the following privileges:
     %% - group_create_space
+    %% - oz_groups_add_relationships
+    %% - oz_spaces_create
     {<<"/groups/:id/spaces">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_space, id = undefined, aspect = instance},
@@ -316,6 +338,7 @@ routes() -> [
     %% List group's spaces
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_groups_list_relationships
     {<<"/groups/:id/spaces">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = spaces}
@@ -323,6 +346,8 @@ routes() -> [
     %% Join space by group
     %% This operation requires one of the following privileges:
     %% - group_join_space
+    %% - oz_spaces_add_relationships
+    %% - oz_groups_add_relationships
     {<<"/groups/:id/spaces/join">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_space, id = undefined, aspect = join},
@@ -331,6 +356,7 @@ routes() -> [
     %% Get group's space details
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_spaces_view
     {<<"/groups/:id/spaces/:sid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_space, id = ?BINDING(sid), aspect = instance, scope = protected},
@@ -339,6 +365,8 @@ routes() -> [
     %% Remove group from space
     %% This operation requires one of the following privileges:
     %% - group_leave_space
+    %% - oz_spaces_remove_relationships
+    %% - oz_groups_remove_relationships
     {<<"/groups/:id/spaces/:sid">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {space, ?BINDING(sid)}}
@@ -346,6 +374,7 @@ routes() -> [
     %% List effective group's spaces
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_groups_list_relationships
     {<<"/groups/:id/effective_spaces">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_spaces}
@@ -353,6 +382,7 @@ routes() -> [
     %% Get effective group space details
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_spaces_view
     {<<"/groups/:id/effective_spaces/:sid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_space, id = ?BINDING(sid), aspect = instance, scope = protected},
@@ -361,6 +391,7 @@ routes() -> [
     %% List effective group's providers
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_groups_list_relationships
     {<<"/groups/:id/effective_providers">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_providers}
@@ -368,6 +399,7 @@ routes() -> [
     %% Get group's effective provider details
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_providers_view
     {<<"/groups/:id/effective_providers/:pid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = instance, scope = protected},
@@ -380,10 +412,11 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = {group_spaces, ?BINDING(id)}, scope = private}
     }},
-    %% Add group handle service
+    %% Create a new handle service for given group.
     %% This operation requires one of the following privileges:
     %% - group_create_handle_service
     %% - oz_handle_services_create
+    %% - oz_groups_add_relationships
     {<<"/groups/:id/handle_services">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_handle_service, id = undefined, aspect = instance},
@@ -392,12 +425,15 @@ routes() -> [
     %% List group handle services
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_groups_list_relationships
     {<<"/groups/:id/handle_services">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = handle_services}
     }},
     %% Get group handle service details
-    %% This operation does not require any specific privileges.
+    %% This operation requires one of the following privileges:
+    %% - group_view
+    %% - oz_handle_services_view
     {<<"/groups/:id/handle_services/:hsid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(hsid), aspect = instance, scope = protected},
@@ -406,6 +442,8 @@ routes() -> [
     %% Remove group handle service
     %% This operation requires one of the following privileges:
     %% - group_leave_handle_service
+    %% - oz_groups_remove_relationships
+    %% - oz_handle_services_remove_relationships
     {<<"/groups/:id/handle_services/:hsid">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {handle_service, ?BINDING(hsid)}}
@@ -413,6 +451,7 @@ routes() -> [
     %% List effective group handle services
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_groups_list_relationships
     {<<"/groups/:id/effective_handle_services">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_handle_services}
@@ -420,15 +459,18 @@ routes() -> [
     %% Get effective group handle service details
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_handle_services_view
     {<<"/groups/:id/effective_handle_services/:hsid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(hsid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
-    %% Create new group handle
+    %% Create a new handle for given group
     %% This operation requires one of the following privileges:
     %% - group_create_handle
     %% - handle_service_register_handle
+    %% - oz_handles_create
+    %% - oz_groups_add_relationships
     {<<"/groups/:id/handles">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_handle, id = undefined, aspect = instance},
@@ -437,6 +479,7 @@ routes() -> [
     %% List group handles
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_groups_list_relationships
     {<<"/groups/:id/handles">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = handles}
@@ -444,6 +487,7 @@ routes() -> [
     %% Get group handle details
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_handles_view
     {<<"/groups/:id/handles/:hid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hid), aspect = instance, scope = protected},
@@ -452,6 +496,8 @@ routes() -> [
     %% Remove group handle
     %% This operation requires one of the following privileges:
     %% - group_leave_handle
+    %% - oz_groups_remove_relationships
+    %% - oz_handles_remove_relationships
     {<<"/groups/:id/handles/:hid">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {handle, ?BINDING(hid)}}
@@ -459,12 +505,15 @@ routes() -> [
     %% List effective group handles
     %% This operation requires one of the following privileges:
     %% - group_view
+    %% - oz_groups_list_relationships
     {<<"/groups/:id/effective_handles">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_handles}
     }},
     %% Get effective group handle details
-    %% This operation does not require any specific privileges.
+    %% This operation requires one of the following privileges:
+    %% - group_view
+    %% - oz_handles_view
     {<<"/groups/:id/effective_handles/:hid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hid), aspect = instance, scope = protected},

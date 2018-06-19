@@ -43,6 +43,9 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched,
     end,
     rest_translator:created_reply(LocationTokens);
 
+create_response(Gri=#gri{id = undefined, aspect = instance}, AuthHint, {fetched, #gri{id = HServiceId}, _}) ->
+    create_response(Gri, AuthHint, {not_fetched, #gri{id = HServiceId}});
+
 create_response(#gri{id = HServiceId, aspect = {user, UserId}}, _, {not_fetched, #gri{id = UserId}, _}) ->
     rest_translator:created_reply(
         [<<"handle_services">>, HServiceId, <<"users">>, UserId]

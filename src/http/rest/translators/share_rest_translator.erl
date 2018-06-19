@@ -33,7 +33,7 @@
     Result :: {data, term()} | {fetched, entity_logic:gri(), term()} |
     {not_fetched, entity_logic:gri()} |
     {not_fetched, entity_logic:gri(), entity_logic:auth_hint()}) -> #rest_resp{}.
-create_response(#gri{id = undefined, aspect = instance}, _, {not_fetched, #gri{id = ShareId}}) ->
+create_response(#gri{id = undefined, aspect = instance}, _, {fetched, #gri{id = ShareId}, _}) ->
     rest_translator:created_reply([<<"shares">>, ShareId]).
 
 

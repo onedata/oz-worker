@@ -97,6 +97,14 @@
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Returns list of admin privileges needed to perform given operation.
+%% @end
+%%--------------------------------------------------------------------
+-callback required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Returns validity verificators for given request.
 %% Returns a map with 'required', 'optional' and 'at_least_one' keys.
 %% Under each of them, there is a map:

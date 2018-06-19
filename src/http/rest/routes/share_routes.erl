@@ -30,6 +30,7 @@ routes() -> [
     %% Create share
     %% This operation requires one of the following privileges:
     %% - space_manage_shares
+    %% - oz_shares_create
     {<<"/shares">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_share, id = undefined, aspect = instance}
@@ -42,7 +43,9 @@ routes() -> [
         b_gri = #b_gri{type = od_share, id = undefined, aspect = list}
     }},
     %% Get share details
-    %% This operation does not require any specific privileges.
+    %% This operation requires one of the following privileges:
+    %% - space_view
+    %% - oz_shares_view
     {<<"/shares/:id">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_share, id = ?BINDING(id), aspect = instance, scope = private}
@@ -50,6 +53,7 @@ routes() -> [
     %% Modify share details
     %% This operation requires one of the following privileges:
     %% - space_manage_shares
+    %% - oz_shares_update
     {<<"/shares/:id">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_share, id = ?BINDING(id), aspect = instance}
@@ -57,6 +61,7 @@ routes() -> [
     %% Remove share
     %% This operation requires one of the following privileges:
     %% - space_manage_shares
+    %% - oz_shares_delete
     {<<"/shares/:id">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_share, id = ?BINDING(id), aspect = instance}

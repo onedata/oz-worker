@@ -63,10 +63,6 @@ list_test(Config) ->
         ?OZ_HANDLE_SERVICES_CREATE
     ]),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [
-        ?OZ_HANDLES_LIST
-    ]),
 
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?USER(U1), ?DOI_SERVICE
@@ -90,7 +86,7 @@ list_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_HANDLES_LIST]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -145,18 +141,9 @@ create_test(Config) ->
         Config, PidHService, U2, set, [?HANDLE_SERVICE_REGISTER_HANDLE]
     ),
 
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U3} = oz_test_utils:handle_service_add_user(Config, DoiHService, U3),
-    {ok, U3} = oz_test_utils:handle_service_add_user(Config, PidHService, U3),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
     oz_test_utils:space_set_user_privileges(Config, S1, U2, set,
-        oz_test_utils:all_space_privileges(Config)
-    ),
-    {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
-    oz_test_utils:space_set_user_privileges(Config, S1, U3, set,
         oz_test_utils:all_space_privileges(Config)
     ),
     {ok, ShareId} = oz_test_utils:create_share(
@@ -175,13 +162,13 @@ create_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                {user, U2},
-                {user, U3}
+                root,
+                {admin, [?OZ_HANDLES_CREATE]}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
-                {user, NonAdmin}
+                {user, U2}
             ]
         },
         rest_spec = #rest_spec{
@@ -191,13 +178,13 @@ create_test(Config) ->
             expected_headers = ?OK_ENV(fun(_Env, Data) ->
                 HService = maps:get(<<"handleServiceId">>, Data),
                 fun(#{<<"Location">> := Location} = _Headers) ->
-                    BaseURL = ?URL(Config, [<<"/user/handles/">>]),
+                    BaseURL = ?URL(Config, [<<"/handles/">>]),
                     [HandleId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(HandleId, HService)
                 end
             end)
         },
-        logic_spec = LogicSpec = #logic_spec{
+        logic_spec = #logic_spec{
             module = handle_logic,
             function = create,
             args = [client, data],
@@ -206,7 +193,8 @@ create_test(Config) ->
                 ?OK_TERM(fun(Result) -> VerifyFun(Result, HService) end)
             end)
         },
-        data_spec = DataSpec = #data_spec{
+        % TODO gs
+        data_spec = #data_spec{
             required = [
                 <<"handleServiceId">>, <<"resourceType">>,
                 <<"resourceId">>, <<"metadata">>
@@ -217,65 +205,6 @@ create_test(Config) ->
                 <<"resourceId">> => [ShareId],
                 <<"metadata">> => [?DC_METADATA]
             },
-            bad_values = [
-                {<<"handleServiceId">>, <<"">>, ?ERROR_FORBIDDEN},
-                {<<"handleServiceId">>, 1234, ?ERROR_FORBIDDEN},
-                {<<"resourceType">>, 1233,
-                    ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
-                {<<"resourceId">>, <<"">>, ?ERROR_FORBIDDEN},
-                {<<"resourceId">>, <<"asdq4ewfs">>, ?ERROR_FORBIDDEN},
-                {<<"metadata">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"metadata">>)},
-                {<<"metadata">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
-            ]
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    % Check that regular client can't make request on behalf of other client
-    ApiTestSpec2 = ApiTestSpec#api_test_spec{
-        client_spec = #client_spec{
-            correct = [{user, U2}],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, U3},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = undefined,
-        logic_spec = undefined,
-        gs_spec = #gs_spec{
-            operation = create,
-            gri = #gri{type = od_handle, aspect = instance},
-            auth_hint = ?AS_USER(U2),
-            expected_result = ?OK_ENV(fun(_Env, Data) ->
-                HService = maps:get(<<"handleServiceId">>, Data),
-                ?OK_MAP_CONTAINS(#{
-                    <<"handleServiceId">> => HService,
-                    <<"metadata">> => ?DC_METADATA,
-                    <<"resourceId">> => ShareId,
-                    <<"resourceType">> => <<"Share">>,
-                    <<"gri">> => fun(EncodedGri) ->
-                        #gri{id = Id} = oz_test_utils:decode_gri(
-                            Config, EncodedGri
-                        ),
-                        VerifyFun(Id, HService)
-                    end
-                })
-            end)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
-
-    % Root client bypasses authorization checks,
-    % hence wrong values of handleServiceId or resourceId
-    % cause validation errors rather than authorization errors.
-    RootApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [root]
-        },
-        logic_spec = LogicSpec,
-        data_spec = DataSpec#data_spec{
             bad_values = [
                 {<<"handleServiceId">>, <<"">>,
                     ?ERROR_BAD_VALUE_EMPTY(<<"handleServiceId">>)},
@@ -297,7 +226,7 @@ create_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, RootApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 get_test(Config) ->
@@ -307,10 +236,6 @@ get_test(Config) ->
     ]),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [
-        ?OZ_HANDLES_LIST
-    ]),
 
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?USER(U1), ?DOI_SERVICE
@@ -349,7 +274,7 @@ get_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, Admin},
+                {admin, [?OZ_HANDLES_VIEW]},
                 {user, NonAdmin},
                 {user, U1}
             ]
@@ -413,7 +338,7 @@ get_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {admin, [?OZ_HANDLES_VIEW]},
                 {user, U1},
                 {user, U2}
             ],
@@ -484,6 +409,7 @@ update_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLES_UPDATE]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -564,6 +490,7 @@ delete_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLES_DELETE]},
                 {user, U2}
             ],
             unauthorized = [nobody],

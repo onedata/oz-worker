@@ -71,7 +71,6 @@ all() ->
 
 create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
     VerifyFun = fun(GroupId, ExpType) ->
         {ok, Group} = oz_test_utils:get_group(Config, GroupId),
@@ -84,10 +83,10 @@ create_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1},
-                {user, U2}
+                {admin, [?OZ_GROUPS_CREATE]}
             ],
-            unauthorized = [nobody]
+            unauthorized = [nobody],
+            forbidden = [{user, U1}]
         },
         rest_spec = #rest_spec{
             method = post,
@@ -95,7 +94,7 @@ create_test(Config) ->
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, DataSet) ->
                 ExpType = maps:get(<<"type">>, DataSet, role),
-                BaseURL = ?URL(Config, [<<"/user/groups/">>]),
+                BaseURL = ?URL(Config, [<<"/groups/">>]),
                 fun(#{<<"Location">> := Location} = _Headers) ->
                     [GroupId] = binary:split(Location, [BaseURL], [global, trim_all]),
                     VerifyFun(GroupId, ExpType)
@@ -109,6 +108,23 @@ create_test(Config) ->
             expected_result = ?OK_ENV(fun(_, DataSet) ->
                 ExpType = maps:get(<<"type">>, DataSet, role),
                 ?OK_TERM(fun(GroupId) -> VerifyFun(GroupId, ExpType) end)
+            end)
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_group, aspect = instance},
+            expected_result = ?OK_ENV(fun(_, DataSet) ->
+                ExpType = maps:get(<<"type">>, DataSet, role),
+                ?OK_MAP_CONTAINS(#{
+                    <<"name">> => ?CORRECT_NAME,
+                    <<"type">> => atom_to_binary(ExpType, utf8),
+                    <<"gri">> => fun(EncodedGri) ->
+                        #gri{id = Id} = oz_test_utils:decode_gri(
+                            Config, EncodedGri
+                        ),
+                        VerifyFun(Id, ExpType)
+                    end
+                })
             end)
         },
         data_spec = #data_spec{
@@ -126,37 +142,7 @@ create_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    % Check that regular client can't make request on behalf of other client
-    ApiTestSpec2 = ApiTestSpec#api_test_spec{
-        client_spec = #client_spec{
-            correct = [{user, U1}],
-            unauthorized = [nobody],
-            forbidden = [{user, U2}]
-        },
-        rest_spec = undefined,
-        logic_spec = undefined,
-        gs_spec = #gs_spec{
-            operation = create,
-            gri = #gri{type = od_group, aspect = instance},
-            auth_hint = ?AS_USER(U1),
-            expected_result = ?OK_ENV(fun(_, DataSet) ->
-                ExpType = maps:get(<<"type">>, DataSet, role),
-                ?OK_MAP_CONTAINS(#{
-                    <<"name">> => ?CORRECT_NAME,
-                    <<"type">> => atom_to_binary(ExpType, utf8),
-                    <<"gri">> => fun(EncodedGri) ->
-                        #gri{id = Id} = oz_test_utils:decode_gri(
-                            Config, EncodedGri
-                        ),
-                        VerifyFun(Id, ExpType)
-                    end
-                })
-            end)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 list_test(Config) ->
@@ -165,10 +151,6 @@ list_test(Config) ->
 
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_GROUPS_LIST
-    ]),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
@@ -181,7 +163,7 @@ list_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_GROUPS_LIST]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -222,10 +204,6 @@ get_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_GROUPS_LIST
-    ]),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1),
         #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
@@ -250,7 +228,7 @@ get_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, Admin},
+                {admin, [?OZ_GROUPS_VIEW]},
                 {user, NonAdmin},
                 {user, U1}
             ]
@@ -320,7 +298,7 @@ get_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {admin, [?OZ_GROUPS_VIEW]},
                 {user, U1},
                 {user, U2}
             ],
@@ -413,7 +391,8 @@ update_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_GROUPS_UPDATE]}
             ],
             unauthorized = [nobody],
             forbidden = [{user, U1}]
@@ -480,7 +459,8 @@ delete_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_GROUPS_DELETE]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -517,10 +497,6 @@ get_oz_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
 
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_VIEW_PRIVILEGES
-    ]),
 
     InitialPrivs = [],
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
@@ -532,7 +508,7 @@ get_oz_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_VIEW_PRIVILEGES]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -562,10 +538,6 @@ get_oz_privileges_test(Config) ->
 
 update_oz_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_SET_PRIVILEGES
-    ]),
 
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
@@ -586,7 +558,7 @@ update_oz_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_SET_PRIVILEGES]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -615,10 +587,6 @@ update_oz_privileges_test(Config) ->
 
 delete_oz_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_SET_PRIVILEGES
-    ]),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
 
@@ -636,7 +604,7 @@ delete_oz_privileges_test(Config) ->
             correct = [
                 root,
                 {user, U1},
-                {user, Admin}
+                {admin, [?OZ_SET_PRIVILEGES]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -669,10 +637,6 @@ get_eff_oz_privileges_test(Config) ->
     % to get group privileges and sometimes not)
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_VIEW_PRIVILEGES
-    ]),
 
     {Bottom, Mid, Top} = oz_test_utils:create_3_nested_groups(Config, U1),
 
@@ -710,7 +674,7 @@ get_eff_oz_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_VIEW_PRIVILEGES]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -749,7 +713,8 @@ list_eff_providers_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_GROUPS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -798,6 +763,7 @@ get_eff_provider_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
+                        {admin, [?OZ_PROVIDERS_VIEW]},
                         {user, U1}
                     ],
                     unauthorized = [nobody],

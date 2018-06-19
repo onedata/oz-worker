@@ -23,6 +23,7 @@
 -export([delete_entity/5]).
 -export([get_relations/4]).
 -export([get_privileges/7]).
+-export([get_privileges/8]).
 -export([update_privileges/7]).
 -export([delete_privileges/7]).
 
@@ -135,17 +136,18 @@ prepare_entity_not_found_gs_spec(GsSpec) ->
 % should not be listed in client spec but provided additionally.
 % Exception to this is when entity directly tries to get it's privileges,
 % then it should be listed as only correct client and provided as argument
-get_privileges(
-    Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv
-) ->
+get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv) ->
+    get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, false).
+
+get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SkipEntity) ->
     % Run original spec
     assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % In case of getting privileges for Entity (mainly in user api), skip this
     % step because eff privileges of entity are affected during test run and
     % it will be able to sometimes get privileges and sometimes not
-    case ApiTestSpec#api_test_spec.client_spec#client_spec.correct of
-        [Entity] ->
+    case SkipEntity of
+        true ->
             ok;
         _ ->
             run_get_privs_tests(
@@ -182,9 +184,7 @@ run_get_privs_tests(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs) ->
                 Config, prepare_get_privs_api_spec(ApiTestSpec, Privs),
                 EnvSetUpFun, undefined, undefined
             ))
-        end, [
-            lists:sublist(AllPrivs, I) || I <- lists:seq(0, length(AllPrivs))
-        ]
+        end, generate_lists_of_privs(AllPrivs)
     ).
 
 
@@ -332,9 +332,7 @@ run_set_privs_tests(
                 Config, NewApiTestSpec, SetPrivsEnvSetUpFun,
                 undefined, VerifyEndFun
             ))
-        end, [
-            lists:sublist(AllPrivs, I) || I <- lists:seq(0, length(AllPrivs))
-        ]
+        end, generate_lists_of_privs(AllPrivs)
     ).
 
 
@@ -362,9 +360,7 @@ run_grant_privs_tests(
                 Config, NewApiTestSpec, GrantPrivsEnvSetUpFun,
                 undefined, VerifyEndFun
             ))
-        end, [
-            lists:sublist(AllPrivs, I) || I <- lists:seq(0, length(AllPrivs))
-        ]
+        end, generate_lists_of_privs(AllPrivs)
     ).
 
 
@@ -390,10 +386,17 @@ run_revoke_privs_tests(
                 Config, NewApiTestSpec, RevokePrivsEnvSetUpFun,
                 undefined, VerifyEndFun
             ))
-        end, [
-            lists:sublist(AllPrivs, I) || I <- lists:seq(0, length(AllPrivs))
-        ]
+        end, generate_lists_of_privs(AllPrivs)
     ).
+
+
+% Returns list of lists of privileges.
+% Each list is sublist of AllPrivs with its length being multiplicity of 3.
+% If length of AllPrivs is not multiplicity of 3 then there is also list of all privileges.
+% For example when AllPrivs is [priv1, priv2, priv3, priv4]
+% the result will be: [[], [priv1, priv2, priv3], [priv1,priv2,priv3,priv4]]
+generate_lists_of_privs(AllPrivs) ->
+    [lists:sublist(AllPrivs, I) || I <- lists:umerge(lists:seq(0, length(AllPrivs),3), [length(AllPrivs)])].
 
 
 % Grant all oz privileges and check that correct clients can delete them but
