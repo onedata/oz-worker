@@ -81,7 +81,14 @@ user_upgrade_test(Config) ->
         Config, od_user, upgrade_record, [5, UserRecordVer5]
     ),
     ?assertEqual(6, Version6),
-    ?assertEqual(UserRecordVer6, user_record_6()).
+    ?assertEqual(UserRecordVer6, user_record_6()),
+    
+    {Version7, UserRecordVer7} = oz_test_utils:call_oz(
+        Config, od_user, upgrade_record, [6, UserRecordVer6]
+    ),
+    ?assertEqual(7, Version7),
+    ?assertEqual(UserRecordVer7, user_record_7()).
+
 
 
 group_upgrade_test(Config) ->
@@ -103,12 +110,19 @@ group_upgrade_test(Config) ->
 
 
 space_upgrade_test(Config) ->
-    OldSpaceRecord = old_space_record(),
-    {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, od_space, upgrade_record, [1, OldSpaceRecord]
+    SpaceRecordVer1 = space_record_1(),
+    
+    {Version2, SpaceRecordVer2} = oz_test_utils:call_oz(
+        Config, od_space, upgrade_record, [1, SpaceRecordVer1]
     ),
-    ?assertEqual(2, NewVersion),
-    ?assertEqual(NewRecord, new_space_record()).
+    ?assertEqual(2, Version2),
+    ?assertEqual(SpaceRecordVer2, space_record_2()),
+    
+    {Version3, SpaceRecordVer3} = oz_test_utils:call_oz(
+        Config, od_space, upgrade_record, [2, SpaceRecordVer2]
+    ),
+    ?assertEqual(3, Version3),
+    ?assertEqual(SpaceRecordVer3, space_record_3()).
 
 
 share_upgrade_test(Config) ->
@@ -213,7 +227,10 @@ user_record_1() -> {od_user,
         <<"sp2">> => <<"sp2Name">>
     },
     [  % oz_privileges
-        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, 
+        oz_groups_list, oz_groups_list_users, oz_groups_list_groups, oz_groups_add_members, oz_groups_remove_members,
+        oz_spaces_list, oz_spaces_list_users, oz_spaces_list_groups, oz_spaces_list_providers, oz_spaces_add_members, oz_spaces_remove_members,
+        oz_providers_list, oz_providers_list_users, oz_providers_list_groups, oz_providers_list_spaces
     ],
     [],  % eff_oz_privileges
     [<<"group1">>, <<"group2">>, <<"group3">>],
@@ -260,8 +277,10 @@ user_record_2() -> {od_user,
         <<"sp2">> => <<"sp2Name">>
     },
     [
-        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
-        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST,
+        oz_groups_list, oz_groups_list_users, oz_groups_list_groups, oz_groups_add_members, oz_groups_remove_members,
+        oz_spaces_list, oz_spaces_list_users, oz_spaces_list_groups, oz_spaces_list_providers, oz_spaces_add_members, oz_spaces_remove_members,
+        oz_providers_list, oz_providers_list_users, oz_providers_list_groups, oz_providers_list_spaces
     ],
     [],
     [<<"group1">>, <<"group2">>, <<"group3">>],
@@ -307,8 +326,10 @@ user_record_3() -> {od_user,
         <<"sp2">> => <<"sp2Name">>
     },
     [
-        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
-        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST,
+        oz_groups_list, oz_groups_list_users, oz_groups_list_groups, oz_groups_add_members, oz_groups_remove_members,
+        oz_spaces_list, oz_spaces_list_users, oz_spaces_list_groups, oz_spaces_list_providers, oz_spaces_add_members, oz_spaces_remove_members,
+        oz_providers_list, oz_providers_list_users, oz_providers_list_groups, oz_providers_list_spaces
     ],
     [],
     [<<"group1">>, <<"group2">>, <<"group3">>],
@@ -356,8 +377,10 @@ user_record_4() -> {od_user,
         <<"sp2">> => <<"sp2Name">>
     },
     [
-        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
-        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST,
+        oz_groups_list, oz_groups_list_users, oz_groups_list_groups, oz_groups_add_members, oz_groups_remove_members,
+        oz_spaces_list, oz_spaces_list_users, oz_spaces_list_groups, oz_spaces_list_providers, oz_spaces_add_members, oz_spaces_remove_members,
+        oz_providers_list, oz_providers_list_users, oz_providers_list_groups, oz_providers_list_spaces
     ],
     [],
     [<<"group1">>, <<"group2">>, <<"group3">>],
@@ -404,8 +427,10 @@ user_record_5() -> {od_user,
         <<"sp2">> => <<"sp2Name">>
     },
     [
-        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
-        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST,
+        oz_groups_list, oz_groups_list_users, oz_groups_list_groups, oz_groups_add_members, oz_groups_remove_members,
+        oz_spaces_list, oz_spaces_list_users, oz_spaces_list_groups, oz_spaces_list_providers, oz_spaces_add_members, oz_spaces_remove_members,
+        oz_providers_list, oz_providers_list_users, oz_providers_list_groups, oz_providers_list_spaces
     ],
     [],
     [<<"group1">>, <<"group2">>, <<"group3">>],
@@ -451,8 +476,60 @@ user_record_6() -> #od_user{
         <<"sp2">> => <<"sp2Name">>
     },
     oz_privileges = [
-        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
-        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST,
+        oz_groups_list, oz_groups_list_users, oz_groups_list_groups, oz_groups_add_members, oz_groups_remove_members,
+        oz_spaces_list, oz_spaces_list_users, oz_spaces_list_groups, oz_spaces_list_providers, oz_spaces_add_members, oz_spaces_remove_members,
+        oz_providers_list, oz_providers_list_users, oz_providers_list_groups, oz_providers_list_spaces
+    ],
+    eff_oz_privileges = [],
+    groups = [<<"group1">>, <<"group2">>, <<"group3">>],
+    spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
+    handle_services = [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
+    handles = [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+    eff_groups = #{},
+    eff_spaces = #{},
+    eff_providers = #{},
+    eff_handle_services = #{},
+    eff_handles = #{},
+    top_down_dirty = true
+}.
+
+user_record_7() -> #od_user{
+    name = <<"name">>,
+    alias = <<"login">>,
+    email_list = [<<"email1@email.com">>, <<"email2@email.com">>],
+    basic_auth_enabled = true,
+    linked_accounts = [
+        #linked_account{
+            idp = google,
+            subject_id = <<"user_id1">>,
+            login = <<"login1">>,
+            name = <<"name1">>,
+            email_list = [<<"email1@email.com">>],
+            groups = []
+        },
+        #linked_account{
+            idp = github,
+            subject_id = <<"user_id2">>,
+            login = <<"login2">>,
+            name = <<"name2">>,
+            email_list = [<<"email2@email.com">>],
+            groups = []
+        }
+    ],
+    default_space = <<"default_space">>,
+    default_provider = <<"default_provider">>,
+    client_tokens = [<<"token1">>, <<"token2">>],
+    space_aliases = #{
+        <<"sp1">> => <<"sp1Name">>,
+        <<"sp2">> => <<"sp2Name">>
+    },
+    oz_privileges = [
+        ?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_LIST, ?OZ_GROUPS_LIST_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_VIEW,
+        ?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_LIST_RELATIONSHIPS, ?OZ_PROVIDERS_VIEW,
+        ?OZ_SET_PRIVILEGES,
+        ?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_LIST, ?OZ_SPACES_LIST_RELATIONSHIPS, ?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_SPACES_VIEW,
+        ?OZ_USERS_LIST, ?OZ_USERS_VIEW, ?OZ_VIEW_PRIVILEGES
     ],
     eff_oz_privileges = [],
     groups = [<<"group1">>, <<"group2">>, <<"group3">>],
@@ -471,7 +548,10 @@ group_record_1() -> {od_group,
     <<"name">>,
     role,
     [ % oz_privileges
-        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST,
+        oz_groups_list, oz_groups_list_users, oz_groups_list_groups, oz_groups_add_members, oz_groups_remove_members,
+        oz_spaces_list, oz_spaces_list_users, oz_spaces_list_groups, oz_spaces_list_providers, oz_spaces_add_members, oz_spaces_remove_members,
+        oz_providers_list, oz_providers_list_users, oz_providers_list_groups, oz_providers_list_spaces
     ],
     [], % eff_oz_privileges
     [<<"parent1">>, <<"parent2">>],
@@ -501,7 +581,12 @@ group_record_1() -> {od_group,
 group_record_2() -> #od_group{
     name = <<"name">>,
     type = role,
-    oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS],
+    oz_privileges = [
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST,
+        oz_groups_list, oz_groups_list_users, oz_groups_list_groups, oz_groups_add_members, oz_groups_remove_members,
+        oz_spaces_list, oz_spaces_list_users, oz_spaces_list_groups, oz_spaces_list_providers, oz_spaces_add_members, oz_spaces_remove_members,
+        oz_providers_list, oz_providers_list_users, oz_providers_list_groups, oz_providers_list_spaces
+    ],
     eff_oz_privileges = [],
 
     parents = [<<"parent1">>, <<"parent2">>],
@@ -533,20 +618,26 @@ group_record_2() -> #od_group{
 group_record_3() -> #od_group{
     name = <<"name">>,
     type = role,
-    oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_RELATIONSHIPS],
+    oz_privileges = [
+        ?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_LIST, ?OZ_GROUPS_LIST_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_VIEW,
+        ?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_LIST_RELATIONSHIPS, ?OZ_PROVIDERS_VIEW,
+        ?OZ_SET_PRIVILEGES,
+        ?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_LIST, ?OZ_SPACES_LIST_RELATIONSHIPS, ?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_SPACES_VIEW,
+        ?OZ_USERS_LIST, ?OZ_USERS_VIEW, ?OZ_VIEW_PRIVILEGES
+    ],
     eff_oz_privileges = [],
 
     parents = [<<"parent1">>, <<"parent2">>],
     children = #{
-        <<"child1">> => [?GROUP_VIEW, ?GROUP_CREATE_SPACE, ?GROUP_INVITE_CHILD],
-        <<"child2">> => [?GROUP_UPDATE, ?GROUP_DELETE, ?GROUP_REMOVE_CHILD]
+        <<"child1">> => [?GROUP_CREATE_SPACE, ?GROUP_INVITE_CHILD, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES],
+        <<"child2">> => [?GROUP_DELETE, ?GROUP_REMOVE_CHILD, ?GROUP_UPDATE]
     },
     eff_parents = #{},
     eff_children = #{},
 
     users = #{
-        <<"user1">> => [?GROUP_CREATE_SPACE, ?GROUP_SET_PRIVILEGES, ?GROUP_JOIN_PARENT],
-        <<"user2">> => [?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_LEAVE_PARENT]
+        <<"user1">> => [?GROUP_CREATE_SPACE, ?GROUP_JOIN_PARENT, ?GROUP_SET_PRIVILEGES],
+        <<"user2">> => [?GROUP_LEAVE_PARENT, ?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES]
     },
     spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
     handle_services = [<<"handle_service1">>],
@@ -562,7 +653,7 @@ group_record_3() -> #od_group{
     bottom_up_dirty = true
 }.
 
-old_space_record() -> {od_space,
+space_record_1() -> {od_space,
     <<"name">>,
     [
         {<<"prov1">>, 1000},
@@ -584,10 +675,35 @@ old_space_record() -> {od_space,
     false  % bottom_up_dirty
 }.
 
-new_space_record() -> #od_space{
+space_record_2() -> #od_space{
     name = <<"name">>,
     users = #{
         <<"user1">> => [?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_REMOVE_GROUP],
+        <<"user2">> => [?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER]
+    },
+    groups = #{
+        <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER],
+        <<"group2">> => [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE]
+    },
+    providers = #{
+        <<"prov1">> => 1000,
+        <<"prov2">> => 250000,
+        <<"prov3">> => 19999999
+    },
+    shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+
+    eff_users = #{},
+    eff_groups = #{},
+    eff_providers = #{},
+
+    top_down_dirty = true,
+    bottom_up_dirty = true
+}.
+
+space_record_3() -> #od_space{
+    name = <<"name">>,
+    users = #{
+        <<"user1">> => [?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_VIEW_PRIVILEGES, ?SPACE_REMOVE_GROUP],
         <<"user2">> => [?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER]
     },
     groups = #{
