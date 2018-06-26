@@ -131,9 +131,12 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
             end
     end,
 
+    % ensure no race condition inbetween domain conflict check and provider creation
     critical_section:run({domain_config, Domain}, fun() ->
         case is_domain_occupied(Domain) of
-            true -> ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
+            {true, _} ->
+                dns_state:remove_delegation_config(ProviderId),
+                ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
             false ->
                 Provider = #od_provider{
                     name = Name, root_macaroon = Identity,
@@ -190,9 +193,12 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
             end
     end,
 
+    % ensure no race condition inbetween domain conflict check and provider creation
     critical_section:run({domain_config, Domain}, fun() ->
         case is_domain_occupied(Domain) of
-            true -> ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
+            {true, _} ->
+                dns_state:remove_delegation_config(ProviderId),
+                ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
             false ->
                 Provider = #od_provider{
                     name = Name, root_macaroon = Identity,
@@ -357,43 +363,9 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = instance}, data = Data}) ->
 update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}) ->
     % prevent race condition with simultaneous updates
     critical_section:run({domain_config_update, ProviderId}, fun() ->
-        Result = case maps:get(<<"subdomainDelegation">>, Data) of
-            false ->
-                dns_state:remove_delegation_config(ProviderId),
-                Domain = maps:get(<<"domain">>, Data),
-                critical_section:run({domain_config, Domain}, fun() ->
-                    case is_domain_occupied(Domain) of
-                        true -> ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
-                        false ->
-                            od_provider:update(ProviderId, fun(Provider) ->
-                                {ok, Provider#od_provider{
-                                    subdomain_delegation = false,
-                                    domain = Domain,
-                                    subdomain = undefined
-                                }}
-                            end)
-                        end
-                    end);
-            true ->
-                Subdomain = maps:get(<<"subdomain">>, Data),
-                FQDN = dns_config:build_fqdn_from_subdomain(Subdomain),
-                IPs = maps:get(<<"ipList">>, Data),
-                case dns_state:set_delegation_config(ProviderId, Subdomain, IPs) of
-                    ok ->
-                        od_provider:update(ProviderId, fun(Provider) ->
-                            {ok, Provider#od_provider{
-                                subdomain_delegation = true,
-                                domain = FQDN,
-                                subdomain = Subdomain
-                            }}
-                        end);
-                    {error, subdomain_exists} ->
-                        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>)
-                end
-        end,
-        case Result of
-            {ok, _} -> ok;
-            Error -> Error
+        case maps:get(<<"subdomainDelegation">>, Data) of
+            true -> update_provider_subomain(ProviderId, Data);
+            false -> update_provider_domain(ProviderId, Data)
         end
     end);
 
@@ -877,10 +849,79 @@ get_min_support_size() ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
+%% Sets the domain of a provider, ensuring the domain is not used
+%% by another provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_provider_domain(ProviderId :: od_provider:id(),
+    Data :: entity_logic:data()) -> entity_logic:update_result().
+update_provider_domain(ProviderId, Data) ->
+    dns_state:remove_delegation_config(ProviderId),
+    Domain = maps:get(<<"domain">>, Data),
+    Result = critical_section:run({domain_config, Domain}, fun() ->
+        case is_domain_occupied(Domain) of
+            {true, ProviderId} -> {ok, no_change};
+            {true, _} -> ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
+            false ->
+                od_provider:update(ProviderId, fun(Provider) ->
+                    {ok, Provider#od_provider{
+                        subdomain_delegation = false,
+                        domain = Domain,
+                        subdomain = undefined
+                    }}
+                end)
+        end
+    end),
+    case Result of
+        {ok, _} -> ok;
+        Error -> Error
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates provider to use given subdomain.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_provider_subomain(ProviderId :: od_provider:id(),
+    Data :: entity_logic:data()) -> entity_logic:update_result().
+update_provider_subomain(ProviderId, Data) ->
+    Subdomain = maps:get(<<"subdomain">>, Data),
+    Domain = dns_config:build_fqdn_from_subdomain(Subdomain),
+    IPs = maps:get(<<"ipList">>, Data),
+    Result = case dns_state:set_delegation_config(ProviderId, Subdomain, IPs) of
+        ok ->
+            od_provider:update(ProviderId, fun(Provider) ->
+                {ok, Provider#od_provider{
+                    subdomain_delegation = true,
+                    domain = Domain,
+                    subdomain = Subdomain
+                }}
+            end);
+        {error, subdomain_exists} ->
+            ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>)
+    end,
+    case Result of
+        {ok, _} -> ok;
+        Error -> Error
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
 %% Checks whether provider with given domain exists.
 %% @end
 %%--------------------------------------------------------------------
--spec is_domain_occupied(Domain :: binary()) -> true | false.
+-spec is_domain_occupied(Domain :: binary()) ->
+    {true, ProviderId :: od_provider:id()} | false.
 is_domain_occupied(Domain) ->
     {ok, Providers} = od_provider:list(),
-    lists:any(fun(P) -> P#document.value#od_provider.domain =:= Domain end, Providers).
+    case [P#document.key ||
+        P <- Providers, P#document.value#od_provider.domain == Domain] of
+        % multiple results should not happen, but older versions did not enforce
+        % unique domains
+        [Id | _] -> {true, Id};
+        [] -> false
+    end.
