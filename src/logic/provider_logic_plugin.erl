@@ -134,8 +134,10 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     % ensure no race condition inbetween domain conflict check and provider creation
     critical_section:run({domain_config, Domain}, fun() ->
         case is_domain_occupied(Domain) of
-            {true, _} ->
+            {true, OtherProviderId} ->
                 dns_state:remove_delegation_config(ProviderId),
+                ?info("Refusing to register provider with domain ~s as it is used by provider ~s",
+                    [Domain, OtherProviderId]),
                 ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
             false ->
                 Provider = #od_provider{
@@ -196,8 +198,10 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
     % ensure no race condition inbetween domain conflict check and provider creation
     critical_section:run({domain_config, Domain}, fun() ->
         case is_domain_occupied(Domain) of
-            {true, _} ->
+            {true, OtherProviderId} ->
                 dns_state:remove_delegation_config(ProviderId),
+                ?info("Refusing to register provider with domain ~s as it is used by provider ~s",
+                    [Domain, OtherProviderId]),
                 ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
             false ->
                 Provider = #od_provider{
@@ -207,6 +211,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
                     latitude = Latitude, longitude = Longitude,
                     admin_email = AdminEmail
                 },
+
                 case od_provider:create(#document{key = ProviderId, value = Provider}) of
                     {ok, _} -> {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
                     _Error ->
@@ -860,7 +865,10 @@ update_provider_domain(ProviderId, Data) ->
     Result = critical_section:run({domain_config, Domain}, fun() ->
         case is_domain_occupied(Domain) of
             {true, ProviderId} -> {ok, no_change};
-            {true, _} -> ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
+            {true, OtherProviderId} ->
+                ?info("Refusing to set provider domain ~s as it is used by provider ~s",
+                    [Domain, OtherProviderId]),
+                ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
             false ->
                 od_provider:update(ProviderId, fun(Provider) ->
                     {ok, Provider#od_provider{
