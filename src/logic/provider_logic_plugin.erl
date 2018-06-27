@@ -856,7 +856,6 @@ get_min_support_size() ->
 -spec update_provider_domain(ProviderId :: od_provider:id(),
     Data :: entity_logic:data()) -> entity_logic:update_result().
 update_provider_domain(ProviderId, Data) ->
-    dns_state:remove_delegation_config(ProviderId),
     Domain = maps:get(<<"domain">>, Data),
     Result = critical_section:run({domain_config, Domain}, fun() ->
         case is_domain_occupied(Domain) of
@@ -873,7 +872,9 @@ update_provider_domain(ProviderId, Data) ->
         end
     end),
     case Result of
-        {ok, _} -> ok;
+        {ok, _} ->
+            dns_state:remove_delegation_config(ProviderId),
+            ok;
         Error -> Error
     end.
 
@@ -911,16 +912,17 @@ update_provider_subomain(ProviderId, Data) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Checks whether provider with given domain exists.
+%% Checks whether provider with given domain exists. If yes, returns its id.
 %% @end
 %%--------------------------------------------------------------------
 -spec is_domain_occupied(Domain :: binary()) ->
     {true, ProviderId :: od_provider:id()} | false.
 is_domain_occupied(Domain) ->
     {ok, Providers} = od_provider:list(),
-    case [P#document.key ||
-        P <- Providers, P#document.value#od_provider.domain == Domain] of
-        % multiple results should not happen, but older versions did not enforce
+    MatchingIds = [P#document.key ||
+        P <- Providers, P#document.value#od_provider.domain == Domain],
+    case MatchingIds of
+        % multiple results should not happen but older versions did not enforce
         % unique domains
         [Id | _] -> {true, Id};
         [] -> false
