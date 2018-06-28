@@ -1851,7 +1851,7 @@ update_domain_is_idempotent_test(Config) ->
     EnvSetUpFun = fun() ->
         #{providerId => P1, providerClient => {provider, P1, P1Macaroon}}
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId} = _Env, _Data) ->
+    VerifyEndFun = fun(true = _ShouldSucceed, #{providerId := ProviderId} = _Env, _Data) ->
         {ok, Provider} = oz_test_utils:get_provider(Config, ProviderId),
         ?assertEqual(NewDomain, Provider#od_provider.domain),
         ?assertEqual(undefined, Provider#od_provider.subdomain),

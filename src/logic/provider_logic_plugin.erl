@@ -136,7 +136,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
         case is_domain_occupied(Domain) of
             {true, OtherProviderId} ->
                 dns_state:remove_delegation_config(ProviderId),
-                ?info("Refusing to register provider with domain ~s as it is used by provider ~s",
+                ?debug("Refusing to register provider with domain ~s as it is used by provider ~s",
                     [Domain, OtherProviderId]),
                 ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
             false ->
@@ -200,7 +200,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) -
         case is_domain_occupied(Domain) of
             {true, OtherProviderId} ->
                 dns_state:remove_delegation_config(ProviderId),
-                ?info("Refusing to register provider with domain ~s as it is used by provider ~s",
+                ?debug("Refusing to register provider with domain ~s as it is used by provider ~s",
                     [Domain, OtherProviderId]),
                 ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
             false ->
@@ -866,8 +866,8 @@ update_provider_domain(ProviderId, Data) ->
         case is_domain_occupied(Domain) of
             {true, ProviderId} -> {ok, no_change};
             {true, OtherProviderId} ->
-                ?info("Refusing to set provider domain ~s as it is used by provider ~s",
-                    [Domain, OtherProviderId]),
+                ?debug("Refusing to set provider's ~s domain to ~s as it is used by provider ~s",
+                    [ProviderId, Domain, OtherProviderId]),
                 ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
             false ->
                 od_provider:update(ProviderId, fun(Provider) ->
