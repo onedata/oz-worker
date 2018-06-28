@@ -67,6 +67,7 @@
     map_group_test/1,
     update_subdomain_test/1,
     update_domain_test/1,
+    update_domain_is_idempotent_test/1,
     get_domain_config_test/1,
     get_current_time_test/1,
     verify_provider_identity_test/1,
@@ -102,6 +103,7 @@ all() ->
         map_group_test,
         update_subdomain_test,
         update_domain_test,
+        update_domain_is_idempotent_test,
         get_domain_config_test,
         get_current_time_test,
         same_domain_test
@@ -1820,6 +1822,73 @@ update_domain_test(Config) ->
                 {<<"domain">>, <<"https://hasprotocol">>,
                     ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)}
             ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, EnvTearDownFun, VerifyEndFun
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Checks that the same data can be used for update twice without error
+%% (issue VFS-4615)
+%% @end
+%%--------------------------------------------------------------------
+update_domain_is_idempotent_test(Config) ->
+    Domain = ?UNIQUE_DOMAIN,
+    NewDomain = <<"newdomain.com">>,
+    ProviderDetails = #{
+        <<"name">> => ?PROVIDER_NAME1,
+        <<"adminEmail">> => <<"admin@onedata.org">>,
+        <<"domain">> => Domain,
+        <<"subdomainDelegation">> => false
+    },
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ProviderDetails
+    ),
+
+    EnvSetUpFun = fun() ->
+        #{providerId => P1, providerClient => {provider, P1, P1Macaroon}}
+    end,
+    VerifyEndFun = fun(true = _ShouldSucceed, #{providerId := ProviderId} = _Env, _Data) ->
+        {ok, Provider} = oz_test_utils:get_provider(Config, ProviderId),
+        ?assertEqual(NewDomain, Provider#od_provider.domain),
+        ?assertEqual(undefined, Provider#od_provider.subdomain),
+        ?assertEqual(false, Provider#od_provider.subdomain_delegation),
+        true
+    end,
+    EnvTearDownFun = fun(_Env) -> ok end,
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                providerClient
+            ],
+            unauthorized = [],
+            forbidden = []
+        },
+        logic_spec = #logic_spec{
+            module = provider_logic,
+            function = update_domain_config,
+            args = [client, providerId, data],
+            expected_result = ?OK
+        },
+        gs_spec = #gs_spec{
+            operation = update,
+            gri = #gri{
+                type = od_provider, id = providerId, aspect = domain_config
+            },
+            expected_result = ?OK
+        },
+        data_spec = #data_spec{
+            required = [<<"subdomainDelegation">>, <<"domain">>],
+            correct_values = #{
+                <<"subdomainDelegation">> => [false],
+                % provided twice to ensure setting same domain twice works (issue VFS-4615)
+                <<"domain">> => [NewDomain, NewDomain]
+            },
+            bad_values = []
         }
     },
     ?assert(api_test_utils:run_tests(
