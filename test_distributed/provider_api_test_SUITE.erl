@@ -29,8 +29,8 @@
 -define(MAP_GROUP_TEST_AUTH, test_auth).
 -define(MAP_GROUP_TEST_AUTH_BIN, atom_to_binary(?MAP_GROUP_TEST_AUTH, latin1)).
 -define(MAP_GROUP_TEST_AUTH_MODULE, test_auth_module).
--define(MAPPED_MEMBERSHIP_SPEC, <<"mapped_group1/user:member">>).
--define(MAPPED_GROUP_SPEC, <<"mapped_group1">>).
+-define(MAPPED_MEMBERSHIP_SPEC, [<<"mapped_group1">>, <<"user:member">>]).
+-define(MAPPED_GROUP_SPEC, [<<"mapped_group1">>]).
 
 
 %% API

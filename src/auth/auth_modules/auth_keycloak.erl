@@ -83,13 +83,12 @@ normalized_membership_spec(IdP, Group, Type, Structure) ->
     TypeStr = idp_group_mapping:type_to_str(Type),
     GroupSpec = case Structure of
         flat ->
-            <<TypeStr/binary, ":", Group/binary>>;
+            [<<TypeStr/binary, ":", Group/binary>>];
         {nested, SplitWith} ->
             GroupTokens = binary:split(Group, SplitWith, [global, trim_all]),
-            MappedTokens = [<<TypeStr/binary, ":", T/binary>> || T <- GroupTokens],
-            str_utils:join_binary(MappedTokens, <<"/">>)
+            [<<TypeStr/binary, ":", T/binary>> || T <- GroupTokens]
     end,
-    <<"vo:", VoId/binary, "/", GroupSpec/binary, "/user:member">>.
+    [<<"vo:", VoId/binary>>] ++ GroupSpec ++ [<<"user:member">>].
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -125,18 +124,7 @@ normalized_membership_specs(IdP, Map) ->
     lists:flatmap(fun({Attr, Type, Structure}) ->
         Groups = maps:get(Attr, Map, []),
         lists:map(fun(Group) ->
-            GroupWithoutSlashes = case Structure of
-                {nested, <<"/">>} ->
-                    Group;
-                _ ->
-                    % Otherwise we need to make sure that there are no slashes
-                    % in the group name, as it would break the group spec format.
-                    str_utils:join_binary(
-                        binary:split(Group, <<"/">>, [global, trim_all]),
-                        <<"-">>
-                    )
-            end,
-            normalized_membership_spec(IdP, GroupWithoutSlashes, Type, Structure)
+            normalized_membership_spec(IdP, Group, Type, Structure)
         end, Groups)
     end, AttributesConfig).
 

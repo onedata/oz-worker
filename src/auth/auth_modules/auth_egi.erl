@@ -119,13 +119,11 @@ normalized_membership_spec(_, <<"urn:mace:egi.eu:group:", Group/binary>>) ->
         _ -> <<"user:member">>
     end,
     MappedTokens = [<<"tm:", T/binary>> || T <- Groups],
-    FullSpecTokens = [<<"vo:", VoId/binary>>] ++ MappedTokens ++ [MemberSpec],
-    str_utils:join_binary(FullSpecTokens, <<"/">>).
-
+    [<<"vo:", VoId/binary>>] ++ MappedTokens ++ [MemberSpec].
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns a list of strings that represent user's group memberships for given
+%% Returns a list of lists of strings that represent user's group memberships for given
 %% IdP. They are strings complying with specification in idp_group_mapping
 %% module. Returned values will be used to compute a diff in memberships
 %% every time a user logs in, so he can be added to / removed from
