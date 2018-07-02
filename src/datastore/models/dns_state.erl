@@ -66,8 +66,8 @@ set_delegation_config(ProviderId, Subdomain, IPs) ->
                     {true, ProviderId} ->
                         DnsState; % subdomain is already set
                     {true, OtherProvider} ->
-                        ?info("Refusing to register provider subdomain ~s as it is used by provider ~s",
-                            [Subdomain, OtherProvider]),
+                        ?debug("Refusing to set provider's ~s subdomain to ~s as it is used by provider ~s",
+                            [ProviderId, Subdomain, OtherProvider]),
                         {error, subdomain_exists};
                     false ->
                         % remove old subdomain of provider begin updated before setting new

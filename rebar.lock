@@ -70,7 +70,7 @@
   1},
  {<<"folsom">>,
   {git,"git://github.com/folsom-project/folsom.git",
-       {ref,"d2c4610cf4dd76ce8449b74e455259c0fa397946"}},
+       {ref,"f4c6521a122ef613c090264008b3a013a4b806d5"}},
   1},
  {<<"gen_server2">>,
   {git,"http://github.com/kzemek/gen_server2.git",
