@@ -15,7 +15,8 @@
 -include("graph_sync/oz_graph_sync.hrl").
 -include("rest.hrl").
 -include("entity_logic.hrl").
--include_lib("datastore/oz_datastore_models.hrl").
+-include("datastore/oz_datastore_models.hrl").
+-include_lib("gui/include/gui_session.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/api_errors.hrl").
@@ -460,11 +461,11 @@ error_to_gs_expectations(Config, ErrorType) ->
 prepare_gs_client(Config, {user, UserId, _Macaroon}) ->
     prepare_gs_client(Config, {user, UserId});
 prepare_gs_client(Config, {user, UserId}) ->
-    {ok, SessionId} = oz_test_utils:create_session(Config, UserId, []),
+    {ok, Cookie} = oz_test_utils:log_in(Config, UserId),
     prepare_gs_client(
         Config,
         {user, UserId},
-        {cookie, {?GRAPH_SYNC_SESSION_COOKIE_NAME, SessionId}},
+        {cookie, {?SESSION_COOKIE_KEY, Cookie}},
         [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
     );
 prepare_gs_client(_Config, nobody) ->

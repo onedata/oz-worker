@@ -442,12 +442,12 @@ user_record_5() -> {od_user,
     true
 }.
 
-user_record_6() -> #od_user{
-    name = <<"name">>,
-    alias = <<"login">>,
-    email_list = [<<"email1@email.com">>, <<"email2@email.com">>],
-    basic_auth_enabled = true,
-    linked_accounts = [
+user_record_6() -> {od_user,
+    <<"name">>,
+    <<"login">>,
+    [<<"email1@email.com">>, <<"email2@email.com">>],
+    true,
+    [
         #linked_account{
             idp = google,
             subject_id = <<"user_id1">>,
@@ -465,30 +465,30 @@ user_record_6() -> #od_user{
             groups = []
         }
     ],
-    default_space = <<"default_space">>,
-    default_provider = <<"default_provider">>,
-    client_tokens = [<<"token1">>, <<"token2">>],
-    space_aliases = #{
+    <<"default_space">>,
+    <<"default_provider">>,
+    [<<"token1">>, <<"token2">>],
+    #{
         <<"sp1">> => <<"sp1Name">>,
         <<"sp2">> => <<"sp2Name">>
     },
-    oz_privileges = [
+    [
         ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST,
         oz_groups_list, oz_groups_list_users, oz_groups_list_groups, oz_groups_add_members, oz_groups_remove_members,
         oz_spaces_list, oz_spaces_list_users, oz_spaces_list_groups, oz_spaces_list_providers, oz_spaces_add_members, oz_spaces_remove_members,
         oz_providers_list, oz_providers_list_users, oz_providers_list_groups, oz_providers_list_spaces
     ],
-    eff_oz_privileges = [],
-    groups = [<<"group1">>, <<"group2">>, <<"group3">>],
-    spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
-    handle_services = [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
-    handles = [<<"handle1">>, <<"handle2">>, <<"handle3">>],
-    eff_groups = #{},
-    eff_spaces = #{},
-    eff_providers = #{},
-    eff_handle_services = #{},
-    eff_handles = #{},
-    top_down_dirty = true
+    [],
+    [<<"group1">>, <<"group2">>, <<"group3">>],
+    [<<"space1">>, <<"space2">>, <<"space3">>],
+    [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
+    [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    true
 }.
 
 user_record_6_with_idp_groups() ->
@@ -500,7 +500,10 @@ user_record_6_with_idp_groups() ->
             login = <<"login1">>,
             name = <<"name1">>,
             email_list = [<<"email1@email.com">>],
-            groups = [<<"vo:test-vo">>, <<"vo:test-vo/user:member">>]
+            groups = [
+                <<"vo:test-vo">>,
+                <<"vo:test-vo/user:member">>
+            ]
         },
         #linked_account{
             idp = github,
@@ -508,7 +511,9 @@ user_record_6_with_idp_groups() ->
             login = <<"login2">>,
             name = <<"name2">>,
             email_list = [<<"email2@email.com">>],
-            groups = [<<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role/user:admin">>]
+            groups = [
+                <<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role/user:admin">>
+            ]
         }
     ]}.
 
@@ -524,7 +529,10 @@ user_record_7() -> #od_user{
             login = <<"login1">>,
             name = <<"name1">>,
             email_list = [<<"email1@email.com">>],
-            groups = [[<<"vo:test-vo">>], [<<"vo:test-vo">>, <<"user:member">>]]
+            groups = [
+                [<<"vo:test-vo">>],
+                [<<"vo:test-vo">>, <<"user:member">>]
+            ]
         },
         #linked_account{
             idp = github,
@@ -532,9 +540,12 @@ user_record_7() -> #od_user{
             login = <<"login2">>,
             name = <<"name2">>,
             email_list = [<<"email2@email.com">>],
-            groups = [[<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>, <<"rl:some-role">>, <<"user:admin">>]]
+            groups = [
+                [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>, <<"rl:some-role">>, <<"user:admin">>]
+            ]
         }
     ],
+    active_sessions = [],
     default_space = <<"default_space">>,
     default_provider = <<"default_provider">>,
     client_tokens = [<<"token1">>, <<"token2">>],

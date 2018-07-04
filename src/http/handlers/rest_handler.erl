@@ -138,24 +138,29 @@ content_types_provided(Req, State) ->
     {true | {false, binary()}, cowboy_req:req(), #state{}}.
 is_authorized(Req, State) ->
     % Check if the request carries any authorization
-    try
+    Result = try
         % Try to authorize the client using several methods.
-        Client = authorize(Req, [
-            fun authorize_by_oauth_provider/1,
-            fun authorize_by_basic_auth/1,
-            fun authorize_by_macaroons/1
-        ]),
-        % Always return true - authorization is checked by entity_logic later.
-        {true, Req, State#state{client = Client}}
+        authorize(Req, [
+            fun auth_utils:authorize_by_oauth_provider/1,
+            fun auth_utils:authorize_by_basic_auth/1,
+            fun auth_utils:authorize_by_macaroons/1
+        ])
     catch
-        throw:Error ->
-            RestResp = error_rest_translator:response(Error),
-            {stop, send_response(RestResp, Req), State};
+        throw:Err ->
+            {error, Err};
         Type:Message ->
             ?error_stacktrace("Unexpected error in ~p:is_authorized - ~p:~p", [
                 ?MODULE, Type, Message
             ]),
-            RestResp = error_rest_translator:response(?ERROR_INTERNAL_SERVER_ERROR),
+            ?ERROR_INTERNAL_SERVER_ERROR
+    end,
+
+    case Result of
+        {true, Client} ->
+            % Always return true - authorization is checked by entity_logic later.
+            {true, Req, State#state{client = Client}};
+        {error, _} = Error ->
+            RestResp = error_rest_translator:response(Error),
             {stop, send_response(RestResp, Req), State}
     end.
 
@@ -386,122 +391,17 @@ call_entity_logic_and_translate_response(ElReq) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(Req :: cowboy_req:req(),
-    AuthFuns :: [fun((cowboy_req:req()) -> false | {true, #client{}})]) ->
-    #client{}.
+    [fun((cowboy_req:req()) -> {true, #client{}} | {error, term()})]) ->
+    {true, #client{}} | {error, term()}.
 authorize(_Req, []) ->
-    ?NOBODY;
+    {true, ?NOBODY};
 authorize(Req, [AuthMethod | Rest]) ->
     case AuthMethod(Req) of
-        {true, Client} ->
-            Client;
         false ->
-            authorize(Req, Rest)
+            authorize(Req, Rest);
+        ClientOrError ->
+            ClientOrError
     end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Tries to authorize client by provided token, if its prefix matches
-%% any of the configured oauth providers supporting authority delegation.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_oauth_provider(Req :: cowboy_req:req()) ->
-    false | {true, #client{}}.
-authorize_by_oauth_provider(Req) ->
-    case cowboy_req:header(<<"x-auth-token">>, Req) of
-        undefined ->
-            false;
-        AccessToken ->
-            case auth_utils:authorize_by_oauth_provider(AccessToken) of
-                false ->
-                    false;
-                {true, Client} ->
-                    {true, Client};
-                ?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(ProviderId) ->
-                    throw(?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(ProviderId))
-            end
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Tries to authorize client by basic auth headers.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_basic_auth(Req :: cowboy_req:req()) ->
-    false | {true, #client{}}.
-authorize_by_basic_auth(Req) ->
-    case cowboy_req:header(<<"authorization">>, Req) of
-        <<"Basic ", UserPasswdB64/binary>> ->
-            case auth_utils:authorize_by_basic_auth(UserPasswdB64) of
-                {true, Client} ->
-                    {true, Client};
-                _ ->
-                    throw(?ERROR_BAD_BASIC_CREDENTIALS)
-            end;
-        _ ->
-            false
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Tries to authorize client by macaroons.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_macaroons(Req :: cowboy_req:req()) ->
-    false | {true, #client{}}.
-authorize_by_macaroons(Req) ->
-    {Macaroon, DischargeMacaroons} = parse_macaroons_from_headers(Req),
-    case Macaroon of
-        undefined ->
-            false;
-        _ ->
-            case auth_utils:authorize_by_macaroons(
-                Macaroon, DischargeMacaroons
-            ) of
-                {true, Client} ->
-                    {true, Client};
-                {error, _} ->
-                    throw(?ERROR_UNAUTHORIZED)
-            end
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Parses macaroon and discharge macaroons out of request's headers.
-%% @end
-%%--------------------------------------------------------------------
--spec parse_macaroons_from_headers(Req :: cowboy_req:req()) ->
-    {Macaroon :: binary() | undefined, DischargeMacaroons :: [binary()]} |
-    no_return().
-parse_macaroons_from_headers(Req) ->
-    MacaroonHeader = cowboy_req:header(<<"macaroon">>, Req),
-    XAuthTokenHeader = cowboy_req:header(<<"x-auth-token">>, Req),
-    % X-Auth-Token is an alias for macaroon header, check if any of them
-    % is given.
-    SerializedMacaroon = case MacaroonHeader of
-        <<_/binary>> ->
-            MacaroonHeader;
-        _ ->
-            XAuthTokenHeader % binary() or undefined
-    end,
-
-    DischargeMacaroons = case cowboy_req:header(<<"discharge-macaroons">>, Req) of
-        undefined ->
-            [];
-        <<"">> ->
-            [];
-        SerializedDischarges ->
-            binary:split(SerializedDischarges, <<" ">>, [global])
-    end,
-
-    {SerializedMacaroon, DischargeMacaroons}.
 
 
 %%--------------------------------------------------------------------
