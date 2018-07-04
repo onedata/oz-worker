@@ -80,6 +80,7 @@ start() ->
         {?OIDC_CONSUME_PATH, [<<"GET">>], page_consume_login},
         {?SAML_CONSUME_PATH, [<<"POST">>], page_consume_login},
         {?SAML_METADATA_PATH, [<<"GET">>], page_saml_metadata},
+        {?SAML_CERT_PATH, [<<"GET">>], page_saml_cert},
         {?DEV_LOGIN_PATH, [<<"GET">>], page_dev_login},
         {?VALIDATE_DEV_LOGIN_PATH, [<<"GET">>], page_validate_dev_login}
     ],
