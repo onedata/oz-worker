@@ -212,7 +212,7 @@ change_password_test(Config) ->
 
 -define(IDP, some_oidc_provider).
 -define(IDP_WITH_SUPERGROUP, some_oidc_provider_with_super_group).
--define(SUPERGROUP, <<"vo:example-vo/tm:admins">>).
+-define(SUPERGROUP, [<<"vo:example-vo">>, <<"tm:admins">>]).
 -define(SUPERGROUP_NAME, <<"admins">>).
 -define(USER_PRIVS, privileges:group_user()).
 -define(MANAGER_PRIVS, privileges:group_manager()).
@@ -231,7 +231,7 @@ merge_groups_in_linked_accounts_test(Config) ->
 
     % Try linked acc with a group
     SecondLinkedAcc = #linked_account{idp = ?IDP, groups = [
-        <<"vo:test-vo/user:member">>
+        [<<"vo:test-vo">>, <<"user:member">>]
     ]},
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, SecondLinkedAcc]
@@ -239,12 +239,12 @@ merge_groups_in_linked_accounts_test(Config) ->
     ?assert(has_linked_accounts(Config, UserId, [SecondLinkedAcc])),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:test-vo">>, <<"test-vo">>, organization,
+        [<<"vo:test-vo">>], <<"test-vo">>, organization,
         ?USER_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:test-vo">>, <<"test-vo">>, organization,
+        [<<"vo:test-vo">>], <<"test-vo">>, organization,
         ?USER_PRIVS, effective
     )),
 
@@ -257,8 +257,8 @@ merge_groups_in_linked_accounts_test(Config) ->
 
     % Linked acc with two groups
     ThirdLinkedAcc = #linked_account{idp = ?IDP, groups = [
-        <<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role/user:admin">>,
-        <<"vo:another-vo/ut:some-unit/tm:some-team/rl:other-role/user:manager">>
+        [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>, <<"rl:some-role">>, <<"user:admin">>],
+        [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>, <<"rl:other-role">>, <<"user:manager">>]
     ]},
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, ThirdLinkedAcc]
@@ -266,58 +266,58 @@ merge_groups_in_linked_accounts_test(Config) ->
     ?assert(has_linked_accounts(Config, UserId, [ThirdLinkedAcc])),
     ?assertNot(has_group(
         Config, UserId,
-        <<"vo:another-vo">>,
+        [<<"vo:another-vo">>],
         <<"another-vo">>, organization, ?USER_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:another-vo">>,
+        [<<"vo:another-vo">>],
         <<"another-vo">>, organization, ?USER_PRIVS, effective
     )),
     ?assertNot(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>],
         <<"some-unit">>, unit, ?USER_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>],
         <<"some-unit">>, unit, ?USER_PRIVS, effective
     )),
     ?assertNot(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit/tm:some-team">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>],
         <<"some-team">>, team, ?USER_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit/tm:some-team">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>],
         <<"some-team">>, team, ?USER_PRIVS, effective
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>, <<"rl:some-role">>],
         <<"some-role">>, role, ?ADMIN_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>, <<"rl:some-role">>],
         <<"some-role">>, role, ?ADMIN_PRIVS, effective
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit/tm:some-team/rl:other-role">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>, <<"rl:other-role">>],
         <<"other-role">>, role, ?MANAGER_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit/tm:some-team/rl:other-role">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>, <<"rl:other-role">>],
         <<"other-role">>, role, ?MANAGER_PRIVS, effective
     )),
 
     % Linked acc the same as before but with one group removed
     FourthLinkedAcc = #linked_account{idp = ?IDP, groups = [
-        <<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role/user:admin">>
+        [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>, <<"rl:some-role">>, <<"user:admin">>]
     ]},
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, FourthLinkedAcc]
@@ -325,59 +325,59 @@ merge_groups_in_linked_accounts_test(Config) ->
     ?assert(has_linked_accounts(Config, UserId, [FourthLinkedAcc])),
     ?assertNot(has_group(
         Config, UserId,
-        <<"vo:another-vo">>,
+        [<<"vo:another-vo">>],
         <<"another-vo">>, organization, ?USER_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:another-vo">>,
+        [<<"vo:another-vo">>],
         <<"another-vo">>, organization, ?USER_PRIVS, effective
     )),
     ?assertNot(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>],
         <<"some-unit">>, unit, ?USER_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>],
         <<"some-unit">>, unit, ?USER_PRIVS, effective
     )),
     ?assertNot(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit/tm:some-team">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>],
         <<"some-team">>, team, ?USER_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit/tm:some-team">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>],
         <<"some-team">>, team, ?USER_PRIVS, effective
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>, <<"rl:some-role">>],
         <<"some-role">>, role, ?ADMIN_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>, <<"rl:some-role">>],
         <<"some-role">>, role, ?ADMIN_PRIVS, effective
     )),
     ?assertNot(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit/tm:some-team/rl:other-role">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>, <<"rl:other-role">>],
         <<"other-role">>, role, ?MANAGER_PRIVS, direct
     )),
     ?assertNot(has_group(
         Config, UserId,
-        <<"vo:another-vo/ut:some-unit/tm:some-team/rl:other-role">>,
+        [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>, <<"rl:other-role">>],
         <<"other-role">>, role, ?MANAGER_PRIVS, effective
     )),
 
     % Linked acc from other provider
     FifthLinkedAcc = #linked_account{idp = ?IDP_WITH_SUPERGROUP, groups = [
-        <<"vo:example-vo/tm:new-team/user:manager">>,
-        <<(?SUPERGROUP)/binary, "/user:member">>
+        [<<"vo:example-vo">>, <<"tm:new-team">>, <<"user:manager">>],
+        ?SUPERGROUP ++ [<<"user:member">>]
     ]},
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, FifthLinkedAcc]
@@ -388,22 +388,22 @@ merge_groups_in_linked_accounts_test(Config) ->
     % there are decided based on membership spec in admin group).
     ?assertNot(has_group(
         Config, UserId,
-        <<"vo:example-vo">>,
+        [<<"vo:example-vo">>],
         <<"example-vo">>, organization, ?USER_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:example-vo">>,
+        [<<"vo:example-vo">>],
         <<"example-vo">>, organization, ?ADMIN_PRIVS, effective
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:example-vo/tm:new-team">>,
+        [<<"vo:example-vo">>, <<"tm:new-team">>],
         <<"new-team">>, team, ?MANAGER_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:example-vo/tm:new-team">>,
+        [<<"vo:example-vo">>, <<"tm:new-team">>],
         <<"new-team">>, team, ?ADMIN_PRIVS, effective
     )),
     ?assert(has_group(
@@ -419,7 +419,7 @@ merge_groups_in_linked_accounts_test(Config) ->
 
     % Linked acc the same as above but without the super group
     SixthLinkedAcc = #linked_account{idp = ?IDP_WITH_SUPERGROUP, groups = [
-        <<"vo:example-vo/tm:new-team/user:manager">>
+        [<<"vo:example-vo">>, <<"tm:new-team">>, <<"user:manager">>]
     ]},
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, SixthLinkedAcc]
@@ -428,22 +428,22 @@ merge_groups_in_linked_accounts_test(Config) ->
     % Now, the user should lose admin privs to all groups
     ?assertNot(has_group(
         Config, UserId,
-        <<"vo:example-vo">>,
+        [<<"vo:example-vo">>],
         <<"example-vo">>, organization, ?USER_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:example-vo">>,
+        [<<"vo:example-vo">>],
         <<"example-vo">>, organization, ?USER_PRIVS, effective
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:example-vo/tm:new-team">>,
+        [<<"vo:example-vo">>, <<"tm:new-team">>],
         <<"new-team">>, team, ?MANAGER_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:example-vo/tm:new-team">>,
+        [<<"vo:example-vo">>, <<"tm:new-team">>],
         <<"new-team">>, team, ?MANAGER_PRIVS, effective
     )),
     ?assertNot(has_group(
@@ -460,7 +460,7 @@ merge_groups_in_linked_accounts_test(Config) ->
     % Linked acc the same as above but user's privileges in the group
     % are downgraded to member.
     SeventhLinkedAcc = #linked_account{idp = ?IDP_WITH_SUPERGROUP, groups = [
-        <<"vo:example-vo/tm:new-team/user:member">>
+        [<<"vo:example-vo">>, <<"tm:new-team">>, <<"user:member">>]
     ]},
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, SeventhLinkedAcc]
@@ -469,22 +469,22 @@ merge_groups_in_linked_accounts_test(Config) ->
     % Now, the user should lose admin privs to all groups
     ?assertNot(has_group(
         Config, UserId,
-        <<"vo:example-vo">>,
+        [<<"vo:example-vo">>],
         <<"example-vo">>, organization, ?USER_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:example-vo">>,
+        [<<"vo:example-vo">>],
         <<"example-vo">>, organization, ?USER_PRIVS, effective
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:example-vo/tm:new-team">>,
+        [<<"vo:example-vo">>, <<"tm:new-team">>],
         <<"new-team">>, team, ?USER_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:example-vo/tm:new-team">>,
+        [<<"vo:example-vo">>, <<"tm:new-team">>],
         <<"new-team">>, team, ?USER_PRIVS, effective
     )),
     ?assertNot(has_group(

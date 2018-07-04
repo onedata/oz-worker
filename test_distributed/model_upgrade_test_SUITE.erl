@@ -84,11 +84,10 @@ user_upgrade_test(Config) ->
     ?assertEqual(UserRecordVer6, user_record_6()),
     
     {Version7, UserRecordVer7} = oz_test_utils:call_oz(
-        Config, od_user, upgrade_record, [6, UserRecordVer6]
+        Config, od_user, upgrade_record, [6, user_record_6_with_idp_groups()]
     ),
     ?assertEqual(7, Version7),
     ?assertEqual(UserRecordVer7, user_record_7()).
-
 
 
 group_upgrade_test(Config) ->
@@ -105,8 +104,6 @@ group_upgrade_test(Config) ->
     ),
     ?assertEqual(3, Version3),
     ?assertEqual(UserRecordVer3, group_record_3()).
-
-
 
 
 space_upgrade_test(Config) ->
@@ -494,6 +491,27 @@ user_record_6() -> #od_user{
     top_down_dirty = true
 }.
 
+user_record_6_with_idp_groups() ->
+    UserRecord6 = user_record_6(),
+    UserRecord6#od_user{linked_accounts = [
+        #linked_account{
+            idp = google,
+            subject_id = <<"user_id1">>,
+            login = <<"login1">>,
+            name = <<"name1">>,
+            email_list = [<<"email1@email.com">>],
+            groups = [<<"vo:test-vo">>, <<"vo:test-vo/user:member">>]
+        },
+        #linked_account{
+            idp = github,
+            subject_id = <<"user_id2">>,
+            login = <<"login2">>,
+            name = <<"name2">>,
+            email_list = [<<"email2@email.com">>],
+            groups = [<<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role/user:admin">>]
+        }
+    ]}.
+
 user_record_7() -> #od_user{
     name = <<"name">>,
     alias = <<"login">>,
@@ -506,7 +524,7 @@ user_record_7() -> #od_user{
             login = <<"login1">>,
             name = <<"name1">>,
             email_list = [<<"email1@email.com">>],
-            groups = []
+            groups = [[<<"vo:test-vo">>], [<<"vo:test-vo">>, <<"user:member">>]]
         },
         #linked_account{
             idp = github,
@@ -514,7 +532,7 @@ user_record_7() -> #od_user{
             login = <<"login2">>,
             name = <<"name2">>,
             email_list = [<<"email2@email.com">>],
-            groups = []
+            groups = [[<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>, <<"rl:some-role">>, <<"user:admin">>]]
         }
     ],
     default_space = <<"default_space">>,
@@ -543,6 +561,7 @@ user_record_7() -> #od_user{
     eff_handles = #{},
     top_down_dirty = true
 }.
+
 
 group_record_1() -> {od_group,
     <<"name">>,

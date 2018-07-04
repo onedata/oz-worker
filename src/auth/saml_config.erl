@@ -176,7 +176,6 @@ get_config() ->
     idp_group_mapping:membership_spec().
 normalize_elixir_membership_spec(Group) ->
     [VO | Rest] = binary:split(Group, <<":">>, [global]),
-    MappedTokens = [<<"vo:", VO/binary>>] ++
-        [<<"tm:", Gr/binary>> || Gr <- Rest] ++
-        [<<"user:member">>],
-    str_utils:join_binary(MappedTokens, <<"/">>).
+    [<<"vo:", VO/binary>>] ++
+    [<<"tm:", Gr/binary>> || Gr <- Rest] ++
+    [<<"user:member">>].

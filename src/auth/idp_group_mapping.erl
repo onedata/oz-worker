@@ -19,9 +19,9 @@
 -include_lib("ctool/include/logging.hrl").
 
 
--type group_spec() :: binary().
+-type group_spec() :: [binary()].
 %% Format of group spec:
-%%  Group structure is expressed by a chain where group ids are separated by "/"
+%%  Group structure is expressed by a list of group ids
 %%  Group names are identical to group ids from spec
 %%  Type is denoted by two letter abbreviations:
 %%      # vo - organization
@@ -29,16 +29,16 @@
 %%      # tm - team
 %%      # rl - role
 %%  Examples:
-%%      # vo:egi.eu
-%%      # vo:egi.eu/ut:some-egi-unit
-%%      # vo:egi.eu/ut:some-egi-unit/tm:some-egi-team
+%%      # [vo:egi.eu]
+%%      # [vo:egi.eu, ut:some-egi-unit]
+%%      # [vo:egi.eu, ut:some-egi-unit, tm:some-egi-team]
 %%  When there is more that one group in group spec, a structure of groups will
 %%      be created where every group is a member of its predecessor
 %%      (left-hand side in spec) with regular member privileges in that group.
--type membership_spec() :: binary().
+-type membership_spec() :: [binary()].
 %% Format of membership spec:
-%%  The format is almost the same as for group spec, except the chain MUST end
-%%      in a string denoting member type and role, separated by ":".
+%%  The format is almost the same as for group spec, except last element of list MUST be
+%%      a string denoting member type and role, separated by ":".
 %%  Allowed types:
 %%      # user
 %%      # group
@@ -47,9 +47,9 @@
 %%      # manager
 %%      # admin
 %%  Examples:
-%%      # vo:egi.eu/user:member
-%%      # vo:egi.eu/ut:some-egi-unit/group:admin
-%%      # vo:egi.eu/ut:some-egi-unit/tm:some-egi-team/user:manager
+%%      # [vo:egi.eu, user:member]
+%%      # [vo:egi.eu, ut:some-egi-unit, group:admin]
+%%      # [vo:egi.eu, ut:some-egi-unit, tm:some-egi-team, user:manager]
 -export_type([group_spec/0, membership_spec/0]).
 
 %% SUPER GROUPS
@@ -96,9 +96,9 @@ coalesce_groups(IdP, UserId, OldGroups, NewGroups) ->
 %% are always safe.
 %% @end
 %%--------------------------------------------------------------------
--spec group_spec_to_db_id(group_spec()) -> binary().
+-spec group_spec_to_db_id(group_spec()) -> datastore:key().
 group_spec_to_db_id(GroupSpec) ->
-    datastore_utils:gen_key(<<"">>, GroupSpec).
+    datastore_utils:gen_key(<<"">>, str_utils:join_binary(GroupSpec, <<"/">>)).
 
 
 %%--------------------------------------------------------------------
@@ -109,9 +109,7 @@ group_spec_to_db_id(GroupSpec) ->
 %%--------------------------------------------------------------------
 -spec membership_spec_to_group_spec(membership_spec()) -> group_spec().
 membership_spec_to_group_spec(MembershipSpec) ->
-    Tokens = spec_to_tokens(MembershipSpec),
-    ParentGroupTokens = lists:sublist(Tokens, length(Tokens) - 1),
-    tokens_to_spec(ParentGroupTokens).
+    lists:sublist(MembershipSpec, length(MembershipSpec) - 1).
 
 
 
@@ -177,19 +175,15 @@ remove_membership(MembershipSpec, UserId) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Analyzes a chain of groups denoted by group spec and creates missing groups,
+%% Analyzes a list of groups denoted by group spec and creates missing groups,
 %% adding proper relations between them. In case super group is specified,
 %% it is added to every new group that is created in the process.
-%% The group spec can also be given as a list of binaries, which is the result
-%% of splitting it on the "/" char.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_group_structure(GroupSpec :: group_spec() | [binary()],
+-spec ensure_group_structure(GroupSpec :: group_spec(),
     SuperGroupSpec :: undefined | group_spec()) -> ok.
-ensure_group_structure(GroupSpec, SuperGroupSpec) when is_binary(GroupSpec) ->
-    ensure_group_structure(spec_to_tokens(GroupSpec), SuperGroupSpec);
-ensure_group_structure(GroupSpecTokens, SuperGroupSpec) ->
-    ensure_group_structure(GroupSpecTokens, 1, SuperGroupSpec).
+ensure_group_structure(GroupSpec, SuperGroupSpec) ->
+    ensure_group_structure(GroupSpec, 1, SuperGroupSpec).
 
 
 %%--------------------------------------------------------------------
@@ -199,14 +193,14 @@ ensure_group_structure(GroupSpecTokens, SuperGroupSpec) ->
 %% of group spec tokens, creating new groups and relations accordingly.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_group_structure(GroupSpecTokens :: [binary()], Depth :: integer(),
+-spec ensure_group_structure(GroupSpec :: group_spec(), Depth :: integer(),
     SuperGroupSpec :: undefined | group_spec()) -> ok.
-ensure_group_structure(GroupSpecTokens, Depth, _) when Depth > length(GroupSpecTokens) ->
+ensure_group_structure(GroupSpec, Depth, _) when Depth > length(GroupSpec) ->
     ok;
-ensure_group_structure(GroupSpecTokens, Depth, SuperGroupSpec) ->
-    GroupSpec = tokens_to_spec(lists:sublist(GroupSpecTokens, Depth)),
-    GroupId = group_spec_to_db_id(GroupSpec),
-    SubgroupId = lists:nth(Depth, GroupSpecTokens),
+ensure_group_structure(GroupSpec, Depth, SuperGroupSpec) ->
+    CurrentGroupSpec = lists:sublist(GroupSpec, Depth),
+    GroupId = group_spec_to_db_id(CurrentGroupSpec),
+    SubgroupId = lists:nth(Depth, CurrentGroupSpec),
     <<GroupTypeStr:2/binary, ":", GroupName/binary>> = SubgroupId,
     {ok, _} = od_group:update(GroupId, fun(Group) -> {ok, Group} end, #od_group{
         name = GroupName, type = str_to_type(GroupTypeStr)
@@ -215,32 +209,32 @@ ensure_group_structure(GroupSpecTokens, Depth, SuperGroupSpec) ->
         true ->
             % If the current group is the super group, it should be added with
             % admin privileges to its parent group.
-            MembershipType = case GroupSpec of
+            MembershipType = case CurrentGroupSpec of
                 SuperGroupSpec -> <<"group:admin">>;
                 _ -> <<"group:member">>
             end,
-            ParentGroupSpec = tokens_to_spec(lists:sublist(GroupSpecTokens, Depth - 1)),
-            MembershipSpec = <<ParentGroupSpec/binary, "/", MembershipType/binary>>,
+            ParentGroupSpec = lists:sublist(GroupSpec, Depth - 1),
+            MembershipSpec = ParentGroupSpec ++ [MembershipType],
             ensure_member(true, MembershipSpec, GroupId);
         false ->
             ok
     end,
-    case {SuperGroupSpec, GroupSpec} of
+    case {SuperGroupSpec, CurrentGroupSpec} of
         {undefined, _} ->
             ok;
         {Spec, Spec} ->
             % Do not add the super group to itself
             ok;
         _ ->
-            % Super group is defined and different that the group, add it with
+            % Super group is defined and different than the group, add it with
             % admin privileges.
             ensure_member(
                 true,
-                <<GroupSpec/binary, "/group:admin">>,
+                CurrentGroupSpec ++ [<<"group:admin">>],
                 group_spec_to_db_id(SuperGroupSpec)
             )
     end,
-    ensure_group_structure(GroupSpecTokens, Depth + 1, SuperGroupSpec).
+    ensure_group_structure(GroupSpec, Depth + 1, SuperGroupSpec).
 
 
 %%--------------------------------------------------------------------
@@ -251,11 +245,10 @@ ensure_group_structure(GroupSpecTokens, Depth, SuperGroupSpec) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec ensure_member(IsMember :: boolean(), MembershipSpec :: membership_spec(),
-    SuperGroupSpec :: undefined | group_spec()) -> ok.
-ensure_member(IsMember, MembershipSpec, MemberId) when is_binary(MembershipSpec) ->
-    Tokens = spec_to_tokens(MembershipSpec),
-    ParentId = group_spec_to_db_id(tokens_to_spec(lists:sublist(Tokens, length(Tokens) - 1))),
-    [MemberType, RoleStr] = binary:split(lists:last(Tokens), <<":">>, [global]),
+    SuperGroupSpec :: undefined | datastore:key()) -> ok.
+ensure_member(IsMember, MembershipSpec, MemberId) ->
+    ParentId = group_spec_to_db_id(lists:sublist(MembershipSpec, length(MembershipSpec) - 1)),
+    [MemberType, RoleStr] = binary:split(lists:last(MembershipSpec), <<":">>),
     Privileges = str_role_to_privileges(RoleStr),
     case {MemberType, IsMember} of
         {<<"user">>, true} ->
@@ -268,28 +261,6 @@ ensure_member(IsMember, MembershipSpec, MemberId) when is_binary(MembershipSpec)
             group_logic:remove_group(?ROOT, ParentId, MemberId)
     end,
     ok.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Splits a group spec into tokens on "/" char.
-%% @end
-%%--------------------------------------------------------------------
--spec spec_to_tokens(Spec :: group_spec()) -> [binary()].
-spec_to_tokens(Spec) ->
-    binary:split(Spec, <<"/">>, [global]).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Joins tokens into a group spec using "/" char.
-%% @end
-%%--------------------------------------------------------------------
--spec tokens_to_spec([binary()]) -> Spec :: group_spec().
-tokens_to_spec(Tokens) ->
-    str_utils:join_binary(Tokens, <<"/">>).
 
 
 %%--------------------------------------------------------------------

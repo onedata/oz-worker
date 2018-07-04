@@ -308,8 +308,18 @@ get_record_struct(6) ->
     % Remove chosen_provider field, rename login to alias
     {record, lists:keydelete(chosen_provider, 1, lists:keyreplace(login, 1, Struct, {alias, string}))};
 get_record_struct(7) ->
-    % The structure does not change, only the privileges are translated.
-    get_record_struct(6).
+    {record, Struct} = get_record_struct(6),
+    LinkedAccStruct = {linked_accounts, [{record, [
+        {idp, atom},
+        {subject_id, string},
+        {login, string},
+        {name, string},
+        {email_list, [string]},
+        {groups, [[string]]}
+    ]}]},
+    % Changed groups spec from binaries to list of binaries
+    {record, lists:keyreplace(linked_accounts, 1, Struct, {linked_accounts, LinkedAccStruct})}.
+    
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -714,23 +724,33 @@ upgrade_record(6, User) ->
             (Other) -> Other 
         end, Privileges)))
     end,
+    
+    TransformedLinkedAccounts = lists:map(fun(LinkedAccount) ->
+        #linked_account{groups = GroupsSpec} = LinkedAccount,
+
+        TransformedGroups = lists:map(fun(BinaryGroupSpec) ->
+            binary:split(BinaryGroupSpec, <<"/">>, [global])
+        end, GroupsSpec),
+
+        LinkedAccount#linked_account{groups = TransformedGroups} 
+    end, LinkedAccounts),
 
     {7, #od_user{
         name = Name,
         alias = Alias,
         email_list = EmailList,
         basic_auth_enabled = BasicAuthEnabled,
-        linked_accounts = LinkedAccounts,
-        
+        linked_accounts = TransformedLinkedAccounts,
+
         default_space = DefaultSpace,
         default_provider = DefaultProvider,
-        
+
         client_tokens = ClientTokens,
         space_aliases = SpaceAliases,
-        
+
         oz_privileges = TranslatePrivileges(OzPrivileges),
         eff_oz_privileges = TranslatePrivileges(EffOzPrivileges),
-        
+
         groups = Groups,
         spaces = Spaces,
         handle_services = HandleServices,
@@ -739,6 +759,5 @@ upgrade_record(6, User) ->
         eff_spaces = EffSpaces,
         eff_providers = EffProviders,
         eff_handle_services = EffHandleServices,
-        eff_handles = EffHandles        
+        eff_handles = EffHandles
     }}.
-    

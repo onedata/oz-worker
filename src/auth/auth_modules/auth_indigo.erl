@@ -80,8 +80,7 @@ normalized_membership_specs(IdP, Map) ->
         fun(Group) ->
             GroupTokens = binary:split(Group, <<"/">>, [global]),
             MappedTokens = [<<"tm:", T/binary>> || T <- GroupTokens],
-            GroupSpec = str_utils:join_binary(MappedTokens, <<"/">>),
-            <<"vo:", VoId/binary, "/", GroupSpec/binary, "/user:member">>
+            [<<"vo:", VoId/binary>>] ++ MappedTokens ++ [<<"user:member">>]
         end, Groups).
 
 
