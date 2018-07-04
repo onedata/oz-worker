@@ -62,7 +62,7 @@ create(SessionId, Session) ->
 %% Retrieves session by Id.
 %% @end
 %%--------------------------------------------------------------------
--spec get(id()) -> ok | {error, term()}.
+-spec get(id()) -> {ok, doc()} | {error, term()}.
 get(Id) ->
     datastore_model:get(?CTX, Id).
 
@@ -117,39 +117,6 @@ delete(SessionId, GracePeriod, ClearExpiredUserSessions) ->
 
 
 %%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Deletes session by Id and performs required cleanup.
-%% @end
-%%--------------------------------------------------------------------
--spec delete_internal(id(), od_user:id(), GracePeriod :: undefined | non_neg_integer(),
-    ClearExpiredUserSessions :: boolean()) -> ok | {error, term()}.
-delete_internal(SessionId, UserId, GracePeriod, false = _ClearExpiredUserSessions) ->
-    % Terminate all user connections related to this session
-    user_connections:clear(SessionId, GracePeriod),
-    od_user:remove_session(UserId, SessionId),
-    datastore_model:delete(?CTX, SessionId);
-
-delete_internal(SessionId, UserId, GracePeriod, true = _ClearExpiredUserSessions) ->
-    delete_internal(SessionId, UserId, GracePeriod, false),
-    % Clear all expired sessions of given user.
-    {ok, ActiveUserSessions} = od_user:get_all_sessions(UserId),
-    lists:foreach(fun(UserSessionId) ->
-        case ?MODULE:get(UserSessionId) of
-            {ok, #document{value = #session{last_refresh = LastRefresh}}} ->
-                case new_gui_session:is_expired(LastRefresh) of
-                    true ->
-                        delete_internal(UserSessionId, UserId, GracePeriod, false);
-                    _ ->
-                        ok
-                end;
-            {error, _} ->
-                delete_internal(UserSessionId, UserId, GracePeriod, false)
-        end
-    end, ActiveUserSessions).
-
-
-%%--------------------------------------------------------------------
 %% @doc
 %% Returns the list of all sessions.
 %% @end
@@ -170,3 +137,50 @@ list() ->
 -spec init() -> ok | {error, term()}.
 init() ->
     datastore_model:init(?CTX).
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Deletes session by Id and performs required cleanup.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_internal(id(), od_user:id(), GracePeriod :: undefined | non_neg_integer(),
+    ClearExpiredUserSessions :: boolean()) -> ok | {error, term()}.
+delete_internal(SessionId, UserId, GracePeriod, false = _ClearExpiredUserSessions) ->
+    % Terminate all user connections related to this session
+    user_connections:clear(SessionId, GracePeriod),
+    od_user:remove_session(UserId, SessionId),
+    datastore_model:delete(?CTX, SessionId);
+
+delete_internal(SessionId, UserId, GracePeriod, true = _ClearExpiredUserSessions) ->
+    delete_internal(SessionId, UserId, GracePeriod, false),
+    clear_expired_sessions(UserId, GracePeriod).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Deletes session by Id and performs required cleanup.
+%% @end
+%%--------------------------------------------------------------------
+-spec clear_expired_sessions(od_user:id(), GracePeriod :: undefined | non_neg_integer()) ->
+    ok | {error, term()}.
+clear_expired_sessions(UserId, GracePeriod) ->
+    {ok, ActiveUserSessions} = od_user:get_all_sessions(UserId),
+    lists:foreach(fun(UserSessionId) ->
+        case ?MODULE:get(UserSessionId) of
+            {ok, #document{value = #session{last_refresh = LastRefresh}}} ->
+                case new_gui_session:is_expired(LastRefresh) of
+                    true ->
+                        delete_internal(UserSessionId, UserId, GracePeriod, false);
+                    _ ->
+                        ok
+                end;
+            {error, _} ->
+                delete_internal(UserSessionId, UserId, GracePeriod, false)
+        end
+    end, ActiveUserSessions).

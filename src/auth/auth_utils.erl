@@ -643,11 +643,9 @@ parse_macaroons_from_headers(Req) ->
     XAuthTokenHeader = cowboy_req:header(<<"x-auth-token">>, Req),
     % X-Auth-Token is an alias for macaroon header, check if any of them
     % is given.
-    SerializedMacaroon = case MacaroonHeader of
-        <<_/binary>> ->
-            MacaroonHeader;
-        _ ->
-            XAuthTokenHeader % binary() or undefined
+    SerializedMacaroon = case is_binary(MacaroonHeader) of
+        true -> MacaroonHeader;
+        false -> XAuthTokenHeader % binary or undefined
     end,
 
     DischargeMacaroons = case cowboy_req:header(<<"discharge-macaroons">>, Req) of

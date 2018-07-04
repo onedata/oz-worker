@@ -28,7 +28,6 @@
 
 -type id() :: session:id().
 -type record() :: #user_connections{}.
--type doc() :: datastore_doc:doc(record()).
 -export_type([id/0, record/0]).
 
 -define(OK_ON_SUCCESS(__Term), case __Term of

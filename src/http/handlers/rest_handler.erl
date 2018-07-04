@@ -147,7 +147,7 @@ is_authorized(Req, State) ->
         ])
     catch
         throw:Err ->
-            {error, Err};
+            Err;
         Type:Message ->
             ?error_stacktrace("Unexpected error in ~p:is_authorized - ~p:~p", [
                 ?MODULE, Type, Message

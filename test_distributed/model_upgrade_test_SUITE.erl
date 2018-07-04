@@ -492,8 +492,7 @@ user_record_6() -> {od_user,
 }.
 
 user_record_6_with_idp_groups() ->
-    UserRecord6 = user_record_6(),
-    UserRecord6#od_user{linked_accounts = [
+    NewLinkedAccounts = [
         #linked_account{
             idp = google,
             subject_id = <<"user_id1">>,
@@ -515,7 +514,8 @@ user_record_6_with_idp_groups() ->
                 <<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role/user:admin">>
             ]
         }
-    ]}.
+    ],
+    erlang:setelement(6, user_record_6(), NewLinkedAccounts).
 
 user_record_7() -> #od_user{
     name = <<"name">>,

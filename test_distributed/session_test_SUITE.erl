@@ -150,9 +150,9 @@ cleanup_on_session_expiry(Config) ->
     ?assert(compare_user_sessions(Config, UserId, [])),
     ?assert(compare_connections_per_user(Config, UserId, [])),
     ?assert(compare_connections_per_session(Config, SessionId, [])),
-    ?assertNot(is_client_alive(ClientPid1)),
-    ?assertNot(is_client_alive(ClientPid2)),
-    ?assertNot(is_client_alive(ClientPid3)),
+    ?assertMatch(false, is_client_alive(ClientPid1), 10),
+    ?assertMatch(false, is_client_alive(ClientPid2), 10),
+    ?assertMatch(false, is_client_alive(ClientPid3), 10),
 
     ok.
 
@@ -172,9 +172,9 @@ cleanup_on_session_delete(Config) ->
     ?assert(compare_user_sessions(Config, UserId, [])),
     ?assert(compare_connections_per_user(Config, UserId, [])),
     ?assert(compare_connections_per_session(Config, SessionId, [])),
-    ?assertNot(is_client_alive(ClientPid1)),
-    ?assertNot(is_client_alive(ClientPid2)),
-    ?assertNot(is_client_alive(ClientPid3)),
+    ?assertMatch(false, is_client_alive(ClientPid1), 10),
+    ?assertMatch(false, is_client_alive(ClientPid2), 10),
+    ?assertMatch(false, is_client_alive(ClientPid3), 10),
 
     ok.
 
@@ -194,9 +194,9 @@ cleanup_on_user_delete(Config) ->
     ?assert(compare_connections_per_session(Config, Session1, [])),
     ?assert(compare_connections_per_session(Config, Session2, [])),
     ?assert(compare_connections_per_session(Config, Session3, [])),
-    ?assertNot(is_client_alive(ClientPid1)),
-    ?assertNot(is_client_alive(ClientPid2)),
-    ?assertNot(is_client_alive(ClientPid3)),
+    ?assertMatch(false, is_client_alive(ClientPid1), 10),
+    ?assertMatch(false, is_client_alive(ClientPid2), 10),
+    ?assertMatch(false, is_client_alive(ClientPid3), 10),
 
     ok.
 
@@ -210,24 +210,36 @@ cleanup_of_expired_sessions_upon_other_session_expiry(Config) ->
 
     simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
 
-    {_Session3, Cookie3} = log_in(Config, UserId),
+    {Session3, Cookie3} = log_in(Config, UserId),
+    {ClientPid3, ServerPid3, {user, UserId}} = start_gs_connection(Config, Cookie3),
 
-    ?assert(compare_user_sessions(Config, UserId, [Session1, Session2])),
-    ?assert(compare_connections_per_user(Config, UserId, [ServerPid1, ServerPid2])),
+    ?assert(compare_user_sessions(Config, UserId, [Session1, Session2, Session3])),
+    ?assert(compare_connections_per_user(Config, UserId, [ServerPid1, ServerPid2, ServerPid3])),
     ?assert(compare_connections_per_session(Config, Session1, [ServerPid1])),
     ?assert(compare_connections_per_session(Config, Session2, [ServerPid2])),
+    ?assert(compare_connections_per_session(Config, Session3, [ServerPid3])),
     ?assert(is_client_alive(ClientPid1)),
     ?assert(is_client_alive(ClientPid2)),
+    ?assert(is_client_alive(ClientPid3)),
 
     simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
-    {_ClientPid4, _ServerPid4, nobody} = start_gs_connection(Config, Cookie3),
 
-    ?assert(compare_connections_per_user(Config, UserId, [])),
-    ?assert(compare_connections_per_user(Config, UserId, [])),
+    % The only session that is still valid, it should not be cleared
+    {Session4, Cookie4} = log_in(Config, UserId),
+    {ClientPid4, ServerPid4, {user, UserId}} = start_gs_connection(Config, Cookie4),
+
+    {_ClientPid5, _ServerPid5, nobody} = start_gs_connection(Config, Cookie3),
+
+    ?assert(compare_user_sessions(Config, UserId, [Session4])),
+    ?assert(compare_connections_per_user(Config, UserId, [ServerPid4])),
     ?assert(compare_connections_per_session(Config, Session1, [])),
     ?assert(compare_connections_per_session(Config, Session2, [])),
-    ?assertNot(is_client_alive(ClientPid1)),
-    ?assertNot(is_client_alive(ClientPid2)),
+    ?assert(compare_connections_per_session(Config, Session3, [])),
+    ?assert(compare_connections_per_session(Config, Session4, [ServerPid4])),
+    ?assertMatch(false, is_client_alive(ClientPid1), 10),
+    ?assertMatch(false, is_client_alive(ClientPid2), 10),
+    ?assertMatch(false, is_client_alive(ClientPid3), 10),
+    ?assert(is_client_alive(ClientPid4)),
 
     ok.
 
@@ -241,23 +253,34 @@ cleanup_of_expired_sessions_upon_other_session_delete(Config) ->
 
     simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
 
-    {_Session3, Cookie3} = log_in(Config, UserId),
+    {Session3, Cookie3} = log_in(Config, UserId),
+    {ClientPid3, ServerPid3, {user, UserId}} = start_gs_connection(Config, Cookie3),
 
-    ?assert(compare_user_sessions(Config, UserId, [Session1, Session2])),
-    ?assert(compare_connections_per_user(Config, UserId, [ServerPid1, ServerPid2])),
+    ?assert(compare_user_sessions(Config, UserId, [Session1, Session2, Session3])),
+    ?assert(compare_connections_per_user(Config, UserId, [ServerPid1, ServerPid2, ServerPid3])),
     ?assert(compare_connections_per_session(Config, Session1, [ServerPid1])),
     ?assert(compare_connections_per_session(Config, Session2, [ServerPid2])),
+    ?assert(compare_connections_per_session(Config, Session3, [ServerPid3])),
     ?assert(is_client_alive(ClientPid1)),
     ?assert(is_client_alive(ClientPid2)),
+    ?assert(is_client_alive(ClientPid3)),
+
+    % The only session that is still valid, it should not be cleared
+    {Session4, Cookie4} = log_in(Config, UserId),
+    {ClientPid4, ServerPid4, {user, UserId}} = start_gs_connection(Config, Cookie4),
 
     oz_test_utils:log_out(Config, Cookie3),
 
-    ?assert(compare_connections_per_user(Config, UserId, [])),
-    ?assert(compare_connections_per_user(Config, UserId, [])),
+    ?assert(compare_user_sessions(Config, UserId, [Session4])),
+    ?assert(compare_connections_per_user(Config, UserId, [ServerPid4])),
     ?assert(compare_connections_per_session(Config, Session1, [])),
     ?assert(compare_connections_per_session(Config, Session2, [])),
-    ?assertNot(is_client_alive(ClientPid1)),
-    ?assertNot(is_client_alive(ClientPid2)),
+    ?assert(compare_connections_per_session(Config, Session3, [])),
+    ?assert(compare_connections_per_session(Config, Session4, [ServerPid4])),
+    ?assertMatch(false, is_client_alive(ClientPid1), 10),
+    ?assertMatch(false, is_client_alive(ClientPid2), 10),
+    ?assertMatch(false, is_client_alive(ClientPid3), 10),
+    ?assert(is_client_alive(ClientPid4)),
 
     ok.
 
@@ -355,16 +378,15 @@ validate_session(Config, Cookie) ->
     rpc:call(random_node(Config), new_gui_session, validate, [MockedReq]).
 
 is_client_alive(Pid) ->
-    is_client_alive(Pid, 10).
-
-is_client_alive(Pid, Retries) ->
     case is_process_alive(Pid) of
         false ->
             false;
         true ->
+            % Force sending a diagnostic message, if the connection is down
+            % the process might still be running as sometimes 'closed' event is
+            % not sent by ssl.
             Pid ! perform_ping,
-            timer:sleep(1000),
-            is_client_alive(Pid, Retries - 1)
+            true
     end.
 
 

@@ -118,7 +118,7 @@ client_disconnected(?PROVIDER(ProvId), _, _ConnectionRef) ->
         {ok, ProviderRecord = #od_provider{name = Name}} ->
             ?info("Provider '~s' (~s) went offline", [Name, ProvId]),
             % Generate a dummy update which will cause a push to GUI clients so that
-            % they can learn the provider is now online.
+            % they can learn the provider is now offline.
             gs_server:updated(
                 od_provider,
                 ProvId,
