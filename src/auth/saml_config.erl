@@ -20,6 +20,7 @@
 
 -export([
     get_sp_config/0,
+    get_saml_cert_pem/0,
     get_supported_idps/0,
     get_idp_config/1,
     has_group_mapping_enabled/1,
@@ -42,10 +43,22 @@ get_sp_config() ->
     SAMLConfig = get_config(),
     SPConfig = maps:get(sp_config, SAMLConfig),
 
+    RolloverNewCert = case maps:get(rollover_new_cert_file, SPConfig, undefined) of
+        undefined -> undefined;
+        CertPath -> esaml_util:load_certificate(CertPath)
+    end,
+
+    RolloverNewKey = case maps:get(rollover_new_key_file, SPConfig, undefined) of
+        undefined -> undefined;
+        KeyPath -> esaml_util:load_private_key(KeyPath)
+    end,
+
     #esaml_sp{
         entity_id = maps:get(entity_id, SPConfig),
         certificate = esaml_util:load_certificate(maps:get(cert_file, SPConfig)),
         key = esaml_util:load_private_key(maps:get(key_file, SPConfig)),
+        rollover_new_certificate = RolloverNewCert,
+        rollover_new_key = RolloverNewKey,
         consume_uri = binary_to_list(oz_worker:get_uri(<<?SAML_CONSUME_PATH>>)),
         metadata_uri = binary_to_list(oz_worker:get_uri(<<?SAML_METADATA_PATH>>)),
         org = #esaml_org{
@@ -61,6 +74,23 @@ get_sp_config() ->
         sign_metadata = maps:get(sign_metadata, SPConfig),
         want_assertions_signed = maps:get(want_assertions_signed, SPConfig)
     }.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the SAML certificate in PEM format. If a rollover certificate is
+%% present, it is returned, otherwise the standard cert.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_saml_cert_pem() -> binary().
+get_saml_cert_pem() ->
+    SAMLConfig = get_config(),
+    SPConfig = maps:get(sp_config, SAMLConfig),
+
+    Default = maps:get(cert_file, SPConfig),
+    CertificatePath = maps:get(rollover_new_cert_file, SPConfig, Default),
+    {ok, CertPem} = file:read_file(CertificatePath),
+    CertPem.
 
 
 %%--------------------------------------------------------------------
