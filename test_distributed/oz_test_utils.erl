@@ -17,6 +17,7 @@
 -include("registered_names.hrl").
 -include("api_test_utils.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("gui/include/gui_session.hrl").
 
 
 %% API
@@ -195,7 +196,7 @@
 
 % Convenience functions for gs
 -export([
-    create_session/3,
+    log_in/2, log_out/2,
     get_gs_ws_url/1,
     get_gs_supported_proto_versions/1,
     decode_gri/2
@@ -816,7 +817,7 @@ all_space_privileges(Config) ->
 create_space(Config, Client, Name) ->
     Result = case Client of
         ?USER(UserId) ->
-            call_oz( Config, user_logic, create_space, [Client, UserId, Name]);
+            call_oz(Config, user_logic, create_space, [Client, UserId, Name]);
         _ ->
             call_oz(Config, space_logic, create, [Client, Name])
     end,
@@ -1334,7 +1335,7 @@ set_provider_domain(Config, ProviderId, Domain) ->
 create_handle_service(Config, Client, Name, ProxyEndpoint, ServiceProperties) ->
     Result = case Client of
         ?USER(UserId) ->
-            call_oz( Config, user_logic, create_handle_service, [
+            call_oz(Config, user_logic, create_handle_service, [
                 Client, UserId, Name, ProxyEndpoint, ServiceProperties
             ]);
         _ ->
@@ -1355,12 +1356,11 @@ create_handle_service(Config, Client, Name, ProxyEndpoint, ServiceProperties) ->
 create_handle_service(Config, Client, Data) ->
     Result = case Client of
         ?USER(UserId) ->
-            call_oz( Config, user_logic, create_handle_service, [Client, UserId, Data]);
+            call_oz(Config, user_logic, create_handle_service, [Client, UserId, Data]);
         _ ->
             call_oz(Config, handle_service_logic, create, [Client, Data])
     end,
     ?assertMatch({ok, _}, Result).
-
 
 
 %%--------------------------------------------------------------------
@@ -1570,7 +1570,7 @@ all_handle_privileges(Config) ->
 create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId, Metadata) ->
     Result = case Client of
         ?USER(UserId) ->
-            call_oz( Config, user_logic, create_handle, [
+            call_oz(Config, user_logic, create_handle, [
                 Client, UserId, HandleServiceId, ResourceType, ResourceId, Metadata
             ]);
         _ ->
@@ -1591,7 +1591,7 @@ create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId, Metadat
 create_handle(Config, Client, Data) ->
     Result = case Client of
         ?USER(UserId) ->
-            call_oz( Config, user_logic, create_handle, [Client, UserId, Data]);
+            call_oz(Config, user_logic, create_handle, [Client, UserId, Data]);
         _ ->
             call_oz(Config, handle_logic, create, [Client, Data])
     end,
@@ -2061,16 +2061,37 @@ gui_ca_certs(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a session for user.
+%% Creates a session for user, simulating a login.
 %% @end
 %%--------------------------------------------------------------------
--spec create_session(Config :: term(),
-    UserId :: term(), CustomArgs :: [term()]) ->
-    {ok, SessId :: binary()}.
-create_session(Config, UserId, CustomArgs) ->
-    ?assertMatch({ok, _}, call_oz(
-        Config, gui_session_plugin, create_session, [UserId, CustomArgs]
-    )).
+-spec log_in(Config :: term(), UserId :: od_user:id()) -> {ok, Cookie :: binary()}.
+log_in(Config, UserId) ->
+    MockedReq = #{},
+    #{resp_cookies := #{?SESSION_COOKIE_KEY := CookieIoList}} = ?assertMatch(#{}, call_oz(
+        Config, new_gui_session, log_in, [UserId, MockedReq]
+    )),
+    Cookie = iolist_to_binary(CookieIoList),
+    CookieKey = ?SESSION_COOKIE_KEY,
+    CookieLen = byte_size(?SESSION_COOKIE_KEY),
+    [<<CookieKey:CookieLen/binary, "=", CookieVal/binary>> | _] = binary:split(Cookie, <<";">>, [global, trim_all]),
+    {ok, CookieVal}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Destroys given session, simulating a user logout.
+%% @end
+%%--------------------------------------------------------------------
+-spec log_out(Config :: term(), Cookie :: binary()) -> ok.
+log_out(Config, Cookie) ->
+    MockedReq = #{
+        resp_headers => #{},
+        headers => #{<<"cookie">> => <<?SESSION_COOKIE_KEY/binary, "=", Cookie/binary>>}
+    },
+    ?assertMatch(#{}, call_oz(
+        Config, new_gui_session, log_out, [MockedReq]
+    )),
+    ok.
 
 
 %%--------------------------------------------------------------------

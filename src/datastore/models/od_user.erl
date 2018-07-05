@@ -20,6 +20,7 @@
 -export([get_by_criterion/1]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
+-export([add_session/2, remove_session/2, get_all_sessions/1]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -37,6 +38,9 @@
                      {email, binary()} |
                      {alias, alias()}.
 -export_type([name/0, alias/0]).
+
+% Delay before all session connections are terminated when user is deleted.
+-define(SESSION_CLEANUP_GRACE_PERIOD, 3000).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -103,6 +107,8 @@ update(UserId, Diff) ->
 %%--------------------------------------------------------------------
 -spec force_delete(id()) -> ok | {error, term()}.
 force_delete(UserId) ->
+    {ok, Sessions} = get_all_sessions(UserId),
+    [session:delete(S, ?SESSION_CLEANUP_GRACE_PERIOD, false) || S <- Sessions],
     datastore_model:delete(?CTX, UserId).
 
 %%--------------------------------------------------------------------
@@ -185,6 +191,50 @@ to_string(UserId) ->
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     user_logic_plugin.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a new session for given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_session(id(), session:id()) -> ok | {error, term()}.
+add_session(UserId, SessionId) ->
+    Result = update(UserId, fun(User = #od_user{active_sessions = ActiveSessions}) ->
+        {ok, User#od_user{active_sessions = [SessionId | ActiveSessions]}}
+    end),
+    case Result of
+        {ok, _} -> ok;
+        {error, _} = Error -> Error
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes a session of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_session(id(), session:id()) -> ok | {error, term()}.
+remove_session(UserId, SessionId) ->
+    Result = update(UserId, fun(User = #od_user{active_sessions = ActiveSessions}) ->
+        {ok, User#od_user{active_sessions = ActiveSessions -- [SessionId]}}
+    end),
+    case Result of
+        {ok, _} -> ok;
+        {error, _} = Error -> Error
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns all sessions of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_all_sessions(id()) -> {ok, [session:id()]} | {error, term()}.
+get_all_sessions(UserId) ->
+    case ?MODULE:get(UserId) of
+        {ok, #document{value = #od_user{active_sessions = ActiveSessions}}} ->
+            {ok, ActiveSessions};
+        {error, _} ->
+            {ok, []}
+    end.
 
 %%%===================================================================
 %%% datastore_model callbacks
@@ -308,18 +358,42 @@ get_record_struct(6) ->
     % Remove chosen_provider field, rename login to alias
     {record, lists:keydelete(chosen_provider, 1, lists:keyreplace(login, 1, Struct, {alias, string}))};
 get_record_struct(7) ->
-    {record, Struct} = get_record_struct(6),
-    LinkedAccStruct = {linked_accounts, [{record, [
-        {idp, atom},
-        {subject_id, string},
-        {login, string},
+    % Changes:
+    %   * new field - active sessions
+    %   * groups spec in linked_accounts from binaries to list of binaries
+    %   * the privileges are translated
+    {record, [
         {name, string},
+        {alias, string},
         {email_list, [string]},
-        {groups, [[string]]}
-    ]}]},
-    % Changed groups spec from binaries to list of binaries
-    {record, lists:keyreplace(linked_accounts, 1, Struct, {linked_accounts, LinkedAccStruct})}.
-    
+        {basic_auth_enabled, boolean},
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {login, string},
+            {name, string},
+            {email_list, [string]},
+            {groups, [[string]]}
+        ]}]},
+        {active_sessions, [string]}, % New field
+        {default_space, string},
+        {default_provider, string},
+        {chosen_provider, string},
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {top_down_dirty, boolean}
+    ]}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -699,6 +773,7 @@ upgrade_record(6, User) ->
 
         _TopDownDirty
     } = User,
+
     TranslatePrivileges = fun(Privileges) ->
         lists:usort(lists:flatten(lists:map(fun
             (oz_users_list) -> [?OZ_USERS_LIST, ?OZ_USERS_VIEW];
@@ -724,7 +799,7 @@ upgrade_record(6, User) ->
             (Other) -> Other 
         end, Privileges)))
     end,
-    
+
     TransformedLinkedAccounts = lists:map(fun(LinkedAccount) ->
         #linked_account{groups = GroupsSpec} = LinkedAccount,
 
@@ -732,7 +807,7 @@ upgrade_record(6, User) ->
             binary:split(BinaryGroupSpec, <<"/">>, [global])
         end, GroupsSpec),
 
-        LinkedAccount#linked_account{groups = TransformedGroups} 
+        LinkedAccount#linked_account{groups = TransformedGroups}
     end, LinkedAccounts),
 
     {7, #od_user{
@@ -741,6 +816,8 @@ upgrade_record(6, User) ->
         email_list = EmailList,
         basic_auth_enabled = BasicAuthEnabled,
         linked_accounts = TransformedLinkedAccounts,
+
+        active_sessions = [],
 
         default_space = DefaultSpace,
         default_provider = DefaultProvider,

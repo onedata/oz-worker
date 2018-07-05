@@ -21,6 +21,7 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
+-include_lib("gui/include/gui_session.hrl").
 
 %% API
 -export([
@@ -127,7 +128,9 @@ basic_auth_login_test(Config) ->
     % Make sure response headers contain cookie with session id - which means
     % that the user has logged in.
     Cookie = maps:get(<<"set-cookie">>, RespHeaders, <<"">>),
-    ?assertMatch(<<"session_id=", _/binary>>, Cookie),
+    CookieKey = ?SESSION_COOKIE_KEY,
+    CookieLen = byte_size(?SESSION_COOKIE_KEY),
+    ?assertMatch(<<CookieKey:CookieLen/binary, "=", _/binary>>, Cookie),
     % Try some inexistent user credentials if 401 is returned
     WrongUserPasswordB64 = base64:encode(<<"lol:wut">>),
     WrongBasicAuthHeaders = #{

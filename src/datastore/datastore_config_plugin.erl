@@ -42,5 +42,6 @@ get_models() -> [
     basic_auth_cache,
     dns_state,
     provider_connection,
+    user_connections,
     state_token
 ].

@@ -1,3 +1,4 @@
+{"1.1.0",
 [{<<"base32">>,
   {git,"https://github.com/dnsimple/base32_erlang.git",
        {ref,"40431a7480176b24863e18b92d9872e54c714df5"}},
@@ -18,11 +19,11 @@
  {<<"certifi">>,{pkg,<<"certifi">>,<<"0.7.0">>},2},
  {<<"cluster_manager">>,
   {raw,{git,"ssh://git@git.plgrid.pl:7999/vfs/cluster-manager.git",
-            {ref,"3a58db4c7a8959411763e55f1197af9b01a5799b"}}},
+            {ref,"d6155dbb8b7031e7214110a94d390afb0f1300b8"}}},
   0},
  {<<"cluster_worker">>,
   {git,"ssh://git@git.plgrid.pl:7999/vfs/cluster-worker.git",
-       {ref,"83837d40415fd9afe7009dc16189898ef800fc1c"}},
+       {ref,"e2bcbc3db3f6e701658e1e05e5cf0233e0cd2907"}},
   0},
  {<<"cowboy">>,
   {git,"git://github.com/ninenines/cowboy.git",
@@ -34,7 +35,7 @@
   2},
  {<<"ctool">>,
   {git,"ssh://git@git.plgrid.pl:7999/vfs/ctool.git",
-       {ref,"462e87603cb334a414ef380f9a484ca12544aafe"}},
+       {ref,"75d1cb2744d90ebab98a8470ebd659a9d37aae48"}},
   0},
  {<<"dns">>,
   {git,"git://github.com/aetrion/dns_erlang.git",
@@ -83,7 +84,7 @@
  {<<"goldrush">>,{pkg,<<"goldrush">>,<<"0.1.9">>},2},
  {<<"gui">>,
   {git,"ssh://git@git.plgrid.pl:7999/vfs/gui.git",
-       {ref,"2199df4b543c9ae521ad4c0cd5eafe7a4811489c"}},
+       {ref,"90dda15166ca46dc861a7df6c3ba525ccf64c1df"}},
   0},
  {<<"hackney">>,
   {git,"git://github.com/benoitc/hackney.git",
@@ -162,4 +163,16 @@
  {<<"worker_pool">>,
   {git,"https://github.com/inaka/worker_pool",
        {ref,"ae5aa2e5819f7cce3aa3fbc50d39743de3515cdc"}},
-  1}].
+  1}]}.
+[
+{pkg_hash,[
+ {<<"bear">>, <<"E95FCA1627CD9E15BAF93CE0A52AFF16917BAF325F0EE65B88CD715376CD2344">>},
+ {<<"certifi">>, <<"861A57F3808F7EB0C2D1802AFEAAE0FA5DE813B0DF0979153CBAFCD853ABABAF">>},
+ {<<"goldrush">>, <<"F06E5D5F1277DA5C413E84D5A2924174182FB108DABB39D5EC548B27424CD106">>},
+ {<<"idna">>, <<"AC62EE99DA068F43C50DC69ACF700E03A62A348360126260E87F2B54ECED86B2">>},
+ {<<"lager">>, <<"9D29C5FF7F926D25ECD9899990867C9152DCF34EEE65BAC8EC0DFC0D16A26E0C">>},
+ {<<"metrics">>, <<"25F094DEA2CDA98213CECC3AEFF09E940299D950904393B2A29D191C346A8486">>},
+ {<<"mimerl">>, <<"993F9B0E084083405ED8252B99460C4F0563E41729AB42D9074FD5E52439BE88">>},
+ {<<"observer_cli">>, <<"54013653C72E75FF3B4B487342DFE56715C9749FF9C31A7DE8F84D18A09E1C3C">>},
+ {<<"ssl_verify_fun">>, <<"28A4D65B7F59893BC2C7DE786DEC1E1555BD742D336043FE644AE956C3497FBE">>}]}
+].

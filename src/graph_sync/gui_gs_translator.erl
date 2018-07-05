@@ -217,20 +217,21 @@ translate_group(GRI = #gri{aspect = instance, scope = private}, #od_group{name =
 
 translate_group(#gri{id = GroupId, aspect = instance, scope = protected}, Group) ->
     Group#{
-        <<"sharedUserList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = users}),
-        <<"sharedGroupList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = children}),
+        <<"parentList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = parents}),
+        <<"childList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = children}),
+        <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = users}),
         <<"spaceList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = spaces})
     };
 
 translate_group(#gri{aspect = instance, scope = shared}, Group) ->
     Group;
 
-translate_group(#gri{aspect = users}, Users) ->
+translate_group(#gri{aspect = parents}, Parents) ->
     #{
         <<"list">> => lists:map(
-            fun(UserId) ->
-                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = shared})
-            end, Users)
+            fun(ParentId) ->
+                gs_protocol:gri_to_string(#gri{type = od_group, id = ParentId, aspect = instance, scope = protected})
+            end, Parents)
     };
 
 translate_group(#gri{aspect = children}, Children) ->
@@ -239,6 +240,14 @@ translate_group(#gri{aspect = children}, Children) ->
             fun(ChildId) ->
                 gs_protocol:gri_to_string(#gri{type = od_group, id = ChildId, aspect = instance, scope = shared})
             end, Children)
+    };
+
+translate_group(#gri{aspect = users}, Users) ->
+    #{
+        <<"list">> => lists:map(
+            fun(UserId) ->
+                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = shared})
+            end, Users)
     };
 
 translate_group(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
@@ -279,8 +288,8 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
     } = SpaceData,
     #{
         <<"name">> => Name,
-        <<"sharedUserList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = users}),
-        <<"sharedGroupList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = groups}),
+        <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = users}),
+        <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = groups}),
         <<"supportSizes">> => Providers,
         <<"providerList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = providers})
     };
