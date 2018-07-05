@@ -41,6 +41,9 @@
 % Endpoint serving SAML SP metadata
 -define(SAML_METADATA_PATH, "/saml/sp.xml").
 
+% Endpoint serving SAML certificate
+-define(SAML_CERT_PATH, "/saml/certificate.pem").
+
 % Endpoint for developer mode login page
 -define(DEV_LOGIN_PATH, "/dev_login").
 
