@@ -35,11 +35,15 @@
     ok | {ok, ResponseData :: term()} | gui_error:error_result().
 handle(<<"getZoneName">>, _) ->
     {ok, ZoneName} = oz_worker:get_env(oz_name),
+    BrandSubtitle = oz_worker:get_env(brand_subtitle, ""),
+    LoginNotification = oz_worker:get_env(login_notification, ""),
     {_AppId, _AppName, AppVersion} = lists:keyfind(
         ?APP_NAME, 1, application:loaded_applications()
     ),
     {ok, [
         {<<"zoneName">>, str_utils:to_binary(ZoneName)},
+        {<<"brandSubtitle">>, str_utils:to_binary(BrandSubtitle)},
+        {<<"loginNotification">>, str_utils:to_binary(LoginNotification)},
         {<<"serviceVersion">>, str_utils:to_binary(AppVersion)}
     ]};
 
