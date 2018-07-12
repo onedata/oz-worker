@@ -47,11 +47,17 @@ handshake_attributes(_) ->
             ProvidersAtoms = auth_utils:get_all_idps(),
             [str_utils:to_binary(P) || P <- ProvidersAtoms]
     end,
+
+    BrandSubtitle = oz_worker:get_env(brand_subtitle, ""),
+    LoginNotification = oz_worker:get_env(login_notification, ""),
+
     #{
         <<"zoneName">> => oz_worker:get_name(),
         <<"serviceVersion">> => oz_worker:get_version(),
         <<"serviceBuildVersion">> => oz_worker:get_build_version(),
-        <<"idps">> => Idps
+        <<"idps">> => Idps,
+        <<"brandSubtitle">> => str_utils:unicode_list_to_binary(BrandSubtitle),
+        <<"loginNotification">> => str_utils:unicode_list_to_binary(LoginNotification)
     }.
 
 
