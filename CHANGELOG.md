@@ -4,6 +4,16 @@
 CHANGELOG
 ---------
 
+### 18.02.0-rc10
+
+* Updating GUI, including: * VFS-4668-add-admin-message-to-login-page
+* VFS-4666 Add customization of brand subtitle and login notification (GUI) to config
+* VFS-4664 Fix a crash report when OZ discards a provider connection
+* VFS-4590 Update cluster-worker ref to include pings in Graph Sync connection
+* VFS-4637 Update esaml ref to include saml rollover mechanism. adjust the code accordingly and add an endpoint for retrieving saml certificate
+* VFS-4582 Hotfix - get group name through protected scope (rather than private) in group data backend
+
+
 ### 18.02.0-rc9
 
 * VFS-4615 Improvide provider_logic_plugin readability
