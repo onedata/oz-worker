@@ -209,7 +209,8 @@ ensure_group_structure(GroupSpecTokens, Depth, SuperGroupSpec) ->
     SubgroupId = lists:nth(Depth, GroupSpecTokens),
     <<GroupTypeStr:2/binary, ":", GroupName/binary>> = SubgroupId,
     {ok, _} = od_group:update(GroupId, fun(Group) -> {ok, Group} end, #od_group{
-        name = GroupName, type = str_to_type(GroupTypeStr)
+        name = group_logic:normalize_name(GroupName),
+        type = str_to_type(GroupTypeStr)
     }),
     case Depth > 1 of
         true ->

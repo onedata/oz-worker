@@ -108,9 +108,16 @@
 % Dashes and underscores are allowed (but not at the beginning or the end).
 -define(ALIAS_VALIDATION_REGEXP, <<"^[a-z0-9A-Z][a-z0-9A-Z_-]{0,13}[a-z0-9A-Z]$">>).
 
+-define(NAME_CHARS_ALLOWED, ")(\\w_").
+-define(NAME_CHARS_ALLOWED_IN_THE_MIDDLE,  ")(\\w_ .-").
+-define(MAXIMUM_NAME_LENGTH, 50).
+
 % Regexp to validate names. Name must be 2-50 characters long and composed of UTF-8 letters, digits, brackets and underscores.
 % Dashes, spaces and dots are allowed (but not at the beginning or the end).
--define(NAME_VALIDATION_REGEXP, <<"^[)(\\w][)(.\\w- ]{0,48}[)(\\w]$">>).
+-define(NAME_VALIDATION_REGEXP, 
+    <<"^[", ?NAME_CHARS_ALLOWED, "][", ?NAME_CHARS_ALLOWED_IN_THE_MIDDLE, 
+      "]{0,", (integer_to_binary(?MAXIMUM_NAME_LENGTH-2))/binary, 
+      "}[", ?NAME_CHARS_ALLOWED, "]$">>).
 
 % Regexp to validate user names. User name must be 2-50 characters long and composed of UTF-8 letters and digits.
 % Dashes, spaces, dots, commas and apostrophes are allowed (but not at the beginning or the end).

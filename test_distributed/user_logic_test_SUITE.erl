@@ -229,9 +229,9 @@ merge_groups_in_linked_accounts_test(Config) ->
     ?assertEqual({ok, []}, oz_test_utils:user_get_groups(Config, UserId)),
     ?assertEqual({ok, []}, oz_test_utils:user_get_eff_groups(Config, UserId)),
 
-    % Try linked acc with a group
+    % Try linked acc with a group and check normalization
     SecondLinkedAcc = #linked_account{idp = ?IDP, groups = [
-        <<"vo:test-vo/user:member">>
+        <<"vo:test-vo|/user:member">>
     ]},
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, SecondLinkedAcc]
@@ -239,12 +239,12 @@ merge_groups_in_linked_accounts_test(Config) ->
     ?assert(has_linked_accounts(Config, UserId, [SecondLinkedAcc])),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:test-vo">>, <<"test-vo">>, organization,
+        <<"vo:test-vo|">>, <<"(test-vo-)">>, organization,
         ?USER_PRIVS, direct
     )),
     ?assert(has_group(
         Config, UserId,
-        <<"vo:test-vo">>, <<"test-vo">>, organization,
+        <<"vo:test-vo|">>, <<"(test-vo-)">>, organization,
         ?USER_PRIVS, effective
     )),
 
