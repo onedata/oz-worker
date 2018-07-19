@@ -35,7 +35,7 @@
 
 %% listener_behaviour callbacks
 -export([port/0, start/0, stop/0, healthcheck/0]).
--export([set_letsencrypt_response/2]).
+-export([set_response_to_letsencrypt_challenge/2]).
 
 %%%===================================================================
 %%% listener_behaviour callbacks
@@ -59,13 +59,11 @@ port() ->
 -spec start() -> ok | {error, Reason :: term()}.
 start() ->
     {ok, OAI_PMH_PATH} = oz_worker:get_env(oai_pmh_api_prefix),
-    {ok, LE_CHALLENGE_PATH} = oz_worker:get_env(letsencrypt_challenge_api_prefix),
-    {ok, LE_CHALLENGE_ROOT} = oz_worker:get_env(letsencrypt_challenge_static_root),
 
     Dispatch = cowboy_router:compile([
         {'_', [
             {OAI_PMH_PATH ++ "/[...]", oai_handler, []},
-            {LE_CHALLENGE_PATH ++ "/[...]", cowboy_static, {dir, LE_CHALLENGE_ROOT}},
+            {?LE_CHALLENGE_PATH ++ "/[...]", cowboy_static, {dir, ?LE_CHALLENGE_ROOT}},
             {"/[...]", redirector_handler, https_listener:port()}
         ]}
     ]),
@@ -122,12 +120,11 @@ healthcheck() ->
 %% for the HTTP authorization challenge.
 %% @end
 %%--------------------------------------------------------------------
--spec set_letsencrypt_response(Name :: file:name_all(), Content :: binary()) ->
+-spec set_response_to_letsencrypt_challenge(Name :: file:name_all(), Content :: binary()) ->
     ok | {error, Reason}
     when Reason :: file:posix() | badarg | terminated | system_limit.
-set_letsencrypt_response(Name, Content) ->
-    {ok, LE_CHALLENGE_ROOT} = oz_worker:get_env(letsencrypt_challenge_static_root),
-    Path = filename:join(LE_CHALLENGE_ROOT, Name),
+set_response_to_letsencrypt_challenge(Name, Content) ->
+    Path = filename:join(?LE_CHALLENGE_ROOT, Name),
     case filelib:ensure_dir(Path) of
         ok -> file:write_file(Path, Content);
         {error, Reason} -> {error, Reason}
