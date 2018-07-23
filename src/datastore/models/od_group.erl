@@ -148,7 +148,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    3.
+    4.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -207,8 +207,11 @@ get_record_struct(2) ->
         {bottom_up_dirty, boolean}
     ]};
 get_record_struct(3) ->
+    % The structure does not change, only group names are normalized.
+    get_record_struct(2);
+get_record_struct(4) ->
     % The structure does not change, only the privileges are translated.
-    get_record_struct(2).
+    get_record_struct(3).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -270,9 +273,61 @@ upgrade_record(1, Group) ->
 
         true,
         true
-    }};
-upgrade_record(2, Group) ->
+    }};upgrade_record(2, Group) ->
     {
+        od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        _TopDownDirty,
+        _BottomUpDirty
+    } = Group,
+
+    {3, #od_group{
+        name = group_logic:normalize_name(Name),
+        type = Type,
+        oz_privileges = OzPrivileges,
+        eff_oz_privileges = EffOzPrivileges,
+
+        parents = Parents,
+        children = Children,
+        eff_parents = EffParents,
+        eff_children = EffChildren,
+
+        users = Users,
+        spaces = Spaces,
+        handle_services = HandleServices,
+        handles = Handles,
+
+        eff_users = EffUsers,
+        eff_spaces = EffSpaces,
+        eff_providers = EffProviders,
+        eff_handle_services = EffHandleServices,
+        eff_handles = EffHandles,
+
+        top_down_dirty = true,
+        bottom_up_dirty = true
+    }};
+upgrade_record(3, Group) ->
+        {
         od_group,
         Name,
         Type,
@@ -338,7 +393,7 @@ upgrade_record(2, Group) ->
         end, Field)
     end,
 
-    {3, #od_group{
+    {4, #od_group{
         name = Name,
         type = Type,
         oz_privileges = TranslatePrivileges(OzPrivileges),
