@@ -76,7 +76,7 @@ build_config() ->
     OnezoneNS = build_onezone_ns_entries(OneZoneIPs),
 
     {PrimaryNS, _IPs} = hd(OnezoneNS),
-    SOARecord = build_record_soa(OneZoneDomain, AdminEmail, PrimaryNS),
+    SOARecord = build_record_soa(OneZoneDomain, PrimaryNS, AdminEmail),
 
     {OneZoneDomain, <<>>, [
         SOARecord |
