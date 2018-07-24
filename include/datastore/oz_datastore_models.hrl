@@ -126,6 +126,8 @@
 -record(od_group, {
     name = <<"">> :: od_group:name(),
     type = role :: od_group:type(),
+    % if group is protected it cannot be deleted
+    protected = false :: boolean(),
 
     % Privileges of this group in admin's OZ API
     oz_privileges = [] :: [privileges:oz_privilege()],

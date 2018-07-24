@@ -64,6 +64,7 @@
     create_group/3,
     get_group/2,
     delete_group/2,
+    mark_group_protected/2,
 
     group_get_children/2,
     group_get_parents/2,
@@ -677,6 +678,22 @@ delete_group(Config, GroupId) ->
     ?assertMatch(ok, call_oz(
         Config, group_logic, delete, [?ROOT, GroupId]
     )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Marks group as protected
+%% @end
+%%--------------------------------------------------------------------
+-spec mark_group_protected(Config :: term(), od_group:id()) -> ok.
+mark_group_protected(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, od_group, update, 
+        [GroupId, fun(Group) -> 
+            {ok, Group#od_group{protected = true}} 
+        end]
+    )),
+    ok.
 
 
 %%--------------------------------------------------------------------

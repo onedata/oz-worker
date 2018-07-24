@@ -70,8 +70,7 @@
     update_domain_is_idempotent_test/1,
     get_domain_config_test/1,
     get_current_time_test/1,
-    verify_provider_identity_test/1,
-    same_domain_test/1
+    verify_provider_identity_test/1
 ]).
 
 all() ->
@@ -105,8 +104,7 @@ all() ->
         update_domain_test,
         update_domain_is_idempotent_test,
         get_domain_config_test,
-        get_current_time_test,
-        same_domain_test
+        get_current_time_test
     ]).
 
 %%%===================================================================

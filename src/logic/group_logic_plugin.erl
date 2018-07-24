@@ -371,7 +371,13 @@ update(Req = #el_req{gri = #gri{id = ParGrId, aspect = {child_privileges, ChGrId
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = GroupId, aspect = instance}}) ->
-    entity_graph:delete_with_relations(od_group, GroupId);
+    {ok, Group} = fetch_entity(GroupId),
+    case Group#od_group.protected of
+        true ->
+            throw(?ERROR_PROTECTED_GROUP);
+        false ->
+            entity_graph:delete_with_relations(od_group, GroupId, Group)
+    end;
 
 delete(#el_req{gri = #gri{id = GroupId, aspect = oz_privileges}}) ->
     update(#el_req{gri = #gri{id = GroupId, aspect = oz_privileges}, data = #{
