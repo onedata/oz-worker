@@ -36,6 +36,7 @@
     get_test/1,
     update_test/1,
     delete_test/1,
+    protected_group_test/1,
     get_oz_privileges_test/1,
     update_oz_privileges_test/1,
     delete_oz_privileges_test/1,
@@ -53,6 +54,7 @@ all() ->
         get_test,
         update_test,
         delete_test,
+        protected_group_test,
         get_oz_privileges_test,
         update_oz_privileges_test,
         delete_oz_privileges_test,
@@ -488,6 +490,46 @@ delete_test(Config) ->
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
 
+
+protected_group_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, GroupdId} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    oz_test_utils:group_set_user_privileges(Config, GroupdId, U1, set, [
+        ?GROUP_DELETE
+    ]),
+    oz_test_utils:mark_group_protected(Config, GroupdId),
+    
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U1},
+                {admin, [?OZ_GROUPS_DELETE]}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = delete,
+            path = [<<"/groups/">>, GroupdId],
+            expected_code = ?HTTP_403_FORBIDDEN
+        },
+        logic_spec = #logic_spec{
+            module = group_logic,
+            function = delete,
+            args = [client, GroupdId],
+            expected_result = ?ERROR_REASON(?ERROR_PROTECTED_GROUP)
+        },
+        gs_spec = #gs_spec{
+            operation = delete,
+            gri = #gri{type = od_group, id = GroupdId, aspect = instance},
+            expected_result = ?ERROR_REASON(?ERROR_PROTECTED_GROUP)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    
+    % Verify that group exists
+    {ok, Groups} = oz_test_utils:list_groups(Config),
+    ?assertEqual(lists:member(GroupdId, Groups), true).
+    
 
 get_oz_privileges_test(Config) ->
     % User whose privileges will be changing during test run and as such

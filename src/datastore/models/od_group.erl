@@ -210,8 +210,33 @@ get_record_struct(3) ->
     % The structure does not change, only group names are normalized.
     get_record_struct(2);
 get_record_struct(4) ->
-    % The structure does not change, only the privileges are translated.
-    get_record_struct(3).
+    % Protected group flag is added and also the privileges are translated.
+    {record, [
+        {name, string},
+        {type, atom},
+        {protected, boolean},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {parents, [string]},
+        {children, #{string => [atom]}},
+        {eff_parents, #{string => [{atom, string}]}},
+        {eff_children, #{string => {[atom], [{atom, string}]}}},
+
+        {users, #{string => [atom]}},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -301,30 +326,31 @@ upgrade_record(1, Group) ->
         _BottomUpDirty
     } = Group,
 
-    {3, #od_group{
-        name = group_logic:normalize_name(Name),
-        type = Type,
-        oz_privileges = OzPrivileges,
-        eff_oz_privileges = EffOzPrivileges,
+    {3, {
+        od_group,
+        group_logic:normalize_name(Name),
+        Type,
+        OzPrivileges,
+        EffOzPrivileges,
 
-        parents = Parents,
-        children = Children,
-        eff_parents = EffParents,
-        eff_children = EffChildren,
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
 
-        users = Users,
-        spaces = Spaces,
-        handle_services = HandleServices,
-        handles = Handles,
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
 
-        eff_users = EffUsers,
-        eff_spaces = EffSpaces,
-        eff_providers = EffProviders,
-        eff_handle_services = EffHandleServices,
-        eff_handles = EffHandles,
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        true,
+        true
     }};
 upgrade_record(3, Group) ->
         {
@@ -396,6 +422,7 @@ upgrade_record(3, Group) ->
     {4, #od_group{
         name = Name,
         type = Type,
+        protected = false,
         oz_privileges = TranslatePrivileges(OzPrivileges),
         eff_oz_privileges = TranslatePrivileges(EffOzPrivileges),
 

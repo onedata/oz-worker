@@ -250,7 +250,7 @@ merge_groups_in_linked_accounts_test(Config) ->
         [<<"vo:test-vo|">>], <<"(test-vo-)">>, organization,
         ?USER_PRIVS, effective
     )),
-
+    
     % Go back to linked acc with no groups and see if they were removed
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, FirstLinkedAcc]
@@ -639,6 +639,10 @@ has_group(Config, UserId, GroupSpec, Name, Type, Privileges, DirectOrEff) ->
         GroupId = oz_test_utils:call_oz(
             Config, idp_group_mapping, group_spec_to_db_id, [GroupSpec]
         ),
+        % Check that created group is marked protected
+        {ok, Group} = oz_test_utils:get_group(Config, GroupId),
+        ?assertEqual(true, Group#od_group.protected),
+
         {ok, UserGroups} = case DirectOrEff of
             direct ->
                 oz_test_utils:user_get_groups(Config, UserId);

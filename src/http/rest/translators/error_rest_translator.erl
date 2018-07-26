@@ -234,6 +234,10 @@ translate(?ERROR_BAD_VALUE_IDENTIFIER(Key)) ->
     {?HTTP_400_BAD_REQUEST, {
         <<"Bad value: provided \"~s\" is not a valid identifier.">>, [Key]
     }};
+translate(?ERROR_PROTECTED_GROUP) ->
+    {?HTTP_403_FORBIDDEN, 
+        <<"Forbidden: this group is protected and cannot be deleted.">>
+    };
 % Errors connected with relations between entities
 translate(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId)) ->
     RelationToString = case {ChType, ParType} of

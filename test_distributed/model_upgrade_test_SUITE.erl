@@ -102,11 +102,11 @@ group_upgrade_test(Config) ->
     ),
     ?assertEqual(3, Version3),
     ?assertEqual(GroupRecordVer3, group_record_3()),
-    {Version4, UserRecordVer4} = oz_test_utils:call_oz(
+    {Version4, GroupRecordVer4} = oz_test_utils:call_oz(
         Config, od_group, upgrade_record, [3, GroupRecordVer3]
     ),
     ?assertEqual(4, Version4),
-    ?assertEqual(UserRecordVer4, group_record_4()).
+    ?assertEqual(GroupRecordVer4, group_record_4()).
 
 
 space_upgrade_test(Config) ->
@@ -687,6 +687,7 @@ group_record_3() -> {od_group,
 group_record_4() -> #od_group{
     name = <<"(ńąµę-)"/utf8>>,
     type = role,
+    protected = false,
     oz_privileges = [
         ?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_LIST, ?OZ_GROUPS_LIST_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_VIEW,
         ?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_LIST_RELATIONSHIPS, ?OZ_PROVIDERS_VIEW,
