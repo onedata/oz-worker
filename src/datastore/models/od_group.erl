@@ -147,7 +147,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    3.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -200,7 +200,10 @@ get_record_struct(2) ->
         {eff_handles, #{string => [{atom, string}]}},
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
-    ]}.
+    ]};
+get_record_struct(3) ->
+    % The structure does not change, only group names are normalized.
+    get_record_struct(2).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -237,27 +240,81 @@ upgrade_record(1, Group) ->
         _TopDownDirty,
         _BottomUpDirty
     } = Group,
-    {2, #od_group{
-        name = Name,
+    {2, {
+        od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        [],
+
+        Parents,
+        maps:from_list(Children),
+        #{},
+        #{},
+
+        maps:from_list(Users),
+        Spaces,
+        HandleServices,
+        Handles,
+
+        #{},
+        #{},
+        #{},
+        #{},
+        #{},
+
+        true,
+        true
+    }};
+upgrade_record(2, Group) ->
+    {
+        od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        _TopDownDirty,
+        _BottomUpDirty
+    } = Group,
+
+    {3, #od_group{
+        name = group_logic:normalize_name(Name),
         type = Type,
         oz_privileges = OzPrivileges,
-        eff_oz_privileges = [],
+        eff_oz_privileges = EffOzPrivileges,
 
         parents = Parents,
-        children = maps:from_list(Children),
-        eff_parents = #{},
-        eff_children = #{},
+        children = Children,
+        eff_parents = EffParents,
+        eff_children = EffChildren,
 
-        users = maps:from_list(Users),
+        users = Users,
         spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles,
 
-        eff_users = #{},
-        eff_spaces = #{},
-        eff_providers = #{},
-        eff_handle_services = #{},
-        eff_handles = #{},
+        eff_users = EffUsers,
+        eff_spaces = EffSpaces,
+        eff_providers = EffProviders,
+        eff_handle_services = EffHandleServices,
+        eff_handles = EffHandles,
 
         top_down_dirty = true,
         bottom_up_dirty = true

@@ -98,7 +98,7 @@
     has_eff_privilege/3
 ]).
 -export([
-    create_predefined_groups/0
+    create_predefined_groups/0, normalize_name/1
 ]).
 
 %%%===================================================================
@@ -1401,6 +1401,28 @@ create_predefined_groups() ->
             create_predefined_group(Id, Name, Privs)
         end, PredefinedGroups).
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Replaces all disallowed characters with dashes('-'). 
+%% If name is too long, it is shortened to allowed size.
+%% If resulting name still doesn't pass validation 
+%% (i.e. is too short or has leading or trailing 
+%% disallowed characters) it is wrapped in parenthesis.
+%% @end
+%%--------------------------------------------------------------------
+-spec normalize_name(binary()) -> binary().
+normalize_name(Name) -> 
+    % string module supports binaries in utf8
+    ShortenedName = string:slice(Name, 0, ?MAXIMUM_NAME_LENGTH),
+    Regexp = <<"[^", ?NAME_CHARS_ALLOWED_IN_THE_MIDDLE, "]">>,
+    NormalizedName = re:replace(ShortenedName, Regexp, 
+        <<"-">>, [{return, binary}, unicode, ucp, global]),
+    case re:run(NormalizedName, ?NAME_VALIDATION_REGEXP, 
+        [{capture, none}, ucp, unicode]) of
+        match -> NormalizedName;
+        _ -> <<"(", (string:slice(NormalizedName, 0, ?MAXIMUM_NAME_LENGTH-2))/binary, ")">>
+    end.
 
 %%%===================================================================
 %%% Internal functions
