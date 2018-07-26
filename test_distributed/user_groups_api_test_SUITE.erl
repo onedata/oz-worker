@@ -228,13 +228,23 @@ join_group_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
 
+    EnvSetUpFun = fun() ->
+        {ok, Macaroon} = oz_test_utils:group_invite_user_token(
+            Config, ?ROOT, G1
+        ),
+        {ok, Token} = onedata_macaroons:serialize(Macaroon),
+        #{macaroonId => macaroon:identifier(Macaroon),
+          token => Token}
+    end,
+    
     VerifyEndFun = fun
-        (true = _ShouldSucceed, _, _) ->
+        (true = _ShouldSucceed, #{macaroonId := MacaroonId}, _) ->
             {ok, Groups} = oz_test_utils:user_get_groups(Config, U1),
             ?assertEqual(lists:member(G1, Groups), true),
             oz_test_utils:group_remove_user(Config, G1, U1),
             {ok, NewGroups} = oz_test_utils:user_get_groups(Config, U1),
-            ?assertEqual(lists:member(G1, NewGroups), false);
+            ?assertEqual(lists:member(G1, NewGroups), false),
+            oz_test_utils:assert_token_not_exists(Config, MacaroonId);
         (false = _ShouldSucceed, _, _) ->
             {ok, Groups} = oz_test_utils:user_get_groups(Config, U1),
             ?assertEqual(lists:member(G1, Groups), false)
@@ -255,11 +265,7 @@ join_group_test(Config) ->
         data_spec = #data_spec{
             required = [<<"token">>],
             correct_values = #{
-                <<"token">> => [fun() ->
-                    {ok, Macaroon} = oz_test_utils:group_invite_user_token(
-                        Config, ?ROOT, G1
-                    ),
-                    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+                <<"token">> => [fun(#{token := Token} = _Env) ->
                     Token
                 end]
             },
@@ -271,7 +277,7 @@ join_group_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, undefined, undefined, VerifyEndFun
+        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )),
 
     % Check that regular client can't make request on behalf of other client
@@ -294,7 +300,46 @@ join_group_test(Config) ->
         % TODO gs
     },
     ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec2, undefined, undefined, VerifyEndFun
+        Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
+    )),
+    
+    % Check that token is not consumed upon failed operation
+    {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1),
+        #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
+    ),
+    {ok, Macaroon} = oz_test_utils:group_invite_user_token(
+        Config, ?ROOT, Group
+    ),
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    
+    ApiTestSpec1 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = <<"/user/groups/join">>,
+            expected_code = ?HTTP_400_BAD_REQUEST
+        },
+        logic_spec = #logic_spec{
+            module = user_logic,
+            function = join_group,
+            args = [client, U1, data],
+            expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_user, U1, od_group, Group))
+        },
+        % TODO gs
+        data_spec = #data_spec{
+            required = [<<"token">>],
+            correct_values = #{<<"token">> => [Token]}
+        }
+    },
+    VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
+            oz_test_utils:assert_token_exists(Config, macaroon:identifier(Macaroon))
+    end,
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1
     )).
 
 

@@ -180,6 +180,10 @@
     handle_get_group_privileges/3
 ]).
 -export([
+    assert_token_exists/2,
+    assert_token_not_exists/2
+]).
+-export([
     delete_all_entities/1,
     delete_all_entities/2
 ]).
@@ -1816,6 +1820,33 @@ group_invite_user_token(Config, Client, GroupId) ->
         Config, group_logic, create_user_invite_token, [Client, GroupId]
     )).
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Asserts token not exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec assert_token_not_exists(Config :: term(),
+    TokenId :: token:id()) ->
+    ok.
+assert_token_not_exists(Config, TokenId) ->
+    ?assertMatch({error, not_found}, call_oz(
+        Config, token, get, [TokenId])),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Asserts token exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec assert_token_exists(Config :: term(),
+    TokenId :: token:id()) ->
+    ok.
+assert_token_exists(Config, TokenId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, token, get, [TokenId])),
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc

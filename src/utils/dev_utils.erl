@@ -58,7 +58,7 @@
 -export([set_up_test_entities/3, destroy_test_entities/3]).
 -export([create_user_with_uuid/2]).
 -export([create_group_with_uuid/3]).
--export([create_space_with_uuid/3, create_space_with_uuid/5, create_space_with_provider/4]).
+-export([create_space_with_uuid/3, create_space_with_provider/4]).
 
 %%%===================================================================
 %%% API
@@ -230,20 +230,6 @@ create_group_with_uuid(UserId, Name, GroupId) ->
     {ok, SpaceId :: binary()} | no_return().
 create_space_with_uuid(Member, Name, UUId) ->
     create_space_with_provider(Member, Name, #{}, UUId).
-
-
-%%--------------------------------------------------------------------
-%% @doc Creates a Space for a user or group with implicit UUId, by a provider that will support it.
-%% Throws exception when call to the datastore fails, or token/member_from_token doesn't exist.
-%% @end
-%%--------------------------------------------------------------------
--spec create_space_with_uuid({provider, ProviderId :: binary()}, Name :: binary(),
-    Token :: binary(), Support :: pos_integer(), UUId :: binary()) ->
-    {ok, SpaceId :: binary()}.
-create_space_with_uuid({provider, ProviderId}, Name, Token, Support, UUId) ->
-    {ok, Macaroon} = onedata_macaroons:deserialize(Token),
-    {ok, Member} = token_logic:consume(Macaroon),
-    create_space_with_provider(Member, Name, #{ProviderId => Support}, UUId).
 
 
 %%--------------------------------------------------------------------

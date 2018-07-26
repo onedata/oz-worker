@@ -268,7 +268,9 @@
     secret :: undefined | binary(),
     resource :: undefined | atom(),
     resource_id :: undefined | binary(),
-    issuer :: undefined | entity_logic:client()
+    issuer :: undefined | entity_logic:client(),
+    % Locked token cannot be consumed.
+    locked = false :: boolean()
 }).
 
 %% Records of this type store a macaroons secret used for authorizing users
