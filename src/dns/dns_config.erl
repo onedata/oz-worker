@@ -71,7 +71,7 @@ insert_config(Config) ->
 build_config() ->
     OneZoneIPs = node_manager:get_cluster_ips(),
     OneZoneDomain = oz_worker:get_domain(),
-    AdminEmail = get_env(soa_admin_mailbox),
+    AdminEmail = oz_worker:get_env(soa_admin_mailbox),
 
     OnezoneNS = build_onezone_ns_entries(OneZoneIPs),
 
@@ -105,7 +105,7 @@ build_a_records(NSDomains, OneZoneIPs) ->
     ProviderSubdomains = maps:to_list(dns_state:get_subdomains_to_ips()),
 
     % check if there are any overlapping records
-    StaticSubdomains = filter_shadowed_entries(get_env(static_a_records, [])),
+    StaticSubdomains = filter_shadowed_entries(oz_worker:get_env(dns_static_a_records, [])),
 
     ProviderDomains = [{build_domain(Sub, OneZoneDomain), IPs}
         || {Sub, IPs} <- ProviderSubdomains ++ StaticSubdomains],
@@ -132,7 +132,7 @@ build_ns_records(OneZoneNS) ->
     OnezoneRecords =
         [build_record_ns(OneZoneDomain, NSHost) || {NSHost, _} <- OneZoneNS],
 
-    StaticEntries = filter_shadowed_entries(get_env(static_ns_records, [])),
+    StaticEntries = filter_shadowed_entries(oz_worker:get_env(dns_static_ns_records, [])),
     StaticRecords = lists:flatmap(fun({Subdomain, Nameservers}) ->
         NSs = case Nameservers of
             _ when is_list(Nameservers) -> Nameservers;
@@ -160,8 +160,8 @@ build_onezone_ns_entries(OneZoneIPs) ->
     NSIPs = lists:sort(OneZoneIPs),
 
     % ensure minimum number of NS subdomains is met
-    Minimum = get_env(ns_min_entries, 1),
-    Maximum = get_env(ns_max_entries, 10),
+    Minimum = oz_worker:get_env(dns_ns_min_entries, 1),
+    Maximum = oz_worker:get_env(dns_ns_max_entries, 10),
     TargetNum = min(Maximum, max(Minimum, length(NSIPs))),
 
     RepeatNum = utils:ceil(Minimum / length(NSIPs)),
@@ -189,7 +189,7 @@ build_onezone_ns_entries(OneZoneIPs) ->
 build_txt_records() ->
     OneZoneDomain = oz_worker:get_domain(),
     ProviderEntries = dns_state:get_txt_records(),
-    StaticEntries = get_env(static_txt_records, []),
+    StaticEntries = oz_worker:get_env(dns_static_txt_records, []),
 
     lists:map(fun
         ({Name, {Content, undefined}}) ->
@@ -213,7 +213,7 @@ build_txt_records() ->
 -spec build_mx_records() -> [#dns_rr{}].
 build_mx_records() ->
     OneZoneDomain = oz_worker:get_domain(),
-    StaticEntries = get_env(static_mx_records, []),
+    StaticEntries = oz_worker:get_env(dns_static_mx_records, []),
 
     lists:map(fun({Subdomain, Mailserver, Preference}) ->
         Domain = build_domain(Subdomain, OneZoneDomain),
@@ -229,7 +229,7 @@ build_mx_records() ->
 -spec build_cname_records() -> [#dns_rr{}].
 build_cname_records() ->
     OneZoneDomain = oz_worker:get_domain(),
-    StaticEntries = filter_shadowed_entries(get_env(static_cname_records, [])),
+    StaticEntries = filter_shadowed_entries(oz_worker:get_env(dns_static_cname_records, [])),
 
     lists:map(fun({Subdomain, Target}) ->
         Domain = build_domain(Subdomain, OneZoneDomain),
@@ -270,7 +270,7 @@ build_record_a(Domain, IP) ->
     #dns_rr{
         name = Domain,
         type = ?DNS_TYPE_A,
-        ttl = get_env(a_ttl),
+        ttl = oz_worker:get_env(dns_a_ttl),
         data = #dns_rrdata_a{ip = IP}
     }.
 
@@ -287,15 +287,15 @@ build_record_soa(Name, MainName, Admin) ->
     #dns_rr{
         name = Name,
         type = ?DNS_TYPE_SOA,
-        ttl = get_env(soa_ttl, 120),
+        ttl = oz_worker:get_env(dns_soa_ttl, 120),
         data = #dns_rrdata_soa{
             mname = MainName,
             rname = Admin,
-            serial = get_env(soa_serial),
-            refresh = get_env(soa_refresh),
-            retry = get_env(soa_retry),
-            expire = get_env(soa_expire),
-            minimum = get_env(soa_minimum)
+            serial = oz_worker:get_env(dns_soa_serial),
+            refresh = oz_worker:get_env(dns_soa_refresh),
+            retry = oz_worker:get_env(dns_soa_retry),
+            expire = oz_worker:get_env(dns_soa_expire),
+            minimum = oz_worker:get_env(dns_soa_minimum)
        }
     }.
 
@@ -310,7 +310,7 @@ build_record_ns(Name, Nameserver) ->
     #dns_rr{
         name = Name,
         type = ?DNS_TYPE_NS,
-        ttl = get_env(ns_ttl, 120),
+        ttl = oz_worker:get_env(dns_ns_ttl, 120),
         data = #dns_rrdata_ns{dname = Nameserver}
     }.
 
@@ -324,7 +324,7 @@ build_record_ns(Name, Nameserver) ->
 %%--------------------------------------------------------------------
 -spec build_record_txt(domain(), binary() | string()) -> #dns_rr{}.
 build_record_txt(Domain, Value) ->
-    build_record_txt(Domain, Value, get_env(txt_ttl, 120)).
+    build_record_txt(Domain, Value, oz_worker:get_env(dns_txt_ttl, 120)).
 
 %%--------------------------------------------------------------------
 %% @private
@@ -358,7 +358,7 @@ build_record_mx(Domain, Address, Preference) ->
     #dns_rr{
         name = Domain,
         type = ?DNS_TYPE_MX,
-        ttl = get_env(mx_ttl, 120),
+        ttl = oz_worker:get_env(dns_mx_ttl, 120),
         data = #dns_rrdata_mx{exchange = Address, preference = Preference}
     }.
 
@@ -374,35 +374,6 @@ build_record_cname(Name, Target) ->
     #dns_rr{
         name = Name,
         type = ?DNS_TYPE_CNAME,
-        ttl = get_env(cname_ttl, 120),
+        ttl = oz_worker:get_env(dns_cname_ttl, 120),
         data = #dns_rrdata_cname{dname = Target}
     }.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Retrieves value from dns config. Throw error if config is not set.
-%% @end
-%%--------------------------------------------------------------------
--spec get_env(Key :: atom()) -> term().
-get_env(Key) ->
-    Props = oz_worker:get_env(dns, []),
-    case proplists:get_value(Key, Props) of
-        undefined ->
-            ?error("Failed to fetch property \"~p\" from dns config.", [Key]),
-            throw({error, {missing_config, dns, Key}});
-        Value -> Value
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Retrieves value from dns config or return Default if not set.
-%% @end
-%%--------------------------------------------------------------------
--spec get_env(Key :: atom(), Default :: term()) -> term().
-get_env(Key, Default) ->
-    Props = oz_worker:get_env(dns, []),
-    proplists:get_value(Key, Props, Default).
