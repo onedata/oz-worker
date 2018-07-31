@@ -71,7 +71,7 @@ insert_config(Config) ->
 build_config() ->
     OneZoneIPs = node_manager:get_cluster_ips(),
     OneZoneDomain = oz_worker:get_domain(),
-    AdminEmail = oz_worker:get_env(soa_admin_mailbox, ""),
+    AdminEmail = get_soa_admin(OneZoneDomain),
 
     OnezoneNS = build_onezone_ns_entries(OneZoneIPs),
 
@@ -90,6 +90,21 @@ build_config() ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns admin email to be given in SOA record.
+%% Uses value from app config if specified, otherwise generates
+%% the name by prepending "admin" to onezone domain.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_soa_admin(OneZoneDomain :: binary()) -> string().
+get_soa_admin(OneZoneDomain) ->
+    case oz_worker:get_env(dns_soa_admin_mailbox) of
+        {ok, Admin} -> str_utils:to_list(Admin);
+        undefined -> binary_to_list(<<"admin.", OneZoneDomain/binary>>)
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @private
@@ -115,7 +130,6 @@ build_a_records(NSDomains, OneZoneIPs) ->
     lists:flatmap(fun({Domain, IPs}) ->
         [build_record_a(Domain, IP) || IP <- IPs]
     end, Entries).
-
 
 
 %%--------------------------------------------------------------------
@@ -220,6 +234,7 @@ build_mx_records() ->
         build_record_mx(Domain, Mailserver, Preference)
     end, StaticEntries).
 
+
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -298,6 +313,7 @@ build_record_soa(Name, MainName, Admin) ->
             minimum = oz_worker:get_env(dns_soa_minimum, 120)
        }
     }.
+
 
 %%--------------------------------------------------------------------
 %% @private
