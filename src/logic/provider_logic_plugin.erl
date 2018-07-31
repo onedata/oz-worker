@@ -18,6 +18,7 @@
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include("idp_group_mapping.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
@@ -261,10 +262,9 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}
 create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
     ProviderId = maps:get(<<"idp">>, Data),
     GroupId = maps:get(<<"groupId">>, Data),
-    MembershipSpec = auth_utils:normalize_membership_spec(
+    IdpEntitlement = auth_utils:normalize_membership_spec(
         binary_to_atom(ProviderId, latin1), GroupId),
-    GroupSpec = idp_group_mapping:membership_spec_to_group_spec(MembershipSpec),
-    {ok, {data, idp_group_mapping:group_spec_to_db_id(GroupSpec)}};
+    {ok, {data, idp_group_mapping:gen_group_id(IdpEntitlement)}};
 
 create(#el_req{gri = #gri{aspect = verify_provider_identity}, data = Data}) ->
     ProviderId = maps:get(<<"providerId">>, Data),

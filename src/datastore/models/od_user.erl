@@ -12,6 +12,7 @@
 -module(od_user).
 -author("Michal Zmuda").
 
+-include("idp_group_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
@@ -196,7 +197,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    6.
+    7.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -305,7 +306,20 @@ get_record_struct(5) ->
 get_record_struct(6) ->
     {record, Struct} = get_record_struct(5),
     % Remove chosen_provider field, rename login to alias
-    {record, lists:keydelete(chosen_provider, 1, lists:keyreplace(login, 1, Struct, {alias, string}))}.
+    {record, lists:keydelete(chosen_provider, 1, lists:keyreplace(login, 1, Struct, {alias, string}))};
+get_record_struct(7) ->
+    {record, Struct} = get_record_struct(6),
+    LinkedAccGroups = {groups, [{record, [
+        {path, [{record, [
+            {name, string},
+            {type, atom}
+        ]}]},
+        {privileges, atom}
+    ]}]},
+    [{record, LinkedAccStruct}] = proplists:get_value(linked_accounts, Struct),
+    NewLinkedAccStruct = lists:keyreplace(groups, 1, LinkedAccStruct, LinkedAccGroups),
+    {record, lists:keyreplace(linked_accounts, 1, Struct, {linked_accounts, [{record, NewLinkedAccStruct}]})}.
+    
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -626,12 +640,103 @@ upgrade_record(5, User) ->
         TopDownDirty
     } = User,
 
-    {6, #od_user{
+    {6, {od_user,
+        Name,
+        Login,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    }};
+upgrade_record(6, User) ->
+    {od_user,
+        Name,
+        Login,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    } = User,
+    
+    MapType = fun(<<"vo">>) -> organization;
+                 (<<"ut">>) -> unit;
+                 (<<"tm">>) -> team;
+                 (<<"rl">>) -> role 
+    end,
+    
+    MapPrivileges = fun(<<"admin">>) -> admin;
+                       (<<"manager">>) -> manager;
+                       (<<"member">>) -> member
+    end,
+    
+    NewLinkedAccounts = lists:map(fun(LinkedAccount) -> 
+        OldGroups = LinkedAccount#linked_account.groups,
+        NewGroups = lists:map(fun(Group) -> 
+            GroupTokens = binary:split(Group, <<"/">>, [global]),
+            Path = lists:map(fun(Token) ->
+                <<GroupTypeStr:2/binary, ":", GroupName/binary>> = Token,
+                #idp_group{
+                    name = GroupName, 
+                    type = MapType(GroupTypeStr)
+                }
+            end, lists:sublist(GroupTokens, length(GroupTokens)-1)),
+            [_, RoleStr] = binary:split(lists:last(GroupTokens), <<":">>, [global]),
+            #idp_entitlement{
+                path = Path,
+                privileges = MapPrivileges(RoleStr)
+            }
+        end, OldGroups),
+        LinkedAccount#linked_account{groups = NewGroups}
+    end, LinkedAccounts),
+    
+    {7, #od_user{
         name = Name,
         alias = Login,
         email_list = EmailList,
         basic_auth_enabled = BasicAuthEnabled,
-        linked_accounts = LinkedAccounts,
+        linked_accounts = NewLinkedAccounts,
 
         default_space = DefaultSpace,
         default_provider = DefaultProvider,
@@ -655,3 +760,4 @@ upgrade_record(5, User) ->
 
         top_down_dirty = TopDownDirty
     }}.
+

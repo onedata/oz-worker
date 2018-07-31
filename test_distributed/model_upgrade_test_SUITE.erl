@@ -12,6 +12,7 @@
 -module(model_upgrade_test_SUITE).
 -author("Lukasz Opiola").
 
+-include("idp_group_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
@@ -81,7 +82,13 @@ user_upgrade_test(Config) ->
         Config, od_user, upgrade_record, [5, UserRecordVer5]
     ),
     ?assertEqual(6, Version6),
-    ?assertEqual(UserRecordVer6, user_record_6()).
+    ?assertEqual(UserRecordVer6, user_record_6()),
+    
+    {Version7, UserRecordVer7} = oz_test_utils:call_oz(
+        Config, od_user, upgrade_record, [6, user_record_6_with_idp_groups()]
+    ),
+    ?assertEqual(7, Version7),
+    ?assertEqual(UserRecordVer7, user_record_7()).
 
 
 group_upgrade_test(Config) ->
@@ -416,12 +423,12 @@ user_record_5() -> {od_user,
     true
 }.
 
-user_record_6() -> #od_user{
-    name = <<"name">>,
-    alias = <<"login">>,
-    email_list = [<<"email1@email.com">>, <<"email2@email.com">>],
-    basic_auth_enabled = true,
-    linked_accounts = [
+user_record_6() -> {od_user,
+    <<"name">>,
+    <<"login">>,
+    [<<"email1@email.com">>, <<"email2@email.com">>],
+    true,
+    [
         #linked_account{
             idp = google,
             subject_id = <<"user_id1">>,
@@ -437,6 +444,87 @@ user_record_6() -> #od_user{
             name = <<"name2">>,
             email_list = [<<"email2@email.com">>],
             groups = []
+        }
+    ],
+    <<"default_space">>,
+    <<"default_provider">>,
+    [<<"token1">>, <<"token2">>],
+    #{
+        <<"sp1">> => <<"sp1Name">>,
+        <<"sp2">> => <<"sp2Name">>
+    },
+    [
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
+        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
+    ],
+    [],
+    [<<"group1">>, <<"group2">>, <<"group3">>],
+    [<<"space1">>, <<"space2">>, <<"space3">>],
+    [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
+    [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    true
+}.
+
+user_record_6_with_idp_groups() ->
+    UserRecord6 = user_record_6(),
+    UserRecord6#od_user{linked_accounts = [
+        #linked_account{
+            idp = google,
+            subject_id = <<"user_id1">>,
+            login = <<"login1">>,
+            name = <<"name1">>,
+            email_list = [<<"email1@email.com">>],
+            groups = [<<"vo:test-vo/user:member">>, <<"vo:another-vo/user:manager">>]
+        },
+        #linked_account{
+            idp = github,
+            subject_id = <<"user_id2">>,
+            login = <<"login2">>,
+            name = <<"name2">>,
+            email_list = [<<"email2@email.com">>],
+            groups = [<<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role/user:admin">>]
+        }
+    ]}.
+
+user_record_7() -> #od_user{
+    name = <<"name">>,
+    alias = <<"login">>,
+    email_list = [<<"email1@email.com">>, <<"email2@email.com">>],
+    basic_auth_enabled = true,
+    linked_accounts = [
+        #linked_account{
+            idp = google,
+            subject_id = <<"user_id1">>,
+            login = <<"login1">>,
+            name = <<"name1">>,
+            email_list = [<<"email1@email.com">>],
+            groups = [
+                #idp_entitlement{path = [#idp_group{name = <<"test-vo">>, type = organization}],privileges = member}, 
+                #idp_entitlement{path = [#idp_group{name = <<"another-vo">>, type = organization}], privileges = manager}
+            ]
+        },
+        #linked_account{
+            idp = github,
+            subject_id = <<"user_id2">>,
+            login = <<"login2">>,
+            name = <<"name2">>,
+            email_list = [<<"email2@email.com">>],
+            groups = [
+                #idp_entitlement{
+                    path = [
+                        #idp_group{name = <<"another-vo">>, type = organization},
+                        #idp_group{name = <<"some-unit">>, type = unit},
+                        #idp_group{name = <<"some-team">>, type = team},
+                        #idp_group{name = <<"some-role">>, type = role}
+                    ],
+                    privileges = admin
+                }
+            ]
         }
     ],
     default_space = <<"default_space">>,
@@ -462,6 +550,7 @@ user_record_6() -> #od_user{
     eff_handles = #{},
     top_down_dirty = true
 }.
+
 
 group_record_1() -> {od_group,
     <<"ńąµę|"/utf8>>,
