@@ -71,7 +71,7 @@ insert_config(Config) ->
 build_config() ->
     OneZoneIPs = node_manager:get_cluster_ips(),
     OneZoneDomain = oz_worker:get_domain(),
-    AdminEmail = oz_worker:get_env(soa_admin_mailbox),
+    AdminEmail = oz_worker:get_env(soa_admin_mailbox, ""),
 
     OnezoneNS = build_onezone_ns_entries(OneZoneIPs),
 
@@ -270,7 +270,7 @@ build_record_a(Domain, IP) ->
     #dns_rr{
         name = Domain,
         type = ?DNS_TYPE_A,
-        ttl = oz_worker:get_env(dns_a_ttl),
+        ttl = oz_worker:get_env(dns_a_ttl, 120),
         data = #dns_rrdata_a{ip = IP}
     }.
 
@@ -291,11 +291,11 @@ build_record_soa(Name, MainName, Admin) ->
         data = #dns_rrdata_soa{
             mname = MainName,
             rname = Admin,
-            serial = oz_worker:get_env(dns_soa_serial),
-            refresh = oz_worker:get_env(dns_soa_refresh),
-            retry = oz_worker:get_env(dns_soa_retry),
-            expire = oz_worker:get_env(dns_soa_expire),
-            minimum = oz_worker:get_env(dns_soa_minimum)
+            serial = oz_worker:get_env(dns_soa_serial, 2017090401),
+            refresh = oz_worker:get_env(dns_soa_refresh, 7200),
+            retry = oz_worker:get_env(dns_soa_retry, 1800),
+            expire = oz_worker:get_env(dns_soa_expire, 1209600),
+            minimum = oz_worker:get_env(dns_soa_minimum, 120)
        }
     }.
 
