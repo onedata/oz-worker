@@ -98,11 +98,11 @@ build_config() ->
 %% the name by prepending "admin" to onezone domain.
 %% @end
 %%--------------------------------------------------------------------
--spec get_soa_admin(OneZoneDomain :: binary()) -> string().
+-spec get_soa_admin(OneZoneDomain :: binary()) -> binary().
 get_soa_admin(OneZoneDomain) ->
     case oz_worker:get_env(dns_soa_admin_mailbox) of
-        {ok, Admin} -> str_utils:to_list(Admin);
-        undefined -> binary_to_list(<<"admin.", OneZoneDomain/binary>>)
+        {ok, Admin} -> str_utils:to_binary(Admin);
+        undefined -> <<"admin.", OneZoneDomain/binary>>
     end.
 
 
