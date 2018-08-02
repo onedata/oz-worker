@@ -31,7 +31,8 @@
     provider_upgrade_test/1,
     handle_service_upgrade_test/1,
     handle_upgrade_test/1,
-    dns_state_upgrade_test/1
+    dns_state_upgrade_test/1,
+    token_upgrade_test/1
 ]).
 
 %%%===================================================================
@@ -46,7 +47,8 @@ all() -> ?ALL([
     provider_upgrade_test,
     handle_service_upgrade_test,
     handle_upgrade_test,
-    dns_state_upgrade_test
+    dns_state_upgrade_test,
+    token_upgrade_test
 ]).
 
 
@@ -162,6 +164,14 @@ dns_state_upgrade_test(Config) ->
     ),
     ?assertEqual(2, NewVersion),
     ?assertEqual(NewRecord, NewDnsStateRecord).
+
+token_upgrade_test(Config) ->
+    TokenRecordVer1 = token_record_1(),
+    {Version2, TokenRecordVer2} = oz_test_utils:call_oz(
+        Config, token, upgrade_record, [1, TokenRecordVer1]
+    ),
+    ?assertEqual(2, Version2),
+    ?assertEqual(TokenRecordVer2, token_record_2()).
 
 
 %%%===================================================================
@@ -796,4 +806,19 @@ dns_state_record(2) -> {dns_state,
         {<<"_acme-challenge">>, <<"token">>, undefined},
         {<<"second">>, <<"value">>, undefined}
     ]}
+}.
+
+token_record_1() -> {token,
+    <<"secret">>,
+    resource,
+    <<"resource_id">>,
+    {client, user, <<"client_id">>}
+}.
+
+token_record_2() -> {token,
+    <<"secret">>,
+    resource,
+    <<"resource_id">>,
+    {client, user, <<"client_id">>},
+    false
 }.

@@ -246,11 +246,24 @@ join_space_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, SpaceId} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
-        #{spaceId => SpaceId}
+        {ok, Macaroon} = oz_test_utils:space_invite_group_token(
+            Config, ?ROOT, SpaceId
+        ),
+        {ok, Token} = onedata_macaroons:serialize(Macaroon),
+        #{
+            spaceId => SpaceId,
+            token => Token,
+            macaroonId => macaroon:identifier(Macaroon)
+        }
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId, macaroonId := MacaroonId} = _Env, _) ->
         {ok, Spaces} = oz_test_utils:group_get_spaces(Config, G1),
-        ?assertEqual(lists:member(SpaceId, Spaces), ShouldSucceed)
+        ?assertEqual(lists:member(SpaceId, Spaces), ShouldSucceed),
+        case ShouldSucceed of
+            true ->
+                oz_test_utils:assert_token_not_exists(Config, MacaroonId);
+            false -> ok
+        end
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -291,11 +304,7 @@ join_space_test(Config) ->
         data_spec = #data_spec{
             required = [<<"token">>],
             correct_values = #{
-                <<"token">> => [fun(#{spaceId := SpaceId} = _Env) ->
-                    {ok, Macaroon} = oz_test_utils:space_invite_group_token(
-                        Config, ?ROOT, SpaceId
-                    ),
-                    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+                <<"token">> => [fun(#{token := Token} = _Env) ->
                     Token
                 end]
             },
@@ -309,6 +318,46 @@ join_space_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+    )),
+    
+    % Check that token is not consumed upon failed operation
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1),
+        #{<<"name">> => ?SPACE_NAME1}
+    ),
+    {ok, Macaroon1} = oz_test_utils:space_invite_group_token(
+        Config, ?ROOT, Space
+    ),
+    {ok, Token} = onedata_macaroons:serialize(Macaroon1),
+    oz_test_utils:space_add_group(Config, Space, G1),
+    
+    ApiTestSpec1 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = [<<"/groups/">>, G1, <<"/spaces/join">>],
+            expected_code = ?HTTP_400_BAD_REQUEST
+        },
+        logic_spec = #logic_spec{
+            module = group_logic,
+            function = join_space,
+            args = [client, G1, data],
+            expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_group, G1, od_space, Space))
+        },
+        % TODO gs
+        data_spec = #data_spec{
+            required = [<<"token">>],
+            correct_values = #{<<"token">> => [Token]}
+        }
+    },
+    VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
+            oz_test_utils:assert_token_exists(Config, macaroon:identifier(Macaroon1))
+    end,
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1
     )).
 
 
