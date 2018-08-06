@@ -15,6 +15,7 @@
 -include("auth_common.hrl").
 -include("http/gui_paths.hrl").
 -include("registered_names.hrl").
+-include("idp_group_mapping.hrl").
 -include_lib("esaml/include/esaml.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -145,7 +146,7 @@ has_group_mapping_enabled(IdPId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_super_group(IdPId :: atom()) ->
-    undefined | idp_group_mapping:group_spec().
+    undefined | [idp_group_mapping:idp_group()].
 get_super_group(IdPId) ->
     SAMLConfig = get_config(),
     SupportedIdPs = maps:get(supported_idps, SAMLConfig),
@@ -159,7 +160,7 @@ get_super_group(IdPId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec normalize_membership_spec(IdPId :: atom(), Groups :: binary()) ->
-    idp_group_mapping:membership_spec().
+    idp_group_mapping:idp_entitlement().
 normalize_membership_spec(elixir, Group) ->
     normalize_elixir_membership_spec(Group);
 normalize_membership_spec(_, Group) ->
@@ -172,7 +173,7 @@ normalize_membership_spec(_, Group) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec normalize_membership_specs(IdPId :: atom(), Groups :: [binary()]) ->
-    [idp_group_mapping:membership_spec()].
+    [idp_group_mapping:idp_entitlement()].
 normalize_membership_specs(elixir, Groups) ->
     lists:map(fun normalize_elixir_membership_spec/1, Groups);
 normalize_membership_specs(_, Groups) ->
@@ -203,10 +204,12 @@ get_config() ->
 %% @end
 %%-------------------------------------------------------------------
 -spec normalize_elixir_membership_spec(binary()) ->
-    idp_group_mapping:membership_spec().
+    idp_group_mapping:idp_entitlement().
 normalize_elixir_membership_spec(Group) ->
     [VO | Rest] = binary:split(Group, <<":">>, [global]),
-    MappedTokens = [<<"vo:", VO/binary>>] ++
-        [<<"tm:", Gr/binary>> || Gr <- Rest] ++
-        [<<"user:member">>],
-    str_utils:join_binary(MappedTokens, <<"/">>).
+    Path = [#idp_group{name = VO, type = organization}] ++ 
+        [#idp_group{name = Gr, type = team} || Gr <- Rest],
+    #idp_entitlement{
+        path = Path,
+        privileges = member
+    }.
