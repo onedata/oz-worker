@@ -116,10 +116,10 @@ list_children_test(Config) ->
 
 create_group_invite_token_test(Config) ->
     % create group with 2 users:
-    %   U2 gets the GROUP_INVITE_CHILD privilege
+    %   U2 gets the GROUP_ADD_CHILD privilege
     %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_INVITE_CHILD
+        Config, ?GROUP_ADD_CHILD
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -226,10 +226,10 @@ get_child_details_test(Config) ->
 
 create_child_test(Config) ->
     % create group with 2 users:
-    %   U2 gets the GROUP_CREATE_CHILD privilege
+    %   U2 gets the GROUP_ADD_CHILD privilege
     %   U1 gets all remaining privileges
     {Parent, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_CREATE_CHILD
+        Config, ?GROUP_ADD_CHILD
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -320,11 +320,11 @@ add_child_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]}
+                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]},
+                {user, User}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, User},
                 {user, NonAdmin}
             ]
         },
@@ -349,7 +349,7 @@ add_child_test(Config) ->
             required = [<<"privileges">>],
             correct_values = #{
                 <<"privileges">> => [
-                    [?GROUP_JOIN_PARENT, ?GROUP_REMOVE_CHILD],
+                    [?GROUP_ADD_PARENT, ?GROUP_REMOVE_CHILD],
                     [?GROUP_INVITE_USER, ?GROUP_VIEW]
                 ]
             },

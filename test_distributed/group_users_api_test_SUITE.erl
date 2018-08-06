@@ -220,43 +220,59 @@ get_user_details_test(Config) ->
 
 add_user_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, EffectiveUser} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+
+    % EffectiveUser belongs to group G1 effectively via SubGroup1, with the
+    % effective privilege to INVITE_USER, so he should be able to join the parent
+    % group as a user
+    {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
+    {ok, SubGroup1} = oz_test_utils:group_add_group(Config, G1, SubGroup1),
+    oz_test_utils:group_set_group_privileges(Config, G1, SubGroup1, grant, [?GROUP_INVITE_USER]),
+
+    % EffectiveUserWithoutInvitePriv belongs to group G1 effectively via SubGroup2,
+    % but without the effective privilege to INVITE_USER, so he should NOT be able
+    % to join the parent group as a user
+    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutInvitePriv), ?GROUP_NAME2),
+    {ok, SubGroup2} = oz_test_utils:group_add_group(Config, G1, SubGroup2),
 
     VerifyEndFun =
         fun
             (true = _ShouldSucceed, _, Data) ->
                 ExpPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
                 {ok, Privs} = oz_test_utils:group_get_user_privileges(
-                    Config, G1, U2
+                    Config, G1, EffectiveUser
                 ),
                 ?assertEqual(ExpPrivs, lists:sort(Privs)),
-                oz_test_utils:group_remove_user(Config, G1, U2);
+                oz_test_utils:group_remove_user(Config, G1, EffectiveUser);
             (false = ShouldSucceed, _, _) ->
                 {ok, Users} = oz_test_utils:group_get_users(Config, G1),
-                ?assertEqual(lists:member(U2, Users), ShouldSucceed)
+                ?assertEqual(lists:member(EffectiveUser, Users), ShouldSucceed)
         end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS]}
+                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS]},
+                {user, EffectiveUser}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
-                {user, NonAdmin}
+                {user, NonAdmin},
+                {user, EffectiveUserWithoutInvitePriv}
             ]
         },
         rest_spec = #rest_spec{
             method = put,
-            path = [<<"/groups/">>, G1, <<"/users/">>, U2],
+            path = [<<"/groups/">>, G1, <<"/users/">>, EffectiveUser],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/groups/">>, G1, <<"/users/">>, U2]),
+                ExpLocation = ?URL(Config, [<<"/groups/">>, G1, <<"/users/">>, EffectiveUser]),
                 ?assertEqual(ExpLocation, Location),
                 true
             end
@@ -264,15 +280,15 @@ add_user_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = add_user,
-            args = [client, G1, U2, data],
-            expected_result = ?OK_BINARY(U2)
+            args = [client, G1, EffectiveUser, data],
+            expected_result = ?OK_BINARY(EffectiveUser)
         },
         % TODO gs
         data_spec = #data_spec{
             required = [<<"privileges">>],
             correct_values = #{
                 <<"privileges">> => [
-                    [?GROUP_JOIN_PARENT, ?GROUP_REMOVE_CHILD],
+                    [?GROUP_ADD_PARENT, ?GROUP_REMOVE_CHILD],
                     [?GROUP_INVITE_USER, ?GROUP_VIEW]
                 ]
             },

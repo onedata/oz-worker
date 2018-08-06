@@ -17,6 +17,7 @@
 
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
@@ -188,7 +189,7 @@ translate_user(#gri{aspect = eff_groups}, Groups) ->
     #{
         <<"list">> => lists:map(
             fun(GroupId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = protected})
+                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
             end, Groups)
     };
 
@@ -196,7 +197,7 @@ translate_user(#gri{aspect = eff_spaces}, Spaces) ->
     #{
         <<"list">> => lists:map(
             fun(SpaceId) ->
-                gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = protected})
+                gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
             end, Spaces)
     };
 
@@ -204,7 +205,7 @@ translate_user(#gri{aspect = eff_providers}, Providers) ->
     #{
         <<"list">> => lists:map(
             fun(ProviderId) ->
-                gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected})
+                gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = auto})
             end, Providers)
     }.
 
@@ -217,26 +218,32 @@ translate_user(#gri{aspect = eff_providers}, Providers) ->
 %%--------------------------------------------------------------------
 -spec translate_group(gs_protocol:gri(), Data :: term()) ->
     gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()}.
-translate_group(GRI = #gri{aspect = instance, scope = private}, #od_group{name = Name, type = Type}) ->
-    ProtectedGRI = GRI#gri{scope = protected},
-    {ProtectedGRI, translate_group(ProtectedGRI, #{<<"name">> => Name, <<"type">> => Type})};
+translate_group(#gri{id = GroupId, aspect = instance, scope = private}, Group) ->
+    fun(?USER(UserId)) ->
+        #{
+            <<"name">> => Group#od_group.name,
+            <<"type">> => Group#od_group.type,
+            <<"scope">> => <<"private">>,
+            <<"canViewPrivileges">> => group_logic:has_eff_privilege(Group, UserId, ?GROUP_VIEW_PRIVILEGES),
+            <<"directMembership">> => group_logic:has_direct_user(Group, UserId),
+            <<"parentList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = parents}),
+            <<"childList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = children}),
+            <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = users}),
+            <<"spaceList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = spaces})
+        }
+    end;
 
-translate_group(#gri{id = GroupId, aspect = instance, scope = protected}, Group) ->
-    Group#{
-        <<"parentList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = parents}),
-        <<"childList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = children}),
-        <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = users}),
-        <<"spaceList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = spaces})
-    };
+translate_group(#gri{aspect = instance, scope = protected}, Group) ->
+    Group#{<<"scope">> => <<"protected">>};
 
 translate_group(#gri{aspect = instance, scope = shared}, Group) ->
-    Group;
+    Group#{<<"scope">> => <<"shared">>};
 
 translate_group(#gri{aspect = parents}, Parents) ->
     #{
         <<"list">> => lists:map(
             fun(ParentId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = ParentId, aspect = instance, scope = protected})
+                gs_protocol:gri_to_string(#gri{type = od_group, id = ParentId, aspect = instance, scope = auto})
             end, Parents)
     };
 
@@ -244,7 +251,7 @@ translate_group(#gri{aspect = children}, Children) ->
     #{
         <<"list">> => lists:map(
             fun(ChildId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = ChildId, aspect = instance, scope = shared})
+                gs_protocol:gri_to_string(#gri{type = od_group, id = ChildId, aspect = instance, scope = auto})
             end, Children)
     };
 
@@ -252,7 +259,7 @@ translate_group(#gri{aspect = users}, Users) ->
     #{
         <<"list">> => lists:map(
             fun(UserId) ->
-                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = shared})
+                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
             end, Users)
     };
 
@@ -270,7 +277,7 @@ translate_group(#gri{aspect = spaces}, Spaces) ->
     #{
         <<"list">> => lists:map(
             fun(SpaceId) ->
-                gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = private})
+                gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
             end, Spaces)
     }.
 
@@ -283,9 +290,19 @@ translate_group(#gri{aspect = spaces}, Spaces) ->
 %%--------------------------------------------------------------------
 -spec translate_space(gs_protocol:gri(), Data :: term()) ->
     gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()}.
-translate_space(GRI = #gri{aspect = instance, scope = private}, #od_space{name = Name, providers = Providers}) ->
-    ProtectedGRI = GRI#gri{scope = protected},
-    {ProtectedGRI, translate_space(ProtectedGRI, #{<<"name">> => Name, <<"providers">> => Providers})};
+translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space = #od_space{name = Name, providers = Providers}) ->
+    fun(?USER(UserId)) ->
+        #{
+            <<"name">> => Name,
+            <<"scope">> => <<"private">>,
+            <<"canViewPrivileges">> => space_logic:has_eff_privilege(Space, UserId, ?SPACE_VIEW_PRIVILEGES),
+            <<"directMembership">> => space_logic:has_direct_user(Space, UserId),
+            <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = users}),
+            <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = groups}),
+            <<"supportSizes">> => Providers,
+            <<"providerList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = providers})
+        }
+    end;
 
 translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData) ->
     #{
@@ -294,8 +311,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
     } = SpaceData,
     #{
         <<"name">> => Name,
-        <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = users}),
-        <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = groups}),
+        <<"scope">> => <<"protected">>,
         <<"supportSizes">> => Providers,
         <<"providerList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = providers})
     };
@@ -304,7 +320,7 @@ translate_space(#gri{aspect = users}, Users) ->
     #{
         <<"list">> => lists:map(
             fun(UserId) ->
-                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = shared})
+                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
             end, Users)
     };
 
@@ -312,7 +328,7 @@ translate_space(#gri{aspect = groups}, Groups) ->
     #{
         <<"list">> => lists:map(
             fun(GroupId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = shared})
+                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
             end, Groups)
     };
 
@@ -330,7 +346,7 @@ translate_space(#gri{aspect = providers, scope = private}, Providers) ->
     #{
         <<"list">> => lists:map(
             fun(ProviderId) ->
-                gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected})
+                gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = auto})
             end, Providers)
     }.
 
@@ -354,6 +370,6 @@ translate_provider(#gri{aspect = {user_spaces, _UserId}}, Spaces) ->
     #{
         <<"list">> => lists:map(
             fun(SpaceId) ->
-                gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = protected})
+                gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
             end, Spaces)
     }.

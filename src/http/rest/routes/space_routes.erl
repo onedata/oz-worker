@@ -157,7 +157,7 @@ routes() -> [
     }},
     %% Create space invite token for group
     %% This operation requires one of the following privileges:
-    %% - space_invite_group
+    %% - space_add_group
     %% - oz_spaces_add_relationships
     {<<"/spaces/:id/groups/token">>, #rest_req{
         method = 'POST',

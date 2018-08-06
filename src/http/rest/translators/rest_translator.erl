@@ -40,8 +40,8 @@ response(#el_req{operation = create} = ElReq, {ok, Result}) ->
     Translator = entity_type_to_translator(Model),
     Translator:create_response(GRI, AuthHint, Result);
 response(#el_req{operation = get} = ElReq, {ok, Data}) ->
-    #el_req{gri = GRI = #gri{type = Model}} = ElReq,
-    Translator = entity_type_to_translator(Model),
+    #el_req{gri = GRI = #gri{type = EntityType}} = ElReq,
+    Translator = entity_type_to_translator(EntityType),
     Translator:get_response(GRI, Data);
 response(#el_req{operation = update}, ok) ->
     updated_reply();

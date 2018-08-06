@@ -160,7 +160,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     end,
     % Group has been modified by adding relation, so it will need to be
     % fetched again.
-    {ok, #document{value = Group}} = od_group:get(GroupId),
+    {ok, Group} = fetch_entity(GroupId),
     {ok, {fetched, GRI#gri{id = GroupId, aspect = instance, scope = private}, Group}};
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
@@ -199,25 +199,20 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     end,
     {ok, {not_fetched, NewGRI}};
 
-create(Req = #el_req{gri = #gri{id = ParentGroupId, aspect = child}}) ->
-    Name = maps:get(<<"name">>, Req#el_req.data),
-    Type = maps:get(<<"type">>, Req#el_req.data, role),
-    {ok, #document{key = GroupId}} = od_group:create(
-        #document{value = #od_group{name = Name, type = Type}}
+create(Req = #el_req{gri = GRI = #gri{id = ParentGroupId, aspect = child}}) ->
+    % Create a new group for user/group (authHint is checked in authorize) and
+    % add the group as child of the parent group.
+    {ok, {fetched, NewGRI = #gri{id = ChildGroupId}, _}} = create(
+        Req#el_req{gri = GRI#gri{id = undefined, aspect = instance}}
     ),
     Privileges = privileges:group_user(),
     entity_graph:add_relation(
-        od_group, GroupId,
+        od_group, ChildGroupId,
         od_group, ParentGroupId,
         Privileges
     ),
-    NewGRI = case lists:member(?GROUP_VIEW, Privileges) of
-        true ->
-            #gri{type = od_group, id = GroupId, aspect = instance, scope = private};
-        false ->
-            #gri{type = od_group, id = GroupId, aspect = instance, scope = protected}
-    end,
-    {ok, {not_fetched, NewGRI}};
+    {ok, Group} = fetch_entity(ChildGroupId),
+    {ok, {fetched, NewGRI, Group}};
 
 create(Req = #el_req{gri = #gri{id = GrId, aspect = invite_user_token}}) ->
     {ok, Macaroon} = token_logic:create(
@@ -511,13 +506,14 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = oz_privileges}},
     user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_SET_PRIVILEGES);
 
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) ->
+authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = instance}}, _) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             true;
         {?USER(UserId), ?AS_GROUP(ChildGroupId)} ->
-            auth_by_privilege(UserId, ChildGroupId, ?GROUP_CREATE_PARENT);
-        _ -> false
+            auth_by_privilege(UserId, ChildGroupId, ?GROUP_ADD_PARENT);
+        _ ->
+            false
     end;
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
@@ -525,19 +521,28 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
         {?USER(UserId), ?AS_USER(UserId)} ->
             true;
         {?USER(UserId), ?AS_GROUP(ChildGroupId)} ->
-            auth_by_privilege(UserId, ChildGroupId, ?GROUP_JOIN_PARENT);
+            auth_by_privilege(UserId, ChildGroupId, ?GROUP_ADD_PARENT);
         _ ->
             false
     end;
 
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, client = ?USER(UserId)}, Group) ->
+    auth_by_privilege(Req, Group, ?GROUP_INVITE_USER);
+
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = child}}, Group) ->
-    auth_by_privilege(Req, Group, ?GROUP_CREATE_CHILD);
+    % A child group can only be created as a user or another group
+    auth_by_privilege(Req, Group, ?GROUP_ADD_CHILD) andalso Req#el_req.auth_hint /= undefined;
+
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {child, ChildId}}, client = ?USER(UserId)}, Group) ->
+    auth_by_privilege(Req, Group, ?GROUP_ADD_CHILD) andalso
+        group_logic:has_eff_privilege(ChildId, UserId, ?GROUP_ADD_PARENT);
+
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_INVITE_USER);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_token}}, Group) ->
-    auth_by_privilege(Req, Group, ?GROUP_INVITE_CHILD);
+    auth_by_privilege(Req, Group, ?GROUP_ADD_CHILD);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_VIEW);

@@ -177,7 +177,7 @@ routes() -> [
     }},
     %% Create a new parent group for given group
     %% This operation requires one of the following privileges:
-    %% - group_create_parent
+    %% - group_add_parent
     %% - oz_groups_add_relationships
     %% - oz_groups_create
     {<<"/groups/:id/parents">>, #rest_req{
@@ -195,7 +195,7 @@ routes() -> [
     }},
     %% Join parent group
     %% This operation requires one of the following privileges:
-    %% - group_join_parent
+    %% - group_add_parent
     %% - oz_groups_add_relationships
     {<<"/groups/:id/parents/join">>, #rest_req{
         method = 'POST',
@@ -238,11 +238,12 @@ routes() -> [
     }},
     %% Create child group
     %% This operation requires one of the following privileges:
-    %% - group_create_child
+    %% - group_add_child
     %% - oz_groups_add_relationships
     {<<"/groups/:id/children">>, #rest_req{
         method = 'POST',
-        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = child}
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = child},
+        b_auth_hint = ?AS_USER(?CLIENT_ID)
     }},
     %% Get subgroups
     %% This operation requires one of the following privileges:
@@ -254,7 +255,7 @@ routes() -> [
     }},
     %% Create child group invitation token
     %% This operation requires one of the following privileges:
-    %% - group_invite_child
+    %% - group_add_child
     %% - oz_groups_add_relationships
     {<<"/groups/:id/children/token">>, #rest_req{
         method = 'POST',
@@ -327,7 +328,7 @@ routes() -> [
     }},
     %% Create a new space for given group
     %% This operation requires one of the following privileges:
-    %% - group_create_space
+    %% - group_add_space
     %% - oz_groups_add_relationships
     %% - oz_spaces_create
     {<<"/groups/:id/spaces">>, #rest_req{
@@ -345,7 +346,7 @@ routes() -> [
     }},
     %% Join space by group
     %% This operation requires one of the following privileges:
-    %% - group_join_space
+    %% - group_add_space
     %% - oz_spaces_add_relationships
     %% - oz_groups_add_relationships
     {<<"/groups/:id/spaces/join">>, #rest_req{

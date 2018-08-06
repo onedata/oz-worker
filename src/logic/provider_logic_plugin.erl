@@ -369,10 +369,10 @@ authorize(#el_req{operation = create, gri = #gri{aspect = map_idp_group}}, _) ->
 authorize(#el_req{operation = create, gri = #gri{aspect = verify_provider_identity}}, _) ->
     true;
 
-authorize(#el_req{operation = create, gri = #gri{aspect = instance}}, _) ->
+authorize(#el_req{operation = create, gri = #gri{id = undefined, aspect = instance}}, _) ->
     true;
 
-authorize(#el_req{operation = create, gri = #gri{aspect = instance_dev}}, _) ->
+authorize(#el_req{operation = create, gri = #gri{id = undefined, aspect = instance_dev}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, _) ->

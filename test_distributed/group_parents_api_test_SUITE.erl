@@ -108,10 +108,10 @@ list_parents_test(Config) ->
 
 create_parent_test(Config) ->
     % create group with 2 users:
-    %   U2 gets ?GROUP_CREATE_PARENT privilege
+    %   U2 gets ?GROUP_ADD_PARENT privilege
     %   U1 gets all remaining privileges
     {Child, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_CREATE_PARENT
+        Config, ?GROUP_ADD_PARENT
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -208,10 +208,10 @@ create_parent_test(Config) ->
 
 join_parent_test(Config) ->
     % create group with 2 users:
-    %   U2 gets the GROUP_JOIN_PARENT privilege
+    %   U2 gets the GROUP_ADD_PARENT privilege
     %   U1 gets all remaining privileges
     {Child, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_JOIN_PARENT
+        Config, ?GROUP_ADD_PARENT
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
