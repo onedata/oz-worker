@@ -165,27 +165,32 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     Macaroon = maps:get(<<"token">>, Req#el_req.data),
-    {ok, {od_group, GroupId}} = token_logic:consume(Macaroon),
     % In the future, privileges can be included in token
     Privileges = privileges:group_user(),
-    case Req#el_req.auth_hint of
-        ?AS_USER(UserId) ->
-            entity_graph:add_relation(
-                od_user, UserId,
-                od_group, GroupId,
-                Privileges
-            );
-        ?AS_GROUP(GroupId) ->
-            throw(?ERROR_CANNOT_JOIN_GROUP_TO_ITSELF);
-        ?AS_GROUP(ChildGroupId) ->
-            entity_graph:add_relation(
-                od_group, ChildGroupId,
-                od_group, GroupId,
-                Privileges
-            );
-        _ ->
-            ok
+    JoinGroupFun = fun(od_group, GroupId) -> 
+        case Req#el_req.auth_hint of
+            ?AS_USER(UserId) ->
+                entity_graph:add_relation(
+                    od_user, UserId,
+                    od_group, GroupId,
+                    Privileges
+                );
+            ?AS_GROUP(GroupId) ->
+                throw(?ERROR_CANNOT_JOIN_GROUP_TO_ITSELF);
+            ?AS_GROUP(ChildGroupId) ->
+                entity_graph:add_relation(
+                    od_group, ChildGroupId,
+                    od_group, GroupId,
+                    Privileges
+                );
+            _ ->
+                ok
+        end,
+        GroupId
     end,
+    
+    GroupId = token_logic:consume(Macaroon, JoinGroupFun),
+    
     NewGRI = case lists:member(?GROUP_VIEW, Privileges) of
         true ->
             #gri{type = od_group, id = GroupId, aspect = instance, scope = private};

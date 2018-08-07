@@ -29,10 +29,9 @@
     login = <<"">> :: binary(),
     name = <<"">> :: binary(),
     email_list = [] :: [binary()],
-    % A list of strings that do not change for each given group so that
-    % a diff can be computed every time a user logs in. Must be normalized
-    % according to specification in idp_group_mapping.
-    groups = [] :: [idp_group_mapping:membership_spec()]
+    % A list of idp entitlements that do not change for each given group 
+    % so that a diff can be computed every time a user logs in. 
+    groups = [] :: [idp_group_mapping:idp_entitlement()]
 }).
 
 %%%===================================================================
@@ -274,7 +273,9 @@
     secret :: undefined | binary(),
     resource :: undefined | atom(),
     resource_id :: undefined | binary(),
-    issuer :: undefined | entity_logic:client()
+    issuer :: undefined | entity_logic:client(),
+    % Locked token cannot be consumed.
+    locked = false :: boolean()
 }).
 
 %% Records of this type store a macaroons secret used for authorizing users

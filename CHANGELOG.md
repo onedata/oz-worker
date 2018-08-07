@@ -6,6 +6,9 @@ CHANGELOG
 
 ### 18.02.0-rc10
 
+* VFS-4695 Fix arguments order in dns soa record creation
+* VFS-4638 Added group name normalization
+* VFS-4029 Implement responding to Let's Encrypt http challenge
 * Updating GUI, including: * VFS-4668-add-admin-message-to-login-page
 * VFS-4666 Add customization of brand subtitle and login notification (GUI) to config
 * VFS-4664 Fix a crash report when OZ discards a provider connection

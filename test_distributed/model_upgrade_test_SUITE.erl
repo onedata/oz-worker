@@ -12,6 +12,7 @@
 -module(model_upgrade_test_SUITE).
 -author("Lukasz Opiola").
 
+-include("idp_group_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
@@ -31,7 +32,8 @@
     provider_upgrade_test/1,
     handle_service_upgrade_test/1,
     handle_upgrade_test/1,
-    dns_state_upgrade_test/1
+    dns_state_upgrade_test/1,
+    token_upgrade_test/1
 ]).
 
 %%%===================================================================
@@ -46,7 +48,8 @@ all() -> ?ALL([
     provider_upgrade_test,
     handle_service_upgrade_test,
     handle_upgrade_test,
-    dns_state_upgrade_test
+    dns_state_upgrade_test,
+    token_upgrade_test
 ]).
 
 
@@ -180,6 +183,14 @@ dns_state_upgrade_test(Config) ->
     ),
     ?assertEqual(2, NewVersion),
     ?assertEqual(NewRecord, NewDnsStateRecord).
+
+token_upgrade_test(Config) ->
+    TokenRecordVer1 = token_record_1(),
+    {Version2, TokenRecordVer2} = oz_test_utils:call_oz(
+        Config, token, upgrade_record, [1, TokenRecordVer1]
+    ),
+    ?assertEqual(2, Version2),
+    ?assertEqual(TokenRecordVer2, token_record_2()).
 
 
 %%%===================================================================
@@ -502,10 +513,7 @@ user_record_6_with_idp_groups() ->
             login = <<"login1">>,
             name = <<"name1">>,
             email_list = [<<"email1@email.com">>],
-            groups = [
-                <<"vo:test-vo">>,
-                <<"vo:test-vo/user:member">>
-            ]
+            groups = [<<"vo:test-vo/user:member">>, <<"vo:another-vo/user:manager">>]
         },
         #linked_account{
             idp = github,
@@ -513,12 +521,11 @@ user_record_6_with_idp_groups() ->
             login = <<"login2">>,
             name = <<"name2">>,
             email_list = [<<"email2@email.com">>],
-            groups = [
-                <<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role/user:admin">>
-            ]
+            groups = [<<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role/user:admin">>]
         }
     ],
     erlang:setelement(6, user_record_6(), NewLinkedAccounts).
+
 
 user_record_7() -> #od_user{
     name = <<"name">>,
@@ -533,8 +540,8 @@ user_record_7() -> #od_user{
             name = <<"name1">>,
             email_list = [<<"email1@email.com">>],
             groups = [
-                [<<"vo:test-vo">>],
-                [<<"vo:test-vo">>, <<"user:member">>]
+                #idp_entitlement{path = [#idp_group{name = <<"test-vo">>, type = organization}],privileges = member}, 
+                #idp_entitlement{path = [#idp_group{name = <<"another-vo">>, type = organization}], privileges = manager}
             ]
         },
         #linked_account{
@@ -544,7 +551,15 @@ user_record_7() -> #od_user{
             name = <<"name2">>,
             email_list = [<<"email2@email.com">>],
             groups = [
-                [<<"vo:another-vo">>, <<"ut:some-unit">>, <<"tm:some-team">>, <<"rl:some-role">>, <<"user:admin">>]
+                #idp_entitlement{
+                    path = [
+                        #idp_group{name = <<"another-vo">>, type = organization},
+                        #idp_group{name = <<"some-unit">>, type = unit},
+                        #idp_group{name = <<"some-team">>, type = team},
+                        #idp_group{name = <<"some-role">>, type = role}
+                    ],
+                    privileges = admin
+                }
             ]
         }
     ],
@@ -575,6 +590,7 @@ user_record_7() -> #od_user{
     eff_handles = #{},
     top_down_dirty = true
 }.
+
 
 group_record_1() -> {od_group,
     <<"ńąµę|"/utf8>>,
@@ -986,4 +1002,19 @@ dns_state_record(2) -> {dns_state,
         {<<"_acme-challenge">>, <<"token">>, undefined},
         {<<"second">>, <<"value">>, undefined}
     ]}
+}.
+
+token_record_1() -> {token,
+    <<"secret">>,
+    resource,
+    <<"resource_id">>,
+    {client, user, <<"client_id">>}
+}.
+
+token_record_2() -> {token,
+    <<"secret">>,
+    resource,
+    <<"resource_id">>,
+    {client, user, <<"client_id">>},
+    false
 }.

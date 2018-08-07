@@ -15,6 +15,7 @@
 -include("rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
+-include("idp_group_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
@@ -29,8 +30,11 @@
 -define(MAP_GROUP_TEST_AUTH, test_auth).
 -define(MAP_GROUP_TEST_AUTH_BIN, atom_to_binary(?MAP_GROUP_TEST_AUTH, latin1)).
 -define(MAP_GROUP_TEST_AUTH_MODULE, test_auth_module).
--define(MAPPED_MEMBERSHIP_SPEC, [<<"mapped_group1">>, <<"user:member">>]).
--define(MAPPED_GROUP_SPEC, [<<"mapped_group1">>]).
+-define(MAPPED_GROUP_PATH, #idp_group{name = <<"mapped_group1">>, type = role}).
+-define(MAPPED_IDP_ENTITLEMENT, #idp_entitlement{
+    path = ?MAPPED_GROUP_PATH,
+    privileges = member
+}).
 
 
 %% API
@@ -1566,7 +1570,7 @@ map_group_test(Config) ->
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
-    MappedGroupHash = idp_group_mapping:group_spec_to_db_id(?MAPPED_GROUP_SPEC),
+    MappedGroupHash = idp_group_mapping:gen_group_id(?MAPPED_GROUP_PATH),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -2098,7 +2102,7 @@ init_per_testcase(map_group_test, Config) ->
         Nodes, ?MAP_GROUP_TEST_AUTH_MODULE, [passthrough, non_strict]
     ),
     ok = test_utils:mock_expect(Nodes, ?MAP_GROUP_TEST_AUTH_MODULE,
-        normalized_membership_spec, fun(_, _) -> ?MAPPED_MEMBERSHIP_SPEC end
+        normalized_membership_spec, fun(_, _) -> ?MAPPED_IDP_ENTITLEMENT end
     ),
     init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->

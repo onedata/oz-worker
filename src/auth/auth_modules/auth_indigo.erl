@@ -15,6 +15,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("auth_common.hrl").
+-include("idp_group_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
@@ -72,15 +73,19 @@ get_user_info(IdP, AccessToken) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec normalized_membership_specs(auth_utils:idp(), maps:map()) ->
-    [idp_group_mapping:membership_spec()].
+    [idp_group_mapping:idp_entitlement()].
 normalized_membership_specs(IdP, Map) ->
     Groups = maps:get(<<"groups">>, Map, []),
     VoId = vo_id(IdP),
     lists:map(
         fun(Group) ->
             GroupTokens = binary:split(Group, <<"/">>, [global]),
-            MappedTokens = [<<"tm:", T/binary>> || T <- GroupTokens],
-            [<<"vo:", VoId/binary>>] ++ MappedTokens ++ [<<"user:member">>]
+            Path = [#idp_group{name = VoId, type = organization}] ++
+                [#idp_group{name = T, type = team} || T <- GroupTokens],
+            #idp_entitlement{
+                path = Path,
+                privileges = member
+            }
         end, Groups).
 
 

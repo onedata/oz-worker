@@ -12,6 +12,7 @@
 -module(od_user).
 -author("Michal Zmuda").
 
+-include("idp_group_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
@@ -360,7 +361,7 @@ get_record_struct(6) ->
 get_record_struct(7) ->
     % Changes:
     %   * new field - active sessions
-    %   * groups spec in linked_accounts from binaries to list of binaries
+    %   * groups spec in linked_accounts from binaries to idp_entitlement records
     %   * the privileges are translated
     {record, [
         {name, string},
@@ -373,7 +374,13 @@ get_record_struct(7) ->
             {login, string},
             {name, string},
             {email_list, [string]},
-            {groups, [[string]]}
+            {groups, [{record, [
+                {path, [{record, [
+                    {name, string},
+                    {type, atom}
+                ]}]},
+                {privileges, atom}
+            ]}]}
         ]}]},
         {active_sessions, [string]}, % New field
         {default_space, string},
@@ -800,22 +807,42 @@ upgrade_record(6, User) ->
         end, Privileges)))
     end,
 
-    TransformedLinkedAccounts = lists:map(fun(LinkedAccount) ->
-        #linked_account{groups = GroupsSpec} = LinkedAccount,
+    MapType = fun(<<"vo">>) -> organization;
+        (<<"ut">>) -> unit;
+        (<<"tm">>) -> team;
+        (<<"rl">>) -> role
+              end,
 
-        TransformedGroups = lists:map(fun(BinaryGroupSpec) ->
-            binary:split(BinaryGroupSpec, <<"/">>, [global])
-        end, GroupsSpec),
-
-        LinkedAccount#linked_account{groups = TransformedGroups}
-    end, LinkedAccounts),
+    MapPrivileges = fun(<<"admin">>) -> admin;
+        (<<"manager">>) -> manager;
+        (<<"member">>) -> member
+                    end,
+    NewLinkedAccounts = lists:map(fun(LinkedAccount) ->
+        OldGroups = LinkedAccount#linked_account.groups,
+        NewGroups = lists:map(fun(Group) ->
+            GroupTokens = binary:split(Group, <<"/">>, [global]),
+            Path = lists:map(fun(Token) ->
+                <<GroupTypeStr:2/binary, ":", GroupName/binary>> = Token,
+                #idp_group{
+                    name = GroupName,
+                    type = MapType(GroupTypeStr)
+                }
+            end, lists:sublist(GroupTokens, length(GroupTokens)-1)),
+            [_, RoleStr] = binary:split(lists:last(GroupTokens), <<":">>, [global]),
+            #idp_entitlement{
+                path = Path,
+                privileges = MapPrivileges(RoleStr)
+            }
+        end, OldGroups),
+        LinkedAccount#linked_account{groups = NewGroups}
+                                  end, LinkedAccounts),
 
     {7, #od_user{
         name = Name,
         alias = Alias,
         email_list = EmailList,
         basic_auth_enabled = BasicAuthEnabled,
-        linked_accounts = TransformedLinkedAccounts,
+        linked_accounts = NewLinkedAccounts,
 
         active_sessions = [],
 
@@ -838,3 +865,4 @@ upgrade_record(6, User) ->
         eff_handle_services = EffHandleServices,
         eff_handles = EffHandles
     }}.
+

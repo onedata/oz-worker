@@ -25,4 +25,4 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback normalized_membership_specs(auth_utils:idp(), maps:map()) ->
-    [idp_group_mapping:membership_spec()].
+    [idp_group_mapping:idp_entitlement()].
