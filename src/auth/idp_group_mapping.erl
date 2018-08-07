@@ -16,41 +16,18 @@
 
 -include("auth_common.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include("idp_group_mapping.hrl").
 -include_lib("ctool/include/logging.hrl").
 
+-type idp_group() :: #idp_group{}.
+-type idp_entitlement() :: #idp_entitlement{}.
 
--type group_spec() :: [binary()].
-%% Format of group spec:
-%%  Group structure is expressed by a list of group ids
-%%  Group names are identical to group ids from spec
-%%  Type is denoted by two letter abbreviations:
-%%      # vo - organization
-%%      # ut - unit
-%%      # tm - team
-%%      # rl - role
-%%  Examples:
-%%      # [vo:egi.eu]
-%%      # [vo:egi.eu, ut:some-egi-unit]
-%%      # [vo:egi.eu, ut:some-egi-unit, tm:some-egi-team]
-%%  When there is more that one group in group spec, a structure of groups will
-%%      be created where every group is a member of its predecessor
-%%      (left-hand side in spec) with regular member privileges in that group.
--type membership_spec() :: [binary()].
-%% Format of membership spec:
-%%  The format is almost the same as for group spec, except last element of list MUST be
-%%      a string denoting member type and role, separated by ":".
-%%  Allowed types:
-%%      # user
-%%      # group
-%%  Allowed roles:
-%%      # member
-%%      # manager
-%%      # admin
-%%  Examples:
-%%      # [vo:egi.eu, user:member]
-%%      # [vo:egi.eu, ut:some-egi-unit, group:admin]
-%%      # [vo:egi.eu, ut:some-egi-unit, tm:some-egi-team, user:manager]
--export_type([group_spec/0, membership_spec/0]).
+-export_type([idp_group/0, idp_entitlement/0]).
+
+%%  User will be added with given privileges to a group denoted by a path.
+%%  When there is more that one group in idp entitlement path, a structure of 
+%%  groups will be created where every group is a member of its predecessor
+%%  (previous group in path) with regular member privileges in that group.
 
 %% SUPER GROUPS
 %% It is possible to specify a super group for each IdP. A super group will be
@@ -62,9 +39,7 @@
 %% API
 -export([
     coalesce_groups/4,
-    group_spec_to_db_id/1,
-    membership_spec_to_group_spec/1,
-    str_to_type/1, type_to_str/1
+    gen_group_id/1
 ]).
 
 %%%===================================================================
@@ -79,13 +54,13 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec coalesce_groups(IdP :: atom(), UserId :: od_user:id(),
-    OldGroups :: [membership_spec()], NewGroups :: [membership_spec()]) -> ok.
+    OldGroups :: [idp_entitlement()], NewGroups :: [idp_entitlement()]) -> ok.
 coalesce_groups(IdP, UserId, OldGroups, NewGroups) ->
     SuperGroup = auth_utils:get_super_group(IdP),
     ToRmv = OldGroups -- NewGroups,
     ToAdd = NewGroups -- OldGroups,
-    [remove_membership(GrSpec, UserId) || GrSpec <- ToRmv],
-    [add_membership(GrSpec, UserId, SuperGroup) || GrSpec <- ToAdd],
+    [remove_membership(IdpEntitlement, UserId) || IdpEntitlement <- ToRmv],
+    [add_membership(IdpEntitlement, UserId, SuperGroup) || IdpEntitlement <- ToAdd],
     ok.
 
 
@@ -96,47 +71,11 @@ coalesce_groups(IdP, UserId, OldGroups, NewGroups) ->
 %% are always safe.
 %% @end
 %%--------------------------------------------------------------------
--spec group_spec_to_db_id(group_spec()) -> datastore:key().
-group_spec_to_db_id(GroupSpec) ->
-    datastore_utils:gen_key(<<"">>, str_utils:join_binary(GroupSpec, <<"/">>)).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Converts membership spec to group spec, i.e. strips the string denoting
-%% member type and role.
-%% @end
-%%--------------------------------------------------------------------
--spec membership_spec_to_group_spec(membership_spec()) -> group_spec().
-membership_spec_to_group_spec(MembershipSpec) ->
-    lists:sublist(MembershipSpec, length(MembershipSpec) - 1).
-
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Converts group type identifier used in group/membership specs into types
-%% recognized in onedata.
-%% @end
-%%--------------------------------------------------------------------
--spec str_to_type(binary()) -> od_group:type().
-str_to_type(<<"vo">>) -> organization;
-str_to_type(<<"ut">>) -> unit;
-str_to_type(<<"tm">>) -> team;
-str_to_type(<<"rl">>) -> role.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Converts group type recognized in onedata into group type identifier used in
-%% group/membership specs.
-%% @end
-%%--------------------------------------------------------------------
--spec type_to_str(od_group:type()) -> binary().
-type_to_str(organization) -> <<"vo">>;
-type_to_str(unit) -> <<"ut">>;
-type_to_str(team) -> <<"tm">>;
-type_to_str(role) -> <<"rl">>.
+-spec gen_group_id(idp_entitlement() | [idp_group()]) -> binary().
+gen_group_id(#idp_entitlement{path = Path}) ->
+    gen_group_id(Path);
+gen_group_id(Path) ->
+    datastore_utils:gen_key(<<"">>, term_to_binary(Path)).
 
 
 %%%===================================================================
@@ -146,124 +85,125 @@ type_to_str(role) -> <<"rl">>.
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Adds a new membership for user based on membership spec.
+%% Adds a new membership for user based on idp entitlement.
 %% @end
 %%--------------------------------------------------------------------
--spec add_membership(MembershipSpec :: membership_spec(), UserId :: od_user:id(),
-    SuperGroupSpec :: undefined | group_spec()) -> ok.
-add_membership(MembershipSpec, UserId, SuperGroupSpec) ->
-    case SuperGroupSpec of
+-spec add_membership(IdpEntitlement :: idp_entitlement(), UserId :: od_user:id(),
+    SuperGroupPath :: undefined | [idp_group()]) -> ok.
+add_membership(IdpEntitlement, UserId, SuperGroupPath) ->
+    case SuperGroupPath of
         undefined -> ok;
-        _ -> ensure_group_structure(SuperGroupSpec, SuperGroupSpec)
+        _ -> ensure_group_structure(SuperGroupPath, SuperGroupPath)
     end,
-    ParentGroupSpec = membership_spec_to_group_spec(MembershipSpec),
-    ensure_group_structure(ParentGroupSpec, SuperGroupSpec),
-    ensure_member(true, MembershipSpec, UserId).
+    Path = IdpEntitlement#idp_entitlement.path,
+    ensure_group_structure(Path, SuperGroupPath),
+    ensure_member(gen_group_id(Path), UserId, user, 
+        IdpEntitlement#idp_entitlement.privileges).
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Removes an existing membership for user based on membership spec.
+%% Removes an existing membership for user based on idp entitlement.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_membership(MembershipSpec :: membership_spec(),
+-spec remove_membership(IdpEntitlement :: idp_entitlement(),
     UserId :: od_user:id()) -> ok.
-remove_membership(MembershipSpec, UserId) ->
+remove_membership(IdpEntitlement, UserId) ->
     % No need to delete groups, just user's memberships in them.
-    ensure_member(false, MembershipSpec, UserId).
+    ParentId = gen_group_id(IdpEntitlement#idp_entitlement.path),
+    ensure_user_not_member(ParentId, UserId).
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Analyzes a list of groups denoted by group spec and creates missing groups,
+%% Analyzes a chain of groups denoted by list of idp groups and creates missing groups,
 %% adding proper relations between them. In case super group is specified,
 %% it is added to every new group that is created in the process.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_group_structure(GroupSpec :: group_spec(),
-    SuperGroupSpec :: undefined | group_spec()) -> ok.
-ensure_group_structure(GroupSpec, SuperGroupSpec) ->
-    ensure_group_structure(GroupSpec, 1, SuperGroupSpec).
+-spec ensure_group_structure(Path :: [idp_group()],
+    SuperGroupPath :: undefined | [idp_group()]) -> ok.
+ensure_group_structure(Path, SuperGroupPath) ->
+    ensure_group_structure(Path, 1, SuperGroupPath).
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% Internal, recursive version of ensure_group_structure/2 that analyses a list
-%% of group spec tokens, creating new groups and relations accordingly.
+%% of idp groups, creating new groups and relations accordingly.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_group_structure(GroupSpec :: group_spec(), Depth :: integer(),
-    SuperGroupSpec :: undefined | group_spec()) -> ok.
-ensure_group_structure(GroupSpec, Depth, _) when Depth > length(GroupSpec) ->
+-spec ensure_group_structure(Path :: [idp_group()], Depth :: integer(),
+    SuperGroupPath :: undefined | [idp_group()]) -> ok.
+ensure_group_structure(Path, Depth, _) when Depth > length(Path) ->
     ok;
-ensure_group_structure(GroupSpec, Depth, SuperGroupSpec) ->
-    CurrentGroupSpec = lists:sublist(GroupSpec, Depth),
-    GroupId = group_spec_to_db_id(CurrentGroupSpec),
-    SubgroupId = lists:nth(Depth, CurrentGroupSpec),
-    <<GroupTypeStr:2/binary, ":", GroupName/binary>> = SubgroupId,
-    {ok, _} = od_group:update(GroupId, fun(Group) -> {ok, Group} end, #od_group{
-        name = group_logic:normalize_name(GroupName),
-        type = str_to_type(GroupTypeStr),
+ensure_group_structure(Path, Depth, SuperGroupPath) ->
+    CurrentGroupPath = lists:sublist(Path, Depth),
+    CurrentGroupId = gen_group_id(CurrentGroupPath),
+    CurrentGroup = lists:nth(Depth, Path),
+    {ok, _} = od_group:update(CurrentGroupId, fun(Group) -> {ok, Group} end, #od_group{
+        name = group_logic:normalize_name(CurrentGroup#idp_group.name),
+        type = CurrentGroup#idp_group.type,
         protected = true
     }),
     case Depth > 1 of
         true ->
             % If the current group is the super group, it should be added with
             % admin privileges to its parent group.
-            MembershipType = case CurrentGroupSpec of
-                SuperGroupSpec -> <<"group:admin">>;
-                _ -> <<"group:member">>
+            {MemberType, MemberRole} = case CurrentGroupPath of
+                SuperGroupPath -> {group, admin};
+                _ -> {group , member}
             end,
-            ParentGroupSpec = lists:sublist(GroupSpec, Depth - 1),
-            MembershipSpec = ParentGroupSpec ++ [MembershipType],
-            ensure_member(true, MembershipSpec, GroupId);
+            ParentGroupPath = lists:sublist(Path, Depth - 1),
+            ensure_member(gen_group_id(ParentGroupPath), CurrentGroupId, 
+                MemberType, MemberRole);
         false ->
             ok
     end,
-    case {SuperGroupSpec, CurrentGroupSpec} of
-        {undefined, _} ->
+    case SuperGroupPath of
+        undefined ->
             ok;
-        {Spec, Spec} ->
+        CurrentGroupPath ->
             % Do not add the super group to itself
             ok;
         _ ->
             % Super group is defined and different than the group, add it with
             % admin privileges.
-            ensure_member(
-                true,
-                CurrentGroupSpec ++ [<<"group:admin">>],
-                group_spec_to_db_id(SuperGroupSpec)
-            )
+            ensure_member(CurrentGroupId, gen_group_id(SuperGroupPath), 
+                group, admin)
     end,
-    ensure_group_structure(GroupSpec, Depth + 1, SuperGroupSpec).
+    ensure_group_structure(Path, Depth + 1, SuperGroupPath).
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Ensures that given entity (user or group) is, or is not, a member of group
-%% denoted by membership spec.
+%% Ensures that given entity (user or group) is a member of group denoted by id.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_member(IsMember :: boolean(), MembershipSpec :: membership_spec(),
-    SuperGroupSpec :: undefined | datastore:key()) -> ok.
-ensure_member(IsMember, MembershipSpec, MemberId) ->
-    ParentId = group_spec_to_db_id(lists:sublist(MembershipSpec, length(MembershipSpec) - 1)),
-    [MemberType, RoleStr] = binary:split(lists:last(MembershipSpec), <<":">>),
-    Privileges = str_role_to_privileges(RoleStr),
-    case {MemberType, IsMember} of
-        {<<"user">>, true} ->
+-spec ensure_member(ParentId :: od_group:id(), MemberId :: od_group:id() | od_user:id(), 
+    MemberType :: user | group, Role :: atom()) -> ok.
+ensure_member(ParentId, MemberId, MemberType, Role) ->
+    Privileges = role_to_privileges(Role),
+    case MemberType of
+        user ->
             group_logic:add_user(?ROOT, ParentId, MemberId, Privileges);
-        {<<"user">>, false} ->
-            group_logic:remove_user(?ROOT, ParentId, MemberId);
-        {<<"group">>, true} ->
-            group_logic:add_group(?ROOT, ParentId, MemberId, Privileges);
-        {<<"group">>, false} ->
-            group_logic:remove_group(?ROOT, ParentId, MemberId)
+        group ->
+            group_logic:add_group(?ROOT, ParentId, MemberId, Privileges)
     end,
     ok.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Ensures that given user is not a member of group denoted by id.
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_user_not_member(ParentId :: od_group:id(), UserId :: od_user:id()) -> ok.
+ensure_user_not_member(ParentId, UserId) ->
+    group_logic:remove_user(?ROOT, ParentId, UserId),
+    ok.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -272,7 +212,7 @@ ensure_member(IsMember, MembershipSpec, MemberId) ->
 %% privileges recognized in onedata.
 %% @end
 %%--------------------------------------------------------------------
--spec str_role_to_privileges(binary()) -> [privileges:group_privilege()].
-str_role_to_privileges(<<"member">>) -> privileges:group_user();
-str_role_to_privileges(<<"manager">>) -> privileges:group_manager();
-str_role_to_privileges(<<"admin">>) -> privileges:group_admin().
+-spec role_to_privileges(atom()) -> [privileges:group_privilege()].
+role_to_privileges(member) -> privileges:group_user();
+role_to_privileges(manager) -> privileges:group_manager();
+role_to_privileges(admin) -> privileges:group_admin().

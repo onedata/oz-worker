@@ -225,11 +225,24 @@ join_parent_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, Group} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME2),
-        #{groupId => Group}
+        {ok, Macaroon} = oz_test_utils:group_invite_group_token(
+            Config, ?ROOT, Group
+        ),
+        {ok, Token} = onedata_macaroons:serialize(Macaroon),
+        #{
+            groupId => Group,
+            macaroonId => macaroon:identifier(Macaroon),
+            token => Token
+        }
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId, macaroonId := MacaroonId} = _Env, _) ->
         {ok, ChildGroups} = oz_test_utils:group_get_children(Config, GroupId),
-        ?assertEqual(lists:member(Child, ChildGroups), ShouldSucceed)
+        ?assertEqual(lists:member(Child, ChildGroups), ShouldSucceed),
+        case ShouldSucceed of
+            true ->
+                oz_test_utils:assert_token_not_exists(Config, MacaroonId);
+            false -> ok
+        end
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -271,11 +284,7 @@ join_parent_test(Config) ->
         data_spec = #data_spec{
             required = [<<"token">>],
             correct_values = #{
-                <<"token">> => [fun(#{groupId := G1} = _Env) ->
-                    {ok, Macaroon} = oz_test_utils:group_invite_group_token(
-                        Config, ?ROOT, G1
-                    ),
-                    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+                <<"token">> => [fun(#{token := Token} = _Env) ->
                     Token
                 end]
             },
@@ -291,7 +300,65 @@ join_parent_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
-    )).
+    )),
+    
+    % Check that token is not consumed upon failed operation
+    {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1),
+        #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
+    ),
+    {ok, Macaroon1} = oz_test_utils:group_invite_group_token(
+        Config, ?ROOT, Group
+    ),
+    {ok, Token} = onedata_macaroons:serialize(Macaroon1),
+    oz_test_utils:group_add_group(Config, Group, Child),
+    ApiTestSpec1 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = [<<"/groups/">>, Child, <<"/parents/join">>],
+            expected_code = ?HTTP_400_BAD_REQUEST
+        },
+        logic_spec = LogicSpec = #logic_spec{
+            module = group_logic,
+            function = join_group,
+            args = [client, Child, data],
+            expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_group, Child, od_group, Group))
+        },
+        % TODO gs
+        data_spec = #data_spec{
+            required = [<<"token">>],
+            correct_values = #{<<"token">> => [Token]}
+        }
+    },
+    VerifyEndFun1 = fun(MacaroonId) ->
+        fun(_ShouldSucceed,_Env,_) ->
+            oz_test_utils:assert_token_exists(Config, macaroon:identifier(MacaroonId))
+        end
+    end,
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1(Macaroon1)
+    )),
+    
+    {ok, Macaroon2} = oz_test_utils:group_invite_group_token(
+        Config, ?ROOT, Child
+    ),
+    {ok, Token2} = onedata_macaroons:serialize(Macaroon2),
+    ApiTestSpec2 = ApiTestSpec1#api_test_spec{
+        logic_spec = LogicSpec#logic_spec{
+            expected_result = ?ERROR_REASON(?ERROR_CANNOT_JOIN_GROUP_TO_ITSELF)
+        },
+        data_spec = #data_spec{
+        required = [<<"token">>],
+        correct_values = #{<<"token">> => [Token2]}
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec2, undefined, undefined, VerifyEndFun1(Macaroon2)
+    )). 
 
 
 leave_parent_test(Config) ->

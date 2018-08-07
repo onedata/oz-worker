@@ -18,6 +18,7 @@
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include("idp_group_mapping.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
@@ -111,108 +112,11 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     Data = Req#el_req.data,
-    Name = maps:get(<<"name">>, Data),
-    Latitude = maps:get(<<"latitude">>, Data, 0.0),
-    Longitude = maps:get(<<"longitude">>, Data, 0.0),
-    SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
-    AdminEmail = maps:get(<<"adminEmail">>, Data),
-
-    ProviderRegistrationPolicy = application:get_env(
-        ?APP_NAME, provider_registration_policy, open
-    ),
-    case ProviderRegistrationPolicy of
-        open ->
-            ok;
-        restricted ->
-            Token = maps:get(<<"token">>, Data),
-            {ok, {od_provider, undefined}} = token_logic:consume(Token)
-    end,
-
-    ProviderId = datastore_utils:gen_key(),
-    {ok, {Macaroon, Identity}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
-
-    {Domain, Subdomain} = case SubdomainDelegation of
-        false ->
-            {maps:get(<<"domain">>, Data), undefined};
-        true ->
-            ReqSubdomain = maps:get(<<"subdomain">>, Data),
-            IPs = maps:get(<<"ipList">>, Data),
-            case dns_state:set_delegation_config(ProviderId, ReqSubdomain, IPs) of
-                ok ->
-                    {dns_config:build_fqdn_from_subdomain(ReqSubdomain), ReqSubdomain};
-                {error, subdomain_exists} ->
-                    throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>))
-            end
-    end,
-
-    Provider = #od_provider{
-        name = Name, root_macaroon = Identity,
-        subdomain_delegation = SubdomainDelegation,
-        domain = Domain, subdomain = Subdomain,
-        latitude = Latitude, longitude = Longitude,
-        admin_email = AdminEmail
-    },
-
-    case od_provider:create(#document{key = ProviderId, value = Provider}) of
-        {ok, _} -> {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
-        _Error ->
-            dns_state:remove_delegation_config(ProviderId),
-            ?ERROR_INTERNAL_SERVER_ERROR
-    end;
-
+    create_provider(Data, datastore_utils:gen_key(), GRI);
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) ->
     Data = Req#el_req.data,
-    Name = maps:get(<<"name">>, Data),
-    Latitude = maps:get(<<"latitude">>, Data, 0.0),
-    Longitude = maps:get(<<"longitude">>, Data, 0.0),
-    SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
-    UUID = maps:get(<<"uuid">>, Data, undefined),
-    AdminEmail = maps:get(<<"adminEmail">>, Data),
-
-    ProviderRegistrationPolicy = application:get_env(
-        ?APP_NAME, provider_registration_policy, open
-    ),
-    case ProviderRegistrationPolicy of
-        open ->
-            ok;
-        restricted ->
-            Token = maps:get(<<"token">>, Data),
-            {ok, {od_provider, undefined}} = token_logic:consume(Token)
-    end,
-
-    ProviderId = UUID,
-    {ok, {Macaroon, Identity}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
-
-    {Domain, Subdomain} = case SubdomainDelegation of
-        false ->
-            {maps:get(<<"domain">>, Data), undefined};
-        true ->
-            ReqSubdomain = maps:get(<<"subdomain">>, Data),
-            IPs = maps:get(<<"ipList">>, Data),
-            case dns_state:set_delegation_config(ProviderId, ReqSubdomain, IPs) of
-                ok ->
-                    {dns_config:build_fqdn_from_subdomain(ReqSubdomain), ReqSubdomain};
-                {error, subdomain_exists} ->
-                    throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>))
-            end
-    end,
-
-    Provider = #od_provider{
-        name = Name, root_macaroon = Identity,
-        subdomain_delegation = SubdomainDelegation,
-        domain = Domain, subdomain = Subdomain,
-        latitude = Latitude, longitude = Longitude,
-        admin_email = AdminEmail
-    },
-
-    case od_provider:create(#document{key = ProviderId, value = Provider}) of
-        {ok, _} -> {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
-        _Error ->
-            dns_state:remove_delegation_config(ProviderId),
-            ?ERROR_INTERNAL_SERVER_ERROR
-    end;
-
+    create_provider(Data, maps:get(<<"uuid">>, Data, undefined), GRI);
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = provider_registration_token}}) ->
     {ok, Macaroon} = token_logic:create(
@@ -225,10 +129,14 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = provider_registration_t
 create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     SupportSize = maps:get(<<"size">>, Data),
     Macaroon = maps:get(<<"token">>, Data),
-    {ok, {od_space, SpaceId}} = token_logic:consume(Macaroon),
-    entity_graph:add_relation(
-        od_space, SpaceId, od_provider, ProviderId, SupportSize
-    ),
+    SupportSpaceFun = fun(od_space, SpaceId) ->
+        entity_graph:add_relation(
+            od_space, SpaceId, od_provider, ProviderId, SupportSize
+        ),
+        SpaceId
+    end,
+    SpaceId = token_logic:consume(Macaroon, SupportSpaceFun),
+    
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
     {ok, {not_fetched, NewGRI}};
 
@@ -253,10 +161,9 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}
 create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
     ProviderId = maps:get(<<"idp">>, Data),
     GroupId = maps:get(<<"groupId">>, Data),
-    MembershipSpec = auth_utils:normalize_membership_spec(
+    IdpEntitlement = auth_utils:normalize_membership_spec(
         binary_to_atom(ProviderId, latin1), GroupId),
-    GroupSpec = idp_group_mapping:membership_spec_to_group_spec(MembershipSpec),
-    {ok, {data, idp_group_mapping:group_spec_to_db_id(GroupSpec)}};
+    {ok, {data, idp_group_mapping:gen_group_id(IdpEntitlement)}};
 
 create(#el_req{gri = #gri{aspect = verify_provider_identity}, data = Data}) ->
     ProviderId = maps:get(<<"providerId">>, Data),
@@ -923,4 +830,65 @@ update_provider_subomain(ProviderId, Data) ->
     case Result of
         {ok, _} -> ok;
         Error -> Error
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Creates a new provider document in database.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_provider(Data :: maps:map(), ProviderId :: od_provider:id(), 
+    GRI :: entity_logic:gri()) -> entity_logic:create_result().
+create_provider(Data, ProviderId, GRI) ->
+    Name = maps:get(<<"name">>, Data),
+    Latitude = maps:get(<<"latitude">>, Data, 0.0),
+    Longitude = maps:get(<<"longitude">>, Data, 0.0),
+    SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
+    AdminEmail = maps:get(<<"adminEmail">>, Data),
+
+    ProviderRegistrationPolicy = application:get_env(
+        ?APP_NAME, provider_registration_policy, open
+    ),
+    
+    CreateProviderFun = fun(od_provider, undefined) ->
+        {ok, {Macaroon, Identity}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
+
+        {Domain, Subdomain} = case SubdomainDelegation of 
+            false ->
+                {maps:get(<<"domain">>, Data), undefined};
+            true ->
+                ReqSubdomain = maps:get(<<"subdomain">>, Data),
+                IPs = maps:get(<<"ipList">>, Data),
+                case dns_state:set_delegation_config(ProviderId, ReqSubdomain, IPs) of
+                    ok ->
+                        {dns_config:build_fqdn_from_subdomain(ReqSubdomain), ReqSubdomain};
+                    {error, subdomain_exists} ->
+                        throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>))
+                end
+        end,
+
+        Provider = #od_provider{
+            name = Name, root_macaroon = Identity,
+            subdomain_delegation = SubdomainDelegation,
+            domain = Domain, subdomain = Subdomain,
+            latitude = Latitude, longitude = Longitude,
+            admin_email = AdminEmail
+        },
+
+        case od_provider:create(#document{key = ProviderId, value = Provider}) of
+            {ok, _} -> {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
+            _Error ->
+                dns_state:remove_delegation_config(ProviderId),
+                ?ERROR_INTERNAL_SERVER_ERROR
+        end
+    end,
+    
+    case ProviderRegistrationPolicy of
+        open ->
+            CreateProviderFun(od_provider, undefined);
+        restricted ->
+            Token = maps:get(<<"token">>, Data),
+            token_logic:consume(Token, CreateProviderFun)
     end.

@@ -252,7 +252,7 @@ get_all_idps() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_super_group(idp()) ->
-    undefined | idp_group_mapping:group_spec().
+    undefined | [idp_group_mapping:idp_group()].
 get_super_group(IdP) ->
     case lists:member(IdP, auth_config:get_auth_providers()) of
         true -> auth_config:get_super_group(IdP);
@@ -423,7 +423,7 @@ validate_saml_login(Req) ->
 %% @end
 %%-------------------------------------------------------------------
 -spec normalize_membership_spec(idp(), GroupIds :: binary()) ->
-    idp_group_mapping:membership_spec().
+    idp_group_mapping:idp_entitlement().
 normalize_membership_spec(IdP, GroupId) ->
     case lists:member(IdP, auth_config:get_auth_providers()) of
         true -> auth_config:normalize_membership_spec(IdP, GroupId);

@@ -103,9 +103,9 @@ end_per_suite(_Config) ->
 
 end_per_testcase(static_subdomain_does_not_shadow_provider_subdomain_test, Config) ->
     lists:foreach(fun(Env) ->
-        set_dns_config(Config, Env, [])
-    end, [static_a_records, static_ns_records, static_mx_records,
-        static_txt_records, static_cname_records]),
+        set_env(Config, Env, [])
+    end, [dns_static_a_records, dns_static_ns_records, dns_static_mx_records,
+        dns_static_txt_records, dns_static_cname_records]),
 
     oz_test_utils:delete_all_entities(Config),
     ok;
@@ -237,8 +237,8 @@ dns_server_resolves_ns_records_test(Config) ->
     OZDomain = ?config(oz_domain, Config),
 
     Maximum = 2,
-    set_dns_config(Config, ns_max_entries, Maximum),
-    set_dns_config(Config, ns_min_entries, 1), % the basic case
+    set_env(Config, dns_ns_max_entries, Maximum),
+    set_env(Config, dns_ns_min_entries, 1), % the basic case
 
     % force dns update
     ?assertEqual(ok, oz_test_utils:call_oz(Config,
@@ -268,8 +268,8 @@ dns_server_duplicates_ns_records_test(Config) ->
 
     Minimum = 4,
     Maximum = 5,
-    set_dns_config(Config, ns_max_entries, Maximum),
-    set_dns_config(Config, ns_min_entries, Minimum),
+    set_env(Config, dns_ns_max_entries, Maximum),
+    set_env(Config, dns_ns_min_entries, Minimum),
 
     % force dns update
     ?assertEqual(ok, oz_test_utils:call_oz(Config,
@@ -301,9 +301,9 @@ update_fails_on_duplicated_subdomain_test(Config) ->
     StaticSubdomain = <<"test">>,
     StaticNSSubdomain = <<"test">>,
 
-    set_dns_config(Config, static_a_records, [{StaticSubdomain, [{1, 1, 1, 1}]}]),
+    set_env(Config, dns_static_a_records, [{StaticSubdomain, [{1, 1, 1, 1}]}]),
     % ns records should also block setting subdomain
-    set_dns_config(Config, static_ns_records, [{StaticNSSubdomain, [StaticNSSubdomain]}]),
+    set_env(Config, dns_static_ns_records, [{StaticNSSubdomain, [StaticNSSubdomain]}]),
     {ok, {P1, _}} = oz_test_utils:create_provider(Config, Name1),
     {ok, {P2, _}} = oz_test_utils:create_provider(Config, Name2),
 
@@ -349,26 +349,26 @@ dns_server_resolves_static_records(Config) ->
     OZDomain = ?config(oz_domain, Config),
 
     Records = [
-        {txt, static_txt_records,
+        {txt, dns_static_txt_records,
             [{<<"txt">>, <<"txt-value">>}],
             {"txt." ++ OZDomain, [["txt-value"]]}},
-        {a, static_a_records,
+        {a, dns_static_a_records,
             [{<<"a">>, ?PROVIDER_IPS1}], {"a." ++ OZDomain, ?PROVIDER_IPS1}},
-        {mx, static_mx_records,
+        {mx, dns_static_mx_records,
             [{<<"mx">>, <<"mx-value">>, 10}],
             {"mx." ++ OZDomain, [{10, "mx-value"}]}
             },
-        {cname, static_cname_records,
+        {cname, dns_static_cname_records,
             [{<<"cname">>, <<"cname-value">>}],
             {"cname." ++ OZDomain, ["cname-value"]}
         },
-        {ns, static_ns_records,
+        {ns, dns_static_ns_records,
             [{<<"ns">>, [<<"ns1-value">>, <<"ns2-value">>]}],
             {"ns."++OZDomain, ["ns1-value", "ns2-value"]}}
     ],
 
     lists:foreach(fun({_, Env, Entries, _}) ->
-        set_dns_config(Config, Env, Entries)
+        set_env(Config, Env, Entries)
     end, Records),
     ?assertEqual(ok, oz_test_utils:call_oz(Config,
         node_manager_plugin, reconcile_dns_config, [])),
@@ -405,7 +405,7 @@ static_subdomain_does_not_shadow_provider_subdomain_test(Config) ->
         Config, ProviderId, SubdomainBin, ProviderIPs1),
 
     % subdomain is set as static entry statically
-    set_dns_config(Config, static_a_records, [{SubdomainBin, StaticIPs}]),
+    set_env(Config, dns_static_a_records, [{SubdomainBin, StaticIPs}]),
 
     % DNS update is sent
     ?assertEqual(ok, oz_test_utils:call_oz(Config,
@@ -605,10 +605,7 @@ filter_response(Type, {ok, Response}) ->
 %% Adds property to the dns config proplist.
 %% @end
 %%--------------------------------------------------------------------
--spec set_dns_config(Config :: term(), Key :: term(), Value :: term()) -> ok.
-set_dns_config(Config, Key, Value) ->
-    OldConfig = oz_test_utils:call_oz(Config,
-        oz_worker, get_env, [dns, []]),
+-spec set_env(Config :: term(), Key :: term(), Value :: term()) -> ok.
+set_env(Config, Key, Value) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:set_env(Nodes, ?APP_NAME, dns,
-        lists:keystore(Key, 1, OldConfig, {Key, Value})).
+    test_utils:set_env(Nodes, ?APP_NAME, Key, Value).

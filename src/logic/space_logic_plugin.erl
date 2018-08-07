@@ -146,25 +146,30 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     Macaroon = maps:get(<<"token">>, Req#el_req.data),
-    {ok, {od_space, SpaceId}} = token_logic:consume(Macaroon),
     % In the future, privileges can be included in token
     Privileges = privileges:space_user(),
-    case Req#el_req.auth_hint of
-        ?AS_USER(UserId) ->
-            entity_graph:add_relation(
-                od_user, UserId,
-                od_space, SpaceId,
-                Privileges
-            );
-        ?AS_GROUP(GroupId) ->
-            entity_graph:add_relation(
-                od_group, GroupId,
-                od_space, SpaceId,
-                Privileges
-            );
-        _ ->
-            ok
+    JoinSpaceFun = fun(od_space, SpaceId) ->
+        case Req#el_req.auth_hint of
+            ?AS_USER(UserId) ->
+                entity_graph:add_relation(
+                    od_user, UserId,
+                    od_space, SpaceId,
+                    Privileges
+                );
+            ?AS_GROUP(GroupId) ->
+                entity_graph:add_relation(
+                    od_group, GroupId,
+                    od_space, SpaceId,
+                    Privileges
+                );
+            _ ->
+                ok
+        end,
+        SpaceId
     end,
+    
+    SpaceId = token_logic:consume(Macaroon, JoinSpaceFun),
+    
     NewGRI = case lists:member(?SPACE_VIEW, Privileges) of
         true ->
             #gri{type = od_space, id = SpaceId, aspect = instance, scope = private};
