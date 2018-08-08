@@ -385,7 +385,6 @@ get_record_struct(7) ->
         {active_sessions, [string]}, % New field
         {default_space, string},
         {default_provider, string},
-        {chosen_provider, string},
         {client_tokens, [string]},
         {space_aliases, #{string => string}},
         {oz_privileges, [atom]},
