@@ -4,6 +4,12 @@
 CHANGELOG
 ---------
 
+### 18.02.0-rc11
+
+* VFS-4055 Update bp_tree
+* VFS-4633 Tokens are not consumed upon failed operation
+
+
 ### 18.02.0-rc10
 
 * VFS-4695 Fix arguments order in dns soa record creation
