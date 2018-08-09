@@ -81,6 +81,7 @@
     get_space/3, get_eff_space/3,
 
     get_eff_providers/2, get_eff_provider/3,
+    get_spaces_in_eff_provider/3,
 
     get_handle_services/2, get_eff_handle_services/2,
     get_handle_service/3, get_eff_handle_service/3,
@@ -897,12 +898,28 @@ get_eff_providers(Client, UserId) ->
 %%--------------------------------------------------------------------
 -spec get_eff_provider(Client :: entity_logic:client(), UserId :: od_user:id(),
     ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
-get_eff_provider(Client, UserId, GroupId) ->
+get_eff_provider(Client, UserId, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_provider, id = GroupId, aspect = instance, scope = protected},
+        gri = #gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_USER(UserId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of spaces supported by specific effective provider among
+%% effective providers of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_spaces_in_eff_provider(Client :: entity_logic:client(), UserId :: od_user:id(),
+    ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
+get_spaces_in_eff_provider(Client, UserId, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {user_spaces, UserId}}
     }).
 
 
@@ -1595,7 +1612,7 @@ setup_user(UserId, UserInfo) ->
                 Name ->
                     <<Name/binary, "'s space">>
             end,
-            {ok, SpaceId} = space_logic:create(?USER(UserId), SpaceName),
+            {ok, SpaceId} = user_logic:create_space(?USER(UserId), UserId, SpaceName),
             od_user:update(UserId, fun(User = #od_user{}) ->
                 {ok, User#od_user{default_space = SpaceId}}
             end);

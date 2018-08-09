@@ -210,7 +210,7 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = create}}) ->
                 {ok, {not_fetched, #gri{type = Type, id = Id}}} -> {Type, Id};
                 {ok, {not_fetched, #gri{type = Type, id = Id}, _}} -> {Type, Id}
             end,
-            ?info("~s has been created by client: ~s", [
+            ?debug("~s has been created by client: ~s", [
                 EntType:to_string(EntId),
                 client_to_string(Cl)
             ]),
@@ -247,7 +247,7 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = delete}}) ->
         {ok, #el_req{gri = #gri{type = Type, id = Id, aspect = instance}, client = Cl}} ->
             % If an entity instance is deleted, log an information about it
             % (it's a significant operation and this information might be useful).
-            ?info("~s has been deleted by client: ~s", [
+            ?debug("~s has been deleted by client: ~s", [
                 Type:to_string(Id),
                 client_to_string(Cl)
             ]),
@@ -398,15 +398,43 @@ ensure_authorized(State = #state{req = ElReq, plugin = Plugin, entity = Entity})
         true ->
             State;
         false ->
-            case ElReq#el_req.client of
-                ?NOBODY ->
-                    % The client was not authenticated -> unauthorized
-                    throw(?ERROR_UNAUTHORIZED);
-                _ ->
-                    % The client was authenticated but cannot access the
-                    % aspect -> forbidden
-                    throw(?ERROR_FORBIDDEN)
+            % Normal authorization failed, check if client has admin privileges
+            case ensure_authorized_as_admin(ElReq, Plugin) of
+                true -> State;
+                false ->
+                    case ElReq#el_req.client of
+                        ?NOBODY ->
+                            % The client was not authenticated -> unauthorized
+                            throw(?ERROR_UNAUTHORIZED);
+                        _ ->
+                            % The client was authenticated but cannot access the
+                            % aspect -> forbidden
+                            throw(?ERROR_FORBIDDEN)
+                    end
             end
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Ensures client specified in request has admin authorization to perform the request,
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_authorized_as_admin(ElReq :: entity_logic:req(), Plugin :: entity_logic:el_plugin()) -> boolean().
+ensure_authorized_as_admin(ElReq, Plugin) ->
+    Privs = Plugin:required_admin_privileges(ElReq),
+    try
+        case Privs of
+            forbidden -> false;
+            _ -> lists:all(fun(Priv) ->
+                user_logic_plugin:auth_by_oz_privilege(ElReq, Priv) 
+            end, Privs)
+        end
+    catch _:_ ->
+        % No need for log here, 'authorize' may crash depending on what the
+        % request contains and this is expected.
+        false
     end.
 
 

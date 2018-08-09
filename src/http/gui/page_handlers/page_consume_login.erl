@@ -32,7 +32,7 @@
 %%--------------------------------------------------------------------
 -spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(Method, Req) ->
-    ValidationResult = case Method of
+    {ValidationResult, Req2} = case Method of
         <<"POST">> ->
             % SAML flow
             auth_utils:validate_saml_login(Req);
@@ -40,19 +40,17 @@ handle(Method, Req) ->
             % OIDC flow
             auth_utils:validate_oidc_login(Req)
     end,
-    {NewReq, RedirectURL} = case ValidationResult of
-        {ok, {UserId, RedirectUrl}} ->
-            ?info("User ~s logged in", [UserId]),
-            Req2 = oz_gui_session:log_in(UserId, Req),
+    {Req4, RedirectURL} = case ValidationResult of
+        {ok, RedirectUrl} ->
             {Req2, RedirectUrl};
         {error, ErrorId} ->
-            Req2 = new_gui:set_cookie(
+            Req3 = cowboy_req:set_resp_cookie(
                 <<"authentication_error">>,
                 atom_to_binary(ErrorId, utf8),
-                #{path => <<"/">>},
-                Req
+                Req2,
+                #{path => <<"/">>}
             ),
-            {Req2, <<?LOGIN_PAGE_PATH>>}
+            {Req3, <<?LOGIN_PAGE_PATH>>}
     end,
     % This page is visited with a POST request, so use a 303 redirect in
     % response so that web browser switches to GET.
@@ -61,4 +59,4 @@ handle(Method, Req) ->
         % Connection close is required, otherwise chrome/safari can get stuck
         % stalled waiting for data.
         <<"connection">> => <<"close">>
-    }, NewReq).
+    }, Req4).

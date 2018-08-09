@@ -20,9 +20,9 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
--export([fetch_entity/1, operation_supported/3]).
+-export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
--export([exists/2, authorize/2, validate/1]).
+-export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
 %%%===================================================================
 %%% API
@@ -86,6 +86,18 @@ operation_supported(_, _, _) -> false.
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Determines if given {Aspect, Scope} pair is subscribable, i.e. clients can
+%% subscribe to receive updates concerning the aspect of entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
+    boolean().
+is_subscribable(instance, _) -> true;
+is_subscribable(_, _) -> false.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
@@ -137,7 +149,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     end,
     % Handle has been modified by adding relation, so it will need to be
     % fetched again.
-    {ok, {not_fetched, GRI#gri{id = HandleId}}};
+    {ok, #document{value = FetchedHandle}} = od_handle:get(HandleId),
+    {ok, {fetched, GRI#gri{id = HandleId}, FetchedHandle}};
 
 create(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:handle_user()),
@@ -343,6 +356,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) -
         {?USER(UserId), ?AS_GROUP(GroupId)} ->
             handle_service_logic:has_eff_group(HServiceId, GroupId) andalso
                 space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES) andalso
+                group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_CREATE_HANDLE) andalso
                 handle_service_logic:has_eff_privilege(HServiceId, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
 
         _ ->
@@ -354,9 +368,6 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, _}}}, Han
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, _}}}, Handle) ->
     auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
-
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = list}}, _) ->
-    user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_HANDLES_LIST);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Handle) ->
     auth_by_privilege(Req, Handle, ?HANDLE_VIEW);
@@ -381,8 +392,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
             );
 
         {?USER(ClientUserId), _} ->
-            handle_logic:has_eff_user(Handle, ClientUserId) orelse
-                user_logic_plugin:auth_by_oz_privilege(ClientUserId, ?OZ_HANDLES_LIST);
+            handle_logic:has_eff_user(Handle, ClientUserId);
 
         _ ->
             % Access to private data also allows access to protected data
@@ -414,6 +424,66 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {group, _}}}, Ha
 authorize(_, _) ->
     false.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns list of admin privileges needed to perform given operation.
+%% @end
+%%--------------------------------------------------------------------
+-spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
+required_admin_privileges(Req=#el_req{operation = create, gri = #gri{aspect = instance}}) ->
+    case Req#el_req.auth_hint of
+        ?AS_USER(_) -> [?OZ_HANDLES_CREATE, ?OZ_USERS_ADD_RELATIONSHIPS];
+        ?AS_GROUP(_) -> [?OZ_HANDLES_CREATE, ?OZ_GROUPS_ADD_RELATIONSHIPS];
+        _ -> [?OZ_HANDLES_CREATE]
+    end;
+
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {user, _}}}) ->
+    [?OZ_HANDLES_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) ->
+    [?OZ_HANDLES_ADD_RELATIONSHIPS, ?OZ_GROUPS_ADD_RELATIONSHIPS];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
+    [?OZ_HANDLES_LIST];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}) ->
+    [?OZ_HANDLES_VIEW];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}}) ->
+    [?OZ_HANDLES_VIEW];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = users}}) ->
+    [?OZ_HANDLES_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_users}}) ->
+    [?OZ_HANDLES_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}) ->
+    [?OZ_HANDLES_VIEW_PRIVILEGES];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {eff_user_privileges, _}}}) ->
+    [?OZ_HANDLES_VIEW_PRIVILEGES];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = groups}}) ->
+    [?OZ_HANDLES_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_groups}}) ->
+    [?OZ_HANDLES_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {group_privileges, _}}}) ->
+    [?OZ_HANDLES_VIEW_PRIVILEGES];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {eff_group_privileges, _}}}) ->
+    [?OZ_HANDLES_VIEW_PRIVILEGES];
+
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
+    [?OZ_HANDLES_UPDATE];
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}) ->
+    [?OZ_HANDLES_SET_PRIVILEGES];
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = {group_privileges, _}}}) ->
+    [?OZ_HANDLES_SET_PRIVILEGES];
+
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instance}}) ->
+    [?OZ_HANDLES_DELETE];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {user, _}}}) ->
+    [?OZ_HANDLES_REMOVE_RELATIONSHIPS, ?OZ_USERS_REMOVE_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {group, _}}}) ->
+    [?OZ_HANDLES_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS];
+
+required_admin_privileges(_) ->
+    forbidden.
 
 %%--------------------------------------------------------------------
 %% @doc

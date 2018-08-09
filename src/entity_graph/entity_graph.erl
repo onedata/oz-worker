@@ -114,7 +114,7 @@ eff_relation(entity_id()) | eff_relation_with_attrs(entity_id(), attributes()) |
 -export([add_relation/4, add_relation/5]).
 -export([update_relation/5]).
 -export([remove_relation/4]).
--export([delete_with_relations/2]).
+-export([delete_with_relations/2, delete_with_relations/3]).
 -export([update_oz_privileges/4]).
 
 %%%===================================================================
@@ -500,6 +500,11 @@ remove_relation(ChType, ChId, ParType, ParId) ->
     ok | no_return().
 delete_with_relations(EntityType, EntityId) ->
     {ok, #document{value = Entity}} = EntityType:get(EntityId),
+    delete_with_relations(EntityType, EntityId, Entity).
+
+-spec delete_with_relations(EntityType :: entity_type(), EntityId :: entity_id(), 
+    Entity :: entity()) -> ok | no_return().
+delete_with_relations(EntityType, EntityId, Entity) ->    
     Parents = get_parents(Entity),
     DependentParents = maps:get(dependent, Parents, #{}),
     IndependentParents = maps:get(independent, Parents, #{}),

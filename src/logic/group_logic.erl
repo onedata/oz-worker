@@ -47,6 +47,7 @@
     create_user_invite_token/2,
     create_group_invite_token/2,
 
+    create_child_group/3, create_child_group/4,
     join_group/3,
     join_space/3,
 
@@ -68,6 +69,7 @@
     get_space/3, get_eff_space/3,
 
     get_eff_providers/2, get_eff_provider/3,
+    get_spaces_in_eff_provider/3,
 
     get_handle_services/2, get_eff_handle_services/2,
     get_handle_service/3, get_eff_handle_service/3,
@@ -128,16 +130,11 @@ create(Client, Name, Type) ->
 create(Client, Name) when is_binary(Name) ->
     create(Client, #{<<"name">> => Name});
 create(Client, Data) ->
-    AuthHint = case Client of
-        ?USER(UserId) -> ?AS_USER(UserId);
-        _ -> undefined
-    end,
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
         client = Client,
         gri = #gri{type = od_group, id = undefined, aspect = instance},
-        data = Data,
-        auth_hint = AuthHint
+        data = Data
     })).
 
 
@@ -464,6 +461,41 @@ create_group_invite_token(Client, GroupId) ->
         client = Client,
         gri = #gri{type = od_group, id = GroupId, aspect = invite_group_token},
         data = #{}
+    })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new child group belonging to given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_child_group(Client :: entity_logic:client(),
+    ParentGroupId :: od_group:id(), Name :: binary(),
+    Type :: od_group:type()) -> {ok, od_group:id()} | {error, term()}.
+create_child_group(Client, ParentGroupId, Name, Type) ->
+    create_child_group(Client, ParentGroupId, #{
+        <<"name">> => Name, <<"type">> => Type
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new child group belonging to given group. Has two variants:
+%% 1) Group Name is given explicitly (the new group will be of default type)
+%% 2) Group name is provided in a proper Data object, group type is optional.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_child_group(Client :: entity_logic:client(),
+    ParentGroupId :: od_group:id(), NameOrData :: binary() | #{}) ->
+    {ok, od_group:id()} | {error, term()}.
+create_child_group(Client, ParentGroupId, Name) when is_binary(Name) ->
+    create_child_group(Client, ParentGroupId, #{<<"name">> => Name});
+create_child_group(Client, ParentGroupId, Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_group, id = ParentGroupId, aspect = child},
+        data = Data
     })).
 
 
@@ -930,6 +962,22 @@ get_eff_provider(Client, GroupId, ProviderId) ->
         client = Client,
         gri = #gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of spaces supported by specific effective provider among
+%% effective providers of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_spaces_in_eff_provider(Client :: entity_logic:client(), GroupId :: od_group:id(),
+    ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
+get_spaces_in_eff_provider(Client, GroupId, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {group_spaces, GroupId}}
     }).
 
 
@@ -1448,7 +1496,8 @@ create_predefined_group(GroupId, Name, Privileges) ->
                 key = GroupId,
                 value = #od_group{
                     name = Name,
-                    type = role
+                    type = role,
+                    protected = true
                 }},
             case od_group:create(NewGroup) of
                 {ok, _} ->

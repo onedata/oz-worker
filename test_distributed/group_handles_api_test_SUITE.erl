@@ -90,7 +90,8 @@ list_handles_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_GROUPS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -117,9 +118,13 @@ list_handles_test(Config) ->
 
 create_handle_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
+    % U1 has all privileges, including ?GROUP_CREATE_HANDLE
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    % U2 doesn't have the ?GROUP_CREATE_HANDLE privilege
+    {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
     {ok, S1} = oz_test_utils:group_create_space(Config, G1, ?SPACE_NAME1),
     {ok, ShareId} = oz_test_utils:create_share(
         Config, ?ROOT, ?SHARE_NAME1, ?SHARE_ID_1, ?ROOT_FILE_ID, S1
@@ -146,7 +151,10 @@ create_handle_test(Config) ->
         ),
         ?assertEqual(#{}, Handle#od_handle.users),
         ?assertEqual(
-            #{U1 => {AllPrivs, [{od_group, G1}]}},
+            #{
+                U1 => {AllPrivs, [{od_group, G1}]},
+                U2 => {AllPrivs, [{od_group, G1}]}
+            },
             Handle#od_handle.eff_users
         ),
         true
@@ -159,7 +167,8 @@ create_handle_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, NonAdmin}
+                {user, NonAdmin},
+                {user, U2}
             ]
         },
         rest_spec = #rest_spec{
@@ -184,7 +193,7 @@ create_handle_test(Config) ->
             auth_hint = ?AS_GROUP(G1),
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"effectiveGroups">> => #{G1 => AllPrivsBin},
-                <<"effectiveUsers">> => #{U1 => AllPrivsBin},
+                <<"effectiveUsers">> => #{U1 => AllPrivsBin, U2 => AllPrivsBin},
                 <<"metadata">> => ?DC_METADATA,
                 <<"handleServiceId">> => HService,
                 <<"resourceType">> => ExpResourceType,
@@ -236,13 +245,15 @@ create_handle_test(Config) ->
     % in validation step not authorize
     RootApiTestSpec = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
-            correct = [root]
+            correct = [
+                root,
+                {admin, [?OZ_HANDLES_CREATE, ?OZ_GROUPS_ADD_RELATIONSHIPS]}
+            ]
         },
         rest_spec = undefined,
         gs_spec = undefined,
         data_spec = DataSpec#data_spec{
             bad_values = [
-                % one cannot check privileges of hs if it does not exist so 403
                 {<<"handleServiceId">>, <<"">>,
                     ?ERROR_BAD_VALUE_EMPTY(<<"handleServiceId">>)},
                 {<<"handleServiceId">>, 1234,
@@ -293,7 +304,8 @@ get_handle_details_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_HANDLES_VIEW]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -323,7 +335,7 @@ leave_handle_test(Config) ->
     %   U2 gets the GROUP_UPDATE privilege
     %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_UPDATE
+        Config, ?GROUP_LEAVE_HANDLE
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -354,6 +366,7 @@ leave_handle_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_HANDLES_REMOVE_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -391,7 +404,8 @@ list_eff_handles_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_GROUPS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -439,7 +453,8 @@ get_eff_handle_details_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, U1}
+                        {user, U1},
+                        {admin, [?OZ_HANDLES_VIEW]}
                     ],
                     unauthorized = [nobody],
                     forbidden = [

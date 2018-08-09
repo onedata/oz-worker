@@ -26,7 +26,7 @@
 % Authenticating based on various credentials
 -export([
     authorize_by_oauth_provider/1,
-    authorize_by_macaroons/2,
+    authorize_by_macaroons/1, authorize_by_macaroons/2,
     authorize_by_basic_auth/1
 ]).
 
@@ -61,9 +61,9 @@
 %% {error, term()} - authorization invalid
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_oauth_provider(AccessToken :: binary()) ->
-    {true, #client{}} | false | {error, term()}.
-authorize_by_oauth_provider(AccessToken) ->
+-spec authorize_by_oauth_provider(AccessToken :: binary() | cowboy_req:req()) ->
+    false | {true, #client{}} | {error, term()}.
+authorize_by_oauth_provider(AccessToken) when is_binary(AccessToken) ->
     AuthDelegationProviders = auth_config:get_providers_with_auth_delegation(),
     MatchingProviders = lists:dropwhile(
         fun({_ProvId, TokenPrefix}) ->
@@ -84,8 +84,32 @@ authorize_by_oauth_provider(AccessToken) ->
                 {error, bad_access_token} ->
                     ?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(IdP);
                 {_, #document{key = UserId}} ->
-                    {true, #client{type = user, id = UserId}}
+                    {true, ?USER(UserId)}
             end
+    end;
+authorize_by_oauth_provider(Req) ->
+    case cowboy_req:header(<<"x-auth-token">>, Req) of
+        undefined ->
+            false;
+        AccessToken ->
+            auth_utils:authorize_by_oauth_provider(AccessToken)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Tries to authorize client by macaroons based on given Cowboy Req.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_macaroons(Req :: cowboy_req:req()) ->
+    false | {true, #client{}} | {error, term()}.
+authorize_by_macaroons(Req) ->
+    case parse_macaroons_from_headers(Req) of
+        {undefined, _} ->
+            false;
+        {Macaroon, DischargeMacaroons} ->
+            authorize_by_macaroons(Macaroon, DischargeMacaroons)
     end.
 
 
@@ -108,9 +132,10 @@ authorize_by_macaroons(Macaroon, <<"">>) ->
     authorize_by_macaroons(Macaroon, []);
 authorize_by_macaroons(Macaroon, [Bin | _] = DischMacaroons) when is_binary(Bin) ->
     try
-        DeserializedDischMacaroons = [
-            begin {ok, DM} = onedata_macaroons:deserialize(S), DM end || S <- DischMacaroons
-        ],
+        DeserializedDischMacaroons = lists:map(fun(Serialized) ->
+            {ok, DM} = onedata_macaroons:deserialize(Serialized),
+            DM
+        end, DischMacaroons),
         authorize_by_macaroons(Macaroon, DeserializedDischMacaroons)
     catch
         _:_ ->
@@ -122,11 +147,11 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
     %% (this is an authorization code for client).
     case auth_logic:validate_token(<<>>, Macaroon, DischargeMacaroons, <<"">>, undefined) of
         {ok, UserId} ->
-            {true, #client{type = user, id = UserId}};
+            {true, ?USER(UserId)};
         _ ->
             case macaroon_logic:verify_provider_auth(Macaroon) of
-                {ok, IdP} ->
-                    {true, #client{type = provider, id = IdP}};
+                {ok, ProviderId} ->
+                    {true, ?PROVIDER(ProviderId)};
                 {error, _} ->
                     ?ERROR_BAD_MACAROON
             end
@@ -135,20 +160,26 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to authenticate client by provider certs.
+%% Tries to authenticate client by basic auth credentials.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_basic_auth(UserPasswdB64 :: binary()) ->
-    {true, #client{}} | {error, bad_cert}.
-authorize_by_basic_auth(UserPasswdB64) ->
+-spec authorize_by_basic_auth(UserPasswdB64 :: binary() | cowboy_req:req()) ->
+    {true, #client{}} | {error, term()}.
+authorize_by_basic_auth(UserPasswdB64) when is_binary(UserPasswdB64) ->
     UserPasswd = base64:decode(UserPasswdB64),
     [User, Passwd] = binary:split(UserPasswd, <<":">>),
     case user_logic:authenticate_by_basic_credentials(User, Passwd) of
         {ok, #document{key = UserId}} ->
-            Client = #client{type = user, id = UserId},
-            {true, Client};
+            {true, ?USER(UserId)};
         _ ->
             ?ERROR_BAD_BASIC_CREDENTIALS
+    end;
+authorize_by_basic_auth(Req) ->
+    case cowboy_req:header(<<"authorization">>, Req) of
+        <<"Basic ", UserPasswdB64/binary>> ->
+            authorize_by_basic_auth(UserPasswdB64);
+        _ ->
+            false
     end.
 
 
@@ -221,7 +252,7 @@ get_all_idps() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_super_group(idp()) ->
-    undefined | idp_group_mapping:group_spec().
+    undefined | [idp_group_mapping:idp_group()].
 get_super_group(IdP) ->
     case lists:member(IdP, auth_config:get_auth_providers()) of
         true -> auth_config:get_super_group(IdP);
@@ -307,7 +338,7 @@ get_saml_redirect_url(IdP, LinkAccount) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate_oidc_login(cowboy_req:req()) ->
-    {ok, {od_user:id(), RedirectUrl :: binary()}} | {error, term()}.
+    {Res, cowboy_req:req()} when Res :: {ok, RedirectUrl :: binary()} | {error, term()}.
 validate_oidc_login(Req) ->
     try
         QueryParams = cowboy_req:parse_qs(Req),
@@ -346,7 +377,7 @@ validate_oidc_login(Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate_saml_login(cowboy_req:req()) ->
-    {ok, {od_user:id(), RedirectUrl :: binary()}} | {error, term()}.
+    {Res, cowboy_req:req()} when Res :: {ok, RedirectUrl :: binary()} | {error, term()}.
 validate_saml_login(Req) ->
     try
         {ok, PostBody, _} = cowboy_req:read_urlencoded_body(Req, #{length => 128000}),
@@ -392,7 +423,7 @@ validate_saml_login(Req) ->
 %% @end
 %%-------------------------------------------------------------------
 -spec normalize_membership_spec(idp(), GroupIds :: binary()) ->
-    idp_group_mapping:membership_spec().
+    idp_group_mapping:idp_entitlement().
 normalize_membership_spec(IdP, GroupId) ->
     case lists:member(IdP, auth_config:get_auth_providers()) of
         true -> auth_config:normalize_membership_spec(IdP, GroupId);
@@ -425,35 +456,41 @@ has_group_mapping_enabled(IdP) ->
 -spec validate_login_by_linked_account(cowboy_req:req(),
     OriginalLinkedAccount :: #linked_account{},
     StateInfo :: state_token:state_info()) ->
-    {ok, {od_user:id(), RedirectUrl :: binary()}} | {error, term()}.
+    {Res, cowboy_req:req()} when Res :: {ok, RedirectUrl :: binary()} | {error, term()}.
 validate_login_by_linked_account(Req, LinkedAccount, StateInfo) ->
     ShouldLinkAccount = maps:get(link_account, StateInfo),
     RedirectAfterLogin = maps:get(redirect_after_login, StateInfo),
     case ShouldLinkAccount of
         false ->
             % Standard login, check if there is an account belonging to the user
-            case acquire_user_by_linked_account(LinkedAccount) of
-                {exists, #document{key = UserId}} ->
-                    {ok, {UserId, RedirectAfterLogin}};
-                {created, #document{key = UserId}} ->
-                    {ok, {UserId, ?AFTER_LOGIN_PAGE_PATH}}
-            end;
+            {UserId, RedirectUrl} = case acquire_user_by_linked_account(LinkedAccount) of
+                {exists, #document{key = Id}} ->
+                    {Id, RedirectAfterLogin};
+                {created, #document{key = Id}} ->
+                    {Id, ?AFTER_LOGIN_PAGE_PATH}
+            end,
+            ?info("User ~s logged in", [UserId]),
+            {{ok, RedirectUrl}, new_gui_session:log_in(UserId, Req)};
         true ->
             % Account adding flow
             % Check if this account isn't connected to other profile
-            {ok, UserId} = oz_gui_session:get_user_id(Req),
-            case get_user_by_linked_account(LinkedAccount) of
-                {ok, #document{key = UserId}} ->
-                    % The account is already linked to this user, report error
-                    {error, ?error_auth_account_already_linked_to_current_user};
-                {ok, #document{key = _OtherUser}} ->
-                    % The account is used on some other profile, cannot proceed
-                    {error, ?error_auth_account_already_linked_to_another_user};
-                {error, not_found} ->
-                    % Not found -> ok, add new linked account to the user
-                    user_logic:merge_linked_account(UserId, LinkedAccount),
-                    entity_graph:ensure_up_to_date(),
-                    {ok, {UserId, <<?AFTER_LOGIN_PAGE_PATH, "?expand_accounts=true">>}}
+            case new_gui_session:validate(Req) of
+                {error, _} ->
+                    {{error, ?error_auth_invalid_request}, Req};
+                {ok, UserId, _, NewReq} ->
+                    case get_user_by_linked_account(LinkedAccount) of
+                        {ok, #document{key = UserId}} ->
+                            % The account is already linked to this user, report error
+                            {{error, ?error_auth_account_already_linked_to_current_user}, NewReq};
+                        {ok, #document{key = _OtherUser}} ->
+                            % The account is used on some other profile, cannot proceed
+                            {{error, ?error_auth_account_already_linked_to_another_user}, NewReq};
+                        {error, not_found} ->
+                            % Not found -> ok, add new linked account to the user
+                            user_logic:merge_linked_account(UserId, LinkedAccount),
+                            entity_graph:ensure_up_to_date(),
+                            {{ok, <<?AFTER_LOGIN_PAGE_PATH, "?expand_accounts=true">>}, NewReq}
+                    end
             end
     end.
 
@@ -590,4 +627,35 @@ acquire_user_by_external_access_token(IdP, AccessToken) ->
 bin_starts_with(Subject, Prefix) ->
     FirstChars = binary:part(Subject, 0, byte_size(Prefix)),
     FirstChars =:= Prefix.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Parses macaroon and discharge macaroons out of request's headers.
+%% @end
+%%--------------------------------------------------------------------
+-spec parse_macaroons_from_headers(Req :: cowboy_req:req()) ->
+    {Macaroon :: binary() | undefined, DischargeMacaroons :: [binary()]} |
+    no_return().
+parse_macaroons_from_headers(Req) ->
+    MacaroonHeader = cowboy_req:header(<<"macaroon">>, Req),
+    XAuthTokenHeader = cowboy_req:header(<<"x-auth-token">>, Req),
+    % X-Auth-Token is an alias for macaroon header, check if any of them
+    % is given.
+    SerializedMacaroon = case is_binary(MacaroonHeader) of
+        true -> MacaroonHeader;
+        false -> XAuthTokenHeader % binary or undefined
+    end,
+
+    DischargeMacaroons = case cowboy_req:header(<<"discharge-macaroons">>, Req) of
+        undefined ->
+            [];
+        <<"">> ->
+            [];
+        SerializedDischarges ->
+            binary:split(SerializedDischarges, <<" ">>, [global])
+    end,
+
+    {SerializedMacaroon, DischargeMacaroons}.
 

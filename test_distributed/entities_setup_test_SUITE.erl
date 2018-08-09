@@ -82,7 +82,10 @@ predefined_groups_test(Config) ->
         % Check if OZ API privileges are correct
         {ok, PrivsResult} = oz_test_utils:group_get_oz_privileges(Config, ExpId),
         % Check if the privileges are correct
-        ?assertEqual(lists:sort(ExpPrivileges), lists:sort(PrivsResult))
+        ?assertEqual(lists:sort(ExpPrivileges), lists:sort(PrivsResult)),
+        % Check if group is marked as protected
+        {ok, #document{value = #od_group{protected = Protected}}} = GroupResult,
+        ?assertEqual(true, Protected)
     end,
     AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
     CheckGroup(<<"group1">>, <<"Group 1">>, AllPrivs),

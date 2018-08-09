@@ -20,9 +20,9 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
--export([fetch_entity/1, operation_supported/3]).
+-export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
--export([exists/2, authorize/2, validate/1]).
+-export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
 %%%===================================================================
 %%% API
@@ -69,6 +69,18 @@ operation_supported(_, _, _) -> false.
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Determines if given {Aspect, Scope} pair is subscribable, i.e. clients can
+%% subscribe to receive updates concerning the aspect of entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
+    boolean().
+is_subscribable(instance, _) -> true;
+is_subscribable(_, _) -> false.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
@@ -91,7 +103,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
             ),
             % Share has been modified by adding relation, so it will need to be
             % fetched again.
-            {ok, {not_fetched, GRI#gri{id = ShareId}}};
+            {ok, #document{value = FetchedShare}} = od_share:get(ShareId),
+            {ok, {fetched, GRI#gri{id = ShareId}, FetchedShare}};
         _ ->
             % This can potentially happen if a share with given share id
             % has been created between data verification and create
@@ -179,16 +192,12 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) -
     SpaceId = maps:get(<<"spaceId">>, Req#el_req.data, <<"">>),
     auth_by_space_privilege(Req, SpaceId, ?SPACE_MANAGE_SHARES);
 
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = list}}, _) ->
-    user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_SHARES_LIST);
-
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Share) ->
     case Req#el_req.client of
         ?USER(UserId) ->
             % In case of auth_hint = ?THROUGH_SPACE(SpaceId),
             % share's membership in space is checked in 'exists'.
-            auth_by_space_membership(UserId, Share) orelse
-                user_logic_plugin:auth_by_oz_privilege(UserId, ?OZ_SHARES_LIST);
+            auth_by_space_privilege(UserId, Share, ?SPACE_VIEW);
 
         ?PROVIDER(ProviderId) ->
             auth_by_space_support(ProviderId, Share)
@@ -208,6 +217,29 @@ authorize(_, _) ->
     false.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns list of admin privileges needed to perform given operation.
+%% @end
+%%--------------------------------------------------------------------
+-spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
+    [?OZ_SHARES_CREATE];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
+    [?OZ_SHARES_LIST];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance}}) ->
+    [?OZ_SHARES_VIEW];
+
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
+    [?OZ_SHARES_UPDATE];
+
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instance}}) ->
+    [?OZ_SHARES_DELETE];
+
+required_admin_privileges(_) ->
+    forbidden.
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns validity verificators for given request.
@@ -241,22 +273,6 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Returns if given user belongs to the space to which this share belongs.
-%% UserId and SpaceId is either given explicitly or derived from request and
-%% share record. Clients of type other than user are discarded.
-%% @end
-%%--------------------------------------------------------------------
--spec auth_by_space_membership(od_user:id(), od_share:info() | od_space:id()) ->
-    boolean().
-auth_by_space_membership(UserId, Share = #od_share{}) ->
-    auth_by_space_membership(UserId, Share#od_share.space);
-auth_by_space_membership(UserId, SpaceId) ->
-    space_logic:has_eff_user(SpaceId, UserId).
-
 
 %%--------------------------------------------------------------------
 %% @private

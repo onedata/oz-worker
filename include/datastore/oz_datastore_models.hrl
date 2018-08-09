@@ -29,10 +29,9 @@
     login = <<"">> :: binary(),
     name = <<"">> :: binary(),
     email_list = [] :: [binary()],
-    % A list of strings that do not change for each given group so that
-    % a diff can be computed every time a user logs in. Must be normalized
-    % according to specification in idp_group_mapping.
-    groups = [] :: [idp_group_mapping:membership_spec()]
+    % A list of idp entitlements that do not change for each given group 
+    % so that a diff can be computed every time a user logs in. 
+    groups = [] :: [idp_group_mapping:idp_entitlement()]
 }).
 
 %%%===================================================================
@@ -90,6 +89,8 @@
     basic_auth_enabled = false :: boolean(),
     linked_accounts = [] :: [od_user:linked_account()],
 
+    active_sessions = [] :: [session:id()],
+
     default_space = undefined :: undefined | binary(),
     default_provider = undefined :: undefined | binary(),
 
@@ -124,6 +125,8 @@
 -record(od_group, {
     name = <<"">> :: od_group:name(),
     type = role :: od_group:type(),
+    % if group is protected it cannot be deleted
+    protected = false :: boolean(),
 
     % Privileges of this group in admin's OZ API
     oz_privileges = [] :: [privileges:oz_privilege()],
@@ -260,7 +263,9 @@
 %% This record defines a GUI session
 -record(session, {
     user_id :: od_user:id(),
-    accessed = 0 :: non_neg_integer()
+    last_refresh = 0 :: non_neg_integer(),
+    nonce = <<"">> :: binary(),
+    previous_nonce = <<"">> :: binary()
 }).
 
 %% This record defines a token that can be used by user to do something
@@ -309,6 +314,11 @@
 %% Stores information about active provider connection
 -record(provider_connection, {
     connection_ref :: gs_server:conn_ref()
+}).
+
+%% Stores information about active user connections per session id
+-record(user_connections, {
+    connections = [] :: [gs_server:conn_ref()]
 }).
 
 % Token used to match together OIDC/SAML requests and responses and protect

@@ -37,9 +37,14 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched,
         ?AS_USER(_UserId) ->
             [<<"user">>, <<"spaces">>, SpaceId];
         ?AS_GROUP(GroupId) ->
-            [<<"groups">>, GroupId, <<"spaces">>, SpaceId]
+            [<<"groups">>, GroupId, <<"spaces">>, SpaceId];
+        _ ->
+            [<<"spaces">>, SpaceId]
     end,
     rest_translator:created_reply(LocationTokens);
+
+create_response(Gri=#gri{id = undefined, aspect = instance}, AuthHint, {fetched, #gri{id = SpaceId}, _}) ->
+    create_response(Gri, AuthHint, {not_fetched, #gri{id = SpaceId}});
 
 create_response(#gri{aspect = join} = Gri, AuthHint, Result) ->
     create_response(Gri#gri{aspect = instance}, AuthHint, Result);
@@ -65,7 +70,6 @@ create_response(#gri{id = SpaceId, aspect = {group, GrId}}, _, {not_fetched, #gr
     rest_translator:created_reply(
         [<<"spaces">>, SpaceId, <<"groups">>, GrId]
     ).
-
 
 %%--------------------------------------------------------------------
 %% @doc

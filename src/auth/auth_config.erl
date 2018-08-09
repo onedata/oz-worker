@@ -166,7 +166,7 @@ has_group_mapping_enabled(ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_super_group(ProviderId :: atom()) ->
-    undefined | idp_group_mapping:group_spec().
+    undefined | [idp_group_mapping:idp_group()].
 get_super_group(ProviderId) ->
     proplists:get_value(super_group, get_group_mapping_config(ProviderId), undefined).
 
@@ -176,7 +176,7 @@ get_super_group(ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec normalize_membership_spec(auth_utils:idp(), GroupId :: binary()) ->
-    idp_group_mapping:membership_spec().
+    idp_group_mapping:idp_entitlement().
 normalize_membership_spec(Idp, GroupId) ->
     HandlerModule = ?MODULE:get_provider_module(Idp),
     HandlerModule:normalized_membership_spec(Idp, GroupId).

@@ -13,6 +13,7 @@
 -author("Michal Zmuda").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
@@ -136,7 +137,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    3.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -169,7 +170,10 @@ get_record_struct(2) ->
         {eff_providers, #{string => [{atom, string}]}},
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
-    ]}.
+    ]};
+get_record_struct(3) ->
+    % The structure does not change, only the privileges are translated.
+    get_record_struct(2).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -194,17 +198,67 @@ upgrade_record(1, Space) ->
         _TopDownDirty,
         _BottomUpDirty
     } = Space,
-    {2, #od_space{
+    {2, 
+        {
+        od_space,
+        Name,
+
+        maps:from_list(Users),
+        maps:from_list(Groups),
+        maps:from_list(ProviderSupports),
+        Shares,
+
+        #{},
+        #{},
+        #{},
+
+        true,
+        true
+    }};
+upgrade_record(2, Space) ->
+    {
+        od_space,
+        Name,
+        
+        Users,
+        Groups, 
+        Providers,
+        Shares,
+        
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        
+        _TopDownDirty,
+        _BottomUpDirty
+        
+    } = Space,
+    TranslatePrivileges = fun(Privileges) ->
+        lists:flatten(lists:map(fun
+            (space_view) -> [?SPACE_VIEW, ?SPACE_VIEW_PRIVILEGES];
+            (Other) -> Other 
+        end, Privileges))
+    end,
+
+    TranslateField = fun(Field) ->
+        maps:map(fun
+            (_, {Privs, Relation}) -> {TranslatePrivileges(Privs), Relation};
+            (_, Privs) -> TranslatePrivileges(Privs)
+        end, Field)
+    end,
+
+    {3, #od_space{
         name = Name,
-
-        users = maps:from_list(Users),
-        groups = maps:from_list(Groups),
-        providers = maps:from_list(ProviderSupports),
+        
+        users = TranslateField(Users),
+        groups = TranslateField(Groups),
+        providers = Providers,
         shares = Shares,
+        
+        eff_users = TranslateField(EffUsers),
+        eff_groups = TranslateField(EffGroups),
+        eff_providers = EffProviders,
 
-        eff_users = #{},
-        eff_groups = #{},
-        eff_providers = #{},
 
         top_down_dirty = true,
         bottom_up_dirty = true

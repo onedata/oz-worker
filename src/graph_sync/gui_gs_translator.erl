@@ -31,8 +31,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns handshake response attributes for given client that has been
-%% authorized.
+%% {@link gs_translator_behaviour} callback handshake_attributes/1.
 %% @end
 %%--------------------------------------------------------------------
 -spec handshake_attributes(gs_protocol:client()) ->
@@ -48,23 +47,28 @@ handshake_attributes(_) ->
             ProvidersAtoms = auth_utils:get_all_idps(),
             [str_utils:to_binary(P) || P <- ProvidersAtoms]
     end,
+
+    BrandSubtitle = oz_worker:get_env(brand_subtitle, ""),
+    LoginNotification = oz_worker:get_env(login_notification, ""),
+
     #{
         <<"zoneName">> => oz_worker:get_name(),
         <<"serviceVersion">> => oz_worker:get_version(),
         <<"serviceBuildVersion">> => oz_worker:get_build_version(),
-        <<"idps">> => Idps
+        <<"idps">> => Idps,
+        <<"brandSubtitle">> => str_utils:unicode_list_to_binary(BrandSubtitle),
+        <<"loginNotification">> => str_utils:unicode_list_to_binary(LoginNotification)
     }.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates CREATE result to the format understood by client. Will be called
-%% only for requests that return {ok, {data, Data}}.
-%% For other results, translate_get is called.
+%% {@link gs_translator_behaviour} callback translate_create/3.
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_create(gs_protocol:protocol_version(), gs_protocol:gri(),
-    Data :: term()) -> gs_protocol:data() | gs_protocol:error().
+    Data :: term()) -> Result | fun((gs_protocol:client()) -> Result) when
+    Result :: gs_protocol:data() | gs_protocol:error().
 translate_create(1, #gri{aspect = invite_group_token}, Macaroon) ->
     translate_create(1, #gri{aspect = invite_user_token}, Macaroon);
 translate_create(1, #gri{aspect = invite_provider_token}, Macaroon) ->
@@ -85,13 +89,12 @@ translate_create(ProtocolVersion, GRI, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates GET result to the format understood by client. Should not include
-%% "gri" in the resulting json map, as it is included automatically.
+%% {@link gs_translator_behaviour} callback translate_get/3.
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_get(gs_protocol:protocol_version(), gs_protocol:gri(),
-    Data :: term()) ->
-    gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()} |
+    Data :: term()) -> Result | fun((gs_protocol:client()) -> Result) when
+    Result :: gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()} |
     gs_protocol:error().
 translate_get(1, GRI = #gri{type = od_user}, Data) ->
     translate_user(GRI, Data);
@@ -181,14 +184,6 @@ translate_user(#gri{aspect = {linked_account, _}}, #linked_account{idp = IdP, em
         <<"emailList">> => Emails
     };
 
-translate_user(#gri{aspect = eff_providers}, Providers) ->
-    #{
-        <<"list">> => lists:map(
-            fun(ProviderId) ->
-                gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected})
-            end, Providers)
-    };
-
 translate_user(#gri{aspect = eff_groups}, Groups) ->
     #{
         <<"list">> => lists:map(
@@ -203,6 +198,14 @@ translate_user(#gri{aspect = eff_spaces}, Spaces) ->
             fun(SpaceId) ->
                 gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = protected})
             end, Spaces)
+    };
+
+translate_user(#gri{aspect = eff_providers}, Providers) ->
+    #{
+        <<"list">> => lists:map(
+            fun(ProviderId) ->
+                gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected})
+            end, Providers)
     }.
 
 
@@ -220,20 +223,21 @@ translate_group(GRI = #gri{aspect = instance, scope = private}, #od_group{name =
 
 translate_group(#gri{id = GroupId, aspect = instance, scope = protected}, Group) ->
     Group#{
-        <<"sharedUserList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = users}),
-        <<"sharedGroupList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = children}),
+        <<"parentList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = parents}),
+        <<"childList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = children}),
+        <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = users}),
         <<"spaceList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = spaces})
     };
 
 translate_group(#gri{aspect = instance, scope = shared}, Group) ->
     Group;
 
-translate_group(#gri{aspect = users}, Users) ->
+translate_group(#gri{aspect = parents}, Parents) ->
     #{
         <<"list">> => lists:map(
-            fun(UserId) ->
-                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = shared})
-            end, Users)
+            fun(ParentId) ->
+                gs_protocol:gri_to_string(#gri{type = od_group, id = ParentId, aspect = instance, scope = protected})
+            end, Parents)
     };
 
 translate_group(#gri{aspect = children}, Children) ->
@@ -242,6 +246,14 @@ translate_group(#gri{aspect = children}, Children) ->
             fun(ChildId) ->
                 gs_protocol:gri_to_string(#gri{type = od_group, id = ChildId, aspect = instance, scope = shared})
             end, Children)
+    };
+
+translate_group(#gri{aspect = users}, Users) ->
+    #{
+        <<"list">> => lists:map(
+            fun(UserId) ->
+                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = shared})
+            end, Users)
     };
 
 translate_group(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
@@ -282,6 +294,8 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
     } = SpaceData,
     #{
         <<"name">> => Name,
+        <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = users}),
+        <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = groups}),
         <<"supportSizes">> => Providers,
         <<"providerList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = providers})
     };
@@ -329,12 +343,14 @@ translate_space(#gri{aspect = providers, scope = private}, Providers) ->
 %%--------------------------------------------------------------------
 -spec translate_provider(gs_protocol:gri(), Data :: term()) ->
     gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()}.
-translate_provider(#gri{id = ProviderId, aspect = instance, scope = protected}, Provider) ->
-    Provider#{
-        <<"spaceList">> => gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = user_spaces})
-    };
+translate_provider(GRI = #gri{aspect = instance, scope = protected}, Provider) ->
+    fun(?USER(UserId)) ->
+        Provider#{
+            <<"spaceList">> => gs_protocol:gri_to_string(GRI#gri{aspect = {user_spaces, UserId}, scope = private})
+        }
+    end;
 
-translate_provider(#gri{aspect = user_spaces}, Spaces) ->
+translate_provider(#gri{aspect = {user_spaces, _UserId}}, Spaces) ->
     #{
         <<"list">> => lists:map(
             fun(SpaceId) ->

@@ -15,6 +15,7 @@
 -include("rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
+-include("idp_group_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
@@ -29,8 +30,11 @@
 -define(MAP_GROUP_TEST_AUTH, test_auth).
 -define(MAP_GROUP_TEST_AUTH_BIN, atom_to_binary(?MAP_GROUP_TEST_AUTH, latin1)).
 -define(MAP_GROUP_TEST_AUTH_MODULE, test_auth_module).
--define(MAPPED_MEMBERSHIP_SPEC, <<"mapped_group1/user:member">>).
--define(MAPPED_GROUP_SPEC, <<"mapped_group1">>).
+-define(MAPPED_GROUP_PATH, #idp_group{name = <<"mapped_group1">>, type = role}).
+-define(MAPPED_IDP_ENTITLEMENT, #idp_entitlement{
+    path = ?MAPPED_GROUP_PATH,
+    privileges = member
+}).
 
 
 %% API
@@ -70,8 +74,7 @@
     update_domain_is_idempotent_test/1,
     get_domain_config_test/1,
     get_current_time_test/1,
-    verify_provider_identity_test/1,
-    same_domain_test/1
+    verify_provider_identity_test/1
 ]).
 
 all() ->
@@ -105,8 +108,7 @@ all() ->
         update_domain_test,
         update_domain_is_idempotent_test,
         get_domain_config_test,
-        get_current_time_test,
-        same_domain_test
+        get_current_time_test
     ]).
 
 %%%===================================================================
@@ -328,10 +330,6 @@ get_test(Config) ->
 
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST
-    ]),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     SupportSize = oz_test_utils:minimum_support_size(Config),
@@ -347,7 +345,7 @@ get_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
-                {user, Admin},
+                {admin, [?OZ_PROVIDERS_VIEW]},
                 {user, NonAdmin},
                 {provider, P2, P2Macaroon}
             ]
@@ -407,7 +405,7 @@ get_test(Config) ->
             correct = [
                 root,
                 {user, U1},
-                {user, Admin},
+                {admin, [?OZ_PROVIDERS_VIEW]},
                 {provider, P2, P2Macaroon}
             ],
             unauthorized = [nobody],
@@ -503,16 +501,12 @@ list_test(Config) ->
 
     % Create two users, grant one of them the privilege to list providers.
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST
-    ]),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_PROVIDERS_LIST]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -628,18 +622,22 @@ update_test(Config) ->
     )),
 
     % Check that clients can't make request on behalf of other client
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, U1, grant, [
         ?OZ_PROVIDERS_LIST
     ]),
+
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
     ApiTestSpec2 = #api_test_spec{
         client_spec = ClientSpec#client_spec{
+            correct = [
+                {admin, [?OZ_PROVIDERS_UPDATE]}
+            ],
             unauthorized = [nobody],
             forbidden = [
-                {user, Admin},
+                {user, U1},
                 {provider, P2, P2Macaroon}
             ]
         },
@@ -666,10 +664,6 @@ delete_test(Config) ->
         Config, ?PROVIDER_NAME2
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_DELETE
-    ]),
 
     EnvSetUpFun = fun() ->
         {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
@@ -689,7 +683,7 @@ delete_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_PROVIDERS_DELETE]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -771,6 +765,7 @@ create_provider_registration_token_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_PROVIDERS_INVITE]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -804,10 +799,6 @@ list_eff_users_test(Config) ->
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_USERS
-    ]),
 
     [{U3, _}, {U4, _}, {U5, _}, {U6, _}] = Users,
     ExpUsers = [U1, U2, U3, U4, U5, U6],
@@ -816,7 +807,7 @@ list_eff_users_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {admin, [?OZ_PROVIDERS_LIST_RELATIONSHIPS]},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
@@ -868,11 +859,6 @@ get_eff_user_test(Config) ->
         Config, P2, S1, oz_test_utils:minimum_support_size(Config)
     ),
 
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_USERS
-    ]),
-
     lists:foreach(
         fun({UserId, UserDetails}) ->
             ExpDetails = UserDetails#{
@@ -884,7 +870,7 @@ get_eff_user_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, Admin},
+                        {admin, [?OZ_USERS_VIEW]},
                         {provider, P1, P1Macaroon}
                     ],
                     unauthorized = [nobody],
@@ -941,10 +927,6 @@ list_eff_groups_test(Config) ->
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_GROUPS
-    ]),
 
     [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}, {G6, _}] = Groups,
     ExpGroups = [G1, G2, G3, G4, G5, G6],
@@ -953,7 +935,7 @@ list_eff_groups_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {admin, [?OZ_PROVIDERS_LIST_RELATIONSHIPS]},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
@@ -1005,11 +987,6 @@ get_eff_group_test(Config) ->
         Config, P2, S1, oz_test_utils:minimum_support_size(Config)
     ),
 
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_GROUPS
-    ]),
-
     lists:foreach(
         fun({GroupId, GroupDetails}) ->
             GroupDetailsBinary = GroupDetails#{
@@ -1022,7 +999,7 @@ get_eff_group_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, Admin},
+                        {admin, [?OZ_GROUPS_VIEW]},
                         {provider, P1, P1Macaroon}
                     ],
                     unauthorized = [nobody],
@@ -1079,17 +1056,13 @@ list_spaces_test(Config) ->
     } = create_2_providers_and_5_supported_spaces(Config),
 
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_SPACES
-    ]),
 
     ExpSpaces = [S1, S2, S3, S4, S5],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {admin, [?OZ_PROVIDERS_LIST_RELATIONSHIPS]},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
@@ -1143,10 +1116,6 @@ get_space_test(Config) ->
     } = create_2_providers_and_5_supported_spaces(Config),
 
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_SPACES
-    ]),
 
     lists:foreach(
         fun({SpaceId, SpaceDetails}) ->
@@ -1154,7 +1123,7 @@ get_space_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, Admin},
+                        {admin, [?OZ_SPACES_VIEW]},
                         {provider, P1, P1Macaroon}
                     ],
                     unauthorized = [nobody],
@@ -1601,7 +1570,7 @@ map_group_test(Config) ->
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
-    MappedGroupHash = idp_group_mapping:group_spec_to_db_id(?MAPPED_GROUP_SPEC),
+    MappedGroupHash = idp_group_mapping:gen_group_id(?MAPPED_GROUP_PATH),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -1908,13 +1877,7 @@ get_domain_config_test(Config) ->
         Config, ?PROVIDER_DETAILS(?PROVIDER_NAME2, ?UNIQUE_DOMAIN)#{<<"subdomainDelegation">> => false}
     ),
 
-    % Create two users, grant one of them the privilege to list providers.
-    % They still shouldn't be able to read domain aspect
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST
-    ]),
 
     ExpBody = #{
         <<"subdomainDelegation">> => false,
@@ -1928,7 +1891,7 @@ get_domain_config_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, Admin},
+                {admin, [?OZ_PROVIDERS_VIEW]},
                 {user, NonAdmin},
                 {provider, P2, P2Macaroon}
             ]
@@ -2088,72 +2051,6 @@ verify_provider_identity_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
-same_domain_test(Config) ->
-    ProviderDetails =  ?PROVIDER_DETAILS(?PROVIDER_NAME1, ?DOMAIN)#{<<"subdomainDelegation">> => false},
-    {ok, _} = oz_test_utils:create_provider(
-        Config, ProviderDetails),
-
-    %% Fail to create provider with existing domain
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [root, nobody]
-        },
-        rest_spec = #rest_spec{
-            method = post,
-            path = <<"/providers">>,
-            expected_code = ?HTTP_400_BAD_REQUEST
-        },
-        logic_spec = #logic_spec{
-            operation = create,
-            module = provider_logic,
-            function = create,
-            args = [client, data],
-            expected_result = ?ERROR_REASON(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>))
-        },
-        data_spec = #data_spec{
-            required = [
-                <<"name">>, <<"adminEmail">>, <<"domain">>, <<"subdomainDelegation">>
-            ],
-            correct_values = #{
-                <<"name">> => [?PROVIDER_NAME2],
-                <<"subdomainDelegation">> => [false],
-                <<"domain">> => [?DOMAIN],
-                <<"adminEmail">> => [?ADMIN_EMAIL]
-            }
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
-        Config, ProviderDetails#{<<"name">> => ?PROVIDER_NAME2, <<"domain">> => ?UNIQUE_DOMAIN}),
-
-    %% Fail to change provider domain to existing one
-    ApiTestSpec1 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [{provider, P2, P2Macaroon}]
-        },
-        logic_spec = #logic_spec{
-            module = provider_logic,
-            function = update_domain_config,
-            args = [client, P2, data],
-            expected_result = ?ERROR_REASON(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>))
-        },
-        gs_spec = #gs_spec{
-            operation = update,
-            gri = #gri{type = od_provider, id = P2, aspect = domain_config},
-            expected_result = ?ERROR_REASON(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>))
-        },
-        data_spec = #data_spec{
-            required = [<<"domain">>, <<"subdomainDelegation">>],
-            correct_values = #{
-                <<"subdomainDelegation">> => [false],
-                <<"domain">> => [?DOMAIN]
-            }
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec1)).
-
-
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
@@ -2205,7 +2102,7 @@ init_per_testcase(map_group_test, Config) ->
         Nodes, ?MAP_GROUP_TEST_AUTH_MODULE, [passthrough, non_strict]
     ),
     ok = test_utils:mock_expect(Nodes, ?MAP_GROUP_TEST_AUTH_MODULE,
-        normalized_membership_spec, fun(_, _) -> ?MAPPED_MEMBERSHIP_SPEC end
+        normalized_membership_spec, fun(_, _) -> ?MAPPED_IDP_ENTITLEMENT end
     ),
     init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->

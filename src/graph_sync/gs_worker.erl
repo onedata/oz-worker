@@ -100,7 +100,7 @@ supervisor_flags() ->
 -spec stream_healthcheck() -> ok.
 stream_healthcheck() ->
     Pid = global:whereis_name(?GS_SERVER_WORKER_GLOBAL_NAME),
-    Node = consistent_hasing:get_node(?GS_SERVER_WORKER_GLOBAL_NAME),
+    Node = consistent_hashing:get_node(?GS_SERVER_WORKER_GLOBAL_NAME),
     case {Pid, Node =:= node()} of
         {undefined, true} ->
             start_gs_server_worker(),

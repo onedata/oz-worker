@@ -109,6 +109,6 @@ get_version() ->
 %%--------------------------------------------------------------------
 -spec get_build_version() -> binary().
 get_build_version() ->
-    get_env(build_version, <<"unknown">>).
+    list_to_binary(get_env(build_version, "unknown")).
 
 

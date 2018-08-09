@@ -73,19 +73,19 @@ translate(?ERROR_FORBIDDEN) ->
 
 % Errors connected with macaroons
 translate(?ERROR_BAD_MACAROON) ->
-    {?HTTP_400_BAD_REQUEST,
+    {?HTTP_401_UNAUTHORIZED,
         <<"Provided authorization token could not be understood by the server">>
     };
 translate(?ERROR_MACAROON_INVALID) ->
-    {?HTTP_400_BAD_REQUEST,
+    {?HTTP_401_UNAUTHORIZED,
         <<"Provided authorization token is not valid">>
     };
 translate(?ERROR_MACAROON_EXPIRED) ->
-    {?HTTP_400_BAD_REQUEST,
+    {?HTTP_401_UNAUTHORIZED,
         <<"Provided authorization token has expired">>
     };
 translate(?ERROR_MACAROON_TTL_TO_LONG(MaxTtl)) ->
-    {?HTTP_400_BAD_REQUEST,
+    {?HTTP_401_UNAUTHORIZED,
         <<"Provided authorization token has too open TTL (it must not exceed ~B seconds)">>,
         [MaxTtl]
     };
@@ -234,6 +234,10 @@ translate(?ERROR_BAD_VALUE_IDENTIFIER(Key)) ->
     {?HTTP_400_BAD_REQUEST, {
         <<"Bad value: provided \"~s\" is not a valid identifier.">>, [Key]
     }};
+translate(?ERROR_PROTECTED_GROUP) ->
+    {?HTTP_403_FORBIDDEN, 
+        <<"Forbidden: this group is protected and cannot be deleted.">>
+    };
 % Errors connected with relations between entities
 translate(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId)) ->
     RelationToString = case {ChType, ParType} of
@@ -247,7 +251,7 @@ translate(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId)) ->
     ]}};
 translate(?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId)) ->
     RelationToString = case {ChType, ParType} of
-        {od_space, od_provider} -> <<"is alraedy supported by">>;
+        {od_space, od_provider} -> <<"is already supported by">>;
         {_, _} -> <<"is already a member of">>
     end,
     {?HTTP_400_BAD_REQUEST, {<<"Bad value: ~s ~s ~s">>, [

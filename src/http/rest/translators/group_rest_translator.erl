@@ -35,17 +35,26 @@
     Result :: {data, term()} | {fetched, entity_logic:gri(), term()} |
     {not_fetched, entity_logic:gri()} |
     {not_fetched, entity_logic:gri(), entity_logic:auth_hint()}) -> #rest_resp{}.
+
 create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched, #gri{id = GroupId}}) ->
     LocationTokens = case AuthHint of
         ?AS_USER(_UserId) ->
             [<<"user">>, <<"groups">>, GroupId];
         ?AS_GROUP(ChildGroupId) ->
-            [<<"groups">>, ChildGroupId, <<"parents">>, GroupId]
+            [<<"groups">>, ChildGroupId, <<"parents">>, GroupId];
+        _ ->
+            [<<"groups">>, GroupId]
     end,
     rest_translator:created_reply(LocationTokens);
 
+create_response(Gri=#gri{id = undefined, aspect = instance}, AuthHint, {fetched, #gri{id = GroupId},_}) ->
+    create_response(Gri, AuthHint, {not_fetched, #gri{id = GroupId}});
+
 create_response(#gri{aspect = join} = Gri, AuthHint, Result) ->
     create_response(Gri#gri{aspect = instance}, AuthHint, Result);
+
+create_response(#gri{id = ParentGroupId, aspect = child}, _, {not_fetched, #gri{id = GroupId}}) ->
+    rest_translator:created_reply([<<"groups">>, ParentGroupId, <<"children">>, GroupId]);
 
 create_response(#gri{aspect = invite_user_token}, _, {data, Macaroon}) ->
     {ok, Token} = onedata_macaroons:serialize(Macaroon),
