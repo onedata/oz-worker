@@ -20,7 +20,7 @@
 -include_lib("ctool/include/test/performance.hrl").
 
 %% API
--export([all/0, init_per_suite/1]).
+-export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([predefined_groups_test/1, global_groups_test/1]).
 -export([automatic_space_membership_via_global_group_test/1]).
 -export([automatic_first_space_test/1]).
@@ -276,3 +276,6 @@ automatic_first_space_test(Config) ->
 
 init_per_suite(Config) ->
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
+
+end_per_suite(_) ->
+    ok.

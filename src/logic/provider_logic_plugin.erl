@@ -574,15 +574,16 @@ validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     }
 };
 
-validate(#el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}) -> #{
-    required => #{
-        {aspect, <<"recordName">>} => {binary, non_empty},
-        <<"content">> => {binary, non_empty}
-    },
-    optional => #{
-        <<"ttl">> => {integer, {not_lower_than, 0}}
-    }
-};
+validate(#el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}) ->
+    #{
+        required => #{
+            {aspect, <<"recordName">>} => {binary, non_empty},
+            <<"content">> => {binary, non_empty}
+        },
+        optional => #{
+            <<"ttl">> => {integer, {not_lower_than, 0}}
+        }
+    };
 
 validate(#el_req{operation = create, gri = #gri{aspect = check_my_ports}}) -> #{
 };
@@ -596,14 +597,15 @@ validate(#el_req{operation = create, gri = #gri{aspect = map_idp_group}}) -> #{
     }
 };
 
-validate(#el_req{operation = create, gri = #gri{aspect = verify_provider_identity}}) -> #{
-    required => #{
-        <<"providerId">> => {binary, {exists, fun(ProviderId) ->
-            provider_logic:exists(ProviderId) end}
-        },
-        <<"macaroon">> => {token, any}
-    }
-};
+validate(#el_req{operation = create, gri = #gri{aspect = verify_provider_identity}}) ->
+    #{
+        required => #{
+            <<"providerId">> => {binary, {exists, fun(ProviderId) ->
+                provider_logic:exists(ProviderId) end}
+            },
+            <<"macaroon">> => {token, any}
+        }
+    };
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
@@ -750,22 +752,12 @@ get_min_support_size() ->
     Data :: entity_logic:data()) -> entity_logic:update_result().
 update_provider_domain(ProviderId, Data) ->
     Domain = maps:get(<<"domain">>, Data),
-    Result = critical_section:run({domain_config, Domain}, fun() ->
-        case is_domain_occupied(Domain) of
-            {true, ProviderId} -> {ok, no_change};
-            {true, OtherProviderId} ->
-                ?debug("Refusing to set provider's ~s domain to ~s as it is used by provider ~s",
-                    [ProviderId, Domain, OtherProviderId]),
-                ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
-            false ->
-                od_provider:update(ProviderId, fun(Provider) ->
-                    {ok, Provider#od_provider{
-                        subdomain_delegation = false,
-                        domain = Domain,
-                        subdomain = undefined
-                    }}
-                end)
-        end
+    Result = od_provider:update(ProviderId, fun(Provider) ->
+        {ok, Provider#od_provider{
+            subdomain_delegation = false,
+            domain = Domain,
+            subdomain = undefined
+        }}
     end),
     case Result of
         {ok, _} ->
@@ -808,26 +800,6 @@ update_provider_subomain(ProviderId, Data) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Checks whether provider with given domain exists. If yes, returns its id.
-%% @end
-%%--------------------------------------------------------------------
--spec is_domain_occupied(Domain :: binary()) ->
-    {true, ProviderId :: od_provider:id()} | false.
-is_domain_occupied(Domain) ->
-    {ok, Providers} = od_provider:list(),
-    MatchingIds = [P#document.key ||
-        P <- Providers, P#document.value#od_provider.domain == Domain],
-    case MatchingIds of
-        % multiple results should not happen but older versions did not enforce
-        % unique domains
-        [Id | _] -> {true, Id};
-        [] -> false
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
 %% Creates a new provider document in database.
 %% @end
 %%--------------------------------------------------------------------
@@ -861,32 +833,21 @@ create_provider(Data, ProviderId, GRI) ->
                 end
         end,
 
-        % ensure no race condition inbetween domain conflict check and provider creation
-        critical_section:run({domain_config, Domain}, fun() ->
-            case is_domain_occupied(Domain) of
-                {true, OtherProviderId} ->
-                    dns_state:remove_delegation_config(ProviderId),
-                    ?debug("Refusing to register provider with domain ~s as it is used by provider ~s",
-                        [Domain, OtherProviderId]),
-                    ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"domain">>);
-                false ->
-                    Provider = #od_provider{
-                        name = Name, root_macaroon = Identity,
-                        subdomain_delegation = SubdomainDelegation,
-                        domain = Domain, subdomain = Subdomain,
-                        latitude = Latitude, longitude = Longitude,
-                        admin_email = AdminEmail
-                    },
+        Provider = #od_provider{
+            name = Name, root_macaroon = Identity,
+            subdomain_delegation = SubdomainDelegation,
+            domain = Domain, subdomain = Subdomain,
+            latitude = Latitude, longitude = Longitude,
+            admin_email = AdminEmail
+        },
 
-                    case od_provider:create(#document{key = ProviderId, value = Provider}) of
-                        {ok, _} ->
-                            {ok, resource, {GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
-                        _Error ->
-                            dns_state:remove_delegation_config(ProviderId),
-                            ?ERROR_INTERNAL_SERVER_ERROR
-                    end
-            end
-        end)
+        case od_provider:create(#document{key = ProviderId, value = Provider}) of
+            {ok, _} ->
+                {ok, resource, {GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
+            _Error ->
+                dns_state:remove_delegation_config(ProviderId),
+                ?ERROR_INTERNAL_SERVER_ERROR
+        end
     end,
 
     case ProviderRegistrationPolicy of

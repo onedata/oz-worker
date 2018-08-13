@@ -204,13 +204,12 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = create}}) ->
                     ensure_operation_supported(
                         State))))),
     case {Result, Req} of
-        {{ok, _, _}, #el_req{gri = #gri{aspect = instance}, client = Cl}} ->
+        {{ok, resource, Resource}, #el_req{gri = #gri{aspect = instance}, client = Cl}} ->
             % If an entity instance is created, log an information about it
             % (it's a significant operation and this information might be useful).
-            {EntType, EntId} = case Result of
-                {ok, {fetched, #gri{type = Type, id = Id}, _}} -> {Type, Id};
-                {ok, {not_fetched, #gri{type = Type, id = Id}}} -> {Type, Id};
-                {ok, {not_fetched, #gri{type = Type, id = Id}, _}} -> {Type, Id}
+            {EntType, EntId} = case Resource of
+                {#gri{type = Type, id = Id}, _} -> {Type, Id};
+                {#gri{type = Type, id = Id}, _, _} -> {Type, Id}
             end,
             ?debug("~s has been created by client: ~s", [
                 EntType:to_string(EntId),

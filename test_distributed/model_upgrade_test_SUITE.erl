@@ -505,7 +505,7 @@ get_record(od_group, 2) -> {od_group,
     true  % bottom_up_dirty
 };
 get_record(od_group, 3) -> #od_group{
-    name = <<"name">>,
+    name = <<"(ńąµę-)"/utf8>>,
     type = role,
     oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS],
     eff_oz_privileges = [],
@@ -535,8 +535,8 @@ get_record(od_group, 3) -> #od_group{
     top_down_dirty = true,
     bottom_up_dirty = true
 };
-get_record(od_group, 3) ->
-    get_record(od_group, 4);
+get_record(od_group, 4) ->
+    get_record(od_group, 3);
 
 
 get_record(od_space, 1) -> {od_space,

@@ -153,7 +153,7 @@ create_dev(Client, Data) ->
     case Res of
         Error = {error, _} ->
             Error;
-        {ok, {fetched, #gri{id = ProviderId}, {_, Certificate}}} ->
+        {ok, resource, {#gri{id = ProviderId}, {_, Certificate}}} ->
             {ok, {ProviderId, Certificate}}
     end.
 
