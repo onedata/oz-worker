@@ -42,13 +42,12 @@ od_handle_service | od_handle | oz_privileges.
 -type data() :: gs_protocol:data().
 -type gri() :: gs_protocol:gri().
 -type auth_hint() :: gs_protocol:auth_hint().
--type error() :: {error, Reason :: term()}.
--type create_result() :: ok | {ok, {data, term()} | {fetched, gri(), term()} |
-{not_fetched, gri()} | {not_fetched, gri(), auth_hint()}} | error().
--type get_result() :: {ok, term()} | {ok, gs_protocol:gri(), term()} | error().
--type delete_result() :: ok | error().
--type update_result() :: ok | error().
+-type create_result() :: gs_protocol:graph_create_result().
+-type get_result() :: gs_protocol:graph_get_result().
+-type delete_result() :: gs_protocol:graph_delete_result().
+-type update_result() :: gs_protocol:graph_update_result().
 -type result() :: create_result() | get_result() | update_result() | delete_result().
+-type error() :: gs_protocol:error().
 
 -type type_validator() :: any | atom | list_of_atoms | binary | alias |
 list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addresses.
