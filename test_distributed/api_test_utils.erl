@@ -22,7 +22,7 @@
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 -define(NO_DATA, undefined).
--define(GS_RESP(Result), #gs_resp_graph{result = Result}).
+-define(GS_RESP(Result), #gs_resp_graph{data = Result}).
 
 %% API
 -export([

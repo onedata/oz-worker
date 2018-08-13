@@ -337,6 +337,8 @@ get_test(Config) ->
     SupportSize = oz_test_utils:minimum_support_size(Config),
     {ok, S1} = oz_test_utils:support_space(Config, P1, S1, SupportSize),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{

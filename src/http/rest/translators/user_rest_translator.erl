@@ -16,8 +16,7 @@
 -include("rest.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
-
--export([create_response/3, get_response/2]).
+-export([create_response/4, get_response/2]).
 
 %%%===================================================================
 %%% API
@@ -25,30 +24,25 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates given entity logic CREATE result into REST response
-%% expressed by #rest_resp{} record. GRI holds the #gri{} od the request,
-%% new GRI holds the #gri{} of new aspect that was created.
+%% {@link rest_translator_behaviour} callback create_response/4.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
-    Result :: {data, term()} | {fetched, entity_logic:gri(), term()} |
-    {not_fetched, entity_logic:gri()} |
-    {not_fetched, entity_logic:gri(), entity_logic:auth_hint()}) -> #rest_resp{}.
-create_response(#gri{aspect = authorize}, _, {data, DischargeMacaroon}) ->
+    entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
+    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
+create_response(#gri{aspect = authorize}, _, value, DischargeMacaroon) ->
     rest_translator:ok_body_reply({binary, DischargeMacaroon});
 
-create_response(#gri{aspect = client_tokens}, _, {fetched, _, Token}) ->
+create_response(#gri{aspect = client_tokens}, _, resource, {_, Token}) ->
     rest_translator:ok_body_reply(#{<<"token">> => Token}).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates given entity logic GET result into REST response
-%% expressed by #rest_resp{} record.
+%% {@link rest_translator_behaviour} callback get_response/2.
 %% @end
 %%--------------------------------------------------------------------
--spec get_response(entity_logic:gri(), entity_logic:get_result()) ->
-    #rest_resp{}.
+-spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
 get_response(#gri{id = undefined, aspect = list}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});
 

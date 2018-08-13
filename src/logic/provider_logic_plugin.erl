@@ -109,7 +109,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = provider_registration_t
         ?PROVIDER_REGISTRATION_TOKEN,
         {od_provider, undefined}
     ),
-    {ok, {data, Macaroon}};
+    {ok, value, Macaroon};
 
 create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     SupportSize = maps:get(<<"size">>, Data),
@@ -121,13 +121,15 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
         SpaceId
     end,
     SpaceId = token_logic:consume(Macaroon, SupportSpaceFun),
-    
+
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
-    {ok, {not_fetched, NewGRI}};
+    {ok, Space} = space_logic_plugin:fetch_entity(SpaceId),
+    {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
+    {ok, resource, {NewGRI, SpaceData}};
 
 create(Req = #el_req{gri = #gri{aspect = check_my_ports}}) ->
     try
-        {ok, {data, test_connection(Req#el_req.data)}}
+        {ok, value, test_connection(Req#el_req.data)}
     catch _:_ ->
         ?ERROR_INTERNAL_SERVER_ERROR
     end;
@@ -140,7 +142,8 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}
             ok = dns_state:set_txt_record(ProviderId, RecordName, Content, TTL);
         {ok, #od_provider{subdomain_delegation = false}} ->
             ?ERROR_SUBDOMAIN_DELEGATION_DISABLED;
-        Error -> Error
+        Error ->
+            Error
     end;
 
 create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
@@ -149,7 +152,7 @@ create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
     MembershipSpec = auth_utils:normalize_membership_spec(
         binary_to_atom(ProviderId, latin1), GroupId),
     GroupSpec = idp_group_mapping:membership_spec_to_group_spec(MembershipSpec),
-    {ok, {data, idp_group_mapping:group_spec_to_db_id(GroupSpec)}};
+    {ok, value, idp_group_mapping:group_spec_to_db_id(GroupSpec)};
 
 create(#el_req{gri = #gri{aspect = verify_provider_identity}, data = Data}) ->
     ProviderId = maps:get(<<"providerId">>, Data),
@@ -207,15 +210,15 @@ get(#el_req{gri = #gri{aspect = domain_config, id = ProviderId}}, Provider) ->
     end;
 
 get(#el_req{gri = #gri{aspect = eff_users}}, Provider) ->
-    {ok, maps:keys(Provider#od_provider.eff_users)};
+    {ok, entity_graph:get_relations(effective, bottom_up, od_user, Provider)};
 get(#el_req{gri = #gri{aspect = eff_groups}}, Provider) ->
-    {ok, maps:keys(Provider#od_provider.eff_groups)};
+    {ok, entity_graph:get_relations(effective, bottom_up, od_group, Provider)};
 
 get(#el_req{gri = #gri{aspect = spaces}}, Provider) ->
-    {ok, maps:keys(Provider#od_provider.spaces)};
+    {ok, entity_graph:get_relations(direct, bottom_up, od_space, Provider)};
 
 get(#el_req{client = ?USER(UserId), gri = #gri{aspect = user_spaces}}, Provider) ->
-    AllSpaces = maps:keys(Provider#od_provider.spaces),
+    {ok, AllSpaces} = get(#el_req{gri = #gri{aspect = spaces}}, Provider),
     {ok, UserSpaces} = user_logic:get_eff_spaces(?ROOT, UserId),
     {ok, ordsets:intersection(
         ordsets:from_list(AllSpaces),
@@ -658,8 +661,8 @@ validate(#el_req{operation = update, gri = #gri{aspect = domain_config},
 %%--------------------------------------------------------------------
 -spec auth_by_membership(od_user:id(), od_provider:info()) ->
     boolean().
-auth_by_membership(UserId, #od_provider{eff_users = EffUsers}) ->
-    maps:is_key(UserId, EffUsers).
+auth_by_membership(UserId, Provider) ->
+    provider_logic:has_eff_user(Provider, UserId).
 
 
 %%--------------------------------------------------------------------
@@ -828,7 +831,7 @@ is_domain_occupied(Domain) ->
 %% Creates a new provider document in database.
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider(Data :: maps:map(), ProviderId :: od_provider:id(), 
+-spec create_provider(Data :: maps:map(), ProviderId :: od_provider:id(),
     GRI :: entity_logic:gri()) -> entity_logic:create_result().
 create_provider(Data, ProviderId, GRI) ->
     Name = maps:get(<<"name">>, Data),
@@ -840,11 +843,11 @@ create_provider(Data, ProviderId, GRI) ->
     ProviderRegistrationPolicy = application:get_env(
         ?APP_NAME, provider_registration_policy, open
     ),
-    
+
     CreateProviderFun = fun(od_provider, undefined) ->
         {ok, {Macaroon, Identity}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
 
-        {Domain, Subdomain} = case SubdomainDelegation of 
+        {Domain, Subdomain} = case SubdomainDelegation of
             false ->
                 {maps:get(<<"domain">>, Data), undefined};
             true ->
@@ -876,7 +879,8 @@ create_provider(Data, ProviderId, GRI) ->
                     },
 
                     case od_provider:create(#document{key = ProviderId, value = Provider}) of
-                        {ok, _} -> {ok, {fetched, GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
+                        {ok, _} ->
+                            {ok, resource, {GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
                         _Error ->
                             dns_state:remove_delegation_config(ProviderId),
                             ?ERROR_INTERNAL_SERVER_ERROR
@@ -884,7 +888,7 @@ create_provider(Data, ProviderId, GRI) ->
             end
         end)
     end,
-    
+
     case ProviderRegistrationPolicy of
         open ->
             CreateProviderFun(od_provider, undefined);

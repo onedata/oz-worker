@@ -150,7 +150,7 @@ actual_timestamp() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    3.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -186,7 +186,11 @@ get_record_struct(2) ->
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
         {bottom_up_dirty, boolean}
-    ]}.
+    ]};
+get_record_struct(3) ->
+    % There are no changes, but all records must be marked dirty to recalculate
+    % effective relations (as intermediaries computing logic has changed).
+    get_record_struct(2).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -224,6 +228,13 @@ upgrade_record(1, Handle) ->
         users = maps:from_list(Users),
         groups = maps:from_list(Groups),
 
+        eff_users = #{},
+        eff_groups = #{},
+
+        bottom_up_dirty = true
+    }};
+upgrade_record(2, Handle) ->
+    {3, Handle#od_handle{
         eff_users = #{},
         eff_groups = #{},
 

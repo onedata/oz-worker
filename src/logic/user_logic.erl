@@ -1113,14 +1113,9 @@ exists(UserId) ->
 -spec has_eff_oz_privilege(UserIdOrUser :: od_user:id() | #od_user{},
     Privilege :: privileges:oz_privilege()) -> boolean().
 has_eff_oz_privilege(UserId, Privilege) when is_binary(UserId) ->
-    case od_user:get(UserId) of
-        {ok, #document{value = User}} ->
-            has_eff_oz_privilege(User, Privilege);
-        _ ->
-            false
-    end;
-has_eff_oz_privilege(#od_user{eff_oz_privileges = UserPrivileges}, Privilege) ->
-    lists:member(Privilege, UserPrivileges).
+    entity_graph:has_oz_privilege(effective, Privilege, {od_user, UserId});
+has_eff_oz_privilege(User, Privilege) ->
+    entity_graph:has_oz_privilege(effective, Privilege, User).
 
 
 %%--------------------------------------------------------------------
@@ -1131,14 +1126,9 @@ has_eff_oz_privilege(#od_user{eff_oz_privileges = UserPrivileges}, Privilege) ->
 -spec has_eff_group(UserIdOrUser :: od_user:id() | #od_user{},
     GroupId :: od_space:id()) -> boolean().
 has_eff_group(UserId, GroupId) when is_binary(UserId) ->
-    case od_user:get(UserId) of
-        {ok, #document{value = User}} ->
-            has_eff_group(User, GroupId);
-        _ ->
-            false
-    end;
-has_eff_group(#od_user{eff_groups = EffGroups}, GroupId) ->
-    maps:is_key(GroupId, EffGroups).
+    entity_graph:has_relation(effective, top_down, od_group, GroupId, {od_user, UserId});
+has_eff_group(User, GroupId) ->
+    entity_graph:has_relation(effective, top_down, od_group, GroupId, User).
 
 
 %%--------------------------------------------------------------------
@@ -1149,14 +1139,9 @@ has_eff_group(#od_user{eff_groups = EffGroups}, GroupId) ->
 -spec has_eff_space(UserIdOrUser :: od_user:id() | #od_user{},
     SpaceId :: od_space:id()) -> boolean().
 has_eff_space(UserId, SpaceId) when is_binary(UserId) ->
-    case od_user:get(UserId) of
-        {ok, #document{value = User}} ->
-            has_eff_space(User, SpaceId);
-        _ ->
-            false
-    end;
-has_eff_space(#od_user{eff_spaces = EffSpaces}, SpaceId) ->
-    maps:is_key(SpaceId, EffSpaces).
+    entity_graph:has_relation(effective, top_down, od_space, SpaceId, {od_user, UserId});
+has_eff_space(User, SpaceId) ->
+    entity_graph:has_relation(effective, top_down, od_space, SpaceId, User).
 
 
 %%--------------------------------------------------------------------
@@ -1165,54 +1150,37 @@ has_eff_space(#od_user{eff_spaces = EffSpaces}, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_provider(UserIdOrUser :: od_user:id() | #od_user{},
-    SpaceId :: od_provider:id()) -> boolean().
+    ProviderId :: od_provider:id()) -> boolean().
 has_eff_provider(UserId, ProviderId) when is_binary(UserId) ->
-    case od_user:get(UserId) of
-        {ok, #document{value = User}} ->
-            has_eff_provider(User, ProviderId);
-        _ ->
-            false
-    end;
-has_eff_provider(#od_user{eff_providers = EffProviders}, ProviderId) ->
-    maps:is_key(ProviderId, EffProviders).
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, {od_user, UserId});
+has_eff_provider(User, ProviderId) ->
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, User).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying whether given user belongs to specified
-%% effective handle_service.
+%% Predicate saying whether given user belongs to specified effective handle_service.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_handle_service(UserIdOrUser :: od_user:id() | #od_user{},
     HServiceId :: od_handle_service:id()) -> boolean().
 has_eff_handle_service(UserId, HServiceId) when is_binary(UserId) ->
-    case od_user:get(UserId) of
-        {ok, #document{value = User}} ->
-            has_eff_handle_service(User, HServiceId);
-        _ ->
-            false
-    end;
-has_eff_handle_service(#od_user{eff_handle_services = EffHServices}, HServiceId) ->
-    maps:is_key(HServiceId, EffHServices).
+    entity_graph:has_relation(effective, top_down, od_handle_service, HServiceId, {od_user, UserId});
+has_eff_handle_service(User, HServiceId) ->
+    entity_graph:has_relation(effective, top_down, od_handle_service, HServiceId, User).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying whether given user belongs to specified
-%% effective handle.
+%% Predicate saying whether given user belongs to specified effective handle_service.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_handle(UserIdOrUser :: od_user:id() | #od_user{},
     HandleId :: od_handle:id()) -> boolean().
 has_eff_handle(UserId, HandleId) when is_binary(UserId) ->
-    case od_user:get(UserId) of
-        {ok, #document{value = User}} ->
-            has_eff_handle(User, HandleId);
-        _ ->
-            false
-    end;
-has_eff_handle(#od_user{eff_handles = EffHandles}, HandleId) ->
-    maps:is_key(HandleId, EffHandles).
+    entity_graph:has_relation(effective, top_down, od_handle, HandleId, {od_user, UserId});
+has_eff_handle(User, HandleId) ->
+    entity_graph:has_relation(effective, top_down, od_handle, HandleId, User).
 
 
 %%--------------------------------------------------------------------

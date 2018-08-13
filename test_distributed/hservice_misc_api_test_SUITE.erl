@@ -287,10 +287,8 @@ get_test(Config) ->
                         U2 => [?HANDLE_SERVICE_VIEW]}
                     ),
                     ?assertEqual(EffUsers, #{
-                        U1 => {AllPrivs -- [?HANDLE_SERVICE_VIEW],
-                            [{od_handle_service, HService}]},
-                        U2 => {[?HANDLE_SERVICE_VIEW],
-                            [{od_handle_service, HService}]}
+                        U1 => {AllPrivs -- [?HANDLE_SERVICE_VIEW], [direct]},
+                        U2 => {[?HANDLE_SERVICE_VIEW], [direct]}
                     })
                 end
             )
@@ -517,6 +515,8 @@ list_handles_test(Config) ->
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, S2} = oz_test_utils:create_space(Config, ?USER(U2), ?SPACE_NAME2),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     % Create 3 handles, 2 for S1 and 1 for S2
     ExpHandles = lists:map(

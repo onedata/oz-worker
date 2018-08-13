@@ -124,7 +124,7 @@ create(#el_req{gri = #gri{aspect = authorize}, data = Data}) ->
         {ok, DischargeMacaroonToken} ->
             % TODO VFS-3835 the macaroon should be serialized in translator
             % rather than here
-            {ok, {data, DischargeMacaroonToken}};
+            {ok, value, DischargeMacaroonToken};
         _ ->
             ?ERROR_BAD_VALUE_IDENTIFIER(<<"identifier">>)
     end;
@@ -134,7 +134,7 @@ create(#el_req{gri = #gri{id = UserId, aspect = client_tokens} = GRI}) ->
     {ok, _} = od_user:update(UserId, fun(#od_user{client_tokens = Tokens} = User) ->
         {ok, User#od_user{client_tokens = [Token | Tokens]}}
     end),
-    {ok, {fetched, GRI#gri{aspect = {client_token, Token}}, Token}};
+    {ok, resource, {GRI#gri{aspect = {client_token, Token}}, Token}};
 
 create(Req = #el_req{gri = #gri{id = UserId, aspect = default_space}}) ->
     SpaceId = maps:get(<<"spaceId">>, Req#el_req.data),
@@ -187,9 +187,9 @@ get(#el_req{gri = #gri{aspect = instance, scope = shared}}, User) ->
     {ok, #{<<"name">> => Name, <<"alias">> => Alias}};
 
 get(#el_req{gri = #gri{aspect = oz_privileges}}, User) ->
-    {ok, User#od_user.oz_privileges};
+    {ok, entity_graph:get_oz_privileges(direct, User)};
 get(#el_req{gri = #gri{aspect = eff_oz_privileges}}, User) ->
-    {ok, User#od_user.eff_oz_privileges};
+    {ok, entity_graph:get_oz_privileges(effective, User)};
 
 get(#el_req{gri = #gri{aspect = client_tokens}}, User) ->
     {ok, User#od_user.client_tokens};
@@ -210,27 +210,27 @@ get(#el_req{gri = #gri{aspect = default_provider}}, User) ->
     {ok, User#od_user.default_provider};
 
 get(#el_req{gri = #gri{aspect = groups}}, User) ->
-    {ok, User#od_user.groups};
+    {ok, entity_graph:get_relations(direct, top_down, od_group, User)};
 get(#el_req{gri = #gri{aspect = eff_groups}}, User) ->
-    {ok, maps:keys(User#od_user.eff_groups)};
+    {ok, entity_graph:get_relations(effective, top_down, od_group, User)};
 
 get(#el_req{gri = #gri{aspect = spaces}}, User) ->
-    {ok, User#od_user.spaces};
+    {ok, entity_graph:get_relations(direct, top_down, od_space, User)};
 get(#el_req{gri = #gri{aspect = eff_spaces}}, User) ->
-    {ok, maps:keys(User#od_user.eff_spaces)};
+    {ok, entity_graph:get_relations(effective, top_down, od_space, User)};
 
 get(#el_req{gri = #gri{aspect = eff_providers}}, User) ->
-    {ok, maps:keys(User#od_user.eff_providers)};
+    {ok, entity_graph:get_relations(effective, top_down, od_provider, User)};
 
 get(#el_req{gri = #gri{aspect = handle_services}}, User) ->
-    {ok, User#od_user.handle_services};
+    {ok, entity_graph:get_relations(direct, top_down, od_handle_service, User)};
 get(#el_req{gri = #gri{aspect = eff_handle_services}}, User) ->
-    {ok, maps:keys(User#od_user.eff_handle_services)};
+    {ok, entity_graph:get_relations(effective, top_down, od_handle_service, User)};
 
 get(#el_req{gri = #gri{aspect = handles}}, User) ->
-    {ok, User#od_user.handles};
+    {ok, entity_graph:get_relations(direct, top_down, od_handle, User)};
 get(#el_req{gri = #gri{aspect = eff_handles}}, User) ->
-    {ok, maps:keys(User#od_user.eff_handles)}.
+    {ok, entity_graph:get_relations(effective, top_down, od_handle, User)}.
 
 
 %%--------------------------------------------------------------------

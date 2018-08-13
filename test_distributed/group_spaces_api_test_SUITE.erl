@@ -170,8 +170,20 @@ create_space_test(Config) ->
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(SpaceId) ->
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
         {ok, Space} = oz_test_utils:get_space(Config, SpaceId),
         ?assertEqual(?SPACE_NAME1, Space#od_space.name),
+
+        ?assertEqual(#{}, Space#od_space.users),
+        ?assertEqual(
+            #{
+                U1 => {AllPrivs, [{od_group, G1}]},
+                U2 => {AllPrivs, [{od_group, G1}]}
+            },
+            Space#od_space.eff_users
+        ),
+        ?assertEqual(#{G1 => AllPrivs}, Space#od_space.groups),
+        ?assertEqual(#{G1 => {AllPrivs, [direct]}}, Space#od_space.eff_groups),
         true
     end,
 
@@ -207,12 +219,7 @@ create_space_test(Config) ->
             operation = create,
             gri = #gri{type = od_space, aspect = instance},
             auth_hint = ?AS_GROUP(G1),
-            expected_result = ?OK_MAP(#{
-                <<"effectiveGroups">> => #{G1 => AllPrivsBin},
-                <<"effectiveUsers">> => #{
-                    U1 => AllPrivsBin,
-                    U2 => AllPrivsBin
-                },
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"groups">> => #{G1 => AllPrivsBin},
                 <<"name">> => ?SPACE_NAME1,
                 <<"providers">> => #{},
@@ -407,7 +414,7 @@ leave_space_test(Config) ->
             args = [client, G1, spaceId],
             expected_result = ?OK
         }
-    % TODO gs
+        % TODO gs
     },
 
     ?assert(api_test_scenarios:run_scenario(delete_entity,

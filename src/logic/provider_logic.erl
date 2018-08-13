@@ -127,7 +127,7 @@ create(Client, Data) ->
     case Res of
         Error = {error, _} ->
             Error;
-        {ok, {fetched, #gri{id = ProviderId}, {_, Certificate}}} ->
+        {ok, resource, {#gri{id = ProviderId}, {_, Certificate}}} ->
             {ok, {ProviderId, Certificate}}
     end.
 
@@ -564,39 +564,28 @@ exists(ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying whether specified user is an effective user in given provider.
+%% Predicate saying whether specified user is an effective user of given provider.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_user(ProviderOrId :: od_provider:id() | #od_provider{},
-    UserId :: od_user:id()) -> boolean().
+    UserId :: od_provider:id()) -> boolean().
 has_eff_user(ProviderId, UserId) when is_binary(ProviderId) ->
-    case od_provider:get(ProviderId) of
-        {ok, #document{value = Provider}} ->
-            has_eff_user(Provider, UserId);
-        _ ->
-            false
-    end;
-has_eff_user(#od_provider{eff_users = EffUsers}, UserId) ->
-    maps:is_key(UserId, EffUsers).
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, {od_provider, ProviderId});
+has_eff_user(Provider, UserId) ->
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, Provider).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying whether specified group is an effective group in given
-%% provider.
+%% Predicate saying whether specified group is an effective group of given provider.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_group(ProviderOrId :: od_provider:id() | #od_provider{},
-    GroupId :: od_group:id()) -> boolean().
+    GroupId :: od_provider:id()) -> boolean().
 has_eff_group(ProviderId, GroupId) when is_binary(ProviderId) ->
-    case od_provider:get(ProviderId) of
-        {ok, #document{value = Provider}} ->
-            has_eff_group(Provider, GroupId);
-        _ ->
-            false
-    end;
-has_eff_group(#od_provider{eff_groups = EffGroups}, GroupId) ->
-    maps:is_key(GroupId, EffGroups).
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, {od_provider, ProviderId});
+has_eff_group(Provider, GroupId) ->
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, Provider).
 
 
 %%--------------------------------------------------------------------
@@ -607,14 +596,9 @@ has_eff_group(#od_provider{eff_groups = EffGroups}, GroupId) ->
 -spec supports_space(ProviderOrId :: od_provider:id() | #od_provider{},
     SpaceId :: od_space:id()) -> boolean().
 supports_space(ProviderId, SpaceId) when is_binary(ProviderId) ->
-    case od_provider:get(ProviderId) of
-        {ok, #document{value = Provider}} ->
-            supports_space(Provider, SpaceId);
-        _ ->
-            false
-    end;
-supports_space(#od_provider{spaces = Spaces}, SpaceId) ->
-    maps:is_key(SpaceId, Spaces).
+    entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, {od_provider, ProviderId});
+supports_space(Provider, SpaceId) ->
+    entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, Provider).
 
 
 %%--------------------------------------------------------------------

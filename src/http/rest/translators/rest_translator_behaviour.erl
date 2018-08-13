@@ -22,9 +22,8 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback create_response(entity_logic:gri(), entity_logic:auth_hint(),
-Result :: {data, term()} | {fetched, entity_logic:gri(), term()} |
-{not_fetched, entity_logic:gri()} |
-{not_fetched, entity_logic:gri(), entity_logic:auth_hint()}) -> #rest_resp{}.
+    entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
+    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
 
 
 %%--------------------------------------------------------------------
@@ -33,5 +32,4 @@ Result :: {data, term()} | {fetched, entity_logic:gri(), term()} |
 %% expressed by #rest_resp{} record.
 %% @end
 %%--------------------------------------------------------------------
--callback get_response(entity_logic:gri(), Result :: term()) ->
-    #rest_resp{}.
+-callback get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.

@@ -124,9 +124,17 @@ create_group_test(Config) ->
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(GroupId, ExpName, ExpType) ->
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
         {ok, Group} = oz_test_utils:get_group(Config, GroupId),
         ?assertEqual(ExpName, Group#od_group.name),
         ?assertEqual(ExpType, Group#od_group.type),
+
+        ?assertEqual(#{}, Group#od_group.children),
+        ?assertEqual(#{}, Group#od_group.eff_children),
+        [User] = ?assertMatch([_], maps:keys(Group#od_group.users)),
+        ?assertEqual(#{User => AllPrivs}, Group#od_group.users),
+        ?assertEqual(#{User => {AllPrivs, [direct]}}, Group#od_group.eff_users),
+
         true
     end,
 
@@ -142,16 +150,16 @@ create_group_test(Config) ->
             path = <<"/user/groups">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, Data) ->
-                    ExpName = maps:get(<<"name">>, Data),
-                    ExpType = maps:get(<<"type">>, Data, role),
-                    BaseURL = ?URL(Config, [<<"/user/groups/">>]),
-                    fun(#{<<"Location">> := Location} = _Headers) ->
-                        [GroupId] = binary:split(
-                            Location, [BaseURL], [global, trim_all]
-                        ),
-                        VerifyFun(GroupId, ExpName, ExpType)
-                    end
+                ExpName = maps:get(<<"name">>, Data),
+                ExpType = maps:get(<<"type">>, Data, role),
+                BaseURL = ?URL(Config, [<<"/user/groups/">>]),
+                fun(#{<<"Location">> := Location} = _Headers) ->
+                    [GroupId] = binary:split(
+                        Location, [BaseURL], [global, trim_all]
+                    ),
+                    VerifyFun(GroupId, ExpName, ExpType)
                 end
+            end
             )
         },
         data_spec = #data_spec{
@@ -201,11 +209,9 @@ create_group_test(Config) ->
             expected_result = ?OK_ENV(fun(_, Data) ->
                 ExpName = maps:get(<<"name">>, Data),
                 ExpType = maps:get(<<"type">>, Data, role),
-                ?OK_MAP(#{
+                ?OK_MAP_CONTAINS(#{
                     <<"children">> => #{},
-                    <<"effectiveChildren">> => #{},
                     <<"users">> => #{U1 => AllPrivsBin},
-                    <<"effectiveUsers">> => #{U1 => AllPrivsBin},
                     <<"name">> => ExpName,
                     <<"parents">> => [],
                     <<"spaces">> => [],

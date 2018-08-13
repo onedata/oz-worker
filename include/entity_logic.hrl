@@ -47,13 +47,11 @@
             __Err;
         ok ->
             throw(create_did_not_return_id);
-        {ok, {data, _}} ->
+        {ok, value, __Data} ->
             throw(create_did_not_return_id);
-        {ok, {fetched, #gri{id = __Id}, _}} ->
+        {ok, resource, {#gri{id = __Id}, __Data}} ->
             {ok, __Id};
-        {ok, {not_fetched, #gri{id = __Id}}} ->
-            {ok, __Id};
-        {ok, {not_fetched, #gri{id = __Id}, _}} ->
+        {ok, resource, {#gri{id = __Id}, _AuthHint, __Data}} ->
             {ok, __Id}
     end
 ).
@@ -64,14 +62,12 @@
             __Err;
         ok ->
             throw(create_did_not_return_data);
-        {ok, {data, __Data}} ->
+        {ok, value, __Data} ->
             {ok, __Data};
-        {ok, {fetched, _GRI, __Data}} ->
+        {ok, resource, {_GRI, __Data}} ->
             {ok, __Data};
-        {ok, {not_fetched, _GRI}} ->
-            throw(create_did_not_return_data);
-        {ok, {not_fetched, _GRI, _AuthHint}} ->
-            throw(create_did_not_return_data)
+        {ok, resource, {_GRI, _AuthHint, __Data}} ->
+            {ok, __Data}
     end
 ).
 
@@ -81,7 +77,7 @@
             __Err;
         ok ->
             ok;
-        {ok, _} ->
+        {ok, _, _} ->
             ok
     end
 ).

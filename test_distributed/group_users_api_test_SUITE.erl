@@ -668,6 +668,8 @@ list_eff_user_privileges_test(Config) ->
         ?GROUP_VIEW
     ]),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     SetPrivsFun = fun(Operation, Privs) ->
         % In case of SET and GRANT, randomly split privileges into four
         % parts and update groups with the privileges. G3 eff_privileges
