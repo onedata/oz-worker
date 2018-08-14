@@ -117,9 +117,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
         _ ->
             ok
     end,
-    % Handle Service has been modified by adding relation, so it will need to be
-    % fetched again.
-    {ok, {not_fetched, GRI#gri{id = HServiceId}}};
+    {ok, FetchedHandleService} = fetch_entity(HServiceId),
+    {ok, resource, {GRI#gri{id = HServiceId}, FetchedHandleService}};
 
 create(#el_req{gri = #gri{id = HServiceId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:handle_service_user()),
@@ -129,7 +128,9 @@ create(#el_req{gri = #gri{id = HServiceId, aspect = {user, UserId}}, data = Data
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, {not_fetched, NewGRI, ?THROUGH_HANDLE_SERVICE(HServiceId)}};
+    {ok, User} = user_logic_plugin:fetch_entity(UserId),
+    {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
+    {ok, resource, {NewGRI, ?THROUGH_HANDLE_SERVICE(HServiceId), UserData}};
 
 create(#el_req{gri = #gri{id = HServiceId, aspect = {group, GroupId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:handle_service_user()),
@@ -139,7 +140,9 @@ create(#el_req{gri = #gri{id = HServiceId, aspect = {group, GroupId}}, data = Da
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
-    {ok, {not_fetched, NewGRI, ?THROUGH_HANDLE_SERVICE(HServiceId)}}.
+    {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
+    {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
+    {ok, resource, {NewGRI, ?THROUGH_HANDLE_SERVICE(HServiceId), GroupData}}.
 
 
 %%--------------------------------------------------------------------
@@ -167,27 +170,25 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, HService) ->
     }};
 
 get(#el_req{gri = #gri{aspect = users}}, HService) ->
-    {ok, maps:keys(HService#od_handle_service.users)};
+    {ok, entity_graph:get_relations(direct, bottom_up, od_user, HService)};
 get(#el_req{gri = #gri{aspect = eff_users}}, HService) ->
-    {ok, maps:keys(HService#od_handle_service.eff_users)};
+    {ok, entity_graph:get_relations(effective, bottom_up, od_user, HService)};
 get(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, HService) ->
-    {ok, maps:get(UserId, HService#od_handle_service.users)};
+    {ok, entity_graph:get_privileges(direct, bottom_up, od_user, UserId, HService)};
 get(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, HService) ->
-    {Privileges, _} = maps:get(UserId, HService#od_handle_service.eff_users),
-    {ok, Privileges};
+    {ok, entity_graph:get_privileges(effective, bottom_up, od_user, UserId, HService)};
 
 get(#el_req{gri = #gri{aspect = groups}}, HService) ->
-    {ok, maps:keys(HService#od_handle_service.groups)};
+    {ok, entity_graph:get_relations(direct, bottom_up, od_group, HService)};
 get(#el_req{gri = #gri{aspect = eff_groups}}, HService) ->
-    {ok, maps:keys(HService#od_handle_service.eff_groups)};
+    {ok, entity_graph:get_relations(effective, bottom_up, od_group, HService)};
 get(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, HService) ->
-    {ok, maps:get(GroupId, HService#od_handle_service.groups)};
+    {ok, entity_graph:get_privileges(direct, bottom_up, od_group, GroupId, HService)};
 get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, HService) ->
-    {Privileges, _} = maps:get(GroupId, HService#od_handle_service.eff_groups),
-    {ok, Privileges};
+    {ok, entity_graph:get_privileges(effective, bottom_up, od_group, GroupId, HService)};
 
 get(#el_req{gri = #gri{aspect = handles}}, HService) ->
-    {ok, HService#od_handle_service.handles}.
+    {ok, entity_graph:get_relations(direct, bottom_up, od_handle, HService)}.
 
 
 %%--------------------------------------------------------------------

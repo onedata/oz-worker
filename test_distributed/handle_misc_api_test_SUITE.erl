@@ -337,6 +337,8 @@ get_test(Config) ->
         ?HANDLE_VIEW
     ]),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     AllPrivs = oz_test_utils:all_handle_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
@@ -376,10 +378,8 @@ get_test(Config) ->
                         U1 => AllPrivs -- [?HANDLE_VIEW], U2 => [?HANDLE_VIEW]}
                     ),
                     ?assertEqual(EffUsers, #{
-                        U1 => {AllPrivs -- [?HANDLE_VIEW],
-                            [{od_handle, HandleId}]},
-                        U2 => {[?HANDLE_VIEW],
-                            [{od_handle, HandleId}]}
+                        U1 => {AllPrivs -- [?HANDLE_VIEW], [{od_handle, <<"self">>}]},
+                        U2 => {[?HANDLE_VIEW], [{od_handle, <<"self">>}]}
                     })
                 end
             )

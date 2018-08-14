@@ -78,20 +78,19 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     Name = maps:get(<<"name">>, Req#el_req.data),
     SpaceId = maps:get(<<"spaceId">>, Req#el_req.data),
     RootFileId = maps:get(<<"rootFileId">>, Req#el_req.data),
-    Share = #document{key = ShareId, value = #od_share{
+    ShareDoc = #document{key = ShareId, value = #od_share{
         name = Name,
         root_file = RootFileId,
         public_url = share_logic:share_id_to_public_url(ShareId)
     }},
-    case od_share:create(Share) of
+    case od_share:create(ShareDoc) of
         {ok, _} ->
             entity_graph:add_relation(
                 od_share, ShareId,
                 od_space, SpaceId
             ),
-            % Share has been modified by adding relation, so it will need to be
-            % fetched again.
-            {ok, {not_fetched, GRI#gri{id = ShareId}}};
+            {ok, Share} = fetch_entity(ShareId),
+            {ok, resource, {GRI#gri{id = ShareId}, Share}};
         _ ->
             % This can potentially happen if a share with given share id
             % has been created between data verification and create

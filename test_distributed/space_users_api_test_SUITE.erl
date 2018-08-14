@@ -641,6 +641,8 @@ get_eff_user_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:group_add_user(Config, G3, U3),
     {ok, U3} = oz_test_utils:group_add_user(Config, G2, U3),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     AllPrivs = oz_test_utils:all_space_privileges(Config),
     InitialPrivs = [?SPACE_VIEW, ?SPACE_WRITE_DATA],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],

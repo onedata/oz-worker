@@ -136,7 +136,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    3.
+    4.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -186,7 +186,11 @@ get_record_struct(3) ->
         {eff_users, #{string => [{atom, string}]}},
         {eff_groups, #{string => [{atom, string}]}},
         {bottom_up_dirty, boolean}
-    ]}.
+    ]};
+get_record_struct(4) ->
+    % There are no changes, but all records must be marked dirty to recalculate
+    % effective relations (as intermediaries computing logic has changed).
+    get_record_struct(3).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -251,7 +255,10 @@ upgrade_record(2, Provider) ->
         name = Name,
         admin_email = undefined,
         root_macaroon = undefined,
+        subdomain_delegation = false,
+        subdomain = undefined,
         domain = Domain,
+
         latitude = Latitude,
         longitude = Longitude,
 
@@ -261,4 +268,11 @@ upgrade_record(2, Provider) ->
         eff_groups = EffGroups,
 
         bottom_up_dirty = BottomUpDirty
+    }};
+upgrade_record(3, Provider) ->
+    {4, Provider#od_provider{
+        eff_users = #{},
+        eff_groups = #{},
+
+        bottom_up_dirty = true
     }}.

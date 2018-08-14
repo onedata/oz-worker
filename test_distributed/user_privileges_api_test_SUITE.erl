@@ -385,14 +385,14 @@ set_oz_privs_fun(Config, User) ->
                     Config, GroupId, Operation, Privileges
                 )
             end, GroupsPrivsPartition
-        )
+        ),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
     end.
 
 
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
-
 
 init_per_suite(Config) ->
     ssl:start(),

@@ -196,7 +196,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    6.
+    7.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -305,7 +305,11 @@ get_record_struct(5) ->
 get_record_struct(6) ->
     {record, Struct} = get_record_struct(5),
     % Remove chosen_provider field, rename login to alias
-    {record, lists:keydelete(chosen_provider, 1, lists:keyreplace(login, 1, Struct, {alias, string}))}.
+    {record, lists:keydelete(chosen_provider, 1, lists:keyreplace(login, 1, Struct, {alias, string}))};
+get_record_struct(7) ->
+    % There are no changes, but all records must be marked dirty to recalculate
+    % effective relations (as intermediaries computing logic has changed).
+    get_record_struct(6).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -654,4 +658,14 @@ upgrade_record(5, User) ->
         eff_handles = EffHandles,
 
         top_down_dirty = TopDownDirty
+    }};
+upgrade_record(6, User) ->
+    {7, User#od_user{
+        eff_groups = #{},
+        eff_spaces = #{},
+        eff_providers = #{},
+        eff_handle_services = #{},
+        eff_handles = #{},
+
+        top_down_dirty = true
     }}.

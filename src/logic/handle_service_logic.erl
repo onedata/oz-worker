@@ -588,53 +588,35 @@ exists(HServiceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_privilege(HServiceOrId :: od_handle_service:id() | #od_handle_service{},
-    UserId :: od_user:id(), Privilege :: privileges:handle_service_privileges()) ->
+    UserId :: od_user:id(), Privilege :: privileges:handle_service_privilege()) ->
     boolean().
 has_eff_privilege(HServiceId, UserId, Privilege) when is_binary(HServiceId) ->
-    case od_handle_service:get(HServiceId) of
-        {ok, #document{value = HService}} ->
-            has_eff_privilege(HService, UserId, Privilege);
-        _ ->
-            false
-    end;
-has_eff_privilege(#od_handle_service{eff_users = UsersPrivileges}, UserId, Privilege) ->
-    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, {[], []}),
-    lists:member(Privilege, UserPrivileges).
+    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, od_handle_service, HServiceId);
+has_eff_privilege(HService, UserId, Privilege) ->
+    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, HService).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying whether specified user is an effective user in given
-%% handle_service.
+%% Predicate saying whether specified user is an effective user of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_user(HServiceOrId :: od_handle_service:id() | #od_handle_service{},
     UserId :: od_user:id()) -> boolean().
 has_eff_user(HServiceId, UserId) when is_binary(HServiceId) ->
-    case od_handle_service:get(HServiceId) of
-        {ok, #document{value = HService}} ->
-            has_eff_user(HService, UserId);
-        _ ->
-            false
-    end;
-has_eff_user(#od_handle_service{eff_users = EffUsers}, UserId) ->
-    maps:is_key(UserId, EffUsers).
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, od_handle_service, HServiceId);
+has_eff_user(HService, UserId) ->
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, HService).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying whether specified group is an effective group in given
-%% handle_service.
+%% Predicate saying whether specified group is an effective group of given handle_service.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_group(HServiceOrId :: od_handle_service:id() | #od_handle_service{},
     GroupId :: od_group:id()) -> boolean().
 has_eff_group(HServiceId, GroupId) when is_binary(HServiceId) ->
-    case od_handle_service:get(HServiceId) of
-        {ok, #document{value = HService}} ->
-            has_eff_group(HService, GroupId);
-        _ ->
-            false
-    end;
-has_eff_group(#od_handle_service{eff_groups = EffGroups}, GroupId) ->
-    maps:is_key(GroupId, EffGroups).
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, od_handle_service, HServiceId);
+has_eff_group(HService, GroupId) ->
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, HService).

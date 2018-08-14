@@ -49,6 +49,20 @@
 ]).
 
 
+% Due to asynchronous entity graph recomputation, privileges converge after a while
+-define(PRIVILEGES_CHECK_RETRIES, 600).
+-define(PRIVILEGES_CHECK_INTERVAL, 100). % Interval * retries = 1 minute
+
+-define(compare_privileges(__PrivsA, __PrivsB), begin
+    __SortedPrivsA = lists:sort(__PrivsA),
+    __SortedPrivsB = lists:sort(__PrivsB),
+    ?assertEqual(
+        __SortedPrivsA, __SortedPrivsB,
+        ?PRIVILEGES_CHECK_RETRIES, ?PRIVILEGES_CHECK_INTERVAL
+    )
+end).
+
+
 run_scenario(Function, Args) ->
     try
         erlang:apply(?MODULE, Function, Args),
@@ -155,6 +169,8 @@ get_privileges(
 
     % Replace clients with entity and check if it can get privileges
     % when view priv is set
+    SetPrivsFun(set, lists:usort(ConstPrivs ++ [ViewPriv])),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     EntityTestSpec = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{correct = [Entity]}
     },
@@ -166,8 +182,9 @@ get_privileges(
     % Replace clients with entity and check if it can not get privileges
     % when all privileges but view one is set
     SetPrivsFun(set, AllPrivs -- [ViewPriv]),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     ForbiddenApiTestSpec = create_forbidden_test_spec(ApiTestSpec, Entity),
-    api_test_utils:run_tests(Config, ForbiddenApiTestSpec).
+    assert(api_test_utils:run_tests(Config, ForbiddenApiTestSpec)).
 
 
 run_get_privs_tests(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs) ->
@@ -235,6 +252,9 @@ update_privileges(
         client_spec = #client_spec{correct = [Entity]}
     } = ApiTestSpec, SetPrivsFun, GetPrivsFun, AllPrivs, Entity, UpdatePriv
 ) ->
+    SetPrivsFun(set, [UpdatePriv]),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     % Run tests giving entity always update priv
     run_update_privs_tests(
         Config, ApiTestSpec, SetPrivsFun,
@@ -243,9 +263,10 @@ update_privileges(
     ),
 
     % Run tests with entity without update privilege
+    SetPrivsFun(set, []),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     ForbiddenVerifyEndFun = fun(_, #{privs := InitialPrivs} = _Env, _Data) ->
-        ActualPrivs = lists:sort(GetPrivsFun()),
-        ?assertEqual(InitialPrivs, ActualPrivs)
+        ?compare_privileges(InitialPrivs, GetPrivsFun())
     end,
     run_update_privs_tests(
         Config, create_forbidden_test_spec(ApiTestSpec, Entity),
@@ -276,22 +297,20 @@ update_privileges(
 update_privs_verify_fun(GetPrivsFun) ->
     fun
         (true = _ShouldSucceed, #{privs := InitialPrivs} = _Env, Data) ->
-            DataPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
+            DataPrivs = maps:get(<<"privileges">>, Data),
             Operation = maps:get(<<"operation">>, Data, set),
-            ActualPrivs = lists:sort(GetPrivsFun()),
+            ActualPrivs = GetPrivsFun(),
             case Operation of
                 set ->
-                    ?assertEqual(DataPrivs, ActualPrivs);
+                    ?compare_privileges(DataPrivs, ActualPrivs);
                 grant ->
-                    ?assertEqual(
-                        lists:usort(InitialPrivs ++ DataPrivs), ActualPrivs
-                    );
+                    ?compare_privileges(lists:usort(InitialPrivs ++ DataPrivs), ActualPrivs);
                 revoke ->
-                    ?assertEqual(DataPrivs -- ActualPrivs, DataPrivs)
+                    ?compare_privileges(DataPrivs -- ActualPrivs, DataPrivs)
             end;
         (false = _ShouldSucceed, #{privs := InitialPrivs} = _Env, _) ->
-            ActualPrivs = lists:sort(GetPrivsFun()),
-            ?assertEqual(InitialPrivs, ActualPrivs)
+            ActualPrivs = GetPrivsFun(),
+            ?compare_privileges(InitialPrivs, ActualPrivs)
     end.
 
 
@@ -395,7 +414,6 @@ run_revoke_privs_tests(
         ]
     ).
 
-
 % Grant all oz privileges and check that correct clients can delete them but
 % forbidden and unauthorized cannot.
 % For entity whose effective privileges are affected (and as such it should be
@@ -409,15 +427,18 @@ delete_privileges(
         #{privs => AllPrivs}
     end,
     VerifyEndFun = fun(ShouldSucceed, _Env, _Data) ->
-        ActualPrivs = lists:sort(GetPrivsFun()),
+        ActualPrivs = GetPrivsFun(),
         case ShouldSucceed of
-            true -> ?assertEqual([], ActualPrivs);
-            false -> ?assertEqual(AllPrivs, ActualPrivs)
+            true -> ?compare_privileges([], ActualPrivs);
+            false -> ?compare_privileges(AllPrivs, ActualPrivs)
         end
     end,
     assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )),
+
+    SetPrivsFun(set, AllPrivs -- [DeletePriv]),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ApiTestSpec2 = create_forbidden_test_spec(ApiTestSpec, Entity),
     EnvSetUpFun2 = fun() ->
@@ -426,8 +447,8 @@ delete_privileges(
         #{privs => Privs}
     end,
     VerifyEndFun2 = fun(_, #{privs := InitialPrivs} = _Env, _Data) ->
-        ActualPrivs = lists:sort(GetPrivsFun()),
-        ?assertEqual(InitialPrivs, ActualPrivs)
+        ActualPrivs = GetPrivsFun(),
+        ?compare_privileges(InitialPrivs, ActualPrivs)
     end,
     assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, EnvSetUpFun2, undefined, VerifyEndFun2
@@ -603,6 +624,8 @@ create_basic_group_env(Config, Privs) ->
     {ok, U2} = oz_test_utils:group_add_user(Config, Group, U2),
     oz_test_utils:group_set_user_privileges(Config, Group, U2, set, Privs),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     {Group, U1, U2}.
 
 
@@ -627,6 +650,8 @@ create_basic_space_env(Config, Privs) ->
     ),
     {ok, U2} = oz_test_utils:space_add_user(Config, Space, U2),
     oz_test_utils:space_set_user_privileges(Config, Space, U2, set, Privs),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     {Space, U1, U2}.
 
@@ -659,6 +684,8 @@ create_basic_doi_hservice_env(Config, Privs) ->
     oz_test_utils:handle_service_set_user_privileges(
         Config, HService, U2, set, Privs
     ),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     {HService, U1, U2}.
 
@@ -700,6 +727,8 @@ create_basic_handle_env(Config, Privs) ->
     oz_test_utils:handle_set_user_privileges(
         Config, HandleId, U2, set, Privs
     ),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     {HandleId, U1, U2}.
 
@@ -752,6 +781,8 @@ create_eff_parent_groups_env(Config) ->
     oz_test_utils:group_set_user_privileges(Config, G1, U2, set,
         oz_test_utils:all_group_privileges(Config) -- [?GROUP_VIEW]
     ),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     {Groups, {U1, U2, NonAdmin}}.
 
@@ -808,6 +839,8 @@ create_eff_child_groups_env(Config) ->
         end, [{G2, U1}, {G6, U4}, {G4, U2}, {G5, U3}]
     ),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     {Groups, Users}.
 
 
@@ -853,6 +886,8 @@ create_space_eff_users_env(Config) ->
     ]),
     {ok, G1} = oz_test_utils:space_add_group(Config, S1, G1),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     {S1, Groups, Users, {U1, U2, NonAdmin}}.
 
 
@@ -892,6 +927,8 @@ create_provider_eff_users_env(Config) ->
     {ok, S1} = oz_test_utils:support_space(
         Config, P1, S1, oz_test_utils:minimum_support_size(Config)
     ),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     {{P1, Macaroon}, S1, Groups, Users, {U1, U2, NonAdmin}}.
 
@@ -942,6 +979,8 @@ create_hservice_eff_users_env(Config) ->
         set, [?HANDLE_SERVICE_VIEW]
     ),
     {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     {HService, Groups, Users, {U1, U2, NonAdmin}}.
 
@@ -1002,6 +1041,8 @@ create_handle_eff_users_env(Config) ->
     ]),
     {ok, G1} = oz_test_utils:handle_add_group(Config, HandleId, G1),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     {HandleId, Groups, Users, {U1, U2, NonAdmin}}.
 
 
@@ -1042,6 +1083,8 @@ create_eff_spaces_env(Config) ->
             {SpaceId, SpaceDetails#{<<"providers">> => #{}}}
         end, [G1, G2, G4, G5, G5]
     ),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     {Spaces, Groups, Users}.
 
@@ -1104,6 +1147,8 @@ create_eff_providers_env(Config) ->
         end, [{P1, S1}, {P2, S2}, {P2, S3}, {P3, S4}, {P4, S5}]
     ),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     {Providers, Spaces, Groups, Users}.
 
 
@@ -1155,6 +1200,8 @@ create_eff_handle_services_env(Config) ->
             {HSid, HServiceDetails}
         end, [G1, G2, G4, G5, G5]
     ),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     {HandleServices, Groups, Users}.
 
@@ -1211,5 +1258,7 @@ create_eff_handles_env(Config) ->
             {HandleId, HandleDetails}
         end, [G1, G2, G3, G4, G5]
     ),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     {Handles, Groups, Users}.

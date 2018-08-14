@@ -122,9 +122,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
         _ ->
             ok
     end,
-    % Space has been modified by adding relation, so it will need to be
-    % fetched again.
-    {ok, {not_fetched, GRI#gri{id = SpaceId}}};
+    {ok, Space} = fetch_entity(SpaceId),
+    {ok, resource, {GRI#gri{id = SpaceId}, Space}};
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     Macaroon = maps:get(<<"token">>, Req#el_req.data),
@@ -149,16 +148,17 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
         end,
         SpaceId
     end,
-    
     SpaceId = token_logic:consume(Macaroon, JoinSpaceFun),
-    
-    NewGRI = case lists:member(?SPACE_VIEW, Privileges) of
-        true ->
-            #gri{type = od_space, id = SpaceId, aspect = instance, scope = private};
-        false ->
-            #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected}
-    end,
-    {ok, {not_fetched, NewGRI}};
+
+    NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance,
+        scope = case lists:member(?SPACE_VIEW, Privileges) of
+            true -> private;
+            false -> protected
+        end
+    },
+    {ok, Space} = fetch_entity(SpaceId),
+    {ok, SpaceData} = get(#el_req{gri = NewGRI}, Space),
+    {ok, resource, {NewGRI, SpaceData}};
 
 create(Req = #el_req{gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
     {ok, Macaroon} = token_logic:create(
@@ -166,7 +166,7 @@ create(Req = #el_req{gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
         ?SPACE_INVITE_USER_TOKEN,
         {od_space, SpaceId}
     ),
-    {ok, {data, Macaroon}};
+    {ok, value, Macaroon};
 
 create(Req = #el_req{gri = #gri{id = SpaceId, aspect = invite_group_token}}) ->
     {ok, Macaroon} = token_logic:create(
@@ -174,7 +174,7 @@ create(Req = #el_req{gri = #gri{id = SpaceId, aspect = invite_group_token}}) ->
         ?SPACE_INVITE_GROUP_TOKEN,
         {od_space, SpaceId}
     ),
-    {ok, {data, Macaroon}};
+    {ok, value, Macaroon};
 
 create(Req = #el_req{gri = #gri{id = SpaceId, aspect = invite_provider_token}}) ->
     {ok, Macaroon} = token_logic:create(
@@ -182,7 +182,7 @@ create(Req = #el_req{gri = #gri{id = SpaceId, aspect = invite_provider_token}}) 
         ?SPACE_SUPPORT_TOKEN,
         {od_space, SpaceId}
     ),
-    {ok, {data, Macaroon}};
+    {ok, value, Macaroon};
 
 create(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:space_user()),
@@ -192,7 +192,9 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}, data = Data}) 
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, {not_fetched, NewGRI, ?THROUGH_SPACE(SpaceId)}};
+    {ok, User} = user_logic_plugin:fetch_entity(UserId),
+    {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
+    {ok, resource, {NewGRI, ?THROUGH_SPACE(SpaceId), UserData}};
 
 create(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:space_user()),
@@ -202,7 +204,9 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}, data = Data}
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
-    {ok, {not_fetched, NewGRI, ?THROUGH_SPACE(SpaceId)}}.
+    {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
+    {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
+    {ok, resource, {NewGRI, ?THROUGH_GROUP(SpaceId), GroupData}}.
 
 
 %%--------------------------------------------------------------------
@@ -227,30 +231,28 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     }};
 
 get(#el_req{gri = #gri{aspect = users}}, Space) ->
-    {ok, maps:keys(Space#od_space.users)};
+    {ok, entity_graph:get_relations(direct, bottom_up, od_user, Space)};
 get(#el_req{gri = #gri{aspect = eff_users}}, Space) ->
-    {ok, maps:keys(Space#od_space.eff_users)};
+    {ok, entity_graph:get_relations(effective, bottom_up, od_user, Space)};
 get(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, Space) ->
-    {ok, maps:get(UserId, Space#od_space.users)};
+    {ok, entity_graph:get_privileges(direct, bottom_up, od_user, UserId, Space)};
 get(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, Space) ->
-    {Privileges, _} = maps:get(UserId, Space#od_space.eff_users),
-    {ok, Privileges};
+    {ok, entity_graph:get_privileges(effective, bottom_up, od_user, UserId, Space)};
 
 get(#el_req{gri = #gri{aspect = groups}}, Space) ->
-    {ok, maps:keys(Space#od_space.groups)};
+    {ok, entity_graph:get_relations(direct, bottom_up, od_group, Space)};
 get(#el_req{gri = #gri{aspect = eff_groups}}, Space) ->
-    {ok, maps:keys(Space#od_space.eff_groups)};
+    {ok, entity_graph:get_relations(effective, bottom_up, od_group, Space)};
 get(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, Space) ->
-    {ok, maps:get(GroupId, Space#od_space.groups)};
+    {ok, entity_graph:get_privileges(direct, bottom_up, od_group, GroupId, Space)};
 get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Space) ->
-    {Privileges, _} = maps:get(GroupId, Space#od_space.eff_groups),
-    {ok, Privileges};
+    {ok, entity_graph:get_privileges(effective, bottom_up, od_group, GroupId, Space)};
 
 get(#el_req{gri = #gri{aspect = shares}}, Space) ->
     {ok, Space#od_space.shares};
 
 get(#el_req{gri = #gri{aspect = providers}}, Space) ->
-    {ok, maps:keys(Space#od_space.providers)}.
+    {ok, entity_graph:get_relations(direct, top_down, od_provider, Space)}.
 
 
 %%--------------------------------------------------------------------
@@ -594,8 +596,8 @@ auth_by_membership(#el_req{client = ?USER(UserId)}, Space) ->
     auth_by_membership(UserId, Space);
 auth_by_membership(#el_req{client = _OtherClient}, _Space) ->
     false;
-auth_by_membership(UserId, #od_space{eff_users = EffUsers}) ->
-    maps:is_key(UserId, EffUsers).
+auth_by_membership(UserId, Space) ->
+    space_logic:has_eff_user(Space, UserId).
 
 
 %%--------------------------------------------------------------------

@@ -148,17 +148,17 @@ create_handle_test(Config) ->
 
     ExpResourceType = <<"Share">>,
     VerifyFun = fun(HandleId) ->
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
         {ok, Handle} = oz_test_utils:get_handle(Config, HandleId),
         ?assertEqual(ExpResourceType, Handle#od_handle.resource_type),
         ?assertEqual(ShareId, Handle#od_handle.resource_id),
         ?assertEqual(HService, Handle#od_handle.handle_service),
+
+        [User] = ?assertMatch([_], maps:keys(Handle#od_handle.users)),
+        ?assertEqual(#{User => AllPrivs}, Handle#od_handle.users),
+        ?assertEqual(#{User => {AllPrivs, [{od_handle, <<"self">>}]}}, Handle#od_handle.eff_users),
         ?assertEqual(#{}, Handle#od_handle.groups),
         ?assertEqual(#{}, Handle#od_handle.eff_groups),
-        ?assertEqual(#{U1 => AllPrivs}, Handle#od_handle.users),
-        ?assertEqual(
-            #{U1 => {AllPrivs, [{od_handle, HandleId}]}},
-            Handle#od_handle.eff_users
-        ),
         true
     end,
 
@@ -234,8 +234,6 @@ create_handle_test(Config) ->
             gri = #gri{type = od_handle, aspect = instance},
             auth_hint = ?AS_USER(U1),
             expected_result = ?OK_MAP_CONTAINS(#{
-                <<"effectiveGroups">> => #{},
-                <<"effectiveUsers">> => #{U1 => AllPrivsBin},
                 <<"metadata">> => ?DC_METADATA,
                 <<"handleServiceId">> => HService,
                 <<"resourceType">> => ExpResourceType,

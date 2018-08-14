@@ -138,8 +138,16 @@ create_space_test(Config) ->
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(SpaceId) ->
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
         {ok, Space} = oz_test_utils:get_space(Config, SpaceId),
         ?assertEqual(ExpName, Space#od_space.name),
+
+        [User] = ?assertMatch([_], maps:keys(Space#od_space.users)),
+        ?assertEqual(#{User => AllPrivs}, Space#od_space.users),
+        ?assertEqual(#{User => {AllPrivs, [{od_space, <<"self">>}]}}, Space#od_space.eff_users),
+        ?assertEqual(#{}, Space#od_space.groups),
+        ?assertEqual(#{}, Space#od_space.eff_groups),
+
         true
     end,
 
@@ -191,9 +199,7 @@ create_space_test(Config) ->
             operation = create,
             gri = #gri{type = od_space, aspect = instance},
             auth_hint = ?AS_USER(U1),
-            expected_result = ?OK_MAP(#{
-                <<"effectiveGroups">> => #{},
-                <<"effectiveUsers">> => #{U1 => AllPrivsBin},
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"groups">> => #{},
                 <<"name">> => ExpName,
                 <<"providers">> => #{},

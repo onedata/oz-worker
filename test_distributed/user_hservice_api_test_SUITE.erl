@@ -137,10 +137,17 @@ create_handle_service_test(Config) ->
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(HServiceId) ->
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
         {ok, HS} = oz_test_utils:get_handle_service(Config, HServiceId),
         ?assertEqual(ExpName, HS#od_handle_service.name),
         ?assertEqual(ExpProxyEndPoint, HS#od_handle_service.proxy_endpoint),
         ?assertEqual(ExpProperties, HS#od_handle_service.service_properties),
+
+        [User] = ?assertMatch([_], maps:keys(HS#od_handle_service.users)),
+        ?assertEqual(#{User => AllPrivs}, HS#od_handle_service.users),
+        ?assertEqual(#{User => {AllPrivs, [{od_handle_service, <<"self">>}]}}, HS#od_handle_service.eff_users),
+        ?assertEqual(#{}, HS#od_handle_service.groups),
+        ?assertEqual(#{}, HS#od_handle_service.eff_groups),
         true
     end,
 
@@ -188,6 +195,8 @@ create_handle_service_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     % Check that regular client can't make request on behalf of other client
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
@@ -213,8 +222,6 @@ create_handle_service_test(Config) ->
             gri = #gri{type = od_handle_service, aspect = instance},
             auth_hint = ?AS_USER(U1),
             expected_result = ?OK_MAP_CONTAINS(#{
-                <<"effectiveGroups">> => #{},
-                <<"effectiveUsers">> => #{U1 => AllPrivsBin},
                 <<"name">> => ExpName,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(

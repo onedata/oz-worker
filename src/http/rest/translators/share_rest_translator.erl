@@ -16,7 +16,7 @@
 -include("rest.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
--export([create_response/3, get_response/2]).
+-export([create_response/4, get_response/2]).
 
 %%%===================================================================
 %%% API
@@ -24,27 +24,22 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates given entity logic CREATE result into REST response
-%% expressed by #rest_resp{} record. GRI holds the #gri{} od the request,
-%% new GRI holds the #gri{} of new aspect that was created.
+%% {@link rest_translator_behaviour} callback create_response/4.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
-    Result :: {data, term()} | {fetched, entity_logic:gri(), term()} |
-    {not_fetched, entity_logic:gri()} |
-    {not_fetched, entity_logic:gri(), entity_logic:auth_hint()}) -> #rest_resp{}.
-create_response(#gri{id = undefined, aspect = instance}, _, {not_fetched, #gri{id = ShareId}}) ->
+    entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
+    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
+create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id = ShareId}, _}) ->
     rest_translator:created_reply([<<"shares">>, ShareId]).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates given entity logic GET result into REST response
-%% expressed by #rest_resp{} record.
+%% {@link rest_translator_behaviour} callback get_response/2.
 %% @end
 %%--------------------------------------------------------------------
--spec get_response(entity_logic:gri(), Result :: term()) ->
-    #rest_resp{}.
+-spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
 get_response(#gri{id = ShareId, aspect = instance, scope = private}, Share) ->
     #od_share{
         name = Name, public_url = PublicUrl, space = SpaceId,
