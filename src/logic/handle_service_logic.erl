@@ -591,7 +591,7 @@ exists(HServiceId) ->
     UserId :: od_user:id(), Privilege :: privileges:handle_service_privilege()) ->
     boolean().
 has_eff_privilege(HServiceId, UserId, Privilege) when is_binary(HServiceId) ->
-    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, {od_handle_service, HServiceId});
+    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, od_handle_service, HServiceId);
 has_eff_privilege(HService, UserId, Privilege) ->
     entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, HService).
 
@@ -604,7 +604,7 @@ has_eff_privilege(HService, UserId, Privilege) ->
 -spec has_eff_user(HServiceOrId :: od_handle_service:id() | #od_handle_service{},
     UserId :: od_user:id()) -> boolean().
 has_eff_user(HServiceId, UserId) when is_binary(HServiceId) ->
-    entity_graph:has_relation(effective, bottom_up, od_user, UserId, {od_handle_service, HServiceId});
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, od_handle_service, HServiceId);
 has_eff_user(HService, UserId) ->
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, HService).
 
@@ -617,6 +617,6 @@ has_eff_user(HService, UserId) ->
 -spec has_eff_group(HServiceOrId :: od_handle_service:id() | #od_handle_service{},
     GroupId :: od_group:id()) -> boolean().
 has_eff_group(HServiceId, GroupId) when is_binary(HServiceId) ->
-    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, {od_handle_service, HServiceId});
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, od_handle_service, HServiceId);
 has_eff_group(HService, GroupId) ->
     entity_graph:has_relation(effective, bottom_up, od_group, GroupId, HService).

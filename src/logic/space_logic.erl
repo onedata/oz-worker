@@ -685,7 +685,7 @@ exists(SpaceId) ->
     UserId :: od_user:id(), Privilege :: privileges:space_privileges()) ->
     boolean().
 has_eff_privilege(SpaceId, UserId, Privilege) when is_binary(SpaceId) ->
-    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, {od_space, SpaceId});
+    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, od_space, SpaceId);
 has_eff_privilege(Space, UserId, Privilege) ->
     entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, Space).
 
@@ -698,7 +698,7 @@ has_eff_privilege(Space, UserId, Privilege) ->
 -spec has_eff_user(SpaceOrId :: od_space:id() | #od_space{},
     UserId :: od_space:id()) -> boolean().
 has_eff_user(SpaceId, UserId) when is_binary(SpaceId) ->
-    entity_graph:has_relation(effective, bottom_up, od_user, UserId, {od_space, SpaceId});
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, od_space, SpaceId);
 has_eff_user(Space, UserId) ->
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, Space).
 
@@ -711,7 +711,7 @@ has_eff_user(Space, UserId) ->
 -spec has_eff_group(SpaceOrId :: od_space:id() | #od_space{},
     GroupId :: od_space:id()) -> boolean().
 has_eff_group(SpaceId, GroupId) when is_binary(SpaceId) ->
-    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, {od_space, SpaceId});
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, od_space, SpaceId);
 has_eff_group(Space, GroupId) ->
     entity_graph:has_relation(effective, bottom_up, od_group, GroupId, Space).
 
@@ -724,6 +724,6 @@ has_eff_group(Space, GroupId) ->
 -spec has_provider(SpaceOrId :: od_space:id() | #od_space{},
     ProviderId :: od_provider:id()) -> boolean().
 has_provider(SpaceId, ProviderId) when is_binary(SpaceId) ->
-    entity_graph:has_relation(direct, top_down, od_provider, ProviderId, {od_space, SpaceId});
+    entity_graph:has_relation(direct, top_down, od_provider, ProviderId, od_space, SpaceId);
 has_provider(Space, ProviderId) ->
     entity_graph:has_relation(direct, top_down, od_provider, ProviderId, Space).

@@ -159,11 +159,11 @@ entity_type() | oz_privileges => eff_relations() | eff_relations_with_attrs() | 
 -export([add_relation/4, add_relation/5]).
 -export([update_relation/5]).
 -export([remove_relation/4]).
--export([get_relations/4, has_relation/5]).
--export([get_privileges/5, has_privilege/6]).
+-export([get_relations/4, has_relation/5, has_relation/6]).
+-export([get_privileges/5, has_privilege/6, has_privilege/7]).
 -export([delete_with_relations/2]).
 -export([update_oz_privileges/4]).
--export([get_oz_privileges/2, has_oz_privilege/3]).
+-export([get_oz_privileges/2, has_oz_privilege/3, has_oz_privilege/4]).
 
 %%%===================================================================
 %%% API
@@ -551,19 +551,28 @@ get_relations(effective, Direction, EntityType, Entity) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying if Subject Entity has a relation with given entity.
+%% Predicate saying if Subject Entity has a relation with given Entity, denoted
+%% by EntityType and EntityId.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_relation(relation_type(), direction(), SubjectEntityType :: entity_type(),
-    SubjectEntityId :: entity_id(), entity() | {entity_type(), entity_id()}) ->
-    boolean().
-has_relation(RelationType, Direction, SubjectEntityType, SubjectEntityId, {EntityType, EntityId}) ->
+    SubjectEntityId :: entity_id(), entity_type(), entity_id()) -> boolean().
+has_relation(RelationType, Direction, SubjectEntityType, SubjectEntityId, EntityType, EntityId) ->
     case EntityType:get(EntityId) of
         {ok, #document{value = Entity}} ->
             has_relation(RelationType, Direction, SubjectEntityType, SubjectEntityId, Entity);
         _ ->
             false
-    end;
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying if Subject Entity has a relation with given Entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_relation(relation_type(), direction(), SubjectEntityType :: entity_type(),
+    SubjectEntityId :: entity_id(), entity()) -> boolean().
 has_relation(RelationType, Direction, SubjectEntityType, SubjectEntityId, Entity) ->
     Relations = get_relations(RelationType, Direction, SubjectEntityType, Entity),
     lists:member(SubjectEntityId, Relations).
@@ -604,19 +613,30 @@ get_privileges(effective, Direction, SubjectEntityType, SubjectEntityId, Entity)
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying if Subject Entity has a privilege towards given Entity.
+%% Predicate saying if Subject Entity has a privilege towards given Entity, denoted
+%% by EntityType and EntityId.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_privilege(relation_type(), direction(),
     SubjectEntityType :: entity_type(), SubjectEntityId :: entity_id(),
-    Privilege :: atom(), entity() | {entity_type(), entity_id()}) -> boolean().
-has_privilege(RelationType, Direction, SubjectEntityType, SubjectEntityId, Privilege, {EntityType, EntityId}) ->
+    Privilege :: atom(), entity_type(), entity_id()) -> boolean().
+has_privilege(RelationType, Direction, SubjectEntityType, SubjectEntityId, Privilege, EntityType, EntityId) ->
     case EntityType:get(EntityId) of
         {ok, #document{value = Entity}} ->
             has_privilege(RelationType, Direction, SubjectEntityType, SubjectEntityId, Privilege, Entity);
         _ ->
             false
-    end;
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying if Subject Entity has a privilege towards given Entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_privilege(relation_type(), direction(),
+    SubjectEntityType :: entity_type(), SubjectEntityId :: entity_id(),
+    Privilege :: atom(), entity()) -> boolean().
 has_privilege(RelationType, Direction, SubjectEntityType, SubjectEntityId, Privilege, Entity) ->
     Privileges = get_privileges(RelationType, Direction, SubjectEntityType, SubjectEntityId, Entity),
     lists:member(Privilege, Privileges).
@@ -736,18 +756,28 @@ get_oz_privileges(effective, #od_group{oz_privileges = Privileges, eff_oz_privil
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying if given Entity has given OZ privilege.
+%% Predicate saying if given Entity (denoted by EntityType and EntityId)
+%% has given OZ privilege.
 %% @end
 %%--------------------------------------------------------------------
--spec has_oz_privilege(relation_type(), privileges:oz_privilege(),
-    entity() | {entity_type(), entity_id()}) -> boolean().
-has_oz_privilege(RelationType, Privilege, {EntityType, EntityId}) ->
+-spec has_oz_privilege(relation_type(), privileges:oz_privilege(), entity_type(), entity_id()) ->
+    boolean().
+has_oz_privilege(RelationType, Privilege, EntityType, EntityId) ->
     case EntityType:get(EntityId) of
         {ok, #document{value = Entity}} ->
             has_oz_privilege(RelationType, Privilege, Entity);
         _ ->
             false
-    end;
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying if given Entity has given OZ privilege.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_oz_privilege(relation_type(), privileges:oz_privilege(), entity()) ->
+    boolean().
 has_oz_privilege(RelationType, Privilege, Entity) ->
     lists:member(Privilege, get_oz_privileges(RelationType, Entity)).
 
@@ -805,7 +835,7 @@ get_state() ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Updates effective graph state by marking given entity dirty or not dirty in
+%% Updates effective graph state by marking given entity dirty or not dirty
 %% (direction-wise).
 %% @end
 %%--------------------------------------------------------------------
@@ -1048,7 +1078,7 @@ mark_record_dirty(top_down, Flag, #od_space{} = Space) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate telling if given record is dirty in given direction.
+%% Predicate telling if given record is dirty (direction-wise).
 %% @end
 %%--------------------------------------------------------------------
 -spec is_dirty(direction(), entity()) -> boolean().
@@ -1610,7 +1640,6 @@ get_parents(Entity) -> #{
 %% @private
 %% @doc
 %% Returns all direct relations of Entity with other entities of given EntityType.
-%% Can strip privileges to return ids only.
 %% Will return empty result when there are no such relations.
 %% @end
 %%--------------------------------------------------------------------
@@ -1624,7 +1653,6 @@ get_direct_relations(Direction, EntityType, Entity) ->
 %% @private
 %% @doc
 %% Returns all effective relations of Entity with other entities of given EntityType.
-%% Can strip privileges to return ids only.
 %% Will return empty result when there are no such relations.
 %% @end
 %%--------------------------------------------------------------------
@@ -1675,7 +1703,6 @@ get_all_direct_relations(top_down, #od_handle{handle_service = HServiceId}) ->
 %% @private
 %% @doc
 %% Returns all effective relations of Entity with other entities of given EntityType.
-%% Can strip privileges to return ids only.
 %% Will return empty result when there are no such relations.
 %% @end
 %%--------------------------------------------------------------------
@@ -1897,7 +1924,15 @@ relation_to_eff_relation(Map, Intermediaries) when is_map(Map) ->
         end, Map).
 
 
--spec override_eff_relations(map_of_eff_relations(), [entity_type()], term()) ->
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Overrides effective relations of given types in a map of effective relations
+%% with given effective relation (with or without attrs).
+%% @end
+%%--------------------------------------------------------------------
+-spec override_eff_relations(map_of_eff_relations(), [entity_type()],
+    intermediaries() | {attributes(), intermediaries()}) ->
     map_of_eff_relations().
 override_eff_relations(MapOfEffRelations, [], _Value) ->
     MapOfEffRelations;

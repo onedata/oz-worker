@@ -169,6 +169,8 @@ get_privileges(
 
     % Replace clients with entity and check if it can get privileges
     % when view priv is set
+    SetPrivsFun(set, lists:usort(ConstPrivs ++ [ViewPriv])),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     EntityTestSpec = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{correct = [Entity]}
     },

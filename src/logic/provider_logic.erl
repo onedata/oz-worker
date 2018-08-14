@@ -570,7 +570,7 @@ exists(ProviderId) ->
 -spec has_eff_user(ProviderOrId :: od_provider:id() | #od_provider{},
     UserId :: od_provider:id()) -> boolean().
 has_eff_user(ProviderId, UserId) when is_binary(ProviderId) ->
-    entity_graph:has_relation(effective, bottom_up, od_user, UserId, {od_provider, ProviderId});
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, od_provider, ProviderId);
 has_eff_user(Provider, UserId) ->
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, Provider).
 
@@ -583,7 +583,7 @@ has_eff_user(Provider, UserId) ->
 -spec has_eff_group(ProviderOrId :: od_provider:id() | #od_provider{},
     GroupId :: od_provider:id()) -> boolean().
 has_eff_group(ProviderId, GroupId) when is_binary(ProviderId) ->
-    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, {od_provider, ProviderId});
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, od_provider, ProviderId);
 has_eff_group(Provider, GroupId) ->
     entity_graph:has_relation(effective, bottom_up, od_group, GroupId, Provider).
 
@@ -596,7 +596,7 @@ has_eff_group(Provider, GroupId) ->
 -spec supports_space(ProviderOrId :: od_provider:id() | #od_provider{},
     SpaceId :: od_space:id()) -> boolean().
 supports_space(ProviderId, SpaceId) when is_binary(ProviderId) ->
-    entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, {od_provider, ProviderId});
+    entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, od_provider, ProviderId);
 supports_space(Provider, SpaceId) ->
     entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, Provider).
 

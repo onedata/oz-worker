@@ -1236,7 +1236,7 @@ exists(GroupId) ->
 -spec has_eff_parent(GroupOrId :: od_group:id() | #od_group{},
     ParentId :: od_group:id()) -> boolean().
 has_eff_parent(GroupId, ParentId) when is_binary(GroupId) ->
-    entity_graph:has_relation(effective, top_down, od_group, ParentId, {od_group, GroupId});
+    entity_graph:has_relation(effective, top_down, od_group, ParentId, od_group, GroupId);
 has_eff_parent(Group, ParentId) ->
     entity_graph:has_relation(effective, top_down, od_group, ParentId, Group).
 
@@ -1249,7 +1249,7 @@ has_eff_parent(Group, ParentId) ->
 -spec has_eff_child(GroupOrId :: od_group:id() | #od_group{},
     ChildId :: od_group:id()) -> boolean().
 has_eff_child(GroupId, ChildId) when is_binary(GroupId) ->
-    entity_graph:has_relation(effective, bottom_up, od_group, ChildId, {od_group, GroupId});
+    entity_graph:has_relation(effective, bottom_up, od_group, ChildId, od_group, GroupId);
 has_eff_child(Group, ChildId) ->
     entity_graph:has_relation(effective, bottom_up, od_group, ChildId, Group).
 
@@ -1262,7 +1262,7 @@ has_eff_child(Group, ChildId) ->
 -spec has_eff_user(GroupOrId :: od_group:id() | #od_group{},
     UserId :: od_group:id()) -> boolean().
 has_eff_user(GroupId, UserId) when is_binary(GroupId) ->
-    entity_graph:has_relation(effective, bottom_up, od_user, UserId, {od_group, GroupId});
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, od_group, GroupId);
 has_eff_user(Group, UserId) ->
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, Group).
 
@@ -1275,7 +1275,7 @@ has_eff_user(Group, UserId) ->
 -spec has_eff_space(GroupOrId :: od_group:id() | #od_group{},
     SpaceId :: od_space:id()) -> boolean().
 has_eff_space(GroupId, SpaceId) when is_binary(GroupId) ->
-    entity_graph:has_relation(effective, top_down, od_space, SpaceId, {od_group, GroupId});
+    entity_graph:has_relation(effective, top_down, od_space, SpaceId, od_group, GroupId);
 has_eff_space(Group, SpaceId) ->
     entity_graph:has_relation(effective, top_down, od_space, SpaceId, Group).
 
@@ -1289,7 +1289,7 @@ has_eff_space(Group, SpaceId) ->
 -spec has_eff_provider(GroupOrId :: od_group:id() | #od_group{},
     ProviderId :: od_provider:id()) -> boolean().
 has_eff_provider(GroupId, ProviderId) when is_binary(GroupId) ->
-    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, {od_group, GroupId});
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, od_group, GroupId);
 has_eff_provider(Group, ProviderId) ->
     entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Group).
 
@@ -1303,7 +1303,7 @@ has_eff_provider(Group, ProviderId) ->
 -spec has_eff_handle_service(GroupOrId :: od_group:id() | #od_group{},
     HServiceId :: od_handle_service:id()) -> boolean().
 has_eff_handle_service(GroupId, HServiceId) when is_binary(GroupId) ->
-    entity_graph:has_relation(effective, top_down, od_handle_service, HServiceId, {od_group, GroupId});
+    entity_graph:has_relation(effective, top_down, od_handle_service, HServiceId, od_group, GroupId);
 has_eff_handle_service(Group, HServiceId) ->
     entity_graph:has_relation(effective, top_down, od_handle_service, HServiceId, Group).
 
@@ -1317,7 +1317,7 @@ has_eff_handle_service(Group, HServiceId) ->
 -spec has_eff_handle(GroupOrId :: od_group:id() | #od_group{},
     HandleId :: od_handle:id()) -> boolean().
 has_eff_handle(GroupId, HandleId) when is_binary(GroupId) ->
-    entity_graph:has_relation(effective, top_down, od_handle, HandleId, {od_group, GroupId});
+    entity_graph:has_relation(effective, top_down, od_handle, HandleId, od_group, GroupId);
 has_eff_handle(Group, HandleId) ->
     entity_graph:has_relation(effective, top_down, od_handle, HandleId, Group).
 
@@ -1332,7 +1332,7 @@ has_eff_handle(Group, HandleId) ->
     UserId :: od_user:id(), Privilege :: privileges:group_privileges()) ->
     boolean().
 has_eff_privilege(GroupId, UserId, Privilege) when is_binary(GroupId) ->
-    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, {od_group, GroupId});
+    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, od_group, GroupId);
 has_eff_privilege(Group, UserId, Privilege) ->
     entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, Group).
 
