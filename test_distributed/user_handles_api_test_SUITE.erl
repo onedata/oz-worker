@@ -156,7 +156,7 @@ create_handle_test(Config) ->
 
         [User] = ?assertMatch([_], maps:keys(Handle#od_handle.users)),
         ?assertEqual(#{User => AllPrivs}, Handle#od_handle.users),
-        ?assertEqual(#{User => {AllPrivs, [direct]}}, Handle#od_handle.eff_users),
+        ?assertEqual(#{User => {AllPrivs, [{od_handle, <<"self">>}]}}, Handle#od_handle.eff_users),
         ?assertEqual(#{}, Handle#od_handle.groups),
         ?assertEqual(#{}, Handle#od_handle.eff_groups),
         true

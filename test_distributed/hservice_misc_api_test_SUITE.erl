@@ -287,8 +287,8 @@ get_test(Config) ->
                         U2 => [?HANDLE_SERVICE_VIEW]}
                     ),
                     ?assertEqual(EffUsers, #{
-                        U1 => {AllPrivs -- [?HANDLE_SERVICE_VIEW], [direct]},
-                        U2 => {[?HANDLE_SERVICE_VIEW], [direct]}
+                        U1 => {AllPrivs -- [?HANDLE_SERVICE_VIEW], [{od_handle_service, <<"self">>}]},
+                        U2 => {[?HANDLE_SERVICE_VIEW], [{od_handle_service, <<"self">>}]}
                     })
                 end
             )

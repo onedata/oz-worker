@@ -145,7 +145,7 @@ create_handle_service_test(Config) ->
 
         [User] = ?assertMatch([_], maps:keys(HS#od_handle_service.users)),
         ?assertEqual(#{User => AllPrivs}, HS#od_handle_service.users),
-        ?assertEqual(#{User => {AllPrivs, [direct]}}, HS#od_handle_service.eff_users),
+        ?assertEqual(#{User => {AllPrivs, [{od_handle_service, <<"self">>}]}}, HS#od_handle_service.eff_users),
         ?assertEqual(#{}, HS#od_handle_service.groups),
         ?assertEqual(#{}, HS#od_handle_service.eff_groups),
         true

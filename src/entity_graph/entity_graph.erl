@@ -57,8 +57,10 @@
 
 -define(ENTITY_GRAPH_LOCK, entity_graph).
 -define(STATE_KEY, <<"entity_graph_state">>).
+-define(SELF_INTERMEDIARY, <<"self">>).
 % How often should effective graph state be checked during ensure_up_to_date.
 -define(UP_TO_DATE_CHECK_INTERVAL, 300).
+
 -define(THROW_ON_ERROR(__Term), case __Term of
     {error, _} -> throw(__Term);
     _ -> __Term
@@ -73,10 +75,46 @@ end).
 % hold pairs of {record type, record id} through which the effective
 % relation exists (intermediaries).
 % There may be multiple such pairs on the list. If the effective neighbour
-% has a direct relation to the entity, the 'direct' keyword is used.
-% All intermediaries are direct members of the entity. To examine the full
-% path of effective relation, a recursive lookup must be performed.
--type intermediaries() :: [direct | {entity_logic:entity_type(), entity_logic:entity_id()}].
+% has a direct relation to the entity, the ?SELF_INTERMEDIARY keyword is used as
+% Entity Id. The list of intermediaries contains only the first intermediary on
+% the effective relation path (which means they all are in a direct relation
+% with the entity). To examine the full path of effective relation, a recursive
+% lookup must be performed. For example, consider user1 being an effective
+% member in space1 through 2 groups:
+%   user1 -> groupA -> groupB -> space1
+% the entities would have the following effective relations:
+%
+%   user1 -> eff_groups = #{
+%       groupA => [{od_user, ?SELF_INTERMEDIARY}],
+%       groupB => [{od_group, groupA}]
+%   }
+%   user1 -> eff_spaces = #{
+%       space1 => [{od_group, groupA}]
+%   }
+%
+%   groupA -> eff_parents = #{
+%       groupB => [{od_group, ?SELF_INTERMEDIARY}]
+%   }
+%   groupA -> eff_spaces = #{
+%       space1 => [{od_group, groupB}]
+%   }
+%
+%   groupB -> eff_children = #{
+%       groupA => [{od_group, ?SELF_INTERMEDIARY}]
+%   }
+%   groupB -> eff_spaces = #{
+%       space1 => [{od_group, ?SELF_INTERMEDIARY}]
+%   }
+%
+%   space1 -> eff_groups = #{
+%       groupA => [{od_group, groupB}],
+%       groupB => [{od_space, ?SELF_INTERMEDIARY}]
+%   }
+%   space1 -> eff_users = #{
+%       user1 => [{od_group, groupB}]
+%   }
+
+-type intermediaries() :: [{entity_logic:entity_type(), entity_logic:entity_id()}].
 -type eff_relations(EntityId) :: #{EntityId => intermediaries()}.
 -type eff_relations_with_attrs(EntityId, Attributes) :: #{EntityId => {Attributes, intermediaries()}}.
 
@@ -555,7 +593,7 @@ get_privileges(effective, Direction, SubjectEntityType, SubjectEntityId, Entity)
                 direct, Direction, SubjectEntityType, SubjectEntityId, Entity
             ),
             InheritedPrivileges = lists:foldl(fun
-                (direct, Acc) ->
+                ({_, ?SELF_INTERMEDIARY}, Acc) ->
                     Acc;
                 ({Type, Id}, Acc) ->
                     Acc ++ get_privileges(direct, Direction, Type, Id, Entity)
@@ -1313,29 +1351,29 @@ remove_parent(#od_handle{} = Handle, od_handle_service, _HServiceId) ->
 gather_eff_from_itself(bottom_up, #od_group{} = Group) ->
     #od_group{users = Users, children = Groups} = Group,
     #{
-        od_user => relation_to_eff_relation(Users, [direct]),
-        od_group => relation_to_eff_relation(Groups, [direct])
+        od_user => relation_to_eff_relation(Users, [{od_group, ?SELF_INTERMEDIARY}]),
+        od_group => relation_to_eff_relation(Groups, [{od_group, ?SELF_INTERMEDIARY}])
     };
 gather_eff_from_itself(bottom_up, #od_space{} = Space) ->
     #od_space{users = Users, groups = Groups} = Space,
     #{
-        od_user => relation_to_eff_relation(Users, [direct]),
-        od_group => relation_to_eff_relation(Groups, [direct])
+        od_user => relation_to_eff_relation(Users, [{od_space, ?SELF_INTERMEDIARY}]),
+        od_group => relation_to_eff_relation(Groups, [{od_space, ?SELF_INTERMEDIARY}])
     };
 gather_eff_from_itself(bottom_up, #od_provider{} = Provider) ->
     #od_provider{spaces = Spaces} = Provider,
-    #{od_space => relation_to_eff_relation(Spaces, [direct])};
+    #{od_space => relation_to_eff_relation(Spaces, [{od_provider, ?SELF_INTERMEDIARY}])};
 gather_eff_from_itself(bottom_up, #od_handle_service{} = HService) ->
     #od_handle_service{users = Users, groups = Groups} = HService,
     #{
-        od_user => relation_to_eff_relation(Users, [direct]),
-        od_group => relation_to_eff_relation(Groups, [direct])
+        od_user => relation_to_eff_relation(Users, [{od_handle_service, ?SELF_INTERMEDIARY}]),
+        od_group => relation_to_eff_relation(Groups, [{od_handle_service, ?SELF_INTERMEDIARY}])
     };
 gather_eff_from_itself(bottom_up, #od_handle{} = Handle) ->
     #od_handle{users = Users, groups = Groups} = Handle,
     #{
-        od_user => relation_to_eff_relation(Users, [direct]),
-        od_group => relation_to_eff_relation(Groups, [direct])
+        od_user => relation_to_eff_relation(Users, [{od_handle, ?SELF_INTERMEDIARY}]),
+        od_group => relation_to_eff_relation(Groups, [{od_handle, ?SELF_INTERMEDIARY}])
     };
 gather_eff_from_itself(top_down, #od_user{} = User) ->
     #od_user{
@@ -1344,10 +1382,10 @@ gather_eff_from_itself(top_down, #od_user{} = User) ->
         oz_privileges = OzPrivileges
     } = User,
     #{
-        od_group => relation_to_eff_relation(Groups, [direct]),
-        od_space => relation_to_eff_relation(Spaces, [direct]),
-        od_handle_service => relation_to_eff_relation(HServices, [direct]),
-        od_handle => relation_to_eff_relation(Handles, [direct]),
+        od_group => relation_to_eff_relation(Groups, [{od_user, ?SELF_INTERMEDIARY}]),
+        od_space => relation_to_eff_relation(Spaces, [{od_user, ?SELF_INTERMEDIARY}]),
+        od_handle_service => relation_to_eff_relation(HServices, [{od_user, ?SELF_INTERMEDIARY}]),
+        od_handle => relation_to_eff_relation(Handles, [{od_user, ?SELF_INTERMEDIARY}]),
         oz_privileges => OzPrivileges
     };
 gather_eff_from_itself(top_down, #od_group{} = Group) ->
@@ -1357,15 +1395,15 @@ gather_eff_from_itself(top_down, #od_group{} = Group) ->
         oz_privileges = OzPrivileges
     } = Group,
     #{
-        od_group => relation_to_eff_relation(Groups, [direct]),
-        od_space => relation_to_eff_relation(Spaces, [direct]),
-        od_handle_service => relation_to_eff_relation(HServices, [direct]),
-        od_handle => relation_to_eff_relation(Handles, [direct]),
+        od_group => relation_to_eff_relation(Groups, [{od_group, ?SELF_INTERMEDIARY}]),
+        od_space => relation_to_eff_relation(Spaces, [{od_group, ?SELF_INTERMEDIARY}]),
+        od_handle_service => relation_to_eff_relation(HServices, [{od_group, ?SELF_INTERMEDIARY}]),
+        od_handle => relation_to_eff_relation(Handles, [{od_group, ?SELF_INTERMEDIARY}]),
         oz_privileges => OzPrivileges
     };
 gather_eff_from_itself(top_down, #od_space{} = Space) ->
     #od_space{providers = Providers} = Space,
-    #{od_provider => relation_to_eff_relation(get_ids(Providers), [direct])}.
+    #{od_provider => relation_to_eff_relation(get_ids(Providers), [{od_space, ?SELF_INTERMEDIARY}])}.
 
 
 %%--------------------------------------------------------------------

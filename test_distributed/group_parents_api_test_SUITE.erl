@@ -129,7 +129,7 @@ create_parent_test(Config) ->
         ?assert(lists:member(Child, Children)),
 
         ?assertEqual(#{Child => AllPrivs}, Parent#od_group.children),
-        ?assertEqual(#{Child => {AllPrivs, [direct]}}, Parent#od_group.eff_children),
+        ?assertEqual(#{Child => {AllPrivs, [{od_group, <<"self">>}]}}, Parent#od_group.eff_children),
 
         ?assertEqual(#{}, Parent#od_group.users),
         ?assertEqual(

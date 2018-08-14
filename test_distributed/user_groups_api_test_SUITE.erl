@@ -133,7 +133,7 @@ create_group_test(Config) ->
         ?assertEqual(#{}, Group#od_group.eff_children),
         [User] = ?assertMatch([_], maps:keys(Group#od_group.users)),
         ?assertEqual(#{User => AllPrivs}, Group#od_group.users),
-        ?assertEqual(#{User => {AllPrivs, [direct]}}, Group#od_group.eff_users),
+        ?assertEqual(#{User => {AllPrivs, [{od_group, <<"self">>}]}}, Group#od_group.eff_users),
 
         true
     end,

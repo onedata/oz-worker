@@ -183,7 +183,7 @@ create_space_test(Config) ->
             Space#od_space.eff_users
         ),
         ?assertEqual(#{G1 => AllPrivs}, Space#od_space.groups),
-        ?assertEqual(#{G1 => {AllPrivs, [direct]}}, Space#od_space.eff_groups),
+        ?assertEqual(#{G1 => {AllPrivs, [{od_space, <<"self">>}]}}, Space#od_space.eff_groups),
         true
     end,
 

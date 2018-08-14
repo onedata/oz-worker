@@ -280,8 +280,8 @@ get_test(Config) ->
                         U1 => AllPrivs -- [?GROUP_VIEW], U2 => [?GROUP_VIEW]}
                     ),
                     ?assertEqual(EffUsers, #{
-                        U1 => {AllPrivs -- [?GROUP_VIEW], [direct]},
-                        U2 => {[?GROUP_VIEW], [direct]}
+                        U1 => {AllPrivs -- [?GROUP_VIEW], [{od_group, <<"self">>}]},
+                        U2 => {[?GROUP_VIEW], [{od_group, <<"self">>}]}
                     })
                 end
             )

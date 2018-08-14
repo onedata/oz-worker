@@ -130,7 +130,7 @@ create_handle_service_test(Config) ->
         ),
 
         ?assertEqual(#{G1 => AllPrivs}, HS#od_handle_service.groups),
-        ?assertEqual(#{G1 => {AllPrivs, [direct]}}, HS#od_handle_service.eff_groups),
+        ?assertEqual(#{G1 => {AllPrivs, [{od_handle_service, <<"self">>}]}}, HS#od_handle_service.eff_groups),
         ?assertEqual(#{}, HS#od_handle_service.users),
         ?assertEqual(
             #{

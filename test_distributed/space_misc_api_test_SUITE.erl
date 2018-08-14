@@ -261,11 +261,11 @@ get_test(Config) ->
                         U2 => [?SPACE_VIEW]}
                     ),
                     ?assertEqual(EffUsers, #{
-                        U1 => {AllPrivs -- [?SPACE_VIEW], [direct]},
-                        U2 => {[?SPACE_VIEW], [direct]}
+                        U1 => {AllPrivs -- [?SPACE_VIEW], [{od_space, <<"self">>}]},
+                        U2 => {[?SPACE_VIEW], [{od_space, <<"self">>}]}
                     }),
                     ?assertEqual(Providers, #{P1 => SupportSize}),
-                    ?assertEqual(EffProviders, #{P1 => [direct]})
+                    ?assertEqual(EffProviders, #{P1 => [{od_space, <<"self">>}]})
                 end
             )
         },

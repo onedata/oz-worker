@@ -144,7 +144,7 @@ create_space_test(Config) ->
 
         [User] = ?assertMatch([_], maps:keys(Space#od_space.users)),
         ?assertEqual(#{User => AllPrivs}, Space#od_space.users),
-        ?assertEqual(#{User => {AllPrivs, [direct]}}, Space#od_space.eff_users),
+        ?assertEqual(#{User => {AllPrivs, [{od_space, <<"self">>}]}}, Space#od_space.eff_users),
         ?assertEqual(#{}, Space#od_space.groups),
         ?assertEqual(#{}, Space#od_space.eff_groups),
 

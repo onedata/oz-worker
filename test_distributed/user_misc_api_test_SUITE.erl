@@ -293,7 +293,7 @@ get_test(Config) ->
                     ?assertEqual(ExpAlias, Alias),
                     ?assertEqual(ExpEmailList, EmailList),
                     ?assertEqual(SpaceId, S1),
-                    ?assertEqual(EffSpaces, #{S1 => [direct]}),
+                    ?assertEqual(EffSpaces, #{S1 => [{od_user, <<"self">>}]}),
                     ?assertEqual(EffProviders, #{P1 => [{od_space, S1}]})
                 end
             )
