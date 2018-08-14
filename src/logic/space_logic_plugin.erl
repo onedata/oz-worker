@@ -383,12 +383,12 @@ exists(#el_req{gri = #gri{id = Id}}, #od_space{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) ->
+authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = instance}}, _) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             true;
         {?USER(UserId), ?AS_GROUP(GroupId)} ->
-            group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_CREATE_SPACE);
+            group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_ADD_SPACE);
         _ ->
             false
     end;
@@ -398,7 +398,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
         {?USER(UserId), ?AS_USER(UserId)} ->
             true;
         {?USER(UserId), ?AS_GROUP(GroupId)} ->
-            group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_JOIN_SPACE);
+            group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_ADD_SPACE);
         _ ->
             false
     end;
@@ -407,7 +407,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_toke
     auth_by_privilege(Req, Space, ?SPACE_INVITE_USER);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_token}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_INVITE_GROUP);
+    auth_by_privilege(Req, Space, ?SPACE_ADD_GROUP);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_provider_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_INVITE_PROVIDER);

@@ -604,13 +604,13 @@ group_record_1() -> {od_group,
     [], % eff_oz_privileges
     [<<"parent1">>, <<"parent2">>],
     [
-        {<<"child1">>, [?GROUP_VIEW, ?GROUP_CREATE_SPACE, group_invite_group]},
+        {<<"child1">>, [?GROUP_VIEW, group_join_space, group_invite_group]},
         {<<"child2">>, [?GROUP_UPDATE, ?GROUP_DELETE, group_remove_group]}
     ],
     [], % eff_parents
     [], % eff_children
     [
-        {<<"user1">>, [?GROUP_CREATE_SPACE, ?GROUP_SET_PRIVILEGES, group_join_group]},
+        {<<"user1">>, [group_create_space, ?GROUP_SET_PRIVILEGES, group_join_group]},
         {<<"user2">>, [?GROUP_UPDATE, ?GROUP_VIEW, group_leave_group]}
     ],
     [<<"space1">>, <<"space2">>, <<"space3">>],
@@ -639,14 +639,14 @@ group_record_2() -> {od_group,
 
     [<<"parent1">>, <<"parent2">>],
     #{
-        <<"child1">> => [?GROUP_VIEW, ?GROUP_CREATE_SPACE, group_invite_group],
+        <<"child1">> => [?GROUP_VIEW, group_join_space, group_invite_group],
         <<"child2">> =>  [?GROUP_UPDATE, ?GROUP_DELETE, group_remove_group]
     },
     #{}, % eff_parents
     #{}, % eff_children
 
     #{
-        <<"user1">> => [?GROUP_CREATE_SPACE, ?GROUP_SET_PRIVILEGES, group_join_group],
+        <<"user1">> => [group_create_space, ?GROUP_SET_PRIVILEGES, group_join_group],
         <<"user2">> => [?GROUP_UPDATE, ?GROUP_VIEW, group_leave_group]
     },
     [<<"space1">>, <<"space2">>, <<"space3">>],
@@ -676,14 +676,14 @@ group_record_3() -> {od_group,
 
     [<<"parent1">>, <<"parent2">>],
     #{
-        <<"child1">> => [?GROUP_VIEW, ?GROUP_CREATE_SPACE, group_invite_group],
+        <<"child1">> => [?GROUP_VIEW, group_join_space, group_invite_group],
         <<"child2">> =>  [?GROUP_UPDATE, ?GROUP_DELETE, group_remove_group]
     },
     #{}, % eff_parents
     #{}, % eff_children
 
     #{
-        <<"user1">> => [?GROUP_CREATE_SPACE, ?GROUP_SET_PRIVILEGES, group_join_group],
+        <<"user1">> => [group_create_space, ?GROUP_SET_PRIVILEGES, group_join_group],
         <<"user2">> => [?GROUP_UPDATE, ?GROUP_VIEW, group_leave_group]
     },
     [<<"space1">>, <<"space2">>, <<"space3">>],
@@ -715,14 +715,14 @@ group_record_4() -> #od_group{
 
     parents = [<<"parent1">>, <<"parent2">>],
     children = #{
-        <<"child1">> => [?GROUP_CREATE_SPACE, ?GROUP_INVITE_CHILD, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES],
+        <<"child1">> => [?GROUP_ADD_CHILD, ?GROUP_ADD_SPACE, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES],
         <<"child2">> => [?GROUP_DELETE, ?GROUP_REMOVE_CHILD, ?GROUP_UPDATE]
     },
     eff_parents = #{},
     eff_children = #{},
 
     users = #{
-        <<"user1">> => [?GROUP_CREATE_SPACE, ?GROUP_JOIN_PARENT, ?GROUP_SET_PRIVILEGES],
+        <<"user1">> => [?GROUP_ADD_PARENT, ?GROUP_ADD_SPACE, ?GROUP_SET_PRIVILEGES],
         <<"user2">> => [?GROUP_LEAVE_PARENT, ?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES]
     },
     spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
@@ -752,7 +752,7 @@ space_record_1() -> {od_space,
     ],
     [
         {<<"group1">>, [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER]},
-        {<<"group2">>, [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE]}
+        {<<"group2">>, [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]}
     ],
     [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
     [],  % eff_users
@@ -769,7 +769,7 @@ space_record_2() -> #od_space{
     },
     groups = #{
         <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER],
-        <<"group2">> => [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE]
+        <<"group2">> => [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
     },
     providers = #{
         <<"prov1">> => 1000,
@@ -794,7 +794,7 @@ space_record_3() -> #od_space{
     },
     groups = #{
         <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER],
-        <<"group2">> => [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE]
+        <<"group2">> => [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP]
     },
     providers = #{
         <<"prov1">> => 1000,

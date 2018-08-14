@@ -139,10 +139,10 @@ add_group_test(Config) ->
 
 create_group_invite_token_test(Config) ->
     % create space with 2 users:
-    %   U2 gets the SPACE_INVITE_GROUP privilege
+    %   U2 gets the SPACE_ADD_GROUP privilege
     %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
-        Config, ?SPACE_INVITE_GROUP
+        Config, ?SPACE_ADD_GROUP
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 

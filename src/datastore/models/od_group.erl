@@ -382,10 +382,12 @@ upgrade_record(3, Group) ->
 
     TranslatePrivileges = fun(Privileges) ->
         lists:usort(lists:flatten(lists:map(fun
-            (group_invite_group) -> ?GROUP_INVITE_CHILD;
+            (group_invite_group) -> ?GROUP_ADD_CHILD;
             (group_remove_group) -> ?GROUP_REMOVE_CHILD;
-            (group_join_group) -> ?GROUP_JOIN_PARENT;
+            (group_join_group) -> ?GROUP_ADD_PARENT;
             (group_leave_group) -> ?GROUP_LEAVE_PARENT;
+            (group_create_space) -> ?GROUP_ADD_SPACE;
+            (group_join_space) -> ?GROUP_ADD_SPACE;
             (group_view) -> [?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES];
                                                 
             (oz_users_list) -> [?OZ_USERS_LIST, ?OZ_USERS_VIEW];

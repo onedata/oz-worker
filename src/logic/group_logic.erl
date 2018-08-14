@@ -90,6 +90,7 @@
 ]).
 -export([
     exists/1,
+    has_direct_user/2,
     has_eff_user/2,
     has_eff_parent/2,
     has_eff_child/2,
@@ -491,11 +492,16 @@ create_child_group(Client, ParentGroupId, Name, Type) ->
 create_child_group(Client, ParentGroupId, Name) when is_binary(Name) ->
     create_child_group(Client, ParentGroupId, #{<<"name">> => Name});
 create_child_group(Client, ParentGroupId, Data) ->
+    AuthHint = case Client of
+        ?USER(UserId) -> ?AS_USER(UserId);
+        _ -> undefined
+    end,
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
         client = Client,
         gri = #gri{type = od_group, id = ParentGroupId, aspect = child},
-        data = Data
+        data = Data,
+        auth_hint = AuthHint
     })).
 
 
@@ -1278,11 +1284,28 @@ exists(GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Predicate saying whether specified user is a direct member of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_direct_user(GroupOrId :: od_group:id() | #od_group{},
+    UserId :: od_group:id()) -> boolean().
+has_direct_user(GroupId, UserId) when is_binary(GroupId) ->
+    case od_group:get(GroupId) of
+        {ok, #document{value = Group}} ->
+            has_direct_user(Group, UserId);
+        _ ->
+            false
+    end;
+has_direct_user(#od_group{users = Users}, UserId) ->
+    maps:is_key(UserId, Users).
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Predicate saying whether specified user is an effective user of given group.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_user(GroupOrId :: od_group:id() | #od_group{},
-    UserId :: od_group:id()) -> boolean().
+    UserId :: od_user:id()) -> boolean().
 has_eff_user(GroupId, UserId) when is_binary(GroupId) ->
     case od_group:get(GroupId) of
         {ok, #document{value = Group}} ->
@@ -1460,16 +1483,17 @@ create_predefined_groups() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec normalize_name(binary()) -> binary().
-normalize_name(Name) -> 
+normalize_name(Name) ->
     % string module supports binaries in utf8
     ShortenedName = string:slice(Name, 0, ?MAXIMUM_NAME_LENGTH),
     Regexp = <<"[^", ?NAME_CHARS_ALLOWED_IN_THE_MIDDLE, "]">>,
-    NormalizedName = re:replace(ShortenedName, Regexp, 
+    NormalizedName = re:replace(ShortenedName, Regexp,
         <<"-">>, [{return, binary}, unicode, ucp, global]),
-    case re:run(NormalizedName, ?NAME_VALIDATION_REGEXP, 
-        [{capture, none}, ucp, unicode]) of
-        match -> NormalizedName;
-        _ -> <<"(", (string:slice(NormalizedName, 0, ?MAXIMUM_NAME_LENGTH-2))/binary, ")">>
+    case re:run(NormalizedName, ?NAME_VALIDATION_REGEXP, [{capture, none}, ucp, unicode]) of
+        match ->
+            NormalizedName;
+        _ ->
+            <<"(", (string:slice(NormalizedName, 0, ?MAXIMUM_NAME_LENGTH - 2))/binary, ")">>
     end.
 
 %%%===================================================================

@@ -236,6 +236,7 @@ upgrade_record(2, Space) ->
     TranslatePrivileges = fun(Privileges) ->
         lists:flatten(lists:map(fun
             (space_view) -> [?SPACE_VIEW, ?SPACE_VIEW_PRIVILEGES];
+            (space_invite_group) -> [?SPACE_ADD_GROUP];
             (Other) -> Other 
         end, Privileges))
     end,

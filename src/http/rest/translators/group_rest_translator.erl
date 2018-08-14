@@ -47,13 +47,13 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched,
     end,
     rest_translator:created_reply(LocationTokens);
 
-create_response(Gri=#gri{id = undefined, aspect = instance}, AuthHint, {fetched, #gri{id = GroupId},_}) ->
+create_response(Gri=#gri{id = undefined, aspect = instance}, AuthHint, {fetched, #gri{id = GroupId}, _}) ->
     create_response(Gri, AuthHint, {not_fetched, #gri{id = GroupId}});
 
 create_response(#gri{aspect = join} = Gri, AuthHint, Result) ->
     create_response(Gri#gri{aspect = instance}, AuthHint, Result);
 
-create_response(#gri{id = ParentGroupId, aspect = child}, _, {not_fetched, #gri{id = GroupId}}) ->
+create_response(#gri{id = ParentGroupId, aspect = child}, _, {fetched, #gri{id = GroupId}, _}) ->
     rest_translator:created_reply([<<"groups">>, ParentGroupId, <<"children">>, GroupId]);
 
 create_response(#gri{aspect = invite_user_token}, _, {data, Macaroon}) ->

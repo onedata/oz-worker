@@ -161,10 +161,10 @@ get_space_details_test(Config) ->
 
 create_space_test(Config) ->
     % create group with 2 users:
-    %   U2 gets the GROUP_CREATE_SPACE privilege
+    %   U2 gets the GROUP_ADD_SPACE privilege
     %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_CREATE_SPACE
+        Config, ?GROUP_ADD_SPACE
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -240,10 +240,10 @@ create_space_test(Config) ->
 
 join_space_test(Config) ->
     % create group with 2 users:
-    %   U2 gets the GROUP_JOIN_SPACE privilege
+    %   U2 gets the GROUP_ADD_SPACE privilege
     %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_JOIN_SPACE
+        Config, ?GROUP_ADD_SPACE
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 

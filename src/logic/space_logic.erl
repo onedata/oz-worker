@@ -63,6 +63,7 @@
 -export([
     exists/1,
     has_eff_privilege/3,
+    has_direct_user/2,
     has_eff_user/2,
     has_eff_group/2,
     has_provider/2
@@ -689,6 +690,24 @@ has_eff_privilege(SpaceId, UserId, Privilege) when is_binary(SpaceId) ->
 has_eff_privilege(#od_space{eff_users = UsersPrivileges}, UserId, Privilege) ->
     {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, {[], []}),
     lists:member(Privilege, UserPrivileges).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified user is a direct member of given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_direct_user(SpaceOrId :: od_space:id() | #od_space{},
+    UserId :: od_space:id()) -> boolean().
+has_direct_user(SpaceId, UserId) when is_binary(SpaceId) ->
+    case od_space:get(SpaceId) of
+        {ok, #document{value = Space}} ->
+            has_direct_user(Space, UserId);
+        _ ->
+            false
+    end;
+has_direct_user(#od_space{users = Users}, UserId) ->
+    maps:is_key(UserId, Users).
 
 
 %%--------------------------------------------------------------------

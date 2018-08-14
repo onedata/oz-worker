@@ -158,7 +158,8 @@ verify_auth_override(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec is_authorized(gs_protocol:client(), gs_protocol:auth_hint(),
-    gs_protocol:gri(), gs_protocol:operation(), gs_protocol:data()) -> boolean().
+    gs_protocol:gri(), gs_protocol:operation(), gs_protocol:data()) ->
+    {true, gs_protocol:gri()} | false.
 is_authorized(Client, AuthHint, GRI, Operation, Entity) ->
     ElReq = #el_req{
         client = Client,
