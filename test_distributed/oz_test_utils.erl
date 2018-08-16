@@ -61,7 +61,9 @@
 
     list_groups/1,
     create_group/3,
+    create_parent_group/4,
     get_group/2,
+    update_group/3,
     delete_group/2,
 
     group_get_children/2,
@@ -73,7 +75,7 @@
 
     group_add_user/3,
     group_set_user_privileges/5,
-    group_add_group/3,
+    group_add_group/3, group_add_group/4,
     group_remove_user/3,
     group_remove_group/3,
     group_leave_space/3,
@@ -81,6 +83,7 @@
     group_invite_group_token/3,
     group_invite_user_token/3,
 
+    group_get_eff_users/2,
     group_get_user_privileges/3,
     group_get_eff_user_privileges/3,
 
@@ -554,6 +557,20 @@ create_group(Config, Client, NameOrData) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Creates a parent group for given group in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_parent_group(Config :: term(), Client :: entity_logic:client(),
+    ChildGroupId :: od_group:id(), NameOrData :: od_group:name() | #{}) ->
+    {ok, Id :: binary()}.
+create_parent_group(Config, Client, ChildGroupId, NameOrData) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, create_parent_group, [Client, ChildGroupId, NameOrData]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Retrieves group data from onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -562,6 +579,19 @@ create_group(Config, Client, NameOrData) ->
 get_group(Config, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, group_logic, get, [?ROOT, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates group name.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_group(Config :: term(), GroupId :: od_group:id(),
+    Name :: od_group:name()) -> ok.
+update_group(Config, GroupId, Name) ->
+    ?assertMatch(ok, call_oz(
+        Config, group_logic, update, [?ROOT, GroupId, #{<<"name">> => Name}]
     )).
 
 
@@ -681,14 +711,25 @@ group_add_user(Config, GroupId, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Adds a group a to group in onezone.
+%% Adds a group a to group in onezone with ROOT auth.
 %% @end
 %%--------------------------------------------------------------------
 -spec group_add_group(Config :: term(), GroupId :: od_group:id(),
     ChildGroupId :: od_group:id()) -> {ok, ChildGroupId :: od_group:id()}.
 group_add_group(Config, GroupId, ChildGroupId) ->
+    group_add_group(Config, ?ROOT, GroupId, ChildGroupId).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a group a to group in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_add_group(Config :: term(), entity_logic:client(), GroupId :: od_group:id(),
+    ChildGroupId :: od_group:id()) -> {ok, ChildGroupId :: od_group:id()}.
+group_add_group(Config, Client, GroupId, ChildGroupId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, add_group, [?ROOT, GroupId, ChildGroupId]
+        Config, group_logic, add_group, [Client, GroupId, ChildGroupId]
     )).
 
 
@@ -743,6 +784,19 @@ group_leave_handle_service(Config, GroupId, HandleServiceId) ->
         Config, group_logic, leave_handle_service,
         [?ROOT, GroupId, HandleServiceId]
     )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the list of effective users in given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_get_eff_users(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [privileges:group_privilege()]}.
+group_get_eff_users(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(Config, group_logic, get_eff_users, [
+        ?ROOT, GroupId
+    ])).
 
 
 %%--------------------------------------------------------------------

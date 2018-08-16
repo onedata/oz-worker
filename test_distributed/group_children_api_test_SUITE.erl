@@ -259,11 +259,11 @@ add_child_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {user, Admin},
+                {user, User}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, User},
                 {user, NonAdmin}
             ]
         },

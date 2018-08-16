@@ -245,7 +245,7 @@ dns_server_resolves_ns_records_test(Config) ->
         node_manager_plugin, reconcile_dns_config, [])),
 
     % number of nodes based on env_desc
-    [IP1, IP2, IP3] = NSIPs = lists:sort(OZIPs),
+    [IP1, IP2, _IP3] = lists:sort(OZIPs),
     NSDomainsIPs = [{"ns1." ++ OZDomain, [IP1]}, {"ns2." ++ OZDomain, [IP2]}],
     {NSDomains, _} = lists:unzip(NSDomainsIPs),
 
@@ -276,7 +276,7 @@ dns_server_duplicates_ns_records_test(Config) ->
         node_manager_plugin, reconcile_dns_config, [])),
 
     % number of nodes based on env_desc
-    [IP1, IP2, IP3] = NSIPs = lists:sort(OZIPs),
+    [IP1, IP2, IP3] = lists:sort(OZIPs),
     NSDomainsIPs = [{"ns1." ++ OZDomain, [IP1]}, {"ns2." ++ OZDomain, [IP2]},
         {"ns3." ++ OZDomain, [IP3]}, {"ns4." ++ OZDomain, [IP1]}],
     {NSDomains, _} = lists:unzip(NSDomainsIPs),
