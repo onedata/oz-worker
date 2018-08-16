@@ -35,10 +35,10 @@ response(_, {error, _} = Err) ->
 response(#el_req{operation = create}, ok) ->
     % No need for translation, 'ok' means success with no response data
     rest_translator:ok_no_content_reply();
-response(#el_req{operation = create} = ElReq, {ok, Result}) ->
+response(#el_req{operation = create} = ElReq, {ok, DataFormat, Result}) ->
     #el_req{gri = GRI = #gri{type = Model}, auth_hint = AuthHint} = ElReq,
     Translator = entity_type_to_translator(Model),
-    Translator:create_response(GRI, AuthHint, Result);
+    Translator:create_response(GRI, AuthHint, DataFormat, Result);
 response(#el_req{operation = get} = ElReq, {ok, Data}) ->
     #el_req{gri = GRI = #gri{type = EntityType}} = ElReq,
     Translator = entity_type_to_translator(EntityType),

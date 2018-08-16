@@ -196,7 +196,8 @@
     minimum_support_size/1,
     mock_handle_proxy/1,
     unmock_handle_proxy/1,
-    gui_ca_certs/1
+    gui_ca_certs/1,
+    ensure_entity_graph_is_up_to_date/1, ensure_entity_graph_is_up_to_date/2
 ]).
 
 % Convenience functions for gs
@@ -692,9 +693,9 @@ delete_group(Config, GroupId) ->
 -spec mark_group_protected(Config :: term(), od_group:id()) -> ok.
 mark_group_protected(Config, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, od_group, update, 
-        [GroupId, fun(Group) -> 
-            {ok, Group#od_group{protected = true}} 
+        Config, od_group, update,
+        [GroupId, fun(Group) ->
+            {ok, Group#od_group{protected = true}}
         end]
     )),
     ok.
@@ -2105,6 +2106,27 @@ unmock_handle_proxy(Config) ->
 -spec gui_ca_certs(Config :: term()) -> [public_key:der_encoded()].
 gui_ca_certs(Config) ->
     call_oz(Config, https_listener, get_cert_chain_pems, []).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Waits for entity graph to be reconciled, with 60 retries.
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_entity_graph_is_up_to_date(Config :: term()) -> boolean().
+ensure_entity_graph_is_up_to_date(Config) ->
+    ensure_entity_graph_is_up_to_date(Config, 60).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Waits for entity graph to be reconciled, with given number of retries.
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_entity_graph_is_up_to_date(Config :: term(), Retries :: non_neg_integer()) ->
+    boolean().
+ensure_entity_graph_is_up_to_date(Config, Retries) ->
+    ?assertMatch(true, call_oz(Config, entity_graph, ensure_up_to_date, []), Retries).
 
 
 %%--------------------------------------------------------------------

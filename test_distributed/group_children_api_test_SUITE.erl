@@ -83,6 +83,7 @@ list_children_test(Config) ->
             GroupId
         end, lists:seq(1, 5)
     ),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -170,6 +171,7 @@ get_child_details_test(Config) ->
         #{<<"name">> => ?GROUP_NAME2, <<"type">> => ?GROUP_TYPE2}
     ),
     oz_test_utils:group_add_group(Config, G1, G2),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -377,6 +379,7 @@ remove_child_test(Config) ->
     EnvSetUpFun = fun() ->
         {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME2),
         {ok, G2} = oz_test_utils:group_add_group(Config, G1, G2),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
         #{groupId => G2}
     end,
     DeleteEntityFun = fun(#{groupId := GroupId} = _Env) ->
@@ -495,6 +498,7 @@ update_child_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, G2} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME2),
     {ok, G2} = oz_test_utils:group_add_group(Config, G1, G2),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = oz_test_utils:all_group_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
@@ -561,6 +565,7 @@ get_eff_children_test(Config) ->
     oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
         ?GROUP_VIEW
     ]),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ExpGroups = [G2, G3, G4, G5, G6],
     ApiTestSpec = #api_test_spec{
@@ -622,6 +627,7 @@ get_eff_child_details_test(Config) ->
     oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
         ?GROUP_VIEW
     ]),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     lists:foreach(
         fun({GroupId, GroupDetails}) ->
@@ -724,6 +730,8 @@ get_eff_child_privileges_test(Config) ->
         AllPrivs -- [?GROUP_VIEW_PRIVILEGES]
     ),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     SetPrivsFun = fun(Operation, Privs) ->
         % In case of SET and GRANT, randomly split privileges into four
         % parts and update groups with the privileges. G3 eff_privileges
@@ -749,7 +757,8 @@ get_eff_child_privileges_test(Config) ->
                     Config, G1, GroupId, Operation, Privileges
                 )
             end, PartitionScheme
-        )
+        ),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
     end,
 
     ApiTestSpec = #api_test_spec{

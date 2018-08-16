@@ -21,7 +21,7 @@
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 %% API
--export([handshake_attributes/1, translate_create/3, translate_get/3]).
+-export([handshake_attributes/1, translate_value/3, translate_resource/3]).
 
 
 %%%===================================================================
@@ -38,27 +38,27 @@
 handshake_attributes(_) ->
     undefined.
 
+
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link gs_translator_behaviour} callback translate_create/3.
+%% {@link gs_translator_behaviour} callback translate_value/3.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_create(gs_protocol:protocol_version(), gs_protocol:gri(),
-    Data :: term()) -> Result | fun((gs_protocol:client()) -> Result) when
-    Result :: gs_protocol:data() | gs_protocol:error().
-translate_create(1, #gri{aspect = invite_group_token}, Macaroon) ->
-    translate_create(1, #gri{aspect = invite_user_token}, Macaroon);
-translate_create(1, #gri{aspect = invite_provider_token}, Macaroon) ->
-    translate_create(1, #gri{aspect = invite_user_token}, Macaroon);
-translate_create(1, #gri{aspect = provider_registration_token}, Macaroon) ->
-    translate_create(1, #gri{aspect = invite_user_token}, Macaroon);
-translate_create(1, #gri{aspect = invite_user_token}, Macaroon) ->
+-spec translate_value(gs_protocol:protocol_version(), gs_protocol:gri(),
+    Data :: term()) -> gs_protocol:data() | gs_protocol:error().
+translate_value(ProtoVersion, #gri{aspect = invite_group_token}, Macaroon) ->
+    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
+translate_value(ProtoVersion, #gri{aspect = invite_provider_token}, Macaroon) ->
+    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
+translate_value(ProtoVersion, #gri{aspect = provider_registration_token}, Macaroon) ->
+    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
+translate_value(_, #gri{aspect = invite_user_token}, Macaroon) ->
     {ok, Token} = onedata_macaroons:serialize(Macaroon),
     Token;
-translate_create(1, #gri{type = od_provider, aspect = map_idp_group}, Id) ->
+translate_value(_, #gri{type = od_provider, aspect = map_idp_group}, Id) ->
     Id;
 
-translate_create(ProtocolVersion, GRI, Data) ->
+translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n
     ProtocolVersion: ~p~n
     GRI: ~p~n
@@ -70,17 +70,17 @@ translate_create(ProtocolVersion, GRI, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link gs_translator_behaviour} callback translate_get/3.
+%% {@link gs_translator_behaviour} callback translate_resource/3.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_get(gs_protocol:protocol_version(), gs_protocol:gri(),
-    Data :: term()) -> Result | fun((gs_protocol:client()) -> Result) when
-    Result :: gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()} |
+-spec translate_resource(gs_protocol:protocol_version(), gs_protocol:gri(),
+    Data :: term()) ->
+    gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()} |
     gs_protocol:error().
-translate_get(1, #gri{type = od_provider, aspect = current_time}, TimeMillis) ->
+translate_resource(_, #gri{type = od_provider, aspect = current_time}, TimeMillis) ->
     #{<<"timeMillis">> => TimeMillis};
 
-translate_get(1, #gri{type = od_user, aspect = instance, scope = private}, User) ->
+translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, User) ->
     #od_user{
         name = Name,
         alias = Alias,
@@ -110,7 +110,7 @@ translate_get(1, #gri{type = od_user, aspect = instance, scope = private}, User)
         <<"effectiveHandleServices">> => maps:keys(EffHandleServices)
     };
 
-translate_get(1, #gri{type = od_user, aspect = instance, scope = protected}, User) ->
+translate_resource(_, #gri{type = od_user, aspect = instance, scope = protected}, User) ->
     #{
         <<"name">> := Name,
         <<"alias">> := Alias,
@@ -126,7 +126,7 @@ translate_get(1, #gri{type = od_user, aspect = instance, scope = protected}, Use
         <<"linkedAccounts">> => LinkedAccountMaps
     };
 
-translate_get(1, #gri{type = od_user, aspect = instance, scope = shared}, User) ->
+translate_resource(_, #gri{type = od_user, aspect = instance, scope = shared}, User) ->
     #{
         <<"name">> := Name,
         <<"alias">> := Alias
@@ -138,7 +138,7 @@ translate_get(1, #gri{type = od_user, aspect = instance, scope = shared}, User) 
         <<"login">> => gs_protocol:undefined_to_null(Alias)
     };
 
-translate_get(1, #gri{type = od_group, aspect = instance, scope = private}, Group) ->
+translate_resource(_, #gri{type = od_group, aspect = instance, scope = private}, Group) ->
     #od_group{
         name = Name,
         type = Type,
@@ -167,12 +167,12 @@ translate_get(1, #gri{type = od_group, aspect = instance, scope = private}, Grou
     };
 
 % shared and protected scopes carry the same data
-translate_get(1, GRI = #gri{type = od_group, aspect = instance, scope = shared}, Group) ->
-    translate_get(1, GRI#gri{scope = protected}, Group);
-translate_get(1, #gri{type = od_group, aspect = instance, scope = protected}, GroupData) ->
+translate_resource(ProtoVersion, GRI = #gri{type = od_group, aspect = instance, scope = shared}, Group) ->
+    translate_resource(ProtoVersion, GRI#gri{scope = protected}, Group);
+translate_resource(_, #gri{type = od_group, aspect = instance, scope = protected}, GroupData) ->
     GroupData;
 
-translate_get(1, #gri{type = od_space, aspect = instance, scope = private}, Space) ->
+translate_resource(_, #gri{type = od_space, aspect = instance, scope = private}, Space) ->
     #od_space{
         name = Name,
 
@@ -197,10 +197,10 @@ translate_get(1, #gri{type = od_space, aspect = instance, scope = private}, Spac
         <<"providers">> => Providers,
         <<"shares">> => Shares
     };
-translate_get(1, #gri{type = od_space, aspect = instance, scope = protected}, SpaceData) ->
+translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected}, SpaceData) ->
     SpaceData;
 
-translate_get(1, #gri{type = od_share, aspect = instance, scope = private}, Share) ->
+translate_resource(_, #gri{type = od_share, aspect = instance, scope = private}, Share) ->
     #od_share{
         name = Name,
         public_url = PublicUrl,
@@ -216,13 +216,13 @@ translate_get(1, #gri{type = od_share, aspect = instance, scope = private}, Shar
         <<"rootFileId">> => RootFileId
     };
 
-translate_get(1, #gri{type = od_share, aspect = instance, scope = protected}, ShareData) ->
+translate_resource(_, #gri{type = od_share, aspect = instance, scope = protected}, ShareData) ->
     ShareData;
 
-translate_get(1, #gri{type = od_share, aspect = instance, scope = public}, ShareData) ->
+translate_resource(_, #gri{type = od_share, aspect = instance, scope = public}, ShareData) ->
     ShareData;
 
-translate_get(1, #gri{type = od_provider, id = Id, aspect = instance, scope = private}, Provider) ->
+translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope = private}, Provider) ->
     #od_provider{
         name = Name,
         subdomain_delegation = SubdomainDelegation,
@@ -256,10 +256,10 @@ translate_get(1, #gri{type = od_provider, id = Id, aspect = instance, scope = pr
     };
 
 
-translate_get(1, #gri{type = od_provider, aspect = instance, scope = protected}, ProviderData) ->
+translate_resource(_, #gri{type = od_provider, aspect = instance, scope = protected}, ProviderData) ->
     ProviderData;
 
-translate_get(1, #gri{type = od_provider, aspect = domain_config}, Data) ->
+translate_resource(_, #gri{type = od_provider, aspect = domain_config}, Data) ->
     case maps:find(<<"ipList">>, Data) of
         {ok, IPList} ->
             IPBinaries = [list_to_binary(inet:ntoa(IP)) || IP <- IPList],
@@ -268,7 +268,7 @@ translate_get(1, #gri{type = od_provider, aspect = domain_config}, Data) ->
             Data
     end;
 
-translate_get(1, #gri{type = od_handle_service, aspect = instance, scope = private}, HService) ->
+translate_resource(_, #gri{type = od_handle_service, aspect = instance, scope = private}, HService) ->
     #od_handle_service{
         name = Name,
 
@@ -282,7 +282,7 @@ translate_get(1, #gri{type = od_handle_service, aspect = instance, scope = priva
         <<"effectiveGroups">> => strip_eff_relation_data(EffGroups)
     };
 
-translate_get(1, #gri{type = od_handle, aspect = instance, scope = private}, Handle) ->
+translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}, Handle) ->
     #od_handle{
         public_handle = PublicHandle,
         resource_type = ResourceType,
@@ -306,10 +306,10 @@ translate_get(1, #gri{type = od_handle, aspect = instance, scope = private}, Han
         <<"effectiveGroups">> => strip_eff_relation_data(EffGroups)
     };
 
-translate_get(1, #gri{type = od_handle, aspect = instance, scope = public}, HandleData) ->
+translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public}, HandleData) ->
     HandleData;
 
-translate_get(ProtocolVersion, GRI, Data) ->
+translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync get result for:~n
     ProtocolVersion: ~p~n
     GRI: ~p~n

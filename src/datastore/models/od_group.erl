@@ -148,7 +148,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    4.
+    5.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -210,6 +210,10 @@ get_record_struct(3) ->
     % The structure does not change, only group names are normalized.
     get_record_struct(2);
 get_record_struct(4) ->
+    % The structure does not change, but all records must be marked dirty to
+    % recalculate effective relations (as intermediaries computing logic has changed).
+    get_record_struct(3);
+get_record_struct(5) ->
     % Protected group flag is added and also the privileges are translated.
     {record, [
         {name, string},
@@ -298,7 +302,8 @@ upgrade_record(1, Group) ->
 
         true,
         true
-    }};upgrade_record(2, Group) ->
+    }};
+upgrade_record(2, Group) ->
     {
         od_group,
         Name,
@@ -353,7 +358,110 @@ upgrade_record(1, Group) ->
         true
     }};
 upgrade_record(3, Group) ->
-        {
+    {od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        _TopDownDirty,
+        _BottomUpDirty
+    } = Group,
+
+    {3, {od_group,
+        group_logic:normalize_name(Name),
+        Type,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        true,
+        true
+    }};
+upgrade_record(3, Group) ->
+    {od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        _EffParents,
+        _EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        _EffUsers,
+        _EffSpaces,
+        _EffProviders,
+        _EffHandleServices,
+        _EffHandles,
+
+        _BottomUpDirty,
+        _TopDownDirty
+    } = Group,
+    {4, {od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        #{},
+        #{},
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        #{},
+        #{},
+        #{},
+        #{},
+        #{},
+
+        true,
+        true
+    }};
+upgrade_record(4, Group) ->
+    {
         od_group,
         Name,
         Type,
@@ -389,39 +497,39 @@ upgrade_record(3, Group) ->
             (group_create_space) -> ?GROUP_ADD_SPACE;
             (group_join_space) -> ?GROUP_ADD_SPACE;
             (group_view) -> [?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES];
-                                                
+
             (oz_users_list) -> [?OZ_USERS_LIST, ?OZ_USERS_VIEW];
-                                                
+
             (oz_groups_list) -> [?OZ_GROUPS_LIST, ?OZ_GROUPS_VIEW];
             (oz_groups_list_users) -> ?OZ_GROUPS_LIST_RELATIONSHIPS;
             (oz_groups_list_groups) -> ?OZ_GROUPS_LIST_RELATIONSHIPS;
             (oz_groups_add_members) -> ?OZ_GROUPS_ADD_RELATIONSHIPS;
             (oz_groups_remove_members) -> ?OZ_GROUPS_REMOVE_RELATIONSHIPS;
-                                                
+
             (oz_spaces_list) -> [?OZ_SPACES_LIST, ?OZ_SPACES_VIEW];
             (oz_spaces_list_users) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
             (oz_spaces_list_groups) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
             (oz_spaces_list_providers) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
             (oz_spaces_add_members) -> ?OZ_SPACES_ADD_RELATIONSHIPS;
             (oz_spaces_remove_members) -> ?OZ_SPACES_REMOVE_RELATIONSHIPS;
-                                                
+
             (oz_providers_list) -> [?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_VIEW];
             (oz_providers_list_users) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
             (oz_providers_list_groups) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
             (oz_providers_list_spaces) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
-                                                
+
             (Other) -> Other
         end, Privileges)))
     end,
 
     TranslateField = fun(Field) ->
         maps:map(fun
-            (_, {Privs, Relation}) -> {TranslatePrivileges(Privs), Relation};
+            (_, {Privs, Intermediaries}) -> {TranslatePrivileges(Privs), Intermediaries};
             (_, Privs) -> TranslatePrivileges(Privs)
         end, Field)
     end,
 
-    {4, #od_group{
+    {5, #od_group{
         name = Name,
         type = Type,
         protected = false,
@@ -447,3 +555,4 @@ upgrade_record(3, Group) ->
         top_down_dirty = true,
         bottom_up_dirty = true
     }}.
+

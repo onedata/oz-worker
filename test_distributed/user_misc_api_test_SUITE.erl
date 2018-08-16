@@ -239,6 +239,8 @@ get_test(Config) ->
         Config, P1, S1, oz_test_utils:minimum_support_size(Config)
     ),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     ProtectedData = #{
         <<"name">> => ExpName,
         <<"alias">> => ExpAlias,
@@ -289,7 +291,7 @@ get_test(Config) ->
                     ?assertEqual(ExpAlias, Alias),
                     ?assertEqual(ExpEmailList, EmailList),
                     ?assertEqual(SpaceId, S1),
-                    ?assertEqual(EffSpaces, #{S1 => [{od_user, User}]}),
+                    ?assertEqual(EffSpaces, #{S1 => [{od_user, <<"self">>}]}),
                     ?assertEqual(EffProviders, #{P1 => [{od_space, S1}]})
                 end
             )
@@ -788,6 +790,8 @@ set_default_provider_test(Config) ->
         {ok, S1} = oz_test_utils:support_space(
             Config, ProviderId, S1, oz_test_utils:minimum_support_size(Config)
         ),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
         #{providerId => ProviderId}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId} = _Env, _) ->
@@ -891,6 +895,7 @@ get_default_provider_test(Config) ->
     {ok, S1} = oz_test_utils:support_space(
         Config, P1, S1, oz_test_utils:minimum_support_size(Config)
     ),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     oz_test_utils:user_set_default_provider(Config, U1, P1),
 
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
@@ -948,6 +953,8 @@ unset_default_provider_test(Config) ->
         {ok, S1} = oz_test_utils:support_space(
             Config, ProviderId, S1, oz_test_utils:minimum_support_size(Config)
         ),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
         oz_test_utils:user_set_default_provider(Config, U1, ProviderId),
         #{providerId => ProviderId}
     end,

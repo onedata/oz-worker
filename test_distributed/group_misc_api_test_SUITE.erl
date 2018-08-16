@@ -218,6 +218,8 @@ get_test(Config) ->
         ?GROUP_VIEW
     ]),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     AllPrivs = oz_test_utils:all_group_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
@@ -260,8 +262,8 @@ get_test(Config) ->
                         U1 => AllPrivs -- [?GROUP_VIEW], U2 => [?GROUP_VIEW]}
                     ),
                     ?assertEqual(EffUsers, #{
-                        U1 => {AllPrivs -- [?GROUP_VIEW], [{od_group, G1}]},
-                        U2 => {[?GROUP_VIEW], [{od_group, G1}]}
+                        U1 => {AllPrivs -- [?GROUP_VIEW], [{od_group, <<"self">>}]},
+                        U2 => {[?GROUP_VIEW], [{od_group, <<"self">>}]}
                     })
                 end
             )
@@ -586,10 +588,12 @@ update_oz_privileges_test(Config) ->
     % to update group privileges and sometimes not)
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:group_set_oz_privileges(Config, G1, Operation, Privs)
+        oz_test_utils:group_set_oz_privileges(Config, G1, Operation, Privs),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
     end,
     GetPrivsFun = fun() ->
         {ok, Privs} = oz_test_utils:group_get_oz_privileges(Config, G1),
@@ -631,10 +635,12 @@ delete_oz_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:group_set_oz_privileges(Config, G1, Operation, Privs)
+        oz_test_utils:group_set_oz_privileges(Config, G1, Operation, Privs),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
     end,
     GetPrivsFun = fun() ->
         {ok, Privs} = oz_test_utils:group_get_oz_privileges(Config, G1),
@@ -682,6 +688,8 @@ get_eff_oz_privileges_test(Config) ->
 
     {Bottom, Mid, Top} = oz_test_utils:create_3_nested_groups(Config, U1),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     InitialPrivs = [],
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(Operation, Privs) ->
@@ -709,7 +717,8 @@ get_eff_oz_privileges_test(Config) ->
                     Config, GroupId, Operation, Privileges
                 )
             end, PartitionScheme
-        )
+        ),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
     end,
 
     ApiTestSpec = #api_test_spec{

@@ -470,7 +470,7 @@ update_user_privileges(Client, HandleId, UserId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
         client = Client,
-        gri = #gri{type = od_handle, id = HandleId, aspect =  {user_privileges, UserId}},
+        gri = #gri{type = od_handle, id = HandleId, aspect = {user_privileges, UserId}},
         data = Data
     }).
 
@@ -556,55 +556,38 @@ exists(HandleId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_privilege(HandleOrId :: od_handle:id() | #od_handle{},
-    UserId :: od_user:id(), Privilege :: privileges:handle_privileges()) ->
+    UserId :: od_user:id(), Privilege :: privileges:handle_privilege()) ->
     boolean().
 has_eff_privilege(HandleId, UserId, Privilege) when is_binary(HandleId) ->
-    case od_handle:get(HandleId) of
-        {ok, #document{value = Handle}} ->
-            has_eff_privilege(Handle, UserId, Privilege);
-        _ ->
-            false
-    end;
-has_eff_privilege(#od_handle{eff_users = UsersPrivileges}, UserId, Privilege) ->
-    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, {[], []}),
-    lists:member(Privilege, UserPrivileges).
+    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, od_handle, HandleId);
+has_eff_privilege(Handle, UserId, Privilege) ->
+    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, Handle).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying whether specified user is an effective user in given handle.
+%% Predicate saying whether specified user is an effective user of given handle.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_user(HandleOrId :: od_handle:id() | #od_handle{},
     UserId :: od_user:id()) -> boolean().
 has_eff_user(HandleId, UserId) when is_binary(HandleId) ->
-    case od_handle:get(HandleId) of
-        {ok, #document{value = Handle}} ->
-            has_eff_user(Handle, UserId);
-        _ ->
-            false
-    end;
-has_eff_user(#od_handle{eff_users = EffUsers}, UserId) ->
-    maps:is_key(UserId, EffUsers).
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, od_handle, HandleId);
+has_eff_user(Handle, UserId) ->
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, Handle).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying whether specified group is an effective group in given
-%% handle.
+%% Predicate saying whether specified group is an effective group of given handle.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_group(HandleOrId :: od_handle:id() | #od_handle{},
     GroupId :: od_group:id()) -> boolean().
 has_eff_group(HandleId, GroupId) when is_binary(HandleId) ->
-    case od_handle:get(HandleId) of
-        {ok, #document{value = Handle}} ->
-            has_eff_group(Handle, GroupId);
-        _ ->
-            false
-    end;
-has_eff_group(#od_handle{eff_groups = EffGroups}, GroupId) ->
-    maps:is_key(GroupId, EffGroups).
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, od_handle, HandleId);
+has_eff_group(Handle, GroupId) ->
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, Handle).
 
 
 %%--------------------------------------------------------------------
@@ -612,14 +595,9 @@ has_eff_group(#od_handle{eff_groups = EffGroups}, GroupId) ->
 %% Predicate saying whether handle belongs to specified handle service.
 %% @end
 %%--------------------------------------------------------------------
--spec has_handle_service(HandleOrId :: od_handle:id() | #od_handle{},
+-spec has_handle_service(HandleOrId :: od_space:id() | #od_space{},
     HServiceId :: od_handle_service:id()) -> boolean().
 has_handle_service(HandleId, HServiceId) when is_binary(HandleId) ->
-    case od_handle:get(HandleId) of
-        {ok, #document{value = Handle}} ->
-            has_handle_service(Handle, HServiceId);
-        _ ->
-            false
-    end;
-has_handle_service(#od_handle{handle_service = HService}, HServiceId) ->
-    HServiceId =:= HService.
+    entity_graph:has_relation(direct, top_down, od_handle_service, HServiceId, od_handle, HandleId);
+has_handle_service(Handle, HServiceId) ->
+    entity_graph:has_relation(direct, top_down, od_handle_service, HServiceId, Handle).

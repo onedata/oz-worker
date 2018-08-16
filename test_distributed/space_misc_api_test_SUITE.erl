@@ -204,6 +204,8 @@ get_test(Config) ->
         Config, P1, S1, SupportSize
     ),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     AllPrivs = oz_test_utils:all_space_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
@@ -240,11 +242,11 @@ get_test(Config) ->
                         U2 => [?SPACE_VIEW]}
                     ),
                     ?assertEqual(EffUsers, #{
-                        U1 => {AllPrivs -- [?SPACE_VIEW], [{od_space, S1}]},
-                        U2 => {[?SPACE_VIEW], [{od_space, S1}]}
+                        U1 => {AllPrivs -- [?SPACE_VIEW], [{od_space, <<"self">>}]},
+                        U2 => {[?SPACE_VIEW], [{od_space, <<"self">>}]}
                     }),
                     ?assertEqual(Providers, #{P1 => SupportSize}),
-                    ?assertEqual(EffProviders, #{P1 => [{od_space, S1}]})
+                    ?assertEqual(EffProviders, #{P1 => [{od_space, <<"self">>}]})
                 end
             )
         },
