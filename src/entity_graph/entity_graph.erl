@@ -159,7 +159,8 @@ entity_type() | oz_privileges => eff_relations() | eff_relations_with_attrs() | 
 -export([add_relation/4, add_relation/5]).
 -export([update_relation/5]).
 -export([remove_relation/4]).
--export([get_relations/4, has_relation/5, has_relation/6]).
+-export([get_relations/4, get_relations_with_privileges/4]).
+-export([has_relation/5, has_relation/6]).
 -export([get_privileges/5, has_privilege/6, has_privilege/7]).
 -export([delete_with_relations/2]).
 -export([update_oz_privileges/4]).
@@ -546,6 +547,35 @@ get_relations(effective, Direction, EntityType, Entity) ->
                 get_ids(get_direct_relations(Direction, EntityType, Entity)),
                 get_ids(get_eff_relations(Direction, EntityType, Entity))
             ))
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns all relations of an entity with entities of given EntityType,
+%% including the privileges.
+%% NOTE: will return empty map if there are no such relations, rather than an error.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_relations_with_privileges(relation_type(), direction(), entity_type(), entity()) ->
+    relations_with_attrs().
+get_relations_with_privileges(direct, Direction, EntityType, Entity) ->
+    get_direct_relations(Direction, EntityType, Entity);
+get_relations_with_privileges(effective, Direction, EntityType, Entity) ->
+    case is_dirty(Direction, Entity) of
+        false ->
+            eff_relation_to_relation(get_eff_relations(Direction, EntityType, Entity));
+        true ->
+            % If the entity is not up to date, return the merged map of direct
+            % and effective relations with privileges
+            Direct = get_direct_relations(Direction, EntityType, Entity),
+            Effective = eff_relation_to_relation(
+                get_eff_relations(Direction, EntityType, Entity)
+            ),
+            maps:fold(fun(EntityId, Privileges, EffPrivsAcc) ->
+                Merged = privileges:union(Privileges, maps:get(EntityId, EffPrivsAcc, [])),
+                maps:put(EntityId, Merged, EffPrivsAcc)
+            end, Effective, Direct)
     end.
 
 
@@ -1921,6 +1951,20 @@ relation_to_eff_relation(Map, Intermediaries) when is_map(Map) ->
     maps:map(
         fun(_NeighbourId, Attributes) ->
             {Attributes, Intermediaries}
+        end, Map).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Converts effective relations with attrs to relations with attrs.
+%% @end
+%%--------------------------------------------------------------------
+-spec eff_relation_to_relation(eff_relations_with_attrs()) -> relations_with_attrs().
+eff_relation_to_relation(Map) ->
+    maps:map(
+        fun(_NeighbourId, {Attributes, _Intermediaries}) ->
+            Attributes
         end, Map).
 
 
