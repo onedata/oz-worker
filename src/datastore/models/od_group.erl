@@ -331,59 +331,6 @@ upgrade_record(2, Group) ->
         _BottomUpDirty
     } = Group,
 
-    {3, {
-        od_group,
-        group_logic:normalize_name(Name),
-        Type,
-        OzPrivileges,
-        EffOzPrivileges,
-
-        Parents,
-        Children,
-        EffParents,
-        EffChildren,
-
-        Users,
-        Spaces,
-        HandleServices,
-        Handles,
-
-        EffUsers,
-        EffSpaces,
-        EffProviders,
-        EffHandleServices,
-        EffHandles,
-
-        true,
-        true
-    }};
-upgrade_record(3, Group) ->
-    {od_group,
-        Name,
-        Type,
-        OzPrivileges,
-        EffOzPrivileges,
-
-        Parents,
-        Children,
-        EffParents,
-        EffChildren,
-
-        Users,
-        Spaces,
-        HandleServices,
-        Handles,
-
-        EffUsers,
-        EffSpaces,
-        EffProviders,
-        EffHandleServices,
-        EffHandles,
-
-        _TopDownDirty,
-        _BottomUpDirty
-    } = Group,
-
     {3, {od_group,
         group_logic:normalize_name(Name),
         Type,

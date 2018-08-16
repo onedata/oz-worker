@@ -360,6 +360,8 @@ get_group_test(Config) ->
     ),
     {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [

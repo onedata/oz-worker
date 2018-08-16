@@ -868,6 +868,8 @@ get_spaces_in_eff_provider_test(Config) ->
     oz_test_utils:support_space(Config, ProviderId, S1_2),
     oz_test_utils:support_space(Config, ProviderId, S2),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     AnotherUser = fun(User) -> case User of
         U1 -> U2;
         U2 -> U1
