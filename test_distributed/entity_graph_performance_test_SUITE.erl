@@ -88,6 +88,12 @@
 )).
 -define(ENDING_USER_NUM, ?config(ending_user_num, Config)).
 
+
+-define(API_TYPE(Value), ?PERF_PARAM(
+    api_type, Value, "", "Type of API used during the test (REST or RPC)."
+)).
+-define(API_TYPE, ?config(api_type, Config)).
+
 %%%===================================================================
 %%% API functions
 %%%===================================================================
@@ -101,64 +107,76 @@ all() ->
 
 create_group_performance(Config) ->
     ?PERFORMANCE(Config, [
-        {repeats, 3},
+        {repeats, 2},
         {success_rate, 100},
-        {description, "Checks the performance of creating a lot of independent groups."},
+        {description, "Checks the performance of creating a lot of independent groups for different users."},
         {parameters, [?GROUP_NUM(100)]},
-        ?PERF_CFG(small, [?GROUP_NUM(100)]),
-        ?PERF_CFG(medium, [?GROUP_NUM(750)]),
-        ?PERF_CFG(large, [?GROUP_NUM(1500)])
+        ?PERF_CFG(small_rpc, [?GROUP_NUM(100), ?API_TYPE(rpc)]),
+        ?PERF_CFG(small_rest, [?GROUP_NUM(100), ?API_TYPE(rest)]),
+        ?PERF_CFG(medium_rpc, [?GROUP_NUM(750), ?API_TYPE(rpc)]),
+        ?PERF_CFG(medium_rest, [?GROUP_NUM(750), ?API_TYPE(rest)]),
+        ?PERF_CFG(large_rpc, [?GROUP_NUM(1500), ?API_TYPE(rpc)]),
+        ?PERF_CFG(large_rest, [?GROUP_NUM(1500), ?API_TYPE(rest)])
     ]).
 create_group_performance_base(Config) ->
-    GroupNum = ?GROUP_NUM,
-    GroupOwners = create_n_users(Config, GroupNum),
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    try
+        GroupNum = ?GROUP_NUM,
+        ApiType = ?API_TYPE,
+        UsersAndAuths = create_n_users(Config, GroupNum),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    %% ----------------------
-    %% Start time measurement
-    %% ----------------------
-    StartTimestamp = os:timestamp(),
+        %% ----------------------
+        %% Start time measurement
+        %% ----------------------
+        StartTimestamp = os:timestamp(),
 
-    lists:foreach(fun(User) ->
-        oz_test_utils:create_group(Config, ?USER(User), <<"group">>)
-    end, GroupOwners),
+        lists:foreach(fun(UserAndAuth) ->
+            create_group(Config, ApiType, UserAndAuth, <<"group">>)
+        end, UsersAndAuths),
 
-    TimestampAfterCreation = os:timestamp(),
-    CreationTime = timer:now_diff(TimestampAfterCreation, StartTimestamp) / 1000,
+        TimestampAfterCreation = os:timestamp(),
+        CreationTime = timer:now_diff(TimestampAfterCreation, StartTimestamp) / 1000,
 
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    ReconciliationTime = timer:now_diff(os:timestamp(), TimestampAfterCreation) / 1000,
-    %% ----------------------
-    %% End time measurement
-    %% ----------------------
-    AvgPerGroup = CreationTime / GroupNum,
-    AvgReconciliationTime = ReconciliationTime / GroupNum,
+        ReconciliationTime = timer:now_diff(os:timestamp(), TimestampAfterCreation) / 1000,
+        %% ----------------------
+        %% End time measurement
+        %% ----------------------
+        AvgPerGroup = CreationTime / GroupNum,
+        AvgReconciliationTime = ReconciliationTime / GroupNum,
 
-    [
-        #parameter{name = group_creation_time, value = CreationTime, unit = "ms",
-            description = "Time taken to create the groups."},
-        #parameter{name = avg_time_per_group, value = AvgPerGroup, unit = "ms",
-            description = "Average time taken to create one group."},
-        #parameter{name = entity_graph_reconciliation_time, value = ReconciliationTime, unit = "ms",
-            description = "Time taken to reconcile the entity graph after the last group was created."},
-        #parameter{name = avg_reconciliation_time_per_group, value = AvgReconciliationTime, unit = "ms",
-            description = "Average time taken to reconcile the entity graph per group created."}
-    ].
+        [
+            #parameter{name = group_creation_time, value = CreationTime, unit = "ms",
+                description = "Time taken to create the groups."},
+            #parameter{name = avg_time_per_group, value = AvgPerGroup, unit = "ms",
+                description = "Average time taken to create one group."},
+            #parameter{name = entity_graph_reconciliation_time, value = ReconciliationTime, unit = "ms",
+                description = "Time taken to reconcile the entity graph after the last group was created."},
+            #parameter{name = avg_reconciliation_time_per_group, value = AvgReconciliationTime, unit = "ms",
+                description = "Average time taken to reconcile the entity graph per group created."}
+        ]
+    catch T:M ->
+        ct:print("~p", [{T, M, erlang:get_stacktrace()}])
+    end.
 
 
 create_space_performance(Config) ->
     ?PERFORMANCE(Config, [
-        {repeats, 3},
+        {repeats, 2},
         {success_rate, 100},
-        {description, "Checks the performance of creating a lot of independent spaces."},
-        {parameters, [?SPACE_NUM(100)]},
-        ?PERF_CFG(small, [?SPACE_NUM(100)]),
-        ?PERF_CFG(medium, [?SPACE_NUM(750)]),
-        ?PERF_CFG(large, [?SPACE_NUM(1500)])
+        {description, "Checks the performance of creating a lot of independent spaces for different users."},
+        {parameters, [?SPACE_NUM(100), ?API_TYPE(rpc), ?API_TYPE(rpc)]},
+        ?PERF_CFG(small_rpc, [?SPACE_NUM(100), ?API_TYPE(rpc)]),
+        ?PERF_CFG(small_rest, [?SPACE_NUM(100), ?API_TYPE(rest)]),
+        ?PERF_CFG(medium_rpc, [?SPACE_NUM(750), ?API_TYPE(rpc)]),
+        ?PERF_CFG(medium_rest, [?SPACE_NUM(750), ?API_TYPE(rest)]),
+        ?PERF_CFG(large_rpc, [?SPACE_NUM(1500), ?API_TYPE(rpc)]),
+        ?PERF_CFG(large_rest, [?SPACE_NUM(1500), ?API_TYPE(rest)])
     ]).
 create_space_performance_base(Config) ->
     SpaceNum = ?SPACE_NUM,
+    ApiType = ?API_TYPE,
     GroupOwners = create_n_users(Config, SpaceNum),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -168,7 +186,7 @@ create_space_performance_base(Config) ->
     StartTimestamp = os:timestamp(),
 
     lists:foreach(fun(User) ->
-        oz_test_utils:create_space(Config, ?USER(User), <<"space">>)
+        create_space(Config, ApiType, ?USER(User), <<"space">>)
     end, GroupOwners),
 
     TimestampAfterCreation = os:timestamp(),
@@ -197,16 +215,20 @@ create_space_performance_base(Config) ->
 
 group_chain_performance(Config) ->
     ?PERFORMANCE(Config, [
-        {repeats, 3},
+        {repeats, 2},
         {success_rate, 100},
         {description, "Checks the performance of creating a long chain of groups."},
-        {parameters, [?GROUP_CHAIN_LENGTH(20)]},
-        ?PERF_CFG(small, [?GROUP_CHAIN_LENGTH(20)]),
-        ?PERF_CFG(medium, [?GROUP_CHAIN_LENGTH(100)]),
-        ?PERF_CFG(large, [?GROUP_CHAIN_LENGTH(200)])
+        {parameters, [?GROUP_CHAIN_LENGTH(20), ?API_TYPE(rpc)]},
+        ?PERF_CFG(small_rpc, [?GROUP_CHAIN_LENGTH(20), ?API_TYPE(rpc)]),
+        ?PERF_CFG(small_rest, [?GROUP_CHAIN_LENGTH(20), ?API_TYPE(rest)]),
+        ?PERF_CFG(medium_rpc, [?GROUP_CHAIN_LENGTH(100), ?API_TYPE(rpc)]),
+        ?PERF_CFG(medium_rest, [?GROUP_CHAIN_LENGTH(100), ?API_TYPE(rest)]),
+        ?PERF_CFG(large_rpc, [?GROUP_CHAIN_LENGTH(200), ?API_TYPE(rpc)]),
+        ?PERF_CFG(large_rest, [?GROUP_CHAIN_LENGTH(200), ?API_TYPE(rest)])
     ]).
 group_chain_performance_base(Config) ->
     GroupChainLength = ?GROUP_CHAIN_LENGTH,
+    ApiType = ?API_TYPE,
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
     %% ----------------------
@@ -242,17 +264,21 @@ group_chain_performance_base(Config) ->
 
 group_chain_append_performance(Config) ->
     ?PERFORMANCE(Config, [
-        {repeats, 3},
+        {repeats, 2},
         {success_rate, 100},
         {description, "Checks the performance of appending to a long chain of groups."},
-        {parameters, [?STARTING_GROUP_NUM(50), ?ENDING_GROUP_NUM(60)]},
-        ?PERF_CFG(small, [?STARTING_GROUP_NUM(50), ?ENDING_GROUP_NUM(60)]),
-        ?PERF_CFG(medium, [?STARTING_GROUP_NUM(100), ?ENDING_GROUP_NUM(120)]),
-        ?PERF_CFG(large, [?STARTING_GROUP_NUM(200), ?ENDING_GROUP_NUM(300)])
+        {parameters, [?STARTING_GROUP_NUM(50), ?ENDING_GROUP_NUM(60), ?API_TYPE(rpc)]},
+        ?PERF_CFG(small_rpc, [?STARTING_GROUP_NUM(50), ?ENDING_GROUP_NUM(60), ?API_TYPE(rpc)]),
+        ?PERF_CFG(small_rest, [?STARTING_GROUP_NUM(50), ?ENDING_GROUP_NUM(60), ?API_TYPE(rest)]),
+        ?PERF_CFG(medium_rpc, [?STARTING_GROUP_NUM(100), ?ENDING_GROUP_NUM(120), ?API_TYPE(rpc)]),
+        ?PERF_CFG(medium_rest, [?STARTING_GROUP_NUM(100), ?ENDING_GROUP_NUM(120), ?API_TYPE(rest)]),
+        ?PERF_CFG(large_rpc, [?STARTING_GROUP_NUM(200), ?ENDING_GROUP_NUM(300), ?API_TYPE(rpc)]),
+        ?PERF_CFG(large_rest, [?STARTING_GROUP_NUM(200), ?ENDING_GROUP_NUM(300), ?API_TYPE(rest)])
     ]).
 group_chain_append_performance_base(Config) ->
     StartingGroupNum = ?STARTING_GROUP_NUM,
     EndingGroupNum = ?ENDING_GROUP_NUM,
+    ApiType = ?API_TYPE,
     ToAppendGroupNum = EndingGroupNum - StartingGroupNum,
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -294,17 +320,21 @@ group_chain_append_performance_base(Config) ->
 
 big_group_performance(Config) ->
     ?PERFORMANCE(Config, [
-        {repeats, 3},
+        {repeats, 2},
         {success_rate, 100},
         {description, "Checks the performance of adding users to a large group."},
-        {parameters, [?STARTING_USER_NUM(80), ?ENDING_USER_NUM(100)]},
-        ?PERF_CFG(small, [?STARTING_USER_NUM(80), ?ENDING_USER_NUM(100)]),
-        ?PERF_CFG(medium, [?STARTING_USER_NUM(650), ?ENDING_USER_NUM(750)]),
-        ?PERF_CFG(large, [?STARTING_USER_NUM(1300), ?ENDING_USER_NUM(1500)])
+        {parameters, [?STARTING_USER_NUM(80), ?ENDING_USER_NUM(100), ?API_TYPE(rpc)]},
+        ?PERF_CFG(small_rpc, [?STARTING_USER_NUM(80), ?ENDING_USER_NUM(100), ?API_TYPE(rpc)]),
+        ?PERF_CFG(small_rest, [?STARTING_USER_NUM(80), ?ENDING_USER_NUM(100), ?API_TYPE(rest)]),
+        ?PERF_CFG(medium_rpc, [?STARTING_USER_NUM(650), ?ENDING_USER_NUM(750), ?API_TYPE(rpc)]),
+        ?PERF_CFG(medium_rest, [?STARTING_USER_NUM(650), ?ENDING_USER_NUM(750), ?API_TYPE(rest)]),
+        ?PERF_CFG(large_rpc, [?STARTING_USER_NUM(1300), ?ENDING_USER_NUM(1500), ?API_TYPE(rpc)]),
+        ?PERF_CFG(large_rest, [?STARTING_USER_NUM(1300), ?ENDING_USER_NUM(1500), ?API_TYPE(rest)])
     ]).
 big_group_performance_base(Config) ->
     StartingUserNum = ?STARTING_USER_NUM,
     EndingUserNum = ?ENDING_USER_NUM,
+    ApiType = ?API_TYPE,
     ToAddUserNum = EndingUserNum - StartingUserNum,
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(User), <<"group">>),
@@ -355,16 +385,20 @@ big_group_performance_base(Config) ->
 
 update_privileges_performance(Config) ->
     ?PERFORMANCE(Config, [
-        {repeats, 3},
+        {repeats, 2},
         {success_rate, 100},
         {description, "Checks the performance of updating user privileges in a group."},
-        {parameters, [?USER_NUM(100)]},
-        ?PERF_CFG(small, [?USER_NUM(100)]),
-        ?PERF_CFG(medium, [?USER_NUM(500)]),
-        ?PERF_CFG(large, [?USER_NUM(1000)])
+        {parameters, [?USER_NUM(100), ?API_TYPE(rpc)]},
+        ?PERF_CFG(small_rpc, [?USER_NUM(100), ?API_TYPE(rpc)]),
+        ?PERF_CFG(small_rest, [?USER_NUM(100), ?API_TYPE(rest)]),
+        ?PERF_CFG(medium_rpc, [?USER_NUM(500), ?API_TYPE(rpc)]),
+        ?PERF_CFG(medium_rest, [?USER_NUM(500), ?API_TYPE(rest)]),
+        ?PERF_CFG(large_rpc, [?USER_NUM(1000), ?API_TYPE(rpc)]),
+        ?PERF_CFG(large_rest, [?USER_NUM(1000), ?API_TYPE(rest)])
     ]).
 update_privileges_performance_base(Config) ->
     UserNum = ?USER_NUM,
+    ApiType = ?API_TYPE,
     GroupPrivileges = oz_test_utils:all_group_privileges(Config),
 
     {ok, GroupCreator} = oz_test_utils:create_user(Config, #od_user{}),
@@ -414,22 +448,29 @@ update_privileges_performance_base(Config) ->
 
 reconcile_privileges_in_group_chain_performance(Config) ->
     ?PERFORMANCE(Config, [
-        {repeats, 3},
+        {repeats, 2},
         {success_rate, 100},
         {description, "Checks the performance of updating effective user "
         "privileges towards the top group of long chain after the privileges "
         "of second to top group are updated."},
-        {parameters, [?GROUP_CHAIN_LENGTH(30), ?USER_NUM(30)]},
-        ?PERF_CFG(small_chain, [?GROUP_CHAIN_LENGTH(100), ?USER_NUM(250)]),
-        ?PERF_CFG(medium_chain, [?GROUP_CHAIN_LENGTH(250), ?USER_NUM(250)]),
-        ?PERF_CFG(large_chain, [?GROUP_CHAIN_LENGTH(500), ?USER_NUM(250)]),
-        ?PERF_CFG(small_members_num, [?GROUP_CHAIN_LENGTH(250), ?USER_NUM(100)]),
-        ?PERF_CFG(medium_members_num, [?GROUP_CHAIN_LENGTH(250), ?USER_NUM(250)]),
-        ?PERF_CFG(large_members_num, [?GROUP_CHAIN_LENGTH(60), ?USER_NUM(500)])
+        {parameters, [?GROUP_CHAIN_LENGTH(40), ?USER_NUM(40), ?API_TYPE(rpc)]},
+        ?PERF_CFG(small_chain_rpc, [?GROUP_CHAIN_LENGTH(40), ?USER_NUM(100), ?API_TYPE(rpc)]),
+        ?PERF_CFG(small_chain_rest, [?GROUP_CHAIN_LENGTH(40), ?USER_NUM(100), ?API_TYPE(rest)]),
+        ?PERF_CFG(medium_chain_rpc, [?GROUP_CHAIN_LENGTH(100), ?USER_NUM(100), ?API_TYPE(rpc)]),
+        ?PERF_CFG(medium_chain_rest, [?GROUP_CHAIN_LENGTH(100), ?USER_NUM(100), ?API_TYPE(rest)]),
+        ?PERF_CFG(large_chain_rpc, [?GROUP_CHAIN_LENGTH(200), ?USER_NUM(100), ?API_TYPE(rpc)]),
+        ?PERF_CFG(large_chain_rest, [?GROUP_CHAIN_LENGTH(200), ?USER_NUM(100), ?API_TYPE(rest)]),
+        ?PERF_CFG(small_members_num_rpc, [?GROUP_CHAIN_LENGTH(100), ?USER_NUM(40), ?API_TYPE(rpc)]),
+        ?PERF_CFG(small_members_num_rest, [?GROUP_CHAIN_LENGTH(100), ?USER_NUM(40), ?API_TYPE(rest)]),
+        ?PERF_CFG(medium_members_num_rpc, [?GROUP_CHAIN_LENGTH(100), ?USER_NUM(100), ?API_TYPE(rpc)]),
+        ?PERF_CFG(medium_members_num_rest, [?GROUP_CHAIN_LENGTH(100), ?USER_NUM(100), ?API_TYPE(rest)]),
+        ?PERF_CFG(large_members_num_rpc, [?GROUP_CHAIN_LENGTH(100), ?USER_NUM(200), ?API_TYPE(rpc)]),
+        ?PERF_CFG(large_members_num_rest, [?GROUP_CHAIN_LENGTH(100), ?USER_NUM(200), ?API_TYPE(rest)])
     ]).
 reconcile_privileges_in_group_chain_performance_base(Config) ->
     GroupChainLength = ?GROUP_CHAIN_LENGTH,
     UserNum = ?USER_NUM,
+    ApiType = ?API_TYPE,
     GroupPrivileges = oz_test_utils:all_group_privileges(Config),
 
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
@@ -489,7 +530,6 @@ create_group_chain(Config, Client, NumberOfGroups, BottomGroup) ->
         {ok, PreviousGroupId} = oz_test_utils:group_add_group(
             Config, Client, ParentId, PreviousGroupId
         ),
-        io:format(user, "x", []),
         ParentId
     end, BottomGroup, lists:seq(2, NumberOfGroups)),
     {BottomGroup, TopGroup}.
@@ -498,7 +538,8 @@ create_group_chain(Config, Client, NumberOfGroups, BottomGroup) ->
 create_n_users(Config, Number) ->
     lists:map(fun(_) ->
         {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-        User
+        {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
+        {User, Macaroon}
     end, lists:seq(1, Number)).
 
 %%%===================================================================
@@ -507,8 +548,44 @@ create_n_users(Config, Number) ->
 
 
 init_per_suite(Config) ->
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
+    ssl:start(),
+    hackney:start(),
+    [{?LOAD_MODULES, [oz_test_utils, rest_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
+    ssl:stop(),
+    hackney:stop(),
     ok.
+
+
+create_group(Config, rpc, {User, _Macaroon}, Name) ->
+    oz_test_utils:create_group(Config, ?USER(User), Name);
+create_group(Config, rest, {User, Macaroon}, Name) ->
+    rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => post,
+            path => <<"/user/groups/">>,
+            body => #{<<"name">> => Name},
+            auth => {user, User, Macaroon}
+        },
+        expect => #{
+            code => 201
+        }
+    }).
+
+
+create_space(Config, rpc, {User, _Macaroon}, Name) ->
+    oz_test_utils:create_space(Config, ?USER(User), Name);
+create_space(Config, rest, {User, Macaroon}, Name) ->
+    rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => post,
+            path => <<"/user/spaces/">>,
+            body => #{<<"name">> => Name},
+            auth => {user, User, Macaroon}
+        },
+        expect => #{
+            code => 201
+        }
+    }).

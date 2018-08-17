@@ -63,7 +63,7 @@ start_link() ->
 init([]) ->
     Stream = self(),
     Since = gs_server_state:get_seq(),
-    Callback = fun(Change) -> gen_server:cast(Stream, {change, Change}) end,
+    Callback = fun(Change) -> gen_server2:cast(Stream, {change, Change}) end,
     couchbase_changes:enable([?DEFAULT_BUCKET]),
     couchbase_changes_worker:start_link(?DEFAULT_BUCKET, ?DEFAULT_SCOPE),
     {ok, _} = couchbase_changes_stream:start_link(
