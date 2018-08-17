@@ -681,69 +681,48 @@ exists(SpaceId) ->
     UserId :: od_user:id(), Privilege :: privileges:space_privileges()) ->
     boolean().
 has_eff_privilege(SpaceId, UserId, Privilege) when is_binary(SpaceId) ->
-    case od_space:get(SpaceId) of
-        {ok, #document{value = Space}} ->
-            has_eff_privilege(Space, UserId, Privilege);
-        _ ->
-            false
-    end;
-has_eff_privilege(#od_space{eff_users = UsersPrivileges}, UserId, Privilege) ->
-    {UserPrivileges, _} = maps:get(UserId, UsersPrivileges, {[], []}),
-    lists:member(Privilege, UserPrivileges).
+    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, od_space, SpaceId);
+has_eff_privilege(Space, UserId, Privilege) ->
+    entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, Space).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying whether specified user is a direct member of given space.
+%% Predicate saying whether specified user is an direct user of given space.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_direct_user(SpaceOrId :: od_space:id() | #od_space{},
     UserId :: od_space:id()) -> boolean().
 has_direct_user(SpaceId, UserId) when is_binary(SpaceId) ->
-    case od_space:get(SpaceId) of
-        {ok, #document{value = Space}} ->
-            has_direct_user(Space, UserId);
-        _ ->
-            false
-    end;
-has_direct_user(#od_space{users = Users}, UserId) ->
-    maps:is_key(UserId, Users).
+    entity_graph:has_relation(direct, bottom_up, od_user, UserId, od_space, SpaceId);
+has_direct_user(Space, UserId) ->
+    entity_graph:has_relation(direct, bottom_up, od_user, UserId, Space).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying whether specified user is an effective user in given space.
+%% Predicate saying whether specified user is an effective user of given space.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_user(SpaceOrId :: od_space:id() | #od_space{},
-    UserId :: od_user:id()) -> boolean().
+    UserId :: od_space:id()) -> boolean().
 has_eff_user(SpaceId, UserId) when is_binary(SpaceId) ->
-    case od_space:get(SpaceId) of
-        {ok, #document{value = Space}} ->
-            has_eff_user(Space, UserId);
-        _ ->
-            false
-    end;
-has_eff_user(#od_space{eff_users = EffUsers}, UserId) ->
-    maps:is_key(UserId, EffUsers).
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, od_space, SpaceId);
+has_eff_user(Space, UserId) ->
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, Space).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying whether specified group is an effective group in given space.
+%% Predicate saying whether specified group is an effective group of given space.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_group(SpaceOrId :: od_space:id() | #od_space{},
-    GroupId :: od_group:id()) -> boolean().
+    GroupId :: od_space:id()) -> boolean().
 has_eff_group(SpaceId, GroupId) when is_binary(SpaceId) ->
-    case od_space:get(SpaceId) of
-        {ok, #document{value = Space}} ->
-            has_eff_group(Space, GroupId);
-        _ ->
-            false
-    end;
-has_eff_group(#od_space{eff_groups = EffGroups}, GroupId) ->
-    maps:is_key(GroupId, EffGroups).
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, od_space, SpaceId);
+has_eff_group(Space, GroupId) ->
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, Space).
 
 
 %%--------------------------------------------------------------------
@@ -754,11 +733,6 @@ has_eff_group(#od_space{eff_groups = EffGroups}, GroupId) ->
 -spec has_provider(SpaceOrId :: od_space:id() | #od_space{},
     ProviderId :: od_provider:id()) -> boolean().
 has_provider(SpaceId, ProviderId) when is_binary(SpaceId) ->
-    case od_space:get(SpaceId) of
-        {ok, #document{value = Space}} ->
-            has_provider(Space, ProviderId);
-        _ ->
-            false
-    end;
-has_provider(#od_space{providers = Providers}, ProviderId) ->
-    maps:is_key(ProviderId, Providers).
+    entity_graph:has_relation(direct, top_down, od_provider, ProviderId, od_space, SpaceId);
+has_provider(Space, ProviderId) ->
+    entity_graph:has_relation(direct, top_down, od_provider, ProviderId, Space).

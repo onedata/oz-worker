@@ -229,6 +229,15 @@ change_password_test(Config) ->
 -define(MANAGER_PRIVS, privileges:group_manager()).
 -define(ADMIN_PRIVS, privileges:group_admin()).
 
+-define(assertHasGroup(__Flag, __Config, __UserId, __GroupSpec, __Name, __Type, __Privileges, __DirectOrEff),
+    ?assertEqual(
+        __Flag,
+        has_group(__Config, __UserId, __GroupSpec, __Name, __Type, __Privileges, __DirectOrEff),
+        600,
+        100   % 600 Attempts every 100 ms - 1 minute
+    )
+).
+
 merge_groups_in_linked_accounts_test(Config) ->
     % Super groups are mocked in init per testcase
     % Start with linked acc with no groups
@@ -241,7 +250,7 @@ merge_groups_in_linked_accounts_test(Config) ->
     ?assertEqual({ok, []}, oz_test_utils:user_get_eff_groups(Config, UserId)),
 
     % Try linked acc with a group and check normalization
-    Path = [ 
+    Path = [
         #idp_group{
             name = <<"test-vo|">>,
             type = organization}
@@ -255,28 +264,28 @@ merge_groups_in_linked_accounts_test(Config) ->
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, SecondLinkedAcc]
     ),
-    
+
     ?assert(has_linked_accounts(Config, UserId, [SecondLinkedAcc])),
-    ?assert(has_group(
+    ?assertHasGroup(true,
         Config, UserId,
         Path, <<"(test-vo-)">>, organization,
         ?USER_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         Path, <<"(test-vo-)">>, organization,
         ?USER_PRIVS, effective
-    )),
-    
+    ),
+
     % Go back to linked acc with no groups and see if they were removed
     oz_test_utils:call_oz(
         Config, user_logic, merge_linked_account, [UserId, FirstLinkedAcc]
     ),
     ?assertEqual({ok, []}, oz_test_utils:user_get_groups(Config, UserId)),
-    ?assertEqual({ok, []}, oz_test_utils:user_get_eff_groups(Config, UserId)),
+    ?assertEqual({ok, []}, oz_test_utils:user_get_eff_groups(Config, UserId), 60),
 
     % Linked acc with two groups
-    Path1 = [ 
+    Path1 = [
         #idp_group{
             name = <<"another-vo">>,
             type = organization},
@@ -319,56 +328,56 @@ merge_groups_in_linked_accounts_test(Config) ->
         Config, user_logic, merge_linked_account, [UserId, ThirdLinkedAcc]
     ),
     ?assert(has_linked_accounts(Config, UserId, [ThirdLinkedAcc])),
-    ?assertNot(has_group(
+    ?assertHasGroup(false,
         Config, UserId,
         lists:sublist(Path1,1),
         <<"another-vo">>, organization, ?USER_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path1,1),
         <<"another-vo">>, organization, ?USER_PRIVS, effective
-    )),
-    ?assertNot(has_group(
+    ),
+    ?assertHasGroup(false,
         Config, UserId,
         lists:sublist(Path1,2),
         <<"some-unit">>, unit, ?USER_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path1,2),
         <<"some-unit">>, unit, ?USER_PRIVS, effective
-    )),
-    ?assertNot(has_group(
+    ),
+    ?assertHasGroup(false,
         Config, UserId,
         lists:sublist(Path1,3),
         <<"some-team">>, team, ?USER_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path1,3),
         <<"some-team">>, team, ?USER_PRIVS, effective
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path1,4),
         <<"some-role">>, role, ?ADMIN_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path1,4),
         <<"some-role">>, role, ?ADMIN_PRIVS, effective
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path2,4),
         <<"other-role">>, role, ?MANAGER_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path2,4),
         <<"other-role">>, role, ?MANAGER_PRIVS, effective
-    )),
+    ),
 
     % Linked acc the same as before but with one group removed
     FourthLinkedAcc = #linked_account{idp = ?IDP, groups = [
@@ -381,56 +390,56 @@ merge_groups_in_linked_accounts_test(Config) ->
         Config, user_logic, merge_linked_account, [UserId, FourthLinkedAcc]
     ),
     ?assert(has_linked_accounts(Config, UserId, [FourthLinkedAcc])),
-    ?assertNot(has_group(
+    ?assertHasGroup(false,
         Config, UserId,
         lists:sublist(Path1,1),
         <<"another-vo">>, organization, ?USER_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path1,1),
         <<"another-vo">>, organization, ?USER_PRIVS, effective
-    )),
-    ?assertNot(has_group(
+    ),
+    ?assertHasGroup(false,
         Config, UserId,
         lists:sublist(Path1,2),
         <<"some-unit">>, unit, ?USER_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path1,2),
         <<"some-unit">>, unit, ?USER_PRIVS, effective
-    )),
-    ?assertNot(has_group(
+    ),
+    ?assertHasGroup(false,
         Config, UserId,
         lists:sublist(Path1,3),
         <<"some-team">>, team, ?USER_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path1,3),
         <<"some-team">>, team, ?USER_PRIVS, effective
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path1,4),
         <<"some-role">>, role, ?ADMIN_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path1,4),
         <<"some-role">>, role, ?ADMIN_PRIVS, effective
-    )),
-    ?assertNot(has_group(
+    ),
+    ?assertHasGroup(false,
         Config, UserId,
         lists:sublist(Path2,4),
         <<"other-role">>, role, ?MANAGER_PRIVS, direct
-    )),
-    ?assertNot(has_group(
+    ),
+    ?assertHasGroup(false,
         Config, UserId,
         lists:sublist(Path2,4),
         <<"other-role">>, role, ?MANAGER_PRIVS, effective
-    )),
+    ),
 
     % Linked acc from other provider
     Path3 = [
@@ -458,36 +467,36 @@ merge_groups_in_linked_accounts_test(Config) ->
     % Because the user belongs to the super group, he should have admin
     % rights (effective) in all the groups, beside the admin group (his privs
     % there are decided based on membership spec in admin group).
-    ?assertNot(has_group(
+    ?assertHasGroup(false,
         Config, UserId,
         lists:sublist(Path3,1),
         <<"example-vo">>, organization, ?USER_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path3,1),
         <<"example-vo">>, organization, ?ADMIN_PRIVS, effective
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path3,2),
         <<"new-team">>, team, ?MANAGER_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path3,2),
         <<"new-team">>, team, ?ADMIN_PRIVS, effective
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         ?SUPERGROUP_PATH,
         ?SUPERGROUP_NAME, team, ?USER_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         ?SUPERGROUP_PATH,
         ?SUPERGROUP_NAME, team, ?USER_PRIVS, effective
-    )),
+    ),
 
     % Linked acc the same as above but without the super group
     SixthLinkedAcc = #linked_account{idp = ?IDP_WITH_SUPERGROUP, groups = [
@@ -501,36 +510,36 @@ merge_groups_in_linked_accounts_test(Config) ->
     ),
     ?assert(has_linked_accounts(Config, UserId, [FourthLinkedAcc, SixthLinkedAcc])),
     % Now, the user should lose admin privs to all groups
-    ?assertNot(has_group(
+    ?assertHasGroup(false,
         Config, UserId,
         lists:sublist(Path3,1),
         <<"example-vo">>, organization, ?USER_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path3,1),
         <<"example-vo">>, organization, ?USER_PRIVS, effective
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path3,2),
         <<"new-team">>, team, ?MANAGER_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path3,2),
         <<"new-team">>, team, ?MANAGER_PRIVS, effective
-    )),
-    ?assertNot(has_group(
+    ),
+    ?assertHasGroup(false,
         Config, UserId,
         ?SUPERGROUP_PATH,
         ?SUPERGROUP_NAME, team, ?USER_PRIVS, direct
-    )),
-    ?assertNot(has_group(
+    ),
+    ?assertHasGroup(false,
         Config, UserId,
         ?SUPERGROUP_PATH,
         ?SUPERGROUP_NAME, team, ?USER_PRIVS, effective
-    )),
+    ),
 
     % Linked acc the same as above but user's privileges in the group
     % are downgraded to member.
@@ -545,36 +554,36 @@ merge_groups_in_linked_accounts_test(Config) ->
     ),
     ?assert(has_linked_accounts(Config, UserId, [FourthLinkedAcc, SeventhLinkedAcc])),
     % Now, the user should lose admin privs to all groups
-    ?assertNot(has_group(
+    ?assertHasGroup(false,
         Config, UserId,
         lists:sublist(Path3,1),
         <<"example-vo">>, organization, ?USER_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path3,1),
         <<"example-vo">>, organization, ?USER_PRIVS, effective
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path3,2),
         <<"new-team">>, team, ?USER_PRIVS, direct
-    )),
-    ?assert(has_group(
+    ),
+    ?assertHasGroup(true,
         Config, UserId,
         lists:sublist(Path3,2),
         <<"new-team">>, team, ?USER_PRIVS, effective
-    )),
-    ?assertNot(has_group(
+    ),
+    ?assertHasGroup(false,
         Config, UserId,
         ?SUPERGROUP_PATH,
         ?SUPERGROUP_NAME, team, ?USER_PRIVS, direct
-    )),
-    ?assertNot(has_group(
+    ),
+    ?assertHasGroup(false,
         Config, UserId,
         ?SUPERGROUP_PATH,
         ?SUPERGROUP_NAME, team, ?USER_PRIVS, effective
-    )),
+    ),
     ok.
 
 
@@ -735,13 +744,13 @@ has_group(Config, UserId, GroupSpec, Name, Type, Privileges, DirectOrEff) ->
             true ->
                 {ok, UserPrivileges} = case DirectOrEff of
                     direct ->
-                        oz_test_utils:group_get_user_privileges(
-                            Config, GroupId, UserId
-                        );
+                        oz_test_utils:call_oz(Config, group_logic, get_user_privileges, [
+                            ?ROOT, GroupId, UserId
+                        ]);
                     effective ->
-                        oz_test_utils:group_get_eff_user_privileges(
-                            Config, GroupId, UserId
-                        )
+                        oz_test_utils:call_oz(Config, group_logic, get_eff_user_privileges, [
+                            ?ROOT, GroupId, UserId
+                        ])
                 end,
                 UserPrivileges =:= Privileges
         end

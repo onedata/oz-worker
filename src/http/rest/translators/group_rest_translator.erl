@@ -18,7 +18,7 @@
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([create_response/3, get_response/2]).
+-export([create_response/4, get_response/2]).
 
 %%%===================================================================
 %%% API
@@ -26,17 +26,13 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates given entity logic CREATE result into REST response
-%% expressed by #rest_resp{} record. GRI holds the #gri{} od the request,
-%% new GRI holds the #gri{} of new aspect that was created.
+%% {@link rest_translator_behaviour} callback create_response/4.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
-    Result :: {data, term()} | {fetched, entity_logic:gri(), term()} |
-    {not_fetched, entity_logic:gri()} |
-    {not_fetched, entity_logic:gri(), entity_logic:auth_hint()}) -> #rest_resp{}.
-
-create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched, #gri{id = GroupId}}) ->
+    entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
+    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
+create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#gri{id = GroupId}, _}) ->
     LocationTokens = case AuthHint of
         ?AS_USER(_UserId) ->
             [<<"user">>, <<"groups">>, GroupId];
@@ -47,29 +43,26 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, {not_fetched,
     end,
     rest_translator:created_reply(LocationTokens);
 
-create_response(Gri=#gri{id = undefined, aspect = instance}, AuthHint, {fetched, #gri{id = GroupId}, _}) ->
-    create_response(Gri, AuthHint, {not_fetched, #gri{id = GroupId}});
+create_response(#gri{aspect = join} = Gri, AuthHint, resource, Result) ->
+    create_response(Gri#gri{aspect = instance}, AuthHint, resource, Result);
 
-create_response(#gri{aspect = join} = Gri, AuthHint, Result) ->
-    create_response(Gri#gri{aspect = instance}, AuthHint, Result);
-
-create_response(#gri{id = ParentGroupId, aspect = child}, _, {fetched, #gri{id = GroupId}, _}) ->
+create_response(#gri{id = ParentGroupId, aspect = child}, _, resource, {#gri{id = GroupId}, _}) ->
     rest_translator:created_reply([<<"groups">>, ParentGroupId, <<"children">>, GroupId]);
 
-create_response(#gri{aspect = invite_user_token}, _, {data, Macaroon}) ->
+create_response(#gri{aspect = invite_user_token}, _, value, Macaroon) ->
     {ok, Token} = onedata_macaroons:serialize(Macaroon),
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 
-create_response(#gri{aspect = invite_group_token}, _, {data, Macaroon}) ->
+create_response(#gri{aspect = invite_group_token}, _, value, Macaroon) ->
     {ok, Token} = onedata_macaroons:serialize(Macaroon),
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 
-create_response(#gri{id = GroupId, aspect = {user, UserId}}, _, {not_fetched, #gri{id = UserId}, _}) ->
+create_response(#gri{id = GroupId, aspect = {user, UserId}}, _, resource, _) ->
     rest_translator:created_reply(
         [<<"groups">>, GroupId, <<"users">>, UserId]
     );
 
-create_response(#gri{id = GroupId, aspect = {child, ChGrId}}, _, {not_fetched, #gri{id = ChGrId}, _}) ->
+create_response(#gri{id = GroupId, aspect = {child, ChGrId}}, _, resource, _) ->
     rest_translator:created_reply(
         [<<"groups">>, GroupId, <<"children">>, ChGrId]
     ).
@@ -77,12 +70,10 @@ create_response(#gri{id = GroupId, aspect = {child, ChGrId}}, _, {not_fetched, #
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates given entity logic GET result into REST response
-%% expressed by #rest_resp{} record.
+%% {@link rest_translator_behaviour} callback get_response/2.
 %% @end
 %%--------------------------------------------------------------------
--spec get_response(entity_logic:gri(), entity_logic:get_result()) ->
-    #rest_resp{}.
+-spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
 get_response(#gri{id = undefined, aspect = list}, Groups) ->
     rest_translator:ok_body_reply(#{<<"groups">> => Groups});
 

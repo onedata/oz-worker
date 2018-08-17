@@ -248,7 +248,7 @@ get_all_sessions(UserId) ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    7.
+    8.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -359,6 +359,10 @@ get_record_struct(6) ->
     % Remove chosen_provider field, rename login to alias
     {record, lists:keydelete(chosen_provider, 1, lists:keyreplace(login, 1, Struct, {alias, string}))};
 get_record_struct(7) ->
+    % There are no changes, but all records must be marked dirty to recalculate
+    % effective relations (as intermediaries computing logic has changed).
+    get_record_struct(6);
+get_record_struct(8) ->
     % Changes:
     %   * new field - active sessions
     %   * groups spec in linked_accounts from binaries to idp_entitlement records
@@ -752,6 +756,66 @@ upgrade_record(5, User) ->
 upgrade_record(6, User) ->
     {od_user,
         Name,
+        Login,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        _EffGroups,
+        _EffSpaces,
+        _EffProviders,
+        _EffHandleServices,
+        _EffHandles,
+
+        _TopDownDirty
+    } = User,
+
+    {7, {od_user,
+        Name,
+        Login,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        #{},
+        #{},
+        #{},
+        #{},
+        #{},
+
+        true
+    }};
+upgrade_record(7, User) ->
+    {od_user,
+        Name,
         Alias,
         EmailList,
         BasicAuthEnabled,
@@ -802,7 +866,7 @@ upgrade_record(6, User) ->
             (oz_providers_list_groups) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
             (oz_providers_list_spaces) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
 
-            (Other) -> Other 
+            (Other) -> Other
         end, Privileges)))
     end,
 
@@ -810,12 +874,12 @@ upgrade_record(6, User) ->
         (<<"ut">>) -> unit;
         (<<"tm">>) -> team;
         (<<"rl">>) -> role
-              end,
+    end,
 
     MapPrivileges = fun(<<"admin">>) -> admin;
         (<<"manager">>) -> manager;
         (<<"member">>) -> member
-                    end,
+    end,
     NewLinkedAccounts = lists:map(fun(LinkedAccount) ->
         OldGroups = LinkedAccount#linked_account.groups,
         NewGroups = lists:map(fun(Group) ->
@@ -834,9 +898,9 @@ upgrade_record(6, User) ->
             }
         end, OldGroups),
         LinkedAccount#linked_account{groups = NewGroups}
-                                  end, LinkedAccounts),
+    end, LinkedAccounts),
 
-    {7, #od_user{
+    {8, #od_user{
         name = Name,
         alias = Alias,
         email_list = EmailList,
@@ -864,4 +928,3 @@ upgrade_record(6, User) ->
         eff_handle_services = EffHandleServices,
         eff_handles = EffHandles
     }}.
-

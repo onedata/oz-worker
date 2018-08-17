@@ -134,29 +134,25 @@ create_handle_test(Config) ->
         Config, ?ROOT, ?DOI_SERVICE
     ),
     {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = oz_test_utils:all_handle_privileges(Config),
-    AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     ExpResourceType = <<"Share">>,
     VerifyFun = fun(HandleId) ->
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
         {ok, Handle} = oz_test_utils:get_handle(Config, HandleId),
         ?assertEqual(ExpResourceType, Handle#od_handle.resource_type),
         ?assertEqual(ShareId, Handle#od_handle.resource_id),
         ?assertEqual(HService, Handle#od_handle.handle_service),
+
         ?assertEqual(#{G1 => AllPrivs}, Handle#od_handle.groups),
-        ?assertEqual(
-            #{G1 => {AllPrivs, [{od_handle, HandleId}]}},
-            Handle#od_handle.eff_groups
-        ),
+        ?assertEqual(#{G1 => {AllPrivs, [{od_handle, <<"self">>}]}}, Handle#od_handle.eff_groups),
         ?assertEqual(#{}, Handle#od_handle.users),
-        ?assertEqual(
-            #{
-                U1 => {AllPrivs, [{od_group, G1}]},
-                U2 => {AllPrivs, [{od_group, G1}]}
-            },
-            Handle#od_handle.eff_users
-        ),
+        ?assertEqual(#{
+            U1 => {AllPrivs, [{od_group, G1}]},
+            U2 => {AllPrivs, [{od_group, G1}]}
+        }, Handle#od_handle.eff_users),
         true
     end,
 
@@ -192,8 +188,6 @@ create_handle_test(Config) ->
             gri = #gri{type = od_handle, aspect = instance},
             auth_hint = ?AS_GROUP(G1),
             expected_result = ?OK_MAP_CONTAINS(#{
-                <<"effectiveGroups">> => #{G1 => AllPrivsBin},
-                <<"effectiveUsers">> => #{U1 => AllPrivsBin, U2 => AllPrivsBin},
                 <<"metadata">> => ?DC_METADATA,
                 <<"handleServiceId">> => HService,
                 <<"resourceType">> => ExpResourceType,

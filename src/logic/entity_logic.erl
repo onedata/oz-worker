@@ -39,9 +39,11 @@ od_handle_service | od_handle | oz_privileges.
 #od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}.
 -type aspect() :: gs_protocol:aspect().
 -type scope() :: gs_protocol:scope().
+-type data_format() :: gs_protocol:data_format().
 -type data() :: gs_protocol:data().
 -type gri() :: gs_protocol:gri().
 -type auth_hint() :: gs_protocol:auth_hint().
+
 -type create_result() :: gs_protocol:graph_create_result().
 -type get_result() :: gs_protocol:graph_get_result().
 -type delete_result() :: gs_protocol:graph_delete_result().
@@ -84,6 +86,7 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
     aspect/0,
     scope/0,
     gri/0,
+    data_format/0,
     data/0,
     auth_hint/0,
     create_result/0,
@@ -201,13 +204,12 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = create}}) ->
                     ensure_operation_supported(
                         State))))),
     case {Result, Req} of
-        {{ok, _}, #el_req{gri = #gri{aspect = instance}, client = Cl}} ->
+        {{ok, resource, Resource}, #el_req{gri = #gri{aspect = instance}, client = Cl}} ->
             % If an entity instance is created, log an information about it
             % (it's a significant operation and this information might be useful).
-            {EntType, EntId} = case Result of
-                {ok, {fetched, #gri{type = Type, id = Id}, _}} -> {Type, Id};
-                {ok, {not_fetched, #gri{type = Type, id = Id}}} -> {Type, Id};
-                {ok, {not_fetched, #gri{type = Type, id = Id}, _}} -> {Type, Id}
+            {EntType, EntId} = case Resource of
+                {#gri{type = Type, id = Id}, _} -> {Type, Id};
+                {#gri{type = Type, id = Id}, _, _} -> {Type, Id}
             end,
             ?debug("~s has been created by client: ~s", [
                 EntType:to_string(EntId),
