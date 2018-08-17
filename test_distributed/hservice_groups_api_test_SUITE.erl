@@ -76,6 +76,7 @@ add_group_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
 
     VerifyEndFun =

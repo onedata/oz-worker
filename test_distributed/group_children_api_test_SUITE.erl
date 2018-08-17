@@ -379,6 +379,8 @@ get_child_privileges_test(Config) ->
     {ok, G2} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME2),
     {ok, G2} = oz_test_utils:group_add_group(Config, G1, G2),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     AllPrivs = oz_test_utils:all_group_privileges(Config),
     InitialPrivs = [?GROUP_VIEW],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
