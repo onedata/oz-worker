@@ -106,8 +106,8 @@ create_group_performance(Config) ->
         {description, "Checks the performance of creating a lot of independent groups."},
         {parameters, [?GROUP_NUM(100)]},
         ?PERF_CFG(small, [?GROUP_NUM(100)]),
-        ?PERF_CFG(medium, [?GROUP_NUM(1000)]),
-        ?PERF_CFG(large, [?GROUP_NUM(2500)])
+        ?PERF_CFG(medium, [?GROUP_NUM(750)]),
+        ?PERF_CFG(large, [?GROUP_NUM(1500)])
     ]).
 create_group_performance_base(Config) ->
     GroupNum = ?GROUP_NUM,
@@ -154,8 +154,8 @@ create_space_performance(Config) ->
         {description, "Checks the performance of creating a lot of independent spaces."},
         {parameters, [?SPACE_NUM(100)]},
         ?PERF_CFG(small, [?SPACE_NUM(100)]),
-        ?PERF_CFG(medium, [?SPACE_NUM(1000)]),
-        ?PERF_CFG(large, [?SPACE_NUM(2500)])
+        ?PERF_CFG(medium, [?SPACE_NUM(750)]),
+        ?PERF_CFG(large, [?SPACE_NUM(1500)])
     ]).
 create_space_performance_base(Config) ->
     SpaceNum = ?SPACE_NUM,
@@ -299,8 +299,8 @@ big_group_performance(Config) ->
         {description, "Checks the performance of adding users to a large group."},
         {parameters, [?STARTING_USER_NUM(80), ?ENDING_USER_NUM(100)]},
         ?PERF_CFG(small, [?STARTING_USER_NUM(80), ?ENDING_USER_NUM(100)]),
-        ?PERF_CFG(medium, [?STARTING_USER_NUM(800), ?ENDING_USER_NUM(1000)]),
-        ?PERF_CFG(large, [?STARTING_USER_NUM(2000), ?ENDING_USER_NUM(2500)])
+        ?PERF_CFG(medium, [?STARTING_USER_NUM(650), ?ENDING_USER_NUM(750)]),
+        ?PERF_CFG(large, [?STARTING_USER_NUM(1300), ?ENDING_USER_NUM(1500)])
     ]).
 big_group_performance_base(Config) ->
     StartingUserNum = ?STARTING_USER_NUM,
@@ -358,10 +358,10 @@ update_privileges_performance(Config) ->
         {repeats, 3},
         {success_rate, 100},
         {description, "Checks the performance of updating user privileges in a group."},
-        {parameters, [?USER_NUM(30)]},
+        {parameters, [?USER_NUM(100)]},
         ?PERF_CFG(small, [?USER_NUM(100)]),
-        ?PERF_CFG(medium, [?USER_NUM(1000)]),
-        ?PERF_CFG(large, [?USER_NUM(2000)])
+        ?PERF_CFG(medium, [?USER_NUM(500)]),
+        ?PERF_CFG(large, [?USER_NUM(1000)])
     ]).
 update_privileges_performance_base(Config) ->
     UserNum = ?USER_NUM,
@@ -489,6 +489,7 @@ create_group_chain(Config, Client, NumberOfGroups, BottomGroup) ->
         {ok, PreviousGroupId} = oz_test_utils:group_add_group(
             Config, Client, ParentId, PreviousGroupId
         ),
+        io:format(user, "x", []),
         ParentId
     end, BottomGroup, lists:seq(2, NumberOfGroups)),
     {BottomGroup, TopGroup}.

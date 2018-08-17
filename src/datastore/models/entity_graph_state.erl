@@ -6,26 +6,27 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This document contains info needed to calculate effective graph of entities.
-%%% Should not be used directly (see entity_graph module).
+%%% This document contains entity graph state singleton, carrying information
+%%% about dirty entities. It is used during recalculation of entity graph.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(entity_graph_state).
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/1, get/1, update/2]).
+-export([initialize/0, get/0, update/1]).
 
 %% datastore_model callbacks
 -export([init/0]).
 
--type id() :: binary().
--type record() :: #entity_graph_state{}.
--type doc() :: datastore_doc:doc(record()).
--type diff() :: datastore_doc:diff(record()).
--export_type([id/0, record/0]).
+-type state() :: #entity_graph_state{}.
+-type diff() :: datastore_doc:diff(state()).
+-export_type([state/0, diff/0]).
+
+-define(STATE_KEY, <<"entity_graph_state">>).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -38,30 +39,44 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates entity graph.
+%% Creates a new entity graph state singleton if it does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec create(doc()) -> {ok, doc()} | {error, term()}.
-create(Doc) ->
-    datastore_model:create(?CTX, Doc).
+-spec initialize() -> ok.
+initialize() ->
+    {ok, _} = datastore_model:update(?CTX, ?STATE_KEY,
+        fun(State) -> {ok, State} end,
+        #document{key = ?STATE_KEY, value = #entity_graph_state{}}
+    ),
+    ok.
+
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns entity graph by ID.
+%% Returns the entity graph state singleton.
 %% @end
 %%--------------------------------------------------------------------
--spec get(id()) -> {ok, doc()} | {error, term()}.
-get(GraphId) ->
-    datastore_model:get(?CTX, GraphId).
+-spec get() -> state().
+get() ->
+    case datastore_model:get(?CTX, ?STATE_KEY) of
+        {ok, #document{value = State}} ->
+            State;
+        Error ->
+            ?error("Cannot retrieve state of effective graph: ~p", [Error]),
+            error(cannot_get_state)
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates entity graph by ID.
+%% Updates entity graph state singleton.
 %% @end
 %%--------------------------------------------------------------------
--spec update(id(), diff())-> {ok, doc()} | {error, term()}.
-update(GraphId, Diff) ->
-    datastore_model:update(?CTX, GraphId, Diff).
+-spec update(diff()) -> ok | {error, term()}.
+update(Diff) ->
+    {ok, _} = datastore_model:update(?CTX, ?STATE_KEY, Diff),
+    ok.
+
 
 %%%===================================================================
 %%% datastore_model callbacks
