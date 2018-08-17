@@ -542,11 +542,20 @@ get_relations(effective, Direction, EntityType, Entity) ->
             get_ids(get_eff_relations(Direction, EntityType, Entity));
         true ->
             % If the entity is not up to date, return the sum of direct and
-            % effective relations
-            lists:usort(lists:append(
-                get_ids(get_direct_relations(Direction, EntityType, Entity)),
-                get_ids(get_eff_relations(Direction, EntityType, Entity))
-            ))
+            % effective relations.
+            Direct = get_ids(get_direct_relations(Direction, EntityType, Entity)),
+            Effective = get_eff_relations(Direction, EntityType, Entity),
+            lists:usort(maps:fold(fun(EntityId, Relation, AccList) ->
+                case get_intermediaries(Relation) of
+                    [{_, ?SELF_INTERMEDIARY}] ->
+                        % Do not include effective relations that have
+                        % only the direct intermediary but do not appear
+                        % among direct relations.
+                        AccList;
+                    _ ->
+                        [EntityId | AccList]
+                end
+            end, Direct, Effective))
     end.
 
 
@@ -564,18 +573,28 @@ get_relations_with_privileges(direct, Direction, EntityType, Entity) ->
 get_relations_with_privileges(effective, Direction, EntityType, Entity) ->
     case is_dirty(Direction, Entity) of
         false ->
-            eff_relation_to_relation(get_eff_relations(Direction, EntityType, Entity));
+            eff_relations_to_relations(get_eff_relations(Direction, EntityType, Entity));
         true ->
             % If the entity is not up to date, return the merged map of direct
-            % and effective relations with privileges
-            Direct = get_direct_relations(Direction, EntityType, Entity),
-            Effective = eff_relation_to_relation(
-                get_eff_relations(Direction, EntityType, Entity)
-            ),
-            maps:fold(fun(EntityId, Privileges, EffPrivsAcc) ->
-                Merged = privileges:union(Privileges, maps:get(EntityId, EffPrivsAcc, [])),
-                maps:put(EntityId, Merged, EffPrivsAcc)
-            end, Effective, Direct)
+            % and effective relations with privileges.
+            AllDirect = get_all_direct_relations(Direction, Entity),
+            Direct = maps:get(EntityType, AllDirect, #{}),
+            Effective = get_eff_relations(Direction, EntityType, Entity),
+            maps:fold(fun
+                (EntityId, {_, [{_, ?SELF_INTERMEDIARY}]}, AccMap) ->
+                    % Do not include effective relations that have
+                    % only the direct intermediary but do not appear
+                    % among direct relations.
+                    AccMap;
+                (EntityId, {_, Intermediaries}, AccMap) ->
+                    DirectPrivs = maps:get(EntityId, AccMap, []),
+                    InheritedPrivs = lists:foldl(fun({Type, Id}, Acc) ->
+                        IntermediaryPrivs = maps:get(Id, maps:get(Type, AllDirect, #{}), []),
+                        privileges:union(Acc, IntermediaryPrivs)
+                    % Skip eff privileges via self (direct membership)
+                    end, [], lists:keydelete(?SELF_INTERMEDIARY, 2, Intermediaries)),
+                    maps:put(EntityId, privileges:union(DirectPrivs, InheritedPrivs), AccMap)
+            end, Direct, Effective)
     end.
 
 
@@ -616,29 +635,9 @@ has_relation(RelationType, Direction, SubjectEntityType, SubjectEntityId, Entity
 %%--------------------------------------------------------------------
 -spec get_privileges(relation_type(), direction(), SubjectEntityType :: entity_type(),
     SubjectEntityId :: entity_id(), entity()) -> privileges().
-get_privileges(direct, Direction, SubjectEntityType, SubjectEntityId, Entity) ->
-    DirectRelations = get_direct_relations(Direction, SubjectEntityType, Entity),
-    maps:get(SubjectEntityId, DirectRelations, []);
-get_privileges(effective, Direction, SubjectEntityType, SubjectEntityId, Entity) ->
-    EffRelations = get_eff_relations(Direction, SubjectEntityType, Entity),
-    {EffPrivileges, Intermediaries} = maps:get(SubjectEntityId, EffRelations, {[], []}),
-    case is_dirty(Direction, Entity) of
-        false ->
-            EffPrivileges;
-        true ->
-            % If the entity is not up to date, return the sum of all direct privileges
-            % of self and intermediaries, from whom the subject entity inherits
-            DirectPrivileges = get_privileges(
-                direct, Direction, SubjectEntityType, SubjectEntityId, Entity
-            ),
-            InheritedPrivileges = lists:foldl(fun
-                ({_, ?SELF_INTERMEDIARY}, Acc) ->
-                    Acc;
-                ({Type, Id}, Acc) ->
-                    Acc ++ get_privileges(direct, Direction, Type, Id, Entity)
-            end, [], Intermediaries),
-            privileges:union(DirectPrivileges, InheritedPrivileges)
-    end.
+get_privileges(RelationType, Direction, SubjectEntityType, SubjectEntityId, Entity) ->
+    Relations = get_relations_with_privileges(RelationType, Direction, SubjectEntityType, Entity),
+    maps:get(SubjectEntityId, Relations, []).
 
 
 %%--------------------------------------------------------------------
@@ -725,7 +724,7 @@ delete_with_relations(EntityType, EntityId) ->
                 lists:foreach(
                     fun(ParId) ->
                         ok = delete_with_relations(ParType, ParId),
-                        ?info("~s has been deleted because it depended on ~s "
+                        ?debug("~s has been deleted because it depended on ~s "
                         "(that is being deleted)", [
                             ParType:to_string(ParId),
                             EntityType:to_string(EntityId)
@@ -737,7 +736,7 @@ delete_with_relations(EntityType, EntityId) ->
                 lists:foreach(
                     fun(ChId) ->
                         ok = delete_with_relations(ChType, ChId),
-                        ?info("~s has been deleted because it depended on ~s "
+                        ?debug("~s has been deleted because it depended on ~s "
                         "(that is being deleted)", [
                             ChType:to_string(ChId),
                             EntityType:to_string(EntityId)
@@ -1411,29 +1410,29 @@ remove_parent(#od_handle{} = Handle, od_handle_service, _HServiceId) ->
 gather_eff_from_itself(bottom_up, #od_group{} = Group) ->
     #od_group{users = Users, children = Groups} = Group,
     #{
-        od_user => relation_to_eff_relation(Users, [{od_group, ?SELF_INTERMEDIARY}]),
-        od_group => relation_to_eff_relation(Groups, [{od_group, ?SELF_INTERMEDIARY}])
+        od_user => relations_to_eff_relations(Users, [{od_group, ?SELF_INTERMEDIARY}]),
+        od_group => relations_to_eff_relations(Groups, [{od_group, ?SELF_INTERMEDIARY}])
     };
 gather_eff_from_itself(bottom_up, #od_space{} = Space) ->
     #od_space{users = Users, groups = Groups} = Space,
     #{
-        od_user => relation_to_eff_relation(Users, [{od_space, ?SELF_INTERMEDIARY}]),
-        od_group => relation_to_eff_relation(Groups, [{od_space, ?SELF_INTERMEDIARY}])
+        od_user => relations_to_eff_relations(Users, [{od_space, ?SELF_INTERMEDIARY}]),
+        od_group => relations_to_eff_relations(Groups, [{od_space, ?SELF_INTERMEDIARY}])
     };
 gather_eff_from_itself(bottom_up, #od_provider{} = Provider) ->
     #od_provider{spaces = Spaces} = Provider,
-    #{od_space => relation_to_eff_relation(Spaces, [{od_provider, ?SELF_INTERMEDIARY}])};
+    #{od_space => relations_to_eff_relations(Spaces, [{od_provider, ?SELF_INTERMEDIARY}])};
 gather_eff_from_itself(bottom_up, #od_handle_service{} = HService) ->
     #od_handle_service{users = Users, groups = Groups} = HService,
     #{
-        od_user => relation_to_eff_relation(Users, [{od_handle_service, ?SELF_INTERMEDIARY}]),
-        od_group => relation_to_eff_relation(Groups, [{od_handle_service, ?SELF_INTERMEDIARY}])
+        od_user => relations_to_eff_relations(Users, [{od_handle_service, ?SELF_INTERMEDIARY}]),
+        od_group => relations_to_eff_relations(Groups, [{od_handle_service, ?SELF_INTERMEDIARY}])
     };
 gather_eff_from_itself(bottom_up, #od_handle{} = Handle) ->
     #od_handle{users = Users, groups = Groups} = Handle,
     #{
-        od_user => relation_to_eff_relation(Users, [{od_handle, ?SELF_INTERMEDIARY}]),
-        od_group => relation_to_eff_relation(Groups, [{od_handle, ?SELF_INTERMEDIARY}])
+        od_user => relations_to_eff_relations(Users, [{od_handle, ?SELF_INTERMEDIARY}]),
+        od_group => relations_to_eff_relations(Groups, [{od_handle, ?SELF_INTERMEDIARY}])
     };
 gather_eff_from_itself(top_down, #od_user{} = User) ->
     #od_user{
@@ -1442,10 +1441,10 @@ gather_eff_from_itself(top_down, #od_user{} = User) ->
         oz_privileges = OzPrivileges
     } = User,
     #{
-        od_group => relation_to_eff_relation(Groups, [{od_user, ?SELF_INTERMEDIARY}]),
-        od_space => relation_to_eff_relation(Spaces, [{od_user, ?SELF_INTERMEDIARY}]),
-        od_handle_service => relation_to_eff_relation(HServices, [{od_user, ?SELF_INTERMEDIARY}]),
-        od_handle => relation_to_eff_relation(Handles, [{od_user, ?SELF_INTERMEDIARY}]),
+        od_group => relations_to_eff_relations(Groups, [{od_user, ?SELF_INTERMEDIARY}]),
+        od_space => relations_to_eff_relations(Spaces, [{od_user, ?SELF_INTERMEDIARY}]),
+        od_handle_service => relations_to_eff_relations(HServices, [{od_user, ?SELF_INTERMEDIARY}]),
+        od_handle => relations_to_eff_relations(Handles, [{od_user, ?SELF_INTERMEDIARY}]),
         oz_privileges => OzPrivileges
     };
 gather_eff_from_itself(top_down, #od_group{} = Group) ->
@@ -1455,15 +1454,15 @@ gather_eff_from_itself(top_down, #od_group{} = Group) ->
         oz_privileges = OzPrivileges
     } = Group,
     #{
-        od_group => relation_to_eff_relation(Groups, [{od_group, ?SELF_INTERMEDIARY}]),
-        od_space => relation_to_eff_relation(Spaces, [{od_group, ?SELF_INTERMEDIARY}]),
-        od_handle_service => relation_to_eff_relation(HServices, [{od_group, ?SELF_INTERMEDIARY}]),
-        od_handle => relation_to_eff_relation(Handles, [{od_group, ?SELF_INTERMEDIARY}]),
+        od_group => relations_to_eff_relations(Groups, [{od_group, ?SELF_INTERMEDIARY}]),
+        od_space => relations_to_eff_relations(Spaces, [{od_group, ?SELF_INTERMEDIARY}]),
+        od_handle_service => relations_to_eff_relations(HServices, [{od_group, ?SELF_INTERMEDIARY}]),
+        od_handle => relations_to_eff_relations(Handles, [{od_group, ?SELF_INTERMEDIARY}]),
         oz_privileges => OzPrivileges
     };
 gather_eff_from_itself(top_down, #od_space{} = Space) ->
     #od_space{providers = Providers} = Space,
-    #{od_provider => relation_to_eff_relation(get_ids(Providers), [{od_space, ?SELF_INTERMEDIARY}])}.
+    #{od_provider => relations_to_eff_relations(get_ids(Providers), [{od_space, ?SELF_INTERMEDIARY}])}.
 
 
 %%--------------------------------------------------------------------
@@ -1524,7 +1523,7 @@ gather_eff_from_neighbours(top_down, #od_user{} = User) ->
                 value = #od_space{
                     providers = Providers
                 }}} = od_space:get(SpaceId),
-            #{od_provider => relation_to_eff_relation(
+            #{od_provider => relations_to_eff_relations(
                 get_ids(Providers), [{od_space, SpaceId}]
             )}
         end, Spaces),
@@ -1544,7 +1543,7 @@ gather_eff_from_neighbours(top_down, #od_group{} = Group) ->
                 value = #od_space{
                     providers = Providers
                 }}} = od_space:get(SpaceId),
-            #{od_provider => relation_to_eff_relation(
+            #{od_provider => relations_to_eff_relations(
                 get_ids(Providers), [{od_space, SpaceId}]
             )}
         end, Spaces),
@@ -1939,15 +1938,15 @@ merge_eff_relations(EffMap1, EffMap2) when is_map(EffMap1) andalso is_map(EffMap
 %% Converts relations (with attrs or without) to effective relations.
 %% @end
 %%--------------------------------------------------------------------
--spec relation_to_eff_relation(relations() | relations_with_attrs(),
+-spec relations_to_eff_relations(relations() | relations_with_attrs(),
     intermediaries()) ->
     eff_relations() | eff_relations_with_attrs().
-relation_to_eff_relation(List, Intermediaries) when is_list(List) ->
+relations_to_eff_relations(List, Intermediaries) when is_list(List) ->
     lists:foldl(
         fun(NeighbourId, AccMap) ->
             AccMap#{NeighbourId => Intermediaries}
         end, #{}, List);
-relation_to_eff_relation(Map, Intermediaries) when is_map(Map) ->
+relations_to_eff_relations(Map, Intermediaries) when is_map(Map) ->
     maps:map(
         fun(_NeighbourId, Attributes) ->
             {Attributes, Intermediaries}
@@ -1960,12 +1959,24 @@ relation_to_eff_relation(Map, Intermediaries) when is_map(Map) ->
 %% Converts effective relations with attrs to relations with attrs.
 %% @end
 %%--------------------------------------------------------------------
--spec eff_relation_to_relation(eff_relations_with_attrs()) -> relations_with_attrs().
-eff_relation_to_relation(Map) ->
+-spec eff_relations_to_relations(eff_relations_with_attrs()) -> relations_with_attrs().
+eff_relations_to_relations(Map) ->
     maps:map(
         fun(_NeighbourId, {Attributes, _Intermediaries}) ->
             Attributes
         end, Map).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns intermediaries of an effective relation.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_intermediaries(#{entity_id() => intermediaries() | {attributes(), intermediaries()}}) ->
+    intermediaries().
+get_intermediaries({_Attributes, Intermediaries}) -> Intermediaries;
+get_intermediaries(Intermediaries) -> Intermediaries.
 
 
 %%--------------------------------------------------------------------
