@@ -83,10 +83,10 @@ update_propagation_performance(Config) ->
         {success_rate, 100},
         {description, "Checks the performance of update propagation via Graph Sync, "
         "where a number of users all belong to a number of groups, which names are modified."},
-        {parameters, [?USER_NUM(10), ?GROUP_NUM(10), ?UPDATE_NUM(10)]},
+        {parameters, [?USER_NUM(10), ?GROUP_NUM(10), ?UPDATE_NUM(5)]},
         ?PERF_CFG(small, [?USER_NUM(10), ?GROUP_NUM(10), ?UPDATE_NUM(10)]),
-        ?PERF_CFG(medium, [?USER_NUM(50), ?GROUP_NUM(50), ?UPDATE_NUM(10)]),
-        ?PERF_CFG(large, [?USER_NUM(100), ?GROUP_NUM(100), ?UPDATE_NUM(10)])
+        ?PERF_CFG(medium, [?USER_NUM(30), ?GROUP_NUM(30), ?UPDATE_NUM(10)]),
+        ?PERF_CFG(large, [?USER_NUM(50), ?GROUP_NUM(50), ?UPDATE_NUM(10)])
     ]).
 update_propagation_performance_base(Config) ->
     UserNum = ?USER_NUM,
@@ -155,11 +155,8 @@ update_propagation_performance_base(Config) ->
     {ok, SupervisorPid, _} = spawn_clients(Config, gui, Users, true, GatherUpdate, OnSuccessFun),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    %% ----------------------
-    %% Start time measurement
-    %% ----------------------
-    StartTimestamp = os:timestamp(),
 
+    ?begin_measurement(groups_update_time),
     lists:foreach(fun(Seq) ->
         NewName = case Seq of
             UpdateNum -> FinalGroupName;
@@ -169,34 +166,36 @@ update_propagation_performance_base(Config) ->
             oz_test_utils:update_group(Config, Group, NewName)
         end, Groups)
     end, lists:seq(1, UpdateNum)),
+    ?end_measurement(groups_update_time),
 
-    TimestampAfterUpdate = os:timestamp(),
-    UpdateTime = timer:now_diff(TimestampAfterUpdate, StartTimestamp) / 1000,
-
+    ?begin_measurement(updates_propagation_time),
     receive finished -> ok end,
+    ?end_measurement(updates_propagation_time),
 
-    UpdatePropagationTime = timer:now_diff(os:timestamp(), StartTimestamp) / 1000,
-    %% ----------------------
-    %% End time measurement
-    %% ----------------------
+    ?derive_measurement(groups_update_time, avg_update_time_per_group_per_user, fun(M) ->
+        M / GroupNum / UpdateNum
+    end),
+    ?derive_measurement(updates_propagation_time, avg_propagation_time_per_client, fun(M) ->
+        M / UserNum
+    end),
+    ?derive_measurement(updates_propagation_time, avg_propagation_time_per_client_per_group, fun(M) ->
+        M / GroupNum / UserNum
+    end),
 
-    AvgSingleUpdateTimePerGroup = UpdateTime / GroupNum / UpdateNum,
-    AvgPropagationTimePerClient = UpdatePropagationTime / UserNum,
-    AvgPropagationTimePerClientPerGroup = UpdatePropagationTime / GroupNum / UserNum,
 
     terminate_clients(Config, SupervisorPid),
 
     [
-        #parameter{name = groups_update_time, value = UpdateTime, unit = "ms",
-            description = "Time taken to make all updates of group names."},
-        #parameter{name = avg_update_time_per_group_per_user, value = AvgSingleUpdateTimePerGroup, unit = "ms",
-            description = "Average time taken to make one update per group."},
-        #parameter{name = update_propagation_time, value = UpdatePropagationTime, unit = "ms",
-            description = "Time taken to propagate all updates after they are done."},
-        #parameter{name = avg_propagation_time_per_client, value = AvgPropagationTimePerClient, unit = "ms",
-            description = "Average time taken to propagate all updates after they are done per client."},
-        #parameter{name = avg_propagation_time_per_client_per_group, value = AvgPropagationTimePerClientPerGroup, unit = "ms",
-            description = "Average time taken to propagate all updates after they are done per client per group."}
+        ?print_measurement(groups_update_time, ms,
+            "Time taken to make all updates of group names."),
+        ?print_measurement(avg_update_time_per_group_per_user, us,
+            "Average time taken to make one update per group."),
+        ?print_measurement(updates_propagation_time, ms,
+            "Time taken to propagate all updates after they are done."),
+        ?print_measurement(avg_propagation_time_per_client, us,
+            "Average time taken to propagate all updates after they are done per client."),
+        ?print_measurement(avg_propagation_time_per_client_per_group, us,
+            "Average time taken to propagate all updates after they are done per client per group.")
     ].
 
 
@@ -268,11 +267,8 @@ privileges_in_a_big_space_performance_base(Config) ->
     {ok, SupervisorPid, _} = spawn_clients(Config, provider, ProvidersAndAuths, true, GatherUpdate, OnSuccessFun),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    %% ----------------------
-    %% Start time measurement
-    %% ----------------------
-    StartTimestamp = os:timestamp(),
 
+    ?begin_measurement(privileges_update_time),
     lists:foreach(fun(Seq) ->
         NewPrivileges = case Seq of
             UpdateNum -> FinalPrivileges;
@@ -281,34 +277,37 @@ privileges_in_a_big_space_performance_base(Config) ->
         end,
         [oz_test_utils:space_set_user_privileges(Config, Space, U, set, NewPrivileges) || U <- Users]
     end, lists:seq(1, UpdateNum)),
+    ?end_measurement(privileges_update_time),
 
-    TimestampAfterUpdate = os:timestamp(),
-    UpdateTime = timer:now_diff(TimestampAfterUpdate, StartTimestamp) / 1000,
 
+    ?begin_measurement(updates_propagation_time),
     receive finished -> ok end,
+    ?end_measurement(updates_propagation_time),
 
-    UpdatePropagationTime = timer:now_diff(os:timestamp(), StartTimestamp) / 1000,
-    %% ----------------------
-    %% End time measurement
-    %% ----------------------
+    ?derive_measurement(privileges_update_time, avg_update_time_per_user, fun(M) ->
+        M / UserNum / UpdateNum
+    end),
+    ?derive_measurement(updates_propagation_time, avg_propagation_time_per_client, fun(M) ->
+        M / ProviderNum
+    end),
+    ?derive_measurement(updates_propagation_time, avg_propagation_time_per_client_per_user, fun(M) ->
+        M / ProviderNum / UserNum
+    end),
 
-    AvgSingleUpdateTimePerUser = UpdateTime / UserNum / UpdateNum,
-    AvgPropagationTimePerClient = UpdatePropagationTime / ProviderNum,
-    AvgPropagationTimePerClientPerUser = UpdatePropagationTime / ProviderNum / UserNum,
 
     terminate_clients(Config, SupervisorPid),
 
     [
-        #parameter{name = privileges_update_time, value = UpdateTime, unit = "ms",
-            description = "Time taken to update privileges of all users given number of times."},
-        #parameter{name = avg_update_time_per_user, value = AvgSingleUpdateTimePerUser, unit = "ms",
-            description = "Average time taken to update privileges of one user once."},
-        #parameter{name = update_propagation_time, value = UpdatePropagationTime, unit = "ms",
-            description = "Time taken to propagate all updates after they are done."},
-        #parameter{name = avg_propagation_time_per_client, value = AvgPropagationTimePerClient, unit = "ms",
-            description = "Average time taken to propagate all updates after they are done per client."},
-        #parameter{name = avg_propagation_time_per_client_per_user, value = AvgPropagationTimePerClientPerUser, unit = "ms",
-            description = "Average time taken to propagate all updates after they are done per client per user."}
+        ?print_measurement(privileges_update_time, ms,
+            "Time taken to update privileges of all users given number of times."),
+        ?print_measurement(avg_update_time_per_user, us,
+            "Average time taken to update privileges of one user once."),
+        ?print_measurement(updates_propagation_time, ms,
+            "Time taken to propagate all updates after they are done."),
+        ?print_measurement(avg_propagation_time_per_client, us,
+            "Average time taken to propagate all updates after they are done per client."),
+        ?print_measurement(avg_propagation_time_per_client_per_user, us,
+            "Average time taken to propagate all updates after they are done per client per user.")
     ].
 
 
@@ -345,29 +344,25 @@ concurrent_active_clients_spawning_performance_base(Config) ->
         erlang:send_after(rand:uniform(round(timer:seconds(RequestInterval))), Pid, perform_request)
     end,
 
-    %% ----------------------
-    %% Start time measurement
-    %% ----------------------
-    StartTime = os:timestamp(),
 
+    ?begin_measurement(clients_spawning_time),
     {ok, SupervisorPid, _} = spawn_clients(
         Config, gui, Users, true, ?NO_OP_FUN, MakeRequestRegularly
     ),
+    ?end_measurement(clients_spawning_time),
 
-    Time = timer:now_diff(os:timestamp(), StartTime) / 1000,
-    %% ----------------------
-    %% End time measurement
-    %% ----------------------
+    ?derive_measurement(clients_spawning_time, avg_time_per_client, fun(M) ->
+        M / UserNum
+    end),
 
-    AvgPerClient = Time / UserNum,
 
     terminate_clients(Config, SupervisorPid),
 
     [
-        #parameter{name = clients_spawning_time, value = Time, unit = "ms",
-            description = "Time taken by clients spawning and making regular requests."},
-        #parameter{name = avg_time_per_client, value = AvgPerClient, unit = "ms",
-            description = "Average time taken by one client to spawn and make regular requests."}
+        ?print_measurement(clients_spawning_time, ms,
+            "Time taken by clients spawning and making regular requests."),
+        ?print_measurement(avg_time_per_client, ms,
+            "Average time taken by one client to spawn and make regular requests.")
     ].
 
 

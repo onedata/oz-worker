@@ -18,6 +18,7 @@
 
 %% API
 -export([get_rest_api_prefix/1, check_rest_call/2]).
+-export([get_oz_url/1]).
 -export([compare_maps/2, contains_map/2]).
 
 

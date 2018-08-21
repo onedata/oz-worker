@@ -73,8 +73,8 @@
     group_get_eff_oz_privileges/2,
     group_set_oz_privileges/4,
 
-    group_add_user/3,
-    group_set_user_privileges/5,
+    group_add_user/3, group_add_user/4,
+    group_set_user_privileges/5, group_set_user_privileges/6,
     group_add_group/3, group_add_group/4,
     group_remove_user/3,
     group_remove_group/3,
@@ -698,14 +698,25 @@ delete_group(Config, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Adds a user a to group in onezone.
+%% Adds a user a to group in onezone with ROOT auth.
 %% @end
 %%--------------------------------------------------------------------
 -spec group_add_user(Config :: term(), GroupId :: od_group:id(),
     UserId :: od_user:id()) -> {ok, UserId :: od_user:id()}.
 group_add_user(Config, GroupId, UserId) ->
+    group_add_user(Config, ?ROOT, GroupId, UserId).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a user a to group in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_add_user(Config :: term(), entity_logic:client(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, UserId :: od_user:id()}.
+group_add_user(Config, Client, GroupId, UserId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, add_user, [?ROOT, GroupId, UserId]
+        Config, group_logic, add_user, [Client, GroupId, UserId]
     )).
 
 
@@ -1794,15 +1805,28 @@ handle_get_group_privileges(Config, HandleId, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Sets privileges for group's user.
+%% Sets privileges for group's user with ?ROOT auth.
 %% @end
 %%--------------------------------------------------------------------
 -spec group_set_user_privileges(Config :: term(), GroupId :: od_group:id(),
     UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
     Privileges :: [privileges:group_privilege()]) -> ok.
 group_set_user_privileges(Config, GroupId, UserId, Operation, Privs) ->
+    group_set_user_privileges(Config, ?ROOT, GroupId, UserId, Operation, Privs).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges for group's user.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_set_user_privileges(Config :: term(), entity_logic:client(),
+    GroupId :: od_group:id(), UserId :: od_user:id(),
+    Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:group_privilege()]) -> ok.
+group_set_user_privileges(Config, Client, GroupId, UserId, Operation, Privs) ->
     ?assertMatch(ok, call_oz(Config, group_logic, update_user_privileges, [
-        ?ROOT, GroupId, UserId, Operation, Privs
+        Client, GroupId, UserId, Operation, Privs
     ])).
 
 
