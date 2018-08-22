@@ -235,7 +235,7 @@ call_oz(Config, Module, Function, Args) ->
     case rpc:call(Node, erlang, apply, [FunWrapper, []]) of
         {crash, Type, Reason, Stacktrace} ->
             % Log a bad rpc - very useful when debugging tests.
-            ct:print(
+            ct:pal(
                 "RPC call in oz_test_utils crashed!~n"
                 "Module: ~p~n"
                 "Function: ~p~n"

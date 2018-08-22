@@ -186,15 +186,15 @@ update_propagation_performance_base(Config) ->
     terminate_clients(Config, SupervisorPid),
 
     [
-        ?print_measurement(groups_update_time, ms,
+        ?format_measurement(groups_update_time, ms,
             "Time taken to make all updates of group names."),
-        ?print_measurement(avg_update_time_per_group_per_user, us,
+        ?format_measurement(avg_update_time_per_group_per_user, us,
             "Average time taken to make one update per group."),
-        ?print_measurement(updates_propagation_time, ms,
+        ?format_measurement(updates_propagation_time, ms,
             "Time taken to propagate all updates after they are done."),
-        ?print_measurement(avg_propagation_time_per_client, us,
+        ?format_measurement(avg_propagation_time_per_client, us,
             "Average time taken to propagate all updates after they are done per client."),
-        ?print_measurement(avg_propagation_time_per_client_per_group, us,
+        ?format_measurement(avg_propagation_time_per_client_per_group, us,
             "Average time taken to propagate all updates after they are done per client per group.")
     ].
 
@@ -298,15 +298,15 @@ privileges_in_a_big_space_performance_base(Config) ->
     terminate_clients(Config, SupervisorPid),
 
     [
-        ?print_measurement(privileges_update_time, ms,
+        ?format_measurement(privileges_update_time, ms,
             "Time taken to update privileges of all users given number of times."),
-        ?print_measurement(avg_update_time_per_user, us,
+        ?format_measurement(avg_update_time_per_user, us,
             "Average time taken to update privileges of one user once."),
-        ?print_measurement(updates_propagation_time, ms,
+        ?format_measurement(updates_propagation_time, ms,
             "Time taken to propagate all updates after they are done."),
-        ?print_measurement(avg_propagation_time_per_client, us,
+        ?format_measurement(avg_propagation_time_per_client, us,
             "Average time taken to propagate all updates after they are done per client."),
-        ?print_measurement(avg_propagation_time_per_client_per_user, us,
+        ?format_measurement(avg_propagation_time_per_client_per_user, us,
             "Average time taken to propagate all updates after they are done per client per user.")
     ].
 
@@ -359,9 +359,9 @@ concurrent_active_clients_spawning_performance_base(Config) ->
     terminate_clients(Config, SupervisorPid),
 
     [
-        ?print_measurement(clients_spawning_time, ms,
+        ?format_measurement(clients_spawning_time, ms,
             "Time taken by clients spawning and making regular requests."),
-        ?print_measurement(avg_time_per_client, ms,
+        ?format_measurement(avg_time_per_client, ms,
             "Average time taken by one client to spawn and make regular requests.")
     ].
 

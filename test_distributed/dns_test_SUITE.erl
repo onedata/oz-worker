@@ -572,7 +572,7 @@ assert_dns_answer(Servers, Query, Type, Expected, Attempts) ->
                 Attempts, ?DNS_ASSERT_RETRY_DELAY)
         catch error:{Reason, _} = Error
             when Reason =:= assertEqual_failed orelse Reason =:= assertMatch_failed ->
-            ct:print("DNS query type ~p to server ~p for name ~p "
+            ct:pal("DNS query type ~p to server ~p for name ~p "
             "returned incorrect results in ~p attempts.",
                 [Type, Server, Query, Attempts]),
 

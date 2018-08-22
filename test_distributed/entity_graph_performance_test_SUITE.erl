@@ -122,43 +122,39 @@ create_group_performance(Config) ->
         ?PERF_CFG(large_rest, [?GROUP_NUM(3000), ?API_TYPE(rest)])
     ]).
 create_group_performance_base(Config) ->
-    try
-        GroupNum = ?GROUP_NUM,
-        ApiType = ?API_TYPE,
-        UsersAndAuths = create_n_users(Config, GroupNum),
-        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    GroupNum = ?GROUP_NUM,
+    ApiType = ?API_TYPE,
+    UsersAndAuths = create_n_users(Config, GroupNum),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
 
-        ?begin_measurement(groups_creation_time),
-        parallel_foreach(fun(UserAndAuth) ->
-            create_group(Config, ApiType, UserAndAuth, <<"group">>)
-        end, UsersAndAuths),
-        ?end_measurement(groups_creation_time),
+    ?begin_measurement(groups_creation_time),
+    parallel_foreach(fun(UserAndAuth) ->
+        create_group(Config, ApiType, UserAndAuth, <<"group">>)
+    end, UsersAndAuths),
+    ?end_measurement(groups_creation_time),
 
-        ?begin_measurement(reconciliation_time),
-        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-        ?end_measurement(reconciliation_time),
+    ?begin_measurement(reconciliation_time),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    ?end_measurement(reconciliation_time),
 
-        ?derive_measurement(groups_creation_time, avg_time_per_group, fun(M) ->
-            M / GroupNum
-        end),
-        ?derive_measurement(reconciliation_time, avg_reconciliation_time_per_group, fun(M) ->
-            M / GroupNum
-        end),
+    ?derive_measurement(groups_creation_time, avg_time_per_group, fun(M) ->
+        M / GroupNum
+    end),
+    ?derive_measurement(reconciliation_time, avg_reconciliation_time_per_group, fun(M) ->
+        M / GroupNum
+    end),
 
-        [
-            ?print_measurement(groups_creation_time, ms,
-                "Time taken to create all groups."),
-            ?print_measurement(avg_time_per_group, us,
-                "Average time taken to create one group."),
-            ?print_measurement(reconciliation_time, ms,
-                "Time taken to reconcile the entity graph after the last group was created."),
-            ?print_measurement(avg_reconciliation_time_per_group, us,
-                "Average time taken to reconcile the entity graph per group created.")
-        ]
-    catch T:M ->
-        ct:print("~p", [{T, M, erlang:get_stacktrace()}])
-    end.
+    [
+        ?format_measurement(groups_creation_time, ms,
+            "Time taken to create all groups."),
+        ?format_measurement(avg_time_per_group, us,
+            "Average time taken to create one group."),
+        ?format_measurement(reconciliation_time, ms,
+            "Time taken to reconcile the entity graph after the last group was created."),
+        ?format_measurement(avg_reconciliation_time_per_group, us,
+            "Average time taken to reconcile the entity graph per group created.")
+    ].
 
 
 create_space_performance(Config) ->
@@ -199,13 +195,13 @@ create_space_performance_base(Config) ->
     end),
 
     [
-        ?print_measurement(space_creation_time, ms,
+        ?format_measurement(space_creation_time, ms,
             "Time taken to create the spaces."),
-        ?print_measurement(avg_time_per_space, us,
+        ?format_measurement(avg_time_per_space, us,
             "Average time taken to create one space."),
-        ?print_measurement(reconciliation_time, ms,
+        ?format_measurement(reconciliation_time, ms,
             "Time taken to reconcile the entity graph after the last space was created."),
-        ?print_measurement(avg_reconciliation_time_per_space, us,
+        ?format_measurement(avg_reconciliation_time_per_space, us,
             "Average time taken to reconcile the entity graph per space created.")
     ].
 
@@ -246,13 +242,13 @@ group_chain_performance_base(Config) ->
     end),
 
     [
-        ?print_measurement(groups_creation_time, ms,
+        ?format_measurement(groups_creation_time, ms,
             "Time taken to create the group chain."),
-        ?print_measurement(avg_time_per_group, us,
+        ?format_measurement(avg_time_per_group, us,
             "Average time taken to create one group."),
-        ?print_measurement(reconciliation_time, ms,
+        ?format_measurement(reconciliation_time, ms,
             "Time taken to reconcile the entity graph after the last group was created."),
-        ?print_measurement(avg_reconciliation_time_per_group, us,
+        ?format_measurement(avg_reconciliation_time_per_group, us,
             "Average time taken to reconcile the entity graph per group added.")
     ].
 
@@ -271,48 +267,44 @@ group_chain_append_performance(Config) ->
         ?PERF_CFG(large_rest, [?STARTING_GROUP_NUM(200), ?ENDING_GROUP_NUM(300), ?API_TYPE(rest)])
     ]).
 group_chain_append_performance_base(Config) ->
-    try
-        StartingGroupNum = ?STARTING_GROUP_NUM,
-        EndingGroupNum = ?ENDING_GROUP_NUM,
-        ApiType = ?API_TYPE,
-        ToAppendGroupNum = EndingGroupNum - StartingGroupNum,
-        {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-        {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
+    StartingGroupNum = ?STARTING_GROUP_NUM,
+    EndingGroupNum = ?ENDING_GROUP_NUM,
+    ApiType = ?API_TYPE,
+    ToAppendGroupNum = EndingGroupNum - StartingGroupNum,
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
 
-        {_BottomGroup, TopGroup} = create_group_chain(Config, ApiType, {User, Macaroon}, StartingGroupNum),
-        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    {_BottomGroup, TopGroup} = create_group_chain(Config, ApiType, {User, Macaroon}, StartingGroupNum),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
 
-        ?begin_measurement(group_appending_time),
-        create_group_chain(
-            Config, ApiType, {User, Macaroon}, ToAppendGroupNum, TopGroup
-        ),
-        ?end_measurement(group_appending_time),
+    ?begin_measurement(group_appending_time),
+    create_group_chain(
+        Config, ApiType, {User, Macaroon}, ToAppendGroupNum, TopGroup
+    ),
+    ?end_measurement(group_appending_time),
 
-        ?begin_measurement(reconciliation_time),
-        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-        ?end_measurement(reconciliation_time),
+    ?begin_measurement(reconciliation_time),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    ?end_measurement(reconciliation_time),
 
-        ?derive_measurement(group_appending_time, avg_time_per_group, fun(M) ->
-            M / ToAppendGroupNum
-        end),
-        ?derive_measurement(reconciliation_time, avg_reconciliation_time_per_group, fun(M) ->
-            M / ToAppendGroupNum
-        end),
+    ?derive_measurement(group_appending_time, avg_time_per_group, fun(M) ->
+        M / ToAppendGroupNum
+    end),
+    ?derive_measurement(reconciliation_time, avg_reconciliation_time_per_group, fun(M) ->
+        M / ToAppendGroupNum
+    end),
 
-        [
-            ?print_measurement(group_appending_time, ms,
-                "Time taken to append to the group chain."),
-            ?print_measurement(avg_time_per_group, us,
-                "Average time taken to append one group."),
-            ?print_measurement(reconciliation_time, ms,
-                "Time taken to reconcile the entity graph after the last group was appended."),
-            ?print_measurement(avg_reconciliation_time_per_group, us,
-                "Average time taken to reconcile the entity graph per group added.")
-        ]
-    catch T:M ->
-        ct:print("~p", [{T, M, erlang:get_stacktrace()}])
-    end.
+    [
+        ?format_measurement(group_appending_time, ms,
+            "Time taken to append to the group chain."),
+        ?format_measurement(avg_time_per_group, us,
+            "Average time taken to append one group."),
+        ?format_measurement(reconciliation_time, ms,
+            "Time taken to reconcile the entity graph after the last group was appended."),
+        ?format_measurement(avg_reconciliation_time_per_group, us,
+            "Average time taken to reconcile the entity graph per group added.")
+    ].
 
 
 big_group_performance(Config) ->
@@ -371,13 +363,13 @@ big_group_performance_base(Config) ->
     end),
 
     [
-        ?print_measurement(user_adding_time, ms,
+        ?format_measurement(user_adding_time, ms,
             "Time taken to add users to the big group."),
-        ?print_measurement(avg_time_per_user, us,
+        ?format_measurement(avg_time_per_user, us,
             "Average time taken to add one user."),
-        ?print_measurement(reconciliation_time, ms,
+        ?format_measurement(reconciliation_time, ms,
             "Time taken to reconcile the entity graph after the last user was added."),
-        ?print_measurement(avg_reconciliation_time_per_user, us,
+        ?format_measurement(avg_reconciliation_time_per_user, us,
             "Average time taken to reconcile the entity graph per user added.")
     ].
 
@@ -434,13 +426,13 @@ update_privileges_performance_base(Config) ->
     end),
 
     [
-        ?print_measurement(privileges_updating_time, ms,
+        ?format_measurement(privileges_updating_time, ms,
             "Time taken to update privileges of all users in the group."),
-        ?print_measurement(avg_time_per_user, us,
+        ?format_measurement(avg_time_per_user, us,
             "Average time taken to update privileges of a user in the group."),
-        ?print_measurement(reconciliation_time, ms,
+        ?format_measurement(reconciliation_time, ms,
             "Time taken to reconcile the entity graph after the last privileges update."),
-        ?print_measurement(avg_reconciliation_time_per_user, us,
+        ?format_measurement(avg_reconciliation_time_per_user, us,
             "Average time taken to reconcile the entity graph per user.")
     ].
 
@@ -461,52 +453,48 @@ reconcile_privileges_in_group_chain_performance(Config) ->
         ?PERF_CFG(large_members_num, [?GROUP_CHAIN_LENGTH(100), ?USER_NUM(1000)])
     ]).
 reconcile_privileges_in_group_chain_performance_base(Config) ->
-    try
-        GroupChainLength = ?GROUP_CHAIN_LENGTH,
-        UserNum = ?USER_NUM,
-        GroupPrivileges = oz_test_utils:all_group_privileges(Config),
-        {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-        {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
-        {BottomGroup, TopGroup} = create_group_chain(Config, rpc, {User, Macaroon}, GroupChainLength),
+    GroupChainLength = ?GROUP_CHAIN_LENGTH,
+    UserNum = ?USER_NUM,
+    GroupPrivileges = oz_test_utils:all_group_privileges(Config),
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
+    {BottomGroup, TopGroup} = create_group_chain(Config, rpc, {User, Macaroon}, GroupChainLength),
 
-        lists:foreach(fun(_) ->
-            {ok, NewUser} = oz_test_utils:create_user(Config, #od_user{}),
-            oz_test_utils:group_add_user(Config, BottomGroup, NewUser)
-        end, lists:seq(2, UserNum)),
-        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    lists:foreach(fun(_) ->
+        {ok, NewUser} = oz_test_utils:create_user(Config, #od_user{}),
+        oz_test_utils:group_add_user(Config, BottomGroup, NewUser)
+    end, lists:seq(2, UserNum)),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-        {ok, [SecondFromTopGroup]} = oz_test_utils:group_get_children(Config, TopGroup),
-        RandomPrivileges = lists:sublist(GroupPrivileges, rand:uniform(length(GroupPrivileges))),
+    {ok, [SecondFromTopGroup]} = oz_test_utils:group_get_children(Config, TopGroup),
+    RandomPrivileges = lists:sublist(GroupPrivileges, rand:uniform(length(GroupPrivileges))),
 
 
-        ?begin_measurement(privileges_update_time),
-        oz_test_utils:group_set_group_privileges(Config, TopGroup, SecondFromTopGroup, set, RandomPrivileges),
-        ?end_measurement(privileges_update_time),
+    ?begin_measurement(privileges_update_time),
+    oz_test_utils:group_set_group_privileges(Config, TopGroup, SecondFromTopGroup, set, RandomPrivileges),
+    ?end_measurement(privileges_update_time),
 
-        ?begin_measurement(reconciliation_time),
-        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-        ?end_measurement(reconciliation_time),
+    ?begin_measurement(reconciliation_time),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    ?end_measurement(reconciliation_time),
 
-        ?derive_measurement(reconciliation_time, avg_reconciliation_time_per_group_in_chain, fun(M) ->
-            M / GroupChainLength
-        end),
-        ?derive_measurement(reconciliation_time, avg_reconciliation_time_per_user, fun(M) ->
-            M / UserNum
-        end),
+    ?derive_measurement(reconciliation_time, avg_reconciliation_time_per_group_in_chain, fun(M) ->
+        M / GroupChainLength
+    end),
+    ?derive_measurement(reconciliation_time, avg_reconciliation_time_per_user, fun(M) ->
+        M / UserNum
+    end),
 
-        [
-            ?print_measurement(privileges_update_time, ms,
-                "Time taken to update privileges of the second to top group towards top group."),
-            ?print_measurement(reconciliation_time, us,
-                "Time taken to reconcile the entity graph after the privileges update."),
-            ?print_measurement(avg_reconciliation_time_per_group_in_chain, us,
-                "Average time taken to reconcile the entity graph per group in chain."),
-            ?print_measurement(avg_reconciliation_time_per_user, us,
-                "Average time taken to reconcile the entity graph per user in the bottom group.")
-        ]
-    catch T:M ->
-        ct:print("~p", [{T, M, erlang:get_stacktrace()}])
-    end.
+    [
+        ?format_measurement(privileges_update_time, ms,
+            "Time taken to update privileges of the second to top group towards top group."),
+        ?format_measurement(reconciliation_time, us,
+            "Time taken to reconcile the entity graph after the privileges update."),
+        ?format_measurement(avg_reconciliation_time_per_group_in_chain, us,
+            "Average time taken to reconcile the entity graph per group in chain."),
+        ?format_measurement(avg_reconciliation_time_per_user, us,
+            "Average time taken to reconcile the entity graph per user in the bottom group.")
+    ].
 
 
 %%%===================================================================
