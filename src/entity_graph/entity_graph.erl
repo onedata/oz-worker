@@ -693,7 +693,7 @@ delete_with_relations(EntityType, EntityId) ->
             lists:foreach(fun(ParId) ->
                 ok = delete_with_relations(ParType, ParId),
                 ?debug("~s has been deleted because it depended on ~s "
-                "(that is being deleted)", [
+                "(which is being deleted)", [
                     ParType:to_string(ParId),
                     EntityType:to_string(EntityId)
                 ])
@@ -703,7 +703,7 @@ delete_with_relations(EntityType, EntityId) ->
             lists:foreach(fun(ChId) ->
                 ok = delete_with_relations(ChType, ChId),
                 ?debug("~s has been deleted because it depended on ~s "
-                "(that is being deleted)", [
+                "(which is being deleted)", [
                     ChType:to_string(ChId),
                     EntityType:to_string(EntityId)
                 ])
