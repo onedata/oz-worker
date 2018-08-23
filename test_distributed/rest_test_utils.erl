@@ -18,6 +18,7 @@
 
 %% API
 -export([get_rest_api_prefix/1, check_rest_call/2]).
+-export([get_oz_url/1]).
 -export([compare_maps/2, contains_map/2]).
 
 
@@ -150,7 +151,7 @@ check_rest_call(Config, ArgsMap) ->
         end,
 
 %%        %% Useful for debug
-%%        ct:print("[Req]: ~n"
+%%        ct:pal("[Req]: ~n"
 %%        "   ReqMethod: ~p~n"
 %%        "   URL: ~p~n"
 %%        "   HeadersPlusAuth: ~p~n"
@@ -198,7 +199,7 @@ check_rest_call(Config, ArgsMap) ->
                     Fun(RespHeaders)
                 catch
                     Type1:Message1 ->
-                        ct:print(
+                        ct:pal(
                             "Headers verification function crashed - ~p:~p~n"
                             "Stacktrace: ~s", [
                                 Type1, Message1, lager:pr_stacktrace(erlang:get_stacktrace())
@@ -243,7 +244,7 @@ check_rest_call(Config, ArgsMap) ->
                     Fun2(ActualBodyMap)
                 catch
                     Type2:Message2 ->
-                        ct:print(
+                        ct:pal(
                             "Body verification function crashed - ~p:~p~n"
                             "Stacktrace: ~s", [
                                 Type2, Message2, lager:pr_stacktrace(erlang:get_stacktrace())
@@ -327,7 +328,7 @@ check_rest_call(Config, ArgsMap) ->
             };
         % Unexpected error
         Type:Message ->
-            ct:print(
+            ct:pal(
                 "~p:check_rest_call failed with unexpected result - ~p:~p~n"
                 "Stacktrace: ~s", [
                     ?MODULE, Type, Message, lager:pr_stacktrace(erlang:get_stacktrace())

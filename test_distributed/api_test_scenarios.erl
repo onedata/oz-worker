@@ -72,7 +72,7 @@ run_scenario(Function, Args) ->
         throw:fail ->
             false;
         Type:Message ->
-            ct:print(
+            ct:pal(
                 "Unexpected error in ~p:run_scenario - ~p:~p~nStacktrace: ~s",
                 [
                     ?MODULE, Type, Message,

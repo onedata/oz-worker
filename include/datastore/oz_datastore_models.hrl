@@ -302,6 +302,7 @@
 }).
 
 -record(entity_graph_state, {
+    refresh_in_progress = false :: boolean(),
     bottom_up_dirty = [] :: [{Priority :: integer(), EntityType :: atom(), EntityId :: binary()}],
     top_down_dirty = [] :: [{Priority :: integer(), EntityType :: atom(), EntityId :: binary()}]
 }).
