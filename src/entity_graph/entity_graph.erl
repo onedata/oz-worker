@@ -56,10 +56,12 @@
 -include_lib("ctool/include/api_errors.hrl").
 
 -define(ENTITY_GRAPH_LOCK, entity_graph).
--define(STATE_KEY, <<"entity_graph_state">>).
 -define(SELF_INTERMEDIARY, <<"self">>).
-% How often should effective graph state be checked during ensure_up_to_date.
--define(UP_TO_DATE_CHECK_INTERVAL, 300).
+% How often should effective graph state be checked during ensure_up_to_date -
+% exponential backoff is used.
+-define(UP_TO_DATE_CHECK_INTERVAL, 100).
+-define(UP_TO_DATE_CHECK_BACKOFF, 1.2).
+-define(UP_TO_DATE_CHECK_RETRIES, 30).  % 30 retries take about 140 seconds
 
 -define(THROW_ON_ERROR(__Term), case __Term of
     {error, _} -> throw(__Term);
@@ -179,18 +181,8 @@ entity_type() | oz_privileges => eff_relations() | eff_relations_with_attrs() | 
 %%--------------------------------------------------------------------
 -spec init_state() -> ok.
 init_state() ->
-    critical_section:run(?ENTITY_GRAPH_LOCK, fun() ->
-        case entity_graph_state:get(?STATE_KEY) of
-            {ok, #document{value = #entity_graph_state{}}} ->
-                ok;
-            {error, not_found} ->
-                {ok, _} = entity_graph_state:create(
-                    #document{key = ?STATE_KEY, value = #entity_graph_state{}}
-                ),
-                verify_state_of_all_entities(),
-                ok
-        end
-    end).
+    entity_graph_state:initialize(),
+    verify_state_of_all_entities().
 
 
 %%--------------------------------------------------------------------
@@ -247,25 +239,21 @@ schedule_refresh() ->
 %%--------------------------------------------------------------------
 -spec ensure_up_to_date() -> boolean().
 ensure_up_to_date() ->
-    ensure_up_to_date(10).
-ensure_up_to_date(0) ->
+    ensure_up_to_date(?UP_TO_DATE_CHECK_RETRIES, ?UP_TO_DATE_CHECK_INTERVAL).
+
+%% @private
+-spec ensure_up_to_date(RetriesLeft :: integer(), Timeout :: integer()) -> boolean().
+ensure_up_to_date(0, _) ->
     false;
-ensure_up_to_date(Retries) ->
-    Result = critical_section:run(?ENTITY_GRAPH_LOCK, fun() ->
-        case get_state() of
-            #entity_graph_state{bottom_up_dirty = [], top_down_dirty = []} ->
-                true;
-            _ ->
-                false
-        end
-    end),
-    case Result of
+ensure_up_to_date(RetriesLeft, Timeout) ->
+    case is_up_to_date() of
         true ->
             true;
         false ->
             schedule_refresh(),
-            timer:sleep(?UP_TO_DATE_CHECK_INTERVAL),
-            ensure_up_to_date(Retries - 1)
+            timer:sleep(Timeout),
+            NewTimeout = round(Timeout * ?UP_TO_DATE_CHECK_BACKOFF),
+            ensure_up_to_date(RetriesLeft - 1, NewTimeout)
     end.
 
 
@@ -690,66 +678,42 @@ delete_with_relations(EntityType, EntityId) ->
     % (all sensitive operations are matched to ok)
     try
         % Remove all independent relations
-        maps:map(
-            fun(ParType, ParentIds) ->
-                lists:foreach(
-                    fun(ParId) ->
-                        sync_on_entity(ParType, ParId, fun() ->
-                            update_dirty_queue(bottom_up, true, ParType, ParId),
-                            update_entity(ParType, ParId, fun(Parent) ->
-                                {ok, mark_record_dirty(bottom_up, true, remove_child(
-                                    Parent, EntityType, EntityId
-                                ))}
-                            end)
-                        end)
-                    end, ParentIds)
-            end, IndependentParents),
-        maps:map(
-            fun(ChType, ChIds) ->
-                lists:foreach(
-                    fun(ChId) ->
-                        sync_on_entity(ChType, ChId, fun() ->
-                            update_dirty_queue(top_down, true, ChType, ChId),
-                            update_entity(ChType, ChId, fun(Child) ->
-                                {ok, mark_record_dirty(top_down, true, remove_parent(
-                                    Child, EntityType, EntityId
-                                ))}
-                            end)
-                        end)
-                    end, ChIds)
-            end, IndependentChildren),
+        maps:map(fun(ParType, ParentIds) ->
+            lists:foreach(fun(ParId) ->
+                ok = remove_relation(EntityType, EntityId, ParType, ParId)
+            end, ParentIds)
+        end, IndependentParents),
+        maps:map(fun(ChType, ChIds) ->
+            lists:foreach(fun(ChId) ->
+                ok = remove_relation(ChType, ChId, EntityType, EntityId)
+            end, ChIds)
+        end, IndependentChildren),
         % Remove all dependent relations and dependent entities
-        maps:map(
-            fun(ParType, ParentIds) ->
-                lists:foreach(
-                    fun(ParId) ->
-                        ok = delete_with_relations(ParType, ParId),
-                        ?debug("~s has been deleted because it depended on ~s "
-                        "(that is being deleted)", [
-                            ParType:to_string(ParId),
-                            EntityType:to_string(EntityId)
-                        ])
-                    end, ParentIds)
-            end, DependentParents),
-        maps:map(
-            fun(ChType, ChIds) ->
-                lists:foreach(
-                    fun(ChId) ->
-                        ok = delete_with_relations(ChType, ChId),
-                        ?debug("~s has been deleted because it depended on ~s "
-                        "(that is being deleted)", [
-                            ChType:to_string(ChId),
-                            EntityType:to_string(EntityId)
-                        ])
-                    end, ChIds)
-            end, DependentChildren),
+        maps:map(fun(ParType, ParentIds) ->
+            lists:foreach(fun(ParId) ->
+                ok = delete_with_relations(ParType, ParId),
+                ?debug("~s has been deleted because it depended on ~s "
+                "(which is being deleted)", [
+                    ParType:to_string(ParId),
+                    EntityType:to_string(EntityId)
+                ])
+            end, ParentIds)
+        end, DependentParents),
+        maps:map(fun(ChType, ChIds) ->
+            lists:foreach(fun(ChId) ->
+                ok = delete_with_relations(ChType, ChId),
+                ?debug("~s has been deleted because it depended on ~s "
+                "(which is being deleted)", [
+                    ChType:to_string(ChId),
+                    EntityType:to_string(EntityId)
+                ])
+            end, ChIds)
+        end, DependentChildren),
         % Remove the entity itself (synchronize with other process which might
         % be updating the entity)
         ok = sync_on_entity(EntityType, EntityId, fun() ->
             EntityType:force_delete(EntityId)
-        end),
-        schedule_refresh(),
-        ok
+        end)
     catch
         Type:Message ->
             ?error_stacktrace(
@@ -844,21 +808,32 @@ update_oz_privileges(EntityType, EntityId, Operation, Privileges) ->
 %%% Internal functions
 %%%===================================================================
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Retrieves effective graph state, which is a globally shared singleton.
-%% @end
-%%--------------------------------------------------------------------
--spec get_state() -> #entity_graph_state{}.
-get_state() ->
-    case entity_graph_state:get(?STATE_KEY) of
-        {ok, #document{value = State}} ->
-            State;
-        Error ->
-            ?error("Cannot retrieve state of effective graph: ~p", [Error]),
-            error(cannot_get_state)
-    end.
+-spec is_up_to_date() -> boolean().
+is_up_to_date() ->
+    is_up_to_date(entity_graph_state:get()).
+
+
+%% @private
+-spec is_up_to_date(entity_graph_state:state()) -> boolean().
+is_up_to_date(#entity_graph_state{bottom_up_dirty = [], top_down_dirty = []}) ->
+    true;
+is_up_to_date(_) ->
+    false.
+
+
+%% @private
+-spec is_refresh_in_progress(entity_graph_state:state()) -> boolean().
+is_refresh_in_progress(#entity_graph_state{refresh_in_progress = Flag}) ->
+    Flag.
+
+
+%% @private
+-spec set_refresh_in_progress(boolean()) -> ok.
+set_refresh_in_progress(Flag) ->
+    entity_graph_state:update(fun(EffGraphState) ->
+        {ok, EffGraphState#entity_graph_state{refresh_in_progress = Flag}}
+    end).
 
 
 %%--------------------------------------------------------------------
@@ -879,7 +854,7 @@ update_dirty_queue(top_down, _, od_handle, _) ->
     ok;
 update_dirty_queue(Direction, Flag, EntityType, EntityId) ->
     Priority = get_priority(Direction, EntityType),
-    {ok, _} = entity_graph_state:update(?STATE_KEY, fun(EffGraphState) ->
+    entity_graph_state:update(fun(EffGraphState) ->
         #entity_graph_state{
             bottom_up_dirty = BottomUpDirty,
             top_down_dirty = TopDownDirty
@@ -907,8 +882,7 @@ update_dirty_queue(Direction, Flag, EntityType, EntityId) ->
                 }
         end,
         {ok, NewState}
-    end),
-    ok.
+    end).
 
 
 %%--------------------------------------------------------------------
@@ -922,25 +896,39 @@ update_dirty_queue(Direction, Flag, EntityType, EntityId) ->
 %%--------------------------------------------------------------------
 -spec refresh_if_needed() -> ok.
 refresh_if_needed() ->
-    critical_section:run(?ENTITY_GRAPH_LOCK, fun() ->
-        case get_state() of
-            #entity_graph_state{bottom_up_dirty = [], top_down_dirty = []} ->
-                ok;
-            State ->
-                try
-                    refresh_entity_graph(State)
-                catch Type:Message ->
-                    ?error_stacktrace("Cannot refresh entity graph - ~p:~p", [
-                        Type, Message
-                    ]),
-                    % Sleep for a while to avoid an aggressive loop
-                    % (in general, the refresh process should not fail at all).
-                    timer:sleep(5000),
-                    schedule_refresh()
-                end
-        end
-    end),
-    ok.
+    State = entity_graph_state:get(),
+    case {is_up_to_date(State), is_refresh_in_progress(State)} of
+        {false, false} ->
+            try
+                critical_section:run(?ENTITY_GRAPH_LOCK, fun() ->
+                    refresh_entity_graph()
+                end)
+            catch Type:Message ->
+                ?error_stacktrace("Cannot refresh entity graph - ~p:~p", [
+                    Type, Message
+                ]),
+                % Sleep for a while to avoid an aggressive loop
+                % (in general, the refresh process should not fail at all).
+                timer:sleep(5000),
+                schedule_refresh()
+            end;
+        {_, _} ->
+            ok
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Marks that entity graph refresh is in progress, performs the refresh and
+%% marks refresh complete.
+%% @end
+%%--------------------------------------------------------------------
+-spec refresh_entity_graph() -> ok.
+refresh_entity_graph() ->
+    set_refresh_in_progress(true),
+    refresh_entity_graph(entity_graph_state:get()),
+    set_refresh_in_progress(false).
 
 
 %%--------------------------------------------------------------------
@@ -951,7 +939,7 @@ refresh_if_needed() ->
 %% dirty entities with lowest priorities.
 %% @end
 %%--------------------------------------------------------------------
--spec refresh_entity_graph(#entity_graph_state{}) -> ok.
+-spec refresh_entity_graph(entity_graph_state:state()) -> ok.
 refresh_entity_graph(#entity_graph_state{bottom_up_dirty = [First | _]}) ->
     {_Priority, EntityType, EntityId} = First,
     % Make sure that the entity is not modified during the whole update
@@ -959,7 +947,7 @@ refresh_entity_graph(#entity_graph_state{bottom_up_dirty = [First | _]}) ->
         refresh_entity(bottom_up, EntityType, EntityId),
         update_dirty_queue(bottom_up, false, EntityType, EntityId)
     end),
-    refresh_entity_graph(get_state());
+    refresh_entity_graph(entity_graph_state:get());
 refresh_entity_graph(#entity_graph_state{top_down_dirty = [First | _]}) ->
     {_Priority, EntityType, EntityId} = First,
     % Make sure that the entity is not modified during the whole update
@@ -967,7 +955,7 @@ refresh_entity_graph(#entity_graph_state{top_down_dirty = [First | _]}) ->
         refresh_entity(top_down, EntityType, EntityId),
         update_dirty_queue(top_down, false, EntityType, EntityId)
     end),
-    refresh_entity_graph(get_state());
+    refresh_entity_graph(entity_graph_state:get());
 refresh_entity_graph(#entity_graph_state{}) ->
     % There are no entities to update, finish.
     ok.
@@ -1031,7 +1019,7 @@ refresh_entity(Direction, EntityType, EntityId, Entity) ->
                     lists:foreach(
                         fun(NId) ->
                             update_dirty_queue(Direction, true, NType, NId),
-                            NType:update(NId, fun(Ent) ->
+                            ok = update_entity(NType, NId, fun(Ent) ->
                                 {ok, mark_record_dirty(Direction, true, Ent)}
                             end)
                         end, NList)
@@ -1039,7 +1027,7 @@ refresh_entity(Direction, EntityType, EntityId, Entity) ->
     end,
     % Update the record marking it not dirty and setting newly calculated
     % effective relations.
-    {ok, _} = EntityType:update(EntityId, fun(Ent) ->
+    ok = update_entity(EntityType, EntityId, fun(Ent) ->
         {ok, mark_record_dirty(Direction, false, update_eff_relations(
             Direction, Ent, AggregatedEffRelations
         ))}

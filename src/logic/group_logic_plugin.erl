@@ -499,8 +499,10 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_tok
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, _}}}, _) ->
     user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_GROUPS_ADD_MEMBERS);
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {child, _}}}, _) ->
-    user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_GROUPS_ADD_MEMBERS);
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {child, ChildId}}, client = ?USER(UserId)}, Group) ->
+    (auth_by_privilege(Req, Group, ?GROUP_INVITE_GROUP) andalso
+        group_logic:has_eff_privilege(ChildId, UserId, ?GROUP_JOIN_GROUP)) orelse
+        user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_GROUPS_ADD_MEMBERS);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = list}}, _) ->
     user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_GROUPS_LIST);
