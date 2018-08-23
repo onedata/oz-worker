@@ -129,7 +129,7 @@ create_group_performance_base(Config) ->
 
 
     ?begin_measurement(groups_creation_time),
-    parallel_foreach(fun(UserAndAuth) ->
+    ok = parallel_foreach(fun(UserAndAuth) ->
         create_group(Config, ApiType, UserAndAuth, <<"group">>)
     end, UsersAndAuths),
     ?end_measurement(groups_creation_time),
@@ -167,8 +167,8 @@ create_space_performance(Config) ->
         ?PERF_CFG(small_rest, [?SPACE_NUM(100), ?API_TYPE(rest)]),
         ?PERF_CFG(medium_rpc, [?SPACE_NUM(1500), ?API_TYPE(rpc)]),
         ?PERF_CFG(medium_rest, [?SPACE_NUM(1500), ?API_TYPE(rest)]),
-        ?PERF_CFG(large_rpc, [?SPACE_NUM(300), ?API_TYPE(rpc)]),
-        ?PERF_CFG(large_rest, [?SPACE_NUM(300), ?API_TYPE(rest)])
+        ?PERF_CFG(large_rpc, [?SPACE_NUM(3000), ?API_TYPE(rpc)]),
+        ?PERF_CFG(large_rest, [?SPACE_NUM(3000), ?API_TYPE(rest)])
     ]).
 create_space_performance_base(Config) ->
     SpaceNum = ?SPACE_NUM,
@@ -178,7 +178,7 @@ create_space_performance_base(Config) ->
 
 
     ?begin_measurement(space_creation_time),
-    parallel_foreach(fun(User) ->
+    ok = parallel_foreach(fun(User) ->
         create_space(Config, ApiType, ?USER(User), <<"space">>)
     end, GroupOwners),
     ?end_measurement(space_creation_time),
@@ -244,11 +244,11 @@ group_chain_performance_base(Config) ->
     [
         ?format_measurement(groups_creation_time, ms,
             "Time taken to create the group chain."),
-        ?format_measurement(avg_time_per_group, us,
-            "Average time taken to create one group."),
+        ?format_measurement(avg_time_per_group, ms,
+            "Average time taken to create one group and add it to the chain (2 operations)."),
         ?format_measurement(reconciliation_time, ms,
             "Time taken to reconcile the entity graph after the last group was created."),
-        ?format_measurement(avg_reconciliation_time_per_group, us,
+        ?format_measurement(avg_reconciliation_time_per_group, ms,
             "Average time taken to reconcile the entity graph per group added.")
     ].
 
@@ -279,9 +279,7 @@ group_chain_append_performance_base(Config) ->
 
 
     ?begin_measurement(group_appending_time),
-    create_group_chain(
-        Config, ApiType, {User, Macaroon}, ToAppendGroupNum, TopGroup
-    ),
+    create_group_chain(Config, ApiType, {User, Macaroon}, ToAppendGroupNum, TopGroup),
     ?end_measurement(group_appending_time),
 
     ?begin_measurement(reconciliation_time),
@@ -298,11 +296,11 @@ group_chain_append_performance_base(Config) ->
     [
         ?format_measurement(group_appending_time, ms,
             "Time taken to append to the group chain."),
-        ?format_measurement(avg_time_per_group, us,
-            "Average time taken to append one group."),
+        ?format_measurement(avg_time_per_group, ms,
+            "Average time taken to create one group and add it to the chain (2 operations)."),
         ?format_measurement(reconciliation_time, ms,
             "Time taken to reconcile the entity graph after the last group was appended."),
-        ?format_measurement(avg_reconciliation_time_per_group, us,
+        ?format_measurement(avg_reconciliation_time_per_group, ms,
             "Average time taken to reconcile the entity graph per group added.")
     ].
 
@@ -346,7 +344,7 @@ big_group_performance_base(Config) ->
 
 
     ?begin_measurement(user_adding_time),
-    parallel_foreach(fun(UserToAdd) ->
+    ok = parallel_foreach(fun(UserToAdd) ->
         group_add_user(Config, ApiType, {Admin, AdminMacaroon}, Group, UserToAdd)
     end, UsersToAdd),
     ?end_measurement(user_adding_time),
@@ -408,7 +406,7 @@ update_privileges_performance_base(Config) ->
 
 
     ?begin_measurement(privileges_updating_time),
-    parallel_foreach(fun(User) ->
+    ok = parallel_foreach(fun(User) ->
         RandomPrivileges = lists:sublist(GroupPrivileges, rand:uniform(length(GroupPrivileges))),
         group_set_user_privileges(Config, ApiType, {Admin, AdminMacaroon}, Group, User, set, RandomPrivileges)
     end, Users),
@@ -488,7 +486,7 @@ reconcile_privileges_in_group_chain_performance_base(Config) ->
     [
         ?format_measurement(privileges_update_time, ms,
             "Time taken to update privileges of the second to top group towards top group."),
-        ?format_measurement(reconciliation_time, us,
+        ?format_measurement(reconciliation_time, ms,
             "Time taken to reconcile the entity graph after the privileges update."),
         ?format_measurement(avg_reconciliation_time_per_group_in_chain, us,
             "Average time taken to reconcile the entity graph per group in chain."),
@@ -539,9 +537,11 @@ end_per_suite(_Config) ->
 
 
 parallel_foreach(Fun, List) ->
-    utils:pforeach(Fun, split_into_sublists(List)).
+    ForeachSublist = fun(Sublist) -> lists:foreach(Fun, Sublist) end,
+    utils:pforeach(ForeachSublist, split_into_sublists(List)).
 
 
+% Splits the list as evenly as possible, into (at most) ?PARALLEL_PROCESSES chunks
 split_into_sublists(List) ->
     {_, Sublists} = lists:foldl(fun
         (_ChunksLeft, {[], OutputAcc}) ->
@@ -551,7 +551,7 @@ split_into_sublists(List) ->
             NewInputAcc = lists:sublist(InputAcc, ChunkSize + 1, length(InputAcc) - ChunkSize),
             NewOutputAcc = [lists:sublist(InputAcc, 1, ChunkSize) | OutputAcc],
             {NewInputAcc, NewOutputAcc}
-    end, {List, []}, lists:seq(length(List), 1, -1)),
+    end, {List, []}, lists:seq(?PARALLEL_PROCESSES, 1, -1)),
     Sublists.
 
 

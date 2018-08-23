@@ -172,7 +172,7 @@ update_propagation_performance_base(Config) ->
     receive finished -> ok end,
     ?end_measurement(updates_propagation_time),
 
-    ?derive_measurement(groups_update_time, avg_update_time_per_group_per_user, fun(M) ->
+    ?derive_measurement(groups_update_time, avg_update_time_per_group, fun(M) ->
         M / GroupNum / UpdateNum
     end),
     ?derive_measurement(updates_propagation_time, avg_propagation_time_per_client, fun(M) ->
@@ -188,11 +188,11 @@ update_propagation_performance_base(Config) ->
     [
         ?format_measurement(groups_update_time, ms,
             "Time taken to make all updates of group names."),
-        ?format_measurement(avg_update_time_per_group_per_user, us,
+        ?format_measurement(avg_update_time_per_group, us,
             "Average time taken to make one update per group."),
         ?format_measurement(updates_propagation_time, ms,
             "Time taken to propagate all updates after they are done."),
-        ?format_measurement(avg_propagation_time_per_client, us,
+        ?format_measurement(avg_propagation_time_per_client, ms,
             "Average time taken to propagate all updates after they are done per client."),
         ?format_measurement(avg_propagation_time_per_client_per_group, us,
             "Average time taken to propagate all updates after they are done per client per group.")
@@ -275,7 +275,9 @@ privileges_in_a_big_space_performance_base(Config) ->
             % Granted privileges are always a long list to generate bigger update sizes.
             _ -> lists:sublist(SpacePrivileges, PrivsNum - 2 + (Seq rem 3))
         end,
-        [oz_test_utils:space_set_user_privileges(Config, Space, U, set, NewPrivileges) || U <- Users]
+        utils:pforeach(fun(User) ->
+            oz_test_utils:space_set_user_privileges(Config, Space, User, set, NewPrivileges)
+        end, Users)
     end, lists:seq(1, UpdateNum)),
     ?end_measurement(privileges_update_time),
 
@@ -359,7 +361,7 @@ concurrent_active_clients_spawning_performance_base(Config) ->
     terminate_clients(Config, SupervisorPid),
 
     [
-        ?format_measurement(clients_spawning_time, ms,
+        ?format_measurement(clients_spawning_time, s,
             "Time taken by clients spawning and making regular requests."),
         ?format_measurement(avg_time_per_client, ms,
             "Average time taken by one client to spawn and make regular requests.")
