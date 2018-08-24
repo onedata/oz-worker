@@ -63,6 +63,7 @@
 -export([
     exists/1,
     has_eff_privilege/3,
+    has_direct_user/2,
     has_eff_user/2,
     has_eff_group/2,
     has_provider/2
@@ -84,16 +85,11 @@
 create(Client, Name) when is_binary(Name) ->
     create(Client, #{<<"name">> => Name});
 create(Client, Data) ->
-    AuthHint = case Client of
-        ?USER(UserId) -> ?AS_USER(UserId);
-        _ -> undefined
-    end,
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
         client = Client,
         gri = #gri{type = od_space, id = undefined, aspect = instance},
-        data = Data,
-        auth_hint = AuthHint
+        data = Data
     })).
 
 
@@ -688,6 +684,19 @@ has_eff_privilege(SpaceId, UserId, Privilege) when is_binary(SpaceId) ->
     entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, od_space, SpaceId);
 has_eff_privilege(Space, UserId, Privilege) ->
     entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, Space).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified user is an direct user of given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_direct_user(SpaceOrId :: od_space:id() | #od_space{},
+    UserId :: od_space:id()) -> boolean().
+has_direct_user(SpaceId, UserId) when is_binary(SpaceId) ->
+    entity_graph:has_relation(direct, bottom_up, od_user, UserId, od_space, SpaceId);
+has_direct_user(Space, UserId) ->
+    entity_graph:has_relation(direct, bottom_up, od_user, UserId, Space).
 
 
 %%--------------------------------------------------------------------

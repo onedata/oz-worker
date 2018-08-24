@@ -37,12 +37,17 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#g
         ?AS_USER(_UserId) ->
             [<<"user">>, <<"groups">>, GroupId];
         ?AS_GROUP(ChildGroupId) ->
-            [<<"groups">>, ChildGroupId, <<"parents">>, GroupId]
+            [<<"groups">>, ChildGroupId, <<"parents">>, GroupId];
+        _ ->
+            [<<"groups">>, GroupId]
     end,
     rest_translator:created_reply(LocationTokens);
 
 create_response(#gri{aspect = join} = Gri, AuthHint, resource, Result) ->
     create_response(Gri#gri{aspect = instance}, AuthHint, resource, Result);
+
+create_response(#gri{id = ParentGroupId, aspect = child}, _, resource, {#gri{id = GroupId}, _}) ->
+    rest_translator:created_reply([<<"groups">>, ParentGroupId, <<"children">>, GroupId]);
 
 create_response(#gri{aspect = invite_user_token}, _, value, Macaroon) ->
     {ok, Token} = onedata_macaroons:serialize(Macaroon),

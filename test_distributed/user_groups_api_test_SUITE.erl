@@ -95,7 +95,8 @@ list_groups_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -291,6 +292,7 @@ join_group_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_USERS_ADD_RELATIONSHIPS]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -353,11 +355,12 @@ get_group_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1),
         #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
     ),
     {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -384,6 +387,7 @@ get_group_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_GROUPS_VIEW]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -504,7 +508,8 @@ list_eff_groups_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -565,6 +570,7 @@ get_eff_group_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
+                        {admin, [?OZ_GROUPS_VIEW]},
                         {user, U1}
                     ],
                     unauthorized = [nobody],

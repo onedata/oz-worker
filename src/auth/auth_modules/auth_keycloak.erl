@@ -14,6 +14,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("auth_common.hrl").
+-include("idp_group_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
@@ -65,7 +66,7 @@ get_user_info(IdP, AccessToken) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec normalized_membership_spec(auth_utils:idp(), Group :: binary()) ->
-    idp_group_mapping:membership_spec().
+    idp_group_mapping:idp_entitlement().
 normalized_membership_spec(IdP, Group) ->
     normalized_membership_spec(IdP, Group, team, {nested, <<"/">>}).
 
@@ -77,19 +78,20 @@ normalized_membership_spec(IdP, Group) ->
 %%--------------------------------------------------------------------
 -spec normalized_membership_spec(auth_utils:idp(), Group :: binary(), od_group:type(),
     Structure :: flat | {nested, SplitWith :: binary()}) ->
-    idp_group_mapping:membership_spec().
+    idp_group_mapping:idp_entitlement().
 normalized_membership_spec(IdP, Group, Type, Structure) ->
     VoId = vo_id(IdP),
-    TypeStr = idp_group_mapping:type_to_str(Type),
-    GroupSpec = case Structure of
+    Path = case Structure of
         flat ->
-            <<TypeStr/binary, ":", Group/binary>>;
+            [#idp_group{name = Group, type = Type}];
         {nested, SplitWith} ->
             GroupTokens = binary:split(Group, SplitWith, [global, trim_all]),
-            MappedTokens = [<<TypeStr/binary, ":", T/binary>> || T <- GroupTokens],
-            str_utils:join_binary(MappedTokens, <<"/">>)
+            [#idp_group{name = T, type = Type} || T <- GroupTokens]
     end,
-    <<"vo:", VoId/binary, "/", GroupSpec/binary, "/user:member">>.
+    #idp_entitlement{
+        path = [#idp_group{name = VoId, type = organization}] ++ Path,
+        privileges = member
+    }.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -117,7 +119,7 @@ normalized_membership_spec(IdP, Group, Type, Structure) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec normalized_membership_specs(auth_utils:idp(), maps:map()) ->
-    [idp_group_mapping:membership_spec()].
+    [idp_group_mapping:idp_entitlement()].
 normalized_membership_specs(IdP, Map) ->
     Config = auth_config:get_auth_config(IdP),
     GroupMappingConfig = proplists:get_value(group_mapping, Config, []),
@@ -125,18 +127,7 @@ normalized_membership_specs(IdP, Map) ->
     lists:flatmap(fun({Attr, Type, Structure}) ->
         Groups = maps:get(Attr, Map, []),
         lists:map(fun(Group) ->
-            GroupWithoutSlashes = case Structure of
-                {nested, <<"/">>} ->
-                    Group;
-                _ ->
-                    % Otherwise we need to make sure that there are no slashes
-                    % in the group name, as it would break the group spec format.
-                    str_utils:join_binary(
-                        binary:split(Group, <<"/">>, [global, trim_all]),
-                        <<"-">>
-                    )
-            end,
-            normalized_membership_spec(IdP, GroupWithoutSlashes, Type, Structure)
+            normalized_membership_spec(IdP, Group, Type, Structure)
         end, Groups)
     end, AttributesConfig).
 

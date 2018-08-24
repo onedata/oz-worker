@@ -164,7 +164,7 @@ entity_type() | oz_privileges => eff_relations() | eff_relations_with_attrs() | 
 -export([get_relations/4, get_relations_with_privileges/4]).
 -export([has_relation/5, has_relation/6]).
 -export([get_privileges/5, has_privilege/6, has_privilege/7]).
--export([delete_with_relations/2]).
+-export([delete_with_relations/2, delete_with_relations/3]).
 -export([update_oz_privileges/4]).
 -export([get_oz_privileges/2, has_oz_privilege/3, has_oz_privilege/4]).
 
@@ -668,6 +668,10 @@ has_privilege(RelationType, Direction, SubjectEntityType, SubjectEntityId, Privi
 -spec delete_with_relations(entity_type(), entity_id()) -> ok.
 delete_with_relations(EntityType, EntityId) ->
     {ok, #document{value = Entity}} = EntityType:get(EntityId),
+    delete_with_relations(EntityType, EntityId, Entity).
+
+-spec delete_with_relations(entity_type(), entity_id(), entity()) -> ok | no_return().
+delete_with_relations(EntityType, EntityId, Entity) ->
     Parents = get_parents(Entity),
     DependentParents = maps:get(dependent, Parents, #{}),
     IndependentParents = maps:get(independent, Parents, #{}),

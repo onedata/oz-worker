@@ -74,6 +74,7 @@ add_group_test(Config) ->
         Config, ?HANDLE_UPDATE
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     AllPrivs = oz_test_utils:all_handle_privileges(Config),
@@ -98,6 +99,7 @@ add_group_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLES_ADD_RELATIONSHIPS, ?OZ_GROUPS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -172,6 +174,7 @@ remove_group_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLES_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -221,6 +224,7 @@ list_groups_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLES_LIST_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -264,6 +268,7 @@ get_group_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_GROUPS_VIEW]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -341,6 +346,7 @@ get_group_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLES_VIEW_PRIVILEGES]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -405,6 +411,7 @@ update_group_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLES_SET_PRIVILEGES]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -447,6 +454,7 @@ list_eff_groups_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLES_LIST_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -500,6 +508,7 @@ get_eff_group_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
+                        {admin, [?OZ_GROUPS_VIEW]},
                         {user, U2}
                     ],
                     unauthorized = [nobody],
@@ -634,6 +643,7 @@ get_eff_group_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLES_VIEW_PRIVILEGES]},
                 {user, U2}
             ],
             unauthorized = [nobody],

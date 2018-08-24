@@ -47,6 +47,7 @@
     create_user_invite_token/2,
     create_group_invite_token/2,
 
+    create_child_group/3, create_child_group/4,
     join_group/3,
     join_space/3,
 
@@ -68,6 +69,7 @@
     get_space/3, get_eff_space/3,
 
     get_eff_providers/2, get_eff_provider/3,
+    get_spaces_in_eff_provider/3,
 
     get_handle_services/2, get_eff_handle_services/2,
     get_handle_service/3, get_eff_handle_service/3,
@@ -90,6 +92,7 @@
     exists/1,
     has_eff_parent/2,
     has_eff_child/2,
+    has_direct_user/2,
     has_eff_user/2,
     has_eff_space/2,
     has_eff_provider/2,
@@ -128,16 +131,11 @@ create(Client, Name, Type) ->
 create(Client, Name) when is_binary(Name) ->
     create(Client, #{<<"name">> => Name});
 create(Client, Data) ->
-    AuthHint = case Client of
-        ?USER(UserId) -> ?AS_USER(UserId);
-        _ -> undefined
-    end,
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
         client = Client,
         gri = #gri{type = od_group, id = undefined, aspect = instance},
-        data = Data,
-        auth_hint = AuthHint
+        data = Data
     })).
 
 
@@ -464,6 +462,46 @@ create_group_invite_token(Client, GroupId) ->
         client = Client,
         gri = #gri{type = od_group, id = GroupId, aspect = invite_group_token},
         data = #{}
+    })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new child group belonging to given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_child_group(Client :: entity_logic:client(),
+    ParentGroupId :: od_group:id(), Name :: binary(),
+    Type :: od_group:type()) -> {ok, od_group:id()} | {error, term()}.
+create_child_group(Client, ParentGroupId, Name, Type) ->
+    create_child_group(Client, ParentGroupId, #{
+        <<"name">> => Name, <<"type">> => Type
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new child group belonging to given group. Has two variants:
+%% 1) Group Name is given explicitly (the new group will be of default type)
+%% 2) Group name is provided in a proper Data object, group type is optional.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_child_group(Client :: entity_logic:client(),
+    ParentGroupId :: od_group:id(), NameOrData :: binary() | #{}) ->
+    {ok, od_group:id()} | {error, term()}.
+create_child_group(Client, ParentGroupId, Name) when is_binary(Name) ->
+    create_child_group(Client, ParentGroupId, #{<<"name">> => Name});
+create_child_group(Client, ParentGroupId, Data) ->
+    AuthHint = case Client of
+        ?USER(UserId) -> ?AS_USER(UserId);
+        _ -> undefined
+    end,
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_group, id = ParentGroupId, aspect = child},
+        data = Data,
+        auth_hint = AuthHint
     })).
 
 
@@ -935,6 +973,22 @@ get_eff_provider(Client, GroupId, ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves the list of spaces supported by specific effective provider among
+%% effective providers of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_spaces_in_eff_provider(Client :: entity_logic:client(), GroupId :: od_group:id(),
+    ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
+get_spaces_in_eff_provider(Client, GroupId, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {group_spaces, GroupId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Retrieves the list of handle_services of given group.
 %% @end
 %%--------------------------------------------------------------------
@@ -1256,15 +1310,38 @@ has_eff_child(Group, ChildId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Predicate saying whether specified user is a direct member of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_direct_user(GroupOrId :: od_group:id() | #od_group{},
+    UserId :: od_group:id()) -> boolean().
+has_direct_user(GroupId, UserId) when is_binary(GroupId) ->
+    case od_group:get(GroupId) of
+        {ok, #document{value = Group}} ->
+            has_direct_user(Group, UserId);
+        _ ->
+            false
+    end;
+has_direct_user(#od_group{users = Users}, UserId) ->
+    maps:is_key(UserId, Users).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Predicate saying whether specified user is an effective user of given group.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_user(GroupOrId :: od_group:id() | #od_group{},
-    UserId :: od_group:id()) -> boolean().
+    UserId :: od_user:id()) -> boolean().
 has_eff_user(GroupId, UserId) when is_binary(GroupId) ->
-    entity_graph:has_relation(effective, bottom_up, od_user, UserId, od_group, GroupId);
-has_eff_user(Group, UserId) ->
-    entity_graph:has_relation(effective, bottom_up, od_user, UserId, Group).
+    case od_group:get(GroupId) of
+        {ok, #document{value = Group}} ->
+            has_eff_user(Group, UserId);
+        _ ->
+            false
+    end;
+has_eff_user(#od_group{eff_users = EffUsers}, UserId) ->
+    maps:is_key(UserId, EffUsers).
 
 
 %%--------------------------------------------------------------------
@@ -1371,16 +1448,17 @@ create_predefined_groups() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec normalize_name(binary()) -> binary().
-normalize_name(Name) -> 
+normalize_name(Name) ->
     % string module supports binaries in utf8
     ShortenedName = string:slice(Name, 0, ?MAXIMUM_NAME_LENGTH),
     Regexp = <<"[^", ?NAME_CHARS_ALLOWED_IN_THE_MIDDLE, "]">>,
-    NormalizedName = re:replace(ShortenedName, Regexp, 
+    NormalizedName = re:replace(ShortenedName, Regexp,
         <<"-">>, [{return, binary}, unicode, ucp, global]),
-    case re:run(NormalizedName, ?NAME_VALIDATION_REGEXP, 
-        [{capture, none}, ucp, unicode]) of
-        match -> NormalizedName;
-        _ -> <<"(", (string:slice(NormalizedName, 0, ?MAXIMUM_NAME_LENGTH-2))/binary, ")">>
+    case re:run(NormalizedName, ?NAME_VALIDATION_REGEXP, [{capture, none}, ucp, unicode]) of
+        match ->
+            NormalizedName;
+        _ ->
+            <<"(", (string:slice(NormalizedName, 0, ?MAXIMUM_NAME_LENGTH - 2))/binary, ")">>
     end.
 
 %%%===================================================================
@@ -1407,7 +1485,8 @@ create_predefined_group(GroupId, Name, Privileges) ->
                 key = GroupId,
                 value = #od_group{
                     name = Name,
-                    type = role
+                    type = role,
+                    protected = true
                 }},
             case od_group:create(NewGroup) of
                 {ok, _} ->

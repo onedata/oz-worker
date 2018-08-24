@@ -13,6 +13,7 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, update/3, force_delete/1]).
@@ -147,7 +148,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    4.
+    5.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -185,19 +186,23 @@ get_record_struct(2) ->
         {type, atom},
         {oz_privileges, [atom]},
         {eff_oz_privileges, [atom]},
+
         {parents, [string]},
         {children, #{string => [atom]}},
         {eff_parents, #{string => [{atom, string}]}},
         {eff_children, #{string => {[atom], [{atom, string}]}}},
+
         {users, #{string => [atom]}},
         {spaces, [string]},
         {handle_services, [string]},
         {handles, [string]},
+
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_spaces, #{string => [{atom, string}]}},
         {eff_providers, #{string => [{atom, string}]}},
         {eff_handle_services, #{string => [{atom, string}]}},
         {eff_handles, #{string => [{atom, string}]}},
+
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
     ]};
@@ -205,9 +210,37 @@ get_record_struct(3) ->
     % The structure does not change, only group names are normalized.
     get_record_struct(2);
 get_record_struct(4) ->
-    % There are no changes, but all records must be marked dirty to recalculate
-    % effective relations (as intermediaries computing logic has changed).
-    get_record_struct(3).
+    % The structure does not change, but all records must be marked dirty to
+    % recalculate effective relations (as intermediaries computing logic has changed).
+    get_record_struct(3);
+get_record_struct(5) ->
+    % Protected group flag is added and also the privileges are translated.
+    {record, [
+        {name, string},
+        {type, atom},
+        {protected, boolean},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {parents, [string]},
+        {children, #{string => [atom]}},
+        {eff_parents, #{string => [{atom, string}]}},
+        {eff_children, #{string => {[atom], [{atom, string}]}}},
+
+        {users, #{string => [atom]}},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -298,23 +331,169 @@ upgrade_record(2, Group) ->
         _BottomUpDirty
     } = Group,
 
-    {3, #od_group{
-        name = group_logic:normalize_name(Name),
+    {3, {od_group,
+        group_logic:normalize_name(Name),
+        Type,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        true,
+        true
+    }};
+upgrade_record(3, Group) ->
+    {od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        _EffParents,
+        _EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        _EffUsers,
+        _EffSpaces,
+        _EffProviders,
+        _EffHandleServices,
+        _EffHandles,
+
+        _BottomUpDirty,
+        _TopDownDirty
+    } = Group,
+    {4, {od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        #{},
+        #{},
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        #{},
+        #{},
+        #{},
+        #{},
+        #{},
+
+        true,
+        true
+    }};
+upgrade_record(4, Group) ->
+    {
+        od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        _TopDownDirty,
+        _BottomUpDirty
+    } = Group,
+
+    TranslatePrivileges = fun(Privileges) ->
+        lists:usort(lists:flatten(lists:map(fun
+            (group_invite_group) -> ?GROUP_ADD_CHILD;
+            (group_remove_group) -> ?GROUP_REMOVE_CHILD;
+            (group_join_group) -> ?GROUP_ADD_PARENT;
+            (group_leave_group) -> ?GROUP_LEAVE_PARENT;
+            (group_create_space) -> ?GROUP_ADD_SPACE;
+            (group_join_space) -> ?GROUP_ADD_SPACE;
+            (group_view) -> [?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES];
+
+            (oz_users_list) -> [?OZ_USERS_LIST, ?OZ_USERS_VIEW];
+
+            (oz_groups_list) -> [?OZ_GROUPS_LIST, ?OZ_GROUPS_VIEW];
+            (oz_groups_list_users) -> ?OZ_GROUPS_LIST_RELATIONSHIPS;
+            (oz_groups_list_groups) -> ?OZ_GROUPS_LIST_RELATIONSHIPS;
+            (oz_groups_add_members) -> ?OZ_GROUPS_ADD_RELATIONSHIPS;
+            (oz_groups_remove_members) -> ?OZ_GROUPS_REMOVE_RELATIONSHIPS;
+
+            (oz_spaces_list) -> [?OZ_SPACES_LIST, ?OZ_SPACES_VIEW];
+            (oz_spaces_list_users) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_list_groups) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_list_providers) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_add_members) -> ?OZ_SPACES_ADD_RELATIONSHIPS;
+            (oz_spaces_remove_members) -> ?OZ_SPACES_REMOVE_RELATIONSHIPS;
+
+            (oz_providers_list) -> [?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_VIEW];
+            (oz_providers_list_users) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+            (oz_providers_list_groups) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+            (oz_providers_list_spaces) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+
+            (Other) -> Other
+        end, Privileges)))
+    end,
+
+    TranslateField = fun(Field) ->
+        maps:map(fun
+            (_, {Privs, Intermediaries}) -> {TranslatePrivileges(Privs), Intermediaries};
+            (_, Privs) -> TranslatePrivileges(Privs)
+        end, Field)
+    end,
+
+    {5, #od_group{
+        name = Name,
         type = Type,
-        oz_privileges = OzPrivileges,
-        eff_oz_privileges = EffOzPrivileges,
+        protected = false,
+        oz_privileges = TranslatePrivileges(OzPrivileges),
+        eff_oz_privileges = TranslatePrivileges(EffOzPrivileges),
 
         parents = Parents,
-        children = Children,
+        children = TranslateField(Children),
         eff_parents = EffParents,
-        eff_children = EffChildren,
+        eff_children = TranslateField(EffChildren),
 
-        users = Users,
+        users = TranslateField(Users),
         spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles,
 
-        eff_users = EffUsers,
+        eff_users = TranslateField(EffUsers),
         eff_spaces = EffSpaces,
         eff_providers = EffProviders,
         eff_handle_services = EffHandleServices,
@@ -322,18 +501,5 @@ upgrade_record(2, Group) ->
 
         top_down_dirty = true,
         bottom_up_dirty = true
-    }};
-upgrade_record(3, Group) ->
-    {4, Group#od_group{
-        eff_parents = #{},
-        eff_children = #{},
-
-        eff_users = #{},
-        eff_spaces = #{},
-        eff_providers = #{},
-        eff_handle_services = #{},
-        eff_handles = #{},
-
-        top_down_dirty = true,
-        bottom_up_dirty = true
     }}.
+

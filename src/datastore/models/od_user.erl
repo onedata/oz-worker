@@ -12,13 +12,16 @@
 -module(od_user).
 -author("Michal Zmuda").
 
+-include("idp_group_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([get_by_criterion/1]).
 -export([to_string/1]).
 -export([entity_logic_plugin/0]).
+-export([add_session/2, remove_session/2, get_all_sessions/1]).
 
 %% datastore_model callbacks
 -export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
@@ -36,6 +39,9 @@
                      {email, binary()} |
                      {alias, alias()}.
 -export_type([name/0, alias/0]).
+
+% Delay before all session connections are terminated when user is deleted.
+-define(SESSION_CLEANUP_GRACE_PERIOD, 3000).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -102,6 +108,8 @@ update(UserId, Diff) ->
 %%--------------------------------------------------------------------
 -spec force_delete(id()) -> ok | {error, term()}.
 force_delete(UserId) ->
+    {ok, Sessions} = get_all_sessions(UserId),
+    [session:delete(S, ?SESSION_CLEANUP_GRACE_PERIOD, false) || S <- Sessions],
     datastore_model:delete(?CTX, UserId).
 
 %%--------------------------------------------------------------------
@@ -185,6 +193,50 @@ to_string(UserId) ->
 entity_logic_plugin() ->
     user_logic_plugin.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a new session for given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec add_session(id(), session:id()) -> ok | {error, term()}.
+add_session(UserId, SessionId) ->
+    Result = update(UserId, fun(User = #od_user{active_sessions = ActiveSessions}) ->
+        {ok, User#od_user{active_sessions = [SessionId | ActiveSessions]}}
+    end),
+    case Result of
+        {ok, _} -> ok;
+        {error, _} = Error -> Error
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes a session of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_session(id(), session:id()) -> ok | {error, term()}.
+remove_session(UserId, SessionId) ->
+    Result = update(UserId, fun(User = #od_user{active_sessions = ActiveSessions}) ->
+        {ok, User#od_user{active_sessions = ActiveSessions -- [SessionId]}}
+    end),
+    case Result of
+        {ok, _} -> ok;
+        {error, _} = Error -> Error
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns all sessions of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_all_sessions(id()) -> {ok, [session:id()]} | {error, term()}.
+get_all_sessions(UserId) ->
+    case ?MODULE:get(UserId) of
+        {ok, #document{value = #od_user{active_sessions = ActiveSessions}}} ->
+            {ok, ActiveSessions};
+        {error, _} ->
+            {ok, []}
+    end.
+
 %%%===================================================================
 %%% datastore_model callbacks
 %%%===================================================================
@@ -196,7 +248,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    7.
+    8.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -309,7 +361,49 @@ get_record_struct(6) ->
 get_record_struct(7) ->
     % There are no changes, but all records must be marked dirty to recalculate
     % effective relations (as intermediaries computing logic has changed).
-    get_record_struct(6).
+    get_record_struct(6);
+get_record_struct(8) ->
+    % Changes:
+    %   * new field - active sessions
+    %   * groups spec in linked_accounts from binaries to idp_entitlement records
+    %   * the privileges are translated
+    {record, [
+        {name, string},
+        {alias, string},
+        {email_list, [string]},
+        {basic_auth_enabled, boolean},
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {login, string},
+            {name, string},
+            {email_list, [string]},
+            {groups, [{record, [
+                {path, [{record, [
+                    {name, string},
+                    {type, atom}
+                ]}]},
+                {privileges, atom}
+            ]}]}
+        ]}]},
+        {active_sessions, [string]}, % New field
+        {default_space, string},
+        {default_provider, string},
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {top_down_dirty, boolean}
+    ]}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -630,12 +724,190 @@ upgrade_record(5, User) ->
         TopDownDirty
     } = User,
 
-    {6, #od_user{
+    {6, {od_user,
+        Name,
+        Login,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    }};
+upgrade_record(6, User) ->
+    {od_user,
+        Name,
+        Login,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        _EffGroups,
+        _EffSpaces,
+        _EffProviders,
+        _EffHandleServices,
+        _EffHandles,
+
+        _TopDownDirty
+    } = User,
+
+    {7, {od_user,
+        Name,
+        Login,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        #{},
+        #{},
+        #{},
+        #{},
+        #{},
+
+        true
+    }};
+upgrade_record(7, User) ->
+    {od_user,
+        Name,
+        Alias,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        _TopDownDirty
+    } = User,
+
+    TranslatePrivileges = fun(Privileges) ->
+        lists:usort(lists:flatten(lists:map(fun
+            (oz_users_list) -> [?OZ_USERS_LIST, ?OZ_USERS_VIEW];
+
+            (oz_groups_list) -> [?OZ_GROUPS_LIST, ?OZ_GROUPS_VIEW];
+            (oz_groups_list_users) -> ?OZ_GROUPS_LIST_RELATIONSHIPS;
+            (oz_groups_list_groups) -> ?OZ_GROUPS_LIST_RELATIONSHIPS;
+            (oz_groups_add_members) -> ?OZ_GROUPS_ADD_RELATIONSHIPS;
+            (oz_groups_remove_members) -> ?OZ_GROUPS_REMOVE_RELATIONSHIPS;
+
+            (oz_spaces_list) -> [?OZ_SPACES_LIST, ?OZ_SPACES_VIEW];
+            (oz_spaces_list_users) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_list_groups) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_list_providers) -> ?OZ_SPACES_LIST_RELATIONSHIPS;
+            (oz_spaces_add_members) -> ?OZ_SPACES_ADD_RELATIONSHIPS;
+            (oz_spaces_remove_members) -> ?OZ_SPACES_REMOVE_RELATIONSHIPS;
+
+            (oz_providers_list) -> [?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_VIEW];
+            (oz_providers_list_users) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+            (oz_providers_list_groups) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+            (oz_providers_list_spaces) -> ?OZ_PROVIDERS_LIST_RELATIONSHIPS;
+
+            (Other) -> Other
+        end, Privileges)))
+    end,
+
+    MapType = fun(<<"vo">>) -> organization;
+        (<<"ut">>) -> unit;
+        (<<"tm">>) -> team;
+        (<<"rl">>) -> role
+    end,
+
+    MapPrivileges = fun(<<"admin">>) -> admin;
+        (<<"manager">>) -> manager;
+        (<<"member">>) -> member
+    end,
+    NewLinkedAccounts = lists:map(fun(LinkedAccount) ->
+        OldGroups = LinkedAccount#linked_account.groups,
+        NewGroups = lists:map(fun(Group) ->
+            GroupTokens = binary:split(Group, <<"/">>, [global]),
+            Path = lists:map(fun(Token) ->
+                <<GroupTypeStr:2/binary, ":", GroupName/binary>> = Token,
+                #idp_group{
+                    name = GroupName,
+                    type = MapType(GroupTypeStr)
+                }
+            end, lists:sublist(GroupTokens, length(GroupTokens)-1)),
+            [_, RoleStr] = binary:split(lists:last(GroupTokens), <<":">>, [global]),
+            #idp_entitlement{
+                path = Path,
+                privileges = MapPrivileges(RoleStr)
+            }
+        end, OldGroups),
+        LinkedAccount#linked_account{groups = NewGroups}
+    end, LinkedAccounts),
+
+    {8, #od_user{
         name = Name,
-        alias = Login,
+        alias = Alias,
         email_list = EmailList,
         basic_auth_enabled = BasicAuthEnabled,
-        linked_accounts = LinkedAccounts,
+        linked_accounts = NewLinkedAccounts,
+
+        active_sessions = [],
 
         default_space = DefaultSpace,
         default_provider = DefaultProvider,
@@ -643,29 +915,16 @@ upgrade_record(5, User) ->
         client_tokens = ClientTokens,
         space_aliases = SpaceAliases,
 
-        oz_privileges = OzPrivileges,
-        eff_oz_privileges = EffOzPrivileges,
+        oz_privileges = TranslatePrivileges(OzPrivileges),
+        eff_oz_privileges = TranslatePrivileges(EffOzPrivileges),
 
         groups = Groups,
         spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles,
-
         eff_groups = EffGroups,
         eff_spaces = EffSpaces,
         eff_providers = EffProviders,
         eff_handle_services = EffHandleServices,
-        eff_handles = EffHandles,
-
-        top_down_dirty = TopDownDirty
-    }};
-upgrade_record(6, User) ->
-    {7, User#od_user{
-        eff_groups = #{},
-        eff_spaces = #{},
-        eff_providers = #{},
-        eff_handle_services = #{},
-        eff_handles = #{},
-
-        top_down_dirty = true
+        eff_handles = EffHandles
     }}.

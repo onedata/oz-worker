@@ -156,17 +156,17 @@ handle(#el_req{gri = #gri{type = EntityType}} = ElReq, Entity) ->
 %% in the #el_req{} record. Entity can be provided if it was prefetched.
 %% @end
 %%--------------------------------------------------------------------
--spec is_authorized(req(), entity()) -> boolean().
+-spec is_authorized(req(), entity()) -> {true, gs_protocol:gri()} | false.
 is_authorized(#el_req{gri = #gri{type = EntityType}} = ElReq, Entity) ->
     try
         ElPlugin = EntityType:entity_logic_plugin(),
         % Existence must be checked too, as sometimes authorization depends
         % on that.
-        ensure_authorized(
+        NewState = ensure_authorized(
             ensure_exists(#state{
                 req = ElReq, plugin = ElPlugin, entity = Entity
             })),
-        true
+        {true, NewState#state.req#el_req.gri}
     catch
         _:_ ->
             false
@@ -214,19 +214,25 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = create}}) ->
             ?debug("~s has been created by client: ~s", [
                 EntType:to_string(EntId),
                 client_to_string(Cl)
-            ]),
-            Result;
+            ]);
         _ ->
-            Result
-    end;
+            ok
+    end,
+    Result;
 
 handle_unsafe(State = #state{req = #el_req{operation = get}}) ->
-    call_get(
-        ensure_authorized(
-            ensure_exists(
-                fetch_entity(
-                    ensure_operation_supported(
-                        State)))));
+    NewState = ensure_authorized(
+        ensure_exists(
+            fetch_entity(
+                ensure_operation_supported(
+                    State)))),
+    {ok, Data} = call_get(NewState),
+    % Return the new GRI if auto scope was requested
+    case State#state.req#el_req.gri#gri.scope of
+        auto -> {ok, NewState#state.req#el_req.gri, Data};
+        _ -> {ok, Data}
+    end;
+
 
 handle_unsafe(State = #state{req = #el_req{operation = update}}) ->
     call_update(
@@ -336,18 +342,25 @@ call_delete(#state{req = ElReq, plugin = Plugin}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec ensure_operation_supported(#state{}) -> #state{}.
-ensure_operation_supported(State = #state{req = Req, plugin = Plugin}) ->
-    Result = try
-        #el_req{operation = Op, gri = #gri{aspect = Asp, scope = Scp}} = Req,
-        Plugin:operation_supported(Op, Asp, Scp)
+ensure_operation_supported(State = #state{req = #el_req{gri = #gri{scope = auto}}}) ->
+    % If auto scope is requested, defer the check until ensure_authorized
+    State;
+ensure_operation_supported(State) ->
+    case ensure_operation_supported_internal(State) of
+        true -> State;
+        false -> throw(?ERROR_NOT_SUPPORTED)
+    end.
+
+
+-spec ensure_operation_supported_internal(#state{}) -> boolean().
+ensure_operation_supported_internal(#state{req = Req, plugin = Plugin}) ->
+    try
+        #el_req{operation = Operation, gri = #gri{aspect = Aspect, scope = Scope}} = Req,
+        Plugin:operation_supported(Operation, Aspect, Scope)
     catch _:_ ->
         % No need for log here, 'operation_supported' may crash depending on
         % what the request contains and this is expected.
         false
-    end,
-    case Result of
-        true -> State;
-        false -> throw(?ERROR_NOT_SUPPORTED)
     end.
 
 
@@ -357,21 +370,24 @@ ensure_operation_supported(State = #state{req = Req, plugin = Plugin}) ->
 %% Ensures aspect of entity specified in request exists, throws on error.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_exists(State :: #state{}) -> #state{}.
-ensure_exists(#state{req = #el_req{gri = #gri{id = undefined}}} = State) ->
-    % Aspects where entity id is undefined always exist.
-    State;
-ensure_exists(State = #state{req = ElReq, plugin = Plugin, entity = Entity}) ->
-    Result = try
+-spec ensure_exists(#state{}) -> #state{}.
+ensure_exists(State) ->
+    case ensure_exists_internal(State) of
+        true -> State;
+        false -> throw(?ERROR_NOT_FOUND)
+    end.
+
+
+-spec ensure_exists_internal(#state{}) -> boolean().
+ensure_exists_internal(#state{req = #el_req{gri = #gri{id = undefined}}}) ->
+    true;
+ensure_exists_internal(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
+    try
         Plugin:exists(ElReq, Entity)
     catch _:_ ->
         % No need for log here, 'exists' may crash depending on what the
         % request contains and this is expected.
         false
-    end,
-    case Result of
-        true -> State;
-        false -> throw(?ERROR_NOT_FOUND)
     end.
 
 
@@ -383,32 +399,80 @@ ensure_exists(State = #state{req = ElReq, plugin = Plugin, entity = Entity}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec ensure_authorized(State :: #state{}) -> #state{}.
-ensure_authorized(State = #state{req = #el_req{client = ?ROOT}}) ->
+ensure_authorized(State = #state{req = #el_req{gri = #gri{scope = auto}}}) ->
+    % Resolve auto scope - maximum scope allowed for given client and place it
+    % in state, which will result in specific scope being used in the operation.
+    case resolve_auto_scope(State) of
+        {true, NewState} -> NewState;
+        false -> report_unauthorized(State)
+    end;
+ensure_authorized(State) ->
+    case ensure_authorized_internal(State) of
+        true -> State;
+        false -> report_unauthorized(State)
+    end.
+
+
+-spec ensure_authorized_internal(#state{}) -> boolean().
+ensure_authorized_internal(#state{req = #el_req{client = ?ROOT}}) ->
     % Root client is authorized to do everything (that client is only available
     % internally).
-    State;
-ensure_authorized(State = #state{req = ElReq, plugin = Plugin, entity = Entity}) ->
-    Result = try
+    true;
+ensure_authorized_internal(State) ->
+    is_client_authorized(State) orelse is_authorized_as_admin(State).
+
+
+-spec resolve_auto_scope(#state{}) -> false | {true, #state{}}.
+resolve_auto_scope(State) ->
+    resolve_auto_scope([private, protected, shared, public], State).
+
+-spec resolve_auto_scope([gs_protocol:scope()], #state{}) -> false | {true, #state{}}.
+resolve_auto_scope([], _State) ->
+    false;
+resolve_auto_scope([Scope | Rest], State = #state{req = Req = #el_req{gri = GRI}}) ->
+    StateWithScope = State#state{req = Req#el_req{gri = GRI#gri{scope = Scope}}},
+    Authorized = ensure_operation_supported_internal(StateWithScope) andalso
+        ensure_exists_internal(StateWithScope) andalso
+        ensure_authorized_internal(StateWithScope),
+    case Authorized of
+        true -> {true, StateWithScope};
+        false -> resolve_auto_scope(Rest, State)
+    end.
+
+
+-spec is_client_authorized(#state{}) -> boolean().
+is_client_authorized(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
+    try
         Plugin:authorize(ElReq, Entity)
     catch _:_ ->
-        % No need for log here, 'authorize' may crash depending on what the
-        % request contains and this is expected.
         false
-    end,
-    case Result of
-        true ->
-            State;
-        false ->
-            case ElReq#el_req.client of
-                ?NOBODY ->
-                    % The client was not authenticated -> unauthorized
-                    throw(?ERROR_UNAUTHORIZED);
-                _ ->
-                    % The client was authenticated but cannot access the
-                    % aspect -> forbidden
-                    throw(?ERROR_FORBIDDEN)
-            end
     end.
+
+
+-spec is_authorized_as_admin(#state{}) -> boolean().
+is_authorized_as_admin(#state{req = ElReq, plugin = Plugin}) ->
+    try
+        case Plugin:required_admin_privileges(ElReq) of
+            forbidden ->
+                false;
+            Privileges ->
+                lists:all(fun(Privilege) ->
+                    user_logic_plugin:auth_by_oz_privilege(ElReq, Privilege)
+                end, Privileges)
+        end
+    catch _:_ ->
+        false
+    end.
+
+
+-spec report_unauthorized(#state{}) -> no_return().
+report_unauthorized(#state{req = #el_req{client = ?NOBODY}}) ->
+    % The client was not authenticated -> unauthorized
+    throw(?ERROR_UNAUTHORIZED);
+report_unauthorized(_) ->
+    % The client was authenticated but cannot access the
+    % aspect -> forbidden
+    throw(?ERROR_FORBIDDEN).
 
 
 %%--------------------------------------------------------------------

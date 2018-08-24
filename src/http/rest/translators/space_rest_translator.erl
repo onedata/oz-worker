@@ -34,7 +34,9 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#g
         ?AS_USER(_UserId) ->
             [<<"user">>, <<"spaces">>, SpaceId];
         ?AS_GROUP(GroupId) ->
-            [<<"groups">>, GroupId, <<"spaces">>, SpaceId]
+            [<<"groups">>, GroupId, <<"spaces">>, SpaceId];
+        _ ->
+            [<<"spaces">>, SpaceId]
     end,
     rest_translator:created_reply(LocationTokens);
 

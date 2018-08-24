@@ -17,6 +17,7 @@
 -include("registered_names.hrl").
 -include("api_test_utils.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("gui/include/gui_session.hrl").
 
 
 %% API
@@ -65,8 +66,10 @@
     get_group/2,
     update_group/3,
     delete_group/2,
+    mark_group_protected/2,
 
     group_get_children/2,
+    group_get_parents/2,
     group_get_spaces/2,
     group_get_users/2,
     group_get_oz_privileges/2,
@@ -135,8 +138,7 @@
     get_provider/2,
     list_providers/1,
     delete_provider/2,
-    support_space/4,
-    support_space/5,
+    support_space/3, support_space/4, support_space/5,
     unsupport_space/3,
     enable_subdomain_delegation/4,
     set_provider_domain/3
@@ -203,7 +205,7 @@
 
 % Convenience functions for gs
 -export([
-    create_session/3,
+    log_in/2, log_out/2,
     get_gs_ws_url/1,
     get_gs_supported_proto_versions/1,
     decode_gri/2
@@ -550,9 +552,13 @@ all_group_privileges(Config) ->
 -spec create_group(Config :: term(), Client :: entity_logic:client(),
     NameOrData :: od_group:name() | #{}) -> {ok, Id :: binary()}.
 create_group(Config, Client, NameOrData) ->
-    ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, create, [Client, NameOrData]
-    )).
+    Result = case Client of
+        ?USER(UserId) ->
+            call_oz(Config, user_logic, create_group, [Client, UserId, NameOrData]);
+        _ ->
+            call_oz(Config, group_logic, create, [Client, NameOrData])
+    end,
+    ?assertMatch({ok, _}, Result).
 
 
 %%--------------------------------------------------------------------
@@ -597,7 +603,7 @@ update_group(Config, GroupId, Name) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves group children groups from onezone.
+%% Retrieves child groups of given group from onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec group_get_children(Config :: term(), GroupId :: od_group:id()) ->
@@ -610,7 +616,20 @@ group_get_children(Config, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves group spaces from onezone.
+%% Retrieves parent groups of given group from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_get_parents(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [od_group:id()]}.
+group_get_parents(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, get_parents, [?ROOT, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves spaces of given group from onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec group_get_spaces(Config :: term(), GroupId :: od_group:id()) ->
@@ -623,7 +642,7 @@ group_get_spaces(Config, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves group users from onezone.
+%% Retrieves users of given group from onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec group_get_users(Config :: term(), GroupId :: od_group:id()) ->
@@ -694,6 +713,22 @@ delete_group(Config, GroupId) ->
     ?assertMatch(ok, call_oz(
         Config, group_logic, delete, [?ROOT, GroupId]
     )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Marks group as protected
+%% @end
+%%--------------------------------------------------------------------
+-spec mark_group_protected(Config :: term(), od_group:id()) -> ok.
+mark_group_protected(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, od_group, update,
+        [GroupId, fun(Group) ->
+            {ok, Group#od_group{protected = true}}
+        end]
+    )),
+    ok.
 
 
 %%--------------------------------------------------------------------
@@ -867,9 +902,14 @@ all_space_privileges(Config) ->
 -spec create_space(Config :: term(), Client :: entity_logic:client(),
     Name :: od_space:name()) -> {ok, od_space:id()}.
 create_space(Config, Client, Name) ->
-    ?assertMatch({ok, _}, call_oz(
-        Config, space_logic, create, [Client, Name]
-    )).
+    Result = case Client of
+        ?USER(UserId) ->
+            call_oz(Config, user_logic, create_space, [Client, UserId, Name]);
+        _ ->
+            call_oz(Config, space_logic, create, [Client, Name])
+    end,
+
+    ?assertMatch({ok, _}, Result).
 
 
 %%--------------------------------------------------------------------
@@ -1267,7 +1307,24 @@ delete_provider(Config, ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Supports a space by a provider based on space id.
+%% Supports a space by a provider based on space id (with default support size).
+%% @end
+%%--------------------------------------------------------------------
+-spec support_space(Config :: term(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) ->
+    {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
+support_space(Config, ProviderId, SpaceId) ->
+    {ok, Macaroon} = ?assertMatch({ok, _}, space_invite_provider_token(
+        Config, ?ROOT, SpaceId
+    )),
+    ?assertMatch({ok, _}, call_oz(Config, provider_logic, support_space, [
+        ?PROVIDER(ProviderId), ProviderId, Macaroon, minimum_support_size(Config)
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Supports a space by a provider based on space id and support size.
 %% @end
 %%--------------------------------------------------------------------
 -spec support_space(Config :: term(), ProviderId :: od_provider:id(),
@@ -1284,7 +1341,7 @@ support_space(Config, ProviderId, SpaceId, Size) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Supports a space by a provider based on token.
+%% Supports a space by a provider based on token and support size.
 %% @end
 %%--------------------------------------------------------------------
 -spec support_space(Config :: term(), Client :: entity_logic:client(),
@@ -1363,9 +1420,17 @@ set_provider_domain(Config, ProviderId, Domain) ->
     ServiceProperties :: od_handle_service:service_properties()) ->
     {ok, od_handle_service:id()}.
 create_handle_service(Config, Client, Name, ProxyEndpoint, ServiceProperties) ->
-    ?assertMatch({ok, _}, call_oz(Config, handle_service_logic, create, [
-        Client, Name, ProxyEndpoint, ServiceProperties
-    ])).
+    Result = case Client of
+        ?USER(UserId) ->
+            call_oz(Config, user_logic, create_handle_service, [
+                Client, UserId, Name, ProxyEndpoint, ServiceProperties
+            ]);
+        _ ->
+            call_oz(Config, handle_service_logic, create, [
+                Client, Name, ProxyEndpoint, ServiceProperties
+            ])
+    end,
+    ?assertMatch({ok, _}, Result).
 
 
 %%--------------------------------------------------------------------
@@ -1376,9 +1441,13 @@ create_handle_service(Config, Client, Name, ProxyEndpoint, ServiceProperties) ->
 -spec create_handle_service(Config :: term(), Client :: entity_logic:client(),
     Data :: maps:map()) -> {ok, od_handle_service:id()}.
 create_handle_service(Config, Client, Data) ->
-    ?assertMatch({ok, _}, call_oz(Config, handle_service_logic, create, [
-        Client, Data
-    ])).
+    Result = case Client of
+        ?USER(UserId) ->
+            call_oz(Config, user_logic, create_handle_service, [Client, UserId, Data]);
+        _ ->
+            call_oz(Config, handle_service_logic, create, [Client, Data])
+    end,
+    ?assertMatch({ok, _}, Result).
 
 
 %%--------------------------------------------------------------------
@@ -1586,9 +1655,17 @@ all_handle_privileges(Config) ->
     ResourceId :: od_handle:resource_id(), Metadata :: od_handle:metadata()) ->
     {ok, od_handle:id()}.
 create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId, Metadata) ->
-    ?assertMatch({ok, _}, call_oz(Config, handle_logic, create, [
-        Client, HandleServiceId, ResourceType, ResourceId, Metadata
-    ])).
+    Result = case Client of
+        ?USER(UserId) ->
+            call_oz(Config, user_logic, create_handle, [
+                Client, UserId, HandleServiceId, ResourceType, ResourceId, Metadata
+            ]);
+        _ ->
+            call_oz(Config, handle_logic, create, [
+                Client, HandleServiceId, ResourceType, ResourceId, Metadata
+            ])
+    end,
+    ?assertMatch({ok, _}, Result).
 
 
 %%--------------------------------------------------------------------
@@ -1599,9 +1676,13 @@ create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId, Metadat
 -spec create_handle(Config :: term(), Client :: entity_logic:client(),
     Data :: maps:map()) -> {ok, od_handle:id()}.
 create_handle(Config, Client, Data) ->
-    ?assertMatch({ok, _}, call_oz(Config, handle_logic, create, [
-        Client, Data
-    ])).
+    Result = case Client of
+        ?USER(UserId) ->
+            call_oz(Config, user_logic, create_handle, [Client, UserId, Data]);
+        _ ->
+            call_oz(Config, handle_logic, create, [Client, Data])
+    end,
+    ?assertMatch({ok, _}, Result).
 
 
 %%--------------------------------------------------------------------
@@ -2128,16 +2209,37 @@ ensure_entity_graph_is_up_to_date(Config, Retries) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a session for user.
+%% Creates a session for user, simulating a login.
 %% @end
 %%--------------------------------------------------------------------
--spec create_session(Config :: term(),
-    UserId :: term(), CustomArgs :: [term()]) ->
-    {ok, SessId :: binary()}.
-create_session(Config, UserId, CustomArgs) ->
-    ?assertMatch({ok, _}, call_oz(
-        Config, gui_session_plugin, create_session, [UserId, CustomArgs]
-    )).
+-spec log_in(Config :: term(), UserId :: od_user:id()) -> {ok, Cookie :: binary()}.
+log_in(Config, UserId) ->
+    MockedReq = #{},
+    #{resp_cookies := #{?SESSION_COOKIE_KEY := CookieIoList}} = ?assertMatch(#{}, call_oz(
+        Config, new_gui_session, log_in, [UserId, MockedReq]
+    )),
+    Cookie = iolist_to_binary(CookieIoList),
+    CookieKey = ?SESSION_COOKIE_KEY,
+    CookieLen = byte_size(?SESSION_COOKIE_KEY),
+    [<<CookieKey:CookieLen/binary, "=", CookieVal/binary>> | _] = binary:split(Cookie, <<";">>, [global, trim_all]),
+    {ok, CookieVal}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Destroys given session, simulating a user logout.
+%% @end
+%%--------------------------------------------------------------------
+-spec log_out(Config :: term(), Cookie :: binary()) -> ok.
+log_out(Config, Cookie) ->
+    MockedReq = #{
+        resp_headers => #{},
+        headers => #{<<"cookie">> => <<?SESSION_COOKIE_KEY/binary, "=", Cookie/binary>>}
+    },
+    ?assertMatch(#{}, call_oz(
+        Config, new_gui_session, log_out, [MockedReq]
+    )),
+    ok.
 
 
 %%--------------------------------------------------------------------

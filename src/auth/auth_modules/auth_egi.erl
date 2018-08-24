@@ -15,6 +15,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 -include("auth_common.hrl").
+-include("idp_group_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
@@ -82,7 +83,7 @@ get_user_info(IdP, AccessToken) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec normalized_membership_spec(auth_utils:idp(), binary()) ->
-    idp_group_mapping:membership_spec().
+    idp_group_mapping:idp_entitlement().
 normalized_membership_spec(_, <<"urn:mace:egi.eu:group:", Group/binary>>) ->
     % Strip out the prefix standard for EGI
 
@@ -111,21 +112,24 @@ normalized_membership_spec(_, <<"urn:mace:egi.eu:group:", Group/binary>>) ->
             end
     end,
 
-    MemberSpec = case RoleStr of
-        <<"member">> -> <<"user:member">>;
-        <<"manager">> -> <<"user:manager">>;
-        <<"admin">> -> <<"user:admin">>;
-        <<"chair">> -> <<"user:admin">>;
-        _ -> <<"user:member">>
+    Privileges = case RoleStr of
+        <<"member">> -> member;
+        <<"manager">> -> manager;
+        <<"admin">> -> admin;
+        <<"chair">> -> admin;
+        _ -> member
     end,
-    MappedTokens = [<<"tm:", T/binary>> || T <- Groups],
-    FullSpecTokens = [<<"vo:", VoId/binary>>] ++ MappedTokens ++ [MemberSpec],
-    str_utils:join_binary(FullSpecTokens, <<"/">>).
+    Path = [#idp_group{name = VoId, type = organization}] ++  
+        [#idp_group{name = T, type = team} || T <- Groups],
+    #idp_entitlement{
+        path = Path,
+        privileges = Privileges
+    }.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns a list of strings that represent user's group memberships for given
+%% Returns a list of lists of strings that represent user's group memberships for given
 %% IdP. They are strings complying with specification in idp_group_mapping
 %% module. Returned values will be used to compute a diff in memberships
 %% every time a user logs in, so he can be added to / removed from
@@ -134,7 +138,7 @@ normalized_membership_spec(_, <<"urn:mace:egi.eu:group:", Group/binary>>) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec normalized_membership_specs(auth_utils:idp(), maps:map()) ->
-    [idp_group_mapping:membership_spec()].
+    [idp_group_mapping:idp_entitlement()].
 normalized_membership_specs(_, Map) ->
     Groups = maps:get(<<"edu_person_entitlements">>, Map, []),
     lists:usort(lists:flatmap(fun(Group) ->

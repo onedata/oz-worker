@@ -100,6 +100,7 @@ add_user_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -176,6 +177,7 @@ remove_user_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_REMOVE_RELATIONSHIPS, ?OZ_USERS_REMOVE_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -210,6 +212,7 @@ list_users_test(Config) ->
         Config, ?HANDLE_SERVICE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U3} = oz_test_utils:handle_service_add_user(Config, HService, U3),
 
@@ -218,6 +221,7 @@ list_users_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_LIST_RELATIONSHIPS]},
                 {user, U2},
                 {user, U3}
             ],
@@ -271,6 +275,7 @@ get_user_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_USERS_VIEW]},
                 {user, U2},
                 {user, U3}
             ],
@@ -340,6 +345,7 @@ get_user_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_VIEW_PRIVILEGES]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -404,6 +410,7 @@ update_user_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_SET_PRIVILEGES]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -446,6 +453,7 @@ list_eff_users_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_LIST_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -497,6 +505,7 @@ get_eff_user_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
+                        {admin, [?OZ_USERS_VIEW]},
                         {user, U2}
                     ],
                     unauthorized = [nobody],
@@ -626,6 +635,7 @@ get_eff_user_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_VIEW_PRIVILEGES]},
                 {user, U2}
             ],
             unauthorized = [nobody],

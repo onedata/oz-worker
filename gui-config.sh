@@ -21,6 +21,6 @@
 TARGET_DIR='_build/default/lib/gui_static'
 # Image which will be used by default to get the static files. If it cannot
 # be resolved, the script will fall back to secondary.
-PRIMARY_IMAGE='docker.onedata.org/oz-gui-default:VFS-4668-add-admin-message-to-login-page'
+PRIMARY_IMAGE='docker.onedata.org/onezone-gui:VFS-4425-group-hierarchy-view'
 # Image which will be used if primary image is not resolved.
-SECONDARY_IMAGE='onedata/oz-gui-default:VFS-4668-add-admin-message-to-login-page'
+SECONDARY_IMAGE='onedata/onezone-gui:VFS-4425-group-hierarchy-view'

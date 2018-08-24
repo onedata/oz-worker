@@ -30,10 +30,10 @@ routes() -> [
     %% Register handle
     %% This operation requires one of the following privileges:
     %% - handle_service_register_handle
+    %% - oz_handles_create
     {<<"/handles">>, #rest_req{
         method = 'POST',
-        b_gri = #b_gri{type = od_handle, id = undefined, aspect = instance},
-        b_auth_hint = ?AS_USER(?CLIENT_ID)
+        b_gri = #b_gri{type = od_handle, id = undefined, aspect = instance}
     }},
     %% List handles
     %% This operation requires one of the following privileges:
@@ -45,6 +45,7 @@ routes() -> [
     %% Get handle
     %% This operation requires one of the following privileges:
     %% - handle_view
+    %% - oz_handles_view
     {<<"/handles/:hndl">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = instance, scope = protected}
@@ -52,6 +53,7 @@ routes() -> [
     %% Modify handle
     %% This operation requires one of the following privileges:
     %% - handle_update
+    %% - oz_handles_update
     {<<"/handles/:hndl">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = instance}
@@ -59,6 +61,7 @@ routes() -> [
     %% Unregister handle
     %% This operation requires one of the following privileges:
     %% - handle_delete
+    %% - oz_handles_delete
     {<<"/handles/:hndl">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = instance}
@@ -66,6 +69,7 @@ routes() -> [
     %% List handle users
     %% This operation requires one of the following privileges:
     %% - handle_view
+    %% - oz_handles_list_relationships
     {<<"/handles/:hndl/users">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = users}
@@ -73,6 +77,8 @@ routes() -> [
     %% Add handle user
     %% This operation requires one of the following privileges:
     %% - handle_update
+    %% - oz_handles_add_relationships
+    %% - oz_users_add_relationships
     {<<"/handles/:hndl/users/:uid">>, #rest_req{
         method = 'PUT',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = {user, ?BINDING(uid)}}
@@ -80,6 +86,7 @@ routes() -> [
     %% Get handle user
     %% This operation requires one of the following privileges:
     %% - handle_view
+    %% - oz_users_view
     {<<"/handles/:hndl/users/:uid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
@@ -88,6 +95,8 @@ routes() -> [
     %% Remove handle user
     %% This operation requires one of the following privileges:
     %% - handle_update
+    %% - oz_handles_remove_relationships
+    %% - oz_users_remove_relationships
     {<<"/handles/:hndl/users/:uid">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = {user, ?BINDING(uid)}}
@@ -95,6 +104,7 @@ routes() -> [
     %% List handle user privileges
     %% This operation requires one of the following privileges:
     %% - handle_view
+    %% - oz_handles_view_privileges
     {<<"/handles/:hndl/users/:uid/privileges">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = {user_privileges, ?BINDING(uid)}}
@@ -102,6 +112,7 @@ routes() -> [
     %% Set handle user privileges
     %% This operation requires one of the following privileges:
     %% - handle_update
+    %% - oz_handles_set_privileges
     {<<"/handles/:hndl/users/:uid/privileges">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = {user_privileges, ?BINDING(uid)}}
@@ -109,6 +120,7 @@ routes() -> [
     %% List effective handle users
     %% This operation requires one of the following privileges:
     %% - handle_view
+    %% - oz_handles_list_relationships
     {<<"/handles/:hndl/effective_users">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = eff_users}
@@ -116,6 +128,7 @@ routes() -> [
     %% Get effective handle user
     %% This operation requires one of the following privileges:
     %% - handle_view
+    %% - oz_users_view
     {<<"/handles/:hndl/effective_users/:uid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
@@ -124,6 +137,7 @@ routes() -> [
     %% List effective handle user privileges
     %% This operation requires one of the following privileges:
     %% - handle_view
+    %% - oz_handles_view_privileges
     {<<"/handles/:hndl/effective_users/:uid/privileges">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = {eff_user_privileges, ?BINDING(uid)}}
@@ -131,6 +145,7 @@ routes() -> [
     %% List handle groups
     %% This operation requires one of the following privileges:
     %% - handle_view
+    %% - oz_handles_list_relationships
     {<<"/handles/:hndl/groups">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = groups}
@@ -138,6 +153,8 @@ routes() -> [
     %% Add handle group
     %% This operation requires one of the following privileges:
     %% - handle_update
+    %% - oz_handles_add_relationships
+    %% - oz_groups_add_relationships
     {<<"/handles/:hndl/groups/:gid">>, #rest_req{
         method = 'PUT',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = {group, ?BINDING(gid)}}
@@ -145,6 +162,7 @@ routes() -> [
     %% Get handle group
     %% This operation requires one of the following privileges:
     %% - handle_view
+    %% - oz_groups_view
     {<<"/handles/:hndl/groups/:gid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = shared},
@@ -153,6 +171,8 @@ routes() -> [
     %% Remove handle group
     %% This operation requires one of the following privileges:
     %% - handle_update
+    %% - oz_handles_remove_relationships
+    %% - oz_groups_remove_relationships
     {<<"/handles/:hndl/groups/:gid">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = {group, ?BINDING(gid)}}
@@ -160,6 +180,7 @@ routes() -> [
     %% List handle group privileges
     %% This operation requires one of the following privileges:
     %% - handle_view
+    %% - oz_handles_view_privileges
     {<<"/handles/:hndl/groups/:gid/privileges">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = {group_privileges, ?BINDING(gid)}}
@@ -167,6 +188,7 @@ routes() -> [
     %% Set handle groups privileges
     %% This operation requires one of the following privileges:
     %% - handle_update
+    %% - oz_handles_set_privileges
     {<<"/handles/:hndl/groups/:gid/privileges">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = {group_privileges, ?BINDING(gid)}}
@@ -174,6 +196,7 @@ routes() -> [
     %% Get effective handle groups
     %% This operation requires one of the following privileges:
     %% - handle_view
+    %% - oz_handles_list_relationships
     {<<"/handles/:hndl/effective_groups">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = eff_groups}
@@ -181,6 +204,7 @@ routes() -> [
     %% Get effective handle group
     %% This operation requires one of the following privileges:
     %% - handle_view
+    %% - oz_groups_view
     {<<"/handles/:hndl/effective_groups/:gid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = shared},
@@ -189,6 +213,7 @@ routes() -> [
     %% List effective handle group privileges
     %% This operation requires one of the following privileges:
     %% - handle_view
+    %% - oz_handles_view_privileges
     {<<"/handles/:hndl/effective_groups/:gid/privileges">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hndl), aspect = {eff_group_privileges, ?BINDING(gid)}}

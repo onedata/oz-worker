@@ -22,14 +22,14 @@
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 %% API
--export([authorize_by_session_cookie/1, authorize_by_token/1]).
--export([authorize_by_macaroons/2, authorize_by_basic_auth/1]).
--export([client_to_identity/1, root_client/0, guest_client/0]).
--export([client_connected/2, client_disconnected/2]).
+-export([authorize/1]).
+-export([client_to_identity/1, root_client/0]).
+-export([client_connected/3, client_disconnected/3]).
+-export([verify_auth_override/1]).
 -export([is_authorized/5]).
 -export([handle_rpc/4]).
 -export([handle_graph_request/6]).
--export([subscribable_resources/1]).
+-export([is_subscribable/1]).
 
 %%%===================================================================
 %%% API
@@ -37,70 +37,31 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to authorize requesting client by session cookie. Will be called only
-%% if a session cookie was sent in the request.
+%% {@link gs_logic_plugin_behaviour} callback authorize/1.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_session_cookie(SessionCookie :: binary()) ->
-    false | {true, gs_protocol:client()} | {error, term()}.
-authorize_by_session_cookie(SessionCookie) ->
-    case oz_gui_session:get_user_id(SessionCookie) of
-        {ok, UserId} ->
-            {true, ?USER(UserId)};
-        _ ->
-            ?ERROR_UNAUTHORIZED
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Tries to authorize requesting client by X-Auth-Token. Will be called
-%% only if a token was sent in the request.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_token(Token :: binary()) ->
-    false | {true, gs_protocol:client()} | {error, term()}.
-authorize_by_token(Token) ->
-    case auth_utils:authorize_by_oauth_provider(Token) of
-        {true, Client} ->
-            {true, Client};
+-spec authorize(cowboy_req:req()) ->
+    {ok, gs_protocol:client(), gs_server:connection_info(), cowboy_req:req()}  |
+    gs_protocol:error().
+authorize(Req) ->
+    case authorize_by_session_cookie(Req) of
+        {true, CookieClient, Cookie, NewReq} ->
+            {ok, CookieClient, new_gui_session:get_session_id(Cookie), NewReq};
         false ->
-            authorize_by_macaroons(Token, <<"">>);
-        {error, _} = Error ->
-            Error
+            case auth_utils:authorize_by_macaroons(Req) of
+                {true, MacaroonClient} ->
+                    {ok, MacaroonClient, undefined, Req};
+                {error, _} ->
+                    ?ERROR_UNAUTHORIZED;
+                false ->
+                    {ok, ?NOBODY, undefined, Req}
+            end
     end.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to authorize requesting client by macaroons. Will be called
-%% only if macaroons were sent in the request.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_macaroons(Macaroon :: binary(),
-    DischargeMacaroons :: [binary()]) ->
-    false | {true, gs_protocol:client()} | {error, term()}.
-authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
-    auth_utils:authorize_by_macaroons(Macaroon, DischargeMacaroons).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Tries to authorize requesting client by basic auth credentials. Will be
-%% called only if credentials were sent in the request, in the format
-%% b64(user:password).
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_basic_auth(UserPasswdB64 :: binary()) ->
-    false | {true, gs_protocol:client()} | {error, term()}.
-authorize_by_basic_auth(UserPasswdB64) ->
-    auth_utils:authorize_by_basic_auth(UserPasswdB64).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Converts client, which is an opaque term for gs_server, into identity of
-%% the client.
+%% {@link gs_logic_plugin_behaviour} callback client_to_identity/1.
 %% @end
 %%--------------------------------------------------------------------
 -spec client_to_identity(gs_protocol:client()) -> gs_protocol:identity().
@@ -111,9 +72,7 @@ client_to_identity(?PROVIDER(ProviderId)) -> {provider, ProviderId}.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the ROOT client as understood by gs_logic_plugin, i.e. a client that
-%% is authorized to do everything. ROOT client can be used only in internal
-%% code (i.e. cannot be accessed via any API).
+%% {@link gs_logic_plugin_behaviour} callback root_client/0.
 %% @end
 %%--------------------------------------------------------------------
 -spec root_client() -> gs_protocol:client().
@@ -123,22 +82,12 @@ root_client() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the GUEST client as understood by gs_logic_plugin, i.e. a client that
-%% was not identified as anyone and can only access public resources.
+%% {@link gs_logic_plugin_behaviour} callback client_connected/2.
 %% @end
 %%--------------------------------------------------------------------
--spec guest_client() -> gs_protocol:client().
-guest_client() ->
-    ?NOBODY.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Callback called when a new client connects to the Graph Sync server.
-%% @end
-%%--------------------------------------------------------------------
--spec client_connected(gs_protocol:client(), gs_server:conn_ref()) -> ok.
-client_connected(?PROVIDER(ProvId), ConnectionRef) ->
+-spec client_connected(gs_protocol:client(), gs_server:connection_info(), gs_server:conn_ref()) ->
+    ok.
+client_connected(?PROVIDER(ProvId), _, ConnectionRef) ->
     {ok, ProviderRecord = #od_provider{
         name = Name
     }} = provider_logic:get(?ROOT, ProvId),
@@ -151,37 +100,66 @@ client_connected(?PROVIDER(ProvId), ConnectionRef) ->
         ProvId,
         ProviderRecord
     );
-client_connected(_, _) ->
+client_connected(?USER, SessionId, ConnectionRef) ->
+    user_connections:add(SessionId, ConnectionRef);
+client_connected(_, _, _) ->
     ok.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Callback called when a client disconnects from the Graph Sync server.
+%% {@link gs_logic_plugin_behaviour} callback client_disconnected/2.
 %% @end
 %%--------------------------------------------------------------------
--spec client_disconnected(gs_protocol:client(), gs_server:conn_ref()) -> ok.
-client_disconnected(?PROVIDER(ProvId), _ConnectionRef) ->
-    case provider_logic:get_protected_data(?ROOT, ProvId) of
-        {ok, #{<<"name">> := Name}} ->
-            ?info("Provider '~s' (~s) went offline", [Name, ProvId]);
+-spec client_disconnected(gs_protocol:client(), gs_server:connection_info(), gs_server:conn_ref()) ->
+    ok.
+client_disconnected(?PROVIDER(ProvId), _, _ConnectionRef) ->
+    case provider_logic:get(?ROOT, ProvId) of
+        {ok, ProviderRecord = #od_provider{name = Name}} ->
+            ?info("Provider '~s' (~s) went offline", [Name, ProvId]),
+            % Generate a dummy update which will cause a push to GUI clients so that
+            % they can learn the provider is now offline.
+            gs_server:updated(
+                od_provider,
+                ProvId,
+                ProviderRecord
+            );
         _ ->
             % Provider could have been deleted in the meantime, in such case do
             % not retrieve its name.
             ?info("Provider '~s' went offline", [ProvId])
     end,
     provider_connection:remove_connection(ProvId);
-client_disconnected(_, _) ->
+client_disconnected(?USER, SessionId, ConnectionRef) ->
+    user_connections:remove(SessionId, ConnectionRef);
+client_disconnected(_, _, _) ->
     ok.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Determines if given client is authorized to perform certain operation.
+%% {@link gs_logic_plugin_behaviour} callback verify_auth_override/1.
+%% @end
+%%--------------------------------------------------------------------
+-spec verify_auth_override(gs_protocol:auth_override()) ->
+    {ok, gs_protocol:client()} | gs_protocol:error().
+verify_auth_override({macaroon, Macaroon, DischMacaroons}) ->
+    case auth_utils:authorize_by_macaroons(Macaroon, DischMacaroons) of
+        {true, Client} -> {ok, Client};
+        {error, _} = Error -> Error
+    end;
+verify_auth_override(_) ->
+    ?ERROR_UNAUTHORIZED.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link gs_logic_plugin_behaviour} callback is_authorized/5.
 %% @end
 %%--------------------------------------------------------------------
 -spec is_authorized(gs_protocol:client(), gs_protocol:auth_hint(),
-    gs_protocol:gri(), gs_protocol:operation(), gs_protocol:data()) -> boolean().
+    gs_protocol:gri(), gs_protocol:operation(), gs_protocol:data()) ->
+    {true, gs_protocol:gri()} | false.
 is_authorized(Client, AuthHint, GRI, Operation, Entity) ->
     ElReq = #el_req{
         client = Client,
@@ -194,7 +172,7 @@ is_authorized(Client, AuthHint, GRI, Operation, Entity) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Handles an RPC request and returns the result.
+%% {@link gs_logic_plugin_behaviour} callback handle_rpc/4.
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_rpc(gs_protocol:protocol_version(), gs_protocol:client(),
@@ -228,7 +206,7 @@ handle_rpc(1, _, _, _) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Handles a graph request and returns the result.
+%% {@link gs_logic_plugin_behaviour} callback handle_graph_request/6.
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_graph_request(gs_protocol:client(), gs_protocol:auth_hint(),
@@ -247,41 +225,32 @@ handle_graph_request(Client, AuthHint, GRI, Operation, Data, Entity) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the list of subscribable resources for given entity type, identified
-%% by {Aspect, Scope} pairs.
+%% {@link gs_logic_plugin_behaviour} callback is_subscribable/1.
 %% @end
 %%--------------------------------------------------------------------
--spec subscribable_resources(gs_protocol:entity_type()) ->
-    [{gs_protocol:aspect(), gs_protocol:scope()}].
-subscribable_resources(od_user) -> [
-    {instance, private},
-    {instance, protected},
-    {instance, shared},
-    {client_tokens, private}
-];
-subscribable_resources(od_group) -> [
-    {instance, private},
-    {instance, protected},
-    {instance, shared}
-];
-subscribable_resources(od_space) -> [
-    {instance, private},
-    {instance, protected}
-];
-subscribable_resources(od_share) -> [
-    {instance, private},
-    {instance, public}
-];
-subscribable_resources(od_provider) -> [
-    {instance, private},
-    {instance, protected}
-];
-subscribable_resources(od_handle_service) -> [
-    {instance, private},
-    {instance, protected}
-];
-subscribable_resources(od_handle) -> [
-    {instance, private},
-    {instance, public}
-].
+-spec is_subscribable(gs_protocol:gri()) -> boolean().
+is_subscribable(#gri{type = EntityType, aspect = Aspect, scope = Scope}) ->
+    ElPlugin = EntityType:entity_logic_plugin(),
+    ElPlugin:is_subscribable(Aspect, Scope).
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Tries to authorize the client based on session cookie.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_session_cookie(cowboy_req:req()) ->
+    false | {true, gs_protocol:client()} | {error, term()}.
+authorize_by_session_cookie(Req) ->
+    case new_gui_session:validate(Req) of
+        {ok, UserId, Cookie, NewReq} ->
+            {true, ?USER(UserId), Cookie, NewReq};
+        {error, no_session_cookie} ->
+            false;
+        {error, invalid} ->
+            false
+    end.

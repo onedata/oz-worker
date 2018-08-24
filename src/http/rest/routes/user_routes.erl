@@ -36,7 +36,7 @@ routes() -> [
     }},
     %% Get user details
     %% This operation requires one of the following privileges:
-    %% - oz_users_list
+    %% - oz_users_view
     {<<"/users/:id">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_user, id = ?BINDING(id), aspect = instance, scope = protected}
@@ -101,8 +101,7 @@ routes() -> [
         b_gri = #b_gri{type = od_user, id = undefined, aspect = authorize}
     }},
     %% List current user privileges
-    %% This operation requires one of the following privileges:
-    %% - oz_view_privileges
+    %% This operation does not require any specific privileges.
     {<<"/user/privileges">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = oz_privileges}
@@ -122,8 +121,7 @@ routes() -> [
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = oz_privileges}
     }},
     %% List current user effective privileges
-    %% This operation requires one of the following privileges:
-    %% - oz_view_privileges
+    %% This operation does not require any specific privileges.
     {<<"/user/effective_privileges">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = eff_oz_privileges}
@@ -182,7 +180,7 @@ routes() -> [
         method = 'PUT',
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = default_provider}
     }},
-    %% Create new group for the current user
+    %% Create a new group for the current user
     %% This operation does not require any specific privileges.
     {<<"/user/groups">>, #rest_req{
         method = 'POST',
@@ -228,7 +226,7 @@ routes() -> [
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
-    %% Create new user space
+    %% Create a new space for the current user
     %% This operation does not require any specific privileges.
     {<<"/user/spaces">>, #rest_req{
         method = 'POST',
@@ -298,14 +296,20 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = eff_providers}
     }},
-    %% Get effective provider details
+    %% Get user's effective provider details
     %% This operation does not require any specific privileges.
     {<<"/user/effective_providers/:pid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
-    %% Add user handle service
+    %% Get user's spaces that are supported by given effective provider
+    %% This operation does not require any specific privileges.
+    {<<"/user/effective_providers/:pid/spaces">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = {user_spaces, ?CLIENT_ID}, scope = private}
+    }},
+    %% Create a new handle service for the current user
     %% This operation requires one of the following privileges:
     %% - oz_handle_service_create
     {<<"/user/handle_services">>, #rest_req{
@@ -345,7 +349,7 @@ routes() -> [
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(hsid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
-    %% Create new user handle
+    %% Create a new handle for the current user
     %% This operation requires one of the following privileges:
     %% - handle_service_register_handle
     {<<"/user/handles">>, #rest_req{
