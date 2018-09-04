@@ -162,7 +162,7 @@ remove_txt_record(ProviderId, Name) ->
                 provider_to_txt_records = PtTR#{
                     ProviderId => proplists:delete(Name, ProviderPtTR)
                 }}};
-            error -> ok
+            error -> {ok, DnsState}
         end
     end, #dns_state{}),
     node_manager_plugin:reconcile_dns_config(),
