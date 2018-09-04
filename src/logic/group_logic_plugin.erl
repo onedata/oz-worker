@@ -122,10 +122,11 @@ operation_supported(delete, {handle, _}, private) -> true.
 -spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
     boolean().
 is_subscribable(instance, _) -> true;
-is_subscribable(users, private) -> true;
+is_subscribable(parents, private) -> true;
 is_subscribable(children, private) -> true;
-is_subscribable({user_privileges, _}, private) -> true;
 is_subscribable({child_privileges, _}, private) -> true;
+is_subscribable(users, private) -> true;
+is_subscribable({user_privileges, _}, private) -> true;
 is_subscribable(spaces, private) -> true;
 is_subscribable(_, _) -> false.
 
