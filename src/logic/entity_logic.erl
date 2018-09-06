@@ -429,10 +429,10 @@ resolve_auto_scope(State) ->
 -spec resolve_auto_scope([gs_protocol:scope()], #state{}) -> false | {true, #state{}}.
 resolve_auto_scope([], _State) ->
     false;
-resolve_auto_scope([Scope | Rest], State = #state{req = Req = #el_req{gri = GRI}}) ->
+resolve_auto_scope([Scope | Rest], State = #state{req = Req = #el_req{operation = Operation, gri = GRI}}) ->
     StateWithScope = State#state{req = Req#el_req{gri = GRI#gri{scope = Scope}}},
     Authorized = ensure_operation_supported_internal(StateWithScope) andalso
-        ensure_exists_internal(StateWithScope) andalso
+        (Operation == create orelse ensure_exists_internal(StateWithScope)) andalso
         ensure_authorized_internal(StateWithScope),
     case Authorized of
         true -> {true, StateWithScope};
