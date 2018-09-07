@@ -14,6 +14,7 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("gui/include/gui_session.hrl").
 -include_lib("cluster_worker/include/global_definitions.hrl").
 -include_lib("cluster_worker/test_distributed/performance_test_utils.hrl").
 
@@ -377,8 +378,8 @@ spawn_clients(Config, Type, Clients, RetryFlag, CallbackFunction, OnSuccessFun) 
     AuthsAndIdentities = lists:map(fun(Client) ->
         case Type of
             gui ->
-                {ok, SessionId} = oz_test_utils:create_session(Config, Client, []),
-                Auth = {cookie, {?GRAPH_SYNC_SESSION_COOKIE_NAME, SessionId}},
+                {ok, SessionId} = oz_test_utils:log_in(Config, Client),
+                Auth = {cookie, {?SESSION_COOKIE_KEY, SessionId}},
                 Identity = {user, Client},
                 {Auth, Identity};
             provider ->
