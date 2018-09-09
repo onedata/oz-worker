@@ -39,7 +39,8 @@
     dns_server_does_not_resolve_removed_subdomain_test/1,
     dns_resolves_txt_record/1,
     txt_record_forbidden_without_subdomain_delegation/1,
-    dns_does_not_resolve_removed_txt_record_test/1
+    dns_does_not_resolve_removed_txt_record_test/1,
+    removing_nonexistent_txt_does_nothing/1
 ]).
 
 
@@ -56,11 +57,15 @@ all() -> ?ALL([
     dns_server_does_not_resolve_removed_subdomain_test,
     dns_resolves_txt_record,
     txt_record_forbidden_without_subdomain_delegation,
-    dns_does_not_resolve_removed_txt_record_test
+    dns_does_not_resolve_removed_txt_record_test,
+    removing_nonexistent_txt_does_nothing
 ]).
 
 -define(DNS_ASSERT_RETRY_COUNT, 7).
 -define(DNS_ASSERT_RETRY_DELAY, timer:seconds(5)).
+
+-define(DNS_STATE_KEY, <<"dns_state_singleton">>).
+-define(DATASTORE_CTX, #{model => dns_state}).
 
 %%%===================================================================
 %%% Example data
@@ -245,7 +250,7 @@ dns_server_resolves_ns_records_test(Config) ->
         node_manager_plugin, reconcile_dns_config, [])),
 
     % number of nodes based on env_desc
-    [IP1, IP2, IP3] = NSIPs = lists:sort(OZIPs),
+    [IP1, IP2, _IP3] = lists:sort(OZIPs),
     NSDomainsIPs = [{"ns1." ++ OZDomain, [IP1]}, {"ns2." ++ OZDomain, [IP2]}],
     {NSDomains, _} = lists:unzip(NSDomainsIPs),
 
@@ -276,7 +281,7 @@ dns_server_duplicates_ns_records_test(Config) ->
         node_manager_plugin, reconcile_dns_config, [])),
 
     % number of nodes based on env_desc
-    [IP1, IP2, IP3] = NSIPs = lists:sort(OZIPs),
+    [IP1, IP2, IP3] = lists:sort(OZIPs),
     NSDomainsIPs = [{"ns1." ++ OZDomain, [IP1]}, {"ns2." ++ OZDomain, [IP2]},
         {"ns3." ++ OZDomain, [IP3]}, {"ns4." ++ OZDomain, [IP1]}],
     {NSDomains, _} = lists:unzip(NSDomainsIPs),
@@ -528,6 +533,19 @@ dns_does_not_resolve_removed_txt_record_test(Config) ->
     assert_dns_answer(OZIPs, RecordFQDN, txt, []).
 
 
+removing_nonexistent_txt_does_nothing(Config) ->
+    {ok, #document{value = DnsStateBefore}} = ?assertMatch({ok, _},
+        oz_test_utils:call_oz(Config, datastore_model, get, [?DATASTORE_CTX, ?DNS_STATE_KEY])),
+
+    ?assertMatch(ok, oz_test_utils:call_oz(Config,
+        dns_state, remove_txt_record, [<<"nonexistentProvider">>, <<"sometxt">>])
+    ),
+
+    {ok, #document{value = DnsStateAfter}} = ?assertMatch({ok, _},
+        oz_test_utils:call_oz(Config, datastore_model, get, [?DATASTORE_CTX, ?DNS_STATE_KEY])),
+    ?assertEqual(DnsStateBefore, DnsStateAfter).
+
+
 %%%===================================================================
 %%% Utils
 %%%===================================================================
@@ -572,7 +590,7 @@ assert_dns_answer(Servers, Query, Type, Expected, Attempts) ->
                 Attempts, ?DNS_ASSERT_RETRY_DELAY)
         catch error:{Reason, _} = Error
             when Reason =:= assertEqual_failed orelse Reason =:= assertMatch_failed ->
-            ct:print("DNS query type ~p to server ~p for name ~p "
+            ct:pal("DNS query type ~p to server ~p for name ~p "
             "returned incorrect results in ~p attempts.",
                 [Type, Server, Query, Attempts]),
 

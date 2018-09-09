@@ -21,7 +21,7 @@
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 %% API
--export([handshake_attributes/1, translate_create/3, translate_get/3]).
+-export([handshake_attributes/1, translate_value/3, translate_resource/3]).
 
 
 %%%===================================================================
@@ -30,8 +30,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns handshake response attributes for given client that has been
-%% authorized.
+%% {@link gs_translator_behaviour} callback handshake_attributes/1.
 %% @end
 %%--------------------------------------------------------------------
 -spec handshake_attributes(gs_protocol:client()) ->
@@ -39,28 +38,28 @@
 handshake_attributes(_) ->
     undefined.
 
+
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates CREATE result to the format understood by client. Will be called
-%% only for requests that return {ok, {data, Data}}.
-%% For other results, translate_get is called.
+%% @doc
+%% {@link gs_translator_behaviour} callback translate_value/3.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_create(gs_protocol:protocol_version(), gs_protocol:gri(),
+-spec translate_value(gs_protocol:protocol_version(), gs_protocol:gri(),
     Data :: term()) -> gs_protocol:data() | gs_protocol:error().
-translate_create(1, #gri{aspect = invite_group_token}, Macaroon) ->
-    translate_create(1, #gri{aspect = invite_user_token}, Macaroon);
-translate_create(1, #gri{aspect = invite_provider_token}, Macaroon) ->
-    translate_create(1, #gri{aspect = invite_user_token}, Macaroon);
-translate_create(1, #gri{aspect = provider_registration_token}, Macaroon) ->
-    translate_create(1, #gri{aspect = invite_user_token}, Macaroon);
-translate_create(1, #gri{aspect = invite_user_token}, Macaroon) ->
+translate_value(ProtoVersion, #gri{aspect = invite_group_token}, Macaroon) ->
+    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
+translate_value(ProtoVersion, #gri{aspect = invite_provider_token}, Macaroon) ->
+    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
+translate_value(ProtoVersion, #gri{aspect = provider_registration_token}, Macaroon) ->
+    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
+translate_value(_, #gri{aspect = invite_user_token}, Macaroon) ->
     {ok, Token} = onedata_macaroons:serialize(Macaroon),
     Token;
-translate_create(1, #gri{type = od_provider, aspect = map_idp_group}, Id) ->
+translate_value(_, #gri{type = od_provider, aspect = map_idp_group}, Id) ->
     Id;
 
-translate_create(ProtocolVersion, GRI, Data) ->
+translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n
     ProtocolVersion: ~p~n
     GRI: ~p~n
@@ -72,30 +71,24 @@ translate_create(ProtocolVersion, GRI, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates GET result to the format understood by client. Should not include
-%% "gri" in the resulting json map, as it is included automatically.
+%% {@link gs_translator_behaviour} callback translate_resource/3.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_get(gs_protocol:protocol_version(), gs_protocol:gri(),
+-spec translate_resource(gs_protocol:protocol_version(), gs_protocol:gri(),
     Data :: term()) ->
     gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()} |
     gs_protocol:error().
-translate_get(1, #gri{type = od_provider, aspect = current_time}, TimeMillis) ->
+translate_resource(_, #gri{type = od_provider, aspect = current_time}, TimeMillis) ->
     #{<<"timeMillis">> => TimeMillis};
 
-translate_get(1, #gri{type = od_user, aspect = instance, scope = private}, User) ->
+translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, User) ->
     #od_user{
         name = Name,
         alias = Alias,
         email_list = EmailList,
         linked_accounts = LinkedAccounts,
         default_space = DefaultSpace,
-        space_aliases = SpaceAliases,
-
-        eff_groups = EffGroups,
-        eff_spaces = EffSpaces,
-        eff_handles = EffHandles,
-        eff_handle_services = EffHandleServices
+        space_aliases = SpaceAliases
     } = User,
     #{
         <<"name">> => Name,
@@ -107,13 +100,13 @@ translate_get(1, #gri{type = od_user, aspect = instance, scope = private}, User)
         <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
         <<"spaceAliases">> => SpaceAliases,
 
-        <<"effectiveGroups">> => maps:keys(EffGroups),
-        <<"effectiveSpaces">> => maps:keys(EffSpaces),
-        <<"effectiveHandles">> => maps:keys(EffHandles),
-        <<"effectiveHandleServices">> => maps:keys(EffHandleServices)
+        <<"effectiveGroups">> => entity_graph:get_relations(effective, top_down, od_group, User),
+        <<"effectiveSpaces">> => entity_graph:get_relations(effective, top_down, od_space, User),
+        <<"effectiveHandles">> => entity_graph:get_relations(effective, top_down, od_handle, User),
+        <<"effectiveHandleServices">> => entity_graph:get_relations(effective, top_down, od_handle_service, User)
     };
 
-translate_get(1, #gri{type = od_user, aspect = instance, scope = protected}, User) ->
+translate_resource(_, #gri{type = od_user, aspect = instance, scope = protected}, User) ->
     #{
         <<"name">> := Name,
         <<"alias">> := Alias,
@@ -129,7 +122,7 @@ translate_get(1, #gri{type = od_user, aspect = instance, scope = protected}, Use
         <<"linkedAccounts">> => LinkedAccountMaps
     };
 
-translate_get(1, #gri{type = od_user, aspect = instance, scope = shared}, User) ->
+translate_resource(_, #gri{type = od_user, aspect = instance, scope = shared}, User) ->
     #{
         <<"name">> := Name,
         <<"alias">> := Alias
@@ -141,17 +134,15 @@ translate_get(1, #gri{type = od_user, aspect = instance, scope = shared}, User) 
         <<"login">> => gs_protocol:undefined_to_null(Alias)
     };
 
-translate_get(1, #gri{type = od_group, aspect = instance, scope = private}, Group) ->
+translate_resource(_, #gri{type = od_group, aspect = instance, scope = private}, Group) ->
     #od_group{
         name = Name,
         type = Type,
 
         children = Children,
-        eff_children = EffChildren,
         parents = Parents,
 
         users = Users,
-        eff_users = EffUsers,
 
         eff_spaces = EffSpaces
     } = Group,
@@ -160,30 +151,28 @@ translate_get(1, #gri{type = od_group, aspect = instance, scope = private}, Grou
         <<"type">> => Type,
 
         <<"children">> => Children,
-        <<"effectiveChildren">> => strip_eff_relation_data(EffChildren),
+        <<"effectiveChildren">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, Group),
         <<"parents">> => Parents,
 
         <<"users">> => Users,
-        <<"effectiveUsers">> => strip_eff_relation_data(EffUsers),
+        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, Group),
 
         <<"spaces">> => maps:keys(EffSpaces)
     };
 
 % shared and protected scopes carry the same data
-translate_get(1, GRI = #gri{type = od_group, aspect = instance, scope = shared}, Group) ->
-    translate_get(1, GRI#gri{scope = protected}, Group);
-translate_get(1, #gri{type = od_group, aspect = instance, scope = protected}, GroupData) ->
+translate_resource(ProtoVersion, GRI = #gri{type = od_group, aspect = instance, scope = shared}, Group) ->
+    translate_resource(ProtoVersion, GRI#gri{scope = protected}, Group);
+translate_resource(_, #gri{type = od_group, aspect = instance, scope = protected}, GroupData) ->
     GroupData;
 
-translate_get(1, #gri{type = od_space, aspect = instance, scope = private}, Space) ->
+translate_resource(_, #gri{type = od_space, aspect = instance, scope = private}, Space) ->
     #od_space{
         name = Name,
 
         users = Users,
-        eff_users = EffUsers,
 
         groups = Groups,
-        eff_groups = EffGroups,
 
         providers = Providers,
         shares = Shares
@@ -192,18 +181,18 @@ translate_get(1, #gri{type = od_space, aspect = instance, scope = private}, Spac
         <<"name">> => Name,
 
         <<"users">> => Users,
-        <<"effectiveUsers">> => strip_eff_relation_data(EffUsers),
+        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, Space),
 
         <<"groups">> => Groups,
-        <<"effectiveGroups">> => strip_eff_relation_data(EffGroups),
+        <<"effectiveGroups">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, Space),
 
         <<"providers">> => Providers,
         <<"shares">> => Shares
     };
-translate_get(1, #gri{type = od_space, aspect = instance, scope = protected}, SpaceData) ->
+translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected}, SpaceData) ->
     SpaceData;
 
-translate_get(1, #gri{type = od_share, aspect = instance, scope = private}, Share) ->
+translate_resource(_, #gri{type = od_share, aspect = instance, scope = private}, Share) ->
     #od_share{
         name = Name,
         public_url = PublicUrl,
@@ -219,13 +208,13 @@ translate_get(1, #gri{type = od_share, aspect = instance, scope = private}, Shar
         <<"rootFileId">> => RootFileId
     };
 
-translate_get(1, #gri{type = od_share, aspect = instance, scope = protected}, ShareData) ->
+translate_resource(_, #gri{type = od_share, aspect = instance, scope = protected}, ShareData) ->
     ShareData;
 
-translate_get(1, #gri{type = od_share, aspect = instance, scope = public}, ShareData) ->
+translate_resource(_, #gri{type = od_share, aspect = instance, scope = public}, ShareData) ->
     ShareData;
 
-translate_get(1, #gri{type = od_provider, id = Id, aspect = instance, scope = private}, Provider) ->
+translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope = private}, Provider) ->
     #od_provider{
         name = Name,
         subdomain_delegation = SubdomainDelegation,
@@ -235,9 +224,7 @@ translate_get(1, #gri{type = od_provider, id = Id, aspect = instance, scope = pr
         latitude = Latitude,
         longitude = Longitude,
 
-        spaces = Spaces,
-        eff_users = EffUsers,
-        eff_groups = EffGroups
+        spaces = Spaces
     } = Provider,
     #{
         <<"name">> => Name,
@@ -253,16 +240,16 @@ translate_get(1, #gri{type = od_provider, id = Id, aspect = instance, scope = pr
         <<"online">> => provider_connection:is_online(Id),
 
         <<"spaces">> => Spaces,
-        <<"effectiveUsers">> => maps:keys(EffUsers),
-        <<"effectiveGroups">> => maps:keys(EffGroups)
+        <<"effectiveUsers">> => entity_graph:get_relations(effective, bottom_up, od_user, Provider),
+        <<"effectiveGroups">> => entity_graph:get_relations(effective, bottom_up, od_group, Provider)
 
     };
 
 
-translate_get(1, #gri{type = od_provider, aspect = instance, scope = protected}, ProviderData) ->
+translate_resource(_, #gri{type = od_provider, aspect = instance, scope = protected}, ProviderData) ->
     ProviderData;
 
-translate_get(1, #gri{type = od_provider, aspect = domain_config}, Data) ->
+translate_resource(_, #gri{type = od_provider, aspect = domain_config}, Data) ->
     case maps:find(<<"ipList">>, Data) of
         {ok, IPList} ->
             IPBinaries = [list_to_binary(inet:ntoa(IP)) || IP <- IPList],
@@ -271,31 +258,22 @@ translate_get(1, #gri{type = od_provider, aspect = domain_config}, Data) ->
             Data
     end;
 
-translate_get(1, #gri{type = od_handle_service, aspect = instance, scope = private}, HService) ->
-    #od_handle_service{
-        name = Name,
-
-        eff_groups = EffGroups,
-        eff_users = EffUsers
-    } = HService,
+translate_resource(_, #gri{type = od_handle_service, aspect = instance, scope = private}, HService) ->
     #{
-        <<"name">> => Name,
+        <<"name">> => HService#od_handle_service.name,
 
-        <<"effectiveUsers">> => strip_eff_relation_data(EffUsers),
-        <<"effectiveGroups">> => strip_eff_relation_data(EffGroups)
+        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, HService),
+        <<"effectiveGroups">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, HService)
     };
 
-translate_get(1, #gri{type = od_handle, aspect = instance, scope = private}, Handle) ->
+translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}, Handle) ->
     #od_handle{
         public_handle = PublicHandle,
         resource_type = ResourceType,
         resource_id = ResourceId,
         metadata = Metadata,
         timestamp = Timestamp,
-        handle_service = HandleServiceId,
-
-        eff_groups = EffGroups,
-        eff_users = EffUsers
+        handle_service = HandleServiceId
     } = Handle,
     #{
         <<"publicHandle">> => PublicHandle,
@@ -305,14 +283,14 @@ translate_get(1, #gri{type = od_handle, aspect = instance, scope = private}, Han
         <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp),
         <<"handleServiceId">> => HandleServiceId,
 
-        <<"effectiveUsers">> => strip_eff_relation_data(EffUsers),
-        <<"effectiveGroups">> => strip_eff_relation_data(EffGroups)
+        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, Handle),
+        <<"effectiveGroups">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, Handle)
     };
 
-translate_get(1, #gri{type = od_handle, aspect = instance, scope = public}, HandleData) ->
+translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public}, HandleData) ->
     HandleData;
 
-translate_get(ProtocolVersion, GRI, Data) ->
+translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync get result for:~n
     ProtocolVersion: ~p~n
     GRI: ~p~n
@@ -321,13 +299,3 @@ translate_get(ProtocolVersion, GRI, Data) ->
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
 
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
--spec strip_eff_relation_data(maps:map()) -> maps:map().
-strip_eff_relation_data(Map) when is_map(Map) ->
-    maps:map(
-        fun(_, {Attributes, _EffRelationData}) ->
-            Attributes
-        end, Map).

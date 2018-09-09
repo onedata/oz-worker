@@ -166,17 +166,14 @@ delete_record(<<"user">>, _Id) ->
 -spec user_record(Client :: entity_logic:client(), UserId :: od_user:id()) ->
     proplists:proplist().
 user_record(Client, UserId) ->
-    {ok, #od_user{
+    {ok, User = #od_user{
         name = Name,
         alias = UserLogin,
         basic_auth_enabled = BasicAuthEnabled,
         linked_accounts = LinkedAccounts,
         client_tokens = ClientTokenIds,
         default_space = DefaultSpaceValue,
-        default_provider = DefaultProviderValue,
-        eff_groups = EffGroups,
-        eff_spaces = EffSpaces,
-        eff_providers = EffProviders
+        default_provider = DefaultProviderValue
     }} = user_logic:get(Client, UserId),
     Login = login_db_to_client(UserLogin),
     Authorizers = authorizers_db_to_client(LinkedAccounts),
@@ -192,9 +189,9 @@ user_record(Client, UserId) ->
         {<<"clienttokens">>, ClientTokens},
         {<<"defaultSpaceId">>, DefaultSpace},
         {<<"defaultProviderId">>, DefaultProvider},
-        {<<"groups">>, maps:keys(EffGroups)},
-        {<<"spaces">>, maps:keys(EffSpaces)},
-        {<<"providers">>, maps:keys(EffProviders)}
+        {<<"groups">>, entity_graph:get_relations(effective, top_down, od_group, User)},
+        {<<"spaces">>, entity_graph:get_relations(effective, top_down, od_space, User)},
+        {<<"providers">>, entity_graph:get_relations(effective, top_down, od_provider, User)}
     ].
 
 

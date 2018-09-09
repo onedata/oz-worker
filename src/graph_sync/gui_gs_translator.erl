@@ -22,7 +22,7 @@
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 %% API
--export([handshake_attributes/1, translate_create/3, translate_get/3]).
+-export([handshake_attributes/1, translate_value/3, translate_resource/3]).
 
 
 %%%===================================================================
@@ -31,8 +31,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns handshake response attributes for given client that has been
-%% authorized.
+%% {@link gs_translator_behaviour} callback handshake_attributes/1.
 %% @end
 %%--------------------------------------------------------------------
 -spec handshake_attributes(gs_protocol:client()) ->
@@ -58,22 +57,20 @@ handshake_attributes(_) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates CREATE result to the format understood by client. Will be called
-%% only for requests that return {ok, {data, Data}}.
-%% For other results, translate_get is called.
+%% {@link gs_translator_behaviour} callback translate_value/3.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_create(gs_protocol:protocol_version(), gs_protocol:gri(),
+-spec translate_value(gs_protocol:protocol_version(), gs_protocol:gri(),
     Data :: term()) -> gs_protocol:data() | gs_protocol:error().
-translate_create(1, #gri{aspect = invite_group_token}, Macaroon) ->
-    translate_create(1, #gri{aspect = invite_user_token}, Macaroon);
-translate_create(1, #gri{aspect = invite_provider_token}, Macaroon) ->
-    translate_create(1, #gri{aspect = invite_user_token}, Macaroon);
-translate_create(1, #gri{aspect = invite_user_token}, Macaroon) ->
+translate_value(ProtoVersion, #gri{aspect = invite_group_token}, Macaroon) ->
+    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
+translate_value(ProtoVersion, #gri{aspect = invite_provider_token}, Macaroon) ->
+    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
+translate_value(_, #gri{aspect = invite_user_token}, Macaroon) ->
     {ok, Token} = onedata_macaroons:serialize(Macaroon),
     Token;
 
-translate_create(ProtocolVersion, GRI, Data) ->
+translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n
     ProtocolVersion: ~p~n
     GRI: ~p~n
@@ -85,24 +82,23 @@ translate_create(ProtocolVersion, GRI, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Translates GET result to the format understood by client. Should not include
-%% "gri" in the resulting json map, as it is included automatically.
+%% {@link gs_translator_behaviour} callback translate_resource/3.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_get(gs_protocol:protocol_version(), gs_protocol:gri(),
+-spec translate_resource(gs_protocol:protocol_version(), gs_protocol:gri(),
     Data :: term()) ->
     gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()} |
     gs_protocol:error().
-translate_get(1, GRI = #gri{type = od_user}, Data) ->
+translate_resource(_, GRI = #gri{type = od_user}, Data) ->
     translate_user(GRI, Data);
-translate_get(1, GRI = #gri{type = od_group}, Data) ->
+translate_resource(_, GRI = #gri{type = od_group}, Data) ->
     translate_group(GRI, Data);
-translate_get(1, GRI = #gri{type = od_space}, Data) ->
+translate_resource(_, GRI = #gri{type = od_space}, Data) ->
     translate_space(GRI, Data);
-translate_get(1, GRI = #gri{type = od_provider}, Data) ->
+translate_resource(_, GRI = #gri{type = od_provider}, Data) ->
     translate_provider(GRI, Data);
 
-translate_get(ProtocolVersion, GRI, Data) ->
+translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync get result for:~n
     ProtocolVersion: ~p~n
     GRI: ~p~n

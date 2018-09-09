@@ -119,14 +119,25 @@ create_handle_service_test(Config) ->
     ]),
 
     AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
-    AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
-    VerifyFun = fun(HService) ->
-        {ok, HS} = oz_test_utils:get_handle_service(Config, HService),
+    VerifyFun = fun(HServiceId) ->
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+        {ok, HS} = oz_test_utils:get_handle_service(Config, HServiceId),
         ?assertEqual(?HANDLE_SERVICE_NAME1, HS#od_handle_service.name),
         ?assertEqual(?PROXY_ENDPOINT, HS#od_handle_service.proxy_endpoint),
         ?assertEqual(
             ?DOI_SERVICE_PROPERTIES, HS#od_handle_service.service_properties
+        ),
+
+        ?assertEqual(#{G1 => AllPrivs}, HS#od_handle_service.groups),
+        ?assertEqual(#{G1 => {AllPrivs, [{od_handle_service, <<"self">>}]}}, HS#od_handle_service.eff_groups),
+        ?assertEqual(#{}, HS#od_handle_service.users),
+        ?assertEqual(
+            #{
+                U1 => {AllPrivs, [{od_group, G1}]},
+                U2 => {AllPrivs, [{od_group, G1}]}
+            },
+            HS#od_handle_service.eff_users
         ),
         true
     end,
@@ -163,12 +174,7 @@ create_handle_service_test(Config) ->
             operation = create,
             gri = #gri{type = od_handle_service, aspect = instance},
             auth_hint = ?AS_GROUP(G1),
-            expected_result = ?OK_MAP(#{
-                <<"effectiveGroups">> => #{G1 => AllPrivsBin},
-                <<"effectiveUsers">> => #{
-                    U1 => AllPrivsBin,
-                    U2 => AllPrivsBin
-                },
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?HANDLE_SERVICE_NAME1,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(

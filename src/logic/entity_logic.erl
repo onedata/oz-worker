@@ -39,16 +39,17 @@ od_handle_service | od_handle | oz_privileges.
 #od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}.
 -type aspect() :: gs_protocol:aspect().
 -type scope() :: gs_protocol:scope().
+-type data_format() :: gs_protocol:data_format().
 -type data() :: gs_protocol:data().
 -type gri() :: gs_protocol:gri().
 -type auth_hint() :: gs_protocol:auth_hint().
--type error() :: {error, Reason :: term()}.
--type create_result() :: ok | {ok, {data, term()} | {fetched, gri(), term()} |
-{not_fetched, gri()} | {not_fetched, gri(), auth_hint()}} | error().
--type get_result() :: {ok, term()} | error().
--type delete_result() :: ok | error().
--type update_result() :: ok | error().
+
+-type create_result() :: gs_protocol:graph_create_result().
+-type get_result() :: gs_protocol:graph_get_result().
+-type delete_result() :: gs_protocol:graph_delete_result().
+-type update_result() :: gs_protocol:graph_update_result().
 -type result() :: create_result() | get_result() | update_result() | delete_result().
+-type error() :: gs_protocol:error().
 
 -type type_validator() :: any | atom | list_of_atoms | binary | alias |
 list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addresses.
@@ -85,6 +86,7 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
     aspect/0,
     scope/0,
     gri/0,
+    data_format/0,
     data/0,
     auth_hint/0,
     create_result/0,
@@ -202,15 +204,14 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = create}}) ->
                     ensure_operation_supported(
                         State))))),
     case {Result, Req} of
-        {{ok, _}, #el_req{gri = #gri{aspect = instance}, client = Cl}} ->
+        {{ok, resource, Resource}, #el_req{gri = #gri{aspect = instance}, client = Cl}} ->
             % If an entity instance is created, log an information about it
             % (it's a significant operation and this information might be useful).
-            {EntType, EntId} = case Result of
-                {ok, {fetched, #gri{type = Type, id = Id}, _}} -> {Type, Id};
-                {ok, {not_fetched, #gri{type = Type, id = Id}}} -> {Type, Id};
-                {ok, {not_fetched, #gri{type = Type, id = Id}, _}} -> {Type, Id}
+            {EntType, EntId} = case Resource of
+                {#gri{type = Type, id = Id}, _} -> {Type, Id};
+                {#gri{type = Type, id = Id}, _, _} -> {Type, Id}
             end,
-            ?info("~s has been created by client: ~s", [
+            ?debug("~s has been created by client: ~s", [
                 EntType:to_string(EntId),
                 client_to_string(Cl)
             ]),
@@ -247,7 +248,7 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = delete}}) ->
         {ok, #el_req{gri = #gri{type = Type, id = Id, aspect = instance}, client = Cl}} ->
             % If an entity instance is deleted, log an information about it
             % (it's a significant operation and this information might be useful).
-            ?info("~s has been deleted by client: ~s", [
+            ?debug("~s has been deleted by client: ~s", [
                 Type:to_string(Id),
                 client_to_string(Cl)
             ]),
@@ -832,7 +833,7 @@ check_value(binary, name, _Key, Value) ->
         match -> ok;
         _ -> throw(?ERROR_BAD_VALUE_NAME)
     end;
-check_value(binary, user_name,_Key, Value) ->
+check_value(binary, user_name, _Key, Value) ->
     case re:run(Value, ?USER_NAME_VALIDATION_REGEXP, [{capture, none}, unicode, ucp]) of
         match -> ok;
         _ -> throw(?ERROR_BAD_VALUE_USER_NAME)

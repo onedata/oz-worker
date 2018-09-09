@@ -61,7 +61,9 @@
 
     list_groups/1,
     create_group/3,
+    create_parent_group/4,
     get_group/2,
+    update_group/3,
     delete_group/2,
 
     group_get_children/2,
@@ -71,9 +73,9 @@
     group_get_eff_oz_privileges/2,
     group_set_oz_privileges/4,
 
-    group_add_user/3,
-    group_set_user_privileges/5,
-    group_add_group/3,
+    group_add_user/3, group_add_user/4,
+    group_set_user_privileges/5, group_set_user_privileges/6,
+    group_add_group/3, group_add_group/4,
     group_remove_user/3,
     group_remove_group/3,
     group_leave_space/3,
@@ -81,6 +83,7 @@
     group_invite_group_token/3,
     group_invite_user_token/3,
 
+    group_get_eff_users/2,
     group_get_user_privileges/3,
     group_get_eff_user_privileges/3,
 
@@ -194,7 +197,8 @@
     minimum_support_size/1,
     mock_handle_proxy/1,
     unmock_handle_proxy/1,
-    gui_ca_certs/1
+    gui_ca_certs/1,
+    ensure_entity_graph_is_up_to_date/1, ensure_entity_graph_is_up_to_date/2
 ]).
 
 % Convenience functions for gs
@@ -231,7 +235,7 @@ call_oz(Config, Module, Function, Args) ->
     case rpc:call(Node, erlang, apply, [FunWrapper, []]) of
         {crash, Type, Reason, Stacktrace} ->
             % Log a bad rpc - very useful when debugging tests.
-            ct:print(
+            ct:pal(
                 "RPC call in oz_test_utils crashed!~n"
                 "Module: ~p~n"
                 "Function: ~p~n"
@@ -553,6 +557,20 @@ create_group(Config, Client, NameOrData) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Creates a parent group for given group in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_parent_group(Config :: term(), Client :: entity_logic:client(),
+    ChildGroupId :: od_group:id(), NameOrData :: od_group:name() | #{}) ->
+    {ok, Id :: binary()}.
+create_parent_group(Config, Client, ChildGroupId, NameOrData) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, create_parent_group, [Client, ChildGroupId, NameOrData]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Retrieves group data from onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -561,6 +579,19 @@ create_group(Config, Client, NameOrData) ->
 get_group(Config, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, group_logic, get, [?ROOT, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates group name.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_group(Config :: term(), GroupId :: od_group:id(),
+    Name :: od_group:name()) -> ok.
+update_group(Config, GroupId, Name) ->
+    ?assertMatch(ok, call_oz(
+        Config, group_logic, update, [?ROOT, GroupId, #{<<"name">> => Name}]
     )).
 
 
@@ -667,15 +698,37 @@ delete_group(Config, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Adds a user a to group in onezone.
+%% Adds a user a to group in onezone with ROOT auth.
 %% @end
 %%--------------------------------------------------------------------
 -spec group_add_user(Config :: term(), GroupId :: od_group:id(),
     UserId :: od_user:id()) -> {ok, UserId :: od_user:id()}.
 group_add_user(Config, GroupId, UserId) ->
+    group_add_user(Config, ?ROOT, GroupId, UserId).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a user a to group in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_add_user(Config :: term(), entity_logic:client(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, UserId :: od_user:id()}.
+group_add_user(Config, Client, GroupId, UserId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, add_user, [?ROOT, GroupId, UserId]
+        Config, group_logic, add_user, [Client, GroupId, UserId]
     )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a group a to group in onezone with ROOT auth.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_add_group(Config :: term(), GroupId :: od_group:id(),
+    ChildGroupId :: od_group:id()) -> {ok, ChildGroupId :: od_group:id()}.
+group_add_group(Config, GroupId, ChildGroupId) ->
+    group_add_group(Config, ?ROOT, GroupId, ChildGroupId).
 
 
 %%--------------------------------------------------------------------
@@ -683,11 +736,11 @@ group_add_user(Config, GroupId, UserId) ->
 %% Adds a group a to group in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec group_add_group(Config :: term(), GroupId :: od_group:id(),
+-spec group_add_group(Config :: term(), entity_logic:client(), GroupId :: od_group:id(),
     ChildGroupId :: od_group:id()) -> {ok, ChildGroupId :: od_group:id()}.
-group_add_group(Config, GroupId, ChildGroupId) ->
+group_add_group(Config, Client, GroupId, ChildGroupId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, add_group, [?ROOT, GroupId, ChildGroupId]
+        Config, group_logic, add_group, [Client, GroupId, ChildGroupId]
     )).
 
 
@@ -742,6 +795,19 @@ group_leave_handle_service(Config, GroupId, HandleServiceId) ->
         Config, group_logic, leave_handle_service,
         [?ROOT, GroupId, HandleServiceId]
     )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the list of effective users in given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_get_eff_users(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [privileges:group_privilege()]}.
+group_get_eff_users(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(Config, group_logic, get_eff_users, [
+        ?ROOT, GroupId
+    ])).
 
 
 %%--------------------------------------------------------------------
@@ -1264,9 +1330,9 @@ all_handle_service_privileges(Config) ->
     IPs :: [inet:ip4_address()]) -> ok.
 enable_subdomain_delegation(Config, ProviderId, Subdomain, IPs) ->
     Data = #{
-      <<"subdomainDelegation">> => true,
-      <<"subdomain">> => Subdomain,
-      <<"ipList">> => IPs},
+        <<"subdomainDelegation">> => true,
+        <<"subdomain">> => Subdomain,
+        <<"ipList">> => IPs},
     ?assertMatch(ok, oz_test_utils:call_oz(Config,
         provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
 
@@ -1277,14 +1343,13 @@ enable_subdomain_delegation(Config, ProviderId, Subdomain, IPs) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec set_provider_domain(Config :: term(), ProviderId :: od_provider:od(),
-    Domain :: binary())  -> ok.
+    Domain :: binary()) -> ok.
 set_provider_domain(Config, ProviderId, Domain) ->
     Data = #{
-      <<"subdomainDelegation">> => false,
-      <<"domain">> => Domain},
+        <<"subdomainDelegation">> => false,
+        <<"domain">> => Domain},
     ?assertMatch(ok, oz_test_utils:call_oz(Config,
         provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
-
 
 
 %%--------------------------------------------------------------------
@@ -1456,7 +1521,6 @@ handle_service_set_user_privileges(
     )).
 
 
-
 %%--------------------------------------------------------------------
 %% @doc
 %% Adds a group to a handle service.
@@ -1490,7 +1554,7 @@ handle_service_remove_group(Config, HServiceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_service_set_group_privileges(Config :: term(),
-    HServiceId :: od_handle_service:id(), GroupId:: od_group:id(),
+    HServiceId :: od_handle_service:id(), GroupId :: od_group:id(),
     Operation :: entity_graph:privileges_operation(),
     Privileges :: [privileges:handle_service_privilege()]) -> ok.
 handle_service_set_group_privileges(
@@ -1741,15 +1805,28 @@ handle_get_group_privileges(Config, HandleId, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Sets privileges for group's user.
+%% Sets privileges for group's user with ?ROOT auth.
 %% @end
 %%--------------------------------------------------------------------
 -spec group_set_user_privileges(Config :: term(), GroupId :: od_group:id(),
     UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
     Privileges :: [privileges:group_privilege()]) -> ok.
 group_set_user_privileges(Config, GroupId, UserId, Operation, Privs) ->
+    group_set_user_privileges(Config, ?ROOT, GroupId, UserId, Operation, Privs).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges for group's user.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_set_user_privileges(Config :: term(), entity_logic:client(),
+    GroupId :: od_group:id(), UserId :: od_user:id(),
+    Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:group_privilege()]) -> ok.
+group_set_user_privileges(Config, Client, GroupId, UserId, Operation, Privs) ->
     ?assertMatch(ok, call_oz(Config, group_logic, update_user_privileges, [
-        ?ROOT, GroupId, UserId, Operation, Privs
+        Client, GroupId, UserId, Operation, Privs
     ])).
 
 
@@ -2026,6 +2103,27 @@ unmock_handle_proxy(Config) ->
 -spec gui_ca_certs(Config :: term()) -> [public_key:der_encoded()].
 gui_ca_certs(Config) ->
     call_oz(Config, https_listener, get_cert_chain_pems, []).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Waits for entity graph to be reconciled, with 60 retries.
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_entity_graph_is_up_to_date(Config :: term()) -> boolean().
+ensure_entity_graph_is_up_to_date(Config) ->
+    ensure_entity_graph_is_up_to_date(Config, 60).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Waits for entity graph to be reconciled, with given number of retries.
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_entity_graph_is_up_to_date(Config :: term(), Retries :: non_neg_integer()) ->
+    boolean().
+ensure_entity_graph_is_up_to_date(Config, Retries) ->
+    ?assertMatch(true, call_oz(Config, entity_graph, ensure_up_to_date, []), Retries).
 
 
 %%--------------------------------------------------------------------

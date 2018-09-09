@@ -147,7 +147,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    3.
+    4.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -203,7 +203,11 @@ get_record_struct(2) ->
     ]};
 get_record_struct(3) ->
     % The structure does not change, only group names are normalized.
-    get_record_struct(2).
+    get_record_struct(2);
+get_record_struct(4) ->
+    % There are no changes, but all records must be marked dirty to recalculate
+    % effective relations (as intermediaries computing logic has changed).
+    get_record_struct(3).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -315,6 +319,20 @@ upgrade_record(2, Group) ->
         eff_providers = EffProviders,
         eff_handle_services = EffHandleServices,
         eff_handles = EffHandles,
+
+        top_down_dirty = true,
+        bottom_up_dirty = true
+    }};
+upgrade_record(3, Group) ->
+    {4, Group#od_group{
+        eff_parents = #{},
+        eff_children = #{},
+
+        eff_users = #{},
+        eff_spaces = #{},
+        eff_providers = #{},
+        eff_handle_services = #{},
+        eff_handles = #{},
 
         top_down_dirty = true,
         bottom_up_dirty = true

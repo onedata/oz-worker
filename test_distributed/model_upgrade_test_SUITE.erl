@@ -51,127 +51,55 @@ all() -> ?ALL([
     token_upgrade_test
 ]).
 
+%%%===================================================================
+%%% Tests
+%%%===================================================================
 
 user_upgrade_test(Config) ->
-    UserRecordVer1 = user_record_1(),
-
-    {Version2, UserRecordVer2} = oz_test_utils:call_oz(
-        Config, od_user, upgrade_record, [1, UserRecordVer1]
-    ),
-    ?assertEqual(2, Version2),
-    ?assertEqual(UserRecordVer2, user_record_2()),
-
-    {Version3, UserRecordVer3} = oz_test_utils:call_oz(
-        Config, od_user, upgrade_record, [2, UserRecordVer2]
-    ),
-    ?assertEqual(3, Version3),
-    ?assertEqual(UserRecordVer3, user_record_3()),
-
-    {Version4, UserRecordVer4} = oz_test_utils:call_oz(
-        Config, od_user, upgrade_record, [3, UserRecordVer3]
-    ),
-    ?assertEqual(4, Version4),
-    ?assertEqual(UserRecordVer4, user_record_4()),
-
-    {Version5, UserRecordVer5} = oz_test_utils:call_oz(
-        Config, od_user, upgrade_record, [4, UserRecordVer4]
-    ),
-    ?assertEqual(5, Version5),
-    ?assertEqual(UserRecordVer5, user_record_5()),
-
-    {Version6, UserRecordVer6} = oz_test_utils:call_oz(
-        Config, od_user, upgrade_record, [5, UserRecordVer5]
-    ),
-    ?assertEqual(6, Version6),
-    ?assertEqual(UserRecordVer6, user_record_6()).
+    test_record_upgrade(Config, od_user, [1, 2, 3, 4, 5, 6, 7]).
 
 
 group_upgrade_test(Config) ->
-    GroupRecordVer1 = group_record_1(),
-    {Version2, GroupRecordVer2} = oz_test_utils:call_oz(
-        Config, od_group, upgrade_record, [1, GroupRecordVer1]
-    ),
-    ?assertEqual(2, Version2),
-    ?assertEqual(GroupRecordVer2, group_record_2()),
-    {Version3, GroupRecordVer3} = oz_test_utils:call_oz(
-        Config, od_group, upgrade_record, [2, GroupRecordVer2]
-    ),
-    ?assertEqual(3, Version3),
-    ?assertEqual(GroupRecordVer3, group_record_3()).
+    test_record_upgrade(Config, od_group, [1, 2, 3, 4]).
 
 
 space_upgrade_test(Config) ->
-    OldSpaceRecord = old_space_record(),
-    {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, od_space, upgrade_record, [1, OldSpaceRecord]
-    ),
-    ?assertEqual(2, NewVersion),
-    ?assertEqual(NewRecord, new_space_record()).
+    test_record_upgrade(Config, od_space, [1, 2, 3]).
 
 
 share_upgrade_test(Config) ->
-    OldShareRecord = old_share_record(),
-    {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, od_share, upgrade_record, [1, OldShareRecord]
-    ),
-    ?assertEqual(2, NewVersion),
-    ?assertEqual(NewRecord, new_share_record()).
+    test_record_upgrade(Config, od_share, [1, 2]).
 
 
 provider_upgrade_test(Config) ->
-    ProviderRecordV1 = provider_record(1),
-    ProviderRecordV2 = provider_record(2),
-    ProviderRecordV3 = provider_record(3),
-
-    % Upgrade 1 -> 2
-    {NewVersion1, NewRecord1} = oz_test_utils:call_oz(
-        Config, od_provider, upgrade_record, [1, ProviderRecordV1]
-    ),
-    ?assertEqual(2, NewVersion1),
-    ?assertEqual(NewRecord1, ProviderRecordV2),
-
-    % Upgrade 1 -> 2
-    {NewVersion2, NewRecord2} = oz_test_utils:call_oz(
-        Config, od_provider, upgrade_record, [2, ProviderRecordV2]
-    ),
-    ?assertEqual(3, NewVersion2),
-    ?assertEqual(NewRecord2, ProviderRecordV3).
+    test_record_upgrade(Config, od_provider, [1, 2, 3, 4]).
 
 
 handle_service_upgrade_test(Config) ->
-    OldHandleServiceRecord = old_handle_service_record(),
-    {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, od_handle_service, upgrade_record, [1, OldHandleServiceRecord]
-    ),
-    ?assertEqual(2, NewVersion),
-    ?assertEqual(NewRecord, new_handle_service_record()).
+    test_record_upgrade(Config, od_handle_service, [1, 2, 3]).
 
 
 handle_upgrade_test(Config) ->
-    OldHandleRecord = old_handle_record(),
-    {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, od_handle, upgrade_record, [1, OldHandleRecord]
-    ),
-    ?assertEqual(2, NewVersion),
-    ?assertEqual(NewRecord, new_handle_record()).
+    test_record_upgrade(Config, od_handle, [1, 2, 3]).
 
 
 dns_state_upgrade_test(Config) ->
-    OldDnsStateRecord = dns_state_record(1),
-    NewDnsStateRecord = dns_state_record(2),
-    {NewVersion, NewRecord} = oz_test_utils:call_oz(
-        Config, dns_state, upgrade_record, [1, OldDnsStateRecord]
-    ),
-    ?assertEqual(2, NewVersion),
-    ?assertEqual(NewRecord, NewDnsStateRecord).
+    test_record_upgrade(Config, dns_state, [1, 2]).
+
 
 token_upgrade_test(Config) ->
-    TokenRecordVer1 = token_record_1(),
-    {Version2, TokenRecordVer2} = oz_test_utils:call_oz(
-        Config, token, upgrade_record, [1, TokenRecordVer1]
-    ),
-    ?assertEqual(2, Version2),
-    ?assertEqual(TokenRecordVer2, token_record_2()).
+    test_record_upgrade(Config, token, [1, 2]).
+
+
+test_record_upgrade(Config, Type, Versions) ->
+    lists:foldl(fun(Version, RecordInOlderVersion) ->
+        {NewVersion, NewRecord} = oz_test_utils:call_oz(
+            Config, Type, upgrade_record, [Version - 1, RecordInOlderVersion]
+        ),
+        ?assertEqual(NewVersion, Version),
+        ?assertEqual(NewRecord, get_record(Type, Version)),
+        NewRecord
+    end, get_record(Type, hd(Versions)), tl(Versions)).
 
 
 %%%===================================================================
@@ -188,7 +116,7 @@ end_per_suite(_Config) ->
 %%% Record definitions
 %%%===================================================================
 
-user_record_1() -> {od_user,
+get_record(od_user, 1) -> {od_user,
     <<"name">>,
     <<"login">>,
     true,   % basic_auth_enabled
@@ -233,9 +161,8 @@ user_record_1() -> {od_user,
     [],  % eff_handle_services
     [],  % eff_handles
     false  % top_down_dirty
-}.
-
-user_record_2() -> {od_user,
+};
+get_record(od_user, 2) -> {od_user,
     <<"name">>,
     <<"login">>,
     <<"alias">>,
@@ -280,9 +207,8 @@ user_record_2() -> {od_user,
     #{},
     #{},
     true
-}.
-
-user_record_3() -> {od_user,
+};
+get_record(od_user, 3) -> {od_user,
     <<"name">>,
     <<"login">>,
     <<"alias">>,
@@ -327,9 +253,8 @@ user_record_3() -> {od_user,
     #{},
     #{},
     true
-}.
-
-user_record_4() -> {od_user,
+};
+get_record(od_user, 4) -> {od_user,
     <<"name">>,
     <<"login">>,
     <<"alias">>,
@@ -376,29 +301,28 @@ user_record_4() -> {od_user,
     #{},
     #{},
     true
-}.
-
-user_record_5() -> {od_user,
+};
+get_record(od_user, 5) -> {od_user,
     <<"name">>,
     <<"login">>,
     [<<"email1@email.com">>, <<"email2@email.com">>],
     true,
     [
-        #linked_account{
-            idp = google,
-            subject_id = <<"user_id1">>,
-            login = <<"login1">>,
-            name = <<"name1">>,
-            email_list = [<<"email1@email.com">>],
-            groups = []
+        {linked_account,
+            google,
+            <<"user_id1">>,
+            <<"login1">>,
+            <<"name1">>,
+            [<<"email1@email.com">>],
+            []
         },
-        #linked_account{
-            idp = github,
-            subject_id = <<"user_id2">>,
-            login = <<"login2">>,
-            name = <<"name2">>,
-            email_list = [<<"email2@email.com">>],
-            groups = []
+        {linked_account,
+            github,
+            <<"user_id2">>,
+            <<"login2">>,
+            <<"name2">>,
+            [<<"email2@email.com">>],
+            []
         }
     ],
     <<"default_space">>,
@@ -424,9 +348,54 @@ user_record_5() -> {od_user,
     #{},
     #{},
     true
-}.
-
-user_record_6() -> #od_user{
+};
+get_record(od_user, 6) -> {od_user,
+    <<"name">>,
+    <<"login">>,
+    [<<"email1@email.com">>, <<"email2@email.com">>],
+    true,
+    [
+        {linked_account,
+            google,
+            <<"user_id1">>,
+            <<"login1">>,
+            <<"name1">>,
+            [<<"email1@email.com">>],
+            []
+        },
+        {linked_account,
+            github,
+            <<"user_id2">>,
+            <<"login2">>,
+            <<"name2">>,
+            [<<"email2@email.com">>],
+            []
+        }
+    ],
+    <<"default_space">>,
+    <<"default_provider">>,
+    [<<"token1">>, <<"token2">>],
+    #{
+        <<"sp1">> => <<"sp1Name">>,
+        <<"sp2">> => <<"sp2Name">>
+    },
+    [
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
+        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
+    ],
+    [],
+    [<<"group1">>, <<"group2">>, <<"group3">>],
+    [<<"space1">>, <<"space2">>, <<"space3">>],
+    [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
+    [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    true
+};
+get_record(od_user, 7) -> #od_user{
     name = <<"name">>,
     alias = <<"login">>,
     email_list = [<<"email1@email.com">>, <<"email2@email.com">>],
@@ -471,9 +440,10 @@ user_record_6() -> #od_user{
     eff_handle_services = #{},
     eff_handles = #{},
     top_down_dirty = true
-}.
+};
 
-group_record_1() -> {od_group,
+
+get_record(od_group, 1) -> {od_group,
     <<"ńąµę|"/utf8>>,
     role,
     [ % oz_privileges
@@ -502,41 +472,39 @@ group_record_1() -> {od_group,
     [], % eff_handles
     false, % top_down_dirty
     false  % bottom_up_dirty
-}.
+};
+get_record(od_group, 2) -> {od_group,
+    <<"ńąµę|"/utf8>>,
+    role,
+    [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS],
+    [],
 
-group_record_2() -> #od_group{
-    name = <<"ńąµę|"/utf8>>,
-    type = role,
-    oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS],
-    eff_oz_privileges = [],
-
-    parents = [<<"parent1">>, <<"parent2">>],
-    children = #{
+    [<<"parent1">>, <<"parent2">>],
+    #{
         <<"child1">> => [?GROUP_VIEW, ?GROUP_CREATE_SPACE, ?GROUP_INVITE_GROUP],
         <<"child2">> => [?GROUP_UPDATE, ?GROUP_DELETE, ?GROUP_JOIN_GROUP]
     },
-    eff_parents = #{},
-    eff_children = #{},
+    #{}, % eff_parents
+    #{}, % eff_children
 
-    users = #{
+    #{
         <<"user1">> => [?GROUP_JOIN_GROUP, ?GROUP_CREATE_SPACE, ?GROUP_SET_PRIVILEGES],
         <<"user2">> => [?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_REMOVE_GROUP]
     },
-    spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
-    handle_services = [<<"handle_service1">>],
-    handles = [<<"handle1">>, <<"handle2">>],
+    [<<"space1">>, <<"space2">>, <<"space3">>],
+    [<<"handle_service1">>],
+    [<<"handle1">>, <<"handle2">>],
 
-    eff_users = #{},
-    eff_spaces = #{},
-    eff_providers = #{},
-    eff_handle_services = #{},
-    eff_handles = #{},
+    #{}, % eff_users
+    #{}, % eff_spaces
+    #{}, % eff_providers
+    #{}, % eff_handle_services
+    #{}, % eff_handles
 
-    top_down_dirty = true,
-    bottom_up_dirty = true
-}.
-
-group_record_3() -> #od_group{
+    true, % top_down_dirty
+    true  % bottom_up_dirty
+};
+get_record(od_group, 3) -> #od_group{
     name = <<"(ńąµę-)"/utf8>>,
     type = role,
     oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS],
@@ -566,9 +534,12 @@ group_record_3() -> #od_group{
 
     top_down_dirty = true,
     bottom_up_dirty = true
-}.
+};
+get_record(od_group, 4) ->
+    get_record(od_group, 3);
 
-old_space_record() -> {od_space,
+
+get_record(od_space, 1) -> {od_space,
     <<"name">>,
     [
         {<<"prov1">>, 1000},
@@ -588,9 +559,32 @@ old_space_record() -> {od_space,
     [],  % eff_groups
     false, % top_down_dirty
     false  % bottom_up_dirty
-}.
+};
+get_record(od_space, 2) -> {od_space,
+    <<"name">>,
+    #{
+        <<"user1">> => [?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_REMOVE_GROUP],
+        <<"user2">> => [?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER]
+    },
+    #{
+        <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER],
+        <<"group2">> => [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE]
+    },
+    #{
+        <<"prov1">> => 1000,
+        <<"prov2">> => 250000,
+        <<"prov3">> => 19999999
+    },
+    [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
 
-new_space_record() -> #od_space{
+    #{},  % eff_users
+    #{},  % eff_groups
+    #{},  % eff_providers
+
+    true, % top_down_dirty
+    true  % bottom_up_dirty
+};
+get_record(od_space, 3) -> #od_space{
     name = <<"name">>,
     users = #{
         <<"user1">> => [?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_REMOVE_GROUP],
@@ -613,9 +607,10 @@ new_space_record() -> #od_space{
 
     top_down_dirty = true,
     bottom_up_dirty = true
-}.
+};
 
-old_share_record() -> {od_share,
+
+get_record(od_share, 1) -> {od_share,
     <<"name">>,
     <<"public_url">>,
     <<"parent_space_id">>,
@@ -624,17 +619,17 @@ old_share_record() -> {od_share,
     [],  % eff_users
     [],  % eff_groups
     false  % bottom_up_dirty
-}.
-
-new_share_record() -> #od_share{
+};
+get_record(od_share, 2) -> #od_share{
     name = <<"name">>,
     public_url = <<"public_url">>,
     space = <<"parent_space_id">>,
     handle = <<"handle_id">>,
     root_file = <<"root_file_id">>
-}.
+};
 
-provider_record(1) -> {od_provider,
+
+get_record(od_provider, 1) -> {od_provider,
     <<"name">>,
     <<"redirection_point">>,
     [<<"url1.com">>, <<"url2.com">>, <<"url3.com">>],
@@ -646,8 +641,7 @@ provider_record(1) -> {od_provider,
     [],  % eff_groups
     false  % bottom_up_dirty
 };
-
-provider_record(2) -> {od_provider,
+get_record(od_provider, 2) -> {od_provider,
     <<"name">>, % name
     <<"redirection_point">>, % redirection_point
     [<<"url1.com">>, <<"url2.com">>, <<"url3.com">>], % urls
@@ -668,22 +662,43 @@ provider_record(2) -> {od_provider,
     #{}, % eff_users
     #{}, % eff_groups
 
-    true % bottom_up_dirt
+    true % bottom_up_dirty
 };
+get_record(od_provider, 3) -> {od_provider,
+    <<"name">>,
+    undefined,
+    undefined,
+    false,
+    <<"redirection_point">>,
+    undefined,
 
-provider_record(3) -> #od_provider{
+    -93.2341,
+    17,
+
+    #{
+        <<"space1">> => 0,
+        <<"space2">> => 0,
+        <<"space3">> => 0,
+        <<"space4">> => 0
+    },
+
+    #{}, % eff_users
+    #{}, % eff_groups
+
+    true % bottom_up_dirty
+};
+get_record(od_provider, 4) -> #od_provider{
     name = <<"name">>,
+    admin_email = undefined,
     root_macaroon = undefined,
-    domain = <<"redirection_point">>,
     subdomain_delegation = false,
+    domain = <<"redirection_point">>,
     subdomain = undefined,
+
     latitude = -93.2341,
     longitude = 17,
 
     spaces = #{
-        % During provider doc translation, extra information is added - support
-        % sizes. However, it is not possible to gather this information because
-        % during update there is no information about document id in context.
         <<"space1">> => 0,
         <<"space2">> => 0,
         <<"space3">> => 0,
@@ -694,9 +709,10 @@ provider_record(3) -> #od_provider{
     eff_groups = #{},
 
     bottom_up_dirty = true
-}.
+};
 
-old_handle_service_record() -> {od_handle_service,
+
+get_record(od_handle_service, 1) -> {od_handle_service,
     <<"name">>,
     <<"proxy_endpoint">>,
     [ % service_properties
@@ -715,9 +731,32 @@ old_handle_service_record() -> {od_handle_service,
     [],  % eff_users
     [],  % eff_groups
     false  % bottom_up_dirty
-}.
+};
+get_record(od_handle_service, 2) -> {od_handle_service,
+    <<"name">>,
+    <<"proxy_endpoint">>,
+    #{
+        <<"property1">> => <<"value1">>,
+        <<"property2">> => <<"value2">>,
+        <<"property3">> => <<"value3">>
+    },
 
-new_handle_service_record() -> #od_handle_service{
+    #{
+        <<"user1">> => [?HANDLE_SERVICE_LIST_HANDLES, ?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],
+        <<"user2">> => [?HANDLE_SERVICE_UPDATE, ?HANDLE_SERVICE_DELETE, ?HANDLE_SERVICE_VIEW]
+    },
+    #{
+        <<"group1">> => [?HANDLE_SERVICE_DELETE, ?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_VIEW],
+        <<"group2">> => [?HANDLE_SERVICE_LIST_HANDLES, ?HANDLE_SERVICE_UPDATE, ?HANDLE_SERVICE_REGISTER_HANDLE]
+    },
+    [],  % handles
+
+    #{},  % eff_users
+    #{},  % eff_groups
+
+    true  % bottom_up_dirty
+};
+get_record(od_handle_service, 3) -> #od_handle_service{
     name = <<"name">>,
     proxy_endpoint = <<"proxy_endpoint">>,
     service_properties = #{
@@ -741,10 +780,11 @@ new_handle_service_record() -> #od_handle_service{
     eff_groups = #{},
 
     bottom_up_dirty = true
-}.
+};
 
 
-old_handle_record() -> {od_handle,
+
+get_record(od_handle, 1) -> {od_handle,
     <<"public_handle">>,
     <<"Share">>, % resource_type
     <<"resource_id">>,
@@ -762,9 +802,31 @@ old_handle_record() -> {od_handle,
     [],  % eff_users
     [],  % eff_groups
     false  % bottom_up_dirty
-}.
+};
+get_record(od_handle, 2) -> {od_handle,
+    <<"public_handle">>,
+    <<"Share">>, % resource_type
+    <<"<metadata_xml_string>">>,
+    {{2016, 4, 4}, {14, 56, 33}}, % timestamp
 
-new_handle_record() -> #od_handle{
+    <<"resource_id">>,
+    <<"handle_service_id">>,
+
+    #{
+        <<"user1">> => [?HANDLE_VIEW, ?HANDLE_UPDATE],
+        <<"user2">> => [?HANDLE_VIEW, ?HANDLE_UPDATE, ?HANDLE_DELETE]
+    },
+    #{
+        <<"group1">> => [?HANDLE_UPDATE],
+        <<"group2">> => [?HANDLE_DELETE]
+    },
+
+    #{},  % eff_users
+    #{},  % eff_groups
+
+    true  % bottom_up_dirty
+};
+get_record(od_handle, 3) -> #od_handle{
     public_handle = <<"public_handle">>,
     resource_type = <<"Share">>,
     metadata = <<"<metadata_xml_string>">>,
@@ -786,36 +848,36 @@ new_handle_record() -> #od_handle{
     eff_groups = #{},
 
     bottom_up_dirty = true
-}.
+};
 
-dns_state_record(1) -> {dns_state,
+
+get_record(dns_state, 1) -> {dns_state,
     #{<<"sub">> => <<"p1">>},
     #{<<"p1">> => <<"sub">>},
-    #{<<"p1">> => [{1,2,3,4}, {192,168,192,1}]},
+    #{<<"p1">> => [{1, 2, 3, 4}, {192, 168, 192, 1}]},
     #{<<"p1">> => [
         {<<"_acme-challenge">>, <<"token">>},
         {<<"second">>, <<"value">>}
     ]}
 };
-
-dns_state_record(2) -> {dns_state,
+get_record(dns_state, 2) -> {dns_state,
     #{<<"sub">> => <<"p1">>},
     #{<<"p1">> => <<"sub">>},
-    #{<<"p1">> => [{1,2,3,4}, {192,168,192,1}]},
+    #{<<"p1">> => [{1, 2, 3, 4}, {192, 168, 192, 1}]},
     #{<<"p1">> => [
         {<<"_acme-challenge">>, <<"token">>, undefined},
         {<<"second">>, <<"value">>, undefined}
     ]}
-}.
+};
 
-token_record_1() -> {token,
+
+get_record(token, 1) -> {token,
     <<"secret">>,
     resource,
     <<"resource_id">>,
     {client, user, <<"client_id">>}
-}.
-
-token_record_2() -> {token,
+};
+get_record(token, 2) -> {token,
     <<"secret">>,
     resource,
     <<"resource_id">>,

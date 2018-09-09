@@ -76,6 +76,7 @@ add_group_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
 
     VerifyEndFun =
@@ -609,6 +610,8 @@ get_eff_group_privileges_test(Config) ->
     {ok, G4} = oz_test_utils:group_add_group(Config, G2, G4),
     {ok, G4} = oz_test_utils:group_add_group(Config, G3, G4),
     {ok, U3} = oz_test_utils:group_add_user(Config, G4, U3),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
     InitialPrivs = [?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],

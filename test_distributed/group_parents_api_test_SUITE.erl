@@ -114,7 +114,11 @@ create_parent_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
+    AllPrivs = oz_test_utils:all_group_privileges(Config),
+    AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
+
     VerifyFun = fun(ParentId, Data) ->
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
         {ok, Parent} = oz_test_utils:get_group(Config, ParentId),
         ExpName = maps:get(<<"name">>, Data),
         ExpType = maps:get(<<"type">>, Data, role),
@@ -123,11 +127,21 @@ create_parent_test(Config) ->
 
         {ok, Children} = oz_test_utils:group_get_children(Config, ParentId),
         ?assert(lists:member(Child, Children)),
+
+        ?assertEqual(#{Child => AllPrivs}, Parent#od_group.children),
+        ?assertEqual(#{Child => {AllPrivs, [{od_group, <<"self">>}]}}, Parent#od_group.eff_children),
+
+        ?assertEqual(#{}, Parent#od_group.users),
+        ?assertEqual(
+            #{
+                U1 => {AllPrivs, [{od_group, Child}]},
+                U2 => {AllPrivs, [{od_group, Child}]}
+            },
+            Parent#od_group.eff_users
+        ),
         true
     end,
 
-    AllPrivs = oz_test_utils:all_group_privileges(Config),
-    AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -164,13 +178,8 @@ create_parent_test(Config) ->
             expected_result = ?OK_ENV(fun(_, Data) ->
                 ExpName = maps:get(<<"name">>, Data),
                 ExpType = maps:get(<<"type">>, Data, role),
-                ?OK_MAP(#{
+                ?OK_MAP_CONTAINS(#{
                     <<"children">> => #{Child => AllPrivsBin},
-                    <<"effectiveChildren">> => #{Child => AllPrivsBin},
-                    <<"users">> => #{},
-                    <<"effectiveUsers">> => #{
-                        U1 => AllPrivsBin, U2 => AllPrivsBin
-                    },
                     <<"name">> => ExpName,
                     <<"parents">> => [],
                     <<"spaces">> => [],
@@ -592,7 +601,7 @@ get_eff_parent_details_test(Config) ->
                                 ),
                                 ?assertEqual(Id, GroupId)
                             end
-                    })
+                        })
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))

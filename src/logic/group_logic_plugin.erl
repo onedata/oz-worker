@@ -140,15 +140,14 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
         _ ->
             ok
     end,
-    % Group has been modified by adding relation, so it will need to be
-    % fetched again.
-    {ok, {not_fetched, GRI#gri{id = GroupId, aspect = instance, scope = private}}};
+    {ok, Group} = fetch_entity(GroupId),
+    {ok, resource, {GRI#gri{id = GroupId}, Group}};
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     Macaroon = maps:get(<<"token">>, Req#el_req.data),
     % In the future, privileges can be included in token
     Privileges = privileges:group_user(),
-    JoinGroupFun = fun(od_group, GroupId) -> 
+    JoinGroupFun = fun(od_group, GroupId) ->
         case Req#el_req.auth_hint of
             ?AS_USER(UserId) ->
                 entity_graph:add_relation(
@@ -169,16 +168,17 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
         end,
         GroupId
     end,
-    
     GroupId = token_logic:consume(Macaroon, JoinGroupFun),
-    
-    NewGRI = case lists:member(?GROUP_VIEW, Privileges) of
-        true ->
-            #gri{type = od_group, id = GroupId, aspect = instance, scope = private};
-        false ->
-            #gri{type = od_group, id = GroupId, aspect = instance, scope = protected}
-    end,
-    {ok, {not_fetched, NewGRI}};
+
+    NewGRI = #gri{type = od_group, id = GroupId, aspect = instance,
+        scope = case lists:member(?GROUP_VIEW, Privileges) of
+            true -> private;
+            false -> protected
+        end
+    },
+    {ok, Group} = fetch_entity(GroupId),
+    {ok, GroupData} = get(#el_req{gri = NewGRI}, Group),
+    {ok, resource, {NewGRI, GroupData}};
 
 create(Req = #el_req{gri = #gri{id = GrId, aspect = invite_user_token}}) ->
     {ok, Macaroon} = token_logic:create(
@@ -186,7 +186,7 @@ create(Req = #el_req{gri = #gri{id = GrId, aspect = invite_user_token}}) ->
         ?GROUP_INVITE_USER_TOKEN,
         {od_group, GrId}
     ),
-    {ok, {data, Macaroon}};
+    {ok, value, Macaroon};
 
 create(Req = #el_req{gri = #gri{id = GrId, aspect = invite_group_token}}) ->
     {ok, Macaroon} = token_logic:create(
@@ -194,7 +194,7 @@ create(Req = #el_req{gri = #gri{id = GrId, aspect = invite_group_token}}) ->
         ?GROUP_INVITE_GROUP_TOKEN,
         {od_group, GrId}
     ),
-    {ok, {data, Macaroon}};
+    {ok, value, Macaroon};
 
 create(#el_req{gri = #gri{id = GrId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:group_user()),
@@ -204,7 +204,9 @@ create(#el_req{gri = #gri{id = GrId, aspect = {user, UserId}}, data = Data}) ->
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, {not_fetched, NewGRI, ?THROUGH_GROUP(GrId)}};
+    {ok, User} = user_logic_plugin:fetch_entity(UserId),
+    {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
+    {ok, resource, {NewGRI, ?THROUGH_GROUP(GrId), UserData}};
 
 create(#el_req{gri = #gri{id = GrId, aspect = {child, ChGrId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:group_user()),
@@ -214,7 +216,9 @@ create(#el_req{gri = #gri{id = GrId, aspect = {child, ChGrId}}, data = Data}) ->
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = ChGrId, aspect = instance, scope = shared},
-    {ok, {not_fetched, NewGRI, ?THROUGH_GROUP(GrId)}}.
+    {ok, ChildGroup} = fetch_entity(ChGrId),
+    {ok, ChildGroupData} = get(#el_req{gri = NewGRI}, ChildGroup),
+    {ok, resource, {NewGRI, ?THROUGH_GROUP(GrId), ChildGroupData}}.
 
 
 %%--------------------------------------------------------------------
@@ -242,53 +246,51 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Group) ->
     }};
 
 get(#el_req{gri = #gri{aspect = oz_privileges}}, Group) ->
-    {ok, Group#od_group.oz_privileges};
+    {ok, entity_graph:get_oz_privileges(direct, Group)};
 
 get(#el_req{gri = #gri{aspect = eff_oz_privileges}}, Group) ->
-    {ok, Group#od_group.eff_oz_privileges};
-
-get(#el_req{gri = #gri{aspect = users}}, Group) ->
-    {ok, maps:keys(Group#od_group.users)};
-get(#el_req{gri = #gri{aspect = eff_users}}, Group) ->
-    {ok, maps:keys(Group#od_group.eff_users)};
-get(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, Group) ->
-    {ok, maps:get(UserId, Group#od_group.users)};
-get(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, Group) ->
-    {Privileges, _} = maps:get(UserId, Group#od_group.eff_users),
-    {ok, Privileges};
+    {ok, entity_graph:get_oz_privileges(effective, Group)};
 
 get(#el_req{gri = #gri{aspect = parents}}, Group) ->
-    {ok, Group#od_group.parents};
+    {ok, entity_graph:get_relations(direct, top_down, od_group, Group)};
 get(#el_req{gri = #gri{aspect = eff_parents}}, Group) ->
-    {ok, maps:keys(Group#od_group.eff_parents)};
+    {ok, entity_graph:get_relations(effective, top_down, od_group, Group)};
 
 get(#el_req{gri = #gri{aspect = children}}, Group) ->
-    {ok, maps:keys(Group#od_group.children)};
+    {ok, entity_graph:get_relations(direct, bottom_up, od_group, Group)};
 get(#el_req{gri = #gri{aspect = eff_children}}, Group) ->
-    {ok, maps:keys(Group#od_group.eff_children)};
+    {ok, entity_graph:get_relations(effective, bottom_up, od_group, Group)};
 get(#el_req{gri = #gri{aspect = {child_privileges, ChildId}}}, Group) ->
-    {ok, maps:get(ChildId, Group#od_group.children)};
+    {ok, entity_graph:get_privileges(direct, bottom_up, od_group, ChildId, Group)};
 get(#el_req{gri = #gri{aspect = {eff_child_privileges, ChildId}}}, Group) ->
-    {Privileges, _} = maps:get(ChildId, Group#od_group.eff_children),
-    {ok, Privileges};
+    {ok, entity_graph:get_privileges(effective, bottom_up, od_group, ChildId, Group)};
+
+get(#el_req{gri = #gri{aspect = users}}, Group) ->
+    {ok, entity_graph:get_relations(direct, bottom_up, od_user, Group)};
+get(#el_req{gri = #gri{aspect = eff_users}}, Group) ->
+    {ok, entity_graph:get_relations(effective, bottom_up, od_user, Group)};
+get(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, Group) ->
+    {ok, entity_graph:get_privileges(direct, bottom_up, od_user, UserId, Group)};
+get(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, Group) ->
+    {ok, entity_graph:get_privileges(effective, bottom_up, od_user, UserId, Group)};
 
 get(#el_req{gri = #gri{aspect = spaces}}, Group) ->
-    {ok, Group#od_group.spaces};
+    {ok, entity_graph:get_relations(direct, top_down, od_space, Group)};
 get(#el_req{gri = #gri{aspect = eff_spaces}}, Group) ->
-    {ok, maps:keys(Group#od_group.eff_spaces)};
+    {ok, entity_graph:get_relations(effective, top_down, od_space, Group)};
 
 get(#el_req{gri = #gri{aspect = eff_providers}}, Group) ->
-    {ok, maps:keys(Group#od_group.eff_providers)};
+    {ok, entity_graph:get_relations(effective, top_down, od_provider, Group)};
 
 get(#el_req{gri = #gri{aspect = handle_services}}, Group) ->
-    {ok, Group#od_group.handle_services};
+    {ok, entity_graph:get_relations(direct, top_down, od_handle_service, Group)};
 get(#el_req{gri = #gri{aspect = eff_handle_services}}, Group) ->
-    {ok, maps:keys(Group#od_group.eff_handle_services)};
+    {ok, entity_graph:get_relations(effective, top_down, od_handle_service, Group)};
 
 get(#el_req{gri = #gri{aspect = handles}}, Group) ->
-    {ok, Group#od_group.handles};
+    {ok, entity_graph:get_relations(direct, top_down, od_handle, Group)};
 get(#el_req{gri = #gri{aspect = eff_handles}}, Group) ->
-    {ok, maps:keys(Group#od_group.eff_handles)}.
+    {ok, entity_graph:get_relations(effective, top_down, od_handle, Group)}.
 
 
 %%--------------------------------------------------------------------
@@ -497,8 +499,10 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_tok
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, _}}}, _) ->
     user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_GROUPS_ADD_MEMBERS);
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {child, _}}}, _) ->
-    user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_GROUPS_ADD_MEMBERS);
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {child, ChildId}}, client = ?USER(UserId)}, Group) ->
+    (auth_by_privilege(Req, Group, ?GROUP_INVITE_GROUP) andalso
+        group_logic:has_eff_privilege(ChildId, UserId, ?GROUP_JOIN_GROUP)) orelse
+        user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_GROUPS_ADD_MEMBERS);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = list}}, _) ->
     user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_GROUPS_LIST);
@@ -620,7 +624,7 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {user, _}}}, Gro
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {child, _}}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_REMOVE_GROUP) orelse
 %%    auth_by_privilege(Req, Group, ?GROUP_REMOVE_CHILD) orelse % TODO VFS-3351
-        user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_GROUPS_REMOVE_MEMBERS);
+    user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_GROUPS_REMOVE_MEMBERS);
 
 authorize(_, _) ->
     false.

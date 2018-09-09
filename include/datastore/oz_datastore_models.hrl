@@ -103,17 +103,17 @@
     eff_oz_privileges = [] :: [privileges:oz_privilege()],
 
     % Direct relations to other entities
-    groups = [] :: entity_graph:relation(od_group:id()),
-    spaces = [] :: entity_graph:relation(od_space:id()),
-    handle_services = [] :: entity_graph:relation(od_handle_service:id()),
-    handles = [] :: entity_graph:relation(od_handle:id()),
+    groups = [] :: entity_graph:relations(od_group:id()),
+    spaces = [] :: entity_graph:relations(od_space:id()),
+    handle_services = [] :: entity_graph:relations(od_handle_service:id()),
+    handles = [] :: entity_graph:relations(od_handle:id()),
 
     % Effective relations to other entities
-    eff_groups = #{} :: entity_graph:eff_relation(od_group:id()),
-    eff_spaces = #{} :: entity_graph:eff_relation(od_space:id()),
-    eff_providers = #{} :: entity_graph:eff_relation(od_provider:id()),
-    eff_handle_services = #{} :: entity_graph:eff_relation(od_handle_service:id()),
-    eff_handles = #{} :: entity_graph:eff_relation(od_handle:id()),
+    eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
+    eff_spaces = #{} :: entity_graph:eff_relations(od_space:id()),
+    eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
+    eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
+    eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
 
     % Marks that the record's effective relations are not up to date.
     top_down_dirty = true :: boolean()
@@ -130,23 +130,23 @@
     eff_oz_privileges = [] :: [privileges:oz_privilege()],
 
     % Group graph related entities (direct and effective)
-    parents = [] :: entity_graph:relation(od_group:id()),
-    children = #{} :: entity_graph:relation_with_attrs(od_group:id(), [privileges:group_privilege()]),
-    eff_parents = #{} :: entity_graph:eff_relation(od_group:id()),
-    eff_children = #{} :: entity_graph:eff_relation_with_attrs(od_group:id(), [privileges:group_privilege()]),
+    parents = [] :: entity_graph:relations(od_group:id()),
+    children = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:group_privilege()]),
+    eff_parents = #{} :: entity_graph:eff_relations(od_group:id()),
+    eff_children = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:group_privilege()]),
 
     % Direct relations to other entities
-    users = #{} :: entity_graph:relation_with_attrs(od_user:id(), [privileges:group_privilege()]),
-    spaces = [] :: entity_graph:relation(od_space:id()),
-    handle_services = [] :: entity_graph:relation(od_handle_service:id()),
-    handles = [] :: entity_graph:relation(od_handle:id()),
+    users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:group_privilege()]),
+    spaces = [] :: entity_graph:relations(od_space:id()),
+    handle_services = [] :: entity_graph:relations(od_handle_service:id()),
+    handles = [] :: entity_graph:relations(od_handle:id()),
 
     % Effective relations to other entities
-    eff_users = #{} :: entity_graph:eff_relation_with_attrs(od_user:id(), [privileges:group_privilege()]),
-    eff_spaces = #{} :: entity_graph:eff_relation(od_space:id()),
-    eff_providers = #{} :: entity_graph:eff_relation(od_provider:id()),
-    eff_handle_services = #{} :: entity_graph:eff_relation(od_handle_service:id()),
-    eff_handles = #{} :: entity_graph:eff_relation(od_handle:id()),
+    eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:group_privilege()]),
+    eff_spaces = #{} :: entity_graph:eff_relations(od_space:id()),
+    eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
+    eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
+    eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
 
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.
@@ -159,18 +159,18 @@
     name = <<"">> :: od_space:name(),
 
     % Direct relations to other entities
-    users = #{} :: entity_graph:relation_with_attrs(od_user:id(), [privileges:space_privilege()]),
-    groups = #{} :: entity_graph:relation_with_attrs(od_group:id(), [privileges:space_privilege()]),
-    providers = #{} :: entity_graph:relation_with_attrs(od_provider:id(), Size :: pos_integer()),
+    users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
+    groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
+    providers = #{} :: entity_graph:relations_with_attrs(od_provider:id(), Size :: pos_integer()),
     % All shares that belong to this space.
-    shares = [] :: entity_graph:relation(od_share:id()),
+    shares = [] :: entity_graph:relations(od_share:id()),
 
     % Effective relations to other entities
-    eff_users = #{} :: entity_graph:eff_relation_with_attrs(od_user:id(), [privileges:space_privilege()]),
-    eff_groups = #{} :: entity_graph:eff_relation_with_attrs(od_group:id(), [privileges:space_privilege()]),
+    eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
+    eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
     % Effective providers contain only direct providers, but this is needed to
     % track changes in spaces and propagate them top-down.
-    eff_providers = #{} :: entity_graph:eff_relation(od_provider:id()),
+    eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
 
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.
@@ -205,11 +205,11 @@
     longitude = 0.0 :: float(),
 
     % Direct relations to other entities
-    spaces = #{} :: entity_graph:relation_with_attrs(od_space:id(), Size :: pos_integer()),
+    spaces = #{} :: entity_graph:relations_with_attrs(od_space:id(), Size :: pos_integer()),
 
     % Effective relations to other entities
-    eff_users = #{} :: entity_graph:eff_relation(od_user:id()),
-    eff_groups = #{} :: entity_graph:eff_relation(od_group:id()),
+    eff_users = #{} :: entity_graph:eff_relations(od_user:id()),
+    eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -221,13 +221,13 @@
     service_properties = #{} :: od_handle_service:service_properties(),
 
     % Direct relations to other entities
-    users = #{} :: entity_graph:relation_with_attrs(od_user:id(), [privileges:handle_service_privilege()]),
-    groups = #{} :: entity_graph:relation_with_attrs(od_group:id(), [privileges:handle_service_privilege()]),
-    handles = [] :: entity_graph:relation(od_handle:id()),
+    users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:handle_service_privilege()]),
+    groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:handle_service_privilege()]),
+    handles = [] :: entity_graph:relations(od_handle:id()),
 
     % Effective relations to other entities
-    eff_users = #{} :: entity_graph:eff_relation_with_attrs(od_user:id(), [privileges:handle_service_privilege()]),
-    eff_groups = #{} :: entity_graph:eff_relation_with_attrs(od_group:id(), [privileges:handle_service_privilege()]),
+    eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_service_privilege()]),
+    eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_service_privilege()]),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -242,12 +242,12 @@
     % Direct relations to other entities
     resource_id :: od_handle:resource_id() | undefined,
     handle_service :: od_handle_service:id() | undefined,
-    users = #{} :: entity_graph:relation_with_attrs(od_user:id(), [privileges:handle_privilege()]),
-    groups = #{} :: entity_graph:relation_with_attrs(od_group:id(), [privileges:handle_privilege()]),
+    users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:handle_privilege()]),
+    groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:handle_privilege()]),
 
     % Effective relations to other entities
-    eff_users = #{} :: entity_graph:eff_relation_with_attrs(od_user:id(), [privileges:handle_privilege()]),
-    eff_groups = #{} :: entity_graph:eff_relation_with_attrs(od_group:id(), [privileges:handle_privilege()]),
+    eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_privilege()]),
+    eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_privilege()]),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -297,6 +297,7 @@
 }).
 
 -record(entity_graph_state, {
+    refresh_in_progress = false :: boolean(),
     bottom_up_dirty = [] :: [{Priority :: integer(), EntityType :: atom(), EntityId :: binary()}],
     top_down_dirty = [] :: [{Priority :: integer(), EntityType :: atom(), EntityId :: binary()}]
 }).
