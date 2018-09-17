@@ -286,21 +286,21 @@ update(#el_req{gri = #gri{id = SpaceId, aspect = instance}, data = Data}) ->
     ok;
 
 update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {user_privileges, UserId}}}) ->
-    Privileges = maps:get(<<"privileges">>, Req#el_req.data),
-    Operation = maps:get(<<"operation">>, Req#el_req.data, set),
+    PrivsToGrant = maps:get(<<"grant">>, Req#el_req.data, []),
+    PrivsToRevoke = maps:get(<<"revoke">>, Req#el_req.data, []),
     entity_graph:update_relation(
         od_user, UserId,
         od_space, SpaceId,
-        {Operation, Privileges}
+        {PrivsToGrant, PrivsToRevoke}
     );
 
 update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {group_privileges, GroupId}}}) ->
-    Privileges = maps:get(<<"privileges">>, Req#el_req.data),
-    Operation = maps:get(<<"operation">>, Req#el_req.data, set),
+    PrivsToGrant = maps:get(<<"grant">>, Req#el_req.data, []),
+    PrivsToRevoke = maps:get(<<"revoke">>, Req#el_req.data, []),
     entity_graph:update_relation(
         od_group, GroupId,
         od_space, SpaceId,
-        {Operation, Privileges}
+        {PrivsToGrant, PrivsToRevoke}
     ).
 
 
@@ -495,7 +495,7 @@ authorize(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
-required_admin_privileges(Req=#el_req{operation = create, gri = #gri{aspect = instance}}) ->
+required_admin_privileges(Req = #el_req{operation = create, gri = #gri{aspect = instance}}) ->
     case Req#el_req.auth_hint of
         ?AS_USER(_) -> [?OZ_SPACES_CREATE, ?OZ_USERS_ADD_RELATIONSHIPS];
         ?AS_GROUP(_) -> [?OZ_SPACES_CREATE, ?OZ_GROUPS_ADD_RELATIONSHIPS];
@@ -509,7 +509,7 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = invite
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = invite_provider_token}}) ->
     [?OZ_SPACES_ADD_RELATIONSHIPS];
 
-required_admin_privileges(Req=#el_req{operation = create, gri = #gri{aspect = join}}) ->
+required_admin_privileges(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
     case Req#el_req.auth_hint of
         ?AS_USER(_) -> [?OZ_USERS_ADD_RELATIONSHIPS];
         ?AS_GROUP(_) -> [?OZ_GROUPS_ADD_RELATIONSHIPS]
@@ -566,7 +566,7 @@ required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {user,
     [?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_USERS_REMOVE_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {group, _}}}) ->
     [?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS];
-required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect =  {provider, _}}}) ->
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {provider, _}}}) ->
     [?OZ_SPACES_REMOVE_RELATIONSHIPS];
 
 required_admin_privileges(_) ->
@@ -641,11 +641,9 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
 
 validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}) ->
     #{
-        required => #{
-            <<"privileges">> => {list_of_atoms, privileges:space_privileges()}
-        },
-        optional => #{
-            <<"operation">> => {atom, [set, grant, revoke]}
+        at_least_one => #{
+            <<"grant">> => {list_of_atoms, privileges:space_privileges()},
+            <<"revoke">> => {list_of_atoms, privileges:space_privileges()}
         }
     };
 

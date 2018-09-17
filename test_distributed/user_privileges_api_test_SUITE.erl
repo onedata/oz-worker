@@ -65,8 +65,10 @@ get_oz_privileges_test(Config) ->
 
     InitialPrivs = [],
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
-        lists:foreach(fun (U) -> oz_test_utils:user_set_oz_privileges(Config, U, Operation, Privs) end, [User, User2])
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        lists:foreach(fun(U) ->
+            oz_test_utils:user_set_oz_privileges(Config, U, PrivsToGrant, PrivsToRevoke)
+        end, [User, User2])
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -99,7 +101,7 @@ get_oz_privileges_test(Config) ->
     },
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-         {user, User2}, ?OZ_VIEW_PRIVILEGES, true
+        {user, User2}, ?OZ_VIEW_PRIVILEGES, true
     ])).
 
 
@@ -124,8 +126,8 @@ update_oz_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:user_set_oz_privileges(Config, User, Operation, Privs)
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        oz_test_utils:user_set_oz_privileges(Config, User, PrivsToGrant, PrivsToRevoke)
     end,
     GetPrivsFun = fun() ->
         {ok, Privs} = oz_test_utils:user_get_oz_privileges(Config, User),
@@ -169,8 +171,8 @@ update_self_oz_privileges_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:user_set_oz_privileges(Config, User, Operation, Privs)
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        oz_test_utils:user_set_oz_privileges(Config, User, PrivsToGrant, PrivsToRevoke)
     end,
     GetPrivsFun = fun() ->
         {ok, Privs} = oz_test_utils:user_get_oz_privileges(Config, User),
@@ -199,8 +201,8 @@ delete_oz_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:user_set_oz_privileges(Config, User, Operation, Privs)
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        oz_test_utils:user_set_oz_privileges(Config, User, PrivsToGrant, PrivsToRevoke)
     end,
     GetPrivsFun = fun() ->
         {ok, Privs} = oz_test_utils:user_get_oz_privileges(Config, User),
@@ -243,8 +245,8 @@ delete_self_oz_privileges_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
 
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:user_set_oz_privileges(Config, User, Operation, Privs)
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        oz_test_utils:user_set_oz_privileges(Config, User, PrivsToGrant, PrivsToRevoke)
     end,
     GetPrivsFun = fun() ->
         {ok, Privs} = oz_test_utils:user_get_oz_privileges(Config, User),
@@ -331,37 +333,26 @@ set_oz_privs_fun(Config, User, User2) ->
         oz_test_utils:group_add_user(Config, Group, User2)
     end, [BottomGroup, MidGroup, TopGroup]),
 
-    fun(Operation, Privs) ->
-        % In case of SET and GRANT, randomly split privileges into four parts
+    fun(PrivsToGrant, PrivsToRevoke) ->
+        % In case of GRANT, randomly split privileges into four parts
         % and update the user and his groups with the privileges. His
         % eff_privileges should contain the sum of those. In case of revoke,
         % the privileges must be revoked for all 4 entities.
-        GroupsPrivsPartition = case Operation of
-            revoke ->
-                oz_test_utils:user_set_oz_privileges(
-                    Config, User, revoke, Privs
-                ),
-                [{BottomGroup, Privs}, {MidGroup, Privs}, {TopGroup, Privs}];
-            _ -> % Covers (set|grant)
-                #{
-                    1 := Privs1, 2 := Privs2, 3 := Privs3, 4 := Privs4
-                } = lists:foldl(
-                    fun(Privilege, AccMap) ->
-                        Index = rand:uniform(4),
-                        AccMap#{Index => [Privilege | maps:get(Index, AccMap)]}
-                    end, #{1 => [], 2 => [], 3 => [], 4 => []}, Privs
-                ),
-                oz_test_utils:user_set_oz_privileges(Config, User, Operation, Privs1),
-                oz_test_utils:user_set_oz_privileges(Config, User2, Operation, Privs1),
-                [{BottomGroup, Privs2}, {MidGroup, Privs3}, {TopGroup, Privs4}]
-        end,
-        lists:foreach(
-            fun({GroupId, Privileges}) ->
-                oz_test_utils:group_set_oz_privileges(
-                    Config, GroupId, Operation, Privileges
-                )
-            end, GroupsPrivsPartition
+        #{
+            1 := PrivsToGrant1, 2 := PrivsToGrant2, 3 := PrivsToGrant3, 4 := PrivsToGrant4
+        } = lists:foldl(
+            fun(Privilege, AccMap) ->
+                Index = rand:uniform(4),
+                AccMap#{Index => [Privilege | maps:get(Index, AccMap)]}
+            end, #{1 => [], 2 => [], 3 => [], 4 => []}, PrivsToGrant
         ),
+
+        oz_test_utils:user_set_oz_privileges(Config, User, PrivsToGrant1, PrivsToRevoke),
+        oz_test_utils:user_set_oz_privileges(Config, User2, PrivsToGrant1, PrivsToRevoke),
+        oz_test_utils:group_set_oz_privileges(Config, BottomGroup, PrivsToGrant2, PrivsToRevoke),
+        oz_test_utils:group_set_oz_privileges(Config, MidGroup, PrivsToGrant3, PrivsToRevoke),
+        oz_test_utils:group_set_oz_privileges(Config, TopGroup, PrivsToGrant4, PrivsToRevoke),
+
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
     end.
 

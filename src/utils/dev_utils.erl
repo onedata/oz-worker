@@ -160,7 +160,7 @@ set_up_test_entities(Users, Groups, Spaces) ->
             fun({UserId, Props}) ->
                 DefaultSpace = proplists:get_value(<<"default_space">>, Props),
                 space_logic:update_user_privileges(
-                    ?ROOT, DefaultSpace, UserId, set, privileges:space_admin()
+                    ?ROOT, DefaultSpace, UserId, privileges:space_admin(), []
                 )
             end, Users),
         ok

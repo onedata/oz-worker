@@ -245,23 +245,23 @@ update(Client, GroupId, Data) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates oz privileges of given group.
-%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_oz_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
-    Operation :: entity_graph:privileges_operation(),
-    Privs :: [privileges:oz_privilege()]) -> ok | {error, term()}.
-update_oz_privileges(Client, GroupId, Operation, Privs) when is_list(Privs) ->
+    PrivsToGrant :: [privileges:oz_privilege()],
+    PrivsToRevoke :: [privileges:oz_privilege()]) -> ok | {error, term()}.
+update_oz_privileges(Client, GroupId, PrivsToGrant, PrivsToRevoke) ->
     update_oz_privileges(Client, GroupId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
+        <<"grant">> => PrivsToGrant,
+        <<"revoke">> => PrivsToRevoke
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates oz privileges of given group.
-%% Privileges must be included in proper Data object, operation is optional.
+%% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_oz_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
@@ -1118,23 +1118,23 @@ get_eff_handle(Client, GroupId, HandleId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified user of given group.
-%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_user_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
-    UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
-    Privs :: [privileges:group_privilege()]) -> ok | {error, term()}.
-update_user_privileges(Client, GroupId, UserId, Operation, Privs) when is_list(Privs) ->
+    UserId :: od_user:id(), PrivsToGrant :: [privileges:group_privilege()],
+    PrivsToRevoke :: [privileges:group_privilege()]) -> ok | {error, term()}.
+update_user_privileges(Client, GroupId, UserId, PrivsToGrant, PrivsToRevoke) ->
     update_user_privileges(Client, GroupId, UserId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
+        <<"grant">> => PrivsToGrant,
+        <<"revoke">> => PrivsToRevoke
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified user of given group.
-%% Privileges must be included in proper Data object, operation is optional.
+%% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_user_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
@@ -1151,23 +1151,23 @@ update_user_privileges(Client, GroupId, UserId, Data) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified child of given group.
-%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_child_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
-    ChildGroupId :: od_group:id(), Operation :: entity_graph:privileges_operation(),
-    Privs :: [privileges:group_privilege()]) -> ok | {error, term()}.
-update_child_privileges(Client, GroupId, ChildGroupId, Operation, Privs) when is_list(Privs) ->
+    ChildGroupId :: od_group:id(), PrivsToGrant :: [privileges:group_privilege()],
+    PrivsToRevoke :: [privileges:group_privilege()]) -> ok | {error, term()}.
+update_child_privileges(Client, GroupId, ChildGroupId, PrivsToGrant, PrivsToRevoke) ->
     update_child_privileges(Client, GroupId, ChildGroupId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
+        <<"grant">> => PrivsToGrant,
+        <<"revoke">> => PrivsToRevoke
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified child of given group.
-%% Privileges must be included in proper Data object, operation is optional.
+%% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_child_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
@@ -1477,8 +1477,7 @@ normalize_name(Name) ->
 create_predefined_group(GroupId, Name, Privileges) ->
     case od_group:exists(GroupId) of
         {ok, true} ->
-            ?info("Predefined group '~s' already exists, "
-            "skipping.", [Name]),
+            ?info("Predefined group '~s' already exists, skipping.", [Name]),
             ok;
         {ok, false} ->
             NewGroup = #document{
@@ -1490,7 +1489,7 @@ create_predefined_group(GroupId, Name, Privileges) ->
                 }},
             case od_group:create(NewGroup) of
                 {ok, _} ->
-                    ok = update_oz_privileges(?ROOT, GroupId, set, Privileges),
+                    ok = update_oz_privileges(?ROOT, GroupId, Privileges, []),
                     ?info("Created predefined group '~s'", [Name]),
                     ok;
                 Other ->

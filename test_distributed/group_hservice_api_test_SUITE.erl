@@ -118,12 +118,12 @@ create_handle_service_test(Config) ->
     % Both users get the privilege, but U1 should be forbidden to create a
     % handle service on behalf of the group as he lacks the
     % ?GROUP_CREATE_HANDLE_SERVICE privilege.
-    oz_test_utils:user_set_oz_privileges(Config, U1, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    oz_test_utils:user_set_oz_privileges(Config, U2, grant, [
+    ], []),
+    oz_test_utils:user_set_oz_privileges(Config, U2, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
 
     AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
 

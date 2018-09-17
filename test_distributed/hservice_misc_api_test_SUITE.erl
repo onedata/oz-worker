@@ -64,13 +64,13 @@ all() ->
 create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U2, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U2, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U3, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U3, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
 
     VerifyFun = fun(HServiceId, ExpProperties) ->
         {ok, HService} = oz_test_utils:get_handle_service(Config, HServiceId),
@@ -178,9 +178,9 @@ list_test(Config) ->
     oz_test_utils:delete_all_entities(Config),
 
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     ExpHServices = lists:map(
@@ -343,9 +343,9 @@ get_test(Config) ->
 
 update_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -354,13 +354,13 @@ update_test(Config) ->
             Config, ?USER(U1), ?DOI_SERVICE
         ),
         oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
-            revoke, [?HANDLE_SERVICE_UPDATE]
+            [], [?HANDLE_SERVICE_UPDATE]
         ),
         {ok, U2} = oz_test_utils:handle_service_add_user(
             Config, HService, U2
         ),
         oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
-            set, [?HANDLE_SERVICE_UPDATE]
+            [?HANDLE_SERVICE_UPDATE], []
         ),
         #{hserviceId => HService}
     end,
@@ -431,9 +431,9 @@ update_test(Config) ->
 
 delete_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -442,13 +442,13 @@ delete_test(Config) ->
             Config, ?USER(U1), ?DOI_SERVICE
         ),
         oz_test_utils:handle_service_set_user_privileges(Config, HService, U1,
-            revoke, [?HANDLE_SERVICE_DELETE]
+            [], [?HANDLE_SERVICE_DELETE]
         ),
         {ok, U2} = oz_test_utils:handle_service_add_user(
             Config, HService, U2
         ),
         oz_test_utils:handle_service_set_user_privileges(Config, HService, U2,
-            set, [?HANDLE_SERVICE_DELETE]
+            [?HANDLE_SERVICE_DELETE], []
         ),
         #{hserviceId => HService}
     end,

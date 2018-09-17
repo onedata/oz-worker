@@ -59,9 +59,9 @@ list_test(Config) ->
     oz_test_utils:delete_all_entities(Config),
 
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, HService} = oz_test_utils:create_handle_service(
@@ -134,17 +134,17 @@ create_test(Config) ->
         Config, ?USER(U1), ?PID_SERVICE
     ),
     oz_test_utils:handle_service_set_user_privileges(
-        Config, PidHService, U1, revoke, [?HANDLE_SERVICE_REGISTER_HANDLE]
+        Config, PidHService, U1, [], [?HANDLE_SERVICE_REGISTER_HANDLE]
     ),
     {ok, U2} = oz_test_utils:handle_service_add_user(Config, PidHService, U2),
     oz_test_utils:handle_service_set_user_privileges(
-        Config, PidHService, U2, set, [?HANDLE_SERVICE_REGISTER_HANDLE]
+        Config, PidHService, U2, [?HANDLE_SERVICE_REGISTER_HANDLE], []
     ),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
-    oz_test_utils:space_set_user_privileges(Config, S1, U2, set,
-        oz_test_utils:all_space_privileges(Config)
+    oz_test_utils:space_set_user_privileges(Config, S1, U2,
+        oz_test_utils:all_space_privileges(Config), []
     ),
     {ok, ShareId} = oz_test_utils:create_share(
         Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
@@ -231,9 +231,9 @@ create_test(Config) ->
 
 get_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -254,13 +254,13 @@ get_test(Config) ->
     {ok, HandleId} = oz_test_utils:create_handle(
         Config, ?USER(U1), HandleDetails
     ),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, revoke, [
+    oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, [], [
         ?HANDLE_VIEW
     ]),
     {ok, U2} = oz_test_utils:handle_add_user(Config, HandleId, U2),
-    oz_test_utils:handle_set_user_privileges(Config, HandleId, U2, set, [
+    oz_test_utils:handle_set_user_privileges(Config, HandleId, U2, [
         ?HANDLE_VIEW
-    ]),
+    ], []),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -387,13 +387,13 @@ update_test(Config) ->
         ),
 
         {ok, U1} = oz_test_utils:handle_add_user(Config, HandleId, U1),
-        oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, set,
-            AllPrivs -- [?HANDLE_UPDATE]
+        oz_test_utils:handle_set_user_privileges(Config, HandleId, U1,
+            AllPrivs -- [?HANDLE_UPDATE], [?HANDLE_UPDATE]
         ),
         {ok, U2} = oz_test_utils:handle_add_user(Config, HandleId, U2),
-        oz_test_utils:handle_set_user_privileges(Config, HandleId, U2, set, [
-            ?HANDLE_UPDATE
-        ]),
+        oz_test_utils:handle_set_user_privileges(Config, HandleId, U2,
+            [?HANDLE_UPDATE], AllPrivs -- [?HANDLE_UPDATE]
+        ),
         #{handleId => HandleId}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{handleId := HandleId}, Data) ->
@@ -462,20 +462,20 @@ delete_test(Config) ->
         Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
     ),
 
-    AllPrivs = oz_test_utils:all_handle_privileges(Config),
+    AllHandlePrivs = oz_test_utils:all_handle_privileges(Config),
     EnvSetUpFun = fun() ->
         {ok, HandleId} = oz_test_utils:create_handle(
             Config, ?ROOT, ?HANDLE(HService, ShareId)
         ),
 
         {ok, U1} = oz_test_utils:handle_add_user(Config, HandleId, U1),
-        oz_test_utils:handle_set_user_privileges(Config, HandleId, U1, set,
-            AllPrivs -- [?HANDLE_DELETE]
+        oz_test_utils:handle_set_user_privileges(Config, HandleId, U1,
+            AllHandlePrivs -- [?HANDLE_DELETE], [?HANDLE_DELETE]
         ),
         {ok, U2} = oz_test_utils:handle_add_user(Config, HandleId, U2),
-        oz_test_utils:handle_set_user_privileges(Config, HandleId, U2, set, [
-            ?HANDLE_DELETE
-        ]),
+        oz_test_utils:handle_set_user_privileges(Config, HandleId, U2,
+            [?HANDLE_DELETE], AllHandlePrivs -- [?HANDLE_DELETE]
+        ),
         #{handleId => HandleId}
     end,
     DeleteEntityFun = fun(#{handleId := HandleId} = _Env) ->

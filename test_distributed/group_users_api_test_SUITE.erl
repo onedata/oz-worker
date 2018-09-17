@@ -136,9 +136,9 @@ create_user_invite_token_test(Config) ->
             path = [<<"/groups/">>, G1, <<"/users/token">>],
             expected_code = ?HTTP_200_OK,
             expected_body =
-                fun(#{<<"token">> := Token}) ->
-                    VerifyFun(Token)
-                end
+            fun(#{<<"token">> := Token}) ->
+                VerifyFun(Token)
+            end
         },
         logic_spec = #logic_spec{
             module = group_logic,
@@ -165,8 +165,9 @@ get_user_details_test(Config) ->
         name = ExpName,
         alias = ExpAlias
     }),
+    AllGroupPrivs = oz_test_utils:all_group_privileges(Config),
     {ok, U3} = oz_test_utils:group_add_user(Config, G1, U3),
-    oz_test_utils:group_set_user_privileges(Config, G1, U3, set, []),
+    oz_test_utils:group_set_user_privileges(Config, G1, U3, [], AllGroupPrivs),
 
     ExpDetails = #{
         <<"alias">> => ExpAlias,
@@ -231,7 +232,7 @@ add_user_test(Config) ->
     % group as a user
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
     {ok, SubGroup1} = oz_test_utils:group_add_group(Config, G1, SubGroup1),
-    oz_test_utils:group_set_group_privileges(Config, G1, SubGroup1, grant, [?GROUP_INVITE_USER]),
+    oz_test_utils:group_set_group_privileges(Config, G1, SubGroup1, [?GROUP_INVITE_USER], []),
 
     % EffectiveUserWithoutInvitePriv belongs to group G1 effectively via SubGroup2,
     % but without the effective privilege to INVITE_USER, so he should NOT be able
@@ -322,8 +323,8 @@ remove_user_test(Config) ->
         oz_test_utils:group_remove_user(Config, G1, User)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{userId := User} = _Env, _) ->
-            {ok, Users} = oz_test_utils:group_get_users(Config, G1),
-            ?assertEqual(lists:member(User, Users), not ShouldSucceed)
+        {ok, Users} = oz_test_utils:group_get_users(Config, G1),
+        ?assertEqual(lists:member(User, Users), not ShouldSucceed)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -376,9 +377,9 @@ list_user_privileges_test(Config) ->
     InitialPrivs = [?GROUP_VIEW],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
-    SetPrivsFun = fun(Operation, Privs) ->
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:group_set_user_privileges(
-            Config, G1, U3, Operation, Privs
+            Config, G1, U3, PrivsToGrant, PrivsToRevoke
         )
     end,
 
@@ -432,9 +433,9 @@ update_user_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:group_add_user(Config, G1, U3),
 
     AllPrivs = oz_test_utils:all_group_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:group_set_user_privileges(
-            Config, G1, U3, Operation, Privs
+            Config, G1, U3, PrivsToGrant, PrivsToRevoke
         )
     end,
     GetPrivsFun = fun() ->
@@ -484,14 +485,15 @@ list_eff_users_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
+    AllGroupPrivs = oz_test_utils:all_group_privileges(Config),
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
-    oz_test_utils:group_set_user_privileges(Config, G1, U1, set,
-        oz_test_utils:all_group_privileges(Config) -- [?GROUP_VIEW]
+    oz_test_utils:group_set_user_privileges(Config, G1, U1,
+        AllGroupPrivs -- [?GROUP_VIEW], [?GROUP_VIEW]
     ),
     {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
-        ?GROUP_VIEW
-    ]),
+    oz_test_utils:group_set_user_privileges(Config, G1, U2,
+        [?GROUP_VIEW], AllGroupPrivs -- [?GROUP_VIEW]
+    ),
 
     ExpUsers = [U1, U2, U3, U4, U5, U6],
     ApiTestSpec = #api_test_spec{
@@ -545,14 +547,15 @@ get_eff_user_details_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
+    AllGroupPrivs = oz_test_utils:all_group_privileges(Config),
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
-    oz_test_utils:group_set_user_privileges(Config, G1, U1, set,
-        oz_test_utils:all_group_privileges(Config) -- [?GROUP_VIEW]
+    oz_test_utils:group_set_user_privileges(Config, G1, U1,
+        AllGroupPrivs -- [?GROUP_VIEW], [?GROUP_VIEW]
     ),
     {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
-        ?GROUP_VIEW
-    ]),
+    oz_test_utils:group_set_user_privileges(Config, G1, U2,
+        [?GROUP_VIEW], AllGroupPrivs -- [?GROUP_VIEW]
+    ),
 
     lists:foreach(
         fun({UserId, UserDetails}) ->
@@ -591,13 +594,13 @@ get_eff_user_details_test(Config) ->
                     },
                     auth_hint = ?THROUGH_GROUP(G1),
                     expected_result = ?OK_MAP(UserDetails#{
-                            <<"login">> => maps:get(<<"alias">>, UserDetails),
-                            <<"gri">> => fun(EncodedGri) ->
-                                #gri{id = UId} = oz_test_utils:decode_gri(
-                                    Config, EncodedGri
-                                ),
-                                ?assertEqual(UId, UserId)
-                            end
+                        <<"login">> => maps:get(<<"alias">>, UserDetails),
+                        <<"gri">> => fun(EncodedGri) ->
+                            #gri{id = UId} = oz_test_utils:decode_gri(
+                                Config, EncodedGri
+                            ),
+                            ?assertEqual(UId, UserId)
+                        end
                     })
                 }
             },
@@ -647,51 +650,44 @@ list_eff_user_privileges_test(Config) ->
 
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
     {ok, U1} = oz_test_utils:group_add_user(Config, G4, U1),
-    oz_test_utils:group_set_user_privileges(Config, G4, U1, set,
-        AllPrivs -- [?GROUP_VIEW_PRIVILEGES]
+    oz_test_utils:group_set_user_privileges(Config, G4, U1,
+        AllPrivs, [?GROUP_VIEW_PRIVILEGES]
     ),
 
     {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
+    oz_test_utils:group_set_user_privileges(Config, G1, U2, [
         ?GROUP_VIEW_PRIVILEGES
-    ]),
+    ], []),
     {ok, U3} = oz_test_utils:group_add_user(Config, G1, U3),
-    oz_test_utils:group_set_user_privileges(Config, G1, U3, revoke, [
+    oz_test_utils:group_set_user_privileges(Config, G1, U3, [], [
         ?GROUP_VIEW_PRIVILEGES
     ]),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    SetPrivsFun = fun(Operation, Privs) ->
-        % In case of SET and GRANT, randomly split privileges into four
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        % In case GRANT, randomly split privileges into four
         % parts and update groups with the privileges. G3 eff_privileges
         % should contain the sum of those. In case of revoke, the
         % privileges must be revoked for all 3 entities.
-        {UserPrivs, PartitionScheme} =
-            case Operation of
-                revoke ->
-                    {Privs, [{G2, Privs}, {G4, Privs}]};
-                _ -> % Covers (set|grant)
-                    Parts = lists:foldl(
-                        fun(Privilege, AccMap) ->
-                            Index = rand:uniform(3),
-                            AccMap#{
-                                Index => [Privilege | maps:get(Index, AccMap)]
-                            }
-                        end, #{1 => [], 2 => [], 3 => []}, Privs),
-                    {maps:get(1, Parts), [
-                        {G2, maps:get(2, Parts)}, {G4, maps:get(3, Parts)}
-                    ]}
-            end,
+        #{
+            1 := PrivsToGrant1, 2 := PrivsToGrant2, 3 := PrivsToGrant3
+        } = lists:foldl(
+            fun(Privilege, AccMap) ->
+                Index = rand:uniform(3),
+                AccMap#{
+                    Index => [Privilege | maps:get(Index, AccMap)]
+                }
+            end, #{1 => [], 2 => [], 3 => []}, PrivsToGrant),
+
         oz_test_utils:group_set_user_privileges(
-            Config, G1, U1, Operation, UserPrivs
+            Config, G1, U1, PrivsToGrant1, PrivsToRevoke
         ),
-        lists:foreach(
-            fun({GroupId, Privileges}) ->
-                oz_test_utils:group_set_group_privileges(
-                    Config, G1, GroupId, Operation, Privileges
-                )
-            end, PartitionScheme
+        oz_test_utils:group_set_group_privileges(
+            Config, G1, G2, PrivsToGrant2, PrivsToRevoke
+        ),
+        oz_test_utils:group_set_group_privileges(
+            Config, G1, G4, PrivsToGrant3, PrivsToRevoke
         )
     end,
 
@@ -723,7 +719,7 @@ list_eff_user_privileges_test(Config) ->
             args = [client, G1, U1],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-        % TODO gs
+    % TODO gs
     },
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [

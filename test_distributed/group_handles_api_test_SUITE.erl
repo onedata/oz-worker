@@ -136,7 +136,7 @@ create_handle_test(Config) ->
     {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    AllPrivs = oz_test_utils:all_handle_privileges(Config),
+    AllHandlePrivs = oz_test_utils:all_handle_privileges(Config),
 
     ExpResourceType = <<"Share">>,
     VerifyFun = fun(HandleId) ->
@@ -146,12 +146,12 @@ create_handle_test(Config) ->
         ?assertEqual(ShareId, Handle#od_handle.resource_id),
         ?assertEqual(HService, Handle#od_handle.handle_service),
 
-        ?assertEqual(#{G1 => AllPrivs}, Handle#od_handle.groups),
-        ?assertEqual(#{G1 => {AllPrivs, [{od_handle, <<"self">>}]}}, Handle#od_handle.eff_groups),
+        ?assertEqual(#{G1 => AllHandlePrivs}, Handle#od_handle.groups),
+        ?assertEqual(#{G1 => {AllHandlePrivs, [{od_handle, <<"self">>}]}}, Handle#od_handle.eff_groups),
         ?assertEqual(#{}, Handle#od_handle.users),
         ?assertEqual(#{
-            U1 => {AllPrivs, [{od_group, G1}]},
-            U2 => {AllPrivs, [{od_group, G1}]}
+            U1 => {AllHandlePrivs, [{od_group, G1}]},
+            U2 => {AllHandlePrivs, [{od_group, G1}]}
         }, Handle#od_handle.eff_users),
         true
     end,

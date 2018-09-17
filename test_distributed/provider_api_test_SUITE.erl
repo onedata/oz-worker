@@ -625,9 +625,9 @@ update_test(Config) ->
 
     % Check that clients can't make request on behalf of other client
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_PROVIDERS_LIST
-    ]),
+    ], []),
 
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
@@ -757,7 +757,7 @@ delete_self_test(Config) ->
 
 create_provider_registration_token_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [?OZ_PROVIDERS_INVITE]),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_PROVIDERS_INVITE], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 

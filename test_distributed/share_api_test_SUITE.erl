@@ -124,9 +124,9 @@ create_test(Config) ->
     ),
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
-    oz_test_utils:space_set_user_privileges(Config, S1, U3, set, [
+    oz_test_utils:space_set_user_privileges(Config, S1, U3, [
         ?SPACE_MANAGE_SHARES
-    ]),
+    ], []),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     ExpShareDetails = #od_share{
