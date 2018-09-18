@@ -244,12 +244,21 @@ upgrade_record(3, Space) ->
         _BottomUpDirty
 
     } = Space,
+
+    % These new privileges are given to all users and groups, because before
+    % introduction they all were allowed to perform related operations
+    NewPrivileges = [
+        ?SPACE_READ_DATA,
+        ?SPACE_MANAGE_INDEXES, ?SPACE_QUERY_INDEXES,
+        ?SPACE_VIEW_STATISTICS
+    ],
+
     TranslatePrivileges = fun(Privileges) ->
-        lists:flatten(lists:map(fun
+        privileges:union(NewPrivileges, lists:flatten(lists:map(fun
             (space_view) -> [?SPACE_VIEW, ?SPACE_VIEW_PRIVILEGES];
             (space_invite_group) -> [?SPACE_ADD_GROUP];
             (Other) -> Other
-        end, Privileges))
+        end, Privileges)))
     end,
 
     TranslateField = fun(Field) ->

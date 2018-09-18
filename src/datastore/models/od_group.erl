@@ -436,7 +436,7 @@ upgrade_record(4, Group) ->
     } = Group,
 
     TranslatePrivileges = fun(Privileges) ->
-        lists:usort(lists:flatten(lists:map(fun
+        privileges:from_list(lists:flatten(lists:map(fun
             (group_invite_group) -> ?GROUP_ADD_CHILD;
             (group_remove_group) -> ?GROUP_REMOVE_CHILD;
             (group_join_group) -> ?GROUP_ADD_PARENT;

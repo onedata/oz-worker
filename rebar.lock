@@ -35,7 +35,7 @@
   2},
  {<<"ctool">>,
   {git,"ssh://git@git.plgrid.pl:7999/vfs/ctool.git",
-       {ref,"c7e8d6a31599352a5fc2202e8746f75a18c1bdf2"}},
+       {ref,"d9a0e61fb4a7ef2f153ca63e191c6b50d5d8d544"}},
   0},
  {<<"dns">>,
   {git,"git://github.com/aetrion/dns_erlang.git",
