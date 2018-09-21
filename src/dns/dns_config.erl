@@ -18,6 +18,7 @@
 
 -export([build_config/0, insert_config/1]).
 -export([build_domain/2, build_fqdn_from_subdomain/1]).
+-export([get_ns_hosts/0]).
 
 -type domain() :: binary().
 -type domain_entry() :: {domain(), [inet:ip4_address()]}.
@@ -85,6 +86,19 @@ build_config() ->
         build_txt_records() ++
         build_mx_records() ++
         build_cname_records()]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns full names of the nsX. subdomains and corresponding IPs.
+%% Used by Onepanel to determine recommended DNS config.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_ns_hosts() -> [{Name :: binary(), IP :: inet:ip4_address()}].
+get_ns_hosts() ->
+    OneZoneIPs = node_manager:get_cluster_ips(),
+    OnezoneNS = build_onezone_ns_entries(OneZoneIPs),
+    [{Name, IP} || {Name, [IP]} <- OnezoneNS].
 
 
 %%%===================================================================

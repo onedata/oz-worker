@@ -6,6 +6,16 @@ CHANGELOG
 
 ### 18.02.0-rc11
 
+* VFS-4837 Fix error in removal of nonexistent TXT record
+* VFS-4769 Optimize datastore calls
+* VFS-4571 Remove cluster_worker config from app.config (use defaults)
+* VFS-4571 Modify cluster worker config for better couchbase performance
+* VFS-4571 Slightly refactor entity_graph code, lower the number of processes waiting on entity graph lock
+* VFS-3858 Properly calculate effective relations of dirty entity after a relation is deleted
+* VFS-3858 Use entity_graph relation logic in provider Graph Sync translator
+* VFS-3858 Use self keyword with entity type rather that direct atom to express direct intermediary, so as not to break record structure
+* VFS-4696 Allowed for duplicate provider domains
+* VFS-3858 Rework entity graph for better performance   * Do not wait for full graph reconciliation after entities create / update   * Calculate approximate effective reltion/permissions when entity is dirty rather then return cached value   * Slightly refactor Graph Sync and Entity Logic, introduce different returned values for create operations   * Adjust tests to new Entity Graph behaviour
 * VFS-4055 Update bp_tree
 * VFS-4633 Tokens are not consumed upon failed operation
 
