@@ -64,28 +64,28 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = instance}
     }},
-    %% List group's Onezone privileges
+    %% List group's admin privileges
     %% This operation requires one of the following privileges:
     %% - oz_view_privileges
     {<<"/groups/:id/privileges">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = oz_privileges}
     }},
-    %% Remove group's Onezone privileges
+    %% Remove group's admin privileges
     %% This operation requires one of the following privileges:
     %% - oz_set_privileges
     {<<"/groups/:id/privileges">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = oz_privileges}
     }},
-    %% Set group's Onezone privileges
+    %% Update group's admin privileges
     %% This operation requires one of the following privileges:
     %% - oz_set_privileges
     {<<"/groups/:id/privileges">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = oz_privileges}
     }},
-    %% List group's effective privileges
+    %% List group's effective admin privileges
     %% This operation requires one of the following privileges:
     %% - oz_view_privileges
     {<<"/groups/:id/effective_privileges">>, #rest_req{
@@ -142,7 +142,7 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}
     }},
-    %% Set user's group privileges
+    %% Update user's group privileges
     %% This operation requires one of the following privileges:
     %% - group_set_privileges
     %% - oz_groups_set_privileges
@@ -167,7 +167,7 @@ routes() -> [
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
-    %% List user group privileges
+    %% List effective user's group privileges
     %% This operation requires one of the following privileges:
     %% - group_view_privileges
     %% - oz_groups_view_privileges
@@ -245,7 +245,7 @@ routes() -> [
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = child},
         b_auth_hint = ?AS_USER(?CLIENT_ID)
     }},
-    %% Get subgroups
+    %% Get child groups
     %% This operation requires one of the following privileges:
     %% - group_view
     %% - oz_groups_list_relationships
@@ -268,7 +268,7 @@ routes() -> [
         method = 'PUT',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {child, ?BINDING(cid)}}
     }},
-    %% Get subgroup details
+    %% Get child group details
     %% This operation requires one of the following privileges:
     %% - group_view
     %% - oz_groups_view
@@ -277,7 +277,7 @@ routes() -> [
         b_gri = #b_gri{type = od_group, id = ?BINDING(cid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
-    %% Remove subgroup
+    %% Remove child group
     %% This operation requires one of the following privileges:
     %% - group_remove_child
     %% - oz_groups_remove_relationships
@@ -285,7 +285,7 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {child, ?BINDING(cid)}}
     }},
-    %% List child group privileges
+    %% List child's group privileges
     %% This operation requires one of the following privileges:
     %% - group_view_privileges
     %% - oz_groups_view_privileges
@@ -293,7 +293,7 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {child_privileges, ?BINDING(cid)}}
     }},
-    %% Set subgroup privileges
+    %% Update child's group privileges
     %% This operation requires one of the following privileges:
     %% - group_set_privileges
     %% - oz_groups_set_privileges
@@ -318,7 +318,7 @@ routes() -> [
         b_gri = #b_gri{type = od_group, id = ?BINDING(cid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
-    %% List effective child group privileges
+    %% List effective child's group privileges
     %% This operation requires one of the following privileges:
     %% - group_view_privileges
     %% - oz_groups_view_privileges

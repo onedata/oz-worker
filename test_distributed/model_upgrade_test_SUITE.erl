@@ -728,12 +728,24 @@ get_record(od_space, 3) -> #od_space{
 get_record(od_space, 4) -> #od_space{
     name = <<"name">>,
     users = #{
-        <<"user1">> => [?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_VIEW_PRIVILEGES, ?SPACE_REMOVE_GROUP],
-        <<"user2">> => [?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER]
+        <<"user1">> => privileges:from_list([
+            ?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_VIEW_PRIVILEGES, ?SPACE_REMOVE_GROUP,
+            ?SPACE_READ_DATA, ?SPACE_MANAGE_INDEXES, ?SPACE_QUERY_INDEXES, ?SPACE_VIEW_STATISTICS
+        ]),
+        <<"user2">> => privileges:from_list([
+            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER,
+            ?SPACE_READ_DATA, ?SPACE_MANAGE_INDEXES, ?SPACE_QUERY_INDEXES, ?SPACE_VIEW_STATISTICS
+        ])
     },
     groups = #{
-        <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER],
-        <<"group2">> => [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP]
+        <<"group1">> => privileges:from_list([
+            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER,
+            ?SPACE_READ_DATA, ?SPACE_MANAGE_INDEXES, ?SPACE_QUERY_INDEXES, ?SPACE_VIEW_STATISTICS
+        ]),
+        <<"group2">> => privileges:from_list([
+            ?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+            ?SPACE_READ_DATA, ?SPACE_MANAGE_INDEXES, ?SPACE_QUERY_INDEXES, ?SPACE_VIEW_STATISTICS
+        ])
     },
     providers = #{
         <<"prov1">> => 1000,
@@ -749,7 +761,6 @@ get_record(od_space, 4) -> #od_space{
     top_down_dirty = true,
     bottom_up_dirty = true
 };
-
 
 get_record(od_share, 1) -> {od_share,
     <<"name">>,

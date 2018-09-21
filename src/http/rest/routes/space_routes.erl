@@ -106,7 +106,7 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {user, ?BINDING(uid)}}
     }},
-    %% List user privileges to space
+    %% List user's space privileges
     %% This operation requires one of the following privileges:
     %% - space_view_privileges
     %% - oz_spaces_view_privileges
@@ -114,7 +114,7 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}
     }},
-    %% Set user privileges to space
+    %% Update user's space privileges
     %% This operation requires one of the following privileges:
     %% - space_set_privileges
     %% - oz_set_privileges
@@ -139,7 +139,7 @@ routes() -> [
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_SPACE(?BINDING(id))
     }},
-    %% List effective user privileges to space
+    %% List effective user's space privileges
     %% This operation requires one of the following privileges:
     %% - space_view_privileges
     %% - oz_spaces_view_privileges
@@ -187,7 +187,7 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {group, ?BINDING(gid)}}
     }},
-    %% List group privileges to space
+    %% List group's space privileges
     %% This operation requires one of the following privileges:
     %% - space_view_privileges
     %% - oz_spaces_view_privileges
@@ -195,7 +195,7 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {group_privileges, ?BINDING(gid)}}
     }},
-    %% Set group privileges to space
+    %% Update group privileges to space
     %% This operation requires one of the following privileges:
     %% - space_set_privileges
     %% - oz_spaces_set_privileges
@@ -220,7 +220,7 @@ routes() -> [
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_SPACE(?BINDING(id))
     }},
-    %% List effective group privileges to space
+    %% List effective group's space privileges
     %% This operation requires one of the following privileges:
     %% - space_view_privileges
     %% - oz_spaces_view_privileges

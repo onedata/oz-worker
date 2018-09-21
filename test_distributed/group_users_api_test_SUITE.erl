@@ -135,8 +135,7 @@ create_user_invite_token_test(Config) ->
             method = post,
             path = [<<"/groups/">>, G1, <<"/users/token">>],
             expected_code = ?HTTP_200_OK,
-            expected_body =
-            fun(#{<<"token">> := Token}) ->
+            expected_body = fun(#{<<"token">> := Token}) ->
                 VerifyFun(Token)
             end
         },
@@ -719,7 +718,7 @@ list_eff_user_privileges_test(Config) ->
             args = [client, G1, U1],
             expected_result = ?OK_LIST(InitialPrivs)
         }
-    % TODO gs
+        % TODO gs
     },
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [

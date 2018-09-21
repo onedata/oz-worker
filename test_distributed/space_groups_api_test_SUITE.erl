@@ -366,7 +366,7 @@ get_group_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:space_add_group(Config, S1, G1),
 
     AllPrivs = oz_test_utils:all_space_privileges(Config),
-    InitialPrivs = [?SPACE_VIEW, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS],
+    InitialPrivs = privileges:space_user(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:space_set_group_privileges(
@@ -636,7 +636,7 @@ get_eff_group_privileges_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = oz_test_utils:all_space_privileges(Config),
-    InitialPrivs = [?SPACE_VIEW, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS],
+    InitialPrivs = privileges:space_user(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->

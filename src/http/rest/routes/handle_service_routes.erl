@@ -99,7 +99,7 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = {user, ?BINDING(uid)}}
     }},
-    %% List handle service user privileges
+    %% List user's handle service privileges
     %% This operation requires one of the following privileges:
     %% - handle_service_view
     %% - oz_handle_services_view_privileges
@@ -107,7 +107,7 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}
     }},
-    %% Set handle service user privileges
+    %% Update user's handle service privileges
     %% This operation requires one of the following privileges:
     %% - handle_service_update
     %% - oz_handle_services_set_privileges
@@ -132,7 +132,7 @@ routes() -> [
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_HANDLE_SERVICE(?BINDING(id))
     }},
-    %% List effective handle service user privileges
+    %% List effective user's handle service privileges
     %% This operation requires one of the following privileges:
     %% - handle_service_view
     %% - oz_handle_services_view_privileges
@@ -175,7 +175,7 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = {group, ?BINDING(gid)}}
     }},
-    %% List handle service group privileges
+    %% List group's handle service privileges
     %% This operation requires one of the following privileges:
     %% - handle_service_view
     %% - oz_handle_services_view_privileges
@@ -183,7 +183,7 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = {group_privileges, ?BINDING(gid)}}
     }},
-    %% Set handle service groups privileges
+    %% Update group's handle service privileges
     %% This operation requires one of the following privileges:
     %% - handle_service_update
     %% - oz_handle_services_set_privileges
@@ -208,7 +208,7 @@ routes() -> [
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_HANDLE_SERVICE(?BINDING(id))
     }},
-    %% Get effective handle service group privileges
+    %% List effective group's handle service privileges
     %% This operation requires one of the following privileges:
     %% - handle_service_view
     %% - oz_handle_services_view_privileges
