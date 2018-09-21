@@ -277,7 +277,9 @@ privileges_in_a_big_space_performance_base(Config) ->
             _ -> lists:sublist(SpacePrivileges, PrivsNum - 2 + (Seq rem 3))
         end,
         utils:pforeach(fun(User) ->
-            oz_test_utils:space_set_user_privileges(Config, Space, User, set, NewPrivileges)
+            oz_test_utils:space_set_user_privileges(
+                Config, Space, User, NewPrivileges, SpacePrivileges -- NewPrivileges
+            )
         end, Users)
     end, lists:seq(1, UpdateNum)),
     ?end_measurement(privileges_update_time),

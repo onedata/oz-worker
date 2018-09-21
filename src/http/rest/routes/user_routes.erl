@@ -48,28 +48,28 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_user, id = ?BINDING(id), aspect = instance}
     }},
-    %% List user Onezone privileges
+    %% List user admin privileges
     %% This operation requires one of the following privileges:
     %% - oz_view_privileges
     {<<"/users/:id/privileges">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_user, id = ?BINDING(id), aspect = oz_privileges}
     }},
-    %% Remove user's Onezone privileges
+    %% Remove user's admin privileges
     %% This operation requires one of the following privileges:
     %% - oz_set_privileges
     {<<"/users/:id/privileges">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_user, id = ?BINDING(id), aspect = oz_privileges}
     }},
-    %% Set user's Onezone privileges
+    %% Update user's admin privileges
     %% This operation requires one of the following privileges:
     %% - oz_set_privileges
     {<<"/users/:id/privileges">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_user, id = ?BINDING(id), aspect = oz_privileges}
     }},
-    %% List user's effective Onezone privileges
+    %% List user's effective admin privileges
     %% This operation requires one of the following privileges:
     %% - oz_view_privileges
     {<<"/users/:id/effective_privileges">>, #rest_req{
@@ -106,14 +106,14 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = oz_privileges}
     }},
-    %% Remove current user privileges
+    %% Remove current user's admin privileges
     %% This operation requires one of the following privileges:
     %% - oz_set_privileges
     {<<"/user/privileges">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = oz_privileges}
     }},
-    %% Set current user privileges
+    %% Update current user's admin privileges
     %% This operation requires one of the following privileges:
     %% - oz_set_privileges
     {<<"/user/privileges">>, #rest_req{

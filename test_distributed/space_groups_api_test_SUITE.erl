@@ -366,11 +366,11 @@ get_group_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:space_add_group(Config, S1, G1),
 
     AllPrivs = oz_test_utils:all_space_privileges(Config),
-    InitialPrivs = [?SPACE_VIEW, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS],
+    InitialPrivs = privileges:space_user(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
-    SetPrivsFun = fun(Operation, Privs) ->
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:space_set_group_privileges(
-            Config, S1, G1, Operation, Privs
+            Config, S1, G1, PrivsToGrant, PrivsToRevoke
         )
     end,
 
@@ -426,9 +426,9 @@ update_group_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:space_add_group(Config, S1, G1),
 
     AllPrivs = oz_test_utils:all_space_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:space_set_group_privileges(
-            Config, S1, G1, Operation, Privs
+            Config, S1, G1, PrivsToGrant, PrivsToRevoke
         )
     end,
     GetPrivsFun = fun() ->
@@ -636,35 +636,24 @@ get_eff_group_privileges_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = oz_test_utils:all_space_privileges(Config),
-    InitialPrivs = [?SPACE_VIEW, ?SPACE_WRITE_DATA, ?SPACE_VIEW_TRANSFERS],
+    InitialPrivs = privileges:space_user(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
-    SetPrivsFun = fun(Operation, Privs) ->
-        % In case of SET and GRANT, randomly split privileges into four
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        % In case of GRANT, randomly split privileges into four
         % parts and update groups with the privileges. G3 eff_privileges
         % should contain the sum of those. In case of revoke, the
         % privileges must be revoked for all 3 entities.
-        PartitionScheme =
-            case Operation of
-                revoke ->
-                    [{G1, Privs}, {G2, Privs}];
-                _ -> % Covers (set|grant)
-                    #{1 := Privs1, 2 := Privs2} = lists:foldl(
-                        fun(Privilege, AccMap) ->
-                            Index = rand:uniform(2),
-                            AccMap#{
-                                Index => [Privilege | maps:get(Index, AccMap)]
-                            }
-                        end, #{1 => [], 2 => []}, Privs),
-                    [{G1, Privs1}, {G2, Privs2}]
-            end,
-        lists:foreach(
-            fun({GroupId, Privileges}) ->
-                oz_test_utils:space_set_group_privileges(
-                    Config, S1, GroupId, Operation, Privileges
-                )
-            end, PartitionScheme
-        )
+        #{1 := PrivsToGrant1, 2 := PrivsToGrant2} = lists:foldl(
+            fun(Privilege, AccMap) ->
+                Index = rand:uniform(2),
+                AccMap#{
+                    Index => [Privilege | maps:get(Index, AccMap)]
+                }
+            end, #{1 => [], 2 => []}, PrivsToGrant),
+
+        oz_test_utils:space_set_group_privileges(Config, S1, G1, PrivsToGrant1, PrivsToRevoke),
+        oz_test_utils:space_set_group_privileges(Config, S1, G2, PrivsToGrant2, PrivsToRevoke)
     end,
 
     ApiTestSpec = #api_test_spec{

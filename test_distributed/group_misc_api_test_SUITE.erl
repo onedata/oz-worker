@@ -210,13 +210,13 @@ get_test(Config) ->
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1),
         #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
     ),
-    oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
+    oz_test_utils:group_set_user_privileges(Config, G1, U1, [], [
         ?GROUP_VIEW
     ]),
     oz_test_utils:group_add_user(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
+    oz_test_utils:group_set_user_privileges(Config, G1, U2, [
         ?GROUP_VIEW
-    ]),
+    ], []),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -367,13 +367,13 @@ update_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-        oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
+        oz_test_utils:group_set_user_privileges(Config, G1, U1, [], [
             ?GROUP_UPDATE
         ]),
         oz_test_utils:group_add_user(Config, G1, U2),
-        oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
+        oz_test_utils:group_set_user_privileges(Config, G1, U2, [
             ?GROUP_UPDATE
-        ]),
+        ], []),
         #{groupId => G1}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId} = _Env, Data) ->
@@ -442,13 +442,13 @@ delete_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-        oz_test_utils:group_set_user_privileges(Config, G1, U1, revoke, [
+        oz_test_utils:group_set_user_privileges(Config, G1, U1, [], [
             ?GROUP_DELETE
         ]),
         oz_test_utils:group_add_user(Config, G1, U2),
-        oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
+        oz_test_utils:group_set_user_privileges(Config, G1, U2, [
             ?GROUP_DELETE
-        ]),
+        ], []),
         #{groupId => G1}
     end,
     DeleteEntityFun = fun(#{groupId := GroupId} = _Env) ->
@@ -495,12 +495,12 @@ delete_test(Config) ->
 
 protected_group_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, GroupdId} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
-    oz_test_utils:group_set_user_privileges(Config, GroupdId, U1, set, [
+    {ok, GroupId} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    oz_test_utils:group_set_user_privileges(Config, GroupId, U1, [
         ?GROUP_DELETE
-    ]),
-    oz_test_utils:mark_group_protected(Config, GroupdId),
-    
+    ], []),
+    oz_test_utils:mark_group_protected(Config, GroupId),
+
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -511,27 +511,27 @@ protected_group_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = delete,
-            path = [<<"/groups/">>, GroupdId],
+            path = [<<"/groups/">>, GroupId],
             expected_code = ?HTTP_403_FORBIDDEN
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = delete,
-            args = [client, GroupdId],
+            args = [client, GroupId],
             expected_result = ?ERROR_REASON(?ERROR_PROTECTED_GROUP)
         },
         gs_spec = #gs_spec{
             operation = delete,
-            gri = #gri{type = od_group, id = GroupdId, aspect = instance},
+            gri = #gri{type = od_group, id = GroupId, aspect = instance},
             expected_result = ?ERROR_REASON(?ERROR_PROTECTED_GROUP)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-    
+
     % Verify that group exists
     {ok, Groups} = oz_test_utils:list_groups(Config),
-    ?assertEqual(lists:member(GroupdId, Groups), true).
-    
+    ?assertEqual(lists:member(GroupId, Groups), true).
+
 
 get_oz_privileges_test(Config) ->
     % User whose privileges will be changing during test run and as such
@@ -544,8 +544,8 @@ get_oz_privileges_test(Config) ->
 
     InitialPrivs = [],
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:group_set_oz_privileges(Config, G1, Operation, Privs)
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        oz_test_utils:group_set_oz_privileges(Config, G1, PrivsToGrant, PrivsToRevoke)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -591,8 +591,8 @@ update_oz_privileges_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:group_set_oz_privileges(Config, G1, Operation, Privs),
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        oz_test_utils:group_set_oz_privileges(Config, G1, PrivsToGrant, PrivsToRevoke),
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
     end,
     GetPrivsFun = fun() ->
@@ -638,8 +638,8 @@ delete_oz_privileges_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
-        oz_test_utils:group_set_oz_privileges(Config, G1, Operation, Privs),
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        oz_test_utils:group_set_oz_privileges(Config, G1, PrivsToGrant, PrivsToRevoke),
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
     end,
     GetPrivsFun = fun() ->
@@ -692,32 +692,23 @@ get_eff_oz_privileges_test(Config) ->
 
     InitialPrivs = [],
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
-        % In case of SET and GRANT, randomly split privileges into four
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        % In case of GRANT, randomly split privileges into four
         % parts and update groups with the privileges. G3 eff_privileges
         % should contain the sum of those. In case of revoke, the
         % privileges must be revoked for all 3 entities.
-        PartitionScheme =
-            case Operation of
-                revoke ->
-                    [{Bottom, Privs}, {Mid, Privs}, {Top, Privs}];
-                _ -> % Covers (set|grant)
-                    #{1 := Privs1, 2 := Privs2, 3 := Privs3} = lists:foldl(
-                        fun(Privilege, AccMap) ->
-                            Index = rand:uniform(3),
-                            AccMap#{
-                                Index => [Privilege | maps:get(Index, AccMap)]
-                            }
-                        end, #{1 => [], 2 => [], 3 => []}, Privs),
-                    [{Bottom, Privs1}, {Mid, Privs2}, {Top, Privs3}]
-            end,
-        lists:foreach(
-            fun({GroupId, Privileges}) ->
-                oz_test_utils:group_set_oz_privileges(
-                    Config, GroupId, Operation, Privileges
-                )
-            end, PartitionScheme
-        ),
+        #{1 := PrivsToGrant1, 2 := PrivsToGrant2, 3 := PrivsToGrant3} = lists:foldl(
+            fun(Privilege, AccMap) ->
+                Index = rand:uniform(3),
+                AccMap#{
+                    Index => [Privilege | maps:get(Index, AccMap)]
+                }
+            end, #{1 => [], 2 => [], 3 => []}, PrivsToGrant),
+
+        oz_test_utils:group_set_oz_privileges(Config, Bottom, PrivsToGrant1, PrivsToRevoke),
+        oz_test_utils:group_set_oz_privileges(Config, Bottom, PrivsToGrant2, PrivsToRevoke),
+        oz_test_utils:group_set_oz_privileges(Config, Bottom, PrivsToGrant3, PrivsToRevoke),
+
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
     end,
 

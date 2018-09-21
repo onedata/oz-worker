@@ -395,23 +395,23 @@ update(Client, UserId, Data) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates oz privileges of given user.
-%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_oz_privileges(Client :: entity_logic:client(), UserId :: od_user:id(),
-    Operation :: entity_graph:privileges_operation(),
-    Privs :: [privileges:oz_privilege()]) -> ok | {error, term()}.
-update_oz_privileges(Client, UserId, Operation, Privs) when is_list(Privs) ->
+    PrivsToGrant :: [privileges:oz_privilege()],
+    PrivsToRevoke :: [privileges:oz_privilege()]) -> ok | {error, term()}.
+update_oz_privileges(Client, UserId, PrivsToGrant, PrivsToRevoke) ->
     update_oz_privileges(Client, UserId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
+        <<"grant">> => PrivsToGrant,
+        <<"revoke">> => PrivsToRevoke
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates oz privileges of given user.
-%% Privileges must be included in proper Data object, operation is optional.
+%% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_oz_privileges(Client :: entity_logic:client(), UserId :: od_user:id(),

@@ -473,23 +473,23 @@ get_handle(Client, HServiceId, HandleId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified user of given handle_service.
-%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_user_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
-    UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
-    Privs :: [privileges:handle_service_privilege()]) -> ok | {error, term()}.
-update_user_privileges(Client, HServiceId, UserId, Operation, Privs) when is_list(Privs) ->
+    UserId :: od_user:id(), PrivsToGrant :: [privileges:handle_service_privilege()],
+    PrivsToRevoke :: [privileges:handle_service_privilege()]) -> ok | {error, term()}.
+update_user_privileges(Client, HServiceId, UserId, PrivsToGrant, PrivsToRevoke) ->
     update_user_privileges(Client, HServiceId, UserId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
+        <<"grant">> => PrivsToGrant,
+        <<"revoke">> => PrivsToRevoke
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified user of given handle_service.
-%% Privileges must be included in proper Data object, operation is optional.
+%% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_user_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
@@ -506,23 +506,23 @@ update_user_privileges(Client, HServiceId, UserId, Data) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified group of given handle_service.
-%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_group_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),
-    GroupId :: od_group:id(), Operation :: entity_graph:privileges_operation(),
-    Privs :: [privileges:handle_service_privilege()]) -> ok | {error, term()}.
-update_group_privileges(Client, HServiceId, GroupId, Operation, Privs) when is_list(Privs) ->
+    GroupId :: od_group:id(), PrivsToGrant :: [privileges:handle_service_privilege()],
+    PrivsToRevoke :: [privileges:handle_service_privilege()]) -> ok | {error, term()}.
+update_group_privileges(Client, HServiceId, GroupId, PrivsToGrant, PrivsToRevoke) ->
     update_group_privileges(Client, HServiceId, GroupId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
+        <<"grant">> => PrivsToGrant,
+        <<"revoke">> => PrivsToRevoke
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified group of given handle_service.
-%% Privileges must be included in proper Data object, operation is optional.
+%% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_group_privileges(Client :: entity_logic:client(), HServiceId :: od_handle_service:id(),

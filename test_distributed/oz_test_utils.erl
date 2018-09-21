@@ -385,11 +385,11 @@ list_users(Config) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec user_set_oz_privileges(Config :: term(), UserId :: od_user:id(),
-    Operation :: entity_graph:privileges_operation(),
-    Privileges :: [privileges:oz_privilege()]) -> ok.
-user_set_oz_privileges(Config, UserId, Operation, Privileges) ->
+    PrivsToGrant :: [privileges:oz_privilege()],
+    PrivsToRevoke :: [privileges:oz_privilege()]) -> ok.
+user_set_oz_privileges(Config, UserId, PrivsToGrant, PrivsToRevoke) ->
     ?assertMatch(ok, call_oz(Config, user_logic, update_oz_privileges, [
-        ?ROOT, UserId, Operation, Privileges
+        ?ROOT, UserId, PrivsToGrant, PrivsToRevoke
     ])).
 
 
@@ -838,7 +838,7 @@ group_leave_handle_service(Config, GroupId, HandleServiceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec group_get_eff_users(Config :: term(), GroupId :: od_group:id()) ->
-    {ok, [privileges:group_privilege()]}.
+    {ok, [od_user:id()]}.
 group_get_eff_users(Config, GroupId) ->
     ?assertMatch({ok, _}, call_oz(Config, group_logic, get_eff_users, [
         ?ROOT, GroupId
@@ -1070,11 +1070,11 @@ space_get_user_privileges(Config, SpaceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_set_user_privileges(Config :: term(), SpaceId :: od_space:id(),
-    UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
-    Privileges :: [privileges:space_privilege()]) -> ok.
-space_set_user_privileges(Config, SpaceId, UserId, Operation, Privs) ->
+    UserId :: od_user:id(), PrivsToGrant :: [privileges:space_privilege()],
+    PrivsToRevoke :: [privileges:space_privilege()]) -> ok.
+space_set_user_privileges(Config, SpaceId, UserId, PrivsToGrant, PrivsToRevoke) ->
     ?assertMatch(ok, call_oz(Config, space_logic, update_user_privileges, [
-        ?ROOT, SpaceId, UserId, Operation, Privs
+        ?ROOT, SpaceId, UserId, PrivsToGrant, PrivsToRevoke
     ])).
 
 
@@ -1097,11 +1097,11 @@ space_get_group_privileges(Config, SpaceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_set_group_privileges(Config :: term(), SpaceId :: od_space:id(),
-    GroupId :: od_group:id(), Operation :: entity_graph:privileges_operation(),
-    Privileges :: [privileges:space_privilege()]) -> ok.
-space_set_group_privileges(Config, SpaceId, GroupId, Operation, Privs) ->
+    GroupId :: od_group:id(), PrivsToGrant :: [privileges:space_privilege()],
+    PrivsToRevoke :: [privileges:space_privilege()]) -> ok.
+space_set_group_privileges(Config, SpaceId, GroupId, PrivsToGrant, PrivsToRevoke) ->
     ?assertMatch(ok, call_oz(Config, space_logic, update_group_privileges, [
-        ?ROOT, SpaceId, GroupId, Operation, Privs
+        ?ROOT, SpaceId, GroupId, PrivsToGrant, PrivsToRevoke
     ])).
 
 
@@ -1580,13 +1580,13 @@ handle_service_remove_user(Config, HServiceId, UserId) ->
 %%--------------------------------------------------------------------
 -spec handle_service_set_user_privileges(Config :: term(),
     HServiceId :: od_handle_service:id(), UserId :: od_user:id(),
-    Operation :: entity_graph:privileges_operation(),
-    Privileges :: [privileges:handle_service_privilege()]) -> ok.
+    PrivsToGrant :: [privileges:handle_service_privilege()],
+    PrivsToRevoke :: [privileges:handle_service_privilege()]) -> ok.
 handle_service_set_user_privileges(
-    Config, HServiceId, UserId, Operation, Privs
+    Config, HServiceId, UserId, PrivsToGrant, PrivsToRevoke
 ) ->
     ?assertMatch(ok, call_oz(Config, handle_service_logic,
-        update_user_privileges, [?ROOT, HServiceId, UserId, Operation, Privs]
+        update_user_privileges, [?ROOT, HServiceId, UserId, PrivsToGrant, PrivsToRevoke]
     )).
 
 
@@ -1624,13 +1624,13 @@ handle_service_remove_group(Config, HServiceId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec handle_service_set_group_privileges(Config :: term(),
     HServiceId :: od_handle_service:id(), GroupId :: od_group:id(),
-    Operation :: entity_graph:privileges_operation(),
-    Privileges :: [privileges:handle_service_privilege()]) -> ok.
+    PrivsToGrant :: [privileges:handle_service_privilege()],
+    PrivsToRevoke :: [privileges:handle_service_privilege()]) -> ok.
 handle_service_set_group_privileges(
-    Config, HServiceId, GroupId, Operation, Privs
+    Config, HServiceId, GroupId, PrivsToGrant, PrivsToRevoke
 ) ->
     ?assertMatch(ok, call_oz(Config, handle_service_logic,
-        update_group_privileges, [?ROOT, HServiceId, GroupId, Operation, Privs]
+        update_group_privileges, [?ROOT, HServiceId, GroupId, PrivsToGrant, PrivsToRevoke]
     )).
 
 
@@ -1809,11 +1809,11 @@ handle_remove_user(Config, HandleId, UserId) ->
 %%--------------------------------------------------------------------
 -spec handle_set_user_privileges(Config :: term(),
     HandleId :: od_handle:id(), UserId :: od_user:id(),
-    Operation :: entity_graph:privileges_operation(),
-    Privileges :: [privileges:handle_privilege()]) -> ok.
-handle_set_user_privileges(Config, HandleId, UserId, Operation, Privs) ->
+    PrivsToGrant :: [privileges:handle_privilege()],
+    PrivsToRevoke :: [privileges:handle_privilege()]) -> ok.
+handle_set_user_privileges(Config, HandleId, UserId, PrivsToGrant, PrivsToRevoke) ->
     ?assertMatch(ok, call_oz(Config, handle_logic,
-        update_user_privileges, [?ROOT, HandleId, UserId, Operation, Privs]
+        update_user_privileges, [?ROOT, HandleId, UserId, PrivsToGrant, PrivsToRevoke]
     )).
 
 
@@ -1890,10 +1890,10 @@ handle_get_group_privileges(Config, HandleId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec group_set_user_privileges(Config :: term(), GroupId :: od_group:id(),
-    UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
-    Privileges :: [privileges:group_privilege()]) -> ok.
-group_set_user_privileges(Config, GroupId, UserId, Operation, Privs) ->
-    group_set_user_privileges(Config, ?ROOT, GroupId, UserId, Operation, Privs).
+    UserId :: od_user:id(), PrivsToGrant :: [privileges:group_privilege()],
+    PrivsToRevoke :: [privileges:group_privilege()]) -> ok.
+group_set_user_privileges(Config, GroupId, UserId, PrivsToGrant, PrivsToRevoke) ->
+    group_set_user_privileges(Config, ?ROOT, GroupId, UserId, PrivsToGrant, PrivsToRevoke).
 
 
 %%--------------------------------------------------------------------
@@ -1903,11 +1903,11 @@ group_set_user_privileges(Config, GroupId, UserId, Operation, Privs) ->
 %%--------------------------------------------------------------------
 -spec group_set_user_privileges(Config :: term(), entity_logic:client(),
     GroupId :: od_group:id(), UserId :: od_user:id(),
-    Operation :: entity_graph:privileges_operation(),
-    Privileges :: [privileges:group_privilege()]) -> ok.
-group_set_user_privileges(Config, Client, GroupId, UserId, Operation, Privs) ->
+    PrivsToGrant :: [privileges:group_privilege()],
+    PrivsToRevoke :: [privileges:group_privilege()]) -> ok.
+group_set_user_privileges(Config, Client, GroupId, UserId, PrivsToGrant, PrivsToRevoke) ->
     ?assertMatch(ok, call_oz(Config, group_logic, update_user_privileges, [
-        Client, GroupId, UserId, Operation, Privs
+        Client, GroupId, UserId, PrivsToGrant, PrivsToRevoke
     ])).
 
 

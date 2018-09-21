@@ -264,7 +264,7 @@ get_user_test(Config) ->
     }),
     {ok, U3} = oz_test_utils:handle_service_add_user(Config, HService, U3),
     oz_test_utils:handle_service_set_user_privileges(Config, HService, U3,
-        revoke, [?HANDLE_SERVICE_VIEW]
+        [], [?HANDLE_SERVICE_VIEW]
     ),
 
     ExpUserDetails = #{
@@ -335,9 +335,9 @@ get_user_privileges_test(Config) ->
     AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
     InitialPrivs = [?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
-    SetPrivsFun = fun(Operation, Privs) ->
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:handle_service_set_user_privileges(
-            Config, HService, U3, Operation, Privs
+            Config, HService, U3, PrivsToGrant, PrivsToRevoke
         )
     end,
 
@@ -394,9 +394,9 @@ update_user_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:handle_service_add_user(Config, HService, U3),
 
     AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:handle_service_set_user_privileges(
-            Config, HService, U3, Operation, Privs
+            Config, HService, U3, PrivsToGrant, PrivsToRevoke
         )
     end,
     GetPrivsFun = fun() ->
@@ -603,31 +603,24 @@ get_eff_user_privileges_test(Config) ->
     InitialPrivs = [?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
-    SetPrivsFun = fun(Operation, Privs) ->
-        % In case of SET and GRANT, randomly split privileges into four
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        % In case of GRANT, randomly split privileges into four
         % parts and update groups with the privileges. G3 eff_privileges
         % should contain the sum of those. In case of revoke, the
         % privileges must be revoked for all 3 entities.
-        PartitionScheme =
-            case Operation of
-                revoke ->
-                    [{G1, Privs}, {G2, Privs}];
-                _ -> % Covers (set|grant)
-                    #{1 := Privs1, 2 := Privs2} = lists:foldl(
-                        fun(Privilege, AccMap) ->
-                            Index = rand:uniform(2),
-                            AccMap#{
-                                Index => [Privilege | maps:get(Index, AccMap)]
-                            }
-                        end, #{1 => [], 2 => []}, Privs),
-                    [{G1, Privs1}, {G2, Privs2}]
-            end,
-        lists:foreach(
-            fun({GroupId, Privileges}) ->
-                oz_test_utils:handle_service_set_group_privileges(
-                    Config, HService, GroupId, Operation, Privileges
-                )
-            end, PartitionScheme
+        #{1 := PrivsToGrant1, 2 := PrivsToGrant2} = lists:foldl(
+            fun(Privilege, AccMap) ->
+                Index = rand:uniform(2),
+                AccMap#{
+                    Index => [Privilege | maps:get(Index, AccMap)]
+                }
+            end, #{1 => [], 2 => []}, PrivsToGrant),
+
+        oz_test_utils:handle_service_set_group_privileges(
+            Config, HService, G1, PrivsToGrant1, PrivsToRevoke
+        ),
+        oz_test_utils:handle_service_set_group_privileges(
+            Config, HService, G2, PrivsToGrant2, PrivsToRevoke
         )
     end,
 

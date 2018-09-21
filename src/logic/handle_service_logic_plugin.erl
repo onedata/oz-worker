@@ -226,21 +226,21 @@ update(#el_req{gri = #gri{id = HServiceId, aspect = instance}, data = Data}) ->
     ok;
 
 update(Req = #el_req{gri = #gri{id = HServiceId, aspect = {user_privileges, UserId}}}) ->
-    Privileges = maps:get(<<"privileges">>, Req#el_req.data),
-    Operation = maps:get(<<"operation">>, Req#el_req.data, set),
+    PrivsToGrant = maps:get(<<"grant">>, Req#el_req.data, []),
+    PrivsToRevoke = maps:get(<<"revoke">>, Req#el_req.data, []),
     entity_graph:update_relation(
         od_user, UserId,
         od_handle_service, HServiceId,
-        {Operation, Privileges}
+        {PrivsToGrant, PrivsToRevoke}
     );
 
 update(Req = #el_req{gri = #gri{id = HServiceId, aspect = {group_privileges, GroupId}}}) ->
-    Privileges = maps:get(<<"privileges">>, Req#el_req.data),
-    Operation = maps:get(<<"operation">>, Req#el_req.data, set),
+    PrivsToGrant = maps:get(<<"grant">>, Req#el_req.data, []),
+    PrivsToRevoke = maps:get(<<"revoke">>, Req#el_req.data, []),
     entity_graph:update_relation(
         od_group, GroupId,
         od_handle_service, HServiceId,
-        {Operation, Privileges}
+        {PrivsToGrant, PrivsToRevoke}
     ).
 
 
@@ -498,11 +498,9 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
 
 validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}) ->
     #{
-        required => #{
-            <<"privileges">> => {list_of_atoms, privileges:handle_service_privileges()}
-        },
-        optional => #{
-            <<"operation">> => {atom, [set, grant, revoke]}
+        at_least_one => #{
+            <<"grant">> => {list_of_atoms, privileges:handle_service_privileges()},
+            <<"revoke">> => {list_of_atoms, privileges:handle_service_privileges()}
         }
     };
 

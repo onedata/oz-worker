@@ -175,9 +175,9 @@ list_test(Config) ->
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, [
         ?OZ_USERS_LIST
-    ]),
+    ], []),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),

@@ -734,7 +734,7 @@ prepare_client({provider, Provider, Macaroon}, Env, _Config) when is_atom(Provid
     {provider, maps:get(Provider, Env, Provider), maps:get(Macaroon, Env, Macaroon)};
 prepare_client({admin, Privs}, _Env, Config) ->
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, Privs),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, Privs, []),
     {user, Admin};
 prepare_client(Client, Env, _Config) when is_atom(Client) ->
     maps:get(Client, Env, Client);

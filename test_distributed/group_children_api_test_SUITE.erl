@@ -443,9 +443,9 @@ get_child_privileges_test(Config) ->
     AllPrivs = oz_test_utils:all_group_privileges(Config),
     InitialPrivs = [?GROUP_VIEW],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
-    SetPrivsFun = fun(Operation, Privs) ->
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:group_set_group_privileges(
-            Config, G1, G2, Operation, Privs
+            Config, G1, G2, PrivsToGrant, PrivsToRevoke
         )
     end,
 
@@ -503,9 +503,9 @@ update_child_privileges_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = oz_test_utils:all_group_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:group_set_group_privileges(
-            Config, G1, G2, Operation, Privs
+            Config, G1, G2, PrivsToGrant, PrivsToRevoke
         )
     end,
     GetPrivsFun = fun() ->
@@ -559,14 +559,15 @@ get_eff_children_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
+    AllGroupPrivs = oz_test_utils:all_group_privileges(Config),
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
-    oz_test_utils:group_set_user_privileges(Config, G1, U1, set,
-        oz_test_utils:all_group_privileges(Config) -- [?GROUP_VIEW]
+    oz_test_utils:group_set_user_privileges(Config, G1, U1,
+        AllGroupPrivs -- [?GROUP_VIEW], [?GROUP_VIEW]
     ),
     {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
-        ?GROUP_VIEW
-    ]),
+    oz_test_utils:group_set_user_privileges(Config, G1, U2,
+        [?GROUP_VIEW], AllGroupPrivs -- [?GROUP_VIEW]
+    ),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ExpGroups = [G2, G3, G4, G5, G6],
@@ -621,14 +622,15 @@ get_eff_child_details_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
+    AllGroupPrivs = oz_test_utils:all_group_privileges(Config),
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
-    oz_test_utils:group_set_user_privileges(Config, G1, U1, set,
-        oz_test_utils:all_group_privileges(Config) -- [?GROUP_VIEW]
+    oz_test_utils:group_set_user_privileges(Config, G1, U1,
+        AllGroupPrivs -- [?GROUP_VIEW], [?GROUP_VIEW]
     ),
     {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
-        ?GROUP_VIEW
-    ]),
+    oz_test_utils:group_set_user_privileges(Config, G1, U2,
+        [?GROUP_VIEW], AllGroupPrivs -- [?GROUP_VIEW]
+    ),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     lists:foreach(
@@ -724,42 +726,36 @@ get_eff_child_privileges_test(Config) ->
     {ok, G3} = oz_test_utils:group_add_group(Config, G1, G3),
 
     {ok, U2} = oz_test_utils:group_add_user(Config, G1, U2),
-    oz_test_utils:group_set_user_privileges(Config, G1, U2, set, [
-        ?GROUP_VIEW_PRIVILEGES
-    ]),
+    oz_test_utils:group_set_user_privileges(Config, G1, U2,
+        [?GROUP_VIEW_PRIVILEGES], AllPrivs -- [?GROUP_VIEW_PRIVILEGES]
+    ),
     {ok, U3} = oz_test_utils:group_add_user(Config, G1, U3),
-    oz_test_utils:group_set_user_privileges(Config, G1, U3, set,
-        AllPrivs -- [?GROUP_VIEW_PRIVILEGES]
+    oz_test_utils:group_set_user_privileges(Config, G1, U3,
+        AllPrivs -- [?GROUP_VIEW_PRIVILEGES], [?GROUP_VIEW_PRIVILEGES]
     ),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    SetPrivsFun = fun(Operation, Privs) ->
-        % In case of SET and GRANT, randomly split privileges into four
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        % In case of GRANT, randomly split privileges into four
         % parts and update groups with the privileges. G3 eff_privileges
         % should contain the sum of those. In case of revoke, the
-        % privileges must be revoked for all 2 entities.
-        PartitionScheme =
-            case Operation of
-                revoke ->
-                    [{G2, Privs}, {G3, Privs}];
-                _ -> % Covers (set|grant)
-                    #{1 := Privs1, 2 := Privs2} = lists:foldl(
-                        fun(Privilege, AccMap) ->
-                            Index = rand:uniform(2),
-                            AccMap#{
-                                Index => [Privilege | maps:get(Index, AccMap)]
-                            }
-                        end, #{1 => [], 2 => []}, Privs),
-                    [{G2, Privs1}, {G3, Privs2}]
-            end,
-        lists:foreach(
-            fun({GroupId, Privileges}) ->
-                oz_test_utils:group_set_group_privileges(
-                    Config, G1, GroupId, Operation, Privileges
-                )
-            end, PartitionScheme
+        % privileges must be revoked for all 3 entities.
+        #{1 := PrivsToGrant1, 2 := PrivsToGrant2} = lists:foldl(
+            fun(Privilege, AccMap) ->
+                Index = rand:uniform(2),
+                AccMap#{
+                    Index => [Privilege | maps:get(Index, AccMap)]
+                }
+            end, #{1 => [], 2 => []}, PrivsToGrant),
+
+        oz_test_utils:group_set_group_privileges(
+            Config, G1, G2, PrivsToGrant1, PrivsToRevoke
         ),
+        oz_test_utils:group_set_group_privileges(
+            Config, G1, G3, PrivsToGrant2, PrivsToRevoke
+        ),
+
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
     end,
 

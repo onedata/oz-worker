@@ -552,23 +552,23 @@ get_provider(Client, SpaceId, ProviderId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified user of given space.
-%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_user_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),
-    UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
-    Privs :: [privileges:space_privilege()]) -> ok | {error, term()}.
-update_user_privileges(Client, SpaceId, UserId, Operation, Privs) when is_list(Privs) ->
+    UserId :: od_user:id(), PrivsToGrant :: [privileges:space_privilege()],
+    PrivsToRevoke :: [privileges:space_privilege()]) -> ok | {error, term()}.
+update_user_privileges(Client, SpaceId, UserId, PrivsToGrant, PrivsToRevoke) ->
     update_user_privileges(Client, SpaceId, UserId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
+        <<"grant">> => PrivsToGrant,
+        <<"revoke">> => PrivsToRevoke
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified user of given space.
-%% Privileges must be included in proper Data object, operation is optional.
+%% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_user_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),
@@ -585,23 +585,23 @@ update_user_privileges(Client, SpaceId, UserId, Data) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified group of given space.
-%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_group_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),
-    GroupId :: od_group:id(), Operation :: entity_graph:privileges_operation(),
-    Privs :: [privileges:space_privilege()]) -> ok | {error, term()}.
-update_group_privileges(Client, SpaceId, GroupId, Operation, Privs) when is_list(Privs) ->
+    GroupId :: od_group:id(), PrivsToGrant :: [privileges:space_privilege()],
+    PrivsToRevoke :: [privileges:space_privilege()]) -> ok | {error, term()}.
+update_group_privileges(Client, SpaceId, GroupId, PrivsToGrant, PrivsToRevoke) ->
     update_group_privileges(Client, SpaceId, GroupId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
+        <<"grant">> => PrivsToGrant,
+        <<"revoke">> => PrivsToRevoke
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified group of given space.
-%% Privileges must be included in proper Data object, operation is optional.
+%% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_group_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),

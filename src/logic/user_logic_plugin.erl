@@ -292,9 +292,9 @@ update(#el_req{gri = #gri{id = UserId, aspect = instance}, data = Data}) ->
     end;
 
 update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data),
-    Operation = maps:get(<<"operation">>, Data, set),
-    entity_graph:update_oz_privileges(od_user, UserId, Operation, Privileges).
+    PrivsToGrant = maps:get(<<"grant">>, Data, []),
+    PrivsToRevoke = maps:get(<<"revoke">>, Data, []),
+    entity_graph:update_oz_privileges(od_user, UserId, PrivsToGrant, PrivsToRevoke).
 
 
 %%--------------------------------------------------------------------
@@ -322,7 +322,7 @@ delete(#el_req{gri = #gri{id = UserId, aspect = instance}}) ->
 
 delete(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}}) ->
     update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = #{
-        <<"operation">> => set, <<"privileges">> => []
+        <<"grant">> => [], <<"revoke">> => privileges:oz_privileges()
     }});
 
 delete(#el_req{gri = #gri{id = UserId, aspect = {client_token, TokenId}}}) ->
@@ -607,11 +607,9 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = oz_privileges}}) -> #{
-    required => #{
-        <<"privileges">> => {list_of_atoms, privileges:oz_privileges()}
-    },
-    optional => #{
-        <<"operation">> => {atom, [set, grant, revoke]}
+    at_least_one => #{
+        <<"grant">> => {list_of_atoms, privileges:oz_privileges()},
+        <<"revoke">> => {list_of_atoms, privileges:oz_privileges()}
     }
 }.
 

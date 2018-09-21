@@ -187,14 +187,15 @@ get_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
+    AllPrivs = oz_test_utils:all_space_privileges(Config),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
-        ?SPACE_VIEW
-    ]),
+    oz_test_utils:space_set_user_privileges(Config, S1, U1,
+        AllPrivs -- [?SPACE_VIEW], [?SPACE_VIEW]
+    ),
     oz_test_utils:space_add_user(Config, S1, U2),
-    oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
-        ?SPACE_VIEW
-    ]),
+    oz_test_utils:space_set_user_privileges(Config, S1, U2,
+        [?SPACE_VIEW], AllPrivs -- [?SPACE_VIEW]
+    ),
 
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
@@ -206,7 +207,6 @@ get_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    AllPrivs = oz_test_utils:all_space_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     % Get and check private data
@@ -339,13 +339,13 @@ update_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?CORRECT_NAME),
-        oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
+        oz_test_utils:space_set_user_privileges(Config, S1, U1, [], [
             ?SPACE_UPDATE
         ]),
         oz_test_utils:space_add_user(Config, S1, U2),
-        oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
+        oz_test_utils:space_set_user_privileges(Config, S1, U2, [
             ?SPACE_UPDATE
-        ]),
+        ], []),
         #{spaceId => S1}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, Data) ->
@@ -407,11 +407,11 @@ delete_test(Config) ->
     EnvSetUpFun = fun() ->
         {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
         oz_test_utils:space_set_user_privileges(
-            Config, S1, U1, revoke, [?SPACE_DELETE]
+            Config, S1, U1, [], [?SPACE_DELETE]
         ),
         oz_test_utils:space_add_user(Config, S1, U2),
         oz_test_utils:space_set_user_privileges(
-            Config, S1, U2, set, [?SPACE_DELETE]
+            Config, S1, U2, [?SPACE_DELETE], []
         ),
         #{spaceId => S1}
     end,
@@ -463,7 +463,7 @@ list_shares_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, User, set, [?SPACE_VIEW]),
+    oz_test_utils:space_set_user_privileges(Config, S1, User, [?SPACE_VIEW], []),
 
     ExpShares = lists:map(
         fun(_) ->
@@ -509,7 +509,7 @@ get_share_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, User, set, [?SPACE_VIEW]),
+    oz_test_utils:space_set_user_privileges(Config, S1, User, [?SPACE_VIEW], []),
 
     ShareName = <<"Share">>,
     ShareId = ?UNIQUE_STRING,
@@ -704,8 +704,9 @@ get_provider_test(Config) ->
         Config, ?PROVIDER_NAME2
     ),
 
+    SpacePrivs = oz_test_utils:all_space_privileges(Config),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, User, set, []),
+    oz_test_utils:space_set_user_privileges(Config, S1, User, [], SpacePrivs),
     {ok, S1} = oz_test_utils:support_space(
         Config, P1, S1, oz_test_utils:minimum_support_size(Config)
     ),

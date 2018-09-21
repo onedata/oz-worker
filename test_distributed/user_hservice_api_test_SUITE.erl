@@ -60,9 +60,9 @@ all() ->
 
 list_handle_services_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -121,13 +121,13 @@ list_handle_services_test(Config) ->
 
 create_handle_service_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U2, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, U2, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     ExpName = ?HANDLE_SERVICE_NAME1,
@@ -239,9 +239,9 @@ create_handle_service_test(Config) ->
 
 get_handle_service_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -300,9 +300,9 @@ get_handle_service_test(Config) ->
 
 leave_handle_service_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
