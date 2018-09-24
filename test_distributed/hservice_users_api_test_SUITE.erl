@@ -554,7 +554,7 @@ get_eff_user_test(Config) ->
 
 
 get_eff_user_privileges_test(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%               HandleService
     %%              /     ||      \

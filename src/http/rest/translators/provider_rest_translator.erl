@@ -81,8 +81,14 @@ get_response(#gri{aspect = {group_spaces, _}}, SpaceIds) ->
 get_response(#gri{aspect = eff_users}, UserIds) ->
     rest_translator:ok_body_reply(#{<<"users">> => UserIds});
 
+get_response(#gri{aspect = {eff_user_membership, _UserId}}, Intermediaries) ->
+    rest_translator:ok_encoded_intermediaries_reply(Intermediaries);
+
 get_response(#gri{aspect = eff_groups}, GroupIds) ->
     rest_translator:ok_body_reply(#{<<"groups">> => GroupIds});
+
+get_response(#gri{aspect = {eff_group_membership, _GroupId}}, Intermediaries) ->
+    rest_translator:ok_encoded_intermediaries_reply(Intermediaries);
 
 get_response(#gri{aspect = spaces}, SpaceIds) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => SpaceIds});

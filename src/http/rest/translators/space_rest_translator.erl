@@ -91,6 +91,9 @@ get_response(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
 get_response(#gri{aspect = {eff_user_privileges, _UserId}}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
+get_response(#gri{aspect = {eff_user_membership, _UserId}}, Intermediaries) ->
+    rest_translator:ok_encoded_intermediaries_reply(Intermediaries);
+
 get_response(#gri{aspect = groups}, Groups) ->
     rest_translator:ok_body_reply(#{<<"groups">> => Groups});
 
@@ -102,6 +105,9 @@ get_response(#gri{aspect = {group_privileges, _GroupId}}, Privileges) ->
 
 get_response(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
+
+get_response(#gri{aspect = {eff_group_membership, _GroupId}}, Intermediaries) ->
+    rest_translator:ok_encoded_intermediaries_reply(Intermediaries);
 
 get_response(#gri{aspect = shares}, Shares) ->
     rest_translator:ok_body_reply(#{<<"shares">> => Shares});

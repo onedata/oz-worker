@@ -175,6 +175,14 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {eff_user_privileges, ?BINDING(uid)}}
     }},
+    %% Get effective user's group membership intermediaries
+    %% This operation requires one of the following privileges:
+    %% - group_view
+    %% - oz_groups_view
+    {<<"/groups/:id/effective_users/:uid/membership">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {eff_user_membership, ?BINDING(uid)}}
+    }},
     %% Create a new parent group for given group
     %% This operation requires one of the following privileges:
     %% - group_add_parent
@@ -325,6 +333,14 @@ routes() -> [
     {<<"/groups/:id/effective_children/:cid/privileges">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {eff_child_privileges, ?BINDING(cid)}}
+    }},
+    %% Get effective child's group membership intermediaries
+    %% This operation requires one of the following privileges:
+    %% - group_view
+    %% - oz_groups_view
+    {<<"/groups/:id/effective_children/:cid/membership">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {eff_child_membership, ?BINDING(cid)}}
     }},
     %% Create a new space for given group
     %% This operation requires one of the following privileges:

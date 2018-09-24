@@ -24,6 +24,7 @@
 %% API
 -export([authorize/1]).
 -export([client_to_identity/1, root_client/0]).
+-export([encode_entity_type/1, decode_entity_type/1]).
 -export([client_connected/3, client_disconnected/3]).
 -export([verify_auth_override/1]).
 -export([is_authorized/5]).
@@ -78,6 +79,38 @@ client_to_identity(?PROVIDER(ProviderId)) -> {provider, ProviderId}.
 -spec root_client() -> gs_protocol:client().
 root_client() ->
     ?ROOT.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link gs_logic_plugin_behaviour} callback encode_entity_type/1.
+%% @end
+%%--------------------------------------------------------------------
+-spec encode_entity_type(gs_protocol:entity_type()) -> binary().
+encode_entity_type(od_user) -> <<"user">>;
+encode_entity_type(od_group) -> <<"group">>;
+encode_entity_type(od_space) -> <<"space">>;
+encode_entity_type(od_share) -> <<"share">>;
+encode_entity_type(od_provider) -> <<"provider">>;
+encode_entity_type(od_handle_service) -> <<"handleService">>;
+encode_entity_type(od_handle) -> <<"handle">>;
+encode_entity_type(_) -> throw(?ERROR_BAD_TYPE).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link gs_logic_plugin_behaviour} callback decode_entity_type/1.
+%% @end
+%%--------------------------------------------------------------------
+-spec decode_entity_type(binary()) -> gs_protocol:entity_type().
+decode_entity_type(<<"user">>) -> od_user;
+decode_entity_type(<<"group">>) -> od_group;
+decode_entity_type(<<"space">>) -> od_space;
+decode_entity_type(<<"share">>) -> od_share;
+decode_entity_type(<<"provider">>) -> od_provider;
+decode_entity_type(<<"handleService">>) -> od_handle_service;
+decode_entity_type(<<"handle">>) -> od_handle;
+decode_entity_type(_) -> throw(?ERROR_BAD_TYPE).
 
 
 %%--------------------------------------------------------------------
@@ -178,9 +211,9 @@ is_authorized(Client, AuthHint, GRI, Operation, Entity) ->
 -spec handle_rpc(gs_protocol:protocol_version(), gs_protocol:client(),
     gs_protocol:rpc_function(), gs_protocol:rpc_args()) ->
     gs_protocol:rpc_result().
-handle_rpc(1, _, <<"authorizeUser">>, Args) ->
+handle_rpc(_, _, <<"authorizeUser">>, Args) ->
     user_logic:authorize(Args);
-handle_rpc(1, _, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdP}) ->
+handle_rpc(_, _, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdP}) ->
     case oz_worker:get_env(dev_mode) of
         {ok, true} ->
             {ok, #{
@@ -192,7 +225,7 @@ handle_rpc(1, _, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdP}) ->
             LinkAccount = maps:get(<<"linkAccount">>, Data, false),
             auth_utils:get_redirect_url(binary_to_atom(IdP, utf8), LinkAccount)
     end;
-handle_rpc(1, ?USER(UserId), <<"getProviderRedirectURL">>, Args) ->
+handle_rpc(_, ?USER(UserId), <<"getProviderRedirectURL">>, Args) ->
     ProviderId = maps:get(<<"providerId">>, Args),
     RedirectPath = case maps:get(<<"path">>, Args, <<"/">>) of
         null -> <<"/">>;
@@ -200,7 +233,7 @@ handle_rpc(1, ?USER(UserId), <<"getProviderRedirectURL">>, Args) ->
     end,
     {ok, URL} = auth_logic:get_redirection_uri(UserId, ProviderId, RedirectPath),
     {ok, #{<<"url">> => URL}};
-handle_rpc(1, _, _, _) ->
+handle_rpc(_, _, _, _) ->
     ?ERROR_RPC_UNDEFINED.
 
 

@@ -310,22 +310,22 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) 
     end;
 
 exists(#el_req{gri = #gri{aspect = {user, UserId}}}, Handle) ->
-    maps:is_key(UserId, Handle#od_handle.users);
+    entity_graph:has_relation(direct, bottom_up, od_user, UserId, Handle);
 
 exists(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, Handle) ->
-    maps:is_key(UserId, Handle#od_handle.users);
+    entity_graph:has_relation(direct, bottom_up, od_user, UserId, Handle);
 
 exists(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, Handle) ->
-    maps:is_key(UserId, Handle#od_handle.eff_users);
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, Handle);
 
 exists(#el_req{gri = #gri{aspect = {group, GroupId}}}, Handle) ->
-    maps:is_key(GroupId, Handle#od_handle.groups);
+    entity_graph:has_relation(direct, bottom_up, od_group, GroupId, Handle);
 
 exists(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, Handle) ->
-    maps:is_key(GroupId, Handle#od_handle.groups);
+    entity_graph:has_relation(direct, bottom_up, od_group, GroupId, Handle);
 
 exists(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Handle) ->
-    maps:is_key(GroupId, Handle#od_handle.eff_groups);
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, Handle);
 
 % All other aspects exist if handle record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_handle{}) ->

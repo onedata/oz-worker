@@ -41,7 +41,8 @@
     update_child_privileges_test/1,
     get_eff_children_test/1,
     get_eff_child_details_test/1,
-    get_eff_child_privileges_test/1
+    get_eff_child_privileges_test/1,
+    get_eff_child_membership_intermediaries/1
 ]).
 
 all() ->
@@ -56,7 +57,8 @@ all() ->
         update_child_privileges_test,
         get_eff_children_test,
         get_eff_child_details_test,
-        get_eff_child_privileges_test
+        get_eff_child_privileges_test,
+        get_eff_child_membership_intermediaries
     ]).
 
 
@@ -693,7 +695,7 @@ get_eff_child_details_test(Config) ->
 
 
 get_eff_child_privileges_test(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%           User2          User3
     %%              \            /
@@ -794,6 +796,144 @@ get_eff_child_privileges_test(Config) ->
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
         {user, U1}, ?GROUP_VIEW_PRIVILEGES
     ])).
+
+
+get_eff_child_membership_intermediaries(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%                   Group1    Group5
+    %%                  /   |  \     /
+    %%                 /    |   \   /
+    %%              Group2  |    Group4
+    %%               /      |   /  | | \
+    %%              /       |  /   | |  \
+    %%            Group3----|-'    | |  Group6 (no view privs)
+    %%                \     |     /   \   /
+    %%                 \    |    /     User2 (no view privs)
+    %%                  \   |   /
+    %%                  UserGroup
+    %%                      |
+    %%                    User1 (view privs)
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserGroup} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+
+    {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+    {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+    {ok, G3} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+    {ok, G4} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+    {ok, G5} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+    {ok, G6} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+
+    oz_test_utils:group_add_user(Config, G4, U2),
+    oz_test_utils:group_set_user_privileges(Config, G4, U2, [], [?GROUP_VIEW]),
+    oz_test_utils:group_add_user(Config, G6, U2),
+    oz_test_utils:group_set_user_privileges(Config, G6, U2, [], [?GROUP_VIEW]),
+
+    oz_test_utils:group_add_group(Config, G1, UserGroup),
+    oz_test_utils:group_add_group(Config, G1, G2),
+    oz_test_utils:group_add_group(Config, G1, G4),
+    oz_test_utils:group_add_group(Config, G3, UserGroup),
+    oz_test_utils:group_add_group(Config, G2, G3),
+    oz_test_utils:group_add_group(Config, G4, G3),
+    oz_test_utils:group_add_group(Config, G4, UserGroup),
+    oz_test_utils:group_add_group(Config, G4, G6),
+    oz_test_utils:group_set_group_privileges(Config, G4, G6, [], [?GROUP_VIEW]),
+    oz_test_utils:group_add_group(Config, G5, G4),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    % {GroupId, ChildId, CorrectUsers, ExpIntermediariesRaw}
+    ExpectedMembershipIntermediaries = [
+        {G1, UserGroup, [U1, U2], ordsets:from_list([
+            {od_group, ?SELF_INTERMEDIARY},
+            {od_group, G2},
+            {od_group, G4}
+        ])},
+        {G1, G2, [U1, U2], ordsets:from_list([
+            {od_group, ?SELF_INTERMEDIARY}
+        ])},
+        {G1, G3, [U1, U2], ordsets:from_list([
+            {od_group, G2},
+            {od_group, G4}
+        ])},
+        {G1, G4, [U1, U2], ordsets:from_list([
+            {od_group, ?SELF_INTERMEDIARY}
+        ])},
+        {G1, G6, [U1, U2], ordsets:from_list([
+            {od_group, G4}
+        ])},
+
+        {G2, UserGroup, [U1], ordsets:from_list([
+            {od_group, G3}
+        ])},
+        {G2, G3, [U1], ordsets:from_list([
+            {od_group, ?SELF_INTERMEDIARY}
+        ])},
+
+        {G3, UserGroup, [U1], ordsets:from_list([
+            {od_group, ?SELF_INTERMEDIARY}
+        ])},
+
+        {G4, UserGroup, [U1], ordsets:from_list([
+            {od_group, ?SELF_INTERMEDIARY},
+            {od_group, G3}
+        ])},
+        {G4, G3, [U1], ordsets:from_list([
+            {od_group, ?SELF_INTERMEDIARY}
+        ])},
+        {G4, G6, [U1, U2], ordsets:from_list([
+            {od_group, ?SELF_INTERMEDIARY}
+        ])},
+
+        {G5, UserGroup, [U1, U2], ordsets:from_list([
+            {od_group, G4}
+        ])},
+        {G5, G3, [U1, U2], ordsets:from_list([
+            {od_group, G4}
+        ])},
+        {G5, G4, [U1, U2], ordsets:from_list([
+            {od_group, ?SELF_INTERMEDIARY}
+        ])},
+        {G5, G6, [U1, U2], ordsets:from_list([
+            {od_group, G4}
+        ])}
+    ],
+
+    lists:foreach(fun({ParentId, ChildId, CorrectUsers, ExpIntermediariesRaw}) ->
+        ExpIntermediaries = lists:map(fun({Type, Id}) ->
+            #{<<"type">> => gs_logic_plugin:encode_entity_type(Type), <<"id">> => Id}
+        end, ExpIntermediariesRaw),
+        CorrectUserClients = [{user, U} || U <- CorrectUsers],
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_GROUPS_VIEW]}
+                ] ++ CorrectUserClients,
+                unauthorized = [nobody],
+                forbidden = [{user, NonAdmin}, {user, U1}, {user, U2}] -- CorrectUserClients
+            },
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/groups/">>, ParentId, <<"/effective_children/">>, ChildId, <<"/membership">>],
+                expected_code = ?HTTP_200_OK,
+                expected_body = #{<<"intermediaries">> => ExpIntermediaries}
+            },
+            logic_spec = #logic_spec{
+                module = group_logic,
+                function = get_eff_child_membership_intermediaries,
+                args = [client, ParentId, ChildId],
+                expected_result = ?OK_LIST(ExpIntermediariesRaw)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end, ExpectedMembershipIntermediaries).
 
 
 %%%===================================================================

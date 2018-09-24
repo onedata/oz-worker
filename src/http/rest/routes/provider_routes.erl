@@ -54,61 +54,77 @@ routes() -> [
     %% Get provider details
     %% This operation requires one of the following privileges:
     %% - oz_providers_view
-    {<<"/providers/:pid">>, #rest_req{
+    {<<"/providers/:id">>, #rest_req{
         method = 'GET',
-        b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = instance, scope = protected}
+        b_gri = #b_gri{type = od_provider, id = ?BINDING(id), aspect = instance, scope = protected}
     }},
     %% Remove provider
     %% This operation requires one of the following privileges:
     %% - oz_providers_delete
-    {<<"/providers/:pid">>, #rest_req{
+    {<<"/providers/:id">>, #rest_req{
         method = 'DELETE',
-        b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = instance}
+        b_gri = #b_gri{type = od_provider, id = ?BINDING(id), aspect = instance}
     }},
     %% List effective users of provider
     %% This operation requires one of the following privileges:
     %% - oz_providers_list_relationships
-    {<<"/providers/:pid/effective_users">>, #rest_req{
+    {<<"/providers/:id/effective_users">>, #rest_req{
         method = 'GET',
-        b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = eff_users}
+        b_gri = #b_gri{type = od_provider, id = ?BINDING(id), aspect = eff_users}
     }},
     %% Get effective user of provider
     %% This operation requires one of the following privileges:
     %% - oz_users_view
-    {<<"/providers/:pid/effective_users/:uid">>, #rest_req{
+    {<<"/providers/:id/effective_users/:uid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = protected},
-        b_auth_hint = ?THROUGH_PROVIDER(?BINDING(pid))
+        b_auth_hint = ?THROUGH_PROVIDER(?BINDING(id))
+    }},
+    %% Get effective user's provider membership intermediaries
+    %% This operation requires one of the following privileges:
+    %% - provider_view
+    %% - oz_providers_view
+    {<<"/providers/:id/effective_users/:uid/membership">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_provider, id = ?BINDING(id), aspect = {eff_user_membership, ?BINDING(uid)}}
     }},
     %% List effective groups of provider
     %% This operation requires one of the following privileges:
     %% - oz_providers_list_relationships
-    {<<"/providers/:pid/effective_groups">>, #rest_req{
+    {<<"/providers/:id/effective_groups">>, #rest_req{
         method = 'GET',
-        b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = eff_groups}
+        b_gri = #b_gri{type = od_provider, id = ?BINDING(id), aspect = eff_groups}
     }},
     %% Get group of provider
     %% This operation requires one of the following privileges:
     %% - oz_groups_view
-    {<<"/providers/:pid/effective_groups/:gid">>, #rest_req{
+    {<<"/providers/:id/effective_groups/:gid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = protected},
-        b_auth_hint = ?THROUGH_PROVIDER(?BINDING(pid))
+        b_auth_hint = ?THROUGH_PROVIDER(?BINDING(id))
+    }},
+    %% Get effective group's provider membership intermediaries
+    %% This operation requires one of the following privileges:
+    %% - provider_view
+    %% - oz_providers_view
+    {<<"/providers/:id/effective_groups/:gid/membership">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_provider, id = ?BINDING(id), aspect = {eff_group_membership, ?BINDING(gid)}}
     }},
     %% List spaces supported by provider
     %% This operation requires one of the following privileges:
     %% - oz_providers_list_relationships
-    {<<"/providers/:pid/spaces">>, #rest_req{
+    {<<"/providers/:id/spaces">>, #rest_req{
         method = 'GET',
-        b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = spaces}
+        b_gri = #b_gri{type = od_provider, id = ?BINDING(id), aspect = spaces}
     }},
     %% Get space supported by provider
     %% This operation requires one of the following privileges:
     %% - oz_spaces_view
-    {<<"/providers/:pid/spaces/:sid">>, #rest_req{
+    {<<"/providers/:id/spaces/:sid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_space, id = ?BINDING(sid), aspect = instance, scope = protected},
-        b_auth_hint = ?THROUGH_PROVIDER(?BINDING(pid))
+        b_auth_hint = ?THROUGH_PROVIDER(?BINDING(id))
     }},
     %% Get provider details
     %% This operation does not require any specific privileges.

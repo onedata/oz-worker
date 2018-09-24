@@ -51,12 +51,12 @@
 -module(entity_graph).
 -author("Lukasz Opiola").
 
+-include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
 -define(ENTITY_GRAPH_LOCK, entity_graph).
--define(SELF_INTERMEDIARY, <<"self">>).
 % How often should effective graph state be checked during ensure_up_to_date -
 % exponential backoff is used.
 -define(UP_TO_DATE_CHECK_INTERVAL, 100).
@@ -160,6 +160,7 @@ entity_type() | oz_privileges => eff_relations() | eff_relations_with_attrs() | 
 -export([get_relations/4, get_relations_with_privileges/4]).
 -export([has_relation/5, has_relation/6]).
 -export([get_privileges/5, has_privilege/6, has_privilege/7]).
+-export([get_intermediaries/4]).
 -export([delete_with_relations/2, delete_with_relations/3]).
 -export([update_oz_privileges/4]).
 -export([get_oz_privileges/2, has_oz_privilege/3, has_oz_privilege/4]).
@@ -565,7 +566,7 @@ get_relations_with_privileges(effective, Direction, EntityType, Entity) ->
             Direct = maps:get(EntityType, AllDirect, #{}),
             Effective = get_eff_relations(Direction, EntityType, Entity),
             maps:fold(fun
-                (EntityId, {_, [{_, ?SELF_INTERMEDIARY}]}, AccMap) ->
+                (_EntityId, {_, [{_, ?SELF_INTERMEDIARY}]}, AccMap) ->
                     % Do not include effective relations that have
                     % only the direct intermediary but do not appear
                     % among direct relations.
@@ -653,6 +654,23 @@ has_privilege(RelationType, Direction, SubjectEntityType, SubjectEntityId, Privi
 has_privilege(RelationType, Direction, SubjectEntityType, SubjectEntityId, Privilege, Entity) ->
     Privileges = get_privileges(RelationType, Direction, SubjectEntityType, SubjectEntityId, Entity),
     lists:member(Privilege, Privileges).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the intermediaries of the effective relation between the
+%% Subject Entity and Entity.
+%% NOTE: will return empty list if there is no such relation, rather than an error.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_intermediaries(direction(), SubjectEntityType :: entity_type(),
+    SubjectEntityId :: entity_id(), entity()) -> intermediaries().
+get_intermediaries(Direction, SubjectEntityType, SubjectEntityId, Entity) ->
+    EffRelations = get_eff_relations(Direction, SubjectEntityType, Entity),
+    case maps:find(SubjectEntityId, EffRelations) of
+        error -> [];
+        {ok, Relation} -> get_intermediaries(Relation)
+    end.
 
 
 %%--------------------------------------------------------------------

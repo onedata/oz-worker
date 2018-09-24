@@ -23,7 +23,8 @@
     ok_no_content_reply/0,
     ok_body_reply/1,
     updated_reply/0,
-    deleted_reply/0
+    deleted_reply/0,
+    ok_encoded_intermediaries_reply/1
 ]).
 
 %%%===================================================================
@@ -106,6 +107,19 @@ updated_reply() ->
 -spec deleted_reply() -> #rest_resp{}.
 deleted_reply() ->
     #rest_resp{code = ?HTTP_204_NO_CONTENT}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% REST reply that should be used for successful REST operations returning
+%% membership intermediaries.
+%% @end
+%%--------------------------------------------------------------------
+-spec ok_encoded_intermediaries_reply(entity_graph:intermediaries()) -> #rest_resp{}.
+ok_encoded_intermediaries_reply(Intermediaries) ->
+    ok_body_reply(#{<<"intermediaries">> => lists:map(fun({Type, Id}) ->
+        #{<<"type">> => gs_logic_plugin:encode_entity_type(Type), <<"id">> => Id}
+    end, Intermediaries)}).
 
 %%%===================================================================
 %%% Internal functions
