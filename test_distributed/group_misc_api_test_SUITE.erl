@@ -95,7 +95,7 @@ create_test(Config) ->
             path = <<"/groups">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, DataSet) ->
-                ExpType = maps:get(<<"type">>, DataSet, role),
+                ExpType = maps:get(<<"type">>, DataSet, team),
                 BaseURL = ?URL(Config, [<<"/groups/">>]),
                 fun(#{<<"Location">> := Location} = _Headers) ->
                     [GroupId] = binary:split(Location, [BaseURL], [global, trim_all]),
@@ -108,7 +108,7 @@ create_test(Config) ->
             function = create,
             args = [client, data],
             expected_result = ?OK_ENV(fun(_, DataSet) ->
-                ExpType = maps:get(<<"type">>, DataSet, role),
+                ExpType = maps:get(<<"type">>, DataSet, team),
                 ?OK_TERM(fun(GroupId) -> VerifyFun(GroupId, ExpType) end)
             end)
         },
@@ -116,7 +116,7 @@ create_test(Config) ->
             operation = create,
             gri = #gri{type = od_group, aspect = instance},
             expected_result = ?OK_ENV(fun(_, DataSet) ->
-                ExpType = maps:get(<<"type">>, DataSet, role),
+                ExpType = maps:get(<<"type">>, DataSet, team),
                 ?OK_MAP_CONTAINS(#{
                     <<"name">> => ?CORRECT_NAME,
                     <<"type">> => atom_to_binary(ExpType, utf8),
@@ -380,10 +380,10 @@ update_test(Config) ->
         {ok, Group} = oz_test_utils:get_group(Config, GroupId),
         {ExpType, ExpName} = case ShouldSucceed of
             false ->
-                {role, ?GROUP_NAME1};
+                {team, ?GROUP_NAME1};
             true ->
                 {
-                    maps:get(<<"type">>, Data, role),
+                    maps:get(<<"type">>, Data, team),
                     maps:get(<<"name">>, Data, ?GROUP_NAME1)
                 }
         end,

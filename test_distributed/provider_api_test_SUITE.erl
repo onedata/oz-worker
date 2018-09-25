@@ -30,7 +30,7 @@
 -define(MAP_GROUP_TEST_AUTH, test_auth).
 -define(MAP_GROUP_TEST_AUTH_BIN, atom_to_binary(?MAP_GROUP_TEST_AUTH, latin1)).
 -define(MAP_GROUP_TEST_AUTH_MODULE, test_auth_module).
--define(MAPPED_GROUP_PATH, #idp_group{name = <<"mapped_group1">>, type = role}).
+-define(MAPPED_GROUP_PATH, #idp_group{name = <<"mapped_group1">>, type = role_holders}).
 -define(MAPPED_IDP_ENTITLEMENT, #idp_entitlement{
     path = ?MAPPED_GROUP_PATH,
     privileges = member

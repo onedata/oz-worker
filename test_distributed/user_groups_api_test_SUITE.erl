@@ -152,7 +152,7 @@ create_group_test(Config) ->
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, Data) ->
                 ExpName = maps:get(<<"name">>, Data),
-                ExpType = maps:get(<<"type">>, Data, role),
+                ExpType = maps:get(<<"type">>, Data, team),
                 BaseURL = ?URL(Config, [<<"/user/groups/">>]),
                 fun(#{<<"Location">> := Location} = _Headers) ->
                     [GroupId] = binary:split(
@@ -197,7 +197,7 @@ create_group_test(Config) ->
             args = [client, U1, data],
             expected_result = ?OK_ENV(fun(_, Data) ->
                 ExpName = maps:get(<<"name">>, Data),
-                ExpType = maps:get(<<"type">>, Data, role),
+                ExpType = maps:get(<<"type">>, Data, team),
                 ?OK_TERM(fun(GroupId) ->
                     VerifyFun(GroupId, ExpName, ExpType)
                 end)
@@ -209,7 +209,7 @@ create_group_test(Config) ->
             auth_hint = ?AS_USER(U1),
             expected_result = ?OK_ENV(fun(_, Data) ->
                 ExpName = maps:get(<<"name">>, Data),
-                ExpType = maps:get(<<"type">>, Data, role),
+                ExpType = maps:get(<<"type">>, Data, team),
                 ?OK_MAP_CONTAINS(#{
                     <<"children">> => #{},
                     <<"users">> => #{U1 => AllPrivsBin},
@@ -548,7 +548,7 @@ get_eff_group_test(Config) ->
 
     lists:foreach(
         fun({GroupId, GroupDetails}) ->
-            ExpType = maps:get(<<"type">>, GroupDetails, role),
+            ExpType = maps:get(<<"type">>, GroupDetails, team),
 
             ApiTestSpec = #api_test_spec{
                 client_spec = #client_spec{correct = [{user, U1}]},

@@ -598,7 +598,7 @@ create_group(Client, UserId, Name, Type) ->
 -spec create_group(Client :: entity_logic:client(), UserId :: od_user:id(),
     NameOrData :: binary() | #{}) -> {ok, od_group:id()} | {error, term()}.
 create_group(Client, UserId, Name) when is_binary(Name) ->
-    create_group(Client, UserId, #{<<"name">> => Name, <<"type">> => role});
+    create_group(Client, UserId, #{<<"name">> => Name, <<"type">> => team});
 create_group(Client, UserId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,

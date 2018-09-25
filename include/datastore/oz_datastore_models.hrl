@@ -124,7 +124,7 @@
 %% belongs to it, list of spaces that are used by this group
 -record(od_group, {
     name = <<"">> :: od_group:name(),
-    type = role :: od_group:type(),
+    type = team :: od_group:type(),
     % if group is protected it cannot be deleted
     protected = false :: boolean(),
 

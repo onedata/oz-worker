@@ -145,7 +145,7 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     Name = maps:get(<<"name">>, Req#el_req.data),
-    Type = maps:get(<<"type">>, Req#el_req.data, role),
+    Type = maps:get(<<"type">>, Req#el_req.data, team),
     {ok, #document{key = GroupId}} = od_group:create(
         #document{value = #od_group{name = Name, type = Type}}
     ),
@@ -816,7 +816,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"name">> => {binary, name}
     },
     optional => #{
-        <<"type">> => {atom, [organization, unit, team, role]}
+        <<"type">> => {atom, [organization, unit, team, role_holders]}
     }
 };
 
@@ -865,7 +865,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = {child, _}}}) -> #{
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"type">> => {atom, [organization, unit, team, role]}
+        <<"type">> => {atom, [organization, unit, team, role_holders]}
     }
 };
 

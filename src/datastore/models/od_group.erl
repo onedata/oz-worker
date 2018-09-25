@@ -31,7 +31,7 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
--type type() :: organization | unit | team | role.
+-type type() :: organization | unit | team | role_holders.
 -export_type([name/0, type/0]).
 
 -define(CTX, #{
@@ -214,7 +214,9 @@ get_record_struct(4) ->
     % recalculate effective relations (as intermediaries computing logic has changed).
     get_record_struct(3);
 get_record_struct(5) ->
-    % Protected group flag is added and also the privileges are translated.
+    % * protected group flag is added
+    % * privileges are translated
+    % * 'role' type is changed to 'role_holders'
     {record, [
         {name, string},
         {type, atom},
@@ -476,9 +478,14 @@ upgrade_record(4, Group) ->
         end, Field)
     end,
 
+    TranslateType = fun
+        (role) -> role_holders;
+        (Other) -> Other
+    end,
+
     {5, #od_group{
         name = Name,
-        type = Type,
+        type = TranslateType(Type),
         protected = false,
         oz_privileges = TranslatePrivileges(OzPrivileges),
         eff_oz_privileges = TranslatePrivileges(EffOzPrivileges),

@@ -16,7 +16,7 @@
 % Record expressing idp group.
 -record(idp_group, {
     name :: od_group:name(),
-    type = role :: od_group:type()
+    type = team :: od_group:type()
 }).
 
 % Record expressing idp entitlement.

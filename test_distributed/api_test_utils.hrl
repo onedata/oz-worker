@@ -130,7 +130,7 @@
 -define(GROUP_TYPE1_BIN, <<"unit">>).
 -define(GROUP_TYPE2, team).
 -define(GROUP_TYPE2_BIN, <<"team">>).
--define(GROUP_TYPES, [organization,unit,team,role]).
+-define(GROUP_TYPES, [organization, unit, team, role_holders]).
 -define(GROUP_DETAILS(GroupName),
     #{
         <<"name">> => GroupName,
