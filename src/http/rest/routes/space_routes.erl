@@ -147,6 +147,14 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {eff_user_privileges, ?BINDING(uid)}}
     }},
+    %% Get effective user's space membership intermediaries
+    %% This operation requires one of the following privileges:
+    %% - space_view
+    %% - oz_spaces_view
+    {<<"/spaces/:id/effective_users/:uid/membership">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {eff_user_membership, ?BINDING(uid)}}
+    }},
     %% List space groups
     %% This operation requires one of the following privileges:
     %% - space_view
@@ -206,7 +214,7 @@ routes() -> [
     %% List effective space groups
     %% This operation requires one of the following privileges:
     %% - space_view
-    %% - oz_spaces_list_relatiosnhips
+    %% - oz_spaces_list_relationships
     {<<"/spaces/:id/effective_groups">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = eff_groups}
@@ -227,6 +235,14 @@ routes() -> [
     {<<"/spaces/:id/effective_groups/:gid/privileges">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {eff_group_privileges, ?BINDING(gid)}}
+    }},
+    %% Get effective group's space membership intermediaries
+    %% This operation requires one of the following privileges:
+    %% - space_view
+    %% - oz_spaces_view
+    {<<"/spaces/:id/effective_groups/:gid/membership">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {eff_group_membership, ?BINDING(gid)}}
     }},
     %% List space shares
     %% This operation requires one of the following privileges:

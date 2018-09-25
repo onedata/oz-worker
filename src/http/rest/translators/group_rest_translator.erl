@@ -87,24 +87,11 @@ get_response(#gri{aspect = oz_privileges}, Privileges) ->
 get_response(#gri{aspect = eff_oz_privileges}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
-get_response(#gri{aspect = users}, Users) ->
-    rest_translator:ok_body_reply(#{<<"users">> => Users});
-
-get_response(#gri{aspect = eff_users}, Users) ->
-    rest_translator:ok_body_reply(#{<<"users">> => Users});
-
-get_response(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
-    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
-
-get_response(#gri{aspect = {eff_user_privileges, _UserId}}, Privileges) ->
-    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
-
 get_response(#gri{aspect = parents}, Parents) ->
     rest_translator:ok_body_reply(#{<<"groups">> => Parents});
 
 get_response(#gri{aspect = eff_parents}, Parents) ->
     rest_translator:ok_body_reply(#{<<"groups">> => Parents});
-
 
 get_response(#gri{aspect = children}, Children) ->
     rest_translator:ok_body_reply(#{<<"groups">> => Children});
@@ -117,6 +104,24 @@ get_response(#gri{aspect = {child_privileges, _ChildId}}, Privileges) ->
 
 get_response(#gri{aspect = {eff_child_privileges, _ChildId}}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
+
+get_response(#gri{aspect = {eff_child_membership, _ChildId}}, Intermediaries) ->
+    rest_translator:ok_encoded_intermediaries_reply(Intermediaries);
+
+get_response(#gri{aspect = users}, Users) ->
+    rest_translator:ok_body_reply(#{<<"users">> => Users});
+
+get_response(#gri{aspect = eff_users}, Users) ->
+    rest_translator:ok_body_reply(#{<<"users">> => Users});
+
+get_response(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
+
+get_response(#gri{aspect = {eff_user_privileges, _UserId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
+
+get_response(#gri{aspect = {eff_user_membership, _UserId}}, Intermediaries) ->
+    rest_translator:ok_encoded_intermediaries_reply(Intermediaries);
 
 get_response(#gri{aspect = spaces}, Spaces) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});

@@ -422,16 +422,16 @@ exists(#el_req{gri = #gri{aspect = default_provider}}, User) ->
     undefined =/= User#od_user.default_provider;
 
 exists(#el_req{gri = #gri{aspect = {group, GroupId}}}, User) ->
-    lists:member(GroupId, User#od_user.groups);
+    entity_graph:has_relation(direct, top_down, od_group, GroupId, User);
 
 exists(#el_req{gri = #gri{aspect = {space, SpaceId}}}, User) ->
-    lists:member(SpaceId, User#od_user.spaces);
+    entity_graph:has_relation(direct, top_down, od_space, SpaceId, User);
 
 exists(#el_req{gri = #gri{aspect = {handle_service, HServiceId}}}, User) ->
-    lists:member(HServiceId, User#od_user.handle_services);
+    entity_graph:has_relation(direct, top_down, od_handle_service, HServiceId, User);
 
 exists(#el_req{gri = #gri{aspect = {handle, HandleId}}}, User) ->
-    lists:member(HandleId, User#od_user.handles);
+    entity_graph:has_relation(direct, top_down, od_handle, HandleId, User);
 
 % All other aspects exist if user record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_user{}) ->

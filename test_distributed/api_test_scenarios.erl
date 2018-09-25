@@ -536,7 +536,7 @@ collect_unique_tokens_fun() ->
 create_basic_group_env(Config, Privs) when not is_list(Privs) ->
     create_basic_group_env(Config, [Privs]);
 create_basic_group_env(Config, Privs) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%                  Group
     %%                 /     \
@@ -564,7 +564,7 @@ create_basic_group_env(Config, Privs) ->
 create_basic_space_env(Config, Privs) when not is_list(Privs) ->
     create_basic_space_env(Config, [Privs]);
 create_basic_space_env(Config, Privs) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%                  Space
     %%                 /     \
@@ -592,7 +592,7 @@ create_basic_space_env(Config, Privs) ->
 create_basic_doi_hservice_env(Config, Privs) when not is_list(Privs) ->
     create_basic_doi_hservice_env(Config, [Privs]);
 create_basic_doi_hservice_env(Config, Privs) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%              HandleService
     %%                 /      \
@@ -628,7 +628,7 @@ create_basic_doi_hservice_env(Config, Privs) ->
 create_basic_handle_env(Config, Privs) when not is_list(Privs) ->
     create_basic_handle_env(Config, [Privs]);
 create_basic_handle_env(Config, Privs) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%                  Handle
     %%                 /      \
@@ -670,7 +670,7 @@ create_basic_handle_env(Config, Privs) ->
 
 
 create_eff_parent_groups_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%      Group5
     %%         \
@@ -725,7 +725,7 @@ create_eff_parent_groups_env(Config) ->
 
 
 create_eff_child_groups_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%                  Group1
     %%                 /      \
@@ -782,7 +782,7 @@ create_eff_child_groups_env(Config) ->
 
 
 create_space_eff_users_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%                  Space
     %%                 /  |  \
@@ -830,7 +830,7 @@ create_space_eff_users_env(Config) ->
 
 
 create_provider_eff_users_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%                Provider
     %%                    |
@@ -872,7 +872,7 @@ create_provider_eff_users_env(Config) ->
 
 
 create_hservice_eff_users_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%              HandleService
     %%                 /  |  \
@@ -925,7 +925,7 @@ create_hservice_eff_users_env(Config) ->
 
 
 create_handle_eff_users_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%                  Handle
     %%                 /  |   \
@@ -987,7 +987,7 @@ create_handle_eff_users_env(Config) ->
 
 
 create_eff_spaces_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%  Space4   Space5
     %%      \     /
@@ -1030,7 +1030,7 @@ create_eff_spaces_env(Config) ->
 
 
 create_eff_providers_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%  Provider3   Provider4
     %%    |          /
@@ -1093,7 +1093,7 @@ create_eff_providers_env(Config) ->
 
 
 create_eff_handle_services_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %% HService4  HService5
     %%      \     /
@@ -1147,7 +1147,7 @@ create_eff_handle_services_env(Config) ->
 
 
 create_eff_handles_env(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %% Handle4  Handle5
     %%      \     /

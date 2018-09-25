@@ -873,7 +873,7 @@ upgrade_record(7, User) ->
     MapType = fun(<<"vo">>) -> organization;
         (<<"ut">>) -> unit;
         (<<"tm">>) -> team;
-        (<<"rl">>) -> role
+        (<<"rl">>) -> role_holders
     end,
 
     MapPrivileges = fun(<<"admin">>) -> admin;

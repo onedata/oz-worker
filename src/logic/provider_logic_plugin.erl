@@ -72,7 +72,9 @@ operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
 
 operation_supported(get, eff_users, private) -> true;
+operation_supported(get, {eff_user_membership, _}, private) -> true;
 operation_supported(get, eff_groups, private) -> true;
+operation_supported(get, {eff_group_membership, _}, private) -> true;
 operation_supported(get, spaces, private) -> true;
 operation_supported(get, {user_spaces, _}, private) -> true;
 operation_supported(get, {group_spaces, _}, private) -> true;
@@ -101,6 +103,8 @@ operation_supported(_, _, _) -> false.
     boolean().
 is_subscribable(instance, _) -> true;
 is_subscribable({user_spaces, _}, private) -> true;
+is_subscribable({eff_user_membership, _}, private) -> true;
+is_subscribable({eff_group_membership, _}, private) -> true;
 is_subscribable(_, _) -> false.
 
 
@@ -225,8 +229,12 @@ get(#el_req{gri = #gri{aspect = domain_config, id = ProviderId}}, Provider) ->
 
 get(#el_req{gri = #gri{aspect = eff_users}}, Provider) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_user, Provider)};
+get(#el_req{gri = #gri{aspect = {eff_user_membership, UserId}}}, Provider) ->
+    {ok, entity_graph:get_intermediaries(bottom_up, od_user, UserId, Provider)};
 get(#el_req{gri = #gri{aspect = eff_groups}}, Provider) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_group, Provider)};
+get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Provider) ->
+    {ok, entity_graph:get_intermediaries(bottom_up, od_group, GroupId, Provider)};
 
 get(#el_req{gri = #gri{aspect = spaces}}, Provider) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_space, Provider)};
@@ -342,14 +350,20 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Provider
             true
     end;
 
+exists(#el_req{gri = #gri{aspect = {eff_user_membership, UserId}}}, Provider) ->
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, Provider);
+
+exists(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Provider) ->
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, Provider);
+
 exists(#el_req{gri = #gri{aspect = {space, SpaceId}}}, Provider) ->
-    maps:is_key(SpaceId, Provider#od_provider.spaces);
+    entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, Provider);
 
 exists(#el_req{gri = #gri{aspect = {user_spaces, UserId}}}, Provider) ->
-    provider_logic:has_eff_user(Provider, UserId);
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, Provider);
 
 exists(#el_req{gri = #gri{aspect = {group_spaces, GroupId}}}, Provider) ->
-    provider_logic:has_eff_group(Provider, GroupId);
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, Provider);
 
 % All other aspects exist if provider record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_provider{}) ->
@@ -429,7 +443,19 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_users}}, _) ->
     auth_by_self(Req);
 
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_membership, UserId}}}, _) ->
+    true;
+
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_membership, _}}}, _) ->
+    auth_by_self(Req);
+
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_groups}}, _) ->
+    auth_by_self(Req);
+
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, _) ->
+    group_logic:has_eff_user(GroupId, UserId);
+
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_group_membership, _}}}, _) ->
     auth_by_self(Req);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = spaces}}, _) ->
@@ -483,8 +509,13 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance,
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_users}}) ->
     [?OZ_PROVIDERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {eff_user_membership, _}}}) ->
+    [?OZ_PROVIDERS_VIEW];
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_groups}}) ->
     [?OZ_PROVIDERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {eff_group_membership, _}}}) ->
+    [?OZ_PROVIDERS_VIEW];
+
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = spaces}}) ->
     [?OZ_PROVIDERS_LIST_RELATIONSHIPS];
 

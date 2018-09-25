@@ -618,7 +618,7 @@ get_record(od_group, 4) ->
     get_record(od_group, 3);
 get_record(od_group, 5) -> #od_group{
     name = <<"(ńąµę-)"/utf8>>,
-    type = role,
+    type = role_holders,
     protected = false,
     oz_privileges = [
         ?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_LIST, ?OZ_GROUPS_LIST_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_VIEW,

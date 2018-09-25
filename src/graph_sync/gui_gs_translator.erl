@@ -225,6 +225,7 @@ translate_group(#gri{id = GroupId, aspect = instance, scope = private}, Group) -
             <<"scope">> => <<"private">>,
             <<"canViewPrivileges">> => group_logic:has_eff_privilege(Group, UserId, ?GROUP_VIEW_PRIVILEGES),
             <<"directMembership">> => group_logic:has_direct_user(Group, UserId),
+            <<"membership">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = {eff_user_membership, UserId}}),
             <<"parentList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = parents}),
             <<"childList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = children}),
             <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = users}),
@@ -267,6 +268,9 @@ translate_group(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
         <<"privileges">> => Privileges
     };
 
+translate_group(#gri{aspect = {eff_user_membership, _UserId}}, Intermediaries) ->
+    format_intermediaries(Intermediaries);
+
 translate_group(#gri{aspect = {child_privileges, _ChildId}}, Privileges) ->
     #{
         <<"privileges">> => Privileges
@@ -296,6 +300,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space = 
             <<"scope">> => <<"private">>,
             <<"canViewPrivileges">> => space_logic:has_eff_privilege(Space, UserId, ?SPACE_VIEW_PRIVILEGES),
             <<"directMembership">> => space_logic:has_direct_user(Space, UserId),
+            <<"membership">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = {eff_user_membership, UserId}}),
             <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = users}),
             <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = groups}),
             <<"supportSizes">> => Providers,
@@ -336,6 +341,9 @@ translate_space(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
         <<"privileges">> => Privileges
     };
 
+translate_space(#gri{aspect = {eff_user_membership, _UserId}}, Intermediaries) ->
+    format_intermediaries(Intermediaries);
+
 translate_space(#gri{aspect = {group_privileges, _GroupId}}, Privileges) ->
     #{
         <<"privileges">> => Privileges
@@ -358,12 +366,16 @@ translate_space(#gri{aspect = providers, scope = private}, Providers) ->
 %%--------------------------------------------------------------------
 -spec translate_provider(gs_protocol:gri(), Data :: term()) ->
     gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()}.
-translate_provider(GRI = #gri{aspect = instance, scope = protected}, Provider) ->
+translate_provider(GRI = #gri{id = ProviderId, aspect = instance, scope = protected}, Provider) ->
     fun(?USER(UserId)) ->
         Provider#{
-            <<"spaceList">> => gs_protocol:gri_to_string(GRI#gri{aspect = {user_spaces, UserId}, scope = private})
+            <<"spaceList">> => gs_protocol:gri_to_string(GRI#gri{aspect = {user_spaces, UserId}, scope = private}),
+            <<"membership">> => gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = {eff_user_membership, UserId}})
         }
     end;
+
+translate_provider(#gri{aspect = {eff_user_membership, _UserId}}, Intermediaries) ->
+    format_intermediaries(Intermediaries);
 
 translate_provider(#gri{aspect = {user_spaces, _UserId}}, Spaces) ->
     #{
@@ -371,4 +383,21 @@ translate_provider(#gri{aspect = {user_spaces, _UserId}}, Spaces) ->
             fun(SpaceId) ->
                 gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
             end, Spaces)
+    }.
+
+
+-spec format_intermediaries(entity_graph:intermediaries()) -> #{}.
+format_intermediaries(Intermediaries) ->
+    {GRIs, DirectMembership} = lists:foldl(fun
+        ({_, ?SELF_INTERMEDIARY}, {AccGRIs, _AccDirectMembership}) ->
+            {AccGRIs, true};
+        ({Type, Id}, {AccGRIs, AccDirectMembership}) ->
+            GRI = gs_protocol:gri_to_string(#gri{
+                type = Type, id = Id, aspect = instance, scope = auto
+            }),
+            {AccGRIs ++ [GRI], AccDirectMembership}
+    end, {[], false}, Intermediaries),
+    #{
+        <<"intermediaries">> => GRIs,
+        <<"directMembership">> => DirectMembership
     }.

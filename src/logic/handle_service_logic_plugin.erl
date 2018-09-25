@@ -284,22 +284,22 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, HService
     end;
 
 exists(#el_req{gri = #gri{aspect = {user, UserId}}}, HService) ->
-    maps:is_key(UserId, HService#od_handle_service.users);
+    entity_graph:has_relation(direct, bottom_up, od_user, UserId, HService);
 
 exists(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, HService) ->
-    maps:is_key(UserId, HService#od_handle_service.users);
+    entity_graph:has_relation(direct, bottom_up, od_user, UserId, HService);
 
 exists(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, HService) ->
-    maps:is_key(UserId, HService#od_handle_service.eff_users);
+    entity_graph:has_relation(effective, bottom_up, od_user, UserId, HService);
 
 exists(#el_req{gri = #gri{aspect = {group, GroupId}}}, HService) ->
-    maps:is_key(GroupId, HService#od_handle_service.groups);
+    entity_graph:has_relation(direct, bottom_up, od_group, GroupId, HService);
 
 exists(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, HService) ->
-    maps:is_key(GroupId, HService#od_handle_service.groups);
+    entity_graph:has_relation(direct, bottom_up, od_group, GroupId, HService);
 
 exists(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, HService) ->
-    maps:is_key(GroupId, HService#od_handle_service.eff_groups);
+    entity_graph:has_relation(effective, bottom_up, od_group, GroupId, HService);
 
 % All other aspects exist if handle_service record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_handle_service{}) ->
