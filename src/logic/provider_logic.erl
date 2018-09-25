@@ -443,13 +443,13 @@ get_eff_group(Client, ProviderId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_group_membership_intermediaries(Client :: entity_logic:client(),
-    ProviderId :: od_provider:id(), UserId :: od_group:id()) ->
+    ProviderId :: od_provider:id(), GroupId :: od_group:id()) ->
     {ok, entity_graph:intermediaries()} | {error, term()}.
-get_eff_group_membership_intermediaries(Client, ProviderId, UserId) ->
+get_eff_group_membership_intermediaries(Client, ProviderId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_provider, id = ProviderId, aspect = {eff_group_membership, UserId}}
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {eff_group_membership, GroupId}}
     }).
 
 

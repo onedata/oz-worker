@@ -513,13 +513,13 @@ get_eff_group_privileges(Client, SpaceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_group_membership_intermediaries(Client :: entity_logic:client(),
-    SpaceId :: od_space:id(), UserId :: od_group:id()) ->
+    SpaceId :: od_space:id(), GroupId :: od_group:id()) ->
     {ok, entity_graph:intermediaries()} | {error, term()}.
-get_eff_group_membership_intermediaries(Client, SpaceId, UserId) ->
+get_eff_group_membership_intermediaries(Client, SpaceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_space, id = SpaceId, aspect = {eff_group_membership, UserId}}
+        gri = #gri{type = od_space, id = SpaceId, aspect = {eff_group_membership, GroupId}}
     }).
 
 

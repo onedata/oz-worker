@@ -262,7 +262,7 @@ create_child_test(Config) ->
             path = [<<"/groups/">>, Parent, <<"/children">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, DataSet) ->
-                ExpType = maps:get(<<"type">>, DataSet, team),
+                ExpType = maps:get(<<"type">>, DataSet, ?DEFAULT_GROUP_TYPE),
                 BaseURL = ?URL(Config, [<<"/groups/">>, Parent, <<"/children/">>]),
 
                 fun(#{<<"Location">> := Location} = _Headers) ->
@@ -276,7 +276,7 @@ create_child_test(Config) ->
             function = create_child_group,
             args = [client, Parent, data],
             expected_result = ?OK_ENV(fun(_, DataSet) ->
-                ExpType = maps:get(<<"type">>, DataSet, team),
+                ExpType = maps:get(<<"type">>, DataSet, ?DEFAULT_GROUP_TYPE),
                 ?OK_TERM(fun(GroupId) -> VerifyFun(GroupId, ExpType) end)
             end)
         },

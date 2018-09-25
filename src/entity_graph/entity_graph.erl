@@ -673,6 +673,13 @@ get_intermediaries(Direction, SubjectEntityType, SubjectEntityId, Entity) ->
     end.
 
 
+%% @private
+-spec get_intermediaries(#{entity_id() => intermediaries() | {attributes(), intermediaries()}}) ->
+    intermediaries().
+get_intermediaries({_Attributes, Intermediaries}) -> Intermediaries;
+get_intermediaries(Intermediaries) -> Intermediaries.
+
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Safely deletes an entity, first removing all its relations and dependent
@@ -1961,18 +1968,6 @@ eff_relations_to_relations(Map) ->
         fun(_NeighbourId, {Attributes, _Intermediaries}) ->
             Attributes
         end, Map).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Returns intermediaries of an effective relation.
-%% @end
-%%--------------------------------------------------------------------
--spec get_intermediaries(#{entity_id() => intermediaries() | {attributes(), intermediaries()}}) ->
-    intermediaries().
-get_intermediaries({_Attributes, Intermediaries}) -> Intermediaries;
-get_intermediaries(Intermediaries) -> Intermediaries.
 
 
 %%--------------------------------------------------------------------

@@ -21,7 +21,6 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
-
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
@@ -145,7 +144,7 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     Name = maps:get(<<"name">>, Req#el_req.data),
-    Type = maps:get(<<"type">>, Req#el_req.data, team),
+    Type = maps:get(<<"type">>, Req#el_req.data, ?DEFAULT_GROUP_TYPE),
     {ok, #document{key = GroupId}} = od_group:create(
         #document{value = #od_group{name = Name, type = Type}}
     ),

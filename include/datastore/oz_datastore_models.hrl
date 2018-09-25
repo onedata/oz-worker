@@ -15,6 +15,7 @@
 -include("entity_logic.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_models.hrl").
 
+-define(DEFAULT_GROUP_TYPE, team).
 
 %%%===================================================================
 %%% DB records definitions
@@ -124,7 +125,7 @@
 %% belongs to it, list of spaces that are used by this group
 -record(od_group, {
     name = <<"">> :: od_group:name(),
-    type = team :: od_group:type(),
+    type = ?DEFAULT_GROUP_TYPE :: od_group:type(),
     % if group is protected it cannot be deleted
     protected = false :: boolean(),
 
