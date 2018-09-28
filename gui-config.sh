@@ -21,6 +21,6 @@
 TARGET_DIR='_build/default/lib/gui_static'
 # Image which will be used by default to get the static files. If it cannot
 # be resolved, the script will fall back to secondary.
-PRIMARY_IMAGE='docker.onedata.org/onezone-gui:VFS-4826-join-me-feature'
+PRIMARY_IMAGE='docker.onedata.org/onezone-gui:VFS-4900-safari-back-18.07'
 # Image which will be used if primary image is not resolved.
-SECONDARY_IMAGE='onedata/onezone-gui:VFS-4826-join-me-feature'
+SECONDARY_IMAGE='onedata/onezone-gui:VFS-4900-safari-back-18.07'
