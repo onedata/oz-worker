@@ -57,7 +57,7 @@ start() ->
     {ok, CertFile} = oz_worker:get_env(web_cert_file),
     ChainFile = oz_worker:get_env(web_cert_chain_file, undefined),
 
-    {ok, CustomRoot} = oz_worker:get_env(gui_custom_static_root),
+    {ok, CustomRoot} = oz_worker:get_env(gui_static_root_override),
     {ok, DefaultRoot} = oz_worker:get_env(gui_default_static_root),
 
     CustomCowboyRoutes = lists:flatten([
@@ -96,7 +96,7 @@ start() ->
         dynamic_pages = DynamicPageRoutes,
         custom_cowboy_routes = CustomCowboyRoutes,
         default_static_root = DefaultRoot,
-        custom_static_root = CustomRoot
+        static_root_override = CustomRoot
     }).
 
 
