@@ -30,7 +30,7 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
--type type() :: organization | unit | team | role.
+-type type() :: organization | unit | team | role_holders.
 -export_type([name/0, type/0]).
 
 -define(CTX, #{
@@ -147,7 +147,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    4.
+    5.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -207,7 +207,10 @@ get_record_struct(3) ->
 get_record_struct(4) ->
     % There are no changes, but all records must be marked dirty to recalculate
     % effective relations (as intermediaries computing logic has changed).
-    get_record_struct(3).
+    get_record_struct(3);
+get_record_struct(5) ->
+    % The 'role' type is changed to 'role_holders', the structure does not change
+    get_record_struct(4).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -298,9 +301,122 @@ upgrade_record(2, Group) ->
         _BottomUpDirty
     } = Group,
 
-    {3, #od_group{
-        name = group_logic:normalize_name(Name),
-        type = Type,
+    {3, {od_group,
+        group_logic:normalize_name(Name),
+        Type,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        true,
+        true
+    }};
+upgrade_record(3, Group) ->
+    {
+        od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        _EffParents,
+        _EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        _EffUsers,
+        _EffSpaces,
+        _EffProviders,
+        _EffHandleServices,
+        _EffHandles,
+
+        _TopDownDirty,
+        _BottomUpDirty
+    } = Group,
+
+    {4, {od_group,
+        group_logic:normalize_name(Name),
+        Type,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        #{},
+        #{},
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        #{},
+        #{},
+        #{},
+        #{},
+        #{},
+
+        true,
+        true
+    }};
+upgrade_record(4, Group) ->
+    {
+        od_group,
+        Name,
+        Type,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Group,
+
+    {5, #od_group{
+        name = Name,
+        type = case Type of
+            role -> role_holders;
+            Other -> Other
+        end,
+
         oz_privileges = OzPrivileges,
         eff_oz_privileges = EffOzPrivileges,
 
@@ -320,20 +436,6 @@ upgrade_record(2, Group) ->
         eff_handle_services = EffHandleServices,
         eff_handles = EffHandles,
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
-    }};
-upgrade_record(3, Group) ->
-    {4, Group#od_group{
-        eff_parents = #{},
-        eff_children = #{},
-
-        eff_users = #{},
-        eff_spaces = #{},
-        eff_providers = #{},
-        eff_handle_services = #{},
-        eff_handles = #{},
-
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        top_down_dirty = TopDownDirty,
+        bottom_up_dirty = BottomUpDirty
     }}.

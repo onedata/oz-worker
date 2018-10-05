@@ -60,7 +60,7 @@ user_upgrade_test(Config) ->
 
 
 group_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_group, [1, 2, 3, 4]).
+    test_record_upgrade(Config, od_group, [1, 2, 3, 4, 5]).
 
 
 space_upgrade_test(Config) ->
@@ -537,6 +537,9 @@ get_record(od_group, 3) -> #od_group{
 };
 get_record(od_group, 4) ->
     get_record(od_group, 3);
+get_record(od_group, 5) ->
+    V4 = get_record(od_group, 4),
+    V4#od_group{type = role_holders};
 
 
 get_record(od_space, 1) -> {od_space,

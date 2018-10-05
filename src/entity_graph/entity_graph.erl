@@ -569,7 +569,7 @@ get_relations_with_privileges(effective, Direction, EntityType, Entity) ->
             Direct = maps:get(EntityType, AllDirect, #{}),
             Effective = get_eff_relations(Direction, EntityType, Entity),
             maps:fold(fun
-                (EntityId, {_, [{_, ?SELF_INTERMEDIARY}]}, AccMap) ->
+                (_EntityId, {_, [{_, ?SELF_INTERMEDIARY}]}, AccMap) ->
                     % Do not include effective relations that have
                     % only the direct intermediary but do not appear
                     % among direct relations.

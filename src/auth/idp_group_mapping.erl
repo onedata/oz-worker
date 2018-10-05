@@ -125,7 +125,7 @@ membership_spec_to_group_spec(MembershipSpec) ->
 str_to_type(<<"vo">>) -> organization;
 str_to_type(<<"ut">>) -> unit;
 str_to_type(<<"tm">>) -> team;
-str_to_type(<<"rl">>) -> role.
+str_to_type(<<"rl">>) -> role_holders.
 
 
 %%--------------------------------------------------------------------
@@ -138,7 +138,7 @@ str_to_type(<<"rl">>) -> role.
 type_to_str(organization) -> <<"vo">>;
 type_to_str(unit) -> <<"ut">>;
 type_to_str(team) -> <<"tm">>;
-type_to_str(role) -> <<"rl">>.
+type_to_str(role_holders) -> <<"rl">>.
 
 
 %%%===================================================================
