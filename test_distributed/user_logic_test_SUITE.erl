@@ -306,22 +306,22 @@ merge_groups_in_linked_accounts_test(Config) ->
     ?assertHasGroup(true,
         Config, UserId,
         <<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role">>,
-        <<"some-role">>, role, ?ADMIN_PRIVS, direct
+        <<"some-role">>, role_holders, ?ADMIN_PRIVS, direct
     ),
     ?assertHasGroup(true,
         Config, UserId,
         <<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role">>,
-        <<"some-role">>, role, ?ADMIN_PRIVS, effective
+        <<"some-role">>, role_holders, ?ADMIN_PRIVS, effective
     ),
     ?assertHasGroup(true,
         Config, UserId,
         <<"vo:another-vo/ut:some-unit/tm:some-team/rl:other-role">>,
-        <<"other-role">>, role, ?MANAGER_PRIVS, direct
+        <<"other-role">>, role_holders, ?MANAGER_PRIVS, direct
     ),
     ?assertHasGroup(true,
         Config, UserId,
         <<"vo:another-vo/ut:some-unit/tm:some-team/rl:other-role">>,
-        <<"other-role">>, role, ?MANAGER_PRIVS, effective
+        <<"other-role">>, role_holders, ?MANAGER_PRIVS, effective
     ),
 
     % Linked acc the same as before but with one group removed
@@ -365,22 +365,22 @@ merge_groups_in_linked_accounts_test(Config) ->
     ?assertHasGroup(true,
         Config, UserId,
         <<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role">>,
-        <<"some-role">>, role, ?ADMIN_PRIVS, direct
+        <<"some-role">>, role_holders, ?ADMIN_PRIVS, direct
     ),
     ?assertHasGroup(true,
         Config, UserId,
         <<"vo:another-vo/ut:some-unit/tm:some-team/rl:some-role">>,
-        <<"some-role">>, role, ?ADMIN_PRIVS, effective
+        <<"some-role">>, role_holders, ?ADMIN_PRIVS, effective
     ),
     ?assertHasGroup(false,
         Config, UserId,
         <<"vo:another-vo/ut:some-unit/tm:some-team/rl:other-role">>,
-        <<"other-role">>, role, ?MANAGER_PRIVS, direct
+        <<"other-role">>, role_holders, ?MANAGER_PRIVS, direct
     ),
     ?assertHasGroup(false,
         Config, UserId,
         <<"vo:another-vo/ut:some-unit/tm:some-team/rl:other-role">>,
-        <<"other-role">>, role, ?MANAGER_PRIVS, effective
+        <<"other-role">>, role_holders, ?MANAGER_PRIVS, effective
     ),
 
     % Linked acc from other provider

@@ -15,6 +15,7 @@
 -include("entity_logic.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_models.hrl").
 
+-define(DEFAULT_GROUP_TYPE, team).
 
 %%%===================================================================
 %%% DB records definitions
@@ -123,7 +124,7 @@
 %% belongs to it, list of spaces that are used by this group
 -record(od_group, {
     name = <<"">> :: od_group:name(),
-    type = role :: od_group:type(),
+    type = ?DEFAULT_GROUP_TYPE :: od_group:type(),
 
     % Privileges of this group in admin's OZ API
     oz_privileges = [] :: [privileges:oz_privilege()],

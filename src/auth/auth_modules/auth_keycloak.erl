@@ -105,7 +105,7 @@ normalized_membership_spec(IdP, Group, Type, Structure) ->
 %% mapped to groups (each attribute value is expected to hold a list of strings).
 %% Format: list of tuples {A, B, C}:
 %%   A -> attribute key
-%%   B -> derived group type (role | team | unit | organization)
+%%   B -> derived group type (role_holders | team | unit | organization)
 %%   C -> expected group structure, one of:
 %%     * flat -> all groups will be a direct child of the VO group,
 %%       names of groups will be the same as in the attribute.

@@ -121,7 +121,7 @@ create_parent_test(Config) ->
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
         {ok, Parent} = oz_test_utils:get_group(Config, ParentId),
         ExpName = maps:get(<<"name">>, Data),
-        ExpType = maps:get(<<"type">>, Data, role),
+        ExpType = maps:get(<<"type">>, Data, ?DEFAULT_GROUP_TYPE),
         ?assertEqual(ExpName, Parent#od_group.name),
         ?assertEqual(ExpType, Parent#od_group.type),
 
@@ -177,7 +177,7 @@ create_parent_test(Config) ->
             auth_hint = ?AS_GROUP(Child),
             expected_result = ?OK_ENV(fun(_, Data) ->
                 ExpName = maps:get(<<"name">>, Data),
-                ExpType = maps:get(<<"type">>, Data, role),
+                ExpType = maps:get(<<"type">>, Data, ?DEFAULT_GROUP_TYPE),
                 ?OK_MAP_CONTAINS(#{
                     <<"children">> => #{Child => AllPrivsBin},
                     <<"name">> => ExpName,
@@ -551,7 +551,7 @@ get_eff_parent_details_test(Config) ->
 
     lists:foreach(
         fun({GroupId, GroupDetails}) ->
-            ExpType = maps:get(<<"type">>, GroupDetails, role),
+            ExpType = maps:get(<<"type">>, GroupDetails, ?DEFAULT_GROUP_TYPE),
 
             ApiTestSpec = #api_test_spec{
                 client_spec = #client_spec{
