@@ -1371,13 +1371,13 @@ create_predefined_groups() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec normalize_name(binary()) -> binary().
-normalize_name(Name) -> 
+normalize_name(Name) ->
     % string module supports binaries in utf8
     ShortenedName = string:slice(Name, 0, ?MAXIMUM_NAME_LENGTH),
     Regexp = <<"[^", ?NAME_CHARS_ALLOWED_IN_THE_MIDDLE, "]">>,
-    NormalizedName = re:replace(ShortenedName, Regexp, 
+    NormalizedName = re:replace(ShortenedName, Regexp,
         <<"-">>, [{return, binary}, unicode, ucp, global]),
-    case re:run(NormalizedName, ?NAME_VALIDATION_REGEXP, 
+    case re:run(NormalizedName, ?NAME_VALIDATION_REGEXP,
         [{capture, none}, ucp, unicode]) of
         match -> NormalizedName;
         _ -> <<"(", (string:slice(NormalizedName, 0, ?MAXIMUM_NAME_LENGTH-2))/binary, ")">>
@@ -1407,7 +1407,7 @@ create_predefined_group(GroupId, Name, Privileges) ->
                 key = GroupId,
                 value = #od_group{
                     name = Name,
-                    type = role
+                    type = role_holders
                 }},
             case od_group:create(NewGroup) of
                 {ok, _} ->
