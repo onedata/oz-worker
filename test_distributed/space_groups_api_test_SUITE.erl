@@ -796,7 +796,7 @@ get_eff_group_membership_intermediaries(Config) ->
 
     lists:foreach(fun({SpaceId, GroupId, CorrectUsers, ExpIntermediariesRaw}) ->
         ExpIntermediaries = lists:map(fun({Type, Id}) ->
-            #{<<"type">> => gs_logic_plugin:encode_entity_type(Type), <<"id">> => Id}
+            #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
         end, ExpIntermediariesRaw),
         CorrectUserClients = [{user, U} || U <- CorrectUsers],
         ApiTestSpec = #api_test_spec{
