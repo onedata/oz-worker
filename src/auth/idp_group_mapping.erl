@@ -25,7 +25,7 @@
 -export_type([idp_group/0, idp_entitlement/0]).
 
 %%  User will be added with given privileges to a group denoted by a path.
-%%  When there is more that one group in idp entitlement path, a structure of 
+%%  When there is more that one group in idp entitlement path, a structure of
 %%  groups will be created where every group is a member of its predecessor
 %%  (previous group in path) with regular member privileges in that group.
 
@@ -97,7 +97,7 @@ add_membership(IdpEntitlement, UserId, SuperGroupPath) ->
     end,
     Path = IdpEntitlement#idp_entitlement.path,
     ensure_group_structure(Path, SuperGroupPath),
-    ensure_member(gen_group_id(Path), UserId, user, 
+    ensure_member(gen_group_id(Path), UserId, user,
         IdpEntitlement#idp_entitlement.privileges).
 
 %%--------------------------------------------------------------------
@@ -156,7 +156,7 @@ ensure_group_structure(Path, Depth, SuperGroupPath) ->
                 _ -> {group , member}
             end,
             ParentGroupPath = lists:sublist(Path, Depth - 1),
-            ensure_member(gen_group_id(ParentGroupPath), CurrentGroupId, 
+            ensure_member(gen_group_id(ParentGroupPath), CurrentGroupId,
                 MemberType, MemberRole);
         false ->
             ok
@@ -170,7 +170,7 @@ ensure_group_structure(Path, Depth, SuperGroupPath) ->
         _ ->
             % Super group is defined and different than the group, add it with
             % admin privileges.
-            ensure_member(CurrentGroupId, gen_group_id(SuperGroupPath), 
+            ensure_member(CurrentGroupId, gen_group_id(SuperGroupPath),
                 group, admin)
     end,
     ensure_group_structure(Path, Depth + 1, SuperGroupPath).
@@ -182,7 +182,7 @@ ensure_group_structure(Path, Depth, SuperGroupPath) ->
 %% Ensures that given entity (user or group) is a member of group denoted by id.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_member(ParentId :: od_group:id(), MemberId :: od_group:id() | od_user:id(), 
+-spec ensure_member(ParentId :: od_group:id(), MemberId :: od_group:id() | od_user:id(),
     MemberType :: user | group, Role :: atom()) -> ok.
 ensure_member(ParentId, MemberId, MemberType, Role) ->
     Privileges = role_to_privileges(Role),

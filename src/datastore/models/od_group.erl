@@ -148,7 +148,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    5.
+    6.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -210,13 +210,15 @@ get_record_struct(3) ->
     % The structure does not change, only group names are normalized.
     get_record_struct(2);
 get_record_struct(4) ->
-    % The structure does not change, but all records must be marked dirty to
-    % recalculate effective relations (as intermediaries computing logic has changed).
+    % There are no changes, but all records must be marked dirty to recalculate
+    % effective relations (as intermediaries computing logic has changed).
     get_record_struct(3);
 get_record_struct(5) ->
+    % The 'role' type is changed to 'role_holders', the structure does not change
+    get_record_struct(4);
+get_record_struct(6) ->
     % * protected group flag is added
     % * privileges are translated
-    % * 'role' type is changed to 'role_holders'
     {record, [
         {name, string},
         {type, atom},
@@ -336,6 +338,7 @@ upgrade_record(2, Group) ->
     {3, {od_group,
         group_logic:normalize_name(Name),
         Type,
+
         OzPrivileges,
         EffOzPrivileges,
 
@@ -359,7 +362,8 @@ upgrade_record(2, Group) ->
         true
     }};
 upgrade_record(3, Group) ->
-    {od_group,
+    {
+        od_group,
         Name,
         Type,
         OzPrivileges,
@@ -381,12 +385,14 @@ upgrade_record(3, Group) ->
         _EffHandleServices,
         _EffHandles,
 
-        _BottomUpDirty,
-        _TopDownDirty
+        _TopDownDirty,
+        _BottomUpDirty
     } = Group,
+
     {4, {od_group,
-        Name,
+        group_logic:normalize_name(Name),
         Type,
+
         OzPrivileges,
         EffOzPrivileges,
 
@@ -414,6 +420,7 @@ upgrade_record(4, Group) ->
         od_group,
         Name,
         Type,
+
         OzPrivileges,
         EffOzPrivileges,
 
@@ -433,8 +440,65 @@ upgrade_record(4, Group) ->
         EffHandleServices,
         EffHandles,
 
-        _TopDownDirty,
-        _BottomUpDirty
+        TopDownDirty,
+        BottomUpDirty
+    } = Group,
+
+    {5, {od_group,
+        Name,
+        case Type of
+            role -> role_holders;
+            Other -> Other
+        end,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(5, Group) ->
+    {
+        od_group,
+        Name,
+        Type,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty,
+        BottomUpDirty
     } = Group,
 
     TranslatePrivileges = fun(Privileges) ->
@@ -478,14 +542,9 @@ upgrade_record(4, Group) ->
         end, Field)
     end,
 
-    TranslateType = fun
-        (role) -> role_holders;
-        (Other) -> Other
-    end,
-
-    {5, #od_group{
+    {6, #od_group{
         name = Name,
-        type = TranslateType(Type),
+        type = Type,
         protected = false,
         oz_privileges = TranslatePrivileges(OzPrivileges),
         eff_oz_privileges = TranslatePrivileges(EffOzPrivileges),
@@ -506,7 +565,7 @@ upgrade_record(4, Group) ->
         eff_handle_services = EffHandleServices,
         eff_handles = EffHandles,
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        top_down_dirty = TopDownDirty,
+        bottom_up_dirty = BottomUpDirty
     }}.
 

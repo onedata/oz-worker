@@ -1490,11 +1490,10 @@ normalize_name(Name) ->
     Regexp = <<"[^", ?NAME_CHARS_ALLOWED_IN_THE_MIDDLE, "]">>,
     NormalizedName = re:replace(ShortenedName, Regexp,
         <<"-">>, [{return, binary}, unicode, ucp, global]),
-    case re:run(NormalizedName, ?NAME_VALIDATION_REGEXP, [{capture, none}, ucp, unicode]) of
-        match ->
-            NormalizedName;
-        _ ->
-            <<"(", (string:slice(NormalizedName, 0, ?MAXIMUM_NAME_LENGTH - 2))/binary, ")">>
+    case re:run(NormalizedName, ?NAME_VALIDATION_REGEXP,
+        [{capture, none}, ucp, unicode]) of
+        match -> NormalizedName;
+        _ -> <<"(", (string:slice(NormalizedName, 0, ?MAXIMUM_NAME_LENGTH-2))/binary, ")">>
     end.
 
 %%%===================================================================
