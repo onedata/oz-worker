@@ -46,7 +46,8 @@
 %%%===================================================================
 
 %%--------------------------------------------------------------------
-%% @doc Returns an URL in where clients should be redirected for authentication
+%% @doc
+%% Returns an URL in where clients should be redirected for authentication
 %% (either via SAML or OIDC) based on IdP.
 %% Returns a map that includes three keys:
 %%      <<"method">>
@@ -82,13 +83,8 @@ get_login_endpoint(IdP, LinkAccount) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Returns an URL in where clients should be redirected for authentication
-%% (either via SAML or OIDC) based on IdP.
-%% Returns a map that includes three keys:
-%%      <<"method">>
-%%      <<"url">>
-%%      <<"formData">>
-%% that defines what request should be performed to redirect to the login page.
+%% @doc
+%% Validates an incoming login request based on received data payload.
 %% @end
 %%--------------------------------------------------------------------
 -spec validate_login(new_gui:method(), cowboy_req:req()) ->
@@ -121,7 +117,7 @@ validate_login(Method, Req) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to a authenticate a client by an access token originating from an
+%% Tries to a authorize a client by an access token originating from an
 %% Identity Provider.
 %% {true, Client} - client was authorized
 %% false - this method cannot verify authorization, other methods should be tried
@@ -145,7 +141,7 @@ authorize_by_external_access_token(AccessToken) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to a authenticate a client by macaroons.
+%% Tries to a authorize a client by macaroons.
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize_by_macaroons(Macaroon :: binary() | macaroon:macaroon(),
@@ -189,7 +185,7 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to a authenticate a client by basic auth credentials.
+%% Tries to a authorize a client by basic auth credentials.
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize_by_basic_auth(UserPasswdB64 :: binary()) ->

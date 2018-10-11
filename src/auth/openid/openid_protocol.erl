@@ -68,7 +68,7 @@ validate_login(IdP, QueryParams) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to a authenticate a client by an access token originating from an
+%% Tries to a authorize a client by an access token originating from an
 %% Identity Provider. Its prefix must match any of the configured openid
 %% providers supporting authority delegation.
 %% {true, Client} - client was authorized
@@ -104,7 +104,7 @@ authorize_by_external_access_token(AccessTokenWithPrefix) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @equiv request_idp(IdP, Method, ExpCode, Endpoint, Headers, Parameters, [])
+%% @equiv request_idp(Method, ExpCode, Endpoint, Headers, Parameters, [])
 %% @end
 %%--------------------------------------------------------------------
 -spec request_idp(get | post, http_client:code(), http_client:url(),

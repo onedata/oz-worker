@@ -408,7 +408,7 @@ gen_group_id(#idp_entitlement{path = Path}) ->
     gen_group_id(Path);
 gen_group_id(Path) ->
     GroupNames = lists:map(fun(#idp_group{type = Type, name = Name}) ->
-        <<(type_to_str(Type))/binary, ":", Name/binary>>
+        <<(encode_type(Type))/binary, ":", Name/binary>>
     end, Path),
     datastore_utils:gen_key(<<"">>, str_utils:join_binary(GroupNames, <<"/">>)).
 
@@ -564,8 +564,8 @@ ensure_admin_group(IdP) ->
 
 
 %% @private
--spec type_to_str(od_group:type()) -> binary().
-type_to_str(organization) -> <<"vo">>;
-type_to_str(unit) -> <<"ut">>;
-type_to_str(team) -> <<"tm">>;
-type_to_str(role_holders) -> <<"rl">>.
+-spec encode_type(od_group:type()) -> binary().
+encode_type(organization) -> <<"vo">>;
+encode_type(unit) -> <<"ut">>;
+encode_type(team) -> <<"tm">>;
+encode_type(role_holders) -> <<"rl">>.

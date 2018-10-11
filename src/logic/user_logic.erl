@@ -1199,7 +1199,7 @@ validate_name(Name) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @see entity_logic:normalize_name/8.
+%% @see entity_logic:normalize_name/9.
 %% Normalizes user name to fit the allowed format.
 %% @end
 %%--------------------------------------------------------------------
@@ -1232,7 +1232,7 @@ validate_alias(Alias) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @see entity_logic:normalize_name/8.
+%% @see entity_logic:normalize_name/9.
 %% Normalizes user alias to fit the allowed format.
 %% @end
 %%--------------------------------------------------------------------

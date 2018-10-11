@@ -215,7 +215,6 @@ idp_exists(IdP) ->
     proplists:is_defined(IdP, ?CFG_SUPPORTED_IDPS).
 
 
-
 -spec is_onepanel_auth_enabled() -> boolean().
 is_onepanel_auth_enabled() ->
     ?CFG_ONEPANEL_AUTH_ENABLED.

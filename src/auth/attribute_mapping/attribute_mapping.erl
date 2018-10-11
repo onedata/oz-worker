@@ -37,8 +37,8 @@
 %%%   }
 %%%
 %%% Allowed mappings are:
-%%%     undefined - this attribute is not mapped at all, the same as deleting
-%%%         the attribute completely from the config.
+%%%     undefined - this attribute is not mapped at all, it is equivalent to
+%%%         deleting the attribute mapping completely from the config.
 %%%
 %%%     {required, <rules>} - this attribute will be mapped according to <rules>,
 %%%         if it's not possible to resolve the attribute the login will fail.
