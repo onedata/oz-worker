@@ -44,8 +44,7 @@ handshake_attributes(_) ->
             [<<"basicAuth">>, <<"plgrid">>];
         _ ->
             % Production mode, return providers from config
-            ProvidersAtoms = auth_utils:get_all_idps(),
-            [str_utils:to_binary(P) || P <- ProvidersAtoms]
+            auth_config:get_supported_idps()
     end,
     #{
         <<"zoneName">> => oz_worker:get_name(),
@@ -171,7 +170,7 @@ translate_user(GRI = #gri{aspect = linked_accounts}, LinkedAccounts) ->
             end, LinkedAccounts)
     };
 
-translate_user(#gri{aspect = {linked_account, _}}, #linked_account{idp = IdP, email_list = Emails}) ->
+translate_user(#gri{aspect = {linked_account, _}}, #linked_account{idp = IdP, emails = Emails}) ->
     #{
         <<"idp">> => IdP,
         <<"emailList">> => Emails

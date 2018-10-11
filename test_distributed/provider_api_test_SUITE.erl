@@ -16,6 +16,7 @@
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include("auth/entitlement_mapping.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
@@ -26,11 +27,7 @@
 
 -include("api_test_utils.hrl").
 
--define(MAP_GROUP_TEST_AUTH, test_auth).
--define(MAP_GROUP_TEST_AUTH_BIN, atom_to_binary(?MAP_GROUP_TEST_AUTH, latin1)).
--define(MAP_GROUP_TEST_AUTH_MODULE, test_auth_module).
--define(MAPPED_MEMBERSHIP_SPEC, <<"mapped_group1/user:member">>).
--define(MAPPED_GROUP_SPEC, <<"mapped_group1">>).
+-define(DUMMY_IDP, dummyIdP).
 
 
 %% API
@@ -876,7 +873,7 @@ get_eff_user_test(Config) ->
     lists:foreach(
         fun({UserId, UserDetails}) ->
             ExpDetails = UserDetails#{
-                <<"emailList">> => [],
+                <<"emails">> => [],
                 <<"linkedAccounts">> => []
             },
 
@@ -918,6 +915,7 @@ get_eff_user_test(Config) ->
                     auth_hint = ?THROUGH_PROVIDER(P1),
                     expected_result = ?OK_MAP(ExpDetails#{
                         <<"login">> => maps:get(<<"alias">>, ExpDetails),
+                        <<"emailList">> => maps:get(<<"emails">>, ExpDetails),
                         <<"gri">> => fun(EncodedGri) ->
                             #gri{id = Id} = oz_test_utils:decode_gri(
                                 Config, EncodedGri
@@ -1601,7 +1599,44 @@ map_group_test(Config) ->
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
-    MappedGroupHash = idp_group_mapping:group_spec_to_db_id(?MAPPED_GROUP_SPEC),
+
+    oz_test_utils:overwrite_auth_config(Config, #{
+        openidConfig => #{
+            enabled => true
+        },
+        supportedIdps => [
+            {?DUMMY_IDP, #{
+                protocol => openid,
+                protocolConfig => #{
+                    plugin => default_oidc_plugin,
+                    entitlementMapping => #{
+                        enabled => true,
+                        parser => nested_entitlement_parser,
+                        parserConfig => #{
+                            splitWith => "/",
+                            topGroupType => unit,
+                            topGroupPrivilegesInVo => member,
+                            subGroupsType => team,
+                            subGroupsPrivilegesInParent => member,
+                            userPrivileges => member
+                        }
+                    }
+                }
+            }}
+        ]
+    }),
+
+    RawEntitlement = <<"my-unit/my-team/my-subteam">>,
+    ExpIdPEntitlement = #idp_entitlement{
+        idp = ?DUMMY_IDP,
+        privileges = member,
+        path = [
+            #idp_group{type = unit, name = <<"my-unit">>, privileges = member},
+            #idp_group{type = team, name = <<"my-team">>, privileges = member},
+            #idp_group{type = team, name = <<"my-subteam">>, privileges = member}
+        ]
+    },
+    ExpGroupId = entitlement_mapping:gen_group_id(ExpIdPEntitlement),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -1613,16 +1648,16 @@ map_group_test(Config) ->
             method = post,
             path = <<"/provider/public/map_idp_group">>,
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"groupId">> => MappedGroupHash}
+            expected_body = #{<<"groupId">> => ExpGroupId}
         },
         data_spec = #data_spec{
             required = [<<"idp">>, <<"groupId">>],
             correct_values = #{
-                <<"idp">> => [?MAP_GROUP_TEST_AUTH_BIN],
-                <<"groupId">> => [<<"group1">>]
+                <<"idp">> => [atom_to_binary(?DUMMY_IDP, utf8)],
+                <<"groupId">> => [RawEntitlement]
             },
             bad_values = [
-                {<<"idp">>, bad_bool, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"idp">>)}
+                {<<"idp">>, bad_idp_name, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"idp">>)}
             ]
         }
     },
@@ -2123,25 +2158,6 @@ init_per_testcase(check_my_ports_test, Config) ->
             end
         end),
     init_per_testcase(default, Config);
-init_per_testcase(map_group_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, auth_config),
-    ok = test_utils:mock_expect(
-        Nodes, auth_config, has_group_mapping_enabled, fun(_) -> true end
-    ),
-    ok = test_utils:mock_expect(Nodes, auth_config, get_auth_providers,
-        fun() -> [?MAP_GROUP_TEST_AUTH | meck:passthrough([])] end
-    ),
-    ok = test_utils:mock_expect(Nodes, auth_config, get_provider_module,
-        fun(_) -> ?MAP_GROUP_TEST_AUTH_MODULE end
-    ),
-    ok = test_utils:mock_new(
-        Nodes, ?MAP_GROUP_TEST_AUTH_MODULE, [passthrough, non_strict]
-    ),
-    ok = test_utils:mock_expect(Nodes, ?MAP_GROUP_TEST_AUTH_MODULE,
-        normalized_membership_spec, fun(_, _) -> ?MAPPED_MEMBERSHIP_SPEC end
-    ),
-    init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
     Config.
 
@@ -2149,11 +2165,6 @@ init_per_testcase(_, Config) ->
 end_per_testcase(check_my_ports_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_unload(Nodes, http_client),
-    end_per_testcase(default, Config);
-end_per_testcase(map_group_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, auth_config),
-    test_utils:mock_unload(Nodes, ?MAP_GROUP_TEST_AUTH_MODULE),
     end_per_testcase(default, Config);
 end_per_testcase(_, _Config) ->
     ok.

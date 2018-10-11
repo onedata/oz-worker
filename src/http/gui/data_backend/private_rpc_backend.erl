@@ -46,6 +46,9 @@ handle(<<"changePassword">>, Props) ->
             ok;
         {error, Binary} when is_binary(Binary) ->
             gui_error:report_warning(Binary);
+        {error, onepanel_auth_disabled} ->
+            gui_error:report_warning(
+                <<"Cannot change user password - basic auth is disabled.">>);
         _ ->
             gui_error:report_warning(
                 <<"Cannot change user password - old password incorrect.">>)
@@ -53,8 +56,12 @@ handle(<<"changePassword">>, Props) ->
 
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     IdP = binary_to_atom(ProviderBin, utf8),
-    {ok, Data} = auth_utils:get_redirect_url(IdP, true),
-    {ok, maps:to_list(Data)};
+    case auth_logic:get_login_endpoint(IdP, true) of
+        {ok, Data} ->
+            {ok, maps:to_list(Data)};
+        {error, _} ->
+            gui_error:internal_server_error()
+    end;
 
 handle(<<"getTokenProviderSupportSpace">>, [{<<"spaceId">>, SpaceId}]) ->
     Client = ?USER(gui_session:get_user_id()),
@@ -71,7 +78,7 @@ handle(<<"getTokenProviderSupportSpace">>, [{<<"spaceId">>, SpaceId}]) ->
 handle(<<"getProviderRedirectURL">>, [{<<"providerId">>, ProviderId}]) ->
     UserId = gui_session:get_user_id(),
     % @todo check if provider is online, if not push update of model
-    {ok, URL} = auth_logic:get_redirection_uri(UserId, ProviderId),
+    {ok, URL} = auth_tokens:get_redirection_uri(UserId, ProviderId),
     {ok, [
         {<<"url">>, URL}
     ]};

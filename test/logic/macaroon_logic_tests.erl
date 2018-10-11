@@ -16,7 +16,6 @@
 -include_lib("ctool/include/auth/onedata_macaroons.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include("registered_names.hrl").
 
 -define(MOCK_MAX_PROVIDER_MACAROON_TTL, 3600).
 
@@ -65,8 +64,8 @@ setup() ->
         time_utils:system_time_seconds()
     end),
 
-    application:set_env(?APP_NAME, http_domain, "dummy-location.org"),
-    application:set_env(?APP_NAME, max_provider_macaroon_ttl, ?MOCK_MAX_PROVIDER_MACAROON_TTL).
+    oz_worker:set_env(http_domain, "dummy-location.org"),
+    oz_worker:set_env(max_provider_macaroon_ttl, ?MOCK_MAX_PROVIDER_MACAROON_TTL).
 
 teardown(_) ->
     ?assert(meck:validate(macaroon_auth)),

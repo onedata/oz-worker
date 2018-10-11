@@ -56,15 +56,12 @@ handle(<<"getSupportedAuthorizers">>, _) ->
                 {<<"authorizers">>, [<<"basicAuth">>, <<"plgrid">>]}
             ]};
         _ ->
-            % Production mode, return providers from config
-            ProvidersAtoms = auth_utils:get_all_idps(),
-            Providers = [str_utils:to_binary(P) || P <- ProvidersAtoms],
             {ok, [
-                {<<"authorizers">>, Providers}
+                {<<"authorizers">>, auth_config:get_supported_idps()}
             ]}
     end;
 
-handle(<<"getLoginEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
+handle(<<"getLoginEndpoint">>, [{<<"provider">>, IdPBin}]) ->
     case oz_worker:get_env(dev_mode) of
         {ok, true} ->
             {ok, [
@@ -73,7 +70,7 @@ handle(<<"getLoginEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
                 {<<"formData">>, null}
             ]};
         _ ->
-            IdP = binary_to_atom(ProviderBin, utf8),
-            {ok, Map} = auth_utils:get_redirect_url(IdP, false),
+            IdP = binary_to_atom(IdPBin, utf8),
+            {ok, Map} = auth_logic:get_login_endpoint(IdP, false),
             {ok, maps:to_list(Map)}
     end.

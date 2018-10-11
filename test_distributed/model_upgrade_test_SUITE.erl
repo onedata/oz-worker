@@ -56,7 +56,7 @@ all() -> ?ALL([
 %%%===================================================================
 
 user_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_user, [1, 2, 3, 4, 5, 6, 7]).
+    test_record_upgrade(Config, od_user, [1, 2, 3, 4, 5, 6, 7, 8]).
 
 
 group_upgrade_test(Config) ->
@@ -395,45 +395,99 @@ get_record(od_user, 6) -> {od_user,
     #{},
     true
 };
-get_record(od_user, 7) -> #od_user{
+get_record(od_user, 7) -> {od_user,
+    <<"name">>,
+    <<"login">>,
+    [<<"email1@email.com">>, <<"email2@email.com">>],
+    true,
+    [
+        {linked_account,
+            google,
+            <<"user_id1">>,
+            <<"login1">>,
+            <<"name1">>,
+            [<<"email1@email.com">>],
+            []
+        },
+        {linked_account,
+            github,
+            <<"user_id2">>,
+            <<"login2">>,
+            <<"name2">>,
+            [<<"email2@email.com">>],
+            []
+        }
+    ],
+    <<"default_space">>,
+    <<"default_provider">>,
+    [<<"token1">>, <<"token2">>],
+    #{
+        <<"sp1">> => <<"sp1Name">>,
+        <<"sp2">> => <<"sp2Name">>
+    },
+    [
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
+        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
+    ],
+    [],
+    [<<"group1">>, <<"group2">>, <<"group3">>],
+    [<<"space1">>, <<"space2">>, <<"space3">>],
+    [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
+    [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    true
+};
+get_record(od_user, 8) -> #od_user{
     name = <<"name">>,
     alias = <<"login">>,
-    email_list = [<<"email1@email.com">>, <<"email2@email.com">>],
+    emails = [<<"email1@email.com">>, <<"email2@email.com">>],
     basic_auth_enabled = true,
     linked_accounts = [
         #linked_account{
             idp = google,
             subject_id = <<"user_id1">>,
-            login = <<"login1">>,
             name = <<"name1">>,
-            email_list = [<<"email1@email.com">>],
-            groups = []
+            alias = <<"login1">>,
+            emails = [<<"email1@email.com">>],
+            entitlements = [],
+            custom = #{}
         },
         #linked_account{
             idp = github,
             subject_id = <<"user_id2">>,
-            login = <<"login2">>,
             name = <<"name2">>,
-            email_list = [<<"email2@email.com">>],
-            groups = []
+            alias = <<"login2">>,
+            emails = [<<"email2@email.com">>],
+            entitlements = [],
+            custom = #{}
         }
     ],
+    entitlements = [],
+
     default_space = <<"default_space">>,
     default_provider = <<"default_provider">>,
+
     client_tokens = [<<"token1">>, <<"token2">>],
     space_aliases = #{
         <<"sp1">> => <<"sp1Name">>,
         <<"sp2">> => <<"sp2Name">>
     },
+
     oz_privileges = [
         ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
         ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
     ],
     eff_oz_privileges = [],
+
     groups = [<<"group1">>, <<"group2">>, <<"group3">>],
     spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
     handle_services = [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
     handles = [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+
     eff_groups = #{},
     eff_spaces = #{},
     eff_providers = #{},
@@ -505,7 +559,7 @@ get_record(od_group, 2) -> {od_group,
     true  % bottom_up_dirty
 };
 get_record(od_group, 3) -> #od_group{
-    name = <<"(ńąµę-)"/utf8>>,
+    name = <<"ńąµę"/utf8>>,
     type = role,
     oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS],
     eff_oz_privileges = [],

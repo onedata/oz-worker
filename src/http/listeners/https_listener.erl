@@ -57,21 +57,22 @@ start() ->
     {ok, CertFile} = oz_worker:get_env(web_cert_file),
     ChainFile = oz_worker:get_env(web_cert_chain_file, undefined),
 
-    {ok, CustomRoot} = oz_worker:get_env(gui_static_root_override),
+    {ok, StaticRootOverride} = oz_worker:get_env(gui_static_root_override),
     {ok, DefaultRoot} = oz_worker:get_env(gui_default_static_root),
+    {ok, CustomFilesRoot} = oz_worker:get_env(gui_custom_static_files_root),
 
     CustomCowboyRoutes = lists:flatten([
         {?NAGIOS_PATH, nagios_handler, []},
         {?WEBSOCKET_PREFIX_PATH ++ "[...]", gui_ws_handler, []},
         {?PROVIDER_GRAPH_SYNC_WS_PATH, gs_ws_handler, [provider_gs_translator]},
         {?GUI_GRAPH_SYNC_WS_PATH, gs_ws_handler, [gui_gs_translator]},
+        {?CUSTOM_STATIC_FILES_PATH, cowboy_static, {dir, CustomFilesRoot}},
         rest_handler:rest_routes()
     ]),
 
     DynamicPageRoutes = [
         {?CONFIGURATION_PATH, [<<"GET">>], page_configuration},
-        {?ZONE_VERSION_PATH, [<<"GET">>], page_zone_version},
-        {?PUBLIC_SHARE_PATH ++ "/:share_id", [<<"GET">>], page_public_share},
+        {?PUBLIC_SHARE_COWBOY_ROUTE, [<<"GET">>], page_public_share},
         {?LOGIN_PATH, [<<"POST">>], page_basic_auth_login},
         {"/do_login", [<<"POST">>], page_basic_auth_login}, % @todo deprecated
         {?LOGOUT_PATH, [<<"GET">>], page_logout},
@@ -96,7 +97,7 @@ start() ->
         dynamic_pages = DynamicPageRoutes,
         custom_cowboy_routes = CustomCowboyRoutes,
         default_static_root = DefaultRoot,
-        static_root_override = CustomRoot
+        static_root_override = StaticRootOverride
     }).
 
 

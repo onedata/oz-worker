@@ -61,7 +61,7 @@ authorize_by_session_cookie(SessionCookie) ->
 -spec authorize_by_token(Token :: binary()) ->
     false | {true, gs_protocol:client()} | {error, term()}.
 authorize_by_token(Token) ->
-    case auth_utils:authorize_by_oauth_provider(Token) of
+    case auth_logic:authorize_by_external_access_token(Token) of
         {true, Client} ->
             {true, Client};
         false ->
@@ -81,7 +81,7 @@ authorize_by_token(Token) ->
     DischargeMacaroons :: [binary()]) ->
     false | {true, gs_protocol:client()} | {error, term()}.
 authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
-    auth_utils:authorize_by_macaroons(Macaroon, DischargeMacaroons).
+    auth_logic:authorize_by_macaroons(Macaroon, DischargeMacaroons).
 
 
 %%--------------------------------------------------------------------
@@ -94,7 +94,7 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
 -spec authorize_by_basic_auth(UserPasswdB64 :: binary()) ->
     false | {true, gs_protocol:client()} | {error, term()}.
 authorize_by_basic_auth(UserPasswdB64) ->
-    auth_utils:authorize_by_basic_auth(UserPasswdB64).
+    auth_logic:authorize_by_basic_auth(UserPasswdB64).
 
 
 %%--------------------------------------------------------------------
@@ -202,7 +202,7 @@ is_authorized(Client, AuthHint, GRI, Operation, Entity) ->
     gs_protocol:rpc_result().
 handle_rpc(1, _, <<"authorizeUser">>, Args) ->
     user_logic:authorize(Args);
-handle_rpc(1, _, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdP}) ->
+handle_rpc(1, _, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
     case oz_worker:get_env(dev_mode) of
         {ok, true} ->
             {ok, #{
@@ -211,8 +211,9 @@ handle_rpc(1, _, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdP}) ->
                 <<"formData">> => null
             }};
         _ ->
+            IdP = binary_to_atom(IdPBin, utf8),
             LinkAccount = maps:get(<<"linkAccount">>, Data, false),
-            auth_utils:get_redirect_url(binary_to_atom(IdP, utf8), LinkAccount)
+            auth_logic:get_login_endpoint(IdP, LinkAccount)
     end;
 handle_rpc(1, ?USER(UserId), <<"getProviderRedirectURL">>, Args) ->
     ProviderId = maps:get(<<"providerId">>, Args),
@@ -220,7 +221,7 @@ handle_rpc(1, ?USER(UserId), <<"getProviderRedirectURL">>, Args) ->
         null -> <<"/">>;
         P -> P
     end,
-    {ok, URL} = auth_logic:get_redirection_uri(UserId, ProviderId, RedirectPath),
+    {ok, URL} = auth_tokens:get_redirection_uri(UserId, ProviderId, RedirectPath),
     {ok, #{<<"url">> => URL}};
 handle_rpc(1, _, _, _) ->
     ?ERROR_RPC_UNDEFINED.

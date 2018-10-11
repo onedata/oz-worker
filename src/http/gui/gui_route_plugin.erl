@@ -19,7 +19,7 @@
 -behaviour(gui_route_plugin_behaviour).
 
 -include("http/gui_paths.hrl").
--include("auth_common.hrl").
+-include("auth/auth_errors.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("gui/include/gui.hrl").

@@ -28,7 +28,7 @@
 %% http response.
 %% @end
 %%--------------------------------------------------------------------
--spec log_in(od_user:id(), cowboy_req:req()) ->    cowboy_req:req().
+-spec log_in(od_user:id(), cowboy_req:req()) -> cowboy_req:req().
 log_in(UserId, Req) ->
     {ok, SessionId} = session:create(UserId),
     new_gui:set_session_cookie(SessionId, session:session_ttl(), Req).

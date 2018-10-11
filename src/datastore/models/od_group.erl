@@ -302,7 +302,7 @@ upgrade_record(2, Group) ->
     } = Group,
 
     {3, {od_group,
-        group_logic:normalize_name(Name),
+        entity_logic:normalize_name(Name),
         Type,
 
         OzPrivileges,
@@ -356,7 +356,7 @@ upgrade_record(3, Group) ->
     } = Group,
 
     {4, {od_group,
-        group_logic:normalize_name(Name),
+        entity_logic:normalize_name(Name),
         Type,
 
         OzPrivileges,

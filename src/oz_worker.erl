@@ -15,7 +15,7 @@
 -include("registered_names.hrl").
 
 %% API
--export([get_env/1, get_env/2]).
+-export([get_env/1, get_env/2, set_env/2]).
 -export([get_name/0]).
 -export([get_domain/0, get_url/0, get_uri/1]).
 -export([get_version/0, get_build_version/0]).
@@ -42,6 +42,16 @@ get_env(Key) ->
 -spec get_env(Key :: atom(), Default :: term()) -> term().
 get_env(Key, Default) ->
     application:get_env(?APP_NAME, Key, Default).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Wrapper function to set oz_worker env variable.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_env(Key :: atom(), Value :: term()) -> ok.
+set_env(Key, Value) ->
+    application:set_env(?APP_NAME, Key, Value).
 
 
 %%--------------------------------------------------------------------
@@ -82,7 +92,7 @@ get_url() ->
 %% must start with a slash).
 %% @end
 %%--------------------------------------------------------------------
--spec get_uri(PathWithSlash :: binary()) -> binary().
+-spec get_uri(PathWithSlash :: binary() | string()) -> binary().
 get_uri(PathWithSlash) when is_binary(PathWithSlash) ->
     <<(get_url())/binary, PathWithSlash/binary>>;
 get_uri(PathWithSlash) when is_list(PathWithSlash) ->

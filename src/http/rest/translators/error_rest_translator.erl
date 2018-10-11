@@ -60,7 +60,9 @@ translate(?ERROR_NOT_IMPLEMENTED) ->
     ?HTTP_501_NOT_IMPLEMENTED;
 
 translate(?ERROR_NOT_SUPPORTED) ->
-    ?HTTP_501_NOT_IMPLEMENTED;
+    {?HTTP_400_BAD_REQUEST,
+        <<"This operation is not supported">>
+    };
 
 translate(?ERROR_NOT_FOUND) ->
     ?HTTP_404_NOT_FOUND;
@@ -73,20 +75,20 @@ translate(?ERROR_FORBIDDEN) ->
 
 % Errors connected with macaroons
 translate(?ERROR_BAD_MACAROON) ->
-    {?HTTP_400_BAD_REQUEST,
+    {?HTTP_401_UNAUTHORIZED,
         <<"Provided authorization token could not be understood by the server">>
     };
 translate(?ERROR_MACAROON_INVALID) ->
-    {?HTTP_400_BAD_REQUEST,
+    {?HTTP_401_UNAUTHORIZED,
         <<"Provided authorization token is not valid">>
     };
 translate(?ERROR_MACAROON_EXPIRED) ->
-    {?HTTP_400_BAD_REQUEST,
+    {?HTTP_401_UNAUTHORIZED,
         <<"Provided authorization token has expired">>
     };
 translate(?ERROR_MACAROON_TTL_TO_LONG(MaxTtl)) ->
-    {?HTTP_400_BAD_REQUEST,
-        <<"Provided authorization token has too open TTL (it must not exceed ~B seconds)">>,
+    {?HTTP_401_UNAUTHORIZED,
+        <<"Provided authorization token has too long (insecure) TTL (it must not exceed ~B seconds)">>,
         [MaxTtl]
     };
 

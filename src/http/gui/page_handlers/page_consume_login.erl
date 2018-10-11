@@ -17,6 +17,8 @@
 
 -include("http/gui_paths.hrl").
 -include("registered_names.hrl").
+-include("auth/auth_errors.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([handle/2]).
@@ -32,27 +34,20 @@
 %%--------------------------------------------------------------------
 -spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(Method, Req) ->
-    ValidationResult = case Method of
-        <<"POST">> ->
-            % SAML flow
-            auth_utils:validate_saml_login(Req);
-        <<"GET">> ->
-            % OIDC flow
-            auth_utils:validate_oidc_login(Req)
-    end,
-    {NewReq, RedirectURL} = case ValidationResult of
-        {ok, {UserId, RedirectUrl}} ->
-            ?info("User ~s logged in", [UserId]),
+    {NewReq, RedirectURL} = case auth_logic:validate_login(Method, Req) of
+        {ok, UserId, RedirectUrl} ->
             Req2 = oz_gui_session:log_in(UserId, Req),
             {Req2, RedirectUrl};
-        {error, ErrorId} ->
+        {auth_error, Error, State} ->
             Req2 = new_gui:set_cookie(
-                <<"authentication_error">>,
-                atom_to_binary(ErrorId, utf8),
-                #{path => <<"/">>},
-                Req
+                <<"authentication_error_reason">>, format_error_reason(Error),
+                #{path => <<"/">>}, Req
             ),
-            {Req2, <<?LOGIN_PAGE_PATH>>}
+            Req3 = new_gui:set_cookie(
+                <<"authentication_error_state">>, State,
+                #{path => <<"/">>}, Req2
+            ),
+            {Req3, <<?LOGIN_PAGE_PATH>>}
     end,
     % This page is visited with a POST request, so use a 303 redirect in
     % response so that web browser switches to GET.
@@ -62,3 +57,29 @@ handle(Method, Req) ->
         % stalled waiting for data.
         <<"connection">> => <<"close">>
     }, NewReq).
+
+
+%% @private
+-spec format_error_reason({error, term()}) -> binary().
+format_error_reason(?ERROR_BAD_AUTH_CONFIG) ->
+    <<"bad_auth_config:", (integer_to_binary(state_token:ttl()))>>;
+format_error_reason(?ERROR_INVALID_STATE) ->
+    <<"invalid_state">>;
+format_error_reason(?ERROR_INVALID_AUTH_REQUEST) ->
+    <<"invalid_auth_request">>;
+format_error_reason(?ERROR_IDP_UNREACHABLE(_)) ->
+    <<"idp_unreachable">>;
+format_error_reason(?ERROR_BAD_IDP_RESPONSE(_, _, _, _)) ->
+    <<"bad_idp_response">>;
+format_error_reason(?ERROR_CANNOT_RESOLVE_REQUIRED_ATTRIBUTE(Attr)) ->
+    <<"cannot_resolve_required_attribute:", (atom_to_binary(Attr, utf8))/binary>>;
+format_error_reason(?ERROR_BAD_ATTRIBUTE_TYPE(Attr, _)) ->
+    <<"cannot_resolve_required_attribute:", (atom_to_binary(Attr, utf8))/binary>>;
+format_error_reason(?ERROR_ATTRIBUTE_MAPPING_ERROR(Attr, _, _, _, _)) ->
+    <<"cannot_resolve_required_attribute:", (atom_to_binary(Attr, utf8))/binary>>;
+format_error_reason(?ERROR_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(_)) ->
+<<"account_already_linked_to_current_user">>;
+format_error_reason(?ERROR_ACCOUNT_ALREADY_LINKED_TO_ANOTHER_USER(_, _)) ->
+    <<"account_already_linked_to_another_user">>;
+format_error_reason(?ERROR_INTERNAL_SERVER_ERROR) ->
+    <<"internal_server_error">>.
