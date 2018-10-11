@@ -30,8 +30,8 @@
     login = <<"">> :: binary(),
     name = <<"">> :: binary(),
     email_list = [] :: [binary()],
-    % A list of idp entitlements that do not change for each given group 
-    % so that a diff can be computed every time a user logs in. 
+    % A list of idp entitlements that do not change for each given group
+    % so that a diff can be computed every time a user logs in.
     groups = [] :: [idp_group_mapping:idp_entitlement()]
 }).
 

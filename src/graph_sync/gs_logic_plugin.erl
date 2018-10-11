@@ -24,7 +24,6 @@
 %% API
 -export([authorize/1]).
 -export([client_to_identity/1, root_client/0]).
--export([encode_entity_type/1, decode_entity_type/1]).
 -export([client_connected/3, client_disconnected/3]).
 -export([verify_auth_override/1]).
 -export([is_authorized/5]).
@@ -79,38 +78,6 @@ client_to_identity(?PROVIDER(ProviderId)) -> {provider, ProviderId}.
 -spec root_client() -> gs_protocol:client().
 root_client() ->
     ?ROOT.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link gs_logic_plugin_behaviour} callback encode_entity_type/1.
-%% @end
-%%--------------------------------------------------------------------
--spec encode_entity_type(gs_protocol:entity_type()) -> binary().
-encode_entity_type(od_user) -> <<"user">>;
-encode_entity_type(od_group) -> <<"group">>;
-encode_entity_type(od_space) -> <<"space">>;
-encode_entity_type(od_share) -> <<"share">>;
-encode_entity_type(od_provider) -> <<"provider">>;
-encode_entity_type(od_handle_service) -> <<"handleService">>;
-encode_entity_type(od_handle) -> <<"handle">>;
-encode_entity_type(_) -> throw(?ERROR_BAD_TYPE).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link gs_logic_plugin_behaviour} callback decode_entity_type/1.
-%% @end
-%%--------------------------------------------------------------------
--spec decode_entity_type(binary()) -> gs_protocol:entity_type().
-decode_entity_type(<<"user">>) -> od_user;
-decode_entity_type(<<"group">>) -> od_group;
-decode_entity_type(<<"space">>) -> od_space;
-decode_entity_type(<<"share">>) -> od_share;
-decode_entity_type(<<"provider">>) -> od_provider;
-decode_entity_type(<<"handleService">>) -> od_handle_service;
-decode_entity_type(<<"handle">>) -> od_handle;
-decode_entity_type(_) -> throw(?ERROR_BAD_TYPE).
 
 
 %%--------------------------------------------------------------------

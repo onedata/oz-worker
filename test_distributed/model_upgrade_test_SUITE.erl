@@ -616,7 +616,10 @@ get_record(od_group, 3) -> {od_group,
 };
 get_record(od_group, 4) ->
     get_record(od_group, 3);
-get_record(od_group, 5) -> #od_group{
+get_record(od_group, 5) ->
+    V4 = get_record(od_group, 4),
+    setelement(3, V4, role_holders);
+get_record(od_group, 6) -> #od_group{
     name = <<"(ńąµę-)"/utf8>>,
     type = role_holders,
     protected = false,
