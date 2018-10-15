@@ -21,6 +21,6 @@
 TARGET_DIR='_build/default/lib/gui_static'
 # Image which will be used by default to get the static files. If it cannot
 # be resolved, the script will fall back to secondary.
-PRIMARY_IMAGE='docker.onedata.org/onezone-gui:VFS-4912-ux-fixes-in-groups-hierarchy'
+PRIMARY_IMAGE='docker.onedata.org/onezone-gui:VFS-4870-representation-of-effective-groups'
 # Image which will be used if primary image is not resolved.
-SECONDARY_IMAGE='onedata/onezone-gui:VFS-4912-ux-fixes-in-groups-hierarchy'
+SECONDARY_IMAGE='onedata/onezone-gui:VFS-4870-representation-of-effective-groups'
