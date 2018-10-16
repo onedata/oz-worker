@@ -57,11 +57,11 @@ all() -> ?ALL([
 %%%===================================================================
 
 user_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_user, [1, 2, 3, 4, 5, 6, 7, 8]).
+    test_record_upgrade(Config, od_user, [1, 2, 3, 4, 5, 6, 7, 8, 9]).
 
 
 group_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_group, [1, 2, 3, 4, 5]).
+    test_record_upgrade(Config, od_group, [1, 2, 3, 4, 5, 6]).
 
 
 space_upgrade_test(Config) ->
@@ -457,10 +457,67 @@ get_record(od_user, 7) -> {od_user,
     #{},
     true
 };
-get_record(od_user, 8) -> #od_user{
+get_record(od_user, 8) -> {od_user,
+    <<"name">>,
+    <<"login">>,
+    [<<"email1@email.com">>, <<"email2@email.com">>],
+    true,
+    [
+        #linked_account{
+            idp = google,
+            subject_id = <<"user_id1">>,
+            name = <<"name1">>,
+            alias = <<"login1">>,
+            emails = [<<"email1@email.com">>],
+            entitlements = [],
+            custom = #{}
+        },
+        #linked_account{
+            idp = github,
+            subject_id = <<"user_id2">>,
+            name = <<"name2">>,
+            alias = <<"login2">>,
+            emails = [<<"email2@email.com">>],
+            entitlements = [],
+            custom = #{}
+        }
+    ],
+    [],
+
+    <<"default_space">>,
+    <<"default_provider">>,
+
+    [<<"token1">>, <<"token2">>],
+    #{
+        <<"sp1">> => <<"sp1Name">>,
+        <<"sp2">> => <<"sp2Name">>
+    },
+
+    [
+        ?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_LIST, ?OZ_GROUPS_LIST_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_VIEW,
+        ?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_LIST_RELATIONSHIPS, ?OZ_PROVIDERS_VIEW,
+        ?OZ_SET_PRIVILEGES,
+        ?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_LIST, ?OZ_SPACES_LIST_RELATIONSHIPS, ?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_SPACES_VIEW,
+        ?OZ_USERS_LIST, ?OZ_USERS_VIEW, ?OZ_VIEW_PRIVILEGES
+    ],
+    [],
+
+    [<<"group1">>, <<"group2">>, <<"group3">>],
+    [<<"space1">>, <<"space2">>, <<"space3">>],
+    [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
+    [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    true
+};
+get_record(od_user, 9) -> #od_user{
     name = <<"name">>,
     alias = <<"login">>,
-    email_list = [<<"email1@email.com">>, <<"email2@email.com">>],
+    emails = [<<"email1@email.com">>, <<"email2@email.com">>],
     basic_auth_enabled = true,
     linked_accounts = [
         #linked_account{
@@ -480,7 +537,9 @@ get_record(od_user, 8) -> #od_user{
             groups = []
         }
     ],
+    entitlements = [],
     active_sessions = [],
+
     default_space = <<"default_space">>,
     default_provider = <<"default_provider">>,
     client_tokens = [<<"token1">>, <<"token2">>],
@@ -578,47 +637,42 @@ get_record(od_group, 2) -> {od_group,
     true, % top_down_dirty
     true  % bottom_up_dirty
 };
-get_record(od_group, 3) -> {od_group,
-    <<"(ńąµę-)"/utf8>>,
-    role,
-    [ % oz_privileges
-        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST,
-        oz_groups_list, oz_groups_list_users, oz_groups_list_groups, oz_groups_add_members, oz_groups_remove_members,
-        oz_spaces_list, oz_spaces_list_users, oz_spaces_list_groups, oz_spaces_list_providers, oz_spaces_add_members, oz_spaces_remove_members,
-        oz_providers_list, oz_providers_list_users, oz_providers_list_groups, oz_providers_list_spaces
-    ],
-    [],
+get_record(od_group, 3) -> #od_group{
+    name = <<"ńąµę"/utf8>>,
+    type = role,
+    oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS],
+    eff_oz_privileges = [],
 
-    [<<"parent1">>, <<"parent2">>],
-    #{
+    parents = [<<"parent1">>, <<"parent2">>],
+    children = #{
         <<"child1">> => [?GROUP_VIEW, group_join_space, group_invite_group],
         <<"child2">> =>  [?GROUP_UPDATE, ?GROUP_DELETE, group_remove_group]
     },
-    #{},
-    #{},
+    eff_parents = #{},
+    eff_children = #{},
 
-    #{
+    users = #{
         <<"user1">> => [group_create_space, ?GROUP_SET_PRIVILEGES, group_join_group],
         <<"user2">> => [?GROUP_UPDATE, ?GROUP_VIEW, group_leave_group]
     },
-    [<<"space1">>, <<"space2">>, <<"space3">>],
-    [<<"handle_service1">>],
-    [<<"handle1">>, <<"handle2">>],
+    spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
+    handle_services = [<<"handle_service1">>],
+    handles = [<<"handle1">>, <<"handle2">>],
 
-    #{},
-    #{},
-    #{},
-    #{},
-    #{},
+    eff_users = #{},
+    eff_spaces = #{},
+    eff_providers = #{},
+    eff_handle_services = #{},
+    eff_handles = #{},
 
-    true,
-    true
+    top_down_dirty = true,
+    bottom_up_dirty = true
 };
 get_record(od_group, 4) ->
     get_record(od_group, 3);
 get_record(od_group, 5) ->
     V4 = get_record(od_group, 4),
-    setelement(3, V4, role_holders);
+    V4#od_group{type = role_holders};
 get_record(od_group, 6) -> #od_group{
     name = <<"(ńąµę-)"/utf8>>,
     type = role_holders,
@@ -764,6 +818,7 @@ get_record(od_space, 4) -> #od_space{
     top_down_dirty = true,
     bottom_up_dirty = true
 };
+
 
 get_record(od_share, 1) -> {od_share,
     <<"name">>,

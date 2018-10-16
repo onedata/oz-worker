@@ -22,17 +22,18 @@
 %%%===================================================================
 
 %% This record must be defined here as od_user depends on it.
-%% This record defines user's account info
-%% received from an SAML / openid / oauth provider.
+%% This record defines user's account info received from a SAML / OpenID provider.
 -record(linked_account, {
-    idp = undefined :: atom(),
-    subject_id = <<"">> :: binary(),
-    login = <<"">> :: binary(),
-    name = <<"">> :: binary(),
-    email_list = [] :: [binary()],
-    % A list of idp entitlements that do not change for each given group
-    % so that a diff can be computed every time a user logs in.
-    groups = [] :: [idp_group_mapping:idp_entitlement()]
+    idp :: atom(),
+    subject_id :: binary(),
+    name = undefined :: undefined | binary(),
+    alias = undefined :: undefined | binary(),
+    emails = [] :: [binary()],
+    % A list of entitlements in given IdP, they must be normalized according
+    % to specification in idp_group_mapping.
+    entitlements = [] :: [entitlement_mapping:raw_entitlement()],
+    % Custom attributes received from the IdP, opaque to Onezone (used in LUMA).
+    custom = #{} :: jiffy:json_value()
 }).
 
 %%%===================================================================
@@ -84,11 +85,12 @@
 -record(od_user, {
     name = <<"">> :: od_user:name(),
     alias = undefined :: od_user:alias(),
-    email_list = [] :: [binary()],
+    emails = [] :: [od_user:email()],
     % Decides if this user can login via login:password, only users created in
     % onepanel are currently allowed to do that.
     basic_auth_enabled = false :: boolean(),
     linked_accounts = [] :: [od_user:linked_account()],
+    entitlements = [] :: [od_group:id()],
 
     active_sessions = [] :: [session:id()],
 

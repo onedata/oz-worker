@@ -166,11 +166,18 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}
     end;
 
 create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
-    ProviderId = maps:get(<<"idp">>, Data),
+    IdP = maps:get(<<"idp">>, Data),
     GroupId = maps:get(<<"groupId">>, Data),
-    IdpEntitlement = auth_utils:normalize_membership_spec(
-        binary_to_atom(ProviderId, latin1), GroupId),
-    {ok, value, idp_group_mapping:gen_group_id(IdpEntitlement)};
+    try entitlement_mapping:map_entitlement(IdP, GroupId) of
+        {ok, {OnedataGroupId, _}} -> {ok, value, OnedataGroupId};
+        {error, malformed} -> ?ERROR_BAD_DATA(<<"groupId">>)
+    catch
+        Type:Reason ->
+            ?debug_stacktrace("Cannot map group '~s' from IdP '~p' due to ~p:~p", [
+                GroupId, IdP, Type, Reason
+            ]),
+            ?ERROR_MALFORMED_DATA
+    end;
 
 create(#el_req{gri = #gri{aspect = verify_provider_identity}, data = Data}) ->
     ProviderId = maps:get(<<"providerId">>, Data),
@@ -662,8 +669,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = check_my_ports}}) -> #{
 
 validate(#el_req{operation = create, gri = #gri{aspect = map_idp_group}}) -> #{
     required => #{
-        <<"idp">> => {binary, {exists, fun(Idp) ->
-            auth_utils:has_group_mapping_enabled(binary_to_atom(Idp, utf8))
+        <<"idp">> => {atom, {exists, fun(IdP) ->
+            entitlement_mapping:enabled(IdP)
         end}},
         <<"groupId">> => {binary, non_empty}
     }

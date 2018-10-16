@@ -1052,7 +1052,7 @@ refresh_entity(Direction, EntityType, EntityId, Entity) ->
             Direction, Ent, AggregatedEffRelations
         ))}
     end),
-    ?debug("Entity refreshed: ~p", [EntityType:to_string(EntityId)]),
+    ?debug("Entity refreshed: ~s", [EntityType:to_string(EntityId)]),
     ok.
 
 

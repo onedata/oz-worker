@@ -44,7 +44,6 @@
 -export([
     init/2,
     allowed_methods/2,
-
     content_types_accepted/2,
     content_types_provided/2,
     is_authorized/2,
@@ -141,9 +140,9 @@ is_authorized(Req, State) ->
     Result = try
         % Try to authorize the client using several methods.
         authorize(Req, [
-            fun auth_utils:authorize_by_oauth_provider/1,
-            fun auth_utils:authorize_by_basic_auth/1,
-            fun auth_utils:authorize_by_macaroons/1
+            fun auth_logic:authorize_by_external_access_token/1,
+            fun auth_logic:authorize_by_basic_auth/1,
+            fun auth_logic:authorize_by_macaroons/1
         ])
     catch
         throw:Err ->

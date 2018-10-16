@@ -46,6 +46,8 @@ handle(<<"POST">>, Req) ->
                 cowboy_req:reply(200, JSONHeader, Body, Req2);
             {error, Binary} when is_binary(Binary) ->
                 cowboy_req:reply(401, #{}, Binary, Req);
+            {error, onepanel_auth_disabled} ->
+                cowboy_req:reply(400, #{}, <<"Onepanel login disabled">>, Req);
             _ ->
                 cowboy_req:reply(401, Req)
         end

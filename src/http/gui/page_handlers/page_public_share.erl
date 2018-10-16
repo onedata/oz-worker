@@ -15,6 +15,7 @@
 
 -behaviour(dynamic_page_behaviour).
 
+-include("http/gui_paths.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -31,7 +32,7 @@
 %%--------------------------------------------------------------------
 -spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"GET">>, Req) ->
-    ShareId = cowboy_req:binding(share_id, Req),
+    ShareId = cowboy_req:binding(?SHARE_ID_BINDING, Req),
     try
         URL = share_logic:share_id_to_redirect_url(ShareId),
         cowboy_req:reply(307, #{<<"location">> => URL}, Req)

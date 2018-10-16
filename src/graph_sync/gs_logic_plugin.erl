@@ -48,7 +48,7 @@ authorize(Req) ->
         {true, CookieClient, Cookie, NewReq} ->
             {ok, CookieClient, new_gui_session:get_session_id(Cookie), NewReq};
         false ->
-            case auth_utils:authorize_by_macaroons(Req) of
+            case auth_logic:authorize_by_macaroons(Req) of
                 {true, MacaroonClient} ->
                     {ok, MacaroonClient, undefined, Req};
                 {error, _} ->
@@ -180,7 +180,7 @@ is_authorized(Client, AuthHint, GRI, Operation, Entity) ->
     gs_protocol:rpc_result().
 handle_rpc(_, _, <<"authorizeUser">>, Args) ->
     user_logic:authorize(Args);
-handle_rpc(_, _, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdP}) ->
+handle_rpc(_, _, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
     case oz_worker:get_env(dev_mode) of
         {ok, true} ->
             {ok, #{
@@ -189,8 +189,9 @@ handle_rpc(_, _, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdP}) ->
                 <<"formData">> => null
             }};
         _ ->
+            IdP = binary_to_atom(IdPBin, utf8),
             LinkAccount = maps:get(<<"linkAccount">>, Data, false),
-            auth_utils:get_redirect_url(binary_to_atom(IdP, utf8), LinkAccount)
+            auth_logic:get_login_endpoint(IdP, LinkAccount)
     end;
 handle_rpc(_, ?USER(UserId), <<"getProviderRedirectURL">>, Args) ->
     ProviderId = maps:get(<<"providerId">>, Args),
@@ -198,7 +199,7 @@ handle_rpc(_, ?USER(UserId), <<"getProviderRedirectURL">>, Args) ->
         null -> <<"/">>;
         P -> P
     end,
-    {ok, URL} = auth_logic:get_redirection_uri(UserId, ProviderId, RedirectPath),
+    {ok, URL} = auth_tokens:get_redirection_uri(UserId, ProviderId, RedirectPath),
     {ok, #{<<"url">> => URL}};
 handle_rpc(_, _, _, _) ->
     ?ERROR_RPC_UNDEFINED.

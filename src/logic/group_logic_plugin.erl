@@ -247,6 +247,8 @@ create(#el_req{gri = #gri{id = GrId, aspect = {user, UserId}}, data = Data}) ->
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
     {ok, resource, {NewGRI, ?THROUGH_GROUP(GrId), UserData}};
 
+create(#el_req{gri = #gri{id = GrId, aspect = {child, GrId}}}) ->
+    throw(?ERROR_CANNOT_JOIN_GROUP_TO_ITSELF);
 create(#el_req{gri = #gri{id = GrId, aspect = {child, ChGrId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:group_user()),
     entity_graph:add_relation(

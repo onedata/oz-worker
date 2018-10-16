@@ -17,8 +17,6 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(PLUGIN, share_logic_plugin).
-
 -export([
     create/5, create/2
 ]).
@@ -179,7 +177,7 @@ exists(ShareId) ->
 %%--------------------------------------------------------------------
 -spec share_id_to_public_url(ShareId :: binary()) -> binary().
 share_id_to_public_url(ShareId) ->
-    oz_worker:get_uri(filename:join(<<?PUBLIC_SHARE_PATH>>, ShareId)).
+    oz_worker:get_uri(?PUBLIC_SHARE_PATH(ShareId)).
 
 
 %%--------------------------------------------------------------------
