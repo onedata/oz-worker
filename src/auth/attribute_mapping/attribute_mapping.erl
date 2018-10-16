@@ -204,17 +204,17 @@
 %%% config (default and IdP specific):
 %%%  defaultProtocolConfig => #{
 %%%      attributeMapping => #{
-%%%          subjectId => {required, eduPersonUniqueId},
-%%%          name => {required, [displayName, surName]},
-%%%          alias => {optional, eduPersonPrincipalName},
-%%%          emails => {optional, mail}
+%%%          subjectId => {required, "eduPersonUniqueID"},
+%%%          name => {required, ["displayName", "surName"]},
+%%%          alias => {optional, "eduPersonPrincipalName"},
+%%%          emails => {optional, "mail"}
 %%%      }
 %%%  }
 %%%
 %%%  {my_idp, #{
 %%%      protocolConfig => #{
 %%%          attributeMapping => #{
-%%%              subjectId => {required, eduPersonTargetedID},
+%%%              subjectId => {required, "eduPersonTargetedID"},
 %%%              % if not explicitly set to undefined, alias rules will be
 %%%              % inherited from defaultProtocolConfig!
 %%%              alias => undefined,
@@ -227,10 +227,10 @@
 %%%  {my_idp, #{
 %%%      protocolConfig => #{
 %%%          attributeMapping => #{
-%%%              subjectId => {required, eduPersonTargetedID},
-%%%              name => {required, [displayName, surName]},
+%%%              subjectId => {required, "eduPersonTargetedID"},
+%%%              name => {required, ["displayName", "surName"]},
 %%%              alias => undefined,
-%%%              emails => {optional, mail},
+%%%              emails => {optional, "mail"},
 %%%              entitlements => {optional, "groups"}
 %%%          }
 %%%      }

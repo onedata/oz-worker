@@ -36,7 +36,7 @@ attribute_mapping_test_() ->
 %%%===================================================================
 
 setup() ->
-    meck:new(auth_config, []),
+    meck:new(auth_config, [passthrough]),
     meck:expect(auth_config, get_attribute_mapping, fun(?DUMMY_IDP, Attr) ->
         maps:get(Attr, get_mocked_attribute_mapping_cfg(), undefined)
     end),

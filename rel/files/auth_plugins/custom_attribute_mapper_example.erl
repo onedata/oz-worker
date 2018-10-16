@@ -13,7 +13,7 @@
 %%% as expected.
 %%% @end
 %%%-------------------------------------------------------------------
--module(custom_attribute_mapper).
+-module(custom_attribute_mapper_example).
 -behavior(auth_plugin_behaviour).
 -behavior(entitlement_parser_behaviour).
 

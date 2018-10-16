@@ -34,19 +34,19 @@ end).
 -define(cfg(__IdP, __Path, __Policy), auth_config:get_protocol_config(__IdP, __Path, __Policy)).
 
 -define(CFG_CLIENT_ID(__IdP),
-    list_to_binary(?cfg(__IdP, [pluginConfig, clientId], required))
+    ?bin(?cfg(__IdP, [pluginConfig, clientId], required))
 ).
 -define(CFG_CLIENT_SECRET(__IdP),
-    list_to_binary(?cfg(__IdP, [pluginConfig, clientSecret], required))
+    ?bin(?cfg(__IdP, [pluginConfig, clientSecret], required))
 ).
 -define(CFG_ENDPOINT(__IdP, __Type),
     ?cfg(__IdP, [pluginConfig, endpoints, __Type], {default, ?DEFAULT_ENDPOINT(__Type)})
 ).
 -define(CFG_XRDS_ENDPOINT(__IdP),
-    list_to_binary(?cfg(__IdP, [pluginConfig, endpoints, xrds], required))
+    ?bin(?cfg(__IdP, [pluginConfig, endpoints, xrds], required))
 ).
 -define(CFG_SCOPE(__IdP),
-    list_to_binary(?cfg(__IdP, [pluginConfig, scope], {default, ?DEFAULT_SCOPE}))
+    ?bin(?cfg(__IdP, [pluginConfig, scope], {default, ?DEFAULT_SCOPE}))
 ).
 -define(CFG_ACCESS_TOKEN_ACQUIRE_METHOD(__IdP),
     ?cfg(__IdP, [pluginConfig, accessTokenAcquireMethod], {default, ?DEFAULT_ACCESS_TOKEN_ACQUIRE_METHOD})
@@ -185,7 +185,7 @@ request_user_info(URL, Parameters, Headers) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Resolves an endpoint for given IdP based on auth.config. The can be more than
+%% Resolves an endpoint for given IdP based on auth.config. There can be more than
 %% one endpoint of given type (typically that applies only to the userinfo endpoint).
 %% Possible Urls in config are:
 %%      - literal url string

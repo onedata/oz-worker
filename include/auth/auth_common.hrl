@@ -18,18 +18,8 @@
 
 -define(XRDS_CACHE_TTL, oz_worker:get_env(openid_xrds_cache_ttl, timer:hours(1))).
 
--define(bin(__Term), case __Term of
-    undefined -> undefined;
-    __List when is_list(__List) -> str_utils:unicode_list_to_binary(__List);
-    __Binary when is_binary(__Binary) -> __Binary
-end).
-
--define(str(__Term), case __Term of
-    undefined -> undefined;
-    __Atom when is_atom(__Atom) -> atom_to_list(__Atom);
-    __Binary when is_binary(__Binary) -> str_utils:binary_to_unicode_list(__Binary);
-    __Str when is_list(__Str) -> __Str
-end).
+-define(bin(Term), auth_config:ensure_bin(Term)).
+-define(str(Term), auth_config:ensure_str(Term)).
 
 -endif.
 

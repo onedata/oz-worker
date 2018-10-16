@@ -62,9 +62,9 @@ handle(Method, Req) ->
 %% @private
 -spec format_error_reason({error, term()}) -> binary().
 format_error_reason(?ERROR_BAD_AUTH_CONFIG) ->
-    <<"bad_auth_config:", (integer_to_binary(state_token:ttl()))>>;
+    <<"bad_auth_config">>;
 format_error_reason(?ERROR_INVALID_STATE) ->
-    <<"invalid_state">>;
+    <<"invalid_state:", (integer_to_binary(state_token:ttl()))/binary>>;
 format_error_reason(?ERROR_INVALID_AUTH_REQUEST) ->
     <<"invalid_auth_request">>;
 format_error_reason(?ERROR_IDP_UNREACHABLE(_)) ->
@@ -78,7 +78,7 @@ format_error_reason(?ERROR_BAD_ATTRIBUTE_TYPE(Attr, _)) ->
 format_error_reason(?ERROR_ATTRIBUTE_MAPPING_ERROR(Attr, _, _, _, _)) ->
     <<"cannot_resolve_required_attribute:", (atom_to_binary(Attr, utf8))/binary>>;
 format_error_reason(?ERROR_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(_)) ->
-<<"account_already_linked_to_current_user">>;
+    <<"account_already_linked_to_current_user">>;
 format_error_reason(?ERROR_ACCOUNT_ALREADY_LINKED_TO_ANOTHER_USER(_, _)) ->
     <<"account_already_linked_to_another_user">>;
 format_error_reason(?ERROR_INTERNAL_SERVER_ERROR) ->

@@ -1274,7 +1274,7 @@ linked_account_to_map(LinkedAccount) ->
         <<"entitlements">> => Entitlements,
         <<"custom">> => Custom,
 
-        % @todo these fields are deprecated, here for backwards compatibility
+        % TODO VFS-4506 deprecated, included for backward compatibility
         <<"login">> => gs_protocol:undefined_to_null(Alias),
         <<"emailList">> => Emails,
         <<"groups">> => Entitlements

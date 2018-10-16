@@ -63,6 +63,10 @@
 -export([
     force_auth_config_reload/0
 ]).
+-export([
+    ensure_bin/1,
+    ensure_str/1
+]).
 
 
 -define(AUTH_CONFIG_FILE, begin {ok, __Path} = oz_worker:get_env(auth_config_file), __Path end).
@@ -438,6 +442,20 @@ force_auth_config_reload() ->
     simple_cache:clear(cached_auth_config),
     get_auth_config(),
     ok.
+
+
+-spec ensure_bin(term()) -> undefined | binary().
+ensure_bin(undefined) -> undefined;
+ensure_bin(Atom) when is_atom(Atom) -> atom_to_binary(Atom, utf8);
+ensure_bin(List) when is_list(List) -> str_utils:unicode_list_to_binary(List);
+ensure_bin(Binary) when is_binary(Binary) -> Binary.
+
+
+-spec ensure_str(term()) -> undefined | string().
+ensure_str(undefined) -> undefined;
+ensure_str(Atom) when is_atom(Atom) -> atom_to_list(Atom);
+ensure_str(Binary) when is_binary(Binary) -> str_utils:binary_to_unicode_list(Binary);
+ensure_str(Str) when is_list(Str) -> Str.
 
 %%%===================================================================
 %%% Internal functions

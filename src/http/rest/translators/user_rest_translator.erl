@@ -46,12 +46,24 @@ create_response(#gri{aspect = client_tokens}, _, resource, {_, Token}) ->
 get_response(#gri{id = undefined, aspect = list}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});
 
-get_response(#gri{id = UserId, aspect = instance, scope = _}, UserData) ->
+get_response(#gri{id = UserId, aspect = instance, scope = protected}, UserData) ->
+    Alias = gs_protocol:undefined_to_null(maps:get(<<"alias">>, UserData)),
+    rest_translator:ok_body_reply(UserData#{
+        <<"userId">> => UserId,
+        <<"alias">> => Alias,
+        % TODO VFS-4506 deprecated fields, included for backward compatibility
+        <<"login">> => Alias,
+        <<"emailList">> => maps:get(<<"emails">>, UserData)
+    });
+
+get_response(#gri{id = UserId, aspect = instance, scope = shared}, UserData) ->
     % scope can be protected or shared
     Alias = gs_protocol:undefined_to_null(maps:get(<<"alias">>, UserData)),
     rest_translator:ok_body_reply(UserData#{
         <<"userId">> => UserId,
-        <<"alias">> => Alias
+        <<"alias">> => Alias,
+        % TODO VFS-4506 deprecated fields, included for backward compatibility
+        <<"login">> => Alias
     });
 
 get_response(#gri{aspect = oz_privileges}, Privileges) ->

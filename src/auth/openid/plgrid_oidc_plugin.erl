@@ -22,7 +22,7 @@
 
 
 -define(CFG_XRDS_ENDPOINT(__IdP),
-    list_to_binary(auth_config:get_protocol_config(__IdP, [pluginConfig, xrds_endpoint], required))
+    ?bin(auth_config:get_protocol_config(__IdP, [pluginConfig, xrds_endpoint], required))
 ).
 
 

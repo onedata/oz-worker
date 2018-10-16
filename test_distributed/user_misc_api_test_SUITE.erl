@@ -344,7 +344,12 @@ get_test(Config) ->
             method = get,
             path = [<<"/users/">>, User],
             expected_code = ?HTTP_200_OK,
-            expected_body = ProtectedData#{<<"userId">> => User}
+            expected_body = ProtectedData#{
+                <<"userId">> => User,
+                % TODO VFS-4506 deprecated fields, included for backward compatibility
+                <<"emailList">> => ExpEmailList,
+                <<"login">> => ExpAlias
+            }
         },
         logic_spec = LogicSpec = #logic_spec{
             module = user_logic,
@@ -358,15 +363,15 @@ get_test(Config) ->
                 type = od_user, id = User, aspect = instance, scope = protected
             },
             expected_result = ?OK_MAP(ProtectedData#{
-                % TODO VFS-4506 deprecated fields, included for backward compatibility
-                <<"emailList">> => ExpEmailList,
-                <<"login">> => ExpAlias,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
                     ),
                     ?assertEqual(Id, User)
-                end
+                end,
+                % TODO VFS-4506 deprecated fields, included for backward compatibility
+                <<"emailList">> => ExpEmailList,
+                <<"login">> => ExpAlias
             })
         }
     },
@@ -389,13 +394,13 @@ get_test(Config) ->
             expected_result = ?OK_MAP(#{
                 <<"name">> => ExpName,
                 <<"alias">> => ExpAlias,
-                <<"login">> => ExpAlias,% TODO VFS-4506 deprecated, included for backward compatibility
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
                     ),
                     ?assertEqual(Id, User)
-                end
+                end,
+                <<"login">> => ExpAlias
             })
         }
     },
@@ -415,7 +420,10 @@ get_self_test(Config) ->
         <<"name">> => ExpName,
         <<"alias">> => ExpAlias,
         <<"emails">> => ExpEmailList,
-        <<"linkedAccounts">> => []
+        <<"linkedAccounts">> => [],
+        % TODO VFS-4506 deprecated, included for backward compatibility
+        <<"login">> => ExpAlias,
+        <<"emailList">> => ExpEmailList
     },
 
     ApiTestSpec = #api_test_spec{
@@ -433,9 +441,6 @@ get_self_test(Config) ->
                 aspect = instance, scope = protected
             },
             expected_result = ?OK_MAP(ProtectedData#{
-                % TODO VFS-4506 deprecated fields, included for backward compatibility
-                <<"login">> => ExpAlias,
-                <<"emailList">> => ExpEmailList,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri

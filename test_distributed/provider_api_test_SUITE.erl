@@ -898,7 +898,12 @@ get_eff_user_test(Config) ->
                         <<"/providers/">>, P1, <<"/effective_users/">>, UserId
                     ],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = ExpDetails#{<<"userId">> => UserId}
+                    expected_body = ExpDetails#{
+                        <<"userId">> => UserId,
+                        % TODO VFS-4506 deprecated, included for backward compatibility
+                        <<"login">> => maps:get(<<"alias">>, ExpDetails),
+                        <<"emailList">> => maps:get(<<"emails">>, ExpDetails)
+                    }
                 },
                 logic_spec = #logic_spec{
                     module = provider_logic,
@@ -914,14 +919,15 @@ get_eff_user_test(Config) ->
                     },
                     auth_hint = ?THROUGH_PROVIDER(P1),
                     expected_result = ?OK_MAP(ExpDetails#{
-                        <<"login">> => maps:get(<<"alias">>, ExpDetails),
-                        <<"emailList">> => maps:get(<<"emails">>, ExpDetails),
                         <<"gri">> => fun(EncodedGri) ->
                             #gri{id = Id} = oz_test_utils:decode_gri(
                                 Config, EncodedGri
                             ),
                             ?assertEqual(Id, UserId)
-                        end
+                        end,
+                        % TODO VFS-4506 deprecated, included for backward compatibility
+                        <<"login">> => maps:get(<<"alias">>, ExpDetails),
+                        <<"emailList">> => maps:get(<<"emails">>, ExpDetails)
                     })
                 }
             },

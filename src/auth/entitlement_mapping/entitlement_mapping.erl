@@ -262,7 +262,7 @@
 %%%                .---------'   |
 %%%   (admin privs>|             my-unit [unit]
 %%%                |             u   u
-%%%                | .-----------'   |<member privs)
+%%%                | .-----------'   |<manager privs)
 %%%                | |               |
 %%%                | |<admin privs)  my-team [team]
 %%%                | |                u   u
@@ -287,7 +287,7 @@
 %%%           |                .---------'   |
 %%%           |   (admin privs>|             my-unit [unit]
 %%%           |                |             u   u
-%%%           |                | .-----------'   |<member privs)
+%%%           |                | .-----------'   |<manager privs)
 %%%           |                | |               |
 %%%           |                | |<admin privs)  my-team [team]
 %%%           |                | |                u   u
@@ -420,21 +420,23 @@ gen_group_id(Path) ->
 %%--------------------------------------------------------------------
 -spec map_entitlement(auth_config:idp(), raw_entitlement()) ->
     {ok, {od_group:id(), idp_entitlement()}} | {error, malformed}.
-map_entitlement(IdP, Entitlement) ->
-    map_entitlement(IdP, Entitlement, ?CFG_PARSER(IdP), ?CFG_PARSER_CONFIG(IdP), ?CFG_VO_GROUP_NAME(IdP)).
-
--spec map_entitlement(auth_config:idp(), raw_entitlement(), module(),
-    auth_config:parser_config(), od_group:name()) ->
-    {ok, {od_group:id(), idp_entitlement()}} | {error, malformed}.
-map_entitlement(IdP, RawEntitlement, Parser, ParserConfig, VoGroupName) ->
+map_entitlement(IdP, RawEntitlement) ->
+    VoGroupName = ?CFG_VO_GROUP_NAME(IdP),
+    AdminGroup = ?CFG_ADMIN_GROUP(IdP),
+    Parser = ?CFG_PARSER(IdP),
+    ParserConfig = ?CFG_PARSER_CONFIG(IdP),
     try
-        IdPEntitlement = Parser:parse(IdP, RawEntitlement, ParserConfig),
-        IdPEntitlementWithVo = add_vo_group(IdPEntitlement, VoGroupName),
-        GroupId = gen_group_id(IdPEntitlementWithVo),
+        ParsedEntitlement = Parser:parse(IdP, RawEntitlement, ParserConfig),
+        ParsedEntitlementWithVo = prepend_vo_group(ParsedEntitlement, VoGroupName),
+        IdPEntitlement = case RawEntitlement of
+            AdminGroup -> convert_to_admin_group(ParsedEntitlementWithVo);
+            _ -> ParsedEntitlementWithVo
+        end,
+        GroupId = gen_group_id(IdPEntitlement),
         ?debug("Successfully mapped entitlement '~ts' to Onedata group: '~s'", [
             RawEntitlement, GroupId
         ]),
-        {ok, {GroupId, IdPEntitlementWithVo}}
+        {ok, {GroupId, IdPEntitlement}}
     catch Type:Reason ->
         ?debug_stacktrace("Cannot parse entitlement \"~s\" for IdP '~p' due to ~p:~p", [
             RawEntitlement, IdP, Type, Reason
@@ -473,25 +475,13 @@ map_entitlements(IdP, Entitlements) ->
         false ->
             [];
         true ->
-            VoGroupName = ?CFG_VO_GROUP_NAME(IdP),
-            Parser = ?CFG_PARSER(IdP),
-            ParserConfig = ?CFG_PARSER_CONFIG(IdP),
             lists:filtermap(fun(RawEntitlement) ->
-                case map_entitlement(IdP, RawEntitlement, Parser, ParserConfig, VoGroupName) of
+                case map_entitlement(IdP, RawEntitlement) of
                     {ok, IdpEntitlement} -> {true, IdpEntitlement};
                     {error, malformed} -> false
                 end
             end, Entitlements)
     end.
-
-
-%% @private
--spec add_vo_group(idp_entitlement(), undefined | binary()) -> idp_entitlement().
-add_vo_group(IdPEntitlement, undefined) ->
-    IdPEntitlement;
-add_vo_group(IdPEntitlement = #idp_entitlement{path = Path}, VoGroupName) ->
-    VoEntry = #idp_group{type = organization, name = VoGroupName, privileges = member},
-    IdPEntitlement#idp_entitlement{path = [VoEntry | Path]}.
 
 
 %%--------------------------------------------------------------------
@@ -503,64 +493,113 @@ add_vo_group(IdPEntitlement = #idp_entitlement{path = Path}, VoGroupName) ->
 %%--------------------------------------------------------------------
 -spec ensure_group_structure(idp_entitlement()) -> od_group:id().
 ensure_group_structure(#idp_entitlement{idp = IdP, path = Path}) ->
-    BottomGroupId = ensure_group_structure(1, undefined, Path),
-    case ensure_admin_group(IdP) of
-        false ->
-            ok;
-        {true, BottomGroupId} ->
-            % Do not add the admin group to itself
-            ok;
-        {true, AdminGroupId} ->
-            group_logic:add_group(?ROOT, BottomGroupId, AdminGroupId, map_privileges(admin))
-    end,
-    BottomGroupId.
+    ensure_group_structure(1, Path, undefined, resolve_admin_group(IdP)).
 
--spec ensure_group_structure(Depth :: integer(), ParentId :: undefined | od_group:id(),
-    [idp_group()]) -> od_group:id().
-ensure_group_structure(Depth, ParentId, Path) when Depth > length(Path) ->
+-spec ensure_group_structure(Depth :: integer(), [idp_group()], ParentId :: undefined | od_group:id(),
+    AdminGroupId :: undefined | od_group:id()) -> od_group:id().
+ensure_group_structure(Depth, Path, ParentId, _AdminGroupId) when Depth > length(Path) ->
     ParentId;
-ensure_group_structure(Depth, ParentId, Path) ->
+ensure_group_structure(Depth, Path, ParentId, AdminGroupId) ->
     SubGroupPath = lists:sublist(Path, Depth),
-    GroupId = gen_group_id(SubGroupPath),
-    #idp_group{type = Type, name = Name, privileges = Privileges} = lists:last(SubGroupPath),
+    GroupId = ensure_group(SubGroupPath, ParentId),
+    add_admin_group_as_child(GroupId, AdminGroupId),
+    ensure_group_structure(Depth + 1, Path, GroupId, AdminGroupId).
+
+
+%% @private
+-spec ensure_group([idp_group()], ParentId :: undefined | od_group:id()) -> od_group:id().
+ensure_group(Path, ParentId) ->
+    GroupId = gen_group_id(Path),
+    #idp_group{type = Type, name = Name, privileges = Privileges} = lists:last(Path),
+    % Update will create the group if it does not exist
     {ok, _} = od_group:update(GroupId, fun(Group) -> {ok, Group} end, #od_group{
         name = entity_logic:normalize_name(Name),
         type = Type
     }),
-    case Depth of
-        1 ->
-            ok;
-        _ ->
-            group_logic:add_group(?ROOT, ParentId, GroupId, map_privileges(Privileges))
-    end,
-    ensure_group_structure(Depth + 1, GroupId, Path).
+    ParentId /= undefined andalso group_logic:add_group(
+        ?ROOT, ParentId, GroupId, map_privileges(Privileges)
+    ),
+    GroupId.
+
+
+%% @private
+-spec add_admin_group_as_child(od_group:id(), AdminGroupId :: undefined | od_group:id()) -> ok.
+add_admin_group_as_child(_GroupId, undefined) ->
+    ok;
+add_admin_group_as_child(GroupId, GroupId) ->
+    % Do not add the admin group to itself
+    ok;
+add_admin_group_as_child(GroupId, AdminGroupId) ->
+    group_logic:add_group(?ROOT, GroupId, AdminGroupId, map_privileges(admin)),
+    ok.
+
+
+%% @private
+-spec prepend_vo_group(idp_entitlement(), undefined | binary()) -> idp_entitlement().
+prepend_vo_group(IdPEntitlement, undefined) ->
+    IdPEntitlement;
+prepend_vo_group(IdPEntitlement = #idp_entitlement{path = Path}, VoGroupName) ->
+    VoEntry = #idp_group{type = organization, name = VoGroupName, privileges = member},
+    IdPEntitlement#idp_entitlement{path = [VoEntry | Path]}.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns the admin group id for given IdP, or undefined. If the admin group
+%% does not exist, it is created. Uses simple cache to cache the results
+%% if the admin group was already created.
+%% @end
+%%--------------------------------------------------------------------
+-spec resolve_admin_group(auth_config:idp()) -> undefined | od_group:id().
+resolve_admin_group(IdP) ->
+    case ?CFG_ADMIN_GROUP(IdP) of
+        undefined ->
+            undefined;
+        RawAdminGroup ->
+            {ok, GroupId} = simple_cache:get({admin_group, {IdP, RawAdminGroup}}, fun() ->
+                case create_admin_group(IdP, RawAdminGroup) of
+                    false ->
+                        % Do not cache in case of failure to map the entitlement
+                        {false, undefined};
+                    {true, GroupId} ->
+                        {true, GroupId}
+                end
+            end),
+            GroupId
+    end.
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% Creates the admin group for given IdP. Returns false if no admin group is
-%% specified in config, or {true, GroupId} if it was created or already existed.
+%% specified in config, or {true, GroupId} if it was created.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_admin_group(auth_config:idp()) -> false | {true, od_group:id()}.
-ensure_admin_group(IdP) ->
-    case ?CFG_ADMIN_GROUP(IdP) of
-        undefined ->
+-spec create_admin_group(auth_config:idp(), raw_entitlement()) -> false | {true, od_group:id()}.
+create_admin_group(IdP, RawAdminGroup) ->
+    case map_entitlement(IdP, RawAdminGroup) of
+        {error, malformed} ->
+            ?warning("Cannot parse admin group for IdP '~p'", [IdP]),
             false;
-        RawAdminGroup ->
-            case map_entitlement(IdP, RawAdminGroup) of
-                {error, malformed} ->
-                    ?warning("Cannot parse admin group for IdP '~p'", [IdP]),
-                    false;
-                {ok, {_GroupId, #idp_entitlement{path = Path}}} ->
-                    [AdminGroup | ParentGroups] = lists:reverse(Path),
-                    PathWithAdminPrivs = lists:reverse(
-                        [AdminGroup#idp_group{privileges = admin} | ParentGroups]
-                    ),
-                    {true, ensure_group_structure(1, undefined, PathWithAdminPrivs)}
-            end
+        {ok, {AdminGroupId, #idp_entitlement{path = Path}}} ->
+            AdminGroupPath = convert_to_admin_group(Path),
+            % Create the admin group first, as ensure_group_structure/4 adds the
+            % admin group to all created groups on the path.
+            ensure_group(AdminGroupPath, undefined),
+            {true, ensure_group_structure(1, AdminGroupPath, undefined, AdminGroupId)}
     end.
+
+
+%% @private
+-spec convert_to_admin_group(idp_entitlement() | [idp_group()]) ->
+    idp_entitlement() | [idp_group()].
+convert_to_admin_group(IdPEntitlement = #idp_entitlement{path = Path}) ->
+    IdPEntitlement#idp_entitlement{path = convert_to_admin_group(Path)};
+convert_to_admin_group(Path) when is_list(Path) ->
+    [AdminGroup | ParentGroups] = lists:reverse(Path),
+    lists:reverse([AdminGroup#idp_group{privileges = admin} | ParentGroups]).
 
 
 %% @private
