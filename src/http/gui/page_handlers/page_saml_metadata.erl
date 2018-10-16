@@ -30,10 +30,15 @@
 %%--------------------------------------------------------------------
 -spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"GET">>, Req) ->
-    SignedXml = esaml_sp:generate_metadata(saml_config:get_sp_config()),
-    Metadata = xmerl:export([SignedXml], xmerl_xml),
-    cowboy_req:reply(200,
-        #{<<"content-type">> => <<"text/xml">>},
-        Metadata,
-        Req
-    ).
+    case auth_config:get_saml_sp_config() of
+        {error, saml_disabled} ->
+            cowboy_req:reply(404, Req);
+        SpConfig ->
+            SignedXml = esaml_sp:generate_metadata(SpConfig),
+            Metadata = xmerl:export([SignedXml], xmerl_xml),
+            cowboy_req:reply(200,
+                #{<<"content-type">> => <<"text/xml">>},
+                Metadata,
+                Req
+            )
+    end.

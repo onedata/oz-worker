@@ -9,7 +9,7 @@
 %%% authentication and authorization.
 %%% @end
 %%%-------------------------------------------------------------------
--module(auth_logic).
+-module(auth_tokens).
 -author("Konrad Zemek").
 
 -include("http/gui_paths.hrl").
@@ -198,7 +198,7 @@ invalidate_token(Identifier) when is_binary(Identifier) ->
 %% For example, where to redirect the user after login.
 %% @end
 %%--------------------------------------------------------------------
--spec generate_state_token(auth_utils:idp(), LinkAccount :: boolean()) ->
+-spec generate_state_token(auth_config:idp(), LinkAccount :: boolean()) ->
     state_token:id().
 generate_state_token(IdP, LinkAccount) ->
     StateInfo = #{

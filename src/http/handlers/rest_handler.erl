@@ -44,7 +44,6 @@
 -export([
     init/2,
     allowed_methods/2,
-
     content_types_accepted/2,
     content_types_provided/2,
     is_authorized/2,
@@ -141,7 +140,7 @@ is_authorized(Req, State) ->
     try
         % Try to authorize the client using several methods.
         Client = authorize(Req, [
-            fun authorize_by_oauth_provider/1,
+            fun authorize_by_external_access_token/1,
             fun authorize_by_basic_auth/1,
             fun authorize_by_macaroons/1
         ]),
@@ -395,7 +394,9 @@ authorize(Req, [AuthMethod | Rest]) ->
         {true, Client} ->
             Client;
         false ->
-            authorize(Req, Rest)
+            authorize(Req, Rest);
+        {error, _} = Error ->
+            throw(Error)
     end.
 
 
@@ -406,21 +407,12 @@ authorize(Req, [AuthMethod | Rest]) ->
 %% any of the configured oauth providers supporting authority delegation.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_oauth_provider(Req :: cowboy_req:req()) ->
+-spec authorize_by_external_access_token(Req :: cowboy_req:req()) ->
     false | {true, #client{}}.
-authorize_by_oauth_provider(Req) ->
+authorize_by_external_access_token(Req) ->
     case cowboy_req:header(<<"x-auth-token">>, Req) of
-        undefined ->
-            false;
-        AccessToken ->
-            case auth_utils:authorize_by_oauth_provider(AccessToken) of
-                false ->
-                    false;
-                {true, Client} ->
-                    {true, Client};
-                ?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(ProviderId) ->
-                    throw(?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(ProviderId))
-            end
+        undefined -> false;
+        AccessToken -> auth_logic:authorize_by_external_access_token(AccessToken)
     end.
 
 
@@ -431,16 +423,11 @@ authorize_by_oauth_provider(Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize_by_basic_auth(Req :: cowboy_req:req()) ->
-    false | {true, #client{}}.
+    false | {true, #client{}} | {error, term()}.
 authorize_by_basic_auth(Req) ->
     case cowboy_req:header(<<"authorization">>, Req) of
         <<"Basic ", UserPasswdB64/binary>> ->
-            case auth_utils:authorize_by_basic_auth(UserPasswdB64) of
-                {true, Client} ->
-                    {true, Client};
-                _ ->
-                    throw(?ERROR_BAD_BASIC_CREDENTIALS)
-            end;
+            auth_logic:authorize_by_basic_auth(UserPasswdB64);
         _ ->
             false
     end.
@@ -455,19 +442,11 @@ authorize_by_basic_auth(Req) ->
 -spec authorize_by_macaroons(Req :: cowboy_req:req()) ->
     false | {true, #client{}}.
 authorize_by_macaroons(Req) ->
-    {Macaroon, DischargeMacaroons} = parse_macaroons_from_headers(Req),
-    case Macaroon of
-        undefined ->
+    case parse_macaroons_from_headers(Req) of
+        {undefined, _} ->
             false;
-        _ ->
-            case auth_utils:authorize_by_macaroons(
-                Macaroon, DischargeMacaroons
-            ) of
-                {true, Client} ->
-                    {true, Client};
-                {error, _} ->
-                    throw(?ERROR_UNAUTHORIZED)
-            end
+        {Macaroon, DischargeMacaroons} ->
+            auth_logic:authorize_by_macaroons(Macaroon, DischargeMacaroons)
     end.
 
 

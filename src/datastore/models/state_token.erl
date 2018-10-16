@@ -8,8 +8,8 @@
 %%% @doc
 %%% This model holds information connected to state tokens. They are used to
 %%% match together OIDC/SAML requests and responses and protect against replay
-%%% attacks. The info contains for example to which IdP the client was
-%%% redirected.
+%%% attacks. Every state token has correlated info, for example to which IdP the
+%%% client was redirected.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(state_token).
@@ -18,11 +18,10 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
--define(STATE_TOKEN_TTL, oz_worker:get_env(state_token_ttl_secs, 300)).
-
 %% API
 -export([create/1]).
 -export([lookup/1]).
+-export([ttl/0]).
 
 %% model_behaviour callbacks
 -export([init/0]).
@@ -58,6 +57,7 @@ create(StateInfo) ->
     }),
     {ok, Token}.
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Lookups state token in database. If existent and still valid, state info
@@ -73,13 +73,24 @@ lookup(Token) ->
             % The token is consumed immediately
             datastore_model:delete(?CTX, Token),
             % Check if the token is still valid
-            case time_utils:cluster_time_seconds() - T =< ?STATE_TOKEN_TTL of
+            case time_utils:cluster_time_seconds() - T =< ttl() of
                 true -> {ok, Info};
                 false -> error
             end;
         _ ->
             error
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the state token Time To Live, as configured in app.config.
+%% @end
+%%--------------------------------------------------------------------
+-spec ttl() -> integer().
+ttl() ->
+    oz_worker:get_env(state_token_ttl_secs, 300).
+
 
 %%%===================================================================
 %%% datastore_model callbacks

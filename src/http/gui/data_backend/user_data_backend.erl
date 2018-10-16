@@ -247,7 +247,7 @@ authorizers_db_to_client(LinkedAccounts) ->
         fun(LinkedAccount, Acc) ->
             #linked_account{
                 idp = Provider,
-                email_list = Emails,
+                emails = Emails,
                 subject_id = SubId} = LinkedAccount,
             ProviderBin = str_utils:to_binary(Provider),
             SubIdBin = str_utils:to_binary(SubId),

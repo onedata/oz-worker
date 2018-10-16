@@ -85,7 +85,7 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
     #od_user{
         name = Name,
         alias = Alias,
-        email_list = EmailList,
+        emails = Emails,
         linked_accounts = LinkedAccounts,
         default_space = DefaultSpace,
         space_aliases = SpaceAliases
@@ -93,9 +93,7 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
     #{
         <<"name">> => Name,
         <<"alias">> => gs_protocol:undefined_to_null(Alias),
-        % TODO VFS-4506 deprecated, included for backward compatibility
-        <<"login">> => gs_protocol:undefined_to_null(Alias),
-        <<"emailList">> => EmailList,
+        <<"emails">> => Emails,
         <<"linkedAccounts">> => user_logic:linked_accounts_to_maps(LinkedAccounts),
         <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
         <<"spaceAliases">> => SpaceAliases,
@@ -103,23 +101,29 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
         <<"effectiveGroups">> => entity_graph:get_relations(effective, top_down, od_group, User),
         <<"effectiveSpaces">> => entity_graph:get_relations(effective, top_down, od_space, User),
         <<"effectiveHandles">> => entity_graph:get_relations(effective, top_down, od_handle, User),
-        <<"effectiveHandleServices">> => entity_graph:get_relations(effective, top_down, od_handle_service, User)
+        <<"effectiveHandleServices">> => entity_graph:get_relations(effective, top_down, od_handle_service, User),
+
+        % TODO VFS-4506 deprecated fields, included for backward compatibility
+        <<"login">> => gs_protocol:undefined_to_null(Alias),
+        <<"emailList">> => Emails
     };
 
 translate_resource(_, #gri{type = od_user, aspect = instance, scope = protected}, User) ->
     #{
         <<"name">> := Name,
         <<"alias">> := Alias,
-        <<"emailList">> := EmailList,
+        <<"emails">> := Emails,
         <<"linkedAccounts">> := LinkedAccountMaps
     } = User,
-    #{
+    User#{
         <<"name">> => Name,
         <<"alias">> => gs_protocol:undefined_to_null(Alias),
-        % TODO VFS-4506 deprecated, included for backward compatibility
+        <<"emails">> => Emails,
+        <<"linkedAccounts">> => LinkedAccountMaps,
+
+        % TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"login">> => gs_protocol:undefined_to_null(Alias),
-        <<"emailList">> => EmailList,
-        <<"linkedAccounts">> => LinkedAccountMaps
+        <<"emailList">> => Emails
     };
 
 translate_resource(_, #gri{type = od_user, aspect = instance, scope = shared}, User) ->
@@ -130,7 +134,8 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = shared}, U
     #{
         <<"name">> => Name,
         <<"alias">> => gs_protocol:undefined_to_null(Alias),
-        % TODO VFS-4506 deprecated, included for backward compatibility
+
+        % TODO VFS-4506 deprecated field, included for backward compatibility
         <<"login">> => gs_protocol:undefined_to_null(Alias)
     };
 

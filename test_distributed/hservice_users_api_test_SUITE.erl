@@ -284,7 +284,11 @@ get_user_test(Config) ->
             method = get,
             path = [<<"/handle_services/">>, HService, <<"/users/">>, U3],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpUserDetails#{<<"userId">> => U3}
+            expected_body = ExpUserDetails#{
+                <<"userId">> => U3,
+                % TODO VFS-4506 deprecated, included for backward compatibility
+                <<"login">> => ExpAlias
+            }
         },
         logic_spec = #logic_spec{
             module = handle_service_logic,
@@ -299,13 +303,14 @@ get_user_test(Config) ->
             },
             auth_hint = ?THROUGH_HANDLE_SERVICE(HService),
             expected_result = ?OK_MAP(ExpUserDetails#{
-                <<"login">> => ExpAlias,% TODO VFS-4506 deprecated, included for backward compatibility
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = UserId} = oz_test_utils:decode_gri(
                         Config, EncodedGri
                     ),
                     ?assertEqual(UserId, U3)
-                end
+                end,
+                % TODO VFS-4506 deprecated, included for backward compatibility
+                <<"login">> => ExpAlias
             })
         }
     },
@@ -512,7 +517,11 @@ get_eff_user_test(Config) ->
                         <<"/effective_users/">>, UserId
                     ],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = UserDetails#{<<"userId">> => UserId}
+                    expected_body = UserDetails#{
+                        <<"userId">> => UserId,
+                        % TODO VFS-4506 deprecated, included for backward compatibility
+                        <<"login">> => maps:get(<<"alias">>, UserDetails)
+                    }
                 },
                 logic_spec = #logic_spec{
                     module = handle_service_logic,
@@ -528,13 +537,14 @@ get_eff_user_test(Config) ->
                     },
                     auth_hint = ?THROUGH_HANDLE_SERVICE(HService),
                     expected_result = ?OK_MAP(UserDetails#{
-                        <<"login">> => maps:get(<<"alias">>, UserDetails),
                         <<"gri">> => fun(EncodedGri) ->
                             #gri{id = Id} = oz_test_utils:decode_gri(
                                 Config, EncodedGri
                             ),
                             ?assertEqual(Id, UserId)
-                        end
+                        end,
+                        % TODO VFS-4506 deprecated, included for backward compatibility
+                        <<"login">> => maps:get(<<"alias">>, UserDetails)
                     })
                 }
             },

@@ -198,7 +198,10 @@
     mock_handle_proxy/1,
     unmock_handle_proxy/1,
     gui_ca_certs/1,
-    ensure_entity_graph_is_up_to_date/1, ensure_entity_graph_is_up_to_date/2
+    ensure_entity_graph_is_up_to_date/1, ensure_entity_graph_is_up_to_date/2,
+    toggle_basic_auth/2,
+    read_auth_config/1,
+    overwrite_auth_config/2
 ]).
 
 % Convenience functions for gs
@@ -2124,6 +2127,55 @@ ensure_entity_graph_is_up_to_date(Config) ->
     boolean().
 ensure_entity_graph_is_up_to_date(Config, Retries) ->
     ?assertMatch(true, call_oz(Config, entity_graph, ensure_up_to_date, []), Retries).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Turns the onepanelAuth (login with basic credentials) on/off by overwriting
+%% auth.config.
+%% @end
+%%--------------------------------------------------------------------
+-spec toggle_basic_auth(Config :: term(), boolean()) -> ok.
+toggle_basic_auth(Config, Flag) ->
+    AuthConfigData = #{
+        onepanelAuthConfig => #{
+            enabled => Flag
+        },
+        supportedIdps => [
+            {onepanel, #{
+                protocol => onepanelAuth
+            }}
+        ]
+    },
+    overwrite_auth_config(Config, AuthConfigData).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns parsed auth.config.
+%% @end
+%%--------------------------------------------------------------------
+-spec read_auth_config(Config :: term()) -> auth_config:config_v2().
+read_auth_config(Config) ->
+    {ok, AuthConfigPath} = call_oz(Config, oz_worker, get_env, [auth_config_file]),
+    {ok, [AuthConfig]} = oz_test_utils:call_oz(Config, file, consult, [AuthConfigPath]),
+    AuthConfig.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overwrites auth.config with given data.
+%% @end
+%%--------------------------------------------------------------------
+-spec overwrite_auth_config(Config :: term(), auth_config:config_v2()) -> ok.
+overwrite_auth_config(Config, AuthConfigData) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    {ok, AuthConfigPath} = call_oz(Config, oz_worker, get_env, [auth_config_file]),
+    rpc:multicall(Nodes, file, write_file, [
+        AuthConfigPath, io_lib:format("~tp.~n", [AuthConfigData#{version => 2}])
+    ]),
+    rpc:multicall(Nodes, auth_config, force_auth_config_reload, []),
+    ok.
 
 
 %%--------------------------------------------------------------------

@@ -120,7 +120,7 @@ authorize_test(Config) ->
     % Generate an auth token, parse the token for 3rd party caveats and check
     % if authorize endpoint works as expected.
     AuthToken = oz_test_utils:call_oz(
-        Config, auth_logic, gen_token, [User, Provider]
+        Config, auth_tokens, gen_token, [User, Provider]
     ),
     {ok, Macaroon} = onedata_macaroons:deserialize(AuthToken),
     Caveats = macaroon:third_party_caveats(Macaroon),
@@ -228,7 +228,7 @@ get_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{
         name = ExpName = <<"UserName">>,
         alias = ExpAlias = <<"UserAlias">>,
-        email_list = ExpEmailList = [<<"a@a.a">>, <<"b@b.b">>]
+        emails = ExpEmailList = [<<"a@a.a">>, <<"b@b.b">>]
     }),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
@@ -246,7 +246,7 @@ get_test(Config) ->
     ProtectedData = #{
         <<"name">> => ExpName,
         <<"alias">> => ExpAlias,
-        <<"emailList">> => ExpEmailList,
+        <<"emails">> => ExpEmailList,
         <<"linkedAccounts">> => []
     },
 
@@ -271,7 +271,7 @@ get_test(Config) ->
             expected_result = ?OK_TERM(
                 fun(#od_user{
                     name = Name, alias = Alias,
-                    email_list = EmailList,
+                    emails = EmailList,
                     basic_auth_enabled = false,
                     linked_accounts = [],
 
@@ -307,10 +307,9 @@ get_test(Config) ->
                 <<"effectiveHandleServices">> => [],
                 <<"effectiveHandles">> => [],
                 <<"effectiveSpaces">> => [S1],
-                <<"emailList">> => ExpEmailList,
+                <<"emails">> => ExpEmailList,
                 <<"linkedAccounts">> => [],
                 <<"alias">> => ExpAlias,
-                <<"login">> => ExpAlias,% TODO VFS-4506 deprecated, included for backward compatibility
                 <<"name">> => ExpName,
                 <<"spaceAliases">> => #{},
                 <<"gri">> => fun(EncodedGri) ->
@@ -318,7 +317,10 @@ get_test(Config) ->
                         Config, EncodedGri
                     ),
                     ?assertEqual(User, Id)
-                end
+                end,
+                % TODO VFS-4506 deprecated fields, included for backward compatibility
+                <<"emailList">> => ExpEmailList,
+                <<"login">> => ExpAlias
             })
         }
     },
@@ -342,7 +344,12 @@ get_test(Config) ->
             method = get,
             path = [<<"/users/">>, User],
             expected_code = ?HTTP_200_OK,
-            expected_body = ProtectedData#{<<"userId">> => User}
+            expected_body = ProtectedData#{
+                <<"userId">> => User,
+                % TODO VFS-4506 deprecated fields, included for backward compatibility
+                <<"emailList">> => ExpEmailList,
+                <<"login">> => ExpAlias
+            }
         },
         logic_spec = LogicSpec = #logic_spec{
             module = user_logic,
@@ -356,13 +363,15 @@ get_test(Config) ->
                 type = od_user, id = User, aspect = instance, scope = protected
             },
             expected_result = ?OK_MAP(ProtectedData#{
-                <<"login">> => ExpAlias,% TODO VFS-4506 deprecated, included for backward compatibility
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
                     ),
                     ?assertEqual(Id, User)
-                end
+                end,
+                % TODO VFS-4506 deprecated fields, included for backward compatibility
+                <<"emailList">> => ExpEmailList,
+                <<"login">> => ExpAlias
             })
         }
     },
@@ -385,13 +394,13 @@ get_test(Config) ->
             expected_result = ?OK_MAP(#{
                 <<"name">> => ExpName,
                 <<"alias">> => ExpAlias,
-                <<"login">> => ExpAlias,% TODO VFS-4506 deprecated, included for backward compatibility
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
                     ),
                     ?assertEqual(Id, User)
-                end
+                end,
+                <<"login">> => ExpAlias
             })
         }
     },
@@ -402,7 +411,7 @@ get_self_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{
         name = ExpName = <<"Name">>,
         alias = ExpAlias = <<"Alias">>,
-        email_list = ExpEmailList = [
+        emails = ExpEmailList = [
             <<"em1@google.com">>, <<"em2@google.com">>
         ]
     }),
@@ -410,8 +419,11 @@ get_self_test(Config) ->
     ProtectedData = #{
         <<"name">> => ExpName,
         <<"alias">> => ExpAlias,
-        <<"emailList">> => ExpEmailList,
-        <<"linkedAccounts">> => []
+        <<"emails">> => ExpEmailList,
+        <<"linkedAccounts">> => [],
+        % TODO VFS-4506 deprecated, included for backward compatibility
+        <<"login">> => ExpAlias,
+        <<"emailList">> => ExpEmailList
     },
 
     ApiTestSpec = #api_test_spec{
@@ -429,7 +441,6 @@ get_self_test(Config) ->
                 aspect = instance, scope = protected
             },
             expected_result = ?OK_MAP(ProtectedData#{
-                <<"login">> => ExpAlias, % TODO VFS-4506 deprecated, included for backward compatibility
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -636,7 +647,7 @@ create_client_token_test(Config) ->
     VerifyFun = fun(ClientToken) ->
         {ok, Macaroon} = onedata_macaroons:deserialize(ClientToken),
         ?assertEqual({ok, User}, oz_test_utils:call_oz(
-            Config, auth_logic, validate_token,
+            Config, auth_tokens, validate_token,
             [<<>>, Macaroon, [], undefined, undefined]
         )),
         true

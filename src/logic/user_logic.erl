@@ -19,11 +19,11 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
--define(PLUGIN, user_logic_plugin).
-
 % (Artificial) identity provider id used for creating user ids for users
 % coming from onepanel.
 -define(ONEZONE_IDP_ID, onezone).
+
+-define(DEFAULT_USER_NAME, <<"Unnamed User">>).
 
 % SSL Opts used to connect to onepanel.
 % Onepanel is usually available under 127.0.0.1 or localhost, so hostname
@@ -103,13 +103,14 @@
     has_eff_handle/2
 ]).
 -export([
+    validate_name/1, normalize_name/1,
+    validate_alias/1, normalize_alias/1,
     linked_account_to_map/1,
     linked_accounts_to_maps/1,
     idp_uid_to_system_uid/2,
     onepanel_uid_to_system_uid/1,
     create_user_by_linked_account/1,
     merge_linked_account/2,
-    is_email_occupied/2,
     authenticate_by_basic_credentials/2,
     change_user_password/3,
     get_default_provider_if_online/1
@@ -1185,6 +1186,70 @@ has_eff_handle(User, HandleId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Validates user name against allowed format.
+%% @end
+%%--------------------------------------------------------------------
+-spec validate_name(binary()) -> boolean().
+validate_name(Name) ->
+    entity_logic:validate_name(
+        Name, ?USER_NAME_FIRST_CHARS_ALLOWED, ?USER_NAME_MIDDLE_CHARS_ALLOWED,
+        ?USER_NAME_LAST_CHARS_ALLOWED, ?USER_NAME_MAXIMUM_LENGTH
+    ).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @see entity_logic:normalize_name/9.
+%% Normalizes user name to fit the allowed format.
+%% @end
+%%--------------------------------------------------------------------
+-spec normalize_name(undefined | od_user:name()) -> od_user:name().
+normalize_name(undefined) ->
+    ?DEFAULT_USER_NAME;
+normalize_name(Name) ->
+    entity_logic:normalize_name(Name,
+        ?USER_NAME_FIRST_CHARS_ALLOWED, <<"">>,
+        ?USER_NAME_MIDDLE_CHARS_ALLOWED, <<"-">>,
+        ?USER_NAME_LAST_CHARS_ALLOWED, <<"">>,
+        ?USER_NAME_MAXIMUM_LENGTH, ?DEFAULT_USER_NAME
+    ).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Validates user alias against allowed format.
+%% @end
+%%--------------------------------------------------------------------
+-spec validate_alias(od_user:alias()) -> boolean().
+validate_alias(undefined) ->
+    undefined;
+validate_alias(Alias) ->
+    entity_logic:validate_name(
+        Alias, ?ALIAS_FIRST_CHARS_ALLOWED, ?ALIAS_MIDDLE_CHARS_ALLOWED,
+        ?ALIAS_LAST_CHARS_ALLOWED, ?ALIAS_MAXIMUM_LENGTH
+    ).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @see entity_logic:normalize_name/9.
+%% Normalizes user alias to fit the allowed format.
+%% @end
+%%--------------------------------------------------------------------
+-spec normalize_alias(od_user:alias()) -> od_user:alias().
+normalize_alias(undefined) ->
+    undefined;
+normalize_alias(Alias) ->
+    entity_logic:normalize_name(Alias,
+        ?ALIAS_FIRST_CHARS_ALLOWED, <<"">>,
+        ?ALIAS_MIDDLE_CHARS_ALLOWED, <<"-">>,
+        ?ALIAS_LAST_CHARS_ALLOWED, <<"">>,
+        ?ALIAS_MAXIMUM_LENGTH, undefined
+    ).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Converts a linked account into serializable map.
 %% @end
 %%--------------------------------------------------------------------
@@ -1192,20 +1257,27 @@ has_eff_handle(User, HandleId) ->
     maps:map().
 linked_account_to_map(LinkedAccount) ->
     #linked_account{
-        idp = IdentityProvider,
+        idp = IdP,
         subject_id = SubjectId,
-        login = Login,
+        alias = Alias,
         name = Name,
-        email_list = EmailList,
-        groups = Groups
+        emails = Emails,
+        entitlements = Entitlements,
+        custom = Custom
     } = LinkedAccount,
     #{
-        <<"idp">> => IdentityProvider,
+        <<"idp">> => IdP,
         <<"subjectId">> => SubjectId,
-        <<"login">> => Login,
-        <<"name">> => Name,
-        <<"emailList">> => EmailList,
-        <<"groups">> => Groups
+        <<"name">> => gs_protocol:undefined_to_null(Name),
+        <<"alias">> => gs_protocol:undefined_to_null(Alias),
+        <<"emails">> => Emails,
+        <<"entitlements">> => Entitlements,
+        <<"custom">> => Custom,
+
+        % TODO VFS-4506 deprecated, included for backward compatibility
+        <<"login">> => gs_protocol:undefined_to_null(Alias),
+        <<"emailList">> => Emails,
+        <<"groups">> => Entitlements
     }.
 
 
@@ -1225,9 +1297,9 @@ linked_accounts_to_maps(LinkedAccounts) ->
 %% Constructs user id based on Identity Provider name and user's id in that IdP.
 %% @end
 %%--------------------------------------------------------------------
--spec idp_uid_to_system_uid(IdPId :: atom(), IdPUserId :: binary()) -> od_user:id().
-idp_uid_to_system_uid(IdPId, IdPUserId) ->
-    datastore_utils:gen_key(<<"">>, str_utils:format_bin("~p:~s", [IdPId, IdPUserId])).
+-spec idp_uid_to_system_uid(auth_config:idp(), SubjectId :: binary()) -> od_user:id().
+idp_uid_to_system_uid(IdP, SubjectId) ->
+    datastore_utils:gen_key(<<"">>, str_utils:format_bin("~p:~s", [IdP, SubjectId])).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -1240,7 +1312,6 @@ onepanel_uid_to_system_uid(OnepanelUserId) ->
 
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Creates a new user based on given linked account. Before creating such user,
 %% it must be ensured that user with such linked account does not exist.
@@ -1249,16 +1320,25 @@ onepanel_uid_to_system_uid(OnepanelUserId) ->
 -spec create_user_by_linked_account(#linked_account{}) ->
     {ok, od_user:doc()} | {error, not_found}.
 create_user_by_linked_account(LinkedAccount) ->
-    #linked_account{idp = IdPName, subject_id = IdPUserId} = LinkedAccount,
-    UserId = idp_uid_to_system_uid(IdPName, IdPUserId),
-    {ok, UserId} = create(#od_user{}, UserId),
+    #linked_account{
+        idp = IdP,
+        subject_id = SubjectId,
+        name = Name,
+        alias = Alias
+    } = LinkedAccount,
+    UserId = idp_uid_to_system_uid(IdP, SubjectId),
+    UserInfo = #od_user{name = normalize_name(Name)},
+    {ok, UserId} = create(UserInfo, UserId),
+    % Ensure no race conditions (update_alias uses a critical section)
+    update_alias(?USER(UserId), UserId, normalize_alias(Alias)),
     merge_linked_account(UserId, LinkedAccount).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Adds an linked account to user's account or replaces the old one (if
-%% present). Gathers user name and emails in the process into user's account.
+%% present). Gathers emails into user's account in the process. Blocks until
+%% user's effective relations have been fully synchronized.
 %% @end
 %%--------------------------------------------------------------------
 -spec merge_linked_account(UserId :: od_user:id(),
@@ -1268,73 +1348,59 @@ merge_linked_account(UserId, LinkedAccount) ->
     % merging causes adding/removing the user from groups, which modifies user
     % doc and would cause a deadlock. Instead, use a critical section to make
     % sure that merging accounts is sequential.
-    critical_section:run({merge_acc, UserId}, fun() ->
+    {ok, Doc} = critical_section:run({merge_acc, UserId}, fun() ->
         merge_linked_account_unsafe(UserId, LinkedAccount)
-    end).
+    end),
+    entity_graph:ensure_up_to_date(),
+    {ok, Doc}.
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Adds an linked account to user's account or replaces the old one (if
-%% present). Gathers user name and emails in the process into user's account.
-%% Operates on #od_user{} record and returns a modified version.
-%% This code should not be run in parallel.
+%% Adds a linked account to user's account or replaces the old one (if
+%% present). Gathers emails and entitlements into user's account in the process.
+%% This code must not be run in parallel.
 %% @end
 %%--------------------------------------------------------------------
--spec merge_linked_account_unsafe(UserId :: od_user:id(),
-    LinkedAccount :: #linked_account{}) -> {ok, od_user:doc()}.
+-spec merge_linked_account_unsafe(od_user:id(), #linked_account{}) ->
+    {ok, od_user:doc()}.
 merge_linked_account_unsafe(UserId, LinkedAccount) ->
     {ok, #document{value = #od_user{
-        name = Name, email_list = Emails, linked_accounts = LinkedAccounts
+        emails = Emails, linked_accounts = LinkedAccounts, entitlements = OldEntitlements
     } = UserInfo}} = od_user:get(UserId),
     #linked_account{
-        idp = IdP, subject_id = IdPUserId,
-        email_list = LinkedEmails, groups = NewGroups
+        idp = IdP, subject_id = SubjectId, emails = LinkedEmails
     } = LinkedAccount,
-    % If no name is specified, take the one provided with new info
-    NewName = case Name of
-        <<"">> -> resolve_name_from_linked_account(LinkedAccount);
-        _ -> Name
-    end,
-    % Add (normalized) emails from provider that are not yet added to account
-    NormalizedEmails = [http_utils:normalize_email(E) || E <- LinkedEmails],
+    % Add (normalized), valid emails from provider that are not yet added to account
+    NormalizedEmails = lists:filtermap(fun(Email) ->
+        Normalized = http_utils:normalize_email(Email),
+        case http_utils:validate_email(Normalized) of
+            true -> {true, Normalized};
+            false -> false
+        end
+    end, LinkedEmails),
     NewEmails = lists:usort(Emails ++ NormalizedEmails),
     % Replace existing linked account, if present
-    {NewLinkedAccs, OldGroups} = case find_linked_account(UserInfo, IdP, IdPUserId) of
-        #linked_account{groups = OldGr} = OldLinkedAcc ->
-            {[LinkedAccount | (LinkedAccounts -- [OldLinkedAcc])], OldGr};
+    NewLinkedAccs = case find_linked_account(UserInfo, IdP, SubjectId) of
+        #linked_account{} = OldLinkedAcc ->
+            [LinkedAccount | lists:delete(OldLinkedAcc, LinkedAccounts)];
         undefined ->
-            {[LinkedAccount | LinkedAccounts], []}
+            [LinkedAccount | LinkedAccounts]
     end,
-    % Coalesce user groups
-    idp_group_mapping:coalesce_groups(IdP, UserId, OldGroups, NewGroups),
+
+    NewEntitlements = entitlement_mapping:coalesce_entitlements(
+        UserId, NewLinkedAccs, OldEntitlements
+    ),
+
     % Return updated user info
     od_user:update(UserId, fun(User = #od_user{}) ->
         {ok, User#od_user{
-            name = NewName,
-            email_list = NewEmails,
-            linked_accounts = NewLinkedAccs
+            emails = NewEmails,
+            linked_accounts = NewLinkedAccs,
+            entitlements = NewEntitlements
         }}
     end).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Predicate telling if given email is occupied from the point of view of
-%% given user. It is not recognized as occupied if the same user already has it.
-%% @end
-%%--------------------------------------------------------------------
--spec is_email_occupied(UserId :: od_user:id(), Email :: binary()) -> boolean().
-is_email_occupied(UserId, Email) ->
-    case od_user:get_by_criterion({email, Email}) of
-        {ok, #document{key = UserId}} ->
-            false;
-        {ok, #document{}} ->
-            true;
-        _ ->
-            false
-    end.
 
 
 %%--------------------------------------------------------------------
@@ -1364,11 +1430,12 @@ authenticate_by_basic_credentials(Login, Password) ->
             UserDocument = case od_user:get(UserId) of
                 {error, not_found} ->
                     UserRecord = #od_user{
-                        name = Login,
-                        alias = Login,
+                        name = normalize_name(Login),
                         basic_auth_enabled = true
                     },
                     {ok, UserId} = create(UserRecord, UserId),
+                    % Ensure no race conditions (update_alias uses a critical section)
+                    update_alias(?USER(UserId), UserId, normalize_alias(Login)),
                     ?info("Created new account for user '~s' from onepanel "
                     "(role: '~s'), id: '~s'", [Login, UserRole, UserId]),
                     {ok, UserDoc} = od_user:get(UserId),
@@ -1410,35 +1477,40 @@ authenticate_by_basic_credentials(Login, Password) ->
 -spec change_user_password(Login :: binary(), OldPassword :: binary(),
     Password :: binary()) -> ok | {error, term()}.
 change_user_password(Login, OldPassword, NewPassword) ->
-    BasicAuthHeader = basic_auth_header(Login, OldPassword),
-    Headers = BasicAuthHeader#{
-        <<"content-type">> => <<"application/json">>
-    },
-    URL = get_onepanel_rest_user_url(Login),
-    Body = json_utils:encode(#{
-        <<"currentPassword">> => OldPassword,
-        <<"newPassword">> => NewPassword
-    }),
-    case http_client:patch(URL, Headers, Body, ?ONEPANEL_CONNECT_OPTS) of
-        {ok, 204, _, _} ->
-            % Invalidate basic auth cache
-            basic_auth_cache:delete(Login),
-            ok;
-        {ok, 401, _, _} ->
-            {error, <<"Invalid password">>};
-        {ok, _, _, ErrorJSON} when size(ErrorJSON) > 0 ->
-            try
-                ErrorMap = json_utils:decode(ErrorJSON),
-                Message = maps:get(<<"description">>, ErrorMap,
-                    <<"Cannot change password">>),
-                {error, Message}
-            catch _:_ ->
-                {error, bad_request}
-            end;
-        {ok, _, _, _} ->
-            {error, bad_request};
-        {error, Error} ->
-            {error, Error}
+    case auth_config:is_onepanel_auth_enabled() of
+        false ->
+            {error, onepanel_auth_disabled};
+        true ->
+            BasicAuthHeader = basic_auth_header(Login, OldPassword),
+            Headers = BasicAuthHeader#{
+                <<"content-type">> => <<"application/json">>
+            },
+            URL = get_onepanel_rest_user_url(Login),
+            Body = json_utils:encode(#{
+                <<"currentPassword">> => OldPassword,
+                <<"newPassword">> => NewPassword
+            }),
+            case http_client:patch(URL, Headers, Body, ?ONEPANEL_CONNECT_OPTS) of
+                {ok, 204, _, _} ->
+                    % Invalidate basic auth cache
+                    basic_auth_cache:delete(Login),
+                    ok;
+                {ok, 401, _, _} ->
+                    {error, <<"Invalid password">>};
+                {ok, _, _, ErrorJSON} when size(ErrorJSON) > 0 ->
+                    try
+                        ErrorMap = json_utils:decode(ErrorJSON),
+                        Message = maps:get(<<"description">>, ErrorMap,
+                            <<"Cannot change password">>),
+                        {error, Message}
+                    catch _:_ ->
+                        {error, bad_request}
+                    end;
+                {ok, _, _, _} ->
+                    {error, bad_request};
+                {error, Error} ->
+                    {error, Error}
+            end
     end.
 
 
@@ -1538,10 +1610,15 @@ fetch_user_info(Login, Password) ->
 -spec get_or_fetch_user_info(Login :: binary(), Password :: binary()) ->
     maps:map() | {error, term()}.
 get_or_fetch_user_info(Login, Password) ->
-    case basic_auth_cache:get(Login, Password) of
-        {error, not_found} -> fetch_user_info(Login, Password);
-        {error, Reason} -> {error, Reason};
-        {ok, UserInfo} -> UserInfo
+    case auth_config:is_onepanel_auth_enabled() of
+        false ->
+            {error, onepanel_auth_disabled};
+        true ->
+            case basic_auth_cache:get(Login, Password) of
+                {error, not_found} -> fetch_user_info(Login, Password);
+                {error, Reason} -> {error, Reason};
+                {ok, UserInfo} -> UserInfo
+            end
     end.
 
 
@@ -1607,37 +1684,3 @@ find_linked_account(#od_user{linked_accounts = LinkedAccounts}, IdP, IdPUserId) 
             (_Other, Found) ->
                 Found
         end, undefined, LinkedAccounts).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Resolve what name should be set for user based on his linked account.
-%% If user name was send by linked provider, use it.
-%% If not, try this with login.
-%% If not, try using the email (the part before @) as name.
-%% If there is no email, return a generic "unknown" string.
-%% @end
-%%--------------------------------------------------------------------
--spec resolve_name_from_linked_account(#linked_account{}) -> binary().
-resolve_name_from_linked_account(#linked_account{
-    name = <<"">>,
-    login = <<"">>,
-    email_list = []
-}) ->
-    <<"Unknown Name">>;
-resolve_name_from_linked_account(#linked_account{
-    name = <<"">>,
-    login = <<"">>,
-    email_list = EmailList
-}) ->
-    hd(binary:split(hd(EmailList), <<"@">>));
-resolve_name_from_linked_account(#linked_account{
-    name = <<"">>,
-    login = Login
-}) ->
-    Login;
-resolve_name_from_linked_account(#linked_account{
-    name = Name
-}) ->
-    Name.
