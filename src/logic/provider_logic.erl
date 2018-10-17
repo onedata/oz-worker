@@ -204,7 +204,7 @@ list(Client) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates information of given provider.
-%% Supports updating Name, Latitude and Longitude.
+%% Supports updating name, latitude, longitude and adminEmail.
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
