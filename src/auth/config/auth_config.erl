@@ -582,12 +582,12 @@ upgrade_auth_config(AuthConfigFile, OldAuthCfg) ->
     "entitlements in the IdP)"),
     AuthConfigBak = AuthConfigFile ++ ?BACKUP_CFG_EXT,
     SamlConfigBak = SamlCfgPath ++ ?BACKUP_CFG_EXT,
-    file:copy(AuthConfigFile, AuthConfigBak),
+    {ok, _} = file:copy(AuthConfigFile, AuthConfigBak),
     case filelib:is_regular(SamlCfgPath) of
-        true -> file:rename(SamlCfgPath, SamlConfigBak);
+        true -> ok = file:rename(SamlCfgPath, SamlConfigBak);
         false -> ok
     end,
-    file:write_file(AuthConfigFile, io_lib:format("~tp.~n", [UpgradedCfg])),
+    ok = file:write_file(AuthConfigFile, io_lib:format("~tp.~n", [UpgradedCfg])),
     UpgradedCfg.
 
 
