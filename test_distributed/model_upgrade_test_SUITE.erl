@@ -462,6 +462,7 @@ get_record(od_user, 8) -> {od_user,
     <<"login">>,
     [<<"email1@email.com">>, <<"email2@email.com">>],
     true,
+
     [
         #linked_account{
             idp = google,
@@ -519,6 +520,7 @@ get_record(od_user, 9) -> #od_user{
     alias = <<"login">>,
     emails = [<<"email1@email.com">>, <<"email2@email.com">>],
     basic_auth_enabled = true,
+
     linked_accounts = [
         #linked_account{
             idp = google,
@@ -538,15 +540,18 @@ get_record(od_user, 9) -> #od_user{
         }
     ],
     entitlements = [],
+
     active_sessions = [],
 
     default_space = <<"default_space">>,
     default_provider = <<"default_provider">>,
+
     client_tokens = [<<"token1">>, <<"token2">>],
     space_aliases = #{
         <<"sp1">> => <<"sp1Name">>,
         <<"sp2">> => <<"sp2Name">>
     },
+
     oz_privileges = [
         ?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_LIST, ?OZ_GROUPS_LIST_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_VIEW,
         ?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_LIST_RELATIONSHIPS, ?OZ_PROVIDERS_VIEW,
@@ -555,15 +560,18 @@ get_record(od_user, 9) -> #od_user{
         ?OZ_USERS_LIST, ?OZ_USERS_VIEW, ?OZ_VIEW_PRIVILEGES
     ],
     eff_oz_privileges = [],
+
     groups = [<<"group1">>, <<"group2">>, <<"group3">>],
     spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
     handle_services = [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
     handles = [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+
     eff_groups = #{},
     eff_spaces = #{},
     eff_providers = #{},
     eff_handle_services = #{},
     eff_handles = #{},
+
     top_down_dirty = true
 };
 

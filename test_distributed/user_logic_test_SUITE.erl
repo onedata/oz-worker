@@ -480,7 +480,7 @@ coalesce_entitlements_test(Config) ->
     ?assertLinkedAccountsCount(3),
 
     % Check if all groups are protected
-    lists:foreach(fun(IdP, Entitlement) ->
+    lists:foreach(fun({IdP, Entitlement}) ->
         ?assert(is_protected(Config, IdP, Entitlement))
     end, [
         {?DUMMY_IDP, <<"group/subgroup">>},

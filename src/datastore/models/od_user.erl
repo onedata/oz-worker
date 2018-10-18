@@ -377,6 +377,7 @@ get_record_struct(8) ->
         {alias, string},
         {emails, [string]},
         {basic_auth_enabled, boolean},
+
         {linked_accounts, [{record, [
             {idp, atom},
             {subject_id, string},
@@ -419,6 +420,7 @@ get_record_struct(9) ->
         {alias, string},
         {email_list, [string]},
         {basic_auth_enabled, boolean},
+
         {linked_accounts, [{record, [
             {idp, atom},
             {subject_id, string},
@@ -428,22 +430,30 @@ get_record_struct(9) ->
             {entitlements, [string]},
             {custom, {custom, {json_utils, encode, decode}}}
         ]}]},
+        {entitlements, [string]},
+
         {active_sessions, [string]}, % New field
+
         {default_space, string},
         {default_provider, string},
+
         {client_tokens, [string]},
         {space_aliases, #{string => string}},
+
         {oz_privileges, [atom]},
         {eff_oz_privileges, [atom]},
+
         {groups, [string]},
         {spaces, [string]},
         {handle_services, [string]},
         {handles, [string]},
+
         {eff_groups, #{string => [{atom, string}]}},
         {eff_spaces, #{string => [{atom, string}]}},
         {eff_providers, #{string => [{atom, string}]}},
         {eff_handle_services, #{string => [{atom, string}]}},
         {eff_handles, #{string => [{atom, string}]}},
+
         {top_down_dirty, boolean}
     ]}.
 
@@ -992,7 +1002,9 @@ upgrade_record(8, User) ->
         alias = Alias,
         emails = EmailList,
         basic_auth_enabled = BasicAuthEnabled,
+
         linked_accounts = LinkedAccounts,
+        entitlements = [],
 
         active_sessions = [],
 
