@@ -648,7 +648,7 @@ get_record(od_group, 2) -> {od_group,
 get_record(od_group, 3) -> #od_group{
     name = <<"ńąµę"/utf8>>,
     type = role,
-    oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS],
+    oz_privileges = [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES, ?OZ_USERS_LIST, oz_spaces_add_members],
     eff_oz_privileges = [],
 
     parents = [<<"parent1">>, <<"parent2">>],
