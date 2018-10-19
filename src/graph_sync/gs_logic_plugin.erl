@@ -180,7 +180,7 @@ is_authorized(Client, AuthHint, GRI, Operation, Entity) ->
     gs_protocol:rpc_result().
 handle_rpc(_, _, <<"authorizeUser">>, Args) ->
     user_logic:authorize(Args);
-handle_rpc(_, _, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
+handle_rpc(_, Client, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
     case oz_worker:get_env(dev_mode) of
         {ok, true} ->
             {ok, #{
@@ -190,7 +190,13 @@ handle_rpc(_, _, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
             }};
         _ ->
             IdP = binary_to_atom(IdPBin, utf8),
-            LinkAccount = maps:get(<<"linkAccount">>, Data, false),
+            LinkAccount = case maps:get(<<"linkAccount">>, Data, false) of
+                false ->
+                    false;
+                true ->
+                    ?USER(UserId) = Client,
+                    {true, UserId}
+            end,
             auth_logic:get_login_endpoint(IdP, LinkAccount)
     end;
 handle_rpc(_, ?USER(UserId), <<"getProviderRedirectURL">>, Args) ->

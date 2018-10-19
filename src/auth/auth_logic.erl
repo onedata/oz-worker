@@ -56,7 +56,7 @@
 %% that defines what request should be performed to redirect to the login page.
 %% @end
 %%--------------------------------------------------------------------
--spec get_login_endpoint(auth_config:idp(), LinkAccount :: boolean()) ->
+-spec get_login_endpoint(auth_config:idp(), LinkAccount :: false | {true, od_user:id()}) ->
     {ok, maps:map()} | {error, term()}.
 get_login_endpoint(IdP, LinkAccount) ->
     try
@@ -97,8 +97,7 @@ validate_login(Method, Req) ->
             log_error(?ERROR_INVALID_STATE, undefined, StateToken, []),
             {auth_error, ?ERROR_INVALID_STATE, StateToken};
         {ok, #{idp := IdP} = StateInfo} ->
-            SessionId = new_gui:get_session_cookie(Req),
-            try validate_login_by_state(Payload, StateToken, StateInfo, SessionId) of
+            try validate_login_by_state(Payload, StateToken, StateInfo) of
                 {ok, UserId, RedirectPage} ->
                     {ok, UserId, RedirectPage};
                 {error, Reason} ->
@@ -237,9 +236,9 @@ authorize_by_basic_auth(Req) ->
 %%%===================================================================
 
 %% @private
--spec validate_login_by_state(Payload :: #{}, state_token:id(), state_token:state_info(), session:id()) ->
+-spec validate_login_by_state(Payload :: #{}, state_token:id(), state_token:state_info()) ->
     {ok, od_user:id(), RedirectPage :: binary()} | {error, term()}.
-validate_login_by_state(Payload, StateToken, #{idp := IdP} = StateInfo, SessionId) ->
+validate_login_by_state(Payload, StateToken, #{idp := IdP} = StateInfo) ->
     Handler = get_protocol_handler(IdP),
     ?debug("Login attempt from IdP '~p' (state: ~s), payload:~n~tp", [
         IdP, StateToken, Payload
@@ -248,14 +247,14 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP} = StateInfo, SessionI
     ?debug("Login from IdP '~p' (state: ~s) validated, attributes:~n~tp", [
         IdP, StateToken, Attributes
     ]),
-    validate_login_by_attributes(IdP, Attributes, StateToken, StateInfo, SessionId).
+    validate_login_by_attributes(IdP, Attributes, StateToken, StateInfo).
 
 
 %% @private
 -spec validate_login_by_attributes(auth_config:idp(), attribute_mapping:idp_attributes(),
-    state_token:id(), state_token:state_info(), session:id()) ->
+    state_token:id(), state_token:state_info()) ->
     {ok, od_user:id(), RedirectPage :: binary()} | {error, term()}.
-validate_login_by_attributes(IdP, Attributes, StateToken, StateInfo, SessionId) ->
+validate_login_by_attributes(IdP, Attributes, StateToken, StateInfo) ->
     LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
     ?debug("Attributes from IdP '~p' (state: ~s) sucessfully mapped:~n~tp", [
         IdP, StateToken, LinkedAccount
@@ -270,10 +269,8 @@ validate_login_by_attributes(IdP, Attributes, StateToken, StateInfo, SessionId) 
             }}} = acquire_user_by_linked_account(LinkedAccount),
             ?info("User ~ts (~s) has logged in", [UserName, UserId]),
             {ok, UserId, RedirectAfterLogin};
-        true ->
-            % Account adding flow
-            % Check if this account isn't connected to other profile
-            {ok, #document{value = #session{user_id = UserId}}} = session:get(SessionId),
+        {true, UserId} ->
+            % Account adding flow - check if this account isn't connected to other profile
             case get_user_by_linked_account(LinkedAccount) of
                 {ok, #document{key = UserId}} ->
                     % The account is already linked to this user, report error
