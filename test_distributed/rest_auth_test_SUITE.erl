@@ -250,7 +250,14 @@ basic_auth_header(Login, Password) ->
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
+    Posthook = fun(NewConfig) ->
+        % Sleep a while before mocking http_client (which is done in
+        % init_per_testcase) - otherwise meck's reloading and purging the module
+        % can cause the oz-worker application to crash.
+        timer:sleep(5000),
+        NewConfig
+    end,
+    [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->

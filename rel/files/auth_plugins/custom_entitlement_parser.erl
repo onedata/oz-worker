@@ -56,8 +56,8 @@ type() ->
 %%--------------------------------------------------------------------
 -spec parse(auth_config:idp(), entitlement_mapping:raw_entitlement(), auth_config:parser_config()) ->
     entitlement_mapping:idp_entitlement().
-parse(egi, Entitlement, _ParserConfig) ->
-    parse_egi_entitlement(Entitlement).
+parse(egi, Entitlement, ParserConfig) ->
+    parse_egi_entitlement(Entitlement, ParserConfig).
 
 
 %%--------------------------------------------------------------------
@@ -70,7 +70,7 @@ parse(egi, Entitlement, _ParserConfig) ->
         entitlement_mapping:idp_entitlement() | {error, malformed}}].
 validation_examples() ->
     lists:flatten(
-        [{egi, Input, #{}, Output} || {Input, Output} <- egi_validation_examples()]
+        [{egi, Input, ParserConfig, Output} || {Input, ParserConfig, Output} <- egi_validation_examples()]
     ).
 
 %%%===================================================================
@@ -98,9 +98,13 @@ validation_examples() ->
 %%          group membership information
 %% @end
 %%--------------------------------------------------------------------
--spec parse_egi_entitlement(entitlement_mapping:raw_entitlement()) -> entitlement_mapping:idp_entitlement().
-parse_egi_entitlement(<<"urn:mace:egi.eu:group:", Group/binary>>) ->
+-spec parse_egi_entitlement(entitlement_mapping:raw_entitlement(), auth_config:parser_config()) ->
+    entitlement_mapping:idp_entitlement().
+parse_egi_entitlement(<<"urn:mace:egi.eu:group:", Group/binary>>, ParserConfig) ->
     % Strip out the prefix standard for EGI
+
+    TopGroupType = maps:get(topGroupType, ParserConfig, team),
+    SubGroupsType = maps:get(subGroupsType, ParserConfig, team),
 
     [GroupStructureEncoded, _GroupAuthority] = binary:split(Group, <<"#">>),
     % Replace plus sings with spaces
@@ -122,9 +126,14 @@ parse_egi_entitlement(<<"urn:mace:egi.eu:group:", Group/binary>>) ->
         _ -> member
     end,
 
+    Path = lists:flatten([
+        #idp_group{type = TopGroupType, name = hd(Groups)},
+        [#idp_group{type = SubGroupsType, name = G, privileges = member} || G <- tl(Groups)]
+    ]),
+
     #idp_entitlement{
         idp = egi,
-        path = [#idp_group{type = team, name = G, privileges = member} || G <- Groups],
+        path = Path,
         privileges = UserPrivileges
     }.
 
@@ -136,16 +145,37 @@ parse_egi_entitlement(<<"urn:mace:egi.eu:group:", Group/binary>>) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec egi_validation_examples() ->
-    [{entitlement_mapping:raw_entitlement(), entitlement_mapping:idp_entitlement() | {error, malformed}}].
+    [{entitlement_mapping:raw_entitlement(), auth_config:parser_config(), entitlement_mapping:idp_entitlement() | {error, malformed}}].
 egi_validation_examples() -> [
     {
         <<"urn:mace:egi.eu:group:fedcloud.egi.eu:role=vm_operator#aai.egi.eu">>,
+        #{},
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = team, name = <<"fedcloud.egi.eu">>, privileges = member}
         ], privileges = member}
     },
     {
+        <<"urn:mace:egi.eu:group:fedcloud.egi.eu:child:role=vm_operator#aai.egi.eu">>,
+        #{},
+        #idp_entitlement{idp = egi, path = [
+            #idp_group{type = team, name = <<"fedcloud.egi.eu">>, privileges = member},
+            #idp_group{type = team, name = <<"child">>, privileges = member}
+        ], privileges = member}
+    },
+    {
+        <<"urn:mace:egi.eu:group:fedcloud.egi.eu:child:role=vm_operator#aai.egi.eu">>,
+        #{
+            topGroupType => organization,
+            subGroupsType => role_holders
+        },
+        #idp_entitlement{idp = egi, path = [
+            #idp_group{type = organization, name = <<"fedcloud.egi.eu">>, privileges = member},
+            #idp_group{type = role_holders, name = <<"child">>, privileges = member}
+        ], privileges = member}
+    },
+    {
         <<"unconfromant-group-name">>,
+        #{},
         {error, malformed}
     }
 ].
