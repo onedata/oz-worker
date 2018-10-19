@@ -190,7 +190,7 @@
 %% Returns the list of all supported IdPs and their config as maps (convertible to JSON).
 %% @end
 %%--------------------------------------------------------------------
--spec get_supported_idps() -> [{idp(), config_section()}].
+-spec get_supported_idps() -> [jiffy:json_value()].
 get_supported_idps() ->
     OnepanelAuthEnabled = ?CFG_ONEPANEL_AUTH_ENABLED,
     OpenIDEnabled = ?CFG_OPENID_ENABLED,
