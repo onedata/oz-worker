@@ -53,7 +53,19 @@ handle(<<"getSupportedAuthorizers">>, _) ->
             % If dev mode is enabled, always return basic auth and just one
             % dummy provider which will redirect to /dev_login page.
             {ok, [
-                {<<"authorizers">>, [<<"basicAuth">>, <<"plgrid">>]}
+                {<<"authorizers">>, [
+                    #{
+                        <<"id">> => <<"onepanel">>,
+                        <<"displayName">> => <<"Onepanel account">>,
+                        <<"iconPath">> => <<"/assets/images/auth-providers/onepanel.svg">>,
+                        <<"iconBackgroundColor">> => <<"#4BD187">>
+                    },
+                    #{
+                        <<"id">> => <<"devLogin">>,
+                        <<"displayName">> => <<"Developer Login">>,
+                        <<"iconPath">> => <<"/assets/images/auth-providers/default.svg">>
+                    }
+                ]}
             ]};
         _ ->
             {ok, [
