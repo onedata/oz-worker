@@ -55,8 +55,9 @@ handle(<<"changePassword">>, Props) ->
     end;
 
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
+    UserId = gui_session:get_user_id(),
     IdP = binary_to_atom(ProviderBin, utf8),
-    case auth_logic:get_login_endpoint(IdP, true) of
+    case auth_logic:get_login_endpoint(IdP, {true, UserId}) of
         {ok, Data} ->
             {ok, maps:to_list(Data)};
         {error, _} ->
