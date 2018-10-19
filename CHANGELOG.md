@@ -4,6 +4,14 @@
 CHANGELOG
 ---------
 
+### 18.02.0-rc12
+
+* Updating GUI, including: VFS-4702-auth-icons-config * VFS-4702 Support for customizable authorization providers icons, colors and names
+* VFS-4614 Code polishing
+* VFS-4614 Universal auth.config for OIDC/SAML Identity Providers
+* VFS-4952 Update description of provider update
+
+
 ### 18.02.0-rc11
 
 * VFS-4837 Fix error in removal of nonexistent TXT record
