@@ -198,7 +198,7 @@ invalidate_token(Identifier) when is_binary(Identifier) ->
 %% For example, where to redirect the user after login.
 %% @end
 %%--------------------------------------------------------------------
--spec generate_state_token(auth_config:idp(), LinkAccount :: boolean()) ->
+-spec generate_state_token(auth_config:idp(), LinkAccount :: false | {true, od_user:id()}) ->
     state_token:id().
 generate_state_token(IdP, LinkAccount) ->
     StateInfo = #{
