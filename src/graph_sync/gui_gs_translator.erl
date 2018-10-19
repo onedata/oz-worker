@@ -40,9 +40,21 @@
 handshake_attributes(_) ->
     Idps = case oz_worker:get_env(dev_mode) of
         {ok, true} ->
-            % If dev mode is enabled, always return basic auth and just one
-            % dummy provider which will redirect to /dev_login page.
-            [<<"basicAuth">>, <<"plgrid">>];
+            % If dev mode is enabled, always return basic auth and Developer
+            % Login dummy IdP which will redirect to /dev_login page.
+            [
+                #{
+                    <<"id">> => <<"onepanel">>,
+                    <<"displayName">> => <<"Onepanel account">>,
+                    <<"iconPath">> => <<"/assets/images/auth-providers/onepanel.svg">>,
+                    <<"iconBackgroundColor">> => <<"#4BD187">>
+                },
+                #{
+                    <<"id">> => <<"devLogin">>,
+                    <<"displayName">> => <<"Developer Login">>,
+                    <<"iconPath">> => <<"/assets/images/auth-providers/default.svg">>
+                }
+            ];
         _ ->
             % Production mode, return providers from config
             auth_config:get_supported_idps()
