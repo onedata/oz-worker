@@ -35,10 +35,10 @@
 -spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(Method, Req) ->
     {NewReq, RedirectURL} = case auth_logic:validate_login(Method, Req) of
-        {ok, UserId, RedirectUrl} ->
+        {ok, UserId, RedirectAfterLogin} ->
             Req2 = oz_gui_session:log_in(UserId, Req),
-            {Req2, RedirectUrl};
-        {auth_error, Error, State} ->
+            {Req2, RedirectAfterLogin};
+        {auth_error, Error, State, RedirectAfterLogin} ->
             Req2 = new_gui:set_cookie(
                 <<"authentication_error_reason">>, format_error_reason(Error),
                 #{path => <<"/">>}, Req
@@ -47,7 +47,7 @@ handle(Method, Req) ->
                 <<"authentication_error_state">>, State,
                 #{path => <<"/">>}, Req2
             ),
-            {Req3, <<?LOGIN_PAGE_PATH>>}
+            {Req3, RedirectAfterLogin}
     end,
     % This page is visited with a POST request, so use a 303 redirect in
     % response so that web browser switches to GET.
