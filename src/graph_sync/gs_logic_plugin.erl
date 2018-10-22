@@ -14,9 +14,10 @@
 -behaviour(gs_logic_plugin_behaviour).
 -author("Lukasz Opiola").
 
+-include("http/gui_paths.hrl").
+-include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include("entity_logic.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
@@ -144,7 +145,7 @@ client_disconnected(_, _, _) ->
 -spec verify_auth_override(gs_protocol:auth_override()) ->
     {ok, gs_protocol:client()} | gs_protocol:error().
 verify_auth_override({macaroon, Macaroon, DischMacaroons}) ->
-    case auth_utils:authorize_by_macaroons(Macaroon, DischMacaroons) of
+    case auth_logic:authorize_by_macaroons(Macaroon, DischMacaroons) of
         {true, Client} -> {ok, Client};
         {error, _} = Error -> Error
     end;
@@ -197,7 +198,8 @@ handle_rpc(_, Client, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
                     ?USER(UserId) = Client,
                     {true, UserId}
             end,
-            auth_logic:get_login_endpoint(IdP, LinkAccount)
+            RedirectAfterLogin = maps:get(<<"redirectUrl">>, Data, <<?AFTER_LOGIN_PAGE_PATH>>),
+            auth_logic:get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin)
     end;
 handle_rpc(_, ?USER(UserId), <<"getProviderRedirectURL">>, Args) ->
     ProviderId = maps:get(<<"providerId">>, Args),
