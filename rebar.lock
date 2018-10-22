@@ -55,7 +55,7 @@
   0},
  {<<"esaml">>,
   {git,"https://github.com/onedata/esaml.git",
-       {ref,"17a79d4f6195f36bd92a15a7cc8d573a627562b7"}},
+       {ref,"2bc01fa41c302cb752e060e2f5477fe380a9bb52"}},
   0},
  {<<"exometer_core">>,
   {git,"https://github.com/onedata/exometer_core.git",

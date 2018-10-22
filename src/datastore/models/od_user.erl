@@ -946,7 +946,9 @@ upgrade_record(8, User) ->
         Alias,
         EmailList,
         BasicAuthEnabled,
+
         LinkedAccounts,
+        Entitlements,
 
         DefaultSpace,
         DefaultProvider,
@@ -1004,7 +1006,7 @@ upgrade_record(8, User) ->
         basic_auth_enabled = BasicAuthEnabled,
 
         linked_accounts = LinkedAccounts,
-        entitlements = [],
+        entitlements = Entitlements,
 
         active_sessions = [],
 

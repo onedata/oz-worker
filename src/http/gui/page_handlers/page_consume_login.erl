@@ -37,7 +37,7 @@
 handle(Method, Req) ->
     {NewReq, RedirectURL} = case auth_logic:validate_login(Method, Req) of
         {ok, UserId, RedirectUrl} ->
-            Req2 = new_gui_session:log_in(?USER(UserId), Req),
+            Req2 = new_gui_session:log_in(UserId, Req),
             {Req2, RedirectUrl};
         {auth_error, Error, State} ->
             Req2 = cowboy_req:set_resp_cookie(
