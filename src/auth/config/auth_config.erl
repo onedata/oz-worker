@@ -575,11 +575,6 @@ upgrade_auth_config(AuthConfigFile, OldAuthCfg) ->
     UpgradedCfg = auth_config_upgrader:upgrade(
         ?CURRENT_CONFIG_VERSION, OldAuthCfg, SamlCfg
     ),
-    ?notice("Upgrade completed, new config written to ~s. "
-    "Moving deprecated auth/saml.config to '~s'", [AuthConfigFile, ?BACKUP_CFG_EXT]),
-    ?alert("Make sure to manually update admin groups (fka super groups) in the "
-    "config, as their format has changed (their names are now 1:1 with "
-    "entitlements in the IdP)"),
     AuthConfigBak = AuthConfigFile ++ ?BACKUP_CFG_EXT,
     SamlConfigBak = SamlCfgPath ++ ?BACKUP_CFG_EXT,
     {ok, _} = file:copy(AuthConfigFile, AuthConfigBak),
@@ -588,6 +583,11 @@ upgrade_auth_config(AuthConfigFile, OldAuthCfg) ->
         false -> ok
     end,
     ok = file:write_file(AuthConfigFile, io_lib:format("~tp.~n", [UpgradedCfg])),
+    ?notice("Upgrade completed, new config written to ~s. "
+    "Moving deprecated auth/saml.config to '~s'", [AuthConfigFile, ?BACKUP_CFG_EXT]),
+    ?alert("Make sure to manually update admin groups (fka super groups) in the "
+    "config, as their format has changed (their names are now 1:1 with "
+    "entitlements in the IdP)"),
     UpgradedCfg.
 
 
