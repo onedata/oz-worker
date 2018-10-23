@@ -16,14 +16,16 @@
 % Endpoint to get Onezone configuration
 -define(CONFIGURATION_PATH, "/configuration").
 
-% DEPRECATED: Endpoint to get Onezone version
--define(ZONE_VERSION_PATH, "/version").
-
 % Endpoint for nagios healthcheck
 -define(NAGIOS_PATH, "/nagios").
 
 % Endpoint for viewing public shares
--define(PUBLIC_SHARE_PATH, "/share").
+-define(SHARE_ID_BINDING, share_id).
+-define(PUBLIC_SHARE_COWBOY_ROUTE, "/share/:share_id").
+-define(PUBLIC_SHARE_PATH(__ShareId), <<"/share/", __ShareId/binary>>).
+
+% Endpoint serving custom, user defined static files
+-define(CUSTOM_STATIC_FILES_PATH, "/custom/[...]").
 
 % Endpoint to perform basic auth login
 -define(LOGIN_PATH, "/login").

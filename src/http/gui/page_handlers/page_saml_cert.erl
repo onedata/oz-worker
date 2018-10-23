@@ -30,8 +30,13 @@
 %%--------------------------------------------------------------------
 -spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"GET">>, Req) ->
-    cowboy_req:reply(200,
-        #{<<"content-type">> => <<"application/x-pem-file">>},
-        saml_config:get_saml_cert_pem(),
-        Req
-    ).
+    case auth_config:get_saml_cert_pem() of
+        {error, saml_disabled} ->
+            cowboy_req:reply(404, Req);
+        Cert ->
+            cowboy_req:reply(200,
+                #{<<"content-type">> => <<"application/x-pem-file">>},
+                Cert,
+                Req
+            )
+    end.

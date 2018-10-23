@@ -107,9 +107,12 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
     entity = undefined :: entity()
 }).
 
+-define(DEFAULT_ENTITY_NAME, <<"Unnamed">>).
+
 -export([handle/1, handle/2]).
 -export([is_authorized/2]).
 -export([client_to_string/1]).
+-export([validate_name/1, validate_name/5, normalize_name/1, normalize_name/9]).
 
 
 %%%===================================================================
@@ -183,6 +186,92 @@ client_to_string(?NOBODY) -> "nobody (unauthenticated client)";
 client_to_string(?ROOT) -> "root";
 client_to_string(?USER(UId)) -> str_utils:format("user:~s", [UId]);
 client_to_string(?PROVIDER(PId)) -> str_utils:format("provider:~s", [PId]).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Validates entity name against universal name format.
+%% @end
+%%--------------------------------------------------------------------
+-spec validate_name(binary()) -> boolean().
+validate_name(Name) ->
+    validate_name(
+        Name, ?NAME_FIRST_CHARS_ALLOWED, ?NAME_MIDDLE_CHARS_ALLOWED,
+        ?NAME_LAST_CHARS_ALLOWED, ?NAME_MAXIMUM_LENGTH
+    ).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Validates entity name against given format.
+%% @end
+%%--------------------------------------------------------------------
+-spec validate_name(Name :: binary(), FirstRgx :: binary(), MiddleRgx :: binary(),
+    LastRgx :: binary(), MaxLength :: non_neg_integer()) -> boolean().
+validate_name(Name, _, _, _, _) when not is_binary(Name) ->
+    false;
+validate_name(Name, FirstRgx, MiddleRgx, LastRgx, MaxLength) ->
+    Regexp = <<
+        "^[", FirstRgx/binary, "][", MiddleRgx/binary,
+        "]{0,", (integer_to_binary(MaxLength - 2))/binary,
+        "}[", LastRgx/binary, "]$"
+    >>,
+    try re:run(Name, Regexp, [{capture, none}, unicode, ucp]) of
+        match -> true;
+        _ -> false
+    catch _:_ ->
+        false
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Trims disallowed characters from the beginning and the end of the string,
+%% replaces disallowed characters in the middle with dashes('-').
+%% If the name is too long, it is shortened to allowed size.
+%% @end
+%%--------------------------------------------------------------------
+-spec normalize_name(binary()) -> binary().
+normalize_name(Name) ->
+    normalize_name(Name,
+        ?NAME_FIRST_CHARS_ALLOWED, <<"">>,
+        ?NAME_MIDDLE_CHARS_ALLOWED, <<"-">>,
+        ?NAME_LAST_CHARS_ALLOWED, <<"">>,
+        ?NAME_MAXIMUM_LENGTH, ?DEFAULT_ENTITY_NAME
+    ).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Normalizes given name according to Regexp for first, middle and last
+%% characters (replaces disallowed characters with given).
+%% If the name is too long, it is shortened to allowed size.
+%% @end
+%%--------------------------------------------------------------------
+-spec normalize_name(Name :: binary(),
+    FirstRgx :: binary(), FirstReplace :: binary(),
+    MiddleRgx :: binary(), MiddleReplace :: binary(),
+    LastRgx :: binary(), LastReplace :: binary(),
+    MaxLength :: non_neg_integer(), DefaultName :: term()) -> term().
+normalize_name(Name, FirstRgx, FirstReplace, MiddleRgx, MiddleReplace, LastRgx, LastReplace, MaxLength, DefaultName) ->
+    TrimmedLeft = re:replace(Name,
+        <<"^[^", FirstRgx/binary, "]*(?=[", FirstRgx/binary, "])">>, FirstReplace,
+        [{return, binary}, unicode, ucp, global]
+    ),
+    TrimmedMiddle = re:replace(TrimmedLeft,
+        <<"[^", MiddleRgx/binary, "]">>, MiddleReplace,
+        [{return, binary}, unicode, ucp, global]
+    ),
+    % string module supports binaries in utf8
+    Shortened = string:slice(TrimmedMiddle, 0, MaxLength),
+    TrimmedRight = re:replace(Shortened,
+        <<"(?<=[", LastRgx/binary, "])[^", LastRgx/binary, "]*$">>, LastReplace,
+        [{return, binary}, unicode, ucp, global]
+    ),
+    case validate_name(TrimmedRight, FirstRgx, MiddleRgx, LastRgx, MaxLength) of
+        false -> DefaultName;
+        true -> TrimmedRight
+    end.
 
 
 %%%===================================================================
@@ -812,13 +901,9 @@ check_value(binary, subdomain, _Key, Value) ->
 check_value(binary, email, Key, <<"">>) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(binary, email, _Key, Value) ->
-    case re:run(Value, ?EMAIL_VALIDATION_REGEXP, [{capture, none}]) of
-        match ->
-            case byte_size(Value) > ?EMAIL_MAX_LENGTH of
-                true -> throw(?ERROR_BAD_VALUE_EMAIL);
-                false -> ok
-            end;
-        _ -> throw(?ERROR_BAD_VALUE_EMAIL)
+    case http_utils:validate_email(Value) of
+        true -> ok;
+        false -> throw(?ERROR_BAD_VALUE_EMAIL)
     end;
 
 check_value(_, AllowedVals, Key, Vals) when is_list(AllowedVals) andalso is_list(Vals) ->
@@ -888,19 +973,19 @@ check_value(token, TokenType, Key, Macaroon) ->
 check_value(alias, alias, _Key, undefined) ->
     ok;
 check_value(alias, alias, _Key, Value) ->
-    case re:run(Value, ?ALIAS_VALIDATION_REGEXP, [{capture, none}]) of
-        match -> ok;
-        _ -> throw(?ERROR_BAD_VALUE_ALIAS)
-    end;
-check_value(binary, name, _Key, Value) ->
-    case re:run(Value, ?NAME_VALIDATION_REGEXP, [{capture, none}, unicode, ucp]) of
-        match -> ok;
-        _ -> throw(?ERROR_BAD_VALUE_NAME)
+    case user_logic:validate_alias(Value) of
+        true -> ok;
+        false -> throw(?ERROR_BAD_VALUE_ALIAS)
     end;
 check_value(binary, user_name, _Key, Value) ->
-    case re:run(Value, ?USER_NAME_VALIDATION_REGEXP, [{capture, none}, unicode, ucp]) of
-        match -> ok;
-        _ -> throw(?ERROR_BAD_VALUE_USER_NAME)
+    case user_logic:validate_name(Value) of
+        true -> ok;
+        false -> throw(?ERROR_BAD_VALUE_USER_NAME)
+    end;
+check_value(binary, name, _Key, Value) ->
+    case validate_name(Value) of
+        true -> ok;
+        false -> throw(?ERROR_BAD_VALUE_NAME)
     end;
 check_value(TypeRule, ValueRule, Key, _) ->
     ?error("Unknown {type, value} rule: {~p, ~p} for key: ~p", [

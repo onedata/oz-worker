@@ -96,28 +96,28 @@
 -define(SUBDOMAIN_VALIDATION_REGEXP,
     <<"^([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$">>).
 
--define(EMAIL_VALIDATION_REGEXP,
-    <<"^[a-zA-Z0-9\\-_\\.\\+]+@[a-zA-Z0-9\\-_\\.]*\\.[a-zA-Z0-9]+$">>).
-
-% According to RFC 5321
--define(EMAIL_MAX_LENGTH, 254).
-
-% Regexp to validate aliases. Alias must be 2-15 characters long and composed of letters and digits.
-% Dashes and underscores are allowed (but not at the beginning or the end).
--define(ALIAS_VALIDATION_REGEXP, <<"^[a-z0-9A-Z][a-z0-9A-Z_-]{0,13}[a-z0-9A-Z]$">>).
-
--define(NAME_CHARS_ALLOWED, ")(\\w_").
--define(NAME_CHARS_ALLOWED_IN_THE_MIDDLE,  ")(\\w_ .-").
--define(MAXIMUM_NAME_LENGTH, 50).
-
-% Regexp to validate names. Name must be 2-50 characters long and composed of UTF-8 letters, digits, brackets and underscores.
+% Regexp to validate names. Name must be 2-50 characters long and composed of
+% UTF-8 letters, digits, brackets and underscores.
 % Dashes, spaces and dots are allowed (but not at the beginning or the end).
--define(NAME_VALIDATION_REGEXP, 
-    <<"^[", ?NAME_CHARS_ALLOWED, "][", ?NAME_CHARS_ALLOWED_IN_THE_MIDDLE, 
-      "]{0,", (integer_to_binary(?MAXIMUM_NAME_LENGTH-2))/binary, 
-      "}[", ?NAME_CHARS_ALLOWED, "]$">>).
+-define(NAME_FIRST_CHARS_ALLOWED, <<")(\\w_">>).
+-define(NAME_MIDDLE_CHARS_ALLOWED, <<">>)(\\w_ .-">>).
+-define(NAME_LAST_CHARS_ALLOWED, ?NAME_FIRST_CHARS_ALLOWED).
+-define(NAME_MAXIMUM_LENGTH, 50).
 
-% Regexp to validate user names. User name must be 2-50 characters long and composed of UTF-8 letters and digits.
-% Dashes, spaces, dots, commas and apostrophes are allowed (but not at the beginning or the end).
--define(USER_NAME_VALIDATION_REGEXP,  <<"^[\\pL\\pNd][\\pL\\pNd ',.-]{0,48}[\\pL\\pNd.]$">>).
+% Regexp to validate user names. User name must be 2-50 characters long and
+% composed of UTF-8 letters and digits. Dashes, spaces, dots, commas and
+% apostrophes are allowed (but not at the beginning or the end).
+-define(USER_NAME_FIRST_CHARS_ALLOWED, <<"\\pL\\pNd">>).
+-define(USER_NAME_MIDDLE_CHARS_ALLOWED, <<"\\pL\\pNd ',.-">>).
+-define(USER_NAME_LAST_CHARS_ALLOWED, <<"\\pL\\pNd.">>).
+-define(USER_NAME_MAXIMUM_LENGTH, 50).
+
+% Regexp to validate aliases. Alias must be 2-20 characters long and composed of
+% letters and digits.
+% Dashes and underscores are allowed (but not at the beginning or the end).
+-define(ALIAS_FIRST_CHARS_ALLOWED, <<"a-z0-9A-Z">>).
+-define(ALIAS_MIDDLE_CHARS_ALLOWED, <<"a-z0-9A-Z._-">>).
+-define(ALIAS_LAST_CHARS_ALLOWED, ?ALIAS_FIRST_CHARS_ALLOWED).
+-define(ALIAS_MAXIMUM_LENGTH, 20).
+
 -endif.

@@ -18,8 +18,6 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("hackney/include/hackney_lib.hrl").
 
--define(PLUGIN, provider_logic_plugin).
-
 -export([
     create_provider_registration_token/1,
     create/4, create/6, create/2, create_dev/2
@@ -208,7 +206,7 @@ list(Client) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates information of given provider.
-%% Supports updating Name, Latitude and Longitude.
+%% Supports updating name, latitude, longitude and adminEmail.
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Client :: entity_logic:client(), ProviderId :: od_provider:id(),

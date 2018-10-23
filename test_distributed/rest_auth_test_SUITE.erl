@@ -13,6 +13,7 @@
 
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include("auth/auth_errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
@@ -97,7 +98,7 @@ basic_auth_test(Config) ->
     % Basic auth procedure is mocked in init_per_testcase,
     % and user is initialized there
     UserId = ?config(user_id, Config),
-    UserName = ?config(user_name, Config),
+    oz_test_utils:toggle_basic_auth(Config, true),
 
     ?assert(rest_test_utils:check_rest_call(Config, #{
         request => #{
@@ -108,11 +109,10 @@ basic_auth_test(Config) ->
         expect => #{
             code => 200,
             body => {contains, #{
-                <<"userId">> => UserId, <<"name">> => UserName
+                <<"userId">> => UserId, <<"name">> => ?CORRECT_LOGIN
             }}
         }
     })),
-
     ?assert(rest_test_utils:check_rest_call(Config, #{
         request => #{
             method => get,
@@ -124,28 +124,61 @@ basic_auth_test(Config) ->
         }
     })),
 
+    % REST authorization by credentials should not work if basic auth is disabled in auth.config
+    oz_test_utils:toggle_basic_auth(Config, false),
+    ?assert(rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            path => <<"/user">>,
+            headers => basic_auth_header(?CORRECT_LOGIN, ?CORRECT_PASSWORD)
+        },
+        expect => #{
+            code => 400
+        }
+    })),
+    ?assert(rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            path => <<"/user">>,
+            headers => basic_auth_header(?BAD_LOGIN, ?BAD_PASSWORD)
+        },
+        expect => #{
+            code => 400
+        }
+    })),
+
     ok.
 
 
 external_access_token_test(Config) ->
-    % OAuth config and authorization procedure are mocked in init_per_testcase,
-    % and user is initialized there
-    UserId = ?config(user_id, Config),
-    UserName = ?config(user_name, Config),
-    IndigoToken = ?config(indigo_token, Config),
-    GoogleToken = ?config(google_token, Config),
-    BadGoogleToken = ?config(bad_google_token, Config),
+    % auth.config and authorization procedure are mocked in init_per_testcase
+    DummyIdP = ?config(dummyIdP, Config),
+    AnotherIdP = ?config(anotherIdP, Config),
+    DisabledIdP = ?config(disabledIdP, Config),
+    UserSubjectIdFun = ?config(user_subject_id_fun, Config),
+    UserNameFun = ?config(user_name_fun, Config),
+    CorrectAccessTokenFun = ?config(correct_access_token_fun, Config),
+    PrefixFun = ?config(prefix_fun, Config),
+
+    UserIdFun = fun(IdP) ->
+        user_logic:idp_uid_to_system_uid(IdP, UserSubjectIdFun(IdP))
+    end,
+
+    XAuthTokenFun = fun(IdP) ->
+        <<(PrefixFun(IdP))/binary, (CorrectAccessTokenFun(IdP))/binary>>
+    end,
 
     ?assert(rest_test_utils:check_rest_call(Config, #{
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => IndigoToken}
+            headers => #{<<"X-Auth-Token">> => XAuthTokenFun(DummyIdP)}
         },
         expect => #{
             code => 200,
             body => {contains, #{
-                <<"userId">> => UserId, <<"name">> => UserName
+                <<"userId">> => UserIdFun(DummyIdP),
+                <<"name">> => UserNameFun(DummyIdP)
             }}
         }
     })),
@@ -154,21 +187,37 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => GoogleToken}
+            headers => #{<<"X-Auth-Token">> => XAuthTokenFun(AnotherIdP)}
         },
         expect => #{
             code => 200,
             body => {contains, #{
-                <<"userId">> => UserId, <<"name">> => UserName
+                <<"userId">> => UserIdFun(AnotherIdP),
+                <<"name">> => UserNameFun(AnotherIdP)
             }}
         }
     })),
 
+    % DisabledIdP has disabled authority delegation
     ?assert(rest_test_utils:check_rest_call(Config, #{
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => BadGoogleToken}
+            headers => #{<<"X-Auth-Token">> => XAuthTokenFun(DisabledIdP)}
+        },
+        expect => #{
+            code => 401
+        }
+    })),
+
+    % prefix from DummyIdP, access token from AnotherIdP
+    ?assert(rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            path => <<"/user">>,
+            headers => #{<<"X-Auth-Token">> => <<
+                (PrefixFun(DummyIdP))/binary, (CorrectAccessTokenFun(AnotherIdP))/binary
+            >>}
         },
         expect => #{
             code => 401
@@ -179,7 +228,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => <<"bad-token">>}
+            headers => #{<<"X-Auth-Token">> => <<"completely-bad-token">>}
         },
         expect => #{
             code => 401
@@ -201,7 +250,14 @@ basic_auth_header(Login, Password) ->
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
+    Posthook = fun(NewConfig) ->
+        % Sleep a while before mocking http_client (which is done in
+        % init_per_testcase) - otherwise meck's reloading and purging the module
+        % can cause the oz-worker application to crash.
+        timer:sleep(5000),
+        NewConfig
+    end,
+    [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
@@ -211,56 +267,129 @@ end_per_suite(_Config) ->
 
 init_per_testcase(basic_auth_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    UserName = <<"U1">>,
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{name = UserName}),
-    {ok, UserDoc} = oz_test_utils:call_oz(Config, od_user, get, [UserId]),
-    ok = test_utils:mock_new(Nodes, user_logic, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, user_logic, authenticate_by_basic_credentials,
-        fun
-            (?CORRECT_LOGIN, ?CORRECT_PASSWORD) ->
-                {ok, UserDoc};
-            (?BAD_LOGIN, ?BAD_PASSWORD) ->
-                {error, <<"Invalid login or password">>};
-            (_, _) ->
-                meck:passthrough()
-        end),
-    [{user_id, UserId}, {user_name, UserName} | Config];
+    OnepanelUserId = <<"user1Id">>,
+    UserId = user_logic:onepanel_uid_to_system_uid(OnepanelUserId),
+
+    ok = test_utils:mock_new(Nodes, http_client, [passthrough]),
+    test_utils:mock_expect(Nodes, http_client, get, fun(Url, Headers, Body, Options) ->
+        case binary:match(Url, <<"9443/api/v3/onepanel/users">>) of
+            nomatch ->
+                meck:passthrough([Url, Headers, Body, Options]);
+            _ ->
+                <<"Basic ", UserAndPassword/binary>> =
+                    maps:get(<<"Authorization">>, Headers),
+                [User, Passwd] =
+                    binary:split(base64:decode(UserAndPassword), <<":">>),
+                case {User, Passwd} of
+                    {?CORRECT_LOGIN, ?CORRECT_PASSWORD} ->
+                        ResponseBody = json_utils:encode(#{
+                            <<"userId">> => OnepanelUserId,
+                            <<"userRole">> => <<"user1Role">>
+                        }),
+                        {ok, 200, #{}, ResponseBody};
+                    _ ->
+                        {ok, 401, #{}, <<"">>}
+                end
+        end
+    end),
+    [{user_id, UserId} | Config];
 
 init_per_testcase(external_access_token_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    UserName = <<"U1">>,
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{name = UserName}),
-    GoogleProvId = google,
-    IndigoProvId = indigo,
-    GooglePrefix = <<"google:">>,
-    IndigoPrefix = <<"indigo-">>,
-    GoogleToken = <<"acess-token-google-dummy">>,
-    IndigoToken = <<"acess-token-indigo-dummy">>,
 
-    ok = test_utils:mock_new(Nodes, auth_config, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, auth_config, get_providers_with_auth_delegation,
-        fun() ->
-            [{IndigoProvId, IndigoPrefix}, {GoogleProvId, GooglePrefix}]
-        end),
+    DummyIdP = dummyIdP,
+    AnotherIdP = anotherIdP,
+    DisabledIdP = disabledIdP,
+    CorrectAccessTokenFun = fun
+        (dummyIdP) -> <<"correct-access-token-dummyIdP">>;
+        (anotherIdP) -> <<"correct-access-token-anotherIdP">>;
+        (disabledIdP) -> <<"correct-access-token-disabledIdP">>
+    end,
+    PrefixFun = fun
+        (dummyIdP) -> <<"dummyIdP/">>;
+        (anotherIdP) -> <<"anotherIdP#">>;
+        (disabledIdP) -> <<"disabledIdP:">>
+    end,
+    UserSubjectIdFun = fun
+        (dummyIdP) -> <<"user1subjectId">>;
+        (anotherIdP) -> <<"user2subjectId">>;
+        (disabledIdP) -> <<"user3subjectId">>
+    end,
+    UserNameFun = fun
+        (dummyIdP) -> <<"User1">>;
+        (anotherIdP) -> <<"User2">>;
+        (disabledIdP) -> <<"User3">>
+    end,
 
-    ok = test_utils:mock_new(Nodes, auth_utils, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, auth_utils, acquire_user_by_external_access_token,
-        fun(ProviderId, AccessToken) ->
-            case {ProviderId, AccessToken} of
-                {GoogleProvId, GoogleToken} ->
-                    {ok, #document{key = UserId, value = #od_user{}}};
-                {IndigoProvId, IndigoToken} ->
-                    {ok, #document{key = UserId, value = #od_user{}}};
-                {_, _} ->
-                    {error, bad_access_token}
-            end
-        end),
+    oz_test_utils:overwrite_auth_config(Config, #{
+        openidConfig => #{
+            enabled => true
+        },
+        supportedIdps => [
+            {DummyIdP, #{
+                protocol => openid,
+                protocolConfig => #{
+                    plugin => default_oidc_plugin,
+                    authorityDelegation => #{
+                        enabled => true,
+                        tokenPrefix => binary_to_list(PrefixFun(DummyIdP))
+                    },
+                    attributeMapping => #{
+                        subjectId => {required, "id"},
+                        name => {required, "name"}
+                    }
+                }
+            }},
+            {AnotherIdP, #{
+                protocol => openid,
+                protocolConfig => #{
+                    plugin => default_oidc_plugin,
+                    authorityDelegation => #{
+                        enabled => true,
+                        tokenPrefix => binary_to_list(PrefixFun(AnotherIdP))
+                    },
+                    attributeMapping => #{
+                        subjectId => {required, "id"},
+                        name => {required, "name"}
+                    }
+                }
+            }},
+            {DisabledIdP, #{
+                protocol => openid,
+                protocolConfig => #{
+                    plugin => default_oidc_plugin,
+                    authorityDelegation => #{
+                        enabled => false,
+                        tokenPrefix => binary_to_list(PrefixFun(DisabledIdP))
+                    },
+                    attributeMapping => #{
+                        subjectId => {required, "id"},
+                        name => {required, "name"}
+                    }
+                }
+            }}
+        ]
+    }),
+
+    ok = test_utils:mock_new(Nodes, default_oidc_plugin, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, default_oidc_plugin, get_user_info, fun(IdP, AccessToken) ->
+        case AccessToken =:= CorrectAccessTokenFun(IdP) of
+            true ->
+                {ok, #{<<"id">> => UserSubjectIdFun(IdP), <<"name">> => UserNameFun(IdP)}};
+            false ->
+                throw(?ERROR_BAD_IDP_RESPONSE(IdP, 401, #{}, <<>>))
+
+        end
+    end),
 
     [
-        {user_id, UserId}, {user_name, UserName},
-        {google_token, <<GooglePrefix/binary, GoogleToken/binary>>},
-        {bad_google_token, <<GooglePrefix/binary, "bad-token">>},
-        {indigo_token, <<IndigoPrefix/binary, IndigoToken/binary>>} |
+        {dummyIdP, DummyIdP},
+        {anotherIdP, AnotherIdP},
+        {disabledIdP, DisabledIdP},
+        {user_subject_id_fun, UserSubjectIdFun},
+        {user_name_fun, UserNameFun},
+        {correct_access_token_fun, CorrectAccessTokenFun},
+        {prefix_fun, PrefixFun} |
         Config
     ];
 
@@ -270,12 +399,11 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(basic_auth_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, user_logic);
+    test_utils:mock_unload(Nodes, http_client);
 
 end_per_testcase(external_access_token_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, auth_config),
-    test_utils:mock_unload(Nodes, auth_utils);
+    test_utils:mock_unload(Nodes, default_oidc_plugin);
 
 end_per_testcase(_, _) ->
     ok.

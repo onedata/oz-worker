@@ -60,7 +60,9 @@ translate(?ERROR_NOT_IMPLEMENTED) ->
     ?HTTP_501_NOT_IMPLEMENTED;
 
 translate(?ERROR_NOT_SUPPORTED) ->
-    ?HTTP_501_NOT_IMPLEMENTED;
+    {?HTTP_400_BAD_REQUEST,
+        <<"This operation is not supported">>
+    };
 
 translate(?ERROR_NOT_FOUND) ->
     ?HTTP_404_NOT_FOUND;
@@ -86,7 +88,7 @@ translate(?ERROR_MACAROON_EXPIRED) ->
     };
 translate(?ERROR_MACAROON_TTL_TO_LONG(MaxTtl)) ->
     {?HTTP_401_UNAUTHORIZED,
-        <<"Provided authorization token has too open TTL (it must not exceed ~B seconds)">>,
+        <<"Provided authorization token has too long (insecure) TTL (it must not exceed ~B seconds)">>,
         [MaxTtl]
     };
 
@@ -235,7 +237,7 @@ translate(?ERROR_BAD_VALUE_IDENTIFIER(Key)) ->
         <<"Bad value: provided \"~s\" is not a valid identifier.">>, [Key]
     }};
 translate(?ERROR_PROTECTED_GROUP) ->
-    {?HTTP_403_FORBIDDEN, 
+    {?HTTP_403_FORBIDDEN,
         <<"Forbidden: this group is protected and cannot be deleted.">>
     };
 % Errors connected with relations between entities

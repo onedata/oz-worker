@@ -192,7 +192,11 @@ get_user_details_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/users/">>, U3],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpDetails#{<<"userId">> => U3}
+            expected_body = ExpDetails#{
+                <<"userId">> => U3,
+                % TODO VFS-4506 deprecated, included for backward compatibility
+                <<"login">> => ExpAlias
+            }
         },
         logic_spec = #logic_spec{
             module = group_logic,
@@ -207,13 +211,14 @@ get_user_details_test(Config) ->
             },
             auth_hint = ?THROUGH_GROUP(G1),
             expected_result = ?OK_MAP(ExpDetails#{
-                <<"login">> => ExpAlias, % TODO VFS-4506 deprecated, included for backward compatibility
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = UserId} = oz_test_utils:decode_gri(
                         Config, EncodedGri
                     ),
                     ?assertEqual(U3, UserId)
-                end
+                end,
+                % TODO VFS-4506 deprecated, included for backward compatibility
+                <<"login">> => ExpAlias
             })
         }
     },
@@ -579,7 +584,11 @@ get_eff_user_details_test(Config) ->
                         <<"/groups/">>, G1, <<"/effective_users/">>, UserId
                     ],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = UserDetails#{<<"userId">> => UserId}
+                    expected_body = UserDetails#{
+                        <<"userId">> => UserId,
+                        % TODO VFS-4506 deprecated, included for backward compatibility
+                        <<"login">> => maps:get(<<"alias">>, UserDetails)
+                    }
                 },
                 logic_spec = #logic_spec{
                     module = group_logic,
@@ -595,13 +604,14 @@ get_eff_user_details_test(Config) ->
                     },
                     auth_hint = ?THROUGH_GROUP(G1),
                     expected_result = ?OK_MAP(UserDetails#{
-                        <<"login">> => maps:get(<<"alias">>, UserDetails),
                         <<"gri">> => fun(EncodedGri) ->
                             #gri{id = UId} = oz_test_utils:decode_gri(
                                 Config, EncodedGri
                             ),
                             ?assertEqual(UId, UserId)
-                        end
+                        end,
+                        % TODO VFS-4506 deprecated, included for backward compatibility
+                        <<"login">> => maps:get(<<"alias">>, UserDetails)
                     })
                 }
             },

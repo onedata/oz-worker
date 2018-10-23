@@ -40,13 +40,24 @@
 handshake_attributes(_) ->
     Idps = case oz_worker:get_env(dev_mode) of
         {ok, true} ->
-            % If dev mode is enabled, always return basic auth and just one
-            % dummy provider which will redirect to /dev_login page.
-            [<<"basicAuth">>, <<"plgrid">>];
+            % If dev mode is enabled, always return basic auth and Developer
+            % Login dummy IdP which will redirect to /dev_login page.
+            [
+                #{
+                    <<"id">> => <<"onepanel">>,
+                    <<"displayName">> => <<"Onepanel account">>,
+                    <<"iconPath">> => <<"/assets/images/auth-providers/onepanel.svg">>,
+                    <<"iconBackgroundColor">> => <<"#4BD187">>
+                },
+                #{
+                    <<"id">> => <<"devLogin">>,
+                    <<"displayName">> => <<"Developer Login">>,
+                    <<"iconPath">> => <<"/assets/images/auth-providers/default.svg">>
+                }
+            ];
         _ ->
             % Production mode, return providers from config
-            ProvidersAtoms = auth_utils:get_all_idps(),
-            [str_utils:to_binary(P) || P <- ProvidersAtoms]
+            auth_config:get_supported_idps()
     end,
 
     BrandSubtitle = oz_worker:get_env(brand_subtitle, ""),
@@ -178,7 +189,7 @@ translate_user(GRI = #gri{aspect = linked_accounts}, LinkedAccounts) ->
             end, LinkedAccounts)
     };
 
-translate_user(#gri{aspect = {linked_account, _}}, #linked_account{idp = IdP, email_list = Emails}) ->
+translate_user(#gri{aspect = {linked_account, _}}, #linked_account{idp = IdP, emails = Emails}) ->
     #{
         <<"idp">> => IdP,
         <<"emailList">> => Emails

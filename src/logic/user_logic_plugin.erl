@@ -138,7 +138,7 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(#el_req{gri = #gri{aspect = authorize}, data = Data}) ->
     Identifier = maps:get(<<"identifier">>, Data),
-    case auth_logic:authenticate_user(Identifier) of
+    case auth_tokens:authenticate_user(Identifier) of
         {ok, DischargeMacaroonToken} ->
             % TODO VFS-3835 the macaroon should be serialized in translator
             % rather than here
@@ -148,7 +148,7 @@ create(#el_req{gri = #gri{aspect = authorize}, data = Data}) ->
     end;
 
 create(#el_req{gri = #gri{id = UserId, aspect = client_tokens} = GRI}) ->
-    Token = auth_logic:gen_token(UserId),
+    Token = auth_tokens:gen_token(UserId),
     {ok, _} = od_user:update(UserId, fun(#od_user{client_tokens = Tokens} = User) ->
         {ok, User#od_user{client_tokens = [Token | Tokens]}}
     end),
@@ -192,12 +192,12 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, User) ->
     {ok, User};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
     #od_user{
-        name = Name, alias = Alias, email_list = EmailList,
+        name = Name, alias = Alias, emails = Emails,
         linked_accounts = LinkedAccounts
     } = User,
     {ok, #{
         <<"name">> => Name, <<"alias">> => Alias,
-        <<"emailList">> => EmailList,
+        <<"emails">> => Emails,
         <<"linkedAccounts">> => user_logic:linked_accounts_to_maps(LinkedAccounts)
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, User) ->
@@ -305,7 +305,7 @@ update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = Data}) ->
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = UserId, aspect = instance}}) ->
     % Invalidate auth tokens
-    auth_logic:invalidate_user_tokens(UserId),
+    auth_tokens:invalidate_user_tokens(UserId),
     % Invalidate basic auth cache and client tokens
     {ok, #document{
         value = #od_user{

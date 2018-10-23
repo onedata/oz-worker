@@ -16,8 +16,6 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(PLUGIN, space_logic_plugin).
-
 -export([
     create/2
 ]).

@@ -34,10 +34,11 @@
 
 -type name() :: binary().
 -type alias() :: undefined | binary().
+-type email() :: binary().
 -type linked_account() :: #linked_account{}.
--type criterion() :: {linked_account, {auth_utils:idp(), UserId :: binary()}} |
-                     {email, binary()} |
-                     {alias, alias()}.
+-type criterion() :: {linked_account, {auth_config:idp(), SubjectId :: binary()}} |
+    {email, email()} |
+    {alias, alias()}.
 -export_type([name/0, alias/0]).
 
 % Delay before all session connections are terminated when user is deleted.
@@ -128,7 +129,7 @@ list() ->
 %%--------------------------------------------------------------------
 -spec get_by_criterion(criterion()) -> {ok, doc()} | {error, term()}.
 get_by_criterion({email, Value}) ->
-    Fun = fun(Doc = #document{value = #od_user{email_list = EmailList}}, Acc) ->
+    Fun = fun(Doc = #document{value = #od_user{emails = EmailList}}, Acc) ->
         case lists:member(Value, EmailList) of
             true -> {stop, [Doc | Acc]};
             false -> {ok, Acc}
@@ -248,7 +249,7 @@ get_all_sessions(UserId) ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    8.
+    9.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -363,47 +364,99 @@ get_record_struct(7) ->
     % effective relations (as intermediaries computing logic has changed).
     get_record_struct(6);
 get_record_struct(8) ->
+    % * added entitlements field
+    % * renamed email_list to emails
+    % * linked_account:
+    %       * modified the fields order
+    %       * renamed groups to entitlements
+    %       * renamed email_list to emails
+    %       * renamed login to alias
+    %       * added custom field.
+    {record, [
+        {name, string},
+        {alias, string},
+        {emails, [string]},
+        {basic_auth_enabled, boolean},
+
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {name, string},
+            {alias, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, {json_utils, encode, decode}}}
+        ]}]},
+        {entitlements, [string]},
+
+        {default_space, string},
+        {default_provider, string},
+
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(9) ->
     % Changes:
     %   * new field - active sessions
-    %   * groups spec in linked_accounts from binaries to idp_entitlement records
     %   * the privileges are translated
     {record, [
         {name, string},
         {alias, string},
         {email_list, [string]},
         {basic_auth_enabled, boolean},
+
         {linked_accounts, [{record, [
             {idp, atom},
             {subject_id, string},
-            {login, string},
             {name, string},
-            {email_list, [string]},
-            {groups, [{record, [
-                {path, [{record, [
-                    {name, string},
-                    {type, atom}
-                ]}]},
-                {privileges, atom}
-            ]}]}
+            {alias, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, {json_utils, encode, decode}}}
         ]}]},
+        {entitlements, [string]},
+
         {active_sessions, [string]}, % New field
+
         {default_space, string},
         {default_provider, string},
+
         {client_tokens, [string]},
         {space_aliases, #{string => string}},
+
         {oz_privileges, [atom]},
         {eff_oz_privileges, [atom]},
+
         {groups, [string]},
         {spaces, [string]},
         {handle_services, [string]},
         {handles, [string]},
+
         {eff_groups, #{string => [{atom, string}]}},
         {eff_spaces, #{string => [{atom, string}]}},
         {eff_providers, #{string => [{atom, string}]}},
         {eff_handle_services, #{string => [{atom, string}]}},
         {eff_handles, #{string => [{atom, string}]}},
+
         {top_down_dirty, boolean}
     ]}.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -649,18 +702,16 @@ upgrade_record(4, User) ->
         TopDownDirty
     } = User,
 
-    NewLinkedAccounts = lists:map(
-        fun({linked_account, ProviderId, UserId, OALogin, OAName, OAEmails, OAGroups}) ->
-            #linked_account{
-                idp = ProviderId,
-                subject_id = UserId,
-                login = OALogin,
-                name = OAName,
-                email_list = OAEmails,
-                groups = OAGroups
-            }
-        end, LinkedAccounts
-    ),
+    NewLinkedAccounts = lists:map(fun({linked_account, ProviderId, UserId, OALogin, OAName, OAEmails, OAGroups}) ->
+        {linked_account,
+            ProviderId,
+            UserId,
+            OALogin,
+            OAName,
+            OAEmails,
+            OAGroups
+        }
+    end, LinkedAccounts),
 
     {5, {od_user,
         Name,
@@ -756,7 +807,7 @@ upgrade_record(5, User) ->
 upgrade_record(6, User) ->
     {od_user,
         Name,
-        Login,
+        Alias,
         EmailList,
         BasicAuthEnabled,
         LinkedAccounts,
@@ -786,7 +837,7 @@ upgrade_record(6, User) ->
 
     {7, {od_user,
         Name,
-        Login,
+        Alias,
         EmailList,
         BasicAuthEnabled,
         LinkedAccounts,
@@ -841,6 +892,84 @@ upgrade_record(7, User) ->
         EffHandleServices,
         EffHandles,
 
+        TopDownDirty
+    } = User,
+
+    TransformedLinkedAccounts = lists:map(fun(LinkedAccount) ->
+        {linked_account, IdP, SubjectId, LALogin, LAName, LAEmailList, _LAGroups} = LinkedAccount,
+
+        #linked_account{
+            idp = IdP,
+            subject_id = SubjectId,
+            name = LAName,
+            alias = LALogin,
+            emails = LAEmailList,
+            % Cannot be translated, but users will not lose their current entitlements
+            % (resulting Onedata group id is the same as before)
+            entitlements = []
+        }
+    end, LinkedAccounts),
+
+    {8, {od_user,
+        Name,
+        Alias,
+        EmailList,
+        BasicAuthEnabled,
+        TransformedLinkedAccounts,
+        [],
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    }};
+upgrade_record(8, User) ->
+    {od_user,
+        Name,
+        Alias,
+        EmailList,
+        BasicAuthEnabled,
+
+        LinkedAccounts,
+        Entitlements,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
         _TopDownDirty
     } = User,
 
@@ -870,42 +999,14 @@ upgrade_record(7, User) ->
         end, Privileges)))
     end,
 
-    MapType = fun(<<"vo">>) -> organization;
-        (<<"ut">>) -> unit;
-        (<<"tm">>) -> team;
-        (<<"rl">>) -> role_holders
-    end,
-
-    MapPrivileges = fun(<<"admin">>) -> admin;
-        (<<"manager">>) -> manager;
-        (<<"member">>) -> member
-    end,
-    NewLinkedAccounts = lists:map(fun(LinkedAccount) ->
-        OldGroups = LinkedAccount#linked_account.groups,
-        NewGroups = lists:map(fun(Group) ->
-            GroupTokens = binary:split(Group, <<"/">>, [global]),
-            Path = lists:map(fun(Token) ->
-                <<GroupTypeStr:2/binary, ":", GroupName/binary>> = Token,
-                #idp_group{
-                    name = GroupName,
-                    type = MapType(GroupTypeStr)
-                }
-            end, lists:sublist(GroupTokens, length(GroupTokens)-1)),
-            [_, RoleStr] = binary:split(lists:last(GroupTokens), <<":">>, [global]),
-            #idp_entitlement{
-                path = Path,
-                privileges = MapPrivileges(RoleStr)
-            }
-        end, OldGroups),
-        LinkedAccount#linked_account{groups = NewGroups}
-    end, LinkedAccounts),
-
-    {8, #od_user{
+    {9, #od_user{
         name = Name,
         alias = Alias,
-        email_list = EmailList,
+        emails = EmailList,
         basic_auth_enabled = BasicAuthEnabled,
-        linked_accounts = NewLinkedAccounts,
+
+        linked_accounts = LinkedAccounts,
+        entitlements = Entitlements,
 
         active_sessions = [],
 
