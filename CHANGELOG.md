@@ -4,6 +4,14 @@
 CHANGELOG
 ---------
 
+### 18.02.0-rc13
+
+* VFS-4614 Adjust logs during auth.config upgrade for clearer error reporting
+* VFS-4623 Generate SOA admin from zone domain
+* VFS-4623 Add defaults to dns config envs
+* VFS-4623 Flatten dns config section
+
+
 ### 18.02.0-rc12
 
 * Updating GUI, including: VFS-4702-auth-icons-config * VFS-4702 Support for customizable authorization providers icons, colors and names
