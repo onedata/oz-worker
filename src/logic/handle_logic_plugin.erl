@@ -102,7 +102,7 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
+create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, client = Client}) ->
     HandleServiceId = maps:get(<<"handleServiceId">>, Req#el_req.data),
     ResourceType = maps:get(<<"resourceType">>, Req#el_req.data),
     ResourceId = maps:get(<<"resourceId">>, Req#el_req.data),
@@ -115,7 +115,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
         resource_type = ResourceType,
         resource_id = ResourceId,
         public_handle = PublicHandle,
-        metadata = Metadata
+        metadata = Metadata,
+        creator = Client
     }},
     {ok, #document{key = HandleId}} = od_handle:create(Handle),
     entity_graph:add_relation(
@@ -192,7 +193,8 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Handle) ->
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
     #od_handle{handle_service = HandleService, public_handle = PublicHandle,
         resource_type = ResourceType, resource_id = ResourceId,
-        metadata = Metadata, timestamp = Timestamp
+        metadata = Metadata, timestamp = Timestamp,
+        created_at = CreatedAt, creator = Creator
     } = Handle,
     {ok, #{
         <<"handleServiceId">> => HandleService,
@@ -200,7 +202,9 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
-        <<"timestamp">> => Timestamp
+        <<"timestamp">> => Timestamp,
+        <<"createdAt">> => CreatedAt,
+        <<"creator">> => Creator
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = public}}, Handle) ->
     #od_handle{

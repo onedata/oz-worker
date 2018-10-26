@@ -110,8 +110,11 @@ routes() -> [
     }},
     %% Add user to group
     %% This operation requires one of the following privileges:
+    %% - group_invite_user
+    %% - group_set_privileges
     %% - oz_groups_add_relationships
     %% - oz_users_add_relationships
+    %% - oz_groups_set_privileges
     {<<"/groups/:id/users/:uid">>, #rest_req{
         method = 'PUT',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {user, ?BINDING(uid)}}
@@ -247,6 +250,7 @@ routes() -> [
     %% Create child group
     %% This operation requires one of the following privileges:
     %% - group_add_child
+    %% - oz_groups_create
     %% - oz_groups_add_relationships
     {<<"/groups/:id/children">>, #rest_req{
         method = 'POST',

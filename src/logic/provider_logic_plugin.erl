@@ -206,12 +206,14 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Provider) ->
 get(#el_req{gri = #gri{id = Id, aspect = instance, scope = protected}}, Provider) ->
     #od_provider{
         name = Name, domain = Domain,
-        latitude = Latitude, longitude = Longitude
+        latitude = Latitude, longitude = Longitude,
+        created_at = CreatedAt
     } = Provider,
     {ok, #{
         <<"name">> => Name, <<"domain">> => Domain,
         <<"latitude">> => Latitude, <<"longitude">> => Longitude,
-        <<"online">> => provider_connection:is_online(Id)
+        <<"online">> => provider_connection:is_online(Id),
+        <<"createdAt">> => CreatedAt
     }};
 
 

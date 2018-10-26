@@ -138,7 +138,7 @@ get_space_details_test(Config) ->
             module = group_logic,
             function = get_space,
             args = [client, G1, S1],
-            expected_result = ?OK_MAP(ExpDetails)
+            expected_result = ?OK_MAP_CONTAINS(ExpDetails)
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -168,7 +168,7 @@ create_space_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllPrivs = oz_test_utils:all_space_privileges(Config),
+    AllPrivs = privileges:space_privileges(),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(SpaceId) ->
@@ -509,7 +509,7 @@ get_eff_space_details_test(Config) ->
                     module = group_logic,
                     function = get_eff_space,
                     args = [client, G1, SpaceId],
-                    expected_result = ?OK_MAP(SpaceDetails)
+                    expected_result = ?OK_MAP_CONTAINS(SpaceDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,

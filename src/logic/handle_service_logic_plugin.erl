@@ -103,14 +103,15 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
+create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, client = Client}) ->
     Name = maps:get(<<"name">>, Req#el_req.data),
     ProxyEndpoint = maps:get(<<"proxyEndpoint">>, Req#el_req.data),
     ServiceProperties = maps:get(<<"serviceProperties">>, Req#el_req.data),
     HandleService = #document{value = #od_handle_service{
         name = Name,
         proxy_endpoint = ProxyEndpoint,
-        service_properties = ServiceProperties
+        service_properties = ServiceProperties,
+        creator = Client
     }},
     {ok, #document{key = HServiceId}} = od_handle_service:create(HandleService),
     case Req#el_req.auth_hint of
@@ -173,12 +174,15 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, HService) ->
     {ok, HService};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, HService) ->
     #od_handle_service{
-        name = Name, proxy_endpoint = Proxy, service_properties = ServiceProps
+        name = Name, proxy_endpoint = Proxy, service_properties = ServiceProps,
+        created_at = CreatedAt, creator = Creator
     } = HService,
     {ok, #{
         <<"name">> => Name,
         <<"proxyEndpoint">> => Proxy,
-        <<"serviceProperties">> => ServiceProps
+        <<"serviceProperties">> => ServiceProps,
+        <<"createdAt">> => CreatedAt,
+        <<"creator">> => Creator
     }};
 
 get(#el_req{gri = #gri{aspect = users}}, HService) ->

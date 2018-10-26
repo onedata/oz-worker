@@ -129,13 +129,13 @@ create_test(Config) ->
     ], []),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    ExpShareDetails = #od_share{
-        name = ?CORRECT_NAME, space = S1, root_file = ?ROOT_FILE_ID
-    },
     VerifyFun = fun(ShareId) ->
         {ok, Share} = oz_test_utils:get_share(Config, ShareId),
         PublicURL = oz_test_utils:get_share_public_url(Config, ShareId),
-        ?assertEqual(ExpShareDetails#od_share{public_url = PublicURL}, Share),
+        ?assertMatch(#od_share{
+            name = ?CORRECT_NAME, space = S1,
+            root_file = ?ROOT_FILE_ID, public_url = PublicURL
+        }, Share),
         true
     end,
 
@@ -201,7 +201,7 @@ create_test(Config) ->
             },
             bad_values = lists:append([
                 [{<<"spaceId">>, <<"">>, ?ERROR_FORBIDDEN},
-                {<<"spaceId">>, <<"asdq4ewfs">>, ?ERROR_FORBIDDEN}],
+                    {<<"spaceId">>, <<"asdq4ewfs">>, ?ERROR_FORBIDDEN}],
                 BadDataValues,
                 ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)])
         }
@@ -221,7 +221,7 @@ create_test(Config) ->
         data_spec = DataSpec#data_spec{
             bad_values = lists:append([
                 [{<<"spaceId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"spaceId">>)},
-                {<<"spaceId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"spaceId">>)}],
+                    {<<"spaceId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"spaceId">>)}],
                 BadDataValues,
                 ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)])
         }
@@ -320,7 +320,7 @@ get_test(Config) ->
             module = share_logic,
             function = get_public_data,
             args = [client, ShareId],
-            expected_result = ?OK_MAP(SharePublicDetails)
+            expected_result = ?OK_MAP_CONTAINS(SharePublicDetails)
         }
         % TODO gs
     },

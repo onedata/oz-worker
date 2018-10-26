@@ -63,6 +63,7 @@ operation_supported(create, join, private) -> true;
 
 operation_supported(create, {user, _}, private) -> true;
 operation_supported(create, {group, _}, private) -> true;
+operation_supported(create, group, private) -> true;
 
 operation_supported(get, list, private) -> true;
 
@@ -107,10 +108,16 @@ operation_supported(_, _, _) -> false.
     boolean().
 is_subscribable(instance, _) -> true;
 is_subscribable(users, private) -> true;
+is_subscribable(eff_users, private) -> true;
 is_subscribable(groups, private) -> true;
+is_subscribable(eff_groups, private) -> true;
+is_subscribable(group, private) -> true;
+is_subscribable({group, _}, private) -> true;
 is_subscribable({user_privileges, _}, private) -> true;
+is_subscribable({eff_user_privileges, _}, private) -> true;
 is_subscribable({eff_user_membership, _}, private) -> true;
 is_subscribable({group_privileges, _}, private) -> true;
+is_subscribable({eff_group_privileges, _}, private) -> true;
 is_subscribable({eff_group_membership, _}, private) -> true;
 is_subscribable(providers, private) -> true;
 is_subscribable(_, _) -> false.
@@ -122,10 +129,10 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
+create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, client = Client}) ->
     #{<<"name">> := Name} = Req#el_req.data,
     {ok, #document{key = SpaceId}} = od_space:create(#document{
-        value = #od_space{name = Name}
+        value = #od_space{name = Name, creator = Client}
     }),
     case Req#el_req.auth_hint of
         ?AS_USER(UserId) ->
@@ -217,6 +224,20 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}, data = Data}) 
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
     {ok, resource, {NewGRI, ?THROUGH_SPACE(SpaceId), UserData}};
 
+create(Req = #el_req{gri = GRI = #gri{id = SpaceId, aspect = group}}) ->
+    % Create a new group for a user and add the group as a member of this space.
+    {ok, resource, {NewGRI = #gri{id = GroupId}, _}} = group_logic_plugin:create(
+        Req#el_req{gri = GRI#gri{type = od_group, id = undefined, aspect = instance}}
+    ),
+    Privileges = privileges:space_user(),
+    entity_graph:add_relation(
+        od_group, GroupId,
+        od_space, SpaceId,
+        Privileges
+    ),
+    {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
+    {ok, resource, {NewGRI, Group}};
+
 create(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:space_user()),
     entity_graph:add_relation(
@@ -245,10 +266,16 @@ get(#el_req{gri = #gri{aspect = list}}, _) ->
 get(#el_req{gri = #gri{aspect = instance, scope = private}}, Space) ->
     {ok, Space};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
-    #od_space{name = Name, providers = Providers} = Space,
+    #od_space{
+        name = Name, providers = Providers, created_at = CreatedAt,
+        shares = Shares, creator = Creator
+    } = Space,
     {ok, #{
         <<"name">> => Name,
-        <<"providers">> => Providers
+        <<"providers">> => Providers,
+        <<"createdAt">> => CreatedAt,
+        <<"creator">> => Creator,
+        <<"sharedDirectories">> => length(Shares)
     }};
 
 get(#el_req{gri = #gri{aspect = users}}, Space) ->
@@ -418,6 +445,27 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
             false
     end;
 
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, client = ?USER(UserId), data = #{<<"privileges">> := _}}, Space) ->
+    auth_by_privilege(Req, Space, ?SPACE_INVITE_USER) andalso auth_by_privilege(Req, Space, ?SPACE_SET_PRIVILEGES);
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, client = ?USER(UserId), data = _}, Space) ->
+    auth_by_privilege(Req, Space, ?SPACE_INVITE_USER);
+
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, GroupId}}, client = ?USER(UserId), data = #{<<"privileges">> := _}}, Space) ->
+    auth_by_privilege(Req, Space, ?SPACE_ADD_GROUP) andalso
+        auth_by_privilege(Req, Space, ?SPACE_SET_PRIVILEGES) andalso
+        group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_ADD_SPACE);
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, GroupId}}, client = ?USER(UserId), data = _}, Space) ->
+    auth_by_privilege(Req, Space, ?SPACE_ADD_GROUP) andalso
+        group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_ADD_SPACE);
+
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Space) ->
+    case {Req#el_req.client, Req#el_req.auth_hint} of
+        {?USER(UserId), ?AS_USER(UserId)} ->
+            auth_by_privilege(Req, Space, ?SPACE_ADD_GROUP);
+        _ ->
+            false
+    end;
+
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_INVITE_USER);
 
@@ -538,10 +586,18 @@ required_admin_privileges(Req = #el_req{operation = create, gri = #gri{aspect = 
         ?AS_GROUP(_) -> [?OZ_GROUPS_ADD_RELATIONSHIPS]
     end;
 
-required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {user, _}}}) ->
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {user, _}}, data = #{<<"privileges">> := _}}) ->
+    [?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_SET_PRIVILEGES, ?OZ_USERS_ADD_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {user, _}}, data = _}) ->
     [?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS];
-required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) ->
+
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {group, _}}, data = #{<<"privileges">> := _}}) ->
+    [?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_SET_PRIVILEGES, ?OZ_GROUPS_ADD_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {group, _}}, data = _}) ->
     [?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_GROUPS_ADD_RELATIONSHIPS];
+
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = group}}) ->
+    [?OZ_GROUPS_CREATE, ?OZ_SPACES_ADD_RELATIONSHIPS];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
     [?OZ_SPACES_LIST];
@@ -659,6 +715,11 @@ validate(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) -> #{
         <<"privileges">> => {list_of_atoms, privileges:space_privileges()}
     }
 };
+
+validate(Req = #el_req{operation = create, gri = #gri{aspect = group}}) ->
+    group_logic_plugin:validate(Req#el_req{gri = #gri{
+        type = od_group, id = undefined, aspect = instance
+    }});
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     required => #{

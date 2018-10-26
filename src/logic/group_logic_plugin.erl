@@ -125,12 +125,16 @@ operation_supported(delete, {handle, _}, private) -> true.
 is_subscribable(instance, _) -> true;
 is_subscribable(parents, private) -> true;
 is_subscribable(children, private) -> true;
+is_subscribable(eff_children, private) -> true;
 is_subscribable(child, private) -> true;
 is_subscribable({child, _}, private) -> true;
 is_subscribable({child_privileges, _}, private) -> true;
+is_subscribable({eff_child_privileges, _}, private) -> true;
 is_subscribable({eff_child_membership, _}, private) -> true;
 is_subscribable(users, private) -> true;
+is_subscribable(eff_users, private) -> true;
 is_subscribable({user_privileges, _}, private) -> true;
+is_subscribable({eff_user_privileges, _}, private) -> true;
 is_subscribable({eff_user_membership, _}, private) -> true;
 is_subscribable(spaces, private) -> true;
 is_subscribable(_, _) -> false.
@@ -142,11 +146,11 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
+create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, client = Client}) ->
     Name = maps:get(<<"name">>, Req#el_req.data),
     Type = maps:get(<<"type">>, Req#el_req.data, ?DEFAULT_GROUP_TYPE),
     {ok, #document{key = GroupId}} = od_group:create(
-        #document{value = #od_group{name = Name, type = Type}}
+        #document{value = #od_group{name = Name, type = Type, creator = Client}}
     ),
     case Req#el_req.auth_hint of
         ?AS_USER(UserId) ->
@@ -179,8 +183,6 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
                     od_group, GroupId,
                     Privileges
                 );
-            ?AS_GROUP(GroupId) ->
-                throw(?ERROR_CANNOT_JOIN_GROUP_TO_ITSELF);
             ?AS_GROUP(ChildGroupId) ->
                 entity_graph:add_relation(
                     od_group, ChildGroupId,
@@ -247,8 +249,6 @@ create(#el_req{gri = #gri{id = GrId, aspect = {user, UserId}}, data = Data}) ->
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
     {ok, resource, {NewGRI, ?THROUGH_GROUP(GrId), UserData}};
 
-create(#el_req{gri = #gri{id = GrId, aspect = {child, GrId}}}) ->
-    throw(?ERROR_CANNOT_JOIN_GROUP_TO_ITSELF);
 create(#el_req{gri = #gri{id = GrId, aspect = {child, ChGrId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:group_user()),
     entity_graph:add_relation(
@@ -278,12 +278,21 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Group) ->
     {ok, Group};
 % Shared and protected data is (currently) the same
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Group) ->
-    get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Group);
-get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Group) ->
-    #od_group{name = Name, type = Type} = Group,
+    #od_group{
+        name = Name, type = Type, created_at = CreatedAt, creator = Creator
+    } = Group,
     {ok, #{
         <<"name">> => Name,
-        <<"type">> => Type
+        <<"type">> => Type,
+        <<"createdAt">> => CreatedAt,
+        <<"creator">> => Creator
+    }};
+get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Group) ->
+    #od_group{name = Name, type = Type, created_at = CreatedAt} = Group,
+    {ok, #{
+        <<"name">> => Name,
+        <<"type">> => Type,
+        <<"createdAt">> => CreatedAt
     }};
 
 get(#el_req{gri = #gri{aspect = oz_privileges}}, Group) ->
@@ -545,16 +554,22 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
             false
     end;
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, client = ?USER(UserId)}, Group) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, client = ?USER(UserId), data = #{<<"privileges">> := _}}, Group) ->
+    auth_by_privilege(Req, Group, ?GROUP_INVITE_USER) andalso auth_by_privilege(Req, Group, ?GROUP_SET_PRIVILEGES);
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, client = ?USER(UserId), data = _}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_INVITE_USER);
+
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {child, ChildId}}, client = ?USER(UserId), data = #{<<"privileges">> := _}}, Group) ->
+    auth_by_privilege(Req, Group, ?GROUP_ADD_CHILD) andalso
+        auth_by_privilege(Req, Group, ?GROUP_SET_PRIVILEGES) andalso
+        group_logic:has_eff_privilege(ChildId, UserId, ?GROUP_ADD_PARENT);
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {child, ChildId}}, client = ?USER(UserId), data = _}, Group) ->
+    auth_by_privilege(Req, Group, ?GROUP_ADD_CHILD) andalso
+        group_logic:has_eff_privilege(ChildId, UserId, ?GROUP_ADD_PARENT);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = child}}, Group) ->
     % A child group can only be created as a user or another group
     auth_by_privilege(Req, Group, ?GROUP_ADD_CHILD) andalso Req#el_req.auth_hint /= undefined;
-
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {child, ChildId}}, client = ?USER(UserId)}, Group) ->
-    auth_by_privilege(Req, Group, ?GROUP_ADD_CHILD) andalso
-        group_logic:has_eff_privilege(ChildId, UserId, ?GROUP_ADD_PARENT);
 
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Group) ->
@@ -714,9 +729,14 @@ required_admin_privileges(Req = #el_req{operation = create, gri = #gri{aspect = 
         ?AS_GROUP(_) -> [?OZ_GROUPS_ADD_RELATIONSHIPS]
     end;
 
-required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {user, _}}}) ->
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {user, _}}, data = #{<<"privileges">> := _}}) ->
+    [?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_SET_PRIVILEGES, ?OZ_USERS_ADD_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {user, _}}, data = _}) ->
     [?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS];
-required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {child, _}}}) ->
+
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {child, _}}, data = #{<<"privileges">> := _}}) ->
+    [?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_SET_PRIVILEGES];
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {child, _}}, data = _}) ->
     [?OZ_GROUPS_ADD_RELATIONSHIPS];
 
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = child}}) ->

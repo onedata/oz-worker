@@ -519,7 +519,8 @@ ensure_group(Path, ParentId) ->
     {ok, _} = od_group:update(GroupId, fun(Group) -> {ok, Group} end, #od_group{
         name = entity_logic:normalize_name(Name),
         type = Type,
-        protected = true
+        protected = true,
+        creator = ?ROOT
     }),
     ParentId /= undefined andalso group_logic:add_group(
         ?ROOT, ParentId, GroupId, map_privileges(Privileges)

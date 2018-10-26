@@ -115,7 +115,7 @@ create_parent_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllPrivs = oz_test_utils:all_group_privileges(Config),
+    AllPrivs = privileges:group_privileges(),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(ParentId, Data) ->
@@ -300,7 +300,7 @@ join_parent_test(Config) ->
             bad_values = [
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
                 {<<"token">>, CreateTokenForItselfFun,
-                    ?ERROR_CANNOT_JOIN_GROUP_TO_ITSELF},
+                    ?ERROR_CANNOT_ADD_RELATION_TO_SELF},
                 {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
                 {<<"token">>, <<"123qwe">>,
                     ?ERROR_BAD_VALUE_TOKEN(<<"token">>)}
@@ -358,7 +358,7 @@ join_parent_test(Config) ->
     {ok, Token2} = onedata_macaroons:serialize(Macaroon2),
     ApiTestSpec2 = ApiTestSpec1#api_test_spec{
         logic_spec = LogicSpec#logic_spec{
-            expected_result = ?ERROR_REASON(?ERROR_CANNOT_JOIN_GROUP_TO_ITSELF)
+            expected_result = ?ERROR_REASON(?ERROR_CANNOT_ADD_RELATION_TO_SELF)
         },
         data_spec = #data_spec{
         required = [<<"token">>],
@@ -465,7 +465,7 @@ get_parent_details_test(Config) ->
             module = group_logic,
             function = get_parent,
             args = [client, Group, ParentGroup],
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME2,
                 <<"type">> => ?GROUP_TYPE2
             })
@@ -579,7 +579,7 @@ get_eff_parent_details_test(Config) ->
                     module = group_logic,
                     function = get_eff_parent,
                     args = [client, G1, GroupId],
-                    expected_result = ?OK_MAP(GroupDetails)
+                    expected_result = ?OK_MAP_CONTAINS(GroupDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,

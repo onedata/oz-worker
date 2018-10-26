@@ -33,9 +33,10 @@
 -export([
     list_children_test/1,
     create_group_invite_token_test/1,
-    get_child_details_test/1,
     create_child_test/1,
+    get_child_details_test/1,
     add_child_test/1,
+    add_child_with_privileges_test/1,
     remove_child_test/1,
     get_child_privileges_test/1,
     update_child_privileges_test/1,
@@ -49,9 +50,10 @@ all() ->
     ?ALL([
         list_children_test,
         create_group_invite_token_test,
-        get_child_details_test,
         create_child_test,
+        get_child_details_test,
         add_child_test,
+        add_child_with_privileges_test,
         remove_child_test,
         get_child_privileges_test,
         update_child_privileges_test,
@@ -160,74 +162,6 @@ create_group_invite_token_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
-get_child_details_test(Config) ->
-    % create group with 2 users:
-    %   U2 gets the GROUP_VIEW privilege
-    %   U1 gets all remaining privileges
-    {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_VIEW
-    ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, G2} = oz_test_utils:create_group(Config, ?ROOT,
-        #{<<"name">> => ?GROUP_NAME2, <<"type">> => ?GROUP_TYPE2}
-    ),
-    oz_test_utils:group_add_group(Config, G1, G2),
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U2},
-                {admin, [?OZ_GROUPS_VIEW]}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, NonAdmin},
-                {user, U1}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/groups/">>, G1, <<"/children/">>, G2],
-            expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"groupId">> => G2,
-                <<"name">> => ?GROUP_NAME2,
-                <<"type">> => ?GROUP_TYPE2_BIN
-            }
-        },
-        logic_spec = #logic_spec{
-            module = group_logic,
-            function = get_child,
-            args = [client, G1, G2],
-            expected_result = ?OK_MAP(#{
-                <<"name">> => ?GROUP_NAME2,
-                <<"type">> => ?GROUP_TYPE2
-            })
-        },
-        gs_spec = #gs_spec{
-            operation = get,
-            gri = #gri{
-                type = od_group, id = G2, aspect = instance, scope = shared
-            },
-            auth_hint = ?THROUGH_GROUP(G1),
-            expected_result = ?OK_MAP(#{
-                <<"name">> => ?GROUP_NAME2,
-                <<"type">> => ?GROUP_TYPE2_BIN,
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    ?assertEqual(Id, G2)
-                end
-            })
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
-
-
 create_child_test(Config) ->
     % create group with 2 users:
     %   U2 gets the GROUP_ADD_CHILD privilege
@@ -299,26 +233,110 @@ create_child_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
+get_child_details_test(Config) ->
+    % create group with 2 users:
+    %   U2 gets the GROUP_VIEW privilege
+    %   U1 gets all remaining privileges
+    {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
+        Config, ?GROUP_VIEW
+    ),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, G2} = oz_test_utils:create_group(Config, ?ROOT,
+        #{<<"name">> => ?GROUP_NAME2, <<"type">> => ?GROUP_TYPE2}
+    ),
+    oz_test_utils:group_add_group(Config, G1, G2),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U2},
+                {admin, [?OZ_GROUPS_VIEW]}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {user, U1}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/groups/">>, G1, <<"/children/">>, G2],
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{
+                <<"groupId">> => G2,
+                <<"name">> => ?GROUP_NAME2,
+                <<"type">> => ?GROUP_TYPE2_BIN
+            }
+        },
+        logic_spec = #logic_spec{
+            module = group_logic,
+            function = get_child,
+            args = [client, G1, G2],
+            expected_result = ?OK_MAP_CONTAINS(#{
+                <<"name">> => ?GROUP_NAME2,
+                <<"type">> => ?GROUP_TYPE2
+            })
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{
+                type = od_group, id = G2, aspect = instance, scope = shared
+            },
+            auth_hint = ?THROUGH_GROUP(G1),
+            expected_result = ?OK_MAP(#{
+                <<"name">> => ?GROUP_NAME2,
+                <<"type">> => ?GROUP_TYPE2_BIN,
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = oz_test_utils:decode_gri(
+                        Config, EncodedGri
+                    ),
+                    ?assertEqual(Id, G2)
+                end
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
 add_child_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserNoAddChildPriv} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserNoAddParentPriv} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, G1} = oz_test_utils:create_group(Config, ?USER(User), ?GROUP_NAME1),
-    {ok, G2} = oz_test_utils:create_group(Config, ?USER(User), ?GROUP_NAME2),
+    {ok, ParentGroup} = oz_test_utils:create_group(Config, ?USER(User), ?GROUP_NAME1),
+    {ok, ChildGroup} = oz_test_utils:create_group(Config, ?USER(User), ?GROUP_NAME2),
 
-    VerifyEndFun =
-        fun
-            (true = _ShouldSucceed, _, Data) ->
-                ExpPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
-                {ok, Privs} = oz_test_utils:group_get_group_privileges(
-                    Config, G1, G2
-                ),
-                ?assertEqual(ExpPrivs, lists:sort(Privs)),
-                oz_test_utils:group_remove_group(Config, G1, G2);
-            (false = ShouldSucceed, _, _) ->
-                {ok, SubGroups} = oz_test_utils:group_get_children(Config, G1),
-                ?assertEqual(lists:member(G2, SubGroups), ShouldSucceed)
-        end,
+    oz_test_utils:group_add_user(Config, ParentGroup, UserNoAddChildPriv),
+    oz_test_utils:group_add_user(Config, ChildGroup, UserNoAddChildPriv),
+    oz_test_utils:group_set_user_privileges(Config, ChildGroup, UserNoAddChildPriv,
+        privileges:group_privileges(), []
+    ),
+    oz_test_utils:group_set_user_privileges(Config, ParentGroup, UserNoAddChildPriv,
+        privileges:group_privileges() -- [?GROUP_ADD_CHILD], [?GROUP_ADD_CHILD]
+    ),
+
+    oz_test_utils:group_add_user(Config, ParentGroup, UserNoAddParentPriv),
+    oz_test_utils:group_add_user(Config, ChildGroup, UserNoAddParentPriv),
+    oz_test_utils:group_set_user_privileges(Config, ChildGroup, UserNoAddParentPriv,
+        privileges:group_privileges() -- [?GROUP_ADD_PARENT], [?GROUP_ADD_PARENT]
+    ),
+    oz_test_utils:group_set_user_privileges(Config, ParentGroup, UserNoAddParentPriv,
+        privileges:group_privileges(), []
+    ),
+
+    VerifyEndFun = fun
+        (true = _ShouldSucceed, _, _) ->
+            {ok, SubGroups} = oz_test_utils:group_get_children(Config, ParentGroup),
+            ?assert(lists:member(ChildGroup, SubGroups)),
+            oz_test_utils:group_remove_group(Config, ParentGroup, ChildGroup);
+        (false = _ShouldSucceed, _, _) ->
+            {ok, SubGroups} = oz_test_utils:group_get_children(Config, ParentGroup),
+            ?assertNot(lists:member(ChildGroup, SubGroups))
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -329,15 +347,17 @@ add_child_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, NonAdmin}
+                {user, NonAdmin},
+                {user, UserNoAddChildPriv},
+                {user, UserNoAddParentPriv}
             ]
         },
         rest_spec = #rest_spec{
             method = put,
-            path = [<<"/groups/">>, G1, <<"/children/">>, G2],
+            path = [<<"/groups/">>, ParentGroup, <<"/children/">>, ChildGroup],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/groups/">>, G1, <<"/children/">>, G2]),
+                ExpLocation = ?URL(Config, [<<"/groups/">>, ParentGroup, <<"/children/">>, ChildGroup]),
                 ?assertEqual(ExpLocation, Location),
                 true
             end
@@ -345,8 +365,80 @@ add_child_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = add_group,
-            args = [client, G1, G2, data],
-            expected_result = ?OK_BINARY(G2)
+            args = [client, ParentGroup, ChildGroup, data],
+            expected_result = ?OK_BINARY(ChildGroup)
+        },
+        % TODO gs
+        data_spec = #data_spec{
+            required = [],
+            correct_values = #{},
+            bad_values = []
+        }
+    },
+
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, undefined, undefined, VerifyEndFun
+    )).
+
+
+add_child_with_privileges_test(Config) ->
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserNoSetPrivsPriv} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, ParentGroup} = oz_test_utils:create_group(Config, ?USER(User), ?GROUP_NAME1),
+    {ok, ChildGroup} = oz_test_utils:create_group(Config, ?USER(User), ?GROUP_NAME2),
+
+    oz_test_utils:group_add_user(Config, ParentGroup, UserNoSetPrivsPriv),
+    oz_test_utils:group_add_user(Config, ChildGroup, UserNoSetPrivsPriv),
+    oz_test_utils:group_set_user_privileges(Config, ChildGroup, UserNoSetPrivsPriv,
+        privileges:group_privileges(), []
+    ),
+    oz_test_utils:group_set_user_privileges(Config, ParentGroup, UserNoSetPrivsPriv,
+        privileges:group_privileges() -- [?GROUP_SET_PRIVILEGES], [?GROUP_SET_PRIVILEGES]
+    ),
+
+    VerifyEndFun = fun
+        (true = _ShouldSucceed, _, Data) ->
+            ExpPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
+            {ok, Privs} = oz_test_utils:group_get_group_privileges(
+                Config, ParentGroup, ChildGroup
+            ),
+            ?assertEqual(ExpPrivs, lists:sort(Privs)),
+            oz_test_utils:group_remove_group(Config, ParentGroup, ChildGroup);
+        (false = _ShouldSucceed, _, _) ->
+            {ok, SubGroups} = oz_test_utils:group_get_children(Config, ParentGroup),
+            ?assertNot(lists:member(ChildGroup, SubGroups))
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_SET_PRIVILEGES, ?OZ_GROUPS_SET_PRIVILEGES]},
+                {user, User}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {user, UserNoSetPrivsPriv}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = put,
+            path = [<<"/groups/">>, ParentGroup, <<"/children/">>, ChildGroup],
+            expected_code = ?HTTP_201_CREATED,
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                ExpLocation = ?URL(Config, [<<"/groups/">>, ParentGroup, <<"/children/">>, ChildGroup]),
+                ?assertEqual(ExpLocation, Location),
+                true
+            end
+        },
+        logic_spec = #logic_spec{
+            module = group_logic,
+            function = add_group,
+            args = [client, ParentGroup, ChildGroup, data],
+            expected_result = ?OK_BINARY(ChildGroup)
         },
         % TODO gs
         data_spec = #data_spec{
@@ -442,7 +534,7 @@ get_child_privileges_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    AllPrivs = oz_test_utils:all_group_privileges(Config),
+    AllPrivs = privileges:group_privileges(),
     InitialPrivs = [?GROUP_VIEW],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
@@ -504,7 +596,7 @@ update_child_privileges_test(Config) ->
     {ok, G2} = oz_test_utils:group_add_group(Config, G1, G2),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    AllPrivs = oz_test_utils:all_group_privileges(Config),
+    AllPrivs = privileges:group_privileges(),
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:group_set_group_privileges(
             Config, G1, G2, PrivsToGrant, PrivsToRevoke
@@ -561,7 +653,7 @@ get_eff_children_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllGroupPrivs = oz_test_utils:all_group_privileges(Config),
+    AllGroupPrivs = privileges:group_privileges(),
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1,
         AllGroupPrivs -- [?GROUP_VIEW], [?GROUP_VIEW]
@@ -624,7 +716,7 @@ get_eff_child_details_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllGroupPrivs = oz_test_utils:all_group_privileges(Config),
+    AllGroupPrivs = privileges:group_privileges(),
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1,
         AllGroupPrivs -- [?GROUP_VIEW], [?GROUP_VIEW]
@@ -669,7 +761,7 @@ get_eff_child_details_test(Config) ->
                     module = group_logic,
                     function = get_eff_child,
                     args = [client, G1, GroupId],
-                    expected_result = ?OK_MAP(GroupDetails)
+                    expected_result = ?OK_MAP_CONTAINS(GroupDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -712,7 +804,7 @@ get_eff_child_privileges_test(Config) ->
     %%                      |
     %%                    User1
 
-    AllPrivs = oz_test_utils:all_group_privileges(Config),
+    AllPrivs = privileges:group_privileges(),
     InitialPrivs = [?GROUP_VIEW],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 

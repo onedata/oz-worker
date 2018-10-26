@@ -58,8 +58,6 @@
     user_leave_space/3
 ]).
 -export([
-    all_group_privileges/1,
-
     list_groups/1,
     create_group/3,
     create_parent_group/4,
@@ -96,8 +94,6 @@
     group_create_space/3
 ]).
 -export([
-    all_space_privileges/1,
-
     create_space/3,
     get_space/2,
     list_spaces/1,
@@ -144,8 +140,6 @@
     set_provider_domain/3
 ]).
 -export([
-    all_handle_service_privileges/1,
-
     list_handle_services/1,
     create_handle_service/5, create_handle_service/3,
     get_handle_service/2,
@@ -163,8 +157,6 @@
     handle_service_set_group_privileges/5
 ]).
 -export([
-    all_handle_privileges/1,
-
     list_handles/1,
     create_handle/6, create_handle/3,
     get_handle/2,
@@ -539,16 +531,6 @@ user_leave_space(Config, UserId, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Get all atoms representing group privileges.
-%% @end
-%%--------------------------------------------------------------------
--spec all_group_privileges(Config :: term()) -> [atom()].
-all_group_privileges(Config) ->
-    call_oz(Config, privileges, group_privileges, []).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Creates group in onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -885,16 +867,6 @@ group_get_group_privileges(Config, GroupId, ChildGroupId) ->
     ?assertMatch({ok, _}, call_oz(Config, group_logic, get_child_privileges, [
         ?ROOT, GroupId, ChildGroupId
     ])).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Get all atoms representing space privileges.
-%% @end
-%%--------------------------------------------------------------------
--spec all_space_privileges(Config :: term()) -> [atom()].
-all_space_privileges(Config) ->
-    call_oz(Config, privileges, space_privileges, []).
 
 
 %%--------------------------------------------------------------------
@@ -1372,16 +1344,6 @@ unsupport_space(Config, ProviderId, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Get all atoms representing handle service privileges.
-%% @end
-%%--------------------------------------------------------------------
--spec all_handle_service_privileges(Config :: term()) -> [atom()].
-all_handle_service_privileges(Config) ->
-    call_oz(Config, privileges, handle_service_privileges, []).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Sets provider subdomain.
 %% @end
 %%--------------------------------------------------------------------
@@ -1635,16 +1597,6 @@ handle_service_set_group_privileges(
     ?assertMatch(ok, call_oz(Config, handle_service_logic,
         update_group_privileges, [?ROOT, HServiceId, GroupId, PrivsToGrant, PrivsToRevoke]
     )).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Get all atoms representing handles privileges.
-%% @end
-%%--------------------------------------------------------------------
--spec all_handle_privileges(Config :: term()) -> [atom()].
-all_handle_privileges(Config) ->
-    call_oz(Config, privileges, handle_privileges, []).
 
 
 %%--------------------------------------------------------------------

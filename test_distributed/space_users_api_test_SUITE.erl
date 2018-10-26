@@ -32,6 +32,7 @@
 ]).
 -export([
     add_user_test/1,
+    add_user_with_privileges_test/1,
     create_user_invite_token_test/1,
     remove_user_test/1,
     list_users_test/1,
@@ -49,6 +50,7 @@
 all() ->
     ?ALL([
         add_user_test,
+        add_user_with_privileges_test,
         create_user_invite_token_test,
         remove_user_test,
         list_users_test,
@@ -71,26 +73,33 @@ all() ->
 
 add_user_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, EffectiveUser} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
 
-    AllPrivs = oz_test_utils:all_space_privileges(Config),
+    % EffectiveUser belongs to space S1 effectively via SubGroup1, with the
+    % effective privilege to INVITE_USER, so he should be able to join the space as a user
+    {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
+    {ok, SubGroup1} = oz_test_utils:space_add_group(Config, S1, SubGroup1),
+    oz_test_utils:space_set_group_privileges(Config, S1, SubGroup1, [?SPACE_INVITE_USER], []),
 
-    VerifyEndFun =
-        fun
-            (true = _ShouldSucceed, _, Data) ->
-                Privs = lists:sort(maps:get(<<"privileges">>, Data)),
-                {ok, ActualPrivs} = oz_test_utils:space_get_user_privileges(
-                    Config, S1, U2
-                ),
-                ?assertEqual(Privs, lists:sort(ActualPrivs)),
-                oz_test_utils:space_remove_user(Config, S1, U2);
-            (false = ShouldSucceed, _, _) ->
-                {ok, Users} = oz_test_utils:space_get_users(Config, S1),
-                ?assertEqual(lists:member(U2, Users), ShouldSucceed)
-        end,
+    % EffectiveUserWithoutInvitePriv belongs to group S1 effectively via SubGroup2,
+    % but without the effective privilege to INVITE_USER, so he should NOT be able
+    % to join the parent group as a user
+    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutInvitePriv), ?GROUP_NAME2),
+    {ok, SubGroup2} = oz_test_utils:space_add_group(Config, S1, SubGroup2),
+
+    VerifyEndFun = fun
+        (true = _ShouldSucceed, _, _) ->
+            {ok, Users} = oz_test_utils:space_get_users(Config, S1),
+            ?assert(lists:member(EffectiveUser, Users)),
+            oz_test_utils:space_remove_user(Config, S1, EffectiveUser);
+        (false = _ShouldSucceed, _, _) ->
+            {ok, Users} = oz_test_utils:space_get_users(Config, S1),
+            ?assertNot(lists:member(EffectiveUser, Users))
+    end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -106,10 +115,10 @@ add_user_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = put,
-            path = [<<"/spaces/">>, S1, <<"/users/">>, U2],
+            path = [<<"/spaces/">>, S1, <<"/users/">>, EffectiveUser],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/spaces/">>, S1, <<"/users/">>, U2]),
+                ExpLocation = ?URL(Config, [<<"/spaces/">>, S1, <<"/users/">>, EffectiveUser]),
                 ?assertEqual(ExpLocation, Location),
                 true
             end
@@ -117,8 +126,83 @@ add_user_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = add_user,
-            args = [client, S1, U2, data],
-            expected_result = ?OK_BINARY(U2)
+            args = [client, S1, EffectiveUser, data],
+            expected_result = ?OK_BINARY(EffectiveUser)
+        },
+        % TODO gs
+        data_spec = #data_spec{
+            required = [],
+            correct_values = #{},
+            bad_values = []
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, undefined, undefined, VerifyEndFun
+    )).
+
+
+add_user_with_privileges_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, EffectiveUser} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+
+    AllPrivs = privileges:space_privileges(),
+
+    % EffectiveUser belongs to space S1 effectively via SubGroup1, with the
+    % effective privilege to INVITE_USER, so he should be able to join the space as a user
+    {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
+    {ok, SubGroup1} = oz_test_utils:space_add_group(Config, S1, SubGroup1),
+    oz_test_utils:space_set_group_privileges(Config, S1, SubGroup1, [?SPACE_INVITE_USER, ?SPACE_SET_PRIVILEGES], []),
+
+    % EffectiveUserWithoutInvitePriv belongs to group S1 effectively via SubGroup2,
+    % but without the effective privilege to INVITE_USER, so he should NOT be able
+    % to join the parent group as a user
+    {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutInvitePriv), ?GROUP_NAME2),
+    {ok, SubGroup2} = oz_test_utils:space_add_group(Config, S1, SubGroup2),
+
+    VerifyEndFun = fun
+        (true = _ShouldSucceed, _, Data) ->
+            Privs = lists:sort(maps:get(<<"privileges">>, Data)),
+            {ok, ActualPrivs} = oz_test_utils:space_get_user_privileges(
+                Config, S1, EffectiveUser
+            ),
+            ?assertEqual(Privs, lists:sort(ActualPrivs)),
+            oz_test_utils:space_remove_user(Config, S1, EffectiveUser);
+        (false = ShouldSucceed, _, _) ->
+            {ok, Users} = oz_test_utils:space_get_users(Config, S1),
+            ?assertEqual(lists:member(EffectiveUser, Users), ShouldSucceed)
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS, ?OZ_SPACES_SET_PRIVILEGES]}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = put,
+            path = [<<"/spaces/">>, S1, <<"/users/">>, EffectiveUser],
+            expected_code = ?HTTP_201_CREATED,
+            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                ExpLocation = ?URL(Config, [<<"/spaces/">>, S1, <<"/users/">>, EffectiveUser]),
+                ?assertEqual(ExpLocation, Location),
+                true
+            end
+        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = add_user,
+            args = [client, S1, EffectiveUser, data],
+            expected_result = ?OK_BINARY(EffectiveUser)
         },
         % TODO gs
         data_spec = #data_spec{
@@ -281,77 +365,86 @@ list_users_test(Config) ->
 
 
 get_user_test(Config) ->
-    % create space with 2 users:
-    %   U2 gets the SPACE_VIEW privilege
-    %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
-        Config, ?SPACE_VIEW
-    ),
+    {ok, Creator} = oz_test_utils:create_user(Config, #od_user{name = <<"creator">>, alias = <<"creator">>}),
+    {ok, MemberWithViewPrivs} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, MemberWithoutViewPrivs} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Member} = oz_test_utils:create_user(Config, #od_user{name = <<"member">>, alias = <<"member">>}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    ExpAlias = ExpName = ?USER_NAME1,
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{
-        name = ExpName,
-        alias = ExpAlias
-    }),
-    {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
-    oz_test_utils:space_set_user_privileges(Config, S1, U3, [], [
-        ?SPACE_VIEW
-    ]),
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(Creator), ?SPACE_NAME1),
+    {ok, _} = oz_test_utils:space_add_user(Config, Space, MemberWithViewPrivs),
+    {ok, _} = oz_test_utils:space_add_user(Config, Space, MemberWithoutViewPrivs),
+    {ok, _} = oz_test_utils:space_add_user(Config, Space, Member),
 
-    ExpUserDetails = #{
-        <<"alias">> => ExpAlias,
-        <<"name">> => ExpName
-    },
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_USERS_VIEW]},
-                {user, U2},
-                {user, U3}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, NonAdmin},
-                {user, U1}
-            ]
+    oz_test_utils:space_set_user_privileges(Config, Space, MemberWithViewPrivs, [?SPACE_VIEW], []),
+    oz_test_utils:space_set_user_privileges(Config, Space, MemberWithoutViewPrivs, [], [?SPACE_VIEW]),
+
+    % Shared data about creator should be available even if he is not longer in the space
+    oz_test_utils:space_remove_user(Config, Space, Creator),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    lists:foreach(fun({SubjectUser, ExpName, ExpAlias}) ->
+        ExpUserDetails = #{
+            <<"alias">> => ExpAlias,
+            <<"name">> => ExpName
         },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/spaces/">>, S1, <<"/users/">>, U3],
-            expected_code = ?HTTP_200_OK,
-            expected_body = ExpUserDetails#{
-                <<"userId">> => U3,
-                % TODO VFS-4506 deprecated, included for backward compatibility
-                <<"login">> => ExpAlias
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_USERS_VIEW]},
+                    {user, SubjectUser},
+                    {user, MemberWithViewPrivs}
+                ] ++ case SubjectUser of
+                    % Every member of the space should be able to see the creator details
+                    Creator -> [{user, MemberWithoutViewPrivs}];
+                    _ -> []
+                end,
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, NonAdmin}
+                ] ++ case SubjectUser of
+                    Creator -> [];
+                    _ -> [{user, MemberWithoutViewPrivs}]
+                end
+            },
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/spaces/">>, Space, <<"/users/">>, SubjectUser],
+                expected_code = ?HTTP_200_OK,
+                expected_body = ExpUserDetails#{
+                    <<"userId">> => SubjectUser,
+                    % TODO VFS-4506 deprecated, included for backward compatibility
+                    <<"login">> => ExpAlias
+                }
+            },
+            logic_spec = #logic_spec{
+                module = space_logic,
+                function = get_user,
+                args = [client, Space, SubjectUser],
+                expected_result = ?OK_MAP_CONTAINS(ExpUserDetails)
+            },
+            gs_spec = #gs_spec{
+                operation = get,
+                gri = #gri{
+                    type = od_user, id = SubjectUser, aspect = instance, scope = shared
+                },
+                auth_hint = ?THROUGH_SPACE(Space),
+                expected_result = ?OK_MAP(ExpUserDetails#{
+                    <<"gri">> => fun(EncodedGri) ->
+                        ?assertMatch(
+                            #gri{id = SubjectUser},
+                            oz_test_utils:decode_gri(Config, EncodedGri)
+                        )
+                    end,
+                    % TODO VFS-4506 deprecated, included for backward compatibility
+                    <<"login">> => maps:get(<<"alias">>, ExpUserDetails)
+                })
             }
         },
-        logic_spec = #logic_spec{
-            module = space_logic,
-            function = get_user,
-            args = [client, S1, U3],
-            expected_result = ?OK_MAP(ExpUserDetails)
-        },
-        gs_spec = #gs_spec{
-            operation = get,
-            gri = #gri{
-                type = od_user, id = U3, aspect = instance, scope = shared
-            },
-            auth_hint = ?THROUGH_SPACE(S1),
-            expected_result = ?OK_MAP(ExpUserDetails#{
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = UserId} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    ?assertEqual(UserId, U3)
-                end,
-                % TODO VFS-4506 deprecated, included for backward compatibility
-                <<"login">> => maps:get(<<"alias">>, ExpUserDetails)
-            })
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end, [{Creator, <<"creator">>, <<"creator">>}, {Member, <<"member">>, <<"member">>}]).
 
 
 get_user_privileges_test(Config) ->
@@ -369,7 +462,7 @@ get_user_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
 
-    AllPrivs = oz_test_utils:all_space_privileges(Config),
+    AllPrivs = privileges:space_privileges(),
     InitialPrivs = privileges:space_user(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
@@ -427,7 +520,7 @@ update_user_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
 
-    AllPrivs = oz_test_utils:all_space_privileges(Config),
+    AllPrivs = privileges:space_privileges(),
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:space_set_user_privileges(
             Config, S1, U3, PrivsToGrant, PrivsToRevoke
@@ -557,7 +650,7 @@ get_eff_user_test(Config) ->
                     module = space_logic,
                     function = get_eff_user,
                     args = [client, S1, UserId],
-                    expected_result = ?OK_MAP(UserDetails)
+                    expected_result = ?OK_MAP_CONTAINS(UserDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -630,7 +723,7 @@ get_eff_user_privileges_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    AllPrivs = oz_test_utils:all_space_privileges(Config),
+    AllPrivs = privileges:space_privileges(),
     InitialPrivs = privileges:space_user(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 

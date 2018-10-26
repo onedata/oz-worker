@@ -304,13 +304,15 @@ add_relation(od_space, GroupId, od_provider, ProviderId, SupportSize) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Adds a relation between given entities. Used for relations with attributes.
+%% Adds a relation between given entities.
 %% @end
 %%--------------------------------------------------------------------
 -spec add_relation(ChildType :: entity_type(), ChildId :: entity_id(),
     ChildAttributes :: attributes(), ParentType :: entity_type(),
     ParentId :: entity_id(), ParentAttributes :: attributes()) ->
     ok | no_return().
+add_relation(EntityType, EntityId, _, EntityType, EntityId, _) ->
+    throw(?ERROR_CANNOT_ADD_RELATION_TO_SELF);
 add_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChType, ChId) of

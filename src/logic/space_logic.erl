@@ -37,6 +37,7 @@
 
     add_user/3, add_user/4,
     add_group/3, add_group/4,
+    create_group/3, create_group/4,
 
     get_users/2, get_eff_users/2,
     get_user/3, get_eff_user/3,
@@ -296,6 +297,40 @@ add_group(Client, SpaceId, GroupId, Data) ->
         client = Client,
         gri = #gri{type = od_space, id = SpaceId, aspect = {group, GroupId}},
         data = Data
+    })).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new group in the space based on group name and type.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_group(Client :: entity_logic:client(), od_space:id(), od_group:name(),
+    od_group:type()) -> {ok, od_group:id()} | {error, term()}.
+create_group(Client, SpaceId, Name, Type) ->
+    create_group(Client, SpaceId, #{<<"name">> => Name, <<"type">> => Type}).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new group in the space. Has two variants:
+%% 1) Group Name is given explicitly (the new group will be of default type)
+%% 2) Group name is provided in a proper Data object, group type is optional.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_group(Client :: entity_logic:client(), od_space:id(),
+    NameOrData :: od_group:name() | #{}) -> {ok, od_group:id()} | {error, term()}.
+create_group(Client, SpaceId, Name) when is_binary(Name) ->
+    create_group(Client, SpaceId, #{<<"name">> => Name});
+create_group(Client, SpaceId, Data) ->
+    AuthHint = case Client of
+        ?USER(UserId) -> ?AS_USER(UserId);
+        _ -> undefined
+    end,
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_space, id = SpaceId, aspect = group},
+        data = Data,
+        auth_hint = AuthHint
     })).
 
 

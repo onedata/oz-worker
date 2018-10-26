@@ -121,7 +121,7 @@ create_group_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllPrivs = oz_test_utils:all_group_privileges(Config),
+    AllPrivs = privileges:group_privileges(),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(GroupId, ExpName, ExpType) ->
@@ -400,7 +400,7 @@ get_group_test(Config) ->
             module = user_logic,
             function = get_group,
             args = [client, U1, G1],
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1
             })
@@ -583,7 +583,7 @@ get_eff_group_test(Config) ->
                     module = user_logic,
                     function = get_eff_group,
                     args = [client, U1, GroupId],
-                    expected_result = ?OK_MAP(GroupDetails)
+                    expected_result = ?OK_MAP_CONTAINS(GroupDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,

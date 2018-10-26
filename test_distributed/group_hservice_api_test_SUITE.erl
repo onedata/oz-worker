@@ -125,7 +125,7 @@ create_handle_service_test(Config) ->
         ?OZ_HANDLE_SERVICES_CREATE
     ], []),
 
-    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
+    AllPrivs = privileges:handle_service_privileges(),
 
     VerifyFun = fun(HServiceId) ->
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -256,7 +256,7 @@ get_handle_service_details_test(Config) ->
             module = group_logic,
             function = get_handle_service,
             args = [client, G1, HService],
-            expected_result = ?OK_MAP(?DOI_SERVICE)
+            expected_result = ?OK_MAP_CONTAINS(?DOI_SERVICE)
         }
         % TODO gs
     },
@@ -406,7 +406,7 @@ get_eff_handle_service_details_test(Config) ->
                     module = group_logic,
                     function = get_eff_handle_service,
                     args = [client, G1, HService],
-                    expected_result = ?OK_MAP(HSDetails)
+                    expected_result = ?OK_MAP_CONTAINS(HSDetails)
                 }
                 % TODO gs
             },

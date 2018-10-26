@@ -114,7 +114,7 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = protected}
         <<"emails">> := Emails,
         <<"linkedAccounts">> := LinkedAccountMaps
     } = User,
-    User#{
+    #{
         <<"name">> => Name,
         <<"alias">> => gs_protocol:undefined_to_null(Alias),
         <<"emails">> => Emails,
@@ -168,7 +168,8 @@ translate_resource(_, #gri{type = od_group, aspect = instance, scope = private},
 translate_resource(ProtoVersion, GRI = #gri{type = od_group, aspect = instance, scope = shared}, Group) ->
     translate_resource(ProtoVersion, GRI#gri{scope = protected}, Group);
 translate_resource(_, #gri{type = od_group, aspect = instance, scope = protected}, GroupData) ->
-    GroupData;
+    #{<<"name">> := Name, <<"type">> := Type} = GroupData,
+    #{<<"name">> => Name, <<"type">> => Type};
 
 translate_resource(_, #gri{type = od_space, aspect = instance, scope = private}, Space) ->
     #od_space{
@@ -194,7 +195,8 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
         <<"shares">> => Shares
     };
 translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected}, SpaceData) ->
-    SpaceData;
+    #{<<"name">> := Name, <<"providers">> := Providers} = SpaceData,
+    #{<<"name">> => Name, <<"providers">> => Providers};
 
 translate_resource(_, #gri{type = od_share, aspect = instance, scope = private}, Share) ->
     #od_share{
@@ -212,11 +214,17 @@ translate_resource(_, #gri{type = od_share, aspect = instance, scope = private},
         <<"rootFileId">> => RootFileId
     };
 
-translate_resource(_, #gri{type = od_share, aspect = instance, scope = protected}, ShareData) ->
-    ShareData;
-
-translate_resource(_, #gri{type = od_share, aspect = instance, scope = public}, ShareData) ->
-    ShareData;
+translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, scope = public}, ShareData) ->
+    #{
+        <<"name">> := Name,
+        <<"publicUrl">> := PublicUrl, <<"spaceId">> := SpaceId,
+        <<"rootFileId">> := RootFileId, <<"handleId">> := HandleId
+    } = ShareData,
+    #{
+        <<"shareId">> => ShareId, <<"name">> => Name,
+        <<"publicUrl">> => PublicUrl, <<"spaceId">> => SpaceId,
+        <<"rootFileId">> => RootFileId, <<"handleId">> => HandleId
+    };
 
 translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope = private}, Provider) ->
     #od_provider{
@@ -250,8 +258,17 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
     };
 
 
-translate_resource(_, #gri{type = od_provider, aspect = instance, scope = protected}, ProviderData) ->
-    ProviderData;
+translate_resource(_, #gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected}, ProviderData) ->
+    #{
+        <<"name">> := Name, <<"domain">> := Domain,
+        <<"latitude">> := Latitude, <<"longitude">> := Longitude,
+        <<"online">> := Online
+    } = ProviderData,
+    #{
+        <<"name">> => Name, <<"domain">> => Domain,
+        <<"latitude">> => Latitude, <<"longitude">> => Longitude,
+        <<"online">> => Online
+    };
 
 translate_resource(_, #gri{type = od_provider, aspect = domain_config}, Data) ->
     case maps:find(<<"ipList">>, Data) of
@@ -292,7 +309,16 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
     };
 
 translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public}, HandleData) ->
-    HandleData;
+    #{
+        <<"publicHandle">> := PublicHandle,
+        <<"metadata">> := Metadata,
+        <<"timestamp">> := Timestamp
+    } = HandleData,
+    #{
+        <<"publicHandle">> => PublicHandle,
+        <<"metadata">> => Metadata,
+        <<"timestamp">> => Timestamp
+    };
 
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync get result for:~n

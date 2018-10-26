@@ -388,7 +388,7 @@ update_privileges_performance(Config) ->
 update_privileges_performance_base(Config) ->
     UserNum = ?USER_NUM,
     ApiType = ?API_TYPE,
-    GroupPrivileges = oz_test_utils:all_group_privileges(Config),
+    GroupPrivileges = privileges:group_privileges(),
 
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, AdminMacaroon} = oz_test_utils:create_client_token(Config, Admin),
@@ -455,7 +455,7 @@ reconcile_privileges_in_group_chain_performance(Config) ->
 reconcile_privileges_in_group_chain_performance_base(Config) ->
     GroupChainLength = ?GROUP_CHAIN_LENGTH,
     UserNum = ?USER_NUM,
-    GroupPrivileges = oz_test_utils:all_group_privileges(Config),
+    GroupPrivileges = privileges:group_privileges(),
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
     {BottomGroup, TopGroup} = create_group_chain(Config, rpc, {User, Macaroon}, GroupChainLength),

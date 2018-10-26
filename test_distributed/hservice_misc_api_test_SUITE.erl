@@ -242,7 +242,7 @@ get_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
+    AllPrivs = privileges:handle_service_privileges(),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     % Get and check private data
@@ -334,7 +334,7 @@ get_test(Config) ->
             module = handle_service_logic,
             function = get_protected_data,
             args = [client, HService],
-            expected_result = ?OK_MAP(?DOI_SERVICE)
+            expected_result = ?OK_MAP_CONTAINS(?DOI_SERVICE)
         }
         % TODO gs
     },

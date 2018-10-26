@@ -176,8 +176,30 @@ get_record_struct(3) ->
     % recalculate effective relations (as intermediaries computing logic has changed).
     get_record_struct(2);
 get_record_struct(4) ->
-    % The structure does not change, only the privileges are translated.
-    get_record_struct(3).
+    % * new field - created_at
+    % * new field - creator
+    % * privileges are translated
+    {record, [
+        {name, string},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {providers, #{string => integer}},
+        {shares, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => [{atom, string}]}},
+
+        {created_at, integer}, % New field
+        {creator, {record, [ % New field
+            {type, atom},
+            {id, string}
+        ]}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -202,29 +224,51 @@ upgrade_record(1, Space) ->
         _TopDownDirty,
         _BottomUpDirty
     } = Space,
-    {2, #od_space{
-        name = Name,
+    {2, {od_space,
+        Name,
 
-        users = maps:from_list(Users),
-        groups = maps:from_list(Groups),
-        providers = maps:from_list(ProviderSupports),
-        shares = Shares,
+        maps:from_list(Users),
+        maps:from_list(Groups),
+        maps:from_list(ProviderSupports),
+        Shares,
 
-        eff_users = #{},
-        eff_groups = #{},
-        eff_providers = #{},
+        #{},
+        #{},
+        #{},
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        true,
+        true
     }};
 upgrade_record(2, Space) ->
-    {3, Space#od_space{
-        eff_users = #{},
-        eff_groups = #{},
-        eff_providers = #{},
+    {od_space,
+        Name,
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        Users,
+        Groups,
+        ProviderSupports,
+        Shares,
+
+        _EffUsers,
+        _EffGroups,
+        _EffProviders,
+
+        _TopDownDirty,
+        _BottomUpDirty
+    } = Space,
+    {3, {od_space,
+        Name,
+
+        Users,
+        Groups,
+        ProviderSupports,
+        Shares,
+
+        #{},
+        #{},
+        #{},
+
+        true,
+        true
     }};
 upgrade_record(3, Space) ->
     {
@@ -280,6 +324,8 @@ upgrade_record(3, Space) ->
         eff_groups = TranslateField(EffGroups),
         eff_providers = EffProviders,
 
+        created_at = time_utils:system_time_seconds(),
+        creator = undefined,
 
         top_down_dirty = true,
         bottom_up_dirty = true
