@@ -41,12 +41,12 @@ handshake_attributes(_) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @doc
 %% {@link gs_translator_behaviour} callback translate_value/3.
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_value(gs_protocol:protocol_version(), gs_protocol:gri(),
-    Data :: term()) -> gs_protocol:data() | gs_protocol:error().
+    Value :: term()) -> Result | fun((gs_protocol:client()) -> Result) when
+    Result :: gs_protocol:data() | gs_protocol:error().
 translate_value(ProtoVersion, #gri{aspect = invite_group_token}, Macaroon) ->
     translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
 translate_value(ProtoVersion, #gri{aspect = invite_provider_token}, Macaroon) ->
@@ -75,9 +75,8 @@ translate_value(ProtocolVersion, GRI, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_resource(gs_protocol:protocol_version(), gs_protocol:gri(),
-    Data :: term()) ->
-    gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()} |
-    gs_protocol:error().
+    ResourceData :: term()) -> Result | fun((gs_protocol:client()) -> Result) when
+    Result :: gs_protocol:data() | gs_protocol:error().
 translate_resource(_, #gri{type = od_provider, aspect = current_time}, TimeMillis) ->
     #{<<"timeMillis">> => TimeMillis};
 

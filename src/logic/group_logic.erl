@@ -45,15 +45,12 @@
     create_user_invite_token/2,
     create_group_invite_token/2,
 
+    create_child_group/3, create_child_group/4,
     join_group/3,
     join_space/3,
 
     add_user/3, add_user/4,
     add_group/3, add_group/4,
-
-    get_users/2, get_eff_users/2,
-    get_user/3, get_eff_user/3,
-    get_user_privileges/3, get_eff_user_privileges/3,
 
     get_parents/2, get_eff_parents/2,
     get_parent/3, get_eff_parent/3,
@@ -61,11 +58,18 @@
     get_children/2, get_eff_children/2,
     get_child/3, get_eff_child/3,
     get_child_privileges/3, get_eff_child_privileges/3,
+    get_eff_child_membership_intermediaries/3,
+
+    get_users/2, get_eff_users/2,
+    get_user/3, get_eff_user/3,
+    get_user_privileges/3, get_eff_user_privileges/3,
+    get_eff_user_membership_intermediaries/3,
 
     get_spaces/2, get_eff_spaces/2,
     get_space/3, get_eff_space/3,
 
     get_eff_providers/2, get_eff_provider/3,
+    get_spaces_in_eff_provider/3,
 
     get_handle_services/2, get_eff_handle_services/2,
     get_handle_service/3, get_eff_handle_service/3,
@@ -88,6 +92,7 @@
     exists/1,
     has_eff_parent/2,
     has_eff_child/2,
+    has_direct_user/2,
     has_eff_user/2,
     has_eff_space/2,
     has_eff_provider/2,
@@ -126,16 +131,11 @@ create(Client, Name, Type) ->
 create(Client, Name) when is_binary(Name) ->
     create(Client, #{<<"name">> => Name});
 create(Client, Data) ->
-    AuthHint = case Client of
-        ?USER(UserId) -> ?AS_USER(UserId);
-        _ -> undefined
-    end,
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
         client = Client,
         gri = #gri{type = od_group, id = undefined, aspect = instance},
-        data = Data,
-        auth_hint = AuthHint
+        data = Data
     })).
 
 
@@ -245,23 +245,23 @@ update(Client, GroupId, Data) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates oz privileges of given group.
-%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_oz_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
-    Operation :: entity_graph:privileges_operation(),
-    Privs :: [privileges:oz_privilege()]) -> ok | {error, term()}.
-update_oz_privileges(Client, GroupId, Operation, Privs) when is_list(Privs) ->
+    PrivsToGrant :: [privileges:oz_privilege()],
+    PrivsToRevoke :: [privileges:oz_privilege()]) -> ok | {error, term()}.
+update_oz_privileges(Client, GroupId, PrivsToGrant, PrivsToRevoke) ->
     update_oz_privileges(Client, GroupId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
+        <<"grant">> => PrivsToGrant,
+        <<"revoke">> => PrivsToRevoke
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates oz privileges of given group.
-%% Privileges must be included in proper Data object, operation is optional.
+%% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_oz_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
@@ -467,6 +467,46 @@ create_group_invite_token(Client, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Creates a new child group belonging to given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_child_group(Client :: entity_logic:client(),
+    ParentGroupId :: od_group:id(), Name :: binary(),
+    Type :: od_group:type()) -> {ok, od_group:id()} | {error, term()}.
+create_child_group(Client, ParentGroupId, Name, Type) ->
+    create_child_group(Client, ParentGroupId, #{
+        <<"name">> => Name, <<"type">> => Type
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new child group belonging to given group. Has two variants:
+%% 1) Group Name is given explicitly (the new group will be of default type)
+%% 2) Group name is provided in a proper Data object, group type is optional.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_child_group(Client :: entity_logic:client(),
+    ParentGroupId :: od_group:id(), NameOrData :: binary() | #{}) ->
+    {ok, od_group:id()} | {error, term()}.
+create_child_group(Client, ParentGroupId, Name) when is_binary(Name) ->
+    create_child_group(Client, ParentGroupId, #{<<"name">> => Name});
+create_child_group(Client, ParentGroupId, Data) ->
+    AuthHint = case Client of
+        ?USER(UserId) -> ?AS_USER(UserId);
+        _ -> undefined
+    end,
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_group, id = ParentGroupId, aspect = child},
+        data = Data,
+        auth_hint = AuthHint
+    })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Joins a group on behalf of given user based on group_invite_user token.
 %% Has two variants:
 %% 1) Token is given explicitly (as binary() or macaroon())
@@ -583,100 +623,6 @@ add_group(Client, GroupId, ChildGroupId, Data) ->
         gri = #gri{type = od_group, id = GroupId, aspect = {child, ChildGroupId}},
         data = Data
     })).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves the list of users of given group.
-%% @end
-%%--------------------------------------------------------------------
--spec get_users(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
-    {ok, [od_user:id()]} | {error, term()}.
-get_users(Client, GroupId) ->
-    entity_logic:handle(#el_req{
-        operation = get,
-        client = Client,
-        gri = #gri{type = od_group, id = GroupId, aspect = users}
-    }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves the list of effective users of given group.
-%% @end
-%%--------------------------------------------------------------------
--spec get_eff_users(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
-    {ok, [od_user:id()]} | {error, term()}.
-get_eff_users(Client, GroupId) ->
-    entity_logic:handle(#el_req{
-        operation = get,
-        client = Client,
-        gri = #gri{type = od_group, id = GroupId, aspect = eff_users}
-    }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves the information about specific user among users of given group.
-%% @end
-%%--------------------------------------------------------------------
--spec get_user(Client :: entity_logic:client(), GroupId :: od_group:id(),
-    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
-get_user(Client, GroupId, UserId) ->
-    entity_logic:handle(#el_req{
-        operation = get,
-        client = Client,
-        gri = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-        auth_hint = ?THROUGH_GROUP(GroupId)
-    }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves the information about specific effective user among
-%% effective users of given group.
-%% @end
-%%--------------------------------------------------------------------
--spec get_eff_user(Client :: entity_logic:client(), GroupId :: od_group:id(),
-    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
-get_eff_user(Client, GroupId, UserId) ->
-    entity_logic:handle(#el_req{
-        operation = get,
-        client = Client,
-        gri = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-        auth_hint = ?THROUGH_GROUP(GroupId)
-    }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves the privileges of specific user among users of given group.
-%% @end
-%%--------------------------------------------------------------------
--spec get_user_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:group_privileges()]} | {error, term()}.
-get_user_privileges(Client, GroupId, UserId) ->
-    entity_logic:handle(#el_req{
-        operation = get,
-        client = Client,
-        gri = #gri{type = od_group, id = GroupId, aspect = {user_privileges, UserId}}
-    }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves the effective privileges of specific effective user
-%% among effective users of given group.
-%% @end
-%%--------------------------------------------------------------------
--spec get_eff_user_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:group_privileges()]} | {error, term()}.
-get_eff_user_privileges(Client, GroupId, UserId) ->
-    entity_logic:handle(#el_req{
-        operation = get,
-        client = Client,
-        gri = #gri{type = od_group, id = GroupId, aspect = {eff_user_privileges, UserId}}
-    }).
 
 
 %%--------------------------------------------------------------------
@@ -838,6 +784,134 @@ get_eff_child_privileges(Client, GroupId, ChildGroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves the membership intermediaries of specific effective child
+%% among effective children of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_child_membership_intermediaries(Client :: entity_logic:client(),
+    GroupId :: od_group:id(), ChildGroupId :: od_group:id()) ->
+    {ok, entity_graph:intermediaries()} | {error, term()}.
+get_eff_child_membership_intermediaries(Client, GroupId, ChildGroupId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_group, id = GroupId, aspect = {eff_child_membership, ChildGroupId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of users of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_users(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_user:id()]} | {error, term()}.
+get_users(Client, GroupId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_group, id = GroupId, aspect = users}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective users of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_users(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_user:id()]} | {error, term()}.
+get_eff_users(Client, GroupId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_group, id = GroupId, aspect = eff_users}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific user among users of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user(Client :: entity_logic:client(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
+get_user(Client, GroupId, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
+        auth_hint = ?THROUGH_GROUP(GroupId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective user among
+%% effective users of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_user(Client :: entity_logic:client(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
+get_eff_user(Client, GroupId, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
+        auth_hint = ?THROUGH_GROUP(GroupId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the privileges of specific user among users of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_user_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, [privileges:group_privileges()]} | {error, term()}.
+get_user_privileges(Client, GroupId, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_group, id = GroupId, aspect = {user_privileges, UserId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the effective privileges of specific effective user
+%% among effective users of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_user_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, [privileges:group_privileges()]} | {error, term()}.
+get_eff_user_privileges(Client, GroupId, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_group, id = GroupId, aspect = {eff_user_privileges, UserId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the membership intermediaries of specific effective user
+%% among effective users of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_user_membership_intermediaries(Client :: entity_logic:client(),
+    GroupId :: od_group:id(), UserId :: od_user:id()) ->
+    {ok, entity_graph:intermediaries()} | {error, term()}.
+get_eff_user_membership_intermediaries(Client, GroupId, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_group, id = GroupId, aspect = {eff_user_membership, UserId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Retrieves the list of spaces of given group.
 %% @end
 %%--------------------------------------------------------------------
@@ -928,6 +1002,22 @@ get_eff_provider(Client, GroupId, ProviderId) ->
         client = Client,
         gri = #gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of spaces supported by specific effective provider among
+%% effective providers of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_spaces_in_eff_provider(Client :: entity_logic:client(), GroupId :: od_group:id(),
+    ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
+get_spaces_in_eff_provider(Client, GroupId, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {group_spaces, GroupId}}
     }).
 
 
@@ -1062,23 +1152,23 @@ get_eff_handle(Client, GroupId, HandleId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified user of given group.
-%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_user_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
-    UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
-    Privs :: [privileges:group_privilege()]) -> ok | {error, term()}.
-update_user_privileges(Client, GroupId, UserId, Operation, Privs) when is_list(Privs) ->
+    UserId :: od_user:id(), PrivsToGrant :: [privileges:group_privilege()],
+    PrivsToRevoke :: [privileges:group_privilege()]) -> ok | {error, term()}.
+update_user_privileges(Client, GroupId, UserId, PrivsToGrant, PrivsToRevoke) ->
     update_user_privileges(Client, GroupId, UserId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
+        <<"grant">> => PrivsToGrant,
+        <<"revoke">> => PrivsToRevoke
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified user of given group.
-%% Privileges must be included in proper Data object, operation is optional.
+%% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_user_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
@@ -1095,23 +1185,23 @@ update_user_privileges(Client, GroupId, UserId, Data) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified child of given group.
-%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_child_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
-    ChildGroupId :: od_group:id(), Operation :: entity_graph:privileges_operation(),
-    Privs :: [privileges:group_privilege()]) -> ok | {error, term()}.
-update_child_privileges(Client, GroupId, ChildGroupId, Operation, Privs) when is_list(Privs) ->
+    ChildGroupId :: od_group:id(), PrivsToGrant :: [privileges:group_privilege()],
+    PrivsToRevoke :: [privileges:group_privilege()]) -> ok | {error, term()}.
+update_child_privileges(Client, GroupId, ChildGroupId, PrivsToGrant, PrivsToRevoke) ->
     update_child_privileges(Client, GroupId, ChildGroupId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
+        <<"grant">> => PrivsToGrant,
+        <<"revoke">> => PrivsToRevoke
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified child of given group.
-%% Privileges must be included in proper Data object, operation is optional.
+%% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_child_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
@@ -1254,15 +1344,38 @@ has_eff_child(Group, ChildId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Predicate saying whether specified user is a direct member of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_direct_user(GroupOrId :: od_group:id() | #od_group{},
+    UserId :: od_group:id()) -> boolean().
+has_direct_user(GroupId, UserId) when is_binary(GroupId) ->
+    case od_group:get(GroupId) of
+        {ok, #document{value = Group}} ->
+            has_direct_user(Group, UserId);
+        _ ->
+            false
+    end;
+has_direct_user(#od_group{users = Users}, UserId) ->
+    maps:is_key(UserId, Users).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Predicate saying whether specified user is an effective user of given group.
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_user(GroupOrId :: od_group:id() | #od_group{},
-    UserId :: od_group:id()) -> boolean().
+    UserId :: od_user:id()) -> boolean().
 has_eff_user(GroupId, UserId) when is_binary(GroupId) ->
-    entity_graph:has_relation(effective, bottom_up, od_user, UserId, od_group, GroupId);
-has_eff_user(Group, UserId) ->
-    entity_graph:has_relation(effective, bottom_up, od_user, UserId, Group).
+    case od_group:get(GroupId) of
+        {ok, #document{value = Group}} ->
+            has_eff_user(Group, UserId);
+        _ ->
+            false
+    end;
+has_eff_user(#od_group{eff_users = EffUsers}, UserId) ->
+    maps:is_key(UserId, EffUsers).
 
 
 %%--------------------------------------------------------------------
@@ -1375,19 +1488,21 @@ create_predefined_group(GroupId, Name, Privileges) ->
     NormalizedName = entity_logic:normalize_name(Name),
     case od_group:exists(GroupId) of
         {ok, true} ->
-            ?info("Predefined group '~s' already exists, "
-            "skipping.", [NormalizedName]),
+            ?info("Predefined group '~s' already exists, skipping.", [
+                NormalizedName
+            ]),
             ok;
         {ok, false} ->
             NewGroup = #document{
                 key = GroupId,
                 value = #od_group{
                     name = NormalizedName,
-                    type = role_holders
+                    type = role_holders,
+                    protected = true
                 }},
             case od_group:create(NewGroup) of
                 {ok, _} ->
-                    ok = update_oz_privileges(?ROOT, GroupId, set, Privileges),
+                    ok = update_oz_privileges(?ROOT, GroupId, Privileges, []),
                     ?info("Created predefined group '~s'", [NormalizedName]),
                     ok;
                 Other ->

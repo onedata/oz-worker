@@ -112,7 +112,7 @@ translate(?ERROR_MISSING_REQUIRED_VALUE(Key)) ->
 translate(?ERROR_MISSING_AT_LEAST_ONE_VALUE(Keys)) ->
     KeysList = str_utils:join_binary(Keys, <<", ">>),
     {?HTTP_400_BAD_REQUEST,
-        {<<"Missing data, you must provide at least one of: ">>, [KeysList]}
+        {<<"Missing data, you must provide at least one of: ~p">>, [KeysList]}
     };
 translate(?ERROR_BAD_DATA(Key)) ->
     {?HTTP_400_BAD_REQUEST,
@@ -236,6 +236,10 @@ translate(?ERROR_BAD_VALUE_IDENTIFIER(Key)) ->
     {?HTTP_400_BAD_REQUEST, {
         <<"Bad value: provided \"~s\" is not a valid identifier.">>, [Key]
     }};
+translate(?ERROR_PROTECTED_GROUP) ->
+    {?HTTP_403_FORBIDDEN,
+        <<"Forbidden: this group is protected and cannot be deleted.">>
+    };
 % Errors connected with relations between entities
 translate(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId)) ->
     RelationToString = case {ChType, ParType} of
@@ -249,7 +253,7 @@ translate(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId)) ->
     ]}};
 translate(?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId)) ->
     RelationToString = case {ChType, ParType} of
-        {od_space, od_provider} -> <<"is alraedy supported by">>;
+        {od_space, od_provider} -> <<"is already supported by">>;
         {_, _} -> <<"is already a member of">>
     end,
     {?HTTP_400_BAD_REQUEST, {<<"Bad value: ~s ~s ~s">>, [

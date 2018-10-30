@@ -60,9 +60,9 @@ all() ->
 
 list_handle_services_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -99,7 +99,8 @@ list_handle_services_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -120,13 +121,13 @@ list_handle_services_test(Config) ->
 
 create_handle_service_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U2, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, U2, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     ExpName = ?HANDLE_SERVICE_NAME1,
@@ -202,6 +203,7 @@ create_handle_service_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_CREATE, ?OZ_USERS_ADD_RELATIONSHIPS]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -237,9 +239,9 @@ create_handle_service_test(Config) ->
 
 get_handle_service_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -276,6 +278,7 @@ get_handle_service_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_VIEW]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -297,9 +300,9 @@ get_handle_service_test(Config) ->
 
 leave_handle_service_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -343,6 +346,7 @@ leave_handle_service_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_REMOVE_RELATIONSHIPS, ?OZ_USERS_REMOVE_RELATIONSHIPS]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -398,7 +402,8 @@ list_eff_handle_services_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -470,6 +475,7 @@ get_eff_handle_service_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
+                        {admin, [?OZ_HANDLE_SERVICES_VIEW]},
                         {user, U1}
                     ],
                     unauthorized = [nobody],

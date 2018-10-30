@@ -49,7 +49,8 @@
     unset_default_provider_test/1,
 
     list_eff_providers_test/1,
-    get_eff_provider_test/1
+    get_eff_provider_test/1,
+    get_spaces_in_eff_provider_test/1
 ]).
 
 all() ->
@@ -72,7 +73,8 @@ all() ->
         unset_default_provider_test,
 
         list_eff_providers_test,
-        get_eff_provider_test
+        get_eff_provider_test,
+        get_spaces_in_eff_provider_test
     ]).
 
 
@@ -173,9 +175,9 @@ list_test(Config) ->
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+    oz_test_utils:user_set_oz_privileges(Config, Admin, [
         ?OZ_USERS_LIST
-    ]),
+    ], []),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
@@ -231,10 +233,6 @@ get_test(Config) ->
         emails = ExpEmailList = [<<"a@a.a">>, <<"b@b.b">>]
     }),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_USERS_LIST
-    ]),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     {ok, S1} = oz_test_utils:support_space(
@@ -261,7 +259,7 @@ get_test(Config) ->
             forbidden = [
                 {provider, P1, P1Macaroon},
                 {user, NonAdmin},
-                {user, Admin}
+                {admin, [?OZ_USERS_VIEW]}
             ]
         },
         logic_spec = #logic_spec{
@@ -332,7 +330,7 @@ get_test(Config) ->
             correct = [
                 root,
                 {user, User},
-                {user, Admin}
+                {admin, [?OZ_USERS_VIEW]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -534,6 +532,7 @@ update_test(Config) ->
     {ok, SomeUser} = oz_test_utils:create_user(Config, #od_user{}),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = ClientSpec#client_spec{
+            correct = [{admin, [?OZ_USERS_UPDATE]}],
             unauthorized = [nobody],
             forbidden = [{user, SomeUser}]
         },
@@ -555,10 +554,6 @@ update_test(Config) ->
 
 delete_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_USERS_DELETE
-    ]),
 
     EnvSetUpFun = fun() ->
         {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
@@ -576,7 +571,7 @@ delete_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_USERS_DELETE]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -1053,7 +1048,8 @@ list_eff_providers_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -1114,6 +1110,7 @@ get_eff_provider_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
+                        {admin, [?OZ_PROVIDERS_VIEW]},
                         {user, U2}
                     ],
                     unauthorized = [nobody],
@@ -1128,28 +1125,83 @@ get_eff_provider_test(Config) ->
                     function = get_eff_provider,
                     args = [client, U2, ProvId],
                     expected_result = ?OK_MAP(ProvDetails)
-                },
-                gs_spec = #gs_spec{
-                    operation = get,
-                    gri = #gri{
-                        type = od_provider, id = ProvId,
-                        aspect = instance, scope = protected
-                    },
-                    auth_hint = ?THROUGH_USER(U2),
-                    expected_result = ?OK_MAP(ProvDetails#{
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
-                            ?assertEqual(Id, ProvId)
-                        end
-                    })
                 }
+                % @todo gs
 
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
 
         end, EffProviders
+    ).
+
+
+get_spaces_in_eff_provider_test(Config) ->
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_DETAILS(?UNIQUE_STRING)#{<<"subdomainDelegation">> => false}
+    ),
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, S1_1} = oz_test_utils:create_space(Config, ?USER(U1), ?UNIQUE_STRING),
+    {ok, S1_2} = oz_test_utils:create_space(Config, ?USER(U1), ?UNIQUE_STRING),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(U2), ?UNIQUE_STRING),
+
+    oz_test_utils:support_space(Config, ProviderId, S1_1),
+    oz_test_utils:support_space(Config, ProviderId, S1_2),
+    oz_test_utils:support_space(Config, ProviderId, S2),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    AnotherUser = fun(User) -> case User of
+        U1 -> U2;
+        U2 -> U1
+    end end,
+
+    lists:foreach(
+        fun({UserId, UserSpaces}) ->
+            ApiTestSpec = #api_test_spec{
+                client_spec = #client_spec{
+                    correct = [
+                        {user, UserId}
+                    ]
+                },
+                rest_spec = #rest_spec{
+                    method = get,
+                    path = [<<"/user/effective_providers/">>, ProviderId, <<"/spaces">>],
+                    expected_code = ?HTTP_200_OK,
+                    expected_body = #{<<"spaces">> => UserSpaces}
+                }
+            },
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+            % Check that regular client can't make request
+            % on behalf of other client
+            ApiTestSpec2 = #api_test_spec{
+                client_spec = #client_spec{
+                    correct = [
+                        root,
+                        {user, UserId}
+                    ],
+                    unauthorized = [nobody],
+                    forbidden = [
+                        {user, AnotherUser(UserId)},
+                        {user, NonAdmin}
+                    ]
+                },
+                rest_spec = undefined,
+                logic_spec = #logic_spec{
+                    module = user_logic,
+                    function = get_spaces_in_eff_provider,
+                    args = [client, UserId, ProviderId],
+                    expected_result = ?OK_LIST(UserSpaces)
+                }
+                % @todo gs
+
+            },
+            ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))
+
+        end, [{U1, [S1_1, S1_2]}, {U2, [S2]}]
     ).
 
 

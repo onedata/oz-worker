@@ -42,7 +42,8 @@
 
     list_eff_users_test/1,
     get_eff_user_test/1,
-    get_eff_user_privileges_test/1
+    get_eff_user_privileges_test/1,
+    get_eff_user_membership_intermediaries/1
 ]).
 
 all() ->
@@ -58,7 +59,8 @@ all() ->
 
         list_eff_users_test,
         get_eff_user_test,
-        get_eff_user_privileges_test
+        get_eff_user_privileges_test,
+        get_eff_user_membership_intermediaries
     ]).
 
 
@@ -71,10 +73,7 @@ add_user_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_SPACES_ADD_MEMBERS
-    ]),
+
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
 
     AllPrivs = oz_test_utils:all_space_privileges(Config),
@@ -97,7 +96,7 @@ add_user_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_USERS_ADD_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -158,6 +157,7 @@ create_user_invite_token_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_SPACES_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -191,10 +191,6 @@ remove_user_test(Config) ->
         Config, ?SPACE_REMOVE_USER
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_SPACES_REMOVE_MEMBERS
-    ]),
 
     EnvSetUpFun = fun() ->
         {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
@@ -213,7 +209,7 @@ remove_user_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {admin, [?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_USERS_REMOVE_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -249,10 +245,6 @@ list_users_test(Config) ->
     ),
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_SPACES_LIST_USERS
-    ]),
 
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
     ExpUsers = [U1, U2, U3],
@@ -261,7 +253,7 @@ list_users_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]},
                 {user, U2},
                 {user, U3}
             ],
@@ -296,10 +288,6 @@ get_user_test(Config) ->
         Config, ?SPACE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_SPACES_LIST_USERS
-    ]),
 
     ExpAlias = ExpName = ?USER_NAME1,
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{
@@ -307,7 +295,7 @@ get_user_test(Config) ->
         alias = ExpAlias
     }),
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
-    oz_test_utils:space_set_user_privileges(Config, S1, U3, revoke, [
+    oz_test_utils:space_set_user_privileges(Config, S1, U3, [], [
         ?SPACE_VIEW
     ]),
 
@@ -319,7 +307,7 @@ get_user_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {admin, [?OZ_USERS_VIEW]},
                 {user, U2},
                 {user, U3}
             ],
@@ -371,7 +359,7 @@ get_user_privileges_test(Config) ->
     %   U2 gets the SPACE_VIEW privilege
     %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
-        Config, ?SPACE_VIEW
+        Config, ?SPACE_VIEW_PRIVILEGES
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -382,11 +370,11 @@ get_user_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
 
     AllPrivs = oz_test_utils:all_space_privileges(Config),
-    InitialPrivs = [?SPACE_VIEW, ?SPACE_WRITE_DATA],
+    InitialPrivs = privileges:space_user(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
-    SetPrivsFun = fun(Operation, Privs) ->
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:space_set_user_privileges(
-            Config, S1, U3, Operation, Privs
+            Config, S1, U3, PrivsToGrant, PrivsToRevoke
         )
     end,
 
@@ -394,6 +382,7 @@ get_user_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_SPACES_VIEW_PRIVILEGES]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -419,7 +408,7 @@ get_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?SPACE_VIEW
+        {user, U3}, ?SPACE_VIEW_PRIVILEGES
     ])).
 
 
@@ -439,9 +428,9 @@ update_user_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
 
     AllPrivs = oz_test_utils:all_space_privileges(Config),
-    SetPrivsFun = fun(Operation, Privs) ->
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:space_set_user_privileges(
-            Config, S1, U3, Operation, Privs
+            Config, S1, U3, PrivsToGrant, PrivsToRevoke
         )
     end,
     GetPrivsFun = fun() ->
@@ -453,6 +442,7 @@ update_user_privileges_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_SPACES_SET_PRIVILEGES]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -486,10 +476,6 @@ list_eff_users_test(Config) ->
         S1, _Groups, [{U3, _}, {U4, _}, {U5, _}, {U6, _}], {U1, U2, NonAdmin}
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_SPACES_LIST_USERS
-    ]),
 
     ExpUsers = [U1, U2, U3, U4, U5, U6],
     ApiTestSpec = #api_test_spec{
@@ -497,7 +483,7 @@ list_eff_users_test(Config) ->
             correct = [
                 root,
                 {user, U2},
-                {user, Admin}
+                {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -539,11 +525,6 @@ get_eff_user_test(Config) ->
         S1, _Groups, EffUsers, {U1, U2, NonAdmin}
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_SPACES_LIST_USERS
-    ]),
-
     lists:foreach(
         fun({UserId, UserDetails}) ->
 
@@ -551,7 +532,7 @@ get_eff_user_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, Admin},
+                        {admin, [?OZ_USERS_VIEW]},
                         {user, U2}
                     ],
                     unauthorized = [nobody],
@@ -604,7 +585,7 @@ get_eff_user_test(Config) ->
 
 
 get_eff_user_privileges_test(Config) ->
-    %% Create environment with following relations:
+    %% Create environment with the following relations:
     %%
     %%                  Space
     %%                 /  ||  \
@@ -628,13 +609,9 @@ get_eff_user_privileges_test(Config) ->
     %   U2 gets the SPACE_VIEW privilege
     %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
-        Config, ?SPACE_VIEW
+        Config, ?SPACE_VIEW_PRIVILEGES
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_SPACES_LIST_USERS
-    ]),
 
     % User whose eff privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
@@ -654,47 +631,36 @@ get_eff_user_privileges_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = oz_test_utils:all_space_privileges(Config),
-    InitialPrivs = [?SPACE_VIEW, ?SPACE_WRITE_DATA],
+    InitialPrivs = privileges:space_user(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
-    SetPrivsFun = fun(Operation, Privs) ->
-        % In case of SET and GRANT, randomly split privileges into four
+    SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
+        % In case of GRANT, randomly split privileges into four
         % parts and update groups with the privileges. G3 eff_privileges
         % should contain the sum of those. In case of revoke, the
         % privileges must be revoked for all 3 entities.
-        PartitionScheme =
-            case Operation of
-                revoke ->
-                    [{G1, Privs}, {G2, Privs}];
-                _ -> % Covers (set|grant)
-                    #{1 := Privs1, 2 := Privs2} = lists:foldl(
-                        fun(Privilege, AccMap) ->
-                            Index = rand:uniform(2),
-                            AccMap#{
-                                Index => [Privilege | maps:get(Index, AccMap)]
-                            }
-                        end, #{1 => [], 2 => []}, Privs),
-                    [{G1, Privs1}, {G2, Privs2}]
-            end,
-        lists:foreach(
-            fun({GroupId, Privileges}) ->
-                oz_test_utils:space_set_group_privileges(
-                    Config, S1, GroupId, Operation, Privileges
-                )
-            end, PartitionScheme
-        )
+        #{1 := PrivsToGrant1, 2 := PrivsToGrant2} = lists:foldl(
+            fun(Privilege, AccMap) ->
+                Index = rand:uniform(2),
+                AccMap#{
+                    Index => [Privilege | maps:get(Index, AccMap)]
+                }
+            end, #{1 => [], 2 => []}, PrivsToGrant),
+
+        oz_test_utils:space_set_group_privileges(Config, S1, G1, PrivsToGrant1, PrivsToRevoke),
+        oz_test_utils:space_set_group_privileges(Config, S1, G2, PrivsToGrant2, PrivsToRevoke)
     end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_SPACES_VIEW_PRIVILEGES]},
                 {user, U2}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
-                {user, Admin},
                 {user, NonAdmin}
             ]
         },
@@ -718,8 +684,106 @@ get_eff_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?SPACE_VIEW
+        {user, U3}, ?SPACE_VIEW_PRIVILEGES
     ])).
+
+
+get_eff_user_membership_intermediaries(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%      Space1       Space2     Space3
+    %%       | |  \     /   |  \     /   \
+    %%       | |   \   /    |   \   /     User2 (no view privs)
+    %%       |  \   Group2  |   Group3
+    %%       |   \   /      |   /  |
+    %%        \   \ /       |  /   |
+    %%         \  Group1----|-'    |
+    %%          \     \     |     /
+    %%           \     \    |    /
+    %%            \     \   |   /
+    %%             '------User1 (view privs)
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+    {ok, G3} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+
+    oz_test_utils:space_add_user(Config, S1, U1),
+    oz_test_utils:space_add_user(Config, S3, U2),
+    oz_test_utils:space_set_user_privileges(Config, S3, U2, [], [?SPACE_VIEW]),
+
+    oz_test_utils:group_add_group(Config, G2, G1),
+    oz_test_utils:group_add_group(Config, G3, G1),
+
+    oz_test_utils:space_add_group(Config, S3, G3),
+    oz_test_utils:space_add_group(Config, S1, G1),
+    oz_test_utils:space_add_group(Config, S1, G2),
+    oz_test_utils:space_add_group(Config, S2, G2),
+    oz_test_utils:space_add_group(Config, S2, G3),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    % {SpaceId, SubjectUser, CorrectUsers, ExpIntermediariesRaw}
+    ExpectedMembershipIntermediaries = [
+        {S1, U1, [U1], ordsets:from_list([
+            {od_space, ?SELF_INTERMEDIARY},
+            {od_group, G1},
+            {od_group, G2}
+        ])},
+
+        {S2, U1, [U1], ordsets:from_list([
+            {od_space, ?SELF_INTERMEDIARY},
+            {od_group, G2},
+            {od_group, G3}
+        ])},
+
+        {S3, U1, [U1], ordsets:from_list([
+            {od_group, G3}
+        ])},
+        {S3, U2, [U1, U2], ordsets:from_list([
+            {od_space, ?SELF_INTERMEDIARY}
+        ])}
+    ],
+
+    lists:foreach(fun({SpaceId, SubjectUser, CorrectUsers, ExpIntermediariesRaw}) ->
+        ExpIntermediaries = lists:map(fun({Type, Id}) ->
+            #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+        end, ExpIntermediariesRaw),
+        CorrectUserClients = [{user, U} || U <- CorrectUsers],
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_SPACES_VIEW]}
+                ] ++ CorrectUserClients,
+                unauthorized = [nobody],
+                forbidden = [{user, NonAdmin}, {user, U1}, {user, U2}] -- CorrectUserClients
+            },
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/spaces/">>, SpaceId, <<"/effective_users/">>, SubjectUser, <<"/membership">>],
+                expected_code = ?HTTP_200_OK,
+                expected_body = #{<<"intermediaries">> => ExpIntermediaries}
+            },
+            logic_spec = #logic_spec{
+                module = space_logic,
+                function = get_eff_user_membership_intermediaries,
+                args = [client, SpaceId, SubjectUser],
+                expected_result = ?OK_LIST(ExpIntermediariesRaw)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end, ExpectedMembershipIntermediaries).
 
 
 %%%===================================================================

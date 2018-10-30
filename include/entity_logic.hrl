@@ -15,6 +15,8 @@
 
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
+-define(SELF_INTERMEDIARY, <<"self">>).
+
 % Record expressing entity logic request client (REST and Graph Sync).
 -record(client, {
     % root is allowed to do anything, it must be used with caution

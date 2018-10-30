@@ -50,7 +50,6 @@ create_response(#gri{id = HandleId, aspect = {group, GroupId}}, _, resource, _) 
         [<<"handles">>, HandleId, <<"groups">>, GroupId]
     ).
 
-
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link rest_translator_behaviour} callback get_response/2.

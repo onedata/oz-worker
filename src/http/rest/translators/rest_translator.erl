@@ -23,7 +23,8 @@
     ok_no_content_reply/0,
     ok_body_reply/1,
     updated_reply/0,
-    deleted_reply/0
+    deleted_reply/0,
+    ok_encoded_intermediaries_reply/1
 ]).
 
 %%%===================================================================
@@ -40,8 +41,8 @@ response(#el_req{operation = create} = ElReq, {ok, DataFormat, Result}) ->
     Translator = entity_type_to_translator(Model),
     Translator:create_response(GRI, AuthHint, DataFormat, Result);
 response(#el_req{operation = get} = ElReq, {ok, Data}) ->
-    #el_req{gri = GRI = #gri{type = Model}} = ElReq,
-    Translator = entity_type_to_translator(Model),
+    #el_req{gri = GRI = #gri{type = EntityType}} = ElReq,
+    Translator = entity_type_to_translator(EntityType),
     Translator:get_response(GRI, Data);
 response(#el_req{operation = update}, ok) ->
     updated_reply();
@@ -106,6 +107,19 @@ updated_reply() ->
 -spec deleted_reply() -> #rest_resp{}.
 deleted_reply() ->
     #rest_resp{code = ?HTTP_204_NO_CONTENT}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% REST reply that should be used for successful REST operations returning
+%% membership intermediaries.
+%% @end
+%%--------------------------------------------------------------------
+-spec ok_encoded_intermediaries_reply(entity_graph:intermediaries()) -> #rest_resp{}.
+ok_encoded_intermediaries_reply(Intermediaries) ->
+    ok_body_reply(#{<<"intermediaries">> => lists:map(fun({Type, Id}) ->
+        #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+    end, Intermediaries)}).
 
 %%%===================================================================
 %%% Internal functions

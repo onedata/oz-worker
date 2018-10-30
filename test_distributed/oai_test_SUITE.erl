@@ -1248,9 +1248,9 @@ create_handles_with_mocked_timestamps(Config, User, HSId, ResourceIds, BeginTime
     end, lists:zip(ResourceIds, TimeOffsets)).
 
 create_handle_service(Config, User) ->
-    ok = oz_test_utils:user_set_oz_privileges(Config, User, grant, [
+    ok = oz_test_utils:user_set_oz_privileges(Config, User, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
     {ok, HSId} = oz_test_utils:create_handle_service(Config, ?USER(User),
         ?DOI_NAME, ?PROXY_ENDPOINT, ?DOI_SERVICE_PROPERTIES
     ),

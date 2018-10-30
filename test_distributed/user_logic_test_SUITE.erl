@@ -23,6 +23,7 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
+-include_lib("gui/include/gui_session.hrl").
 
 %% API
 -export([
@@ -136,7 +137,9 @@ basic_auth_login_test(Config) ->
     % Make sure response headers contain cookie with session id - which means
     % that the user has logged in.
     Cookie = maps:get(<<"set-cookie">>, RespHeaders, <<"">>),
-    ?assertMatch(<<"session_id=", _/binary>>, Cookie),
+    CookieKey = ?SESSION_COOKIE_KEY,
+    CookieLen = byte_size(?SESSION_COOKIE_KEY),
+    ?assertMatch(<<CookieKey:CookieLen/binary, "=", _/binary>>, Cookie),
     % Try some inexistent user credentials if 401 is returned
     WrongUserPasswordB64 = base64:encode(<<"lol:wut">>),
     WrongBasicAuthHeaders = #{
@@ -191,7 +194,7 @@ automatic_group_membership_test(Config) ->
     BasicAuthEndpoint = str_utils:format_bin(
         "https://~s/do_login", [Domain]
     ),
-    % See get/1.
+    % See mock_onepanel_rest_get/1.
     UserPasswordB64 = base64:encode(<<"user2:password2">>),
     BasicAuthHeaders = #{
         <<"authorization">> => <<"Basic ", UserPasswordB64/binary>>
@@ -474,7 +477,28 @@ coalesce_entitlements_test(Config) ->
     % Merge one of the accounts, which should add the entitlements again
     MergeAcc(?THIRD_IDP, [<<"staff/vm-operators">>, <<"task4.1">>, <<"testGroup">>, <<"staff/admins/privileged">>]),
     ?assertGroupsCount(10, 14),
-    ?assertLinkedAccountsCount(3).
+    ?assertLinkedAccountsCount(3),
+
+    % Check if all groups are protected
+    lists:foreach(fun({IdP, Entitlement}) ->
+        ?assert(is_protected(Config, IdP, Entitlement))
+    end, [
+        {?DUMMY_IDP, <<"group/subgroup">>},
+        {?DUMMY_IDP, <<"anotherGroup">>},
+        {?DUMMY_IDP, <<"thirdGroup">>},
+
+        {?OTHER_IDP, <<"users/admins">>},
+        {?OTHER_IDP, <<"users/developers">>},
+        {?OTHER_IDP, <<"users/technicians">>},
+        {?OTHER_IDP, <<"users">>},
+
+        {?THIRD_IDP, <<"staff/vm-operators">>},
+        {?THIRD_IDP, <<"task4.1">>},
+        {?THIRD_IDP, <<"testGroup">>},
+        {?THIRD_IDP, <<"staff/admins/privileged">>},
+        {?THIRD_IDP, <<"staff">>},
+        {?THIRD_IDP, <<"staff/admins">>}
+    ]).
 
 
 %%%===================================================================
@@ -647,9 +671,6 @@ check_groups_count(Config, UserId, ExpDirectCount, ExpEffectiveCount) ->
     DirectCount = length(get_groups(Config, UserId, direct)),
     EffectiveCount = length(get_groups(Config, UserId, effective)),
     EntitlementsCount = length(get_entitlements(Config, UserId)),
-    lists:foreach(fun(G) ->
-        {ok, #od_group{name = Name}} = oz_test_utils:get_group(Config, G)
-    end, get_groups(Config, UserId, effective)),
     DirectCount =:= ExpDirectCount andalso
         EntitlementsCount =:= ExpDirectCount andalso
         EffectiveCount =:= ExpEffectiveCount.
@@ -697,6 +718,15 @@ check_group_structure(Config, IdP, ParentRawEntitlement, ChildRawEntitlement, Re
         end
     catch _:_ ->
         false
+    end.
+
+
+is_protected(Config, IdP, RawEntitlement) ->
+    IdPEntitlement = expected_parsing_result(Config, IdP, RawEntitlement),
+    GroupId = entitlement_mapping:gen_group_id(IdPEntitlement),
+    case oz_test_utils:get_group(Config, GroupId) of
+        {ok, #od_group{protected = true}} -> true;
+        _ -> false
     end.
 
 
