@@ -37,7 +37,7 @@
 -record(rest_resp, {
     code = 200 :: integer(),
     headers = #{} :: #{binary() => binary()},
-    body = {binary, <<"">>} :: jiffy:json_value() | {binary, binary()}
+    body = {binary, <<"">>} :: json_utils:json_term() | {binary, binary()}
 }).
 
 % Convenience macros user in rest_req, they will be processed before passed

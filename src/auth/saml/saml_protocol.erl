@@ -14,6 +14,7 @@
 -behavior(auth_protocol_behaviour).
 -author("Lukasz Opiola").
 
+-include("auth/auth_common.hrl").
 -include("auth/auth_errors.hrl").
 -include_lib("esaml/include/esaml.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -91,7 +92,7 @@ validate_login(IdP, QueryParams) ->
                 {ok, #esaml_assertion{attributes = Attributes}} ->
                     {ok, normalize_attributes(Attributes)};
                 {error, Reason} ->
-                    ?warning("Invalid login request via SAML. Reason:~p~nPOST params:~n~p",
+                    ?auth_warning("Invalid login request via SAML. Reason:~p~nPOST params:~n~p",
                         [Reason, QueryParams]),
                     throw(?ERROR_INVALID_AUTH_REQUEST)
             end

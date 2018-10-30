@@ -14,6 +14,7 @@
 -author("Lukasz Opiola").
 -behaviour(rpc_backend_behaviour).
 
+-include("http/gui_paths.hrl").
 -include("registered_names.hrl").
 -include_lib("esaml/include/esaml.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -47,7 +48,9 @@ handle(<<"getZoneName">>, _) ->
         {<<"serviceVersion">>, str_utils:to_binary(AppVersion)}
     ]};
 
-handle(<<"getSupportedAuthorizers">>, _) ->
+handle(<<"getSupportedAuthorizers">>, Data) ->
+    TestMode = proplists:get_value(<<"testMode">>, Data, false),
+    TestMode andalso auth_test_mode:process_enable_test_mode(),
     case oz_worker:get_env(dev_mode) of
         {ok, true} ->
             % If dev mode is enabled, always return basic auth and just one
@@ -73,7 +76,10 @@ handle(<<"getSupportedAuthorizers">>, _) ->
             ]}
     end;
 
-handle(<<"getLoginEndpoint">>, [{<<"provider">>, IdPBin}]) ->
+handle(<<"getLoginEndpoint">>, Data) ->
+    IdPBin = proplists:get_value(<<"provider">>, Data, <<>>),
+    TestMode = proplists:get_value(<<"testMode">>, Data, false),
+    TestMode andalso auth_test_mode:process_enable_test_mode(),
     case oz_worker:get_env(dev_mode) of
         {ok, true} ->
             {ok, [
@@ -83,6 +89,6 @@ handle(<<"getLoginEndpoint">>, [{<<"provider">>, IdPBin}]) ->
             ]};
         _ ->
             IdP = binary_to_atom(IdPBin, utf8),
-            {ok, Map} = auth_logic:get_login_endpoint(IdP, false),
+            {ok, Map} = auth_logic:get_login_endpoint(IdP, false, <<?AFTER_LOGIN_PAGE_PATH>>, TestMode),
             {ok, maps:to_list(Map)}
     end.

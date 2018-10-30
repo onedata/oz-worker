@@ -221,7 +221,8 @@ handle_rpc(1, Client, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
                     {true, UserId}
             end,
             RedirectAfterLogin = maps:get(<<"redirectUrl">>, Data, <<?AFTER_LOGIN_PAGE_PATH>>),
-            auth_logic:get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin)
+            TestMode = maps:get(<<"testMode">>, Data, false),
+            auth_logic:get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode)
     end;
 handle_rpc(1, ?USER(UserId), <<"getProviderRedirectURL">>, Args) ->
     ProviderId = maps:get(<<"providerId">>, Args),

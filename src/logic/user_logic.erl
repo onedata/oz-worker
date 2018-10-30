@@ -111,6 +111,7 @@
     onepanel_uid_to_system_uid/1,
     create_user_by_linked_account/1,
     merge_linked_account/2,
+    build_test_user_info/1,
     authenticate_by_basic_credentials/2,
     change_user_password/3,
     get_default_provider_if_online/1
@@ -1373,14 +1374,7 @@ merge_linked_account_unsafe(UserId, LinkedAccount) ->
         idp = IdP, subject_id = SubjectId, emails = LinkedEmails
     } = LinkedAccount,
     % Add (normalized), valid emails from provider that are not yet added to account
-    NormalizedEmails = lists:filtermap(fun(Email) ->
-        Normalized = http_utils:normalize_email(Email),
-        case http_utils:validate_email(Normalized) of
-            true -> {true, Normalized};
-            false -> false
-        end
-    end, LinkedEmails),
-    NewEmails = lists:usort(Emails ++ NormalizedEmails),
+    NewEmails = lists:usort(Emails ++ normalize_idp_emails(LinkedEmails)),
     % Replace existing linked account, if present
     NewLinkedAccs = case find_linked_account(UserInfo, IdP, SubjectId) of
         #linked_account{} = OldLinkedAcc ->
@@ -1401,6 +1395,35 @@ merge_linked_account_unsafe(UserId, LinkedAccount) ->
             entitlements = NewEntitlements
         }}
     end).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Build a JSON compatible user info based on a linked account for test page
+%% purposes. The info expresses what user data would be gathered during an
+%% analogous production login process.
+%% @end
+%%--------------------------------------------------------------------
+-spec build_test_user_info(#linked_account{}) -> json_utils:json_term().
+build_test_user_info(LinkedAccount) ->
+    #linked_account{
+        idp = IdP,
+        subject_id = SubjectId,
+        name = Name,
+        alias = Alias,
+        emails = Emails,
+        entitlements = Entitlements
+    } = LinkedAccount,
+    MappedEntitlements = entitlement_mapping:map_entitlements(IdP, Entitlements),
+    {GroupIds, _} = lists:unzip(MappedEntitlements),
+    #{
+        <<"userId">> => idp_uid_to_system_uid(IdP, SubjectId),
+        <<"name">> => normalize_name(Name),
+        <<"alias">> => normalize_alias(Alias),
+        <<"emails">> => normalize_idp_emails(Emails),
+        <<"linkedAccounts">> => [linked_account_to_map(LinkedAccount)],
+        <<"groups">> => GroupIds
+    }.
 
 
 %%--------------------------------------------------------------------
@@ -1684,3 +1707,15 @@ find_linked_account(#od_user{linked_accounts = LinkedAccounts}, IdP, IdPUserId) 
             (_Other, Found) ->
                 Found
         end, undefined, LinkedAccounts).
+
+
+%% @private
+-spec normalize_idp_emails([binary()]) -> [binary()].
+normalize_idp_emails(Emails) ->
+    lists:filtermap(fun(Email) ->
+        Normalized = http_utils:normalize_email(Email),
+        case http_utils:validate_email(Normalized) of
+            true -> {true, Normalized};
+            false -> false
+        end
+    end, Emails).

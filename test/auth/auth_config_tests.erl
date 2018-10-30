@@ -40,20 +40,32 @@
 
 -define(DUMMY_ONEZONE_DOMAIN, "onezone.org").
 
-auth_config_test_() ->
-    {foreach,
-        fun setup/0,
+
+-define(TEST_CASES, [
+    {"get SAML SP config", fun get_saml_sp_config/0},
+    {"IdP exists", fun idp_exists/0},
+    {"get SAML cert in PEM format", fun get_saml_cert_pem/0},
+    {"get SAML IdP config", fun get_saml_idp_config/0},
+    {"get supported IdPs", fun get_supported_idps/0},
+    {"get attribute mapping", fun get_attribute_mapping/0},
+    {"get entitlement mapping config", fun get_entitlement_mapping_config/0},
+    {"get authority delegation config", fun get_authority_delegation_config/0}
+]).
+
+
+production_auth_config_test_() ->
+    {foreach, local, % 'local' runs setup/teardown and the test in the same process
+        fun setup_production_auth_config/0,
         fun teardown/1,
-        [
-            {"get SAML SP config", fun get_saml_sp_config/0},
-            {"IdP exists", fun idp_exists/0},
-            {"get SAML cert in PEM format", fun get_saml_cert_pem/0},
-            {"get SAML IdP config", fun get_saml_idp_config/0},
-            {"get supported IdPs", fun get_supported_idps/0},
-            {"get attribute mapping", fun get_attribute_mapping/0},
-            {"get entitlement mapping config", fun get_entitlement_mapping_config/0},
-            {"get authority delegation config", fun get_authority_delegation_config/0}
-        ]
+        ?TEST_CASES
+    }.
+
+
+test_auth_config_test_() ->
+    {foreach, local, % 'local' runs setup/teardown and the test in the same process
+        fun setup_test_auth_config/0,
+        fun teardown/1,
+        ?TEST_CASES
     }.
 
 
@@ -61,7 +73,17 @@ auth_config_test_() ->
 %%% Setup/teardown functions
 %%%===================================================================
 
-setup() ->
+
+setup_production_auth_config() ->
+    setup(production).
+
+
+setup_test_auth_config() ->
+    setup(test).
+
+
+%% Type :: production | test
+setup(Type) ->
     meck:new(file, [unstick, passthrough]),
     meck:expect(file, consult, fun
         (?DUMMY_AUTH_CONFIG_PATH) -> {ok, [get_mock_config_file()]};
@@ -104,7 +126,13 @@ setup() ->
         (?CERN_METADATA_URL) -> ?DUMMY_SAML_METADATA("cern")
     end),
 
-    oz_worker:set_env(auth_config_file, ?DUMMY_AUTH_CONFIG_PATH),
+    case Type of
+        production ->
+            oz_worker:set_env(auth_config_file, ?DUMMY_AUTH_CONFIG_PATH);
+        test ->
+            oz_worker:set_env(test_auth_config_file, ?DUMMY_AUTH_CONFIG_PATH),
+            auth_test_mode:process_enable_test_mode()
+    end,
     oz_worker:set_env(auth_config_cache_ttl, -1),
     oz_worker:set_env(http_domain, ?DUMMY_ONEZONE_DOMAIN).
 
@@ -114,7 +142,8 @@ teardown(_) ->
     ?assert(meck:validate(filelib)),
     ok = meck:unload(filelib),
     ?assert(meck:validate(esaml_util)),
-    ok = meck:unload(esaml_util).
+    ok = meck:unload(esaml_util),
+    auth_test_mode:process_disable_test_mode().
 
 %%%===================================================================
 %%% Test functions
@@ -267,6 +296,7 @@ get_supported_idps() ->
 
     % Simulate no config file at all
     oz_worker:set_env(auth_config_file, "inexistent-file.config"),
+    oz_worker:set_env(test_auth_config_file, "inexistent-file.config"),
     ?assertMatch([], auth_config:get_supported_idps()).
 
 
