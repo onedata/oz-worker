@@ -14,11 +14,10 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
--include_lib("ctool/include/logging.hrl").
 
 -type public_url() :: binary().
 
--define(RANDOM_ID, base64url:encode(crypto:strong_rand_bytes(5))).
+-define(RANDOM_ID(), base64url:encode(crypto:strong_rand_bytes(5))).
 -define(DOI_DC_IDENTIFIER(Hndl), <<"doi:", Hndl/binary>>).
 
 %% API
@@ -51,7 +50,7 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
     case Type of
         <<"DOI">> ->
             Prefix = maps:get(<<"prefix">>, ServiceProperties),
-            DoiId = ?RANDOM_ID,
+            DoiId = ?RANDOM_ID(),
             DoiHandle = <<Prefix/binary, "/", DoiId/binary>>,
             DoiHandleEncoded = http_utils:url_encode(DoiHandle),
             {ok, 201, _, _} = handle_proxy_client:put(
@@ -59,7 +58,7 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
             ),
             {ok, ?DOI_DC_IDENTIFIER(DoiHandle)};
         _ -> % <<"PID">> and other types
-            DoiId = ?RANDOM_ID,
+            DoiId = ?RANDOM_ID(),
             {ok, 201, _, RespJSON} = handle_proxy_client:put(
                 ProxyEndpoint, <<"/handle?hndl=", DoiId/binary>>, Headers, Body
             ),
