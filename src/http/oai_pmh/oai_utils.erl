@@ -20,14 +20,14 @@
 -export([datetime_to_oai_datestamp/1, oai_datestamp_to_datetime/1,
     is_harvesting/1, verb_to_module/1, is_earlier_or_equal/2,
     dates_have_the_same_granularity/2, to_xml/1, ensure_list/1, harvest/4,
-    oai_identifier_encode/1, oai_identifier_decode/1]).
+    oai_identifier_encode/1, oai_identifier_decode/1, build_oai_record/3]).
 -export([list_handles/0, get_handle/1]).
 
 %%%--------------------------------------------------------------------
 %%% @doc
 %%% Encode handle id to oai identifier supported by oz-worker.
 %%% oai identifier is in form:
-%%%     oai:onedata.org:<handle_id>
+%%%     oai:<onezone-domain>:<handle_id>
 %%% @end
 %%%--------------------------------------------------------------------
 -spec oai_identifier_encode(od_handle:id()) -> oai_id().
@@ -38,18 +38,43 @@ oai_identifier_encode(Id) ->
 %%% @doc
 %%% Decode handle id from oai identifier supported by oz-worker.
 %%% oai identifier is in form:
-%%%     oai:onedata.org:<handle_id>
+%%%     oai:<onezone-domain>:<handle_id>
 %%% @end
 %%%--------------------------------------------------------------------
 -spec oai_identifier_decode(oai_id()) -> od_handle:id().
 oai_identifier_decode(OAIId) ->
-    PrefixSize = size(?OAI_IDENTIFIER_PREFIX),
-    case binary:match(OAIId, ?OAI_IDENTIFIER_PREFIX) of
+    Prefix = ?OAI_IDENTIFIER_PREFIX,
+    PrefixSize = size(Prefix),
+    case binary:match(OAIId, Prefix) of
         {0, PrefixSize} ->
             binary:part(OAIId, size(OAIId), PrefixSize - size(OAIId));
         _ ->
             throw({illegalId, OAIId})
     end.
+
+%%%--------------------------------------------------------------------
+%%% @doc
+%%% Builds an #oai_record{} based on metadata prefix, OAI identifier and
+%%% provided handle.
+%%% @end
+%%%--------------------------------------------------------------------
+-spec build_oai_record(MetadataPrefix :: binary(), oai_id(), od_handle:record()) ->
+    #oai_record{}.
+build_oai_record(MetadataPrefix, OaiId, Handle) ->
+    #oai_record{
+        header = #oai_header{
+            identifier = OaiId,
+            datestamp = oai_utils:datetime_to_oai_datestamp(Handle#od_handle.timestamp)
+        },
+        metadata = #oai_metadata{
+            metadata_format = #oai_metadata_format{metadataPrefix = MetadataPrefix},
+            additional_identifiers = [
+                Handle#od_handle.public_handle,
+                share_logic:share_id_to_public_url(Handle#od_handle.resource_id)
+            ],
+            value = Handle#od_handle.metadata
+        }
+    }.
 
 %%%--------------------------------------------------------------------
 %%% @equiv time_utils:datetime_to_datestamp(DateTime).
@@ -202,12 +227,16 @@ to_xml(#oai_header{identifier = Identifier, datestamp = Datestamp}) ->
         name = header,
         content = ensure_list(to_xml({identifier, Identifier})) ++
         ensure_list(to_xml({datestamp, Datestamp}))};
-to_xml(#oai_metadata{metadata_format = Format, value = Value}) ->
+to_xml(#oai_metadata{} = OaiMetadata) ->
+    #oai_metadata{
+        metadata_format = Format, value = Value,
+        additional_identifiers = AdditionalIdentifiers
+    } = OaiMetadata,
     MetadataPrefix = Format#oai_metadata_format.metadataPrefix,
     Mod = metadata_formats:module(MetadataPrefix),
     #xmlElement{
         name = metadata,
-        content = ensure_list(to_xml(Mod:encode(Value)))};
+        content = ensure_list(to_xml(Mod:encode(Value, AdditionalIdentifiers)))};
 to_xml(#oai_metadata_format{metadataPrefix = MetadataPrefix, schema = Schema,
     metadataNamespace = Namespace}) ->
     #xmlElement{

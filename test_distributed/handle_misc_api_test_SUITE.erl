@@ -224,7 +224,6 @@ create_test(Config) ->
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
                 {<<"resourceId">>, <<"">>, ?ERROR_FORBIDDEN},
                 {<<"resourceId">>, <<"asdq4ewfs">>, ?ERROR_FORBIDDEN},
-                {<<"metadata">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"metadata">>)},
                 {<<"metadata">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
         }
@@ -291,9 +290,7 @@ create_test(Config) ->
                 {<<"resourceId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceId">>)},
                 {<<"metadata">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
-                {<<"metadata">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"metadata">>)}
+                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
         }
     },
@@ -512,7 +509,6 @@ update_test(Config) ->
             required = [<<"metadata">>],
             correct_values = #{<<"metadata">> => [?DC_METADATA2]},
             bad_values = [
-                {<<"metadata">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"metadata">>)},
                 {<<"metadata">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
         }

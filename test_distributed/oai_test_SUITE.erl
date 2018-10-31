@@ -30,6 +30,8 @@
     empty_verb_get_test/1, empty_verb_post_test/1,
     illegal_arg_get_test/1, illegal_arg_post_test/1,
     get_record_get_test/1, get_record_post_test/1,
+    get_record_with_bad_metadata_get_test/1,
+    get_record_with_bad_metadata_post_test/1,
     missing_arg_get_test/1, missing_arg_post_test/1,
     id_not_existing_get_test/1, id_not_existing_post_test/1,
     cannot_disseminate_format_get_test/1, cannot_disseminate_format_post_test/1,
@@ -128,6 +130,8 @@ all() -> ?ALL([
     identify_change_earliest_datestamp_post_test,
     get_record_get_test,
     get_record_post_test,
+    get_record_with_bad_metadata_get_test,
+    get_record_with_bad_metadata_post_test,
     list_metadata_formats_get_test,
     list_metadata_formats_post_test,
     list_identifiers_get_test,
@@ -219,6 +223,12 @@ get_record_get_test(Config) ->
 
 get_record_post_test(Config) ->
     get_record_test_base(Config, post).
+
+get_record_with_bad_metadata_get_test(Config) ->
+    get_record_with_bad_metadata_test_base(Config, get).
+
+get_record_with_bad_metadata_post_test(Config) ->
+    get_record_with_bad_metadata_test_base(Config, post).
 
 list_metadata_formats_get_test(Config) ->
     list_metadata_formats_test_base(Config, get).
@@ -452,8 +462,9 @@ identify_test_base(Config, Method) ->
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
         #xmlElement{name = earliestDatestamp, content = [#xmlText{value = convert(Timestamp)}]},
         #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
-        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]},
-        #xmlElement{name = adminEmail, content = [#xmlText{value = "info@onedata.org"}]}
+        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
+    ] ++ [
+        #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
     ],
     ?assert(check_identify(200, [], Method, ExpResponseContent, Config)).
 
@@ -481,8 +492,9 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
         #xmlElement{name = earliestDatestamp, content = [#xmlText{value = convert(Timestamp1)}]},
         #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
-        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]},
-        #xmlElement{name = adminEmail, content = [#xmlText{value = "info@onedata.org"}]}
+        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
+    ] ++ [
+        #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
     ],
     ?assert(check_identify(200, [], Method, ExpResponseContent, Config)),
 
@@ -494,8 +506,9 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
         #xmlElement{name = earliestDatestamp, content = [#xmlText{value = convert(Timestamp2)}]},
         #xmlElement{name = deletedRecord, content = [#xmlText{value = "no"}]},
-        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]},
-        #xmlElement{name = adminEmail, content = [#xmlText{value = "info@onedata.org"}]}
+        #xmlElement{name = granularity, content = [#xmlText{value = "YYYY-MM-DDThh:mm:ssZ"}]}
+    ] ++ [
+        #xmlElement{name = adminEmail, content = [#xmlText{value = Email}]} || Email <- expected_admin_emails(Config)
     ],
     ?assert(check_identify(200, [], Method, ExpResponseContent2, Config)).
 
@@ -512,10 +525,10 @@ get_record_test_base(Config, Method) ->
     Identifier = create_handle_with_mocked_timestamp(Config, User, HSId, ?SHARE_ID,
         ?DC_METADATA_XML, Timestamp),
 
-    {#xmlElement{content = DCMetadata}, _} = xmerl_scan:string(binary_to_list(?DC_METADATA_XML)),
+    ExpectedDCMetadata = expected_dc_metadata(Config, Identifier, ?DC_METADATA_XML),
 
     Args = [
-        {<<"identifier">>, oai_identifier(Identifier)},
+        {<<"identifier">>, oai_identifier(Config, Identifier)},
         {<<"metadataPrefix">>, ?DC_METADATA_PREFIX}
     ],
 
@@ -527,7 +540,7 @@ get_record_test_base(Config, Method) ->
                     #xmlElement{
                         name = identifier,
                         content = [#xmlText{
-                            value = binary_to_list(oai_identifier(Identifier))
+                            value = binary_to_list(oai_identifier(Config, Identifier))
                         }]
                     },
                     #xmlElement{
@@ -543,13 +556,75 @@ get_record_test_base(Config, Method) ->
                 content = [
                     #xmlElement{
                         name = 'oai_dc:dc',
-                        content = DCMetadata
+                        content = ExpectedDCMetadata
                     }
                 ]
             }
         ]}
     ],
     ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config)).
+
+
+get_record_with_bad_metadata_test_base(Config, Method) ->
+
+    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
+    {ok, ?SHARE_ID} = oz_test_utils:create_share(
+        Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
+    ),
+    HSId = create_handle_service(Config, User),
+    Timestamp = erlang:universaltime(),
+
+    BadMetadataExamples = [
+        <<"">>,
+        <<"null">>,
+        <<"<bad-xml></yes-very-bad>">>
+    ],
+
+    lists:foreach(fun(Metadata) ->
+        Identifier = create_handle_with_mocked_timestamp(Config, User, HSId, ?SHARE_ID,
+            Metadata, Timestamp),
+        Args = [
+            {<<"identifier">>, oai_identifier(Config, Identifier)},
+            {<<"metadataPrefix">>, ?DC_METADATA_PREFIX}
+        ],
+
+        ExpResponseContent = [
+            #xmlElement{name = record, content = [
+                #xmlElement{
+                    name = header,
+                    content = [
+                        #xmlElement{
+                            name = identifier,
+                            content = [#xmlText{
+                                value = binary_to_list(oai_identifier(Config, Identifier))
+                            }]
+                        },
+                        #xmlElement{
+                            name = datestamp,
+                            content = [#xmlText{
+                                value = convert(Timestamp)
+                            }]
+                        }
+                    ]
+                },
+                #xmlElement{
+                    name = metadata,
+                    content = [
+                        #xmlElement{
+                            name = 'oai_dc:dc',
+                            % Badly formatted metadata should result in only
+                            % dc:identifiers being present in the OAI output
+                            content = expected_dc_identifiers(Config, Identifier)
+                        }
+                    ]
+                }
+            ]}
+        ],
+        ?assert(check_get_record(200, Args, Method, ExpResponseContent, Config))
+    end, BadMetadataExamples).
+
+
 
 list_metadata_formats_test_base(Config, Method) ->
     ExpResponseContent = [
@@ -579,9 +654,9 @@ list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffs
     BeginTime = erlang:universaltime(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
 
-    Identifiers =
-        setup_test_for_harvesting(Config, IdentifiersNum, BeginTime, TimeOffsets,
-            ?DC_METADATA_XML),
+    Identifiers = setup_test_for_harvesting(
+        Config, IdentifiersNum, BeginTime, TimeOffsets, ?DC_METADATA_XML
+    ),
 
     From = convert(increase_timestamp(BeginTime, FromOffset)),
     Until = convert(increase_timestamp(BeginTime, UntilOffset)),
@@ -597,7 +672,7 @@ list_identifiers_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffs
                 #xmlElement{
                     name = identifier,
                     content = [#xmlText{
-                        value = binary_to_list(oai_identifier(Id))
+                        value = binary_to_list(oai_identifier(Config, Id))
                     }]
                 },
                 #xmlElement{
@@ -621,9 +696,9 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     BeginTime = erlang:universaltime(),
     TimeOffsets = lists:seq(0, IdentifiersNum - 1), % timestamps will differ with 1 second each
 
-    Identifiers =
-        setup_test_for_harvesting(Config, IdentifiersNum, BeginTime, TimeOffsets,
-            ?DC_METADATA_XML),
+    Identifiers = setup_test_for_harvesting(
+        Config, IdentifiersNum, BeginTime, TimeOffsets, ?DC_METADATA_XML
+    ),
 
     From = convert(increase_timestamp(BeginTime, FromOffset)),
     Until = convert(increase_timestamp(BeginTime, UntilOffset)),
@@ -639,7 +714,7 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
                 #xmlElement{
                     name = identifier,
                     content = [#xmlText{
-                        value = binary_to_list(oai_identifier(Id))
+                        value = binary_to_list(oai_identifier(Config, Id))
                     }]
                 },
                 #xmlElement{
@@ -673,7 +748,7 @@ list_identifiers_modify_timestamp_test_base(Config, Method, IdentifiersNum,
                 #xmlElement{
                     name = identifier,
                     content = [#xmlText{
-                        value = binary_to_list(oai_identifier(Id))
+                        value = binary_to_list(oai_identifier(Config, Id))
                     }]
                 },
                 #xmlElement{
@@ -701,12 +776,11 @@ list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) 
     Until = convert(increase_timestamp(BeginTime, UntilOffset)),
     Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
 
-    {#xmlElement{content = DCMetadata}, _} = xmerl_scan:string(binary_to_list(?DC_METADATA_XML)),
-
     IdsAndTimestamps =
         ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset),
 
     ExpResponseContent = lists:map(fun({Id, TimeOffset}) ->
+        ExpectedDCMetadata = expected_dc_metadata(Config, Id, ?DC_METADATA_XML),
         #xmlElement{
             name = record,
             content = [
@@ -716,7 +790,7 @@ list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) 
                         #xmlElement{
                             name = identifier,
                             content = [#xmlText{
-                                value = binary_to_list(oai_identifier(Id))
+                                value = binary_to_list(oai_identifier(Config, Id))
                             }]
                         },
                         #xmlElement{
@@ -732,7 +806,7 @@ list_records_test_base(Config, Method, IdentifiersNum, FromOffset, UntilOffset) 
                     content = [
                         #xmlElement{
                             name = 'oai_dc:dc',
-                            content = DCMetadata
+                            content = ExpectedDCMetadata
                         }
                     ]
                 }
@@ -759,12 +833,11 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
     Until = convert(increase_timestamp(BeginTime, UntilOffset)),
     Args = prepare_harvesting_args(?DC_METADATA_PREFIX, From, Until),
 
-    {#xmlElement{content = DCMetadata}, _} = xmerl_scan:string(binary_to_list(?DC_METADATA_XML)),
-
     IdsAndTimestamps =
         ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets, FromOffset, UntilOffset),
 
     ExpResponseContent = lists:map(fun({Id, TimeOffset}) ->
+        ExpectedDCMetadata = expected_dc_metadata(Config, Id, ?DC_METADATA_XML),
         #xmlElement{
             name = record,
             content = [
@@ -774,7 +847,7 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
                         #xmlElement{
                             name = identifier,
                             content = [#xmlText{
-                                value = binary_to_list(oai_identifier(Id))
+                                value = binary_to_list(oai_identifier(Config, Id))
                             }]
                         },
                         #xmlElement{
@@ -790,7 +863,7 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
                     content = [
                         #xmlElement{
                             name = 'oai_dc:dc',
-                            content = DCMetadata
+                            content = ExpectedDCMetadata
                         }
                     ]
                 }
@@ -813,6 +886,7 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
         ids_and_timestamps_to_be_harvested(Identifiers, TimeOffsets2, FromOffset, UntilOffset),
 
     ExpResponseContent2 = lists:map(fun({Id, TimeOffset}) ->
+        ExpectedDCMetadata = expected_dc_metadata(Config, Id, ?DC_METADATA_XML),
         #xmlElement{
             name = record,
             content = [
@@ -822,7 +896,7 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
                         #xmlElement{
                             name = identifier,
                             content = [#xmlText{
-                                value = binary_to_list(oai_identifier(Id))
+                                value = binary_to_list(oai_identifier(Config, Id))
                             }]
                         },
                         #xmlElement{
@@ -838,7 +912,7 @@ list_records_modify_timestamp_test_base(Config, Method, IdentifiersNum,
                     content = [
                         #xmlElement{
                             name = 'oai_dc:dc',
-                            content = DCMetadata
+                            content = ExpectedDCMetadata
                         }
                     ]
                 }
@@ -883,7 +957,7 @@ cannot_disseminate_format_test_base(Config, Method) ->
     Identifier = create_handle(Config, User, HSId, ?SHARE_ID, ?DC_METADATA_XML),
 
     Args = [
-        {<<"identifier">>, oai_identifier(Identifier)},
+        {<<"identifier">>, oai_identifier(Config, Identifier)},
         {<<"metadataPrefix">>, <<"not_supported_format">>}
     ],
     ?assert(check_cannot_disseminate_format_error(200, Args, Method, [], Config)).
@@ -908,7 +982,7 @@ list_metadata_formats_no_format_error_test_base(Config, Method) ->
         end]
     )),
 
-    Args = [{<<"identifier">>, oai_identifier(Identifier)}],
+    Args = [{<<"identifier">>, oai_identifier(Config, Identifier)}],
 
     ?assert(check_list_metadata_formats_error(200, Args, Method, [], Config)).
 
@@ -1333,8 +1407,9 @@ offset_in_range(From, Until, Offset) ->
     (From =< Offset) and (Offset =< Until).
 
 
-oai_identifier(HandleId) ->
-    <<"oai:onedata.org:", HandleId/binary>>.
+oai_identifier(Config, HandleId) ->
+    {ok, OnezoneDomain} = oz_test_utils:get_oz_domain(Config),
+    <<"oai:", (list_to_binary(OnezoneDomain))/binary, ":", HandleId/binary>>.
 
 exclude_offset_from_range(Offset, undefined, undefined) -> Offset;
 exclude_offset_from_range(_Offset, From, undefined) -> From - rand:uniform(100);
@@ -1349,3 +1424,31 @@ random_out_of_range(Lower, Upper, Max) ->
         0 -> -1 * Number;
         _ -> Number
     end.
+
+expected_dc_metadata(Config, HandleId, DcMetadataXml) ->
+    {#xmlElement{content = DCMetadata}, _} = xmerl_scan:string(binary_to_list(DcMetadataXml)),
+    DCMetadata ++ expected_dc_identifiers(Config, HandleId).
+
+% Resulting metadata should include additional identifiers - public handle and public share url
+expected_dc_identifiers(Config, HandleId) ->
+    {ok, #od_handle{
+        resource_id = ShareId, public_handle = PublicHandle}
+    } = oz_test_utils:get_handle(Config, HandleId),
+    ShareUrl = oz_test_utils:get_share_public_url(Config, ShareId),
+    [
+        #xmlElement{
+            name = 'dc:identifier',
+            content = [#xmlText{value = binary_to_list(PublicHandle)}]
+        },
+        #xmlElement{
+            name = 'dc:identifier',
+            content = [#xmlText{value = binary_to_list(ShareUrl)}]
+        }
+    ].
+
+
+expected_admin_emails(Config) ->
+    {ok, AdminEmails} = oz_test_utils:call_oz(Config, oz_worker, get_env, [admin_emails]),
+    AdminEmails.
+
+
