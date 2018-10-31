@@ -68,8 +68,8 @@
     ensure_str/1
 ]).
 
-
 -define(AUTH_CONFIG_FILE, begin {ok, __Path} = oz_worker:get_env(auth_config_file), __Path end).
+-define(TEST_AUTH_CONFIG_FILE, begin {ok, __Path} = oz_worker:get_env(test_auth_config_file), __Path end).
 -define(CONFIG_CACHE_TTL, oz_worker:get_env(auth_config_cache_ttl, timer:minutes(1))).
 
 -define(LEGACY_SAML_CONFIG_NAME, "saml.config").
@@ -190,7 +190,7 @@
 %% Returns the list of all supported IdPs and their config as maps (convertible to JSON).
 %% @end
 %%--------------------------------------------------------------------
--spec get_supported_idps() -> [jiffy:json_value()].
+-spec get_supported_idps() -> [json_utils:json_term()].
 get_supported_idps() ->
     OnepanelAuthEnabled = ?CFG_ONEPANEL_AUTH_ENABLED,
     OpenIDEnabled = ?CFG_OPENID_ENABLED,
@@ -467,7 +467,7 @@ ensure_str(Str) when is_list(Str) -> Str.
 %% Returns IdP's config as a map (convertible to JSON).
 %% @end
 %%--------------------------------------------------------------------
--spec get_idp_config_json(idp(), config_section()) -> jiffy:json_value().
+-spec get_idp_config_json(idp(), config_section()) -> json_utils:json_term().
 get_idp_config_json(IdP, IdPConfig) ->
     #{
         <<"id">> => IdP,
@@ -486,16 +486,21 @@ get_idp_config_json(IdP, IdPConfig) ->
 %%--------------------------------------------------------------------
 -spec get_auth_config() -> config_v2().
 get_auth_config() ->
-    {ok, Cfg} = simple_cache:get(cached_auth_config, fun() ->
-        {true, fetch_auth_config(), ?CONFIG_CACHE_TTL}
-    end),
-    Cfg.
+    case auth_test_mode:process_is_test_mode_enabled() of
+        false ->
+            {ok, Cfg} = simple_cache:get(cached_auth_config, fun() ->
+                {true, fetch_auth_config(), ?CONFIG_CACHE_TTL}
+            end),
+            Cfg;
+        true ->
+            get_test_auth_config()
+    end.
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Reads auth config from file and returns it as a map. If an old version is
+%% Reads the auth config from file and returns it as a map. If an old version is
 %% detected, upgrade is attempted.
 %% @end
 %%--------------------------------------------------------------------
@@ -535,6 +540,36 @@ fetch_auth_config() ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
+%% Reads the test auth config from file and returns it as a map. The test auth
+%% config can be used to test various IdP configurations on a production system
+%% without interfering with the standard login page (the test login page is
+%% under /#/test/login).
+%% @end
+%%--------------------------------------------------------------------
+-spec get_test_auth_config() -> config_v2().
+get_test_auth_config() ->
+    TestAuthConfigFile = ?TEST_AUTH_CONFIG_FILE,
+    case file:consult(TestAuthConfigFile) of
+        {ok, [Cfg = #{version := ?CURRENT_CONFIG_VERSION}]} ->
+            Cfg;
+        {ok, _} ->
+            ?alert("Badly formatted test.auth.config in ~s, the test "
+            "login page will not work.", [TestAuthConfigFile]),
+            #{};
+        {error, enoent} ->
+            ?debug("test.auth.config was not found in ~s, the test "
+            "login page will not work.", [TestAuthConfigFile]),
+            #{};
+        {error, _} = Error ->
+            ?alert("Cannot load test.auth.config due to ~p. The login "
+            "page will not work.", [Error]),
+            #{}
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
 %% Attempts to upgrade the old auth.config file. Uses critical section
 %% to ensure no race condition.
 %% @end
@@ -542,15 +577,30 @@ fetch_auth_config() ->
 -spec upgrade_auth_config(file:filename_all()) -> config_v2().
 upgrade_auth_config(AuthConfigFile) ->
     critical_section:run(auth_config_upgrade, fun() ->
-        case file:consult(AuthConfigFile) of
-            {ok, [#{version := ?CURRENT_CONFIG_VERSION} = UpgradedCfg]} ->
-                % Another process upgraded the config in parallel, skip
-                UpgradedCfg;
-            {ok, [OldAuthCfg]} ->
-                upgrade_auth_config(AuthConfigFile, OldAuthCfg)
+        {ok, {LastSeen, LastUpgradeResult}} = simple_cache:get(
+            previous_auth_cfg_upgrade, fun() -> {false, {<<"">>, #{}}} end
+        ),
+        case file_md5(AuthConfigFile) of
+            LastSeen ->
+                % Do not attempt upgrade of the same file multiple times
+                LastUpgradeResult;
+            _ ->
+                % Save empty upgrade result, which will be overwritten by actual
+                % result upon success, or will stay empty upon failure
+                simple_cache:put(
+                    previous_auth_cfg_upgrade, {file_md5(AuthConfigFile), #{}}
+                ),
+                {ok, [OldAuthCfg]} = file:consult(AuthConfigFile),
+                UpgradedCfg = upgrade_auth_config(AuthConfigFile, OldAuthCfg),
+                % Success - overwrite empty result
+                simple_cache:put(
+                    previous_auth_cfg_upgrade, {file_md5(AuthConfigFile), UpgradedCfg}
+                ),
+                UpgradedCfg
         end
     end).
 
+%% @private
 -spec upgrade_auth_config(file:filename_all(), config_v1()) -> config_v2().
 upgrade_auth_config(AuthConfigFile, OldAuthCfg) ->
     ?notice("Deprecated auth.config found in ~s - attempting "
@@ -591,6 +641,7 @@ upgrade_auth_config(AuthConfigFile, OldAuthCfg) ->
     UpgradedCfg.
 
 
+%% @private
 -spec ensure_file_exists(file:filename_all()) -> file:filename_all() | no_return().
 ensure_file_exists(Path) ->
     case filelib:is_regular(Path) of
@@ -604,6 +655,7 @@ ensure_file_exists(Path) ->
     end.
 
 
+%% @private
 -spec get_default_protocol_config(protocol(), nested_params(), config_policy(), trace()) ->
     term() | no_return().
 get_default_protocol_config(Protocol, NestedParams, Policy, Trace) ->
@@ -615,6 +667,7 @@ get_default_protocol_config(Protocol, NestedParams, Policy, Trace) ->
     get_nested_cfg(NestedParams, Policy, DefaultIdPConfig, Trace).
 
 
+%% @private
 -spec get_nested_cfg(nested_params(), config_policy()) -> term() | no_return().
 get_nested_cfg(NestedParams, Policy) ->
     get_nested_cfg(NestedParams, Policy, get_auth_config(), []).
@@ -646,13 +699,25 @@ get_param(Key, Policy, Config, Trace) ->
     end.
 
 
+%% @private
 -spec param_not_found(nested_param_key(), config_policy(), trace()) ->
     term() | no_return().
 param_not_found(_Key, {default, Default}, _Trace) ->
     Default;
 param_not_found(Key, required, Trace) ->
     TraceBinaries = [str_utils:format_bin("~s", [T]) || T <- Trace ++ [Key]],
-    ?alert("Missing required parameter in auth.config: ~s", [
-        str_utils:join_binary(TraceBinaries, <<" -> ">>)
+    ConfigFile = case auth_test_mode:process_is_test_mode_enabled() of
+        false -> "auth.config";
+        true -> "test.auth.config"
+    end,
+    ?alert("Missing required parameter in ~s: ~s", [
+        ConfigFile, str_utils:join_binary(TraceBinaries, <<" -> ">>)
     ]),
     throw(?ERROR_BAD_AUTH_CONFIG).
+
+
+%% @private
+-spec file_md5(FilePath :: string()) -> binary().
+file_md5(FilePath) ->
+    {ok, Bin} = file:read_file(FilePath),
+    erlang:md5(Bin).

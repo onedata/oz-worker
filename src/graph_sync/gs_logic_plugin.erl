@@ -14,9 +14,10 @@
 -behaviour(gs_logic_plugin_behaviour).
 -author("Lukasz Opiola").
 
+-include("http/gui_paths.hrl").
+-include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include("entity_logic.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
@@ -219,7 +220,9 @@ handle_rpc(1, Client, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
                     ?USER(UserId) = Client,
                     {true, UserId}
             end,
-            auth_logic:get_login_endpoint(IdP, LinkAccount)
+            RedirectAfterLogin = maps:get(<<"redirectUrl">>, Data, <<?AFTER_LOGIN_PAGE_PATH>>),
+            TestMode = maps:get(<<"testMode">>, Data, false),
+            auth_logic:get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode)
     end;
 handle_rpc(1, ?USER(UserId), <<"getProviderRedirectURL">>, Args) ->
     ProviderId = maps:get(<<"providerId">>, Args),

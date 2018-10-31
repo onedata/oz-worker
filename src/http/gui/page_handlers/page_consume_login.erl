@@ -15,6 +15,7 @@
 
 -behaviour(dynamic_page_behaviour).
 
+-include("entity_logic.hrl").
 -include("http/gui_paths.hrl").
 -include("registered_names.hrl").
 -include("auth/auth_errors.hrl").
@@ -34,29 +35,37 @@
 %%--------------------------------------------------------------------
 -spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(Method, Req) ->
-    {NewReq, RedirectURL} = case auth_logic:validate_login(Method, Req) of
-        {ok, UserId, RedirectUrl} ->
-            Req2 = oz_gui_session:log_in(UserId, Req),
-            {Req2, RedirectUrl};
-        {auth_error, Error, State} ->
-            Req2 = new_gui:set_cookie(
-                <<"authentication_error_reason">>, format_error_reason(Error),
-                #{path => <<"/">>}, Req
-            ),
-            Req3 = new_gui:set_cookie(
-                <<"authentication_error_state">>, State,
-                #{path => <<"/">>}, Req2
-            ),
-            {Req3, <<?LOGIN_PAGE_PATH>>}
-    end,
-    % This page is visited with a POST request, so use a 303 redirect in
-    % response so that web browser switches to GET.
-    cowboy_req:reply(303, #{
-        <<"location">> => RedirectURL,
-        % Connection close is required, otherwise chrome/safari can get stuck
-        % stalled waiting for data.
-        <<"connection">> => <<"close">>
-    }, NewReq).
+    ValidateResult = auth_logic:validate_login(Method, Req),
+    case auth_test_mode:process_is_test_mode_enabled() of
+        true ->
+            cowboy_req:reply(200, #{
+                <<"content-type">> => <<"text/html">>
+            }, render_test_login_results(ValidateResult), Req);
+        false ->
+            {NewReq, RedirectURL} = case ValidateResult of
+                {ok, UserId, RedirectAfterLogin} ->
+                    Req2 = oz_gui_session:log_in(UserId, Req),
+                    {Req2, RedirectAfterLogin};
+                {auth_error, Error, State, RedirectAfterLogin} ->
+                    Req2 = new_gui:set_cookie(
+                        <<"authentication_error_reason">>, format_error_reason(Error),
+                        #{path => <<"/">>}, Req
+                    ),
+                    Req3 = new_gui:set_cookie(
+                        <<"authentication_error_state">>, State,
+                        #{path => <<"/">>}, Req2
+                    ),
+                    {Req3, RedirectAfterLogin}
+            end,
+            % This page is visited with a POST request, so use a 303 redirect in
+            % response so that web browser switches to GET.
+            cowboy_req:reply(303, #{
+                <<"location">> => RedirectURL,
+                % Connection close is required, otherwise chrome/safari can get stuck
+                % stalled waiting for data.
+                <<"connection">> => <<"close">>
+            }, NewReq)
+    end.
 
 
 %% @private
@@ -83,3 +92,57 @@ format_error_reason(?ERROR_ACCOUNT_ALREADY_LINKED_TO_ANOTHER_USER(_, _)) ->
     <<"account_already_linked_to_another_user">>;
 format_error_reason(?ERROR_INTERNAL_SERVER_ERROR) ->
     <<"internal_server_error">>.
+
+
+%% @private
+-spec render_test_login_results({ok, od_user:id(), RedirectPage :: binary()} |
+{auth_error, {error, term()}, state_token:id(), RedirectPage :: binary()}) -> binary().
+render_test_login_results(ValidateResult) ->
+    StatusHeaders = case ValidateResult of
+        {ok, _, _} ->
+            UserData = auth_test_mode:get_user_data(),
+            str_utils:unicode_list_to_binary(str_utils:format(
+                "<h3 style='color: #1c8e23;'>Login successful, gathered user data:</h3>~n"
+                "<pre><code>~ts</code></pre>",
+                [json_utils:encode(UserData, [pretty])]
+            ));
+        {auth_error, Error, _, _} ->
+            str_utils:unicode_list_to_binary(str_utils:format(
+                "<h3 style='color: #912011;'>Login failed due to:</h3>~n"
+                "<pre><code>~tp</code></pre>",
+                [Error]
+            ))
+    end,
+    test_login_page_html(StatusHeaders, str_utils:unicode_list_to_binary(auth_test_mode:get_logs())).
+
+
+%% @private
+-spec test_login_page_html(StatusHeaders :: binary(), Log :: binary()) -> binary().
+test_login_page_html(StatusHeaders, Log) -> <<"
+<!DOCTYPE html>
+<html lang=\"en\">
+<head>
+    <meta http-equiv=\"Content-Type\" content=\"text/html; charset=utf-8\"/>
+<head>
+<body>
+<div>
+<p><a href=\"/#/test/login\">Back to test login page</a></p>
+<i>Below results are a simulation of user login and what data would be gathered
+in the process. Note that no users or groups are actually created in the system
+in the test mode. Use only for diagnostics.</i>
+
+<hr />
+
+", StatusHeaders/binary, "
+
+<hr />
+
+<h3>Detailed log:</h3>
+<pre style='max-width: 100%; word-wrap: break-word; white-space: pre-wrap;'><code>
+", Log/binary, "
+</code></pre>
+
+</div>
+</body>
+</html>
+">>.

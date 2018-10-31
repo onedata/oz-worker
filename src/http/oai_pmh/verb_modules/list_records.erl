@@ -74,17 +74,9 @@ get_response(<<"record">>, Args) ->
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
     From = proplists:get_value(<<"from">>, Args),
     Until = proplists:get_value(<<"until">>, Args),
-    HarvestingFun = fun(Id, #od_handle{timestamp = Timestamp, metadata = Metadata}) ->
-        #oai_record{
-            header = #oai_header{
-                identifier = oai_utils:oai_identifier_encode(Id),
-                datestamp = oai_utils:datetime_to_oai_datestamp(Timestamp)
-            },
-            metadata = #oai_metadata{
-                metadata_format = #oai_metadata_format{metadataPrefix = MetadataPrefix},
-                value = Metadata
-            }
-        }
+    HarvestingFun = fun(HandleId, Handle) ->
+        OaiId = oai_utils:oai_identifier_encode(HandleId),
+        oai_utils:build_oai_record(MetadataPrefix, OaiId, Handle)
     end,
     oai_utils:harvest(MetadataPrefix, From, Until, HarvestingFun).
 

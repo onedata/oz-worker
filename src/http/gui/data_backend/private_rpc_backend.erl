@@ -15,6 +15,7 @@
 -behaviour(rpc_backend_behaviour).
 
 -include("rest.hrl").
+-include("http/gui_paths.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
@@ -57,7 +58,8 @@ handle(<<"changePassword">>, Props) ->
 handle(<<"getConnectAccountEndpoint">>, [{<<"provider">>, ProviderBin}]) ->
     UserId = gui_session:get_user_id(),
     IdP = binary_to_atom(ProviderBin, utf8),
-    case auth_logic:get_login_endpoint(IdP, {true, UserId}) of
+    RedirectAfterLogin = <<?AFTER_LOGIN_PAGE_PATH, "?expand_accounts=true">>,
+    case auth_logic:get_login_endpoint(IdP, {true, UserId}, RedirectAfterLogin, false) of
         {ok, Data} ->
             {ok, maps:to_list(Data)};
         {error, _} ->

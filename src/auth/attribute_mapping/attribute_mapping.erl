@@ -246,7 +246,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 % Public types
--type idp_attributes() :: jiffy:json_value().
+-type idp_attributes() :: json_utils:json_term().
 -type onedata_attribute() :: subjectId | name | alias | emails | entitlements | custom.
 -type attribute_mapping() :: undefined | {required, rule()} | {optional, rule()} | {plugin, module()}.
 -export_type([idp_attributes/0, onedata_attribute/0, attribute_mapping/0]).
@@ -313,7 +313,7 @@ map_attributes(IdP, Attributes) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec map_attribute(auth_config:idp(), onedata_attribute(), attribute_type(), idp_attributes()) ->
-    jiffy:json_value() | no_return().
+    json_utils:json_term() | no_return().
 map_attribute(IdP, Attribute, Type, IdPAttributes) ->
     MappingRule = auth_config:get_attribute_mapping(IdP, Attribute),
     case apply_attribute_mapping(IdP, Attribute, MappingRule, IdPAttributes) of
@@ -338,7 +338,7 @@ end).
 
 -spec apply_attribute_mapping(auth_config:idp(), onedata_attribute(), attribute_mapping(),
     idp_attributes()) ->
-    {ok, jiffy:json_value()} | {error, bad_type} | {error, not_found} |
+    {ok, json_utils:json_term()} | {error, bad_type} | {error, not_found} |
     {error, {attribute_mapping_error, throw | error | exit, term(), []}}.
 apply_attribute_mapping(_IdP, _Attribute, undefined, _IdPAttributes) ->
     {ok, undefined};
@@ -360,7 +360,7 @@ apply_attribute_mapping(IdP, Attribute, {plugin, Module}, IdPAttributes) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec compute_attribute(rule(), idp_attributes()) ->
-    {ok, jiffy:json_value()} | {error, bad_type} | {error, not_found}.
+    {ok, json_utils:json_term()} | {error, bad_type} | {error, not_found}.
 compute_attribute({any, [Rule]}, IdPAttributes) ->
     compute_attribute(Rule, IdPAttributes);
 compute_attribute({any, [Rule | Rest]}, IdPAttributes) ->

@@ -1780,7 +1780,7 @@ update_domain_test(Config) ->
     Subdomain = <<"prov-sub">>,
     ProviderDetails = #{
         <<"name">> => ?PROVIDER_NAME1,
-        <<"adminEmail">> => <<"admin@onedata.org">>,
+        <<"adminEmail">> => <<"admin@onezone.example.com">>,
         <<"subdomain">> => Subdomain,
         <<"ipList">> => [<<"2.4.6.8">>, <<"255.253.251.2">>],
         <<"subdomainDelegation">> => true
@@ -1881,7 +1881,7 @@ update_domain_is_idempotent_test(Config) ->
     NewDomain = <<"newdomain.com">>,
     ProviderDetails = #{
         <<"name">> => ?PROVIDER_NAME1,
-        <<"adminEmail">> => <<"admin@onedata.org">>,
+        <<"adminEmail">> => <<"admin@onezone.example.com">>,
         <<"domain">> => Domain,
         <<"subdomainDelegation">> => false
     },
