@@ -194,7 +194,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
     #od_handle{handle_service = HandleService, public_handle = PublicHandle,
         resource_type = ResourceType, resource_id = ResourceId,
         metadata = Metadata, timestamp = Timestamp,
-        created_at = CreatedAt, creator = Creator
+        creation_time = CreationTime, creator = Creator
     } = Handle,
     {ok, #{
         <<"handleServiceId">> => HandleService,
@@ -203,7 +203,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
         <<"timestamp">> => Timestamp,
-        <<"createdAt">> => CreatedAt,
+        <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = public}}, Handle) ->

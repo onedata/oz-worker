@@ -165,7 +165,7 @@ get_record_struct(2) ->
         {root_file, string}
     ]};
 get_record_struct(3) ->
-    % * new field - created_at
+    % * new field - creation_time
     % * new field - creator
     {record, [
         {name, string},
@@ -174,7 +174,7 @@ get_record_struct(3) ->
         {handle, string},
         {root_file, string},
 
-        {created_at, integer}, % New field
+        {creation_time, integer}, % New field
         {creator, {record, [ % New field
             {type, atom},
             {id, string}
@@ -225,6 +225,6 @@ upgrade_record(2, Share) ->
         handle = HandleId,
         root_file = RootFileId,
 
-        created_at = time_utils:system_time_seconds(),
+        creation_time = time_utils:system_time_seconds(),
         creator = undefined
     }}.

@@ -192,7 +192,7 @@ get_record_struct(4) ->
     % effective relations (as intermediaries computing logic has changed).
     get_record_struct(3);
 get_record_struct(5) ->
-    % * new field - created_at
+    % * new field - creation_time
     {record, [
         {name, string},
         {admin_email, string},
@@ -210,7 +210,7 @@ get_record_struct(5) ->
         {eff_users, #{string => [{atom, string}]}},
         {eff_groups, #{string => [{atom, string}]}},
 
-        {created_at, integer}, % New field
+        {creation_time, integer}, % New field
 
         {bottom_up_dirty, boolean}
     ]}.
@@ -365,7 +365,7 @@ upgrade_record(4, Provider) ->
         eff_users = EffUsers,
         eff_groups = EffGroups,
 
-        created_at = time_utils:system_time_seconds(),
+        creation_time = time_utils:system_time_seconds(),
 
         bottom_up_dirty = BottomUpDirty
     }}.

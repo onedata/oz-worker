@@ -267,13 +267,13 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Space) ->
     {ok, Space};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{
-        name = Name, providers = Providers, created_at = CreatedAt,
+        name = Name, providers = Providers, creation_time = CreationTime,
         shares = Shares, creator = Creator
     } = Space,
     {ok, #{
         <<"name">> => Name,
         <<"providers">> => Providers,
-        <<"createdAt">> => CreatedAt,
+        <<"creationTime">> => CreationTime,
         <<"creator">> => Creator,
         <<"sharedDirectories">> => length(Shares)
     }};

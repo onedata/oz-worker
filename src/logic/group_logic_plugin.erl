@@ -279,20 +279,20 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Group) ->
 % Shared and protected data is (currently) the same
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Group) ->
     #od_group{
-        name = Name, type = Type, created_at = CreatedAt, creator = Creator
+        name = Name, type = Type, creation_time = CreationTime, creator = Creator
     } = Group,
     {ok, #{
         <<"name">> => Name,
         <<"type">> => Type,
-        <<"createdAt">> => CreatedAt,
+        <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Group) ->
-    #od_group{name = Name, type = Type, created_at = CreatedAt} = Group,
+    #od_group{name = Name, type = Type, creation_time = CreationTime} = Group,
     {ok, #{
         <<"name">> => Name,
         <<"type">> => Type,
-        <<"createdAt">> => CreatedAt
+        <<"creationTime">> => CreationTime
     }};
 
 get(#el_req{gri = #gri{aspect = oz_privileges}}, Group) ->

@@ -119,7 +119,7 @@
     eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
 
-    created_at = time_utils:system_time_seconds() :: entity_logic:created_at(),
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
 
     % Marks that the record's effective relations are not up to date.
     top_down_dirty = true :: boolean()
@@ -156,7 +156,7 @@
     eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
 
-    created_at = time_utils:system_time_seconds() :: entity_logic:created_at(),
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | entity_logic:client(),
 
     % Marks that the record's effective relations are not up to date.
@@ -183,7 +183,7 @@
     % track changes in spaces and propagate them top-down.
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
 
-    created_at = time_utils:system_time_seconds() :: entity_logic:created_at(),
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | entity_logic:client(),
 
     % Marks that the record's effective relations are not up to date.
@@ -205,7 +205,7 @@
     handle = undefined :: undefined | od_handle:id(),
     root_file = undefined :: undefined | binary(),
 
-    created_at = time_utils:system_time_seconds() :: entity_logic:created_at(),
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | entity_logic:client()
 }).
 
@@ -229,7 +229,7 @@
     eff_users = #{} :: entity_graph:eff_relations(od_user:id()),
     eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
 
-    created_at = time_utils:system_time_seconds() :: entity_logic:created_at(),
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -249,7 +249,7 @@
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_service_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_service_privilege()]),
 
-    created_at = time_utils:system_time_seconds() :: entity_logic:created_at(),
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | entity_logic:client(),
 
     % Marks that the record's effective relations are not up to date.
@@ -272,7 +272,7 @@
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_privilege()]),
 
-    created_at = time_utils:system_time_seconds() :: entity_logic:created_at(),
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | entity_logic:client(),
 
     % Marks that the record's effective relations are not up to date.

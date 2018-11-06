@@ -414,7 +414,7 @@ get_record_struct(8) ->
 get_record_struct(9) ->
     % Changes:
     %   * new field - active sessions
-    %   * new field - created_at
+    %   * new field - creation_time
     %   * the privileges are translated
     {record, [
         {name, string},
@@ -455,7 +455,7 @@ get_record_struct(9) ->
         {eff_handle_services, #{string => [{atom, string}]}},
         {eff_handles, #{string => [{atom, string}]}},
 
-        {created_at, integer}, % New field
+        {creation_time, integer}, % New field
 
         {top_down_dirty, boolean}
     ]}.
@@ -1033,7 +1033,7 @@ upgrade_record(8, User) ->
         eff_handle_services = EffHandleServices,
         eff_handles = EffHandles,
 
-        created_at = time_utils:system_time_seconds(),
+        creation_time = time_utils:system_time_seconds(),
 
         top_down_dirty = TopDownDirty
     }}.

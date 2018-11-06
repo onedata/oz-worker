@@ -129,12 +129,12 @@ get(#el_req{gri = #gri{aspect = instance, scope = public}}, Share) ->
     #od_share{
         name = Name, public_url = PublicUrl,
         root_file = RootFileId, handle = HandleId,
-        created_at = CreatedAt
+        creation_time = CreationTime, creator = Creator
     } = Share,
     {ok, #{
         <<"name">> => Name, <<"publicUrl">> => PublicUrl,
         <<"rootFileId">> => RootFileId, <<"handleId">> => HandleId,
-        <<"createdAt">> => CreatedAt
+        <<"creationTime">> => CreationTime, <<"creator">> => Creator
     }}.
 
 

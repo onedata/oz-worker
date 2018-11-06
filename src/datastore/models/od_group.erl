@@ -218,7 +218,7 @@ get_record_struct(5) ->
     get_record_struct(4);
 get_record_struct(6) ->
     % * new field - protected group flag
-    % * new field - created_at
+    % * new field - creation_time
     % * new field - creator
     % * privileges are translated
     {record, [
@@ -244,7 +244,7 @@ get_record_struct(6) ->
         {eff_handle_services, #{string => [{atom, string}]}},
         {eff_handles, #{string => [{atom, string}]}},
 
-        {created_at, integer}, % New field
+        {creation_time, integer}, % New field
         {creator, {record, [ % New field
             {type, atom},
             {id, string}
@@ -573,7 +573,7 @@ upgrade_record(5, Group) ->
         eff_handle_services = EffHandleServices,
         eff_handles = EffHandles,
 
-        created_at = time_utils:system_time_seconds(),
+        creation_time = time_utils:system_time_seconds(),
         creator = undefined,
 
         top_down_dirty = TopDownDirty,

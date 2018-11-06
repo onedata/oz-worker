@@ -176,7 +176,7 @@ get_record_struct(3) ->
     % recalculate effective relations (as intermediaries computing logic has changed).
     get_record_struct(2);
 get_record_struct(4) ->
-    % * new field - created_at
+    % * new field - creation_time
     % * new field - creator
     % * privileges are translated
     {record, [
@@ -191,7 +191,7 @@ get_record_struct(4) ->
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
         {eff_providers, #{string => [{atom, string}]}},
 
-        {created_at, integer}, % New field
+        {creation_time, integer}, % New field
         {creator, {record, [ % New field
             {type, atom},
             {id, string}
@@ -324,7 +324,7 @@ upgrade_record(3, Space) ->
         eff_groups = TranslateField(EffGroups),
         eff_providers = EffProviders,
 
-        created_at = time_utils:system_time_seconds(),
+        creation_time = time_utils:system_time_seconds(),
         creator = undefined,
 
         top_down_dirty = true,

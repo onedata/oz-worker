@@ -193,20 +193,20 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, User) ->
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
     #od_user{
         name = Name, alias = Alias, emails = Emails,
-        linked_accounts = LinkedAccounts, created_at = CreatedAt
+        linked_accounts = LinkedAccounts, creation_time = CreationTime
     } = User,
     {ok, #{
         <<"name">> => Name, <<"alias">> => Alias,
         <<"emails">> => Emails,
         <<"linkedAccounts">> => user_logic:linked_accounts_to_maps(LinkedAccounts),
-        <<"createdAt">> => CreatedAt
+        <<"creationTime">> => CreationTime
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, User) ->
-    #od_user{name = Name, alias = Alias, created_at = CreatedAt} = User,
+    #od_user{name = Name, alias = Alias, creation_time = CreationTime} = User,
     {ok, #{
         <<"name">> => Name,
         <<"alias">> => Alias,
-        <<"createdAt">> => CreatedAt
+        <<"creationTime">> => CreationTime
     }};
 
 get(#el_req{gri = #gri{aspect = oz_privileges}}, User) ->

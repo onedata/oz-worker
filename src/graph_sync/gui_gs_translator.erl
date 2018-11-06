@@ -133,7 +133,7 @@ translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, U
         <<"spaceList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_spaces, scope = private}),
         <<"providerList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_providers, scope = private}),
         <<"info">> => #{
-            <<"createdAt">> => User#od_user.created_at
+            <<"creationTime">> => User#od_user.creation_time
         }
     };
 
@@ -223,7 +223,7 @@ translate_group(#gri{id = GroupId, aspect = instance, scope = private}, Group) -
             <<"effUserList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = eff_users}),
             <<"spaceList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = spaces}),
             <<"info">> => maps:merge(translate_creator(Group#od_group.creator), #{
-                <<"createdAt">> => Group#od_group.created_at
+                <<"creationTime">> => Group#od_group.creation_time
             })
         }
     end;
@@ -332,7 +332,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
             <<"supportSizes">> => Providers,
             <<"providerList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = providers}),
             <<"info">> => maps:merge(translate_creator(Space#od_space.creator), #{
-                <<"createdAt">> => Space#od_space.created_at,
+                <<"creationTime">> => Space#od_space.creation_time,
                 <<"sharedDirectories">> => length(Shares)
             })
         }
@@ -342,7 +342,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
     #{
         <<"name">> := Name,
         <<"providers">> := Providers,
-        <<"createdAt">> := CreatedAt,
+        <<"creationTime">> := CreationTime,
         <<"creator">> := Creator,
         <<"sharedDirectories">> := SharedDirectories
     } = SpaceData,
@@ -352,7 +352,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"supportSizes">> => Providers,
         <<"providerList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = providers}),
         <<"info">> => maps:merge(translate_creator(Creator), #{
-            <<"createdAt">> => CreatedAt,
+            <<"creationTime">> => CreationTime,
             <<"sharedDirectories">> => SharedDirectories
         })
     };
@@ -438,9 +438,9 @@ translate_provider(GRI = #gri{aspect = instance, scope = protected}, Provider) -
             <<"name">> := Name, <<"domain">> := Domain,
             <<"latitude">> := Latitude, <<"longitude">> := Longitude,
             <<"online">> := Online,
-            <<"createdAt">> := CreatedAt
+            <<"creationTime">> := CreationTime
         } = Provider,
-        Provider#{
+        #{
             <<"name">> => Name,
             <<"domain">> => Domain,
             <<"latitude">> => Latitude,
@@ -448,7 +448,7 @@ translate_provider(GRI = #gri{aspect = instance, scope = protected}, Provider) -
             <<"online">> => Online,
             <<"spaceList">> => gs_protocol:gri_to_string(GRI#gri{aspect = {user_spaces, UserId}, scope = private}),
             <<"info">> => #{
-                <<"createdAt">> => CreatedAt
+                <<"creationTime">> => CreationTime
             }
         }
     end;

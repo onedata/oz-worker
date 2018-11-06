@@ -175,13 +175,13 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, HService) ->
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, HService) ->
     #od_handle_service{
         name = Name, proxy_endpoint = Proxy, service_properties = ServiceProps,
-        created_at = CreatedAt, creator = Creator
+        creation_time = CreationTime, creator = Creator
     } = HService,
     {ok, #{
         <<"name">> => Name,
         <<"proxyEndpoint">> => Proxy,
         <<"serviceProperties">> => ServiceProps,
-        <<"createdAt">> => CreatedAt,
+        <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
     }};
 

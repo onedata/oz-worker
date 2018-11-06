@@ -584,7 +584,7 @@ get_record(od_user, 9) -> #od_user{
     eff_handle_services = #{},
     eff_handles = #{},
 
-    created_at = ?DUMMY_TIMESTAMP,
+    creation_time = ?DUMMY_TIMESTAMP,
 
     top_down_dirty = true
 };
@@ -736,7 +736,7 @@ get_record(od_group, 6) -> #od_group{
     eff_handle_services = #{},
     eff_handles = #{},
 
-    created_at = ?DUMMY_TIMESTAMP,
+    creation_time = ?DUMMY_TIMESTAMP,
     creator = undefined,
 
     top_down_dirty = true,
@@ -846,7 +846,7 @@ get_record(od_space, 4) -> #od_space{
     eff_groups = #{},
     eff_providers = #{},
 
-    created_at = ?DUMMY_TIMESTAMP,
+    creation_time = ?DUMMY_TIMESTAMP,
     creator = undefined,
 
     top_down_dirty = true,
@@ -878,7 +878,7 @@ get_record(od_share, 3) -> #od_share{
     handle = <<"handle_id">>,
     root_file = <<"root_file_id">>,
 
-    created_at = ?DUMMY_TIMESTAMP,
+    creation_time = ?DUMMY_TIMESTAMP,
     creator = undefined
 };
 
@@ -985,7 +985,7 @@ get_record(od_provider, 5) -> #od_provider{
     eff_users = #{},
     eff_groups = #{},
 
-    created_at = ?DUMMY_TIMESTAMP,
+    creation_time = ?DUMMY_TIMESTAMP,
 
     bottom_up_dirty = true
 };
@@ -1083,7 +1083,7 @@ get_record(od_handle_service, 4) -> #od_handle_service{
     eff_users = #{},
     eff_groups = #{},
 
-    created_at = ?DUMMY_TIMESTAMP,
+    creation_time = ?DUMMY_TIMESTAMP,
     creator = undefined,
 
     bottom_up_dirty = true
@@ -1176,7 +1176,7 @@ get_record(od_handle, 4) -> #od_handle{
     eff_users = #{},
     eff_groups = #{},
 
-    created_at = ?DUMMY_TIMESTAMP,
+    creation_time = ?DUMMY_TIMESTAMP,
     creator = undefined,
 
     bottom_up_dirty = true
