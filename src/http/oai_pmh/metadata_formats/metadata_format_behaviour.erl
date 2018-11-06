@@ -58,6 +58,8 @@
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% Function capable of encoding given metadata to XML.
+%%% AdditionalIdentifiers should be injected into the metadata.
 %%% @end
 %%%-------------------------------------------------------------------
--callback encode(Metadata :: #{} | binary()) -> #xmlElement{}.
+-callback encode(Metadata :: #{} | binary(), AdditionalIdentifiers :: [binary()]) ->
+    #xmlElement{}.

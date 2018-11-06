@@ -160,13 +160,13 @@
 -define(DOMAIN, <<"multilevel.provider-domain.org">>).
 -define(UNIQUE_DOMAIN, ?UNIQUE_STRING).
 -define(SUB_DOMAIN, <<"prov-sub">>).
--define(ADMIN_EMAIL, <<"admin@onedata.org">>).
+-define(ADMIN_EMAIL, <<"admin@onezone.example.com">>).
 -define(PROVIDER_NAME1, <<"provider1">>).
 -define(PROVIDER_NAME2, <<"provider2">>).
 -define(PROVIDER_DETAILS(ProviderName, Domain),
     #{
         <<"name">> => ProviderName,
-        <<"adminEmail">> => <<"admin@onedata.org">>,
+        <<"adminEmail">> => <<"admin@onezone.example.com">>,
         <<"domain">> => Domain,
         <<"latitude">> => rand:uniform() * 90,
         <<"longitude">> => rand:uniform() * 180

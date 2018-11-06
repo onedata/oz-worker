@@ -15,6 +15,7 @@
 -include("graph_sync/oz_graph_sync.hrl").
 -include("rest.hrl").
 -include("entity_logic.hrl").
+-include_lib("gui/include/new_gui.hrl").
 -include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
@@ -464,7 +465,7 @@ prepare_gs_client(Config, {user, UserId}) ->
     prepare_gs_client(
         Config,
         {user, UserId},
-        {cookie, {?GRAPH_SYNC_SESSION_COOKIE_NAME, SessionId}},
+        {cookie, {?SESSION_COOKIE_KEY, SessionId}},
         [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
     );
 prepare_gs_client(_Config, nobody) ->

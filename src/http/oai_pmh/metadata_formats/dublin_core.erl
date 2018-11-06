@@ -12,12 +12,13 @@
 -author("Jakub Kudzia").
 
 -include("http/handlers/oai.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 -behaviour(metadata_format_behaviour).
 
 %% API
--export([elements/0, encode/1, metadata_prefix/0, schema_URL/0,
-        extra_namespaces/0, schema_location/0, main_namespace/0]).
+-export([elements/0, encode/2, metadata_prefix/0, schema_URL/0,
+    extra_namespaces/0, schema_location/0, main_namespace/0]).
 
 
 %%%===================================================================
@@ -95,14 +96,13 @@ elements() -> [
 
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% {@link metadata_format_behaviour} callback encode/0
+%%% {@link metadata_format_behaviour} callback encode/2
 %%% @end
 %%%-------------------------------------------------------------------
--spec encode(#{} | binary()) -> #xmlElement{}.
-encode(Metadata) ->
+-spec encode(#{} | binary(), AdditionalIdentifiers :: [binary()]) -> #xmlElement{}.
+encode(Metadata, AdditionalIdentifiers) ->
 
-    {#xmlElement{content=MetadataContent}, _} = xmerl_scan:string(binary_to_list(Metadata)),
-    %%TODO  currently bare xml is saved in  handle
+    %% @TODO currently bare xml is saved in  handle
     %%    MetadataXML = lists:flatmap(fun(Key) ->
     %%        case maps:get(Key, Metadata, undefined) of
     %%            undefined -> [];
@@ -112,10 +112,29 @@ encode(Metadata) ->
     %%        end
     %%    end, elements()),
 
+    MetadataContent = try xmerl_scan:string(binary_to_list(Metadata), [{quiet, true}]) of
+        {#xmlElement{content = Content}, _} ->
+            Content
+    catch Type:Reason ->
+        ?debug_stacktrace(
+            "Cannot parse dublin core metadata due to ~p:~p, identifiers: ~p",
+            [Type, Reason, AdditionalIdentifiers]
+        ),
+        []
+    end,
+
+    IdentifiersMetadata = lists:map(fun(Identifier) ->
+        #xmlElement{
+            name = 'dc:identifier',
+            content = [#xmlText{value = binary_to_list(Identifier)}]
+        }
+    end, AdditionalIdentifiers),
+
     #xmlElement{
         name = 'oai_dc:dc',
         attributes = get_attributes(),
-        content = MetadataContent}.
+        content = MetadataContent ++ IdentifiersMetadata
+    }.
 
 
 %%%===================================================================

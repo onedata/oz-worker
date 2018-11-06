@@ -23,12 +23,13 @@
 
 -record(oai_metadata_format, {
     metadataPrefix :: binary() | undefined,
-    schema ::binary() | undefined,
-    metadataNamespace ::binary() | undefined
+    schema :: binary() | undefined,
+    metadataNamespace :: binary() | undefined
 }).
 
 -record(oai_metadata, {
     metadata_format :: oai_metadata_format(),
+    additional_identifiers :: [binary()],
     value :: binary() | #{} | #xmlElement{}
 }).
 
@@ -103,6 +104,6 @@
 
 -define(PROTOCOL_VERSION, <<"2.0">>).
 
--define(OAI_IDENTIFIER_PREFIX, <<"oai:onedata.org:">>).
+-define(OAI_IDENTIFIER_PREFIX, <<"oai:", (oz_worker:get_domain())/binary, ":">>).
 
 -endif.
