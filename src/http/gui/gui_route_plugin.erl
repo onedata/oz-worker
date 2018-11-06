@@ -30,6 +30,7 @@
 -export([login_page_path/0, default_page_path/0]).
 -export([error_404_html_file/0, error_500_html_file/0]).
 -export([response_headers/0]).
+-export([check_ws_origin/1]).
 
 %% Convenience macros for defining routes.
 
@@ -216,3 +217,26 @@ error_500_html_file() ->
 response_headers() ->
     {ok, Headers} = oz_worker:get_env(gui_response_headers),
     Headers.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link gui_route_plugin_behaviour} callback check_ws_origin/1
+%% @end
+%%--------------------------------------------------------------------
+-spec check_ws_origin(cowboy_req:req()) -> boolean().
+check_ws_origin(Req) ->
+    case application:get_env(?APP_NAME, check_ws_origin, true) of
+        false -> 
+            true;
+        _ ->
+            OriginHeader = cowboy_req:header(<<"origin">>, Req),
+            URL = case OriginHeader of
+                      <<"wss://", Rest/binary>> -> Rest;
+                      _ -> OriginHeader
+            end,
+            Host = maps:get(host, url_utils:parse(URL)),
+            {_, IP} = inet:parse_ipv4strict_address(binary_to_list(Host)),
+            (oz_worker:get_domain() == Host) or (IP == node_manager:get_ip_address())
+    end.
+
