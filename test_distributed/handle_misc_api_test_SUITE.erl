@@ -206,23 +206,13 @@ create_test(Config) ->
                 <<"metadata">> => [?DC_METADATA]
             },
             bad_values = [
-                {<<"handleServiceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"handleServiceId">>)},
-                {<<"handleServiceId">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"handleServiceId">>)},
-                {<<"resourceType">>, <<"">>,
-                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"resourceType">>,
-                        [<<"Share">>])},
-                {<<"resourceType">>, 1234,
+                {<<"handleServiceId">>, <<"">>, ?ERROR_FORBIDDEN},
+                {<<"handleServiceId">>, 1234, ?ERROR_FORBIDDEN},
+                {<<"resourceType">>, 1233,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
-                {<<"resourceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"resourceId">>)},
-                {<<"resourceId">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"resourceId">>)},
-                {<<"metadata">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
-                {<<"metadata">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"metadata">>)}
+                {<<"resourceId">>, <<"">>, ?ERROR_FORBIDDEN},
+                {<<"resourceId">>, <<"asdq4ewfs">>, ?ERROR_FORBIDDEN},
+                {<<"metadata">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
         }
     },
@@ -438,7 +428,6 @@ update_test(Config) ->
             required = [<<"metadata">>],
             correct_values = #{<<"metadata">> => [?DC_METADATA2]},
             bad_values = [
-                {<<"metadata">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"metadata">>)},
                 {<<"metadata">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
         }

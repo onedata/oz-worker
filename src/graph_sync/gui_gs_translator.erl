@@ -38,28 +38,6 @@
 -spec handshake_attributes(gs_protocol:client()) ->
     gs_protocol:handshake_attributes().
 handshake_attributes(_) ->
-    Idps = case oz_worker:get_env(dev_mode) of
-        {ok, true} ->
-            % If dev mode is enabled, always return basic auth and Developer
-            % Login dummy IdP which will redirect to /dev_login page.
-            [
-                #{
-                    <<"id">> => <<"onepanel">>,
-                    <<"displayName">> => <<"Onepanel account">>,
-                    <<"iconPath">> => <<"/assets/images/auth-providers/onepanel.svg">>,
-                    <<"iconBackgroundColor">> => <<"#4BD187">>
-                },
-                #{
-                    <<"id">> => <<"devLogin">>,
-                    <<"displayName">> => <<"Developer Login">>,
-                    <<"iconPath">> => <<"/assets/images/auth-providers/default.svg">>
-                }
-            ];
-        _ ->
-            % Production mode, return providers from config
-            auth_config:get_supported_idps()
-    end,
-
     BrandSubtitle = oz_worker:get_env(brand_subtitle, ""),
     LoginNotification = oz_worker:get_env(login_notification, ""),
 
@@ -67,7 +45,6 @@ handshake_attributes(_) ->
         <<"zoneName">> => oz_worker:get_name(),
         <<"serviceVersion">> => oz_worker:get_version(),
         <<"serviceBuildVersion">> => oz_worker:get_build_version(),
-        <<"idps">> => Idps,
         <<"brandSubtitle">> => str_utils:unicode_list_to_binary(BrandSubtitle),
         <<"loginNotification">> => str_utils:unicode_list_to_binary(LoginNotification)
     }.

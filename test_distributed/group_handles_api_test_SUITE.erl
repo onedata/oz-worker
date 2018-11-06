@@ -227,9 +227,7 @@ create_handle_test(Config) ->
                 {<<"resourceId">>, <<"">>, ?ERROR_FORBIDDEN},
                 {<<"resourceId">>, 1234, ?ERROR_FORBIDDEN},
                 {<<"metadata">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
-                {<<"metadata">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"metadata">>)}
+                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
         }
     },
@@ -264,9 +262,7 @@ create_handle_test(Config) ->
                 {<<"resourceId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceId">>)},
                 {<<"metadata">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
-                {<<"metadata">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"metadata">>)}
+                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
         }
     },

@@ -33,7 +33,7 @@
     % to specification in idp_group_mapping.
     entitlements = [] :: [entitlement_mapping:raw_entitlement()],
     % Custom attributes received from the IdP, opaque to Onezone (used in LUMA).
-    custom = #{} :: jiffy:json_value()
+    custom = #{} :: json_utils:json_term()
 }).
 
 %%%===================================================================

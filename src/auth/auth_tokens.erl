@@ -28,7 +28,7 @@
     authenticate_user/1]).
 
 %% Handling state tokens
--export([generate_state_token/3, lookup_state_token/1]).
+-export([generate_state_token/4, lookup_state_token/1]).
 
 %%%===================================================================
 %%% API
@@ -199,12 +199,13 @@ invalidate_token(Identifier) when is_binary(Identifier) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec generate_state_token(auth_config:idp(), LinkAccount :: false | {true, od_user:id()},
-    RedirectAfterLogin :: binary()) -> state_token:id().
-generate_state_token(IdP, LinkAccount, RedirectAfterLogin) ->
+    RedirectAfterLogin :: binary(), TestMode :: boolean()) -> state_token:id().
+generate_state_token(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
     StateInfo = #{
         idp => IdP,
         link_account => LinkAccount,
-        redirect_after_login => RedirectAfterLogin
+        redirect_after_login => RedirectAfterLogin,
+        test_mode => TestMode
     },
     {ok, Token} = state_token:create(StateInfo),
     Token.

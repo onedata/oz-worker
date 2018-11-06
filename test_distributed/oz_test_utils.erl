@@ -1246,7 +1246,7 @@ get_share_public_url(Config, ShareId) ->
 create_provider(Config, Name) when is_binary(Name) ->
     create_provider(Config, #{
         <<"name">> => Name,
-        <<"adminEmail">> => <<"admin@onedata.org">>,
+        <<"adminEmail">> => <<"admin@onezone.example.com">>,
         <<"domain">> => ?UNIQUE_DOMAIN,
         <<"subdomainDelegation">> => false,
         <<"latitude">> => 0.0,
@@ -2155,8 +2155,11 @@ mock_handle_proxy(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     ok = test_utils:mock_new(Nodes, handle_proxy_client, [passthrough]),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, put,
-        fun(_, <<"/handle", _/binary>>, _, _) ->
-            {ok, 201, #{<<"location">> => <<"/test_location">>}, <<"">>}
+        fun(_, <<"/handle?hndl=", Hndl/binary>>, _, _) ->
+            ResponseBody = json_utils:encode(#{
+                <<"handle">> => <<"http://hndl.service.example.com/", Hndl/binary>>
+            }),
+            {ok, 201, #{}, ResponseBody}
         end),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, patch,
         fun(_, <<"/handle", _/binary>>, _, _) ->

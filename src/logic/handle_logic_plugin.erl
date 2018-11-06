@@ -504,7 +504,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"resourceId">> => {binary, {exists, fun(Value) ->
             share_logic:exists(Value) end
         }},
-        <<"metadata">> => {binary, non_empty}
+        <<"metadata">> => {binary, any}
     }
 };
 
@@ -532,7 +532,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) -> #{
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     required => #{
-        <<"metadata">> => {binary, non_empty}
+        <<"metadata">> => {binary, any}
     }
 };
 

@@ -56,7 +56,7 @@ response(#el_req{operation = delete}, ok) ->
 %% a body in response.
 %% @end
 %%--------------------------------------------------------------------
--spec ok_body_reply(Body :: jiffy:json_value()) -> #rest_resp{}.
+-spec ok_body_reply(json_utils:json_term()) -> #rest_resp{}.
 ok_body_reply(Body) ->
     #rest_resp{code = ?HTTP_200_OK, body = Body}.
 
