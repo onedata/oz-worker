@@ -206,13 +206,21 @@ create_test(Config) ->
                 <<"metadata">> => [?DC_METADATA]
             },
             bad_values = [
-                {<<"handleServiceId">>, <<"">>, ?ERROR_FORBIDDEN},
-                {<<"handleServiceId">>, 1234, ?ERROR_FORBIDDEN},
-                {<<"resourceType">>, 1233,
+                {<<"handleServiceId">>, <<"">>,
+                    ?ERROR_BAD_VALUE_EMPTY(<<"handleServiceId">>)},
+                {<<"handleServiceId">>, 1234,
+                    ?ERROR_BAD_VALUE_BINARY(<<"handleServiceId">>)},
+                {<<"resourceType">>, <<"">>,
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"resourceType">>,
+                        [<<"Share">>])},
+                {<<"resourceType">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
-                {<<"resourceId">>, <<"">>, ?ERROR_FORBIDDEN},
-                {<<"resourceId">>, <<"asdq4ewfs">>, ?ERROR_FORBIDDEN},
-                {<<"metadata">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
+                {<<"resourceId">>, <<"">>,
+                    ?ERROR_BAD_VALUE_EMPTY(<<"resourceId">>)},
+                {<<"resourceId">>, 1234,
+                    ?ERROR_BAD_VALUE_BINARY(<<"resourceId">>)},
+                {<<"metadata">>, 1234,
+                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
         }
     },
