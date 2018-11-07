@@ -281,7 +281,7 @@ is_subscribable(#gri{type = EntityType, aspect = Aspect, scope = Scope}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize_by_session_cookie(cowboy_req:req()) ->
-    false | {true, gs_protocol:client()} | {error, term()}.
+    false | {true, gs_protocol:client()}.
 authorize_by_session_cookie(Req) ->
     case check_ws_origin(Req) of
         true ->
@@ -291,10 +291,10 @@ authorize_by_session_cookie(Req) ->
                 {error, no_session_cookie} ->
                     false;
                 {error, invalid} ->
-                    ?ERROR_UNAUTHORIZED
+                    false
             end;
         false ->
-            ?ERROR_UNAUTHORIZED
+            false
     end.
 
 
