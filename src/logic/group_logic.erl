@@ -1498,7 +1498,8 @@ create_predefined_group(GroupId, Name, Privileges) ->
                 value = #od_group{
                     name = NormalizedName,
                     type = role_holders,
-                    protected = true
+                    protected = true,
+                    creator = ?ROOT
                 }},
             case od_group:create(NewGroup) of
                 {ok, _} ->

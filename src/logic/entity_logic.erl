@@ -76,6 +76,9 @@ at_least_one => #{Key :: binary() | {aspect, binary()} => {type_validator(), val
 optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_validator()}}
 }.
 
+% Common fields for all records
+-type creation_time() :: non_neg_integer().  % UNIX timestamp in seconds
+
 -export_type([
     client/0,
     el_plugin/0,
@@ -97,7 +100,8 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
     result/0,
     type_validator/0,
     value_validator/0,
-    validity_verificator/0
+    validity_verificator/0,
+    creation_time/0
 ]).
 
 % Internal record containing the request data and state.

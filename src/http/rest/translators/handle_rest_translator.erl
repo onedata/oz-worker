@@ -60,13 +60,21 @@ get_response(#gri{id = undefined, aspect = list}, Handles) ->
     rest_translator:ok_body_reply(#{<<"handles">> => Handles});
 
 get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleData) ->
-    Timestamp = maps:get(<<"timestamp">>, HandleData),
-    % Replace "publicHandle" with "handle" key
-    PublicHandle = maps:get(<<"publicHandle">>, HandleData),
-    NewData = maps:remove(<<"publicHandle">>, HandleData),
-    rest_translator:ok_body_reply(NewData#{
+    #{
+        <<"handleServiceId">> := HandleService,
+        <<"publicHandle">> := PublicHandle,
+        <<"resourceType">> := ResourceType,
+        <<"resourceId">> := ResourceId,
+        <<"metadata">> := Metadata,
+        <<"timestamp">> := Timestamp
+    } = HandleData,
+    rest_translator:ok_body_reply(#{
         <<"handleId">> => HandleId,
+        <<"handleServiceId">> => HandleService,
         <<"handle">> => PublicHandle,
+        <<"resourceType">> => ResourceType,
+        <<"resourceId">> => ResourceId,
+        <<"metadata">> => Metadata,
         <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp)
     });
 

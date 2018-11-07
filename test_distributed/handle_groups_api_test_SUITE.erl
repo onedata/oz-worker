@@ -77,7 +77,7 @@ add_group_test(Config) ->
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    AllPrivs = oz_test_utils:all_handle_privileges(Config),
+    AllPrivs = privileges:handle_privileges(),
 
     VerifyEndFun =
         fun
@@ -291,7 +291,7 @@ get_group_test(Config) ->
             module = handle_logic,
             function = get_group,
             args = [client, HandleId, G1],
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1
             })
@@ -333,7 +333,7 @@ get_group_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME1),
     {ok, G1} = oz_test_utils:handle_add_group(Config, HandleId, G1),
 
-    AllPrivs = oz_test_utils:all_handle_privileges(Config),
+    AllPrivs = privileges:handle_privileges(),
     InitialPrivs = [?HANDLE_VIEW],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
@@ -394,7 +394,7 @@ update_group_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME1),
     {ok, G1} = oz_test_utils:handle_add_group(Config, HandleId, G1),
 
-    AllPrivs = oz_test_utils:all_handle_privileges(Config),
+    AllPrivs = privileges:handle_privileges(),
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:handle_set_group_privileges(
             Config, HandleId, G1, PrivsToGrant, PrivsToRevoke
@@ -532,7 +532,7 @@ get_eff_group_test(Config) ->
                     module = handle_logic,
                     function = get_eff_group,
                     args = [client, HandleId, GroupId],
-                    expected_result = ?OK_MAP(GroupDetails)
+                    expected_result = ?OK_MAP_CONTAINS(GroupDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -607,7 +607,7 @@ get_eff_group_privileges_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    AllPrivs = oz_test_utils:all_handle_privileges(Config),
+    AllPrivs = privileges:handle_privileges(),
     InitialPrivs = [?HANDLE_VIEW],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 

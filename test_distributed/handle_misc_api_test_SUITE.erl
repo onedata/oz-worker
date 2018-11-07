@@ -144,7 +144,7 @@ create_test(Config) ->
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
     oz_test_utils:space_set_user_privileges(Config, S1, U2,
-        oz_test_utils:all_space_privileges(Config), []
+        privileges:space_privileges(), []
     ),
     {ok, ShareId} = oz_test_utils:create_share(
         Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
@@ -220,9 +220,7 @@ create_test(Config) ->
                 {<<"resourceId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceId">>)},
                 {<<"metadata">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
-                {<<"metadata">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"metadata">>)}
+                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
         }
     },
@@ -264,7 +262,7 @@ get_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    AllPrivs = oz_test_utils:all_handle_privileges(Config),
+    AllPrivs = privileges:handle_privileges(),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     % Get and check private data
@@ -380,7 +378,7 @@ update_test(Config) ->
         Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
     ),
 
-    AllPrivs = oz_test_utils:all_handle_privileges(Config),
+    AllPrivs = privileges:handle_privileges(),
     EnvSetUpFun = fun() ->
         {ok, HandleId} = oz_test_utils:create_handle(
             Config, ?ROOT, ?HANDLE(HService, ShareId)
@@ -438,7 +436,6 @@ update_test(Config) ->
             required = [<<"metadata">>],
             correct_values = #{<<"metadata">> => [?DC_METADATA2]},
             bad_values = [
-                {<<"metadata">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"metadata">>)},
                 {<<"metadata">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
         }
@@ -462,7 +459,7 @@ delete_test(Config) ->
         Config, ?ROOT, ShareId, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
     ),
 
-    AllHandlePrivs = oz_test_utils:all_handle_privileges(Config),
+    AllHandlePrivs = privileges:handle_privileges(),
     EnvSetUpFun = fun() ->
         {ok, HandleId} = oz_test_utils:create_handle(
             Config, ?ROOT, ?HANDLE(HService, ShareId)

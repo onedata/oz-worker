@@ -20,6 +20,8 @@
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 
+-define(DUMMY_TIMESTAMP, 1539770225).
+
 %% API
 -export([
     all/0, init_per_suite/1, end_per_suite/1
@@ -69,19 +71,19 @@ space_upgrade_test(Config) ->
 
 
 share_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_share, [1, 2]).
+    test_record_upgrade(Config, od_share, [1, 2, 3]).
 
 
 provider_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_provider, [1, 2, 3, 4]).
+    test_record_upgrade(Config, od_provider, [1, 2, 3, 4, 5]).
 
 
 handle_service_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_handle_service, [1, 2, 3]).
+    test_record_upgrade(Config, od_handle_service, [1, 2, 3, 4]).
 
 
 handle_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_handle, [1, 2, 3]).
+    test_record_upgrade(Config, od_handle, [1, 2, 3, 4]).
 
 
 dns_state_upgrade_test(Config) ->
@@ -108,9 +110,19 @@ test_record_upgrade(Config, Type, Versions) ->
 %%%===================================================================
 
 init_per_suite(Config) ->
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
+    Posthook = fun(NewConfig) ->
+        Nodes = ?config(oz_worker_nodes, NewConfig),
+        ok = test_utils:mock_new(Nodes, time_utils, [passthrough]),
+        ok = test_utils:mock_expect(Nodes, time_utils, system_time_seconds, fun() ->
+            ?DUMMY_TIMESTAMP
+        end),
+        NewConfig
+    end,
+    [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]} | Config].
 
-end_per_suite(_Config) ->
+end_per_suite(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_unload(Nodes, [time_utils]),
     ok.
 
 %%%===================================================================
@@ -572,6 +584,8 @@ get_record(od_user, 9) -> #od_user{
     eff_handle_services = #{},
     eff_handles = #{},
 
+    creation_time = ?DUMMY_TIMESTAMP,
+
     top_down_dirty = true
 };
 
@@ -722,6 +736,9 @@ get_record(od_group, 6) -> #od_group{
     eff_handle_services = #{},
     eff_handles = #{},
 
+    creation_time = ?DUMMY_TIMESTAMP,
+    creator = undefined,
+
     top_down_dirty = true,
     bottom_up_dirty = true
 };
@@ -772,29 +789,29 @@ get_record(od_space, 2) -> {od_space,
     true, % top_down_dirty
     true  % bottom_up_dirty
 };
-get_record(od_space, 3) -> #od_space{
-    name = <<"name">>,
-    users = #{
+get_record(od_space, 3) -> {od_space,
+    <<"name">>,
+    #{
         <<"user1">> => [?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_REMOVE_GROUP],
         <<"user2">> => [?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER]
     },
-    groups = #{
+    #{
         <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER],
         <<"group2">> => [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
     },
-    providers = #{
+    #{
         <<"prov1">> => 1000,
         <<"prov2">> => 250000,
         <<"prov3">> => 19999999
     },
-    shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+    [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
 
-    eff_users = #{},
-    eff_groups = #{},
-    eff_providers = #{},
+    #{},
+    #{},
+    #{},
 
-    top_down_dirty = true,
-    bottom_up_dirty = true
+    true,
+    true
 };
 get_record(od_space, 4) -> #od_space{
     name = <<"name">>,
@@ -829,6 +846,9 @@ get_record(od_space, 4) -> #od_space{
     eff_groups = #{},
     eff_providers = #{},
 
+    creation_time = ?DUMMY_TIMESTAMP,
+    creator = undefined,
+
     top_down_dirty = true,
     bottom_up_dirty = true
 };
@@ -844,12 +864,22 @@ get_record(od_share, 1) -> {od_share,
     [],  % eff_groups
     false  % bottom_up_dirty
 };
-get_record(od_share, 2) -> #od_share{
+get_record(od_share, 2) -> {od_share,
+    <<"name">>,
+    <<"public_url">>,
+    <<"parent_space_id">>,
+    <<"handle_id">>,
+    <<"root_file_id">>
+};
+get_record(od_share, 3) -> #od_share{
     name = <<"name">>,
     public_url = <<"public_url">>,
     space = <<"parent_space_id">>,
     handle = <<"handle_id">>,
-    root_file = <<"root_file_id">>
+    root_file = <<"root_file_id">>,
+
+    creation_time = ?DUMMY_TIMESTAMP,
+    creator = undefined
 };
 
 
@@ -911,7 +941,30 @@ get_record(od_provider, 3) -> {od_provider,
 
     true % bottom_up_dirty
 };
-get_record(od_provider, 4) -> #od_provider{
+get_record(od_provider, 4) -> {od_provider,
+    <<"name">>,
+    undefined,
+    undefined,
+    false,
+    <<"redirection_point">>,
+    undefined,
+
+    -93.2341,
+    17,
+
+    #{
+        <<"space1">> => 0,
+        <<"space2">> => 0,
+        <<"space3">> => 0,
+        <<"space4">> => 0
+    },
+
+    #{},
+    #{},
+
+    true
+};
+get_record(od_provider, 5) -> #od_provider{
     name = <<"name">>,
     admin_email = undefined,
     root_macaroon = undefined,
@@ -931,6 +984,8 @@ get_record(od_provider, 4) -> #od_provider{
 
     eff_users = #{},
     eff_groups = #{},
+
+    creation_time = ?DUMMY_TIMESTAMP,
 
     bottom_up_dirty = true
 };
@@ -980,7 +1035,32 @@ get_record(od_handle_service, 2) -> {od_handle_service,
 
     true  % bottom_up_dirty
 };
-get_record(od_handle_service, 3) -> #od_handle_service{
+get_record(od_handle_service, 3) -> {od_handle_service,
+    <<"name">>,
+    <<"proxy_endpoint">>,
+    #{
+        <<"property1">> => <<"value1">>,
+        <<"property2">> => <<"value2">>,
+        <<"property3">> => <<"value3">>
+    },
+
+    #{
+        <<"user1">> => [?HANDLE_SERVICE_LIST_HANDLES, ?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_REGISTER_HANDLE],
+        <<"user2">> => [?HANDLE_SERVICE_UPDATE, ?HANDLE_SERVICE_DELETE, ?HANDLE_SERVICE_VIEW]
+    },
+    #{
+        <<"group1">> => [?HANDLE_SERVICE_DELETE, ?HANDLE_SERVICE_VIEW, ?HANDLE_SERVICE_VIEW],
+        <<"group2">> => [?HANDLE_SERVICE_LIST_HANDLES, ?HANDLE_SERVICE_UPDATE, ?HANDLE_SERVICE_REGISTER_HANDLE]
+    },
+    [],
+
+
+    #{},
+    #{},
+
+    true
+};
+get_record(od_handle_service, 4) -> #od_handle_service{
     name = <<"name">>,
     proxy_endpoint = <<"proxy_endpoint">>,
     service_properties = #{
@@ -1003,9 +1083,11 @@ get_record(od_handle_service, 3) -> #od_handle_service{
     eff_users = #{},
     eff_groups = #{},
 
+    creation_time = ?DUMMY_TIMESTAMP,
+    creator = undefined,
+
     bottom_up_dirty = true
 };
-
 
 
 get_record(od_handle, 1) -> {od_handle,
@@ -1050,7 +1132,30 @@ get_record(od_handle, 2) -> {od_handle,
 
     true  % bottom_up_dirty
 };
-get_record(od_handle, 3) -> #od_handle{
+get_record(od_handle, 3) -> {od_handle,
+    <<"public_handle">>,
+    <<"Share">>,
+    <<"<metadata_xml_string>">>,
+    {{2016, 4, 4}, {14, 56, 33}},
+
+    <<"resource_id">>,
+    <<"handle_service_id">>,
+
+    #{
+        <<"user1">> => [?HANDLE_VIEW, ?HANDLE_UPDATE],
+        <<"user2">> => [?HANDLE_VIEW, ?HANDLE_UPDATE, ?HANDLE_DELETE]
+    },
+    #{
+        <<"group1">> => [?HANDLE_UPDATE],
+        <<"group2">> => [?HANDLE_DELETE]
+    },
+
+    #{},
+    #{},
+
+    true
+};
+get_record(od_handle, 4) -> #od_handle{
     public_handle = <<"public_handle">>,
     resource_type = <<"Share">>,
     metadata = <<"<metadata_xml_string>">>,
@@ -1070,6 +1175,9 @@ get_record(od_handle, 3) -> #od_handle{
 
     eff_users = #{},
     eff_groups = #{},
+
+    creation_time = ?DUMMY_TIMESTAMP,
+    creator = undefined,
 
     bottom_up_dirty = true
 };

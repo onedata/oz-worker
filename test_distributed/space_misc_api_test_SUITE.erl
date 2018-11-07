@@ -187,7 +187,7 @@ get_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllPrivs = oz_test_utils:all_space_privileges(Config),
+    AllPrivs = privileges:space_privileges(),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     oz_test_utils:space_set_user_privileges(Config, S1, U1,
         AllPrivs -- [?SPACE_VIEW], [?SPACE_VIEW]
@@ -307,7 +307,7 @@ get_test(Config) ->
             module = space_logic,
             function = get_protected_data,
             args = [client, S1],
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?SPACE_NAME1,
                 <<"providers">> => #{P1 => SupportSize}
             })
@@ -704,7 +704,7 @@ get_provider_test(Config) ->
         Config, ?PROVIDER_NAME2
     ),
 
-    SpacePrivs = oz_test_utils:all_space_privileges(Config),
+    SpacePrivs = privileges:space_privileges(),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     oz_test_utils:space_set_user_privileges(Config, S1, User, [], SpacePrivs),
     {ok, S1} = oz_test_utils:support_space(
@@ -743,7 +743,7 @@ get_provider_test(Config) ->
             module = space_logic,
             function = get_provider,
             args = [client, S1, P1],
-            expected_result = ?OK_MAP(ExpDetails)
+            expected_result = ?OK_MAP_CONTAINS(ExpDetails)
         },
         gs_spec = GsSpec = #gs_spec{
             operation = get,

@@ -37,8 +37,8 @@
 -type email() :: binary().
 -type linked_account() :: #linked_account{}.
 -type criterion() :: {linked_account, {auth_config:idp(), SubjectId :: binary()}} |
-    {email, email()} |
-    {alias, alias()}.
+{email, email()} |
+{alias, alias()}.
 -export_type([name/0, alias/0]).
 
 % Delay before all session connections are terminated when user is deleted.
@@ -414,6 +414,7 @@ get_record_struct(8) ->
 get_record_struct(9) ->
     % Changes:
     %   * new field - active sessions
+    %   * new field - creation_time
     %   * the privileges are translated
     {record, [
         {name, string},
@@ -453,6 +454,8 @@ get_record_struct(9) ->
         {eff_providers, #{string => [{atom, string}]}},
         {eff_handle_services, #{string => [{atom, string}]}},
         {eff_handles, #{string => [{atom, string}]}},
+
+        {creation_time, integer}, % New field
 
         {top_down_dirty, boolean}
     ]}.
@@ -970,7 +973,7 @@ upgrade_record(8, User) ->
         EffHandleServices,
         EffHandles,
 
-        _TopDownDirty
+        TopDownDirty
     } = User,
 
     TranslatePrivileges = fun(Privileges) ->
@@ -1023,9 +1026,14 @@ upgrade_record(8, User) ->
         spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles,
+
         eff_groups = EffGroups,
         eff_spaces = EffSpaces,
         eff_providers = EffProviders,
         eff_handle_services = EffHandleServices,
-        eff_handles = EffHandles
+        eff_handles = EffHandles,
+
+        creation_time = time_utils:system_time_seconds(),
+
+        top_down_dirty = TopDownDirty
     }}.

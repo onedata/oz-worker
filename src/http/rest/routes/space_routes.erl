@@ -82,8 +82,11 @@ routes() -> [
     }},
     %% Add user to space
     %% This operation requires one of the following privileges:
+    %% - space_invite_user
+    %% - space_set_privileges
     %% - oz_spaces_add_relationships
     %% - oz_users_add_relationships
+    %% - oz_spaces_set_privileges
     {<<"/spaces/:id/users/:uid">>, #rest_req{
         method = 'PUT',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {user, ?BINDING(uid)}}
@@ -155,6 +158,16 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {eff_user_membership, ?BINDING(uid)}}
     }},
+    %% Create group in space
+    %% This operation requires one of the following privileges:
+    %% - space_add_group
+    %% - oz_groups_create
+    %% - oz_spaces_add_relationships
+    {<<"/spaces/:id/groups">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = group},
+        b_auth_hint = ?AS_USER(?CLIENT_ID)
+    }},
     %% List space groups
     %% This operation requires one of the following privileges:
     %% - space_view
@@ -173,7 +186,11 @@ routes() -> [
     }},
     %% Add group to space
     %% This operation requires one of the following privileges:
+    %% - space_add_group
+    %% - space_set_privileges
     %% - oz_spaces_add_relationships
+    %% - oz_groups_add_relationships
+    %% - oz_space_set_privileges
     {<<"/spaces/:id/groups/:gid">>, #rest_req{
         method = 'PUT',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {group, ?BINDING(gid)}}

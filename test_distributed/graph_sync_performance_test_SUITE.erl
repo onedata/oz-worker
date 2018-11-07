@@ -216,7 +216,7 @@ privileges_in_a_big_space_performance_base(Config) ->
     UserNum = ?USER_NUM,
     UpdateNum = ?UPDATE_NUM,
     ProviderNum = ?PROVIDER_NUM,
-    SpacePrivileges = oz_test_utils:all_space_privileges(Config),
+    SpacePrivileges = privileges:space_privileges(),
     PrivsNum = length(SpacePrivileges),
     [Creator | Rest] = Users = create_n_users(Config, UserNum),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(Creator), <<"space">>),

@@ -58,8 +58,6 @@
     user_leave_space/3
 ]).
 -export([
-    all_group_privileges/1,
-
     list_groups/1,
     create_group/3,
     create_parent_group/4,
@@ -96,8 +94,6 @@
     group_create_space/3
 ]).
 -export([
-    all_space_privileges/1,
-
     create_space/3,
     get_space/2,
     list_spaces/1,
@@ -144,8 +140,6 @@
     set_provider_domain/3
 ]).
 -export([
-    all_handle_service_privileges/1,
-
     list_handle_services/1,
     create_handle_service/5, create_handle_service/3,
     get_handle_service/2,
@@ -163,8 +157,6 @@
     handle_service_set_group_privileges/5
 ]).
 -export([
-    all_handle_privileges/1,
-
     list_handles/1,
     create_handle/6, create_handle/3,
     get_handle/2,
@@ -539,16 +531,6 @@ user_leave_space(Config, UserId, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Get all atoms representing group privileges.
-%% @end
-%%--------------------------------------------------------------------
--spec all_group_privileges(Config :: term()) -> [atom()].
-all_group_privileges(Config) ->
-    call_oz(Config, privileges, group_privileges, []).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Creates group in onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -885,16 +867,6 @@ group_get_group_privileges(Config, GroupId, ChildGroupId) ->
     ?assertMatch({ok, _}, call_oz(Config, group_logic, get_child_privileges, [
         ?ROOT, GroupId, ChildGroupId
     ])).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Get all atoms representing space privileges.
-%% @end
-%%--------------------------------------------------------------------
--spec all_space_privileges(Config :: term()) -> [atom()].
-all_space_privileges(Config) ->
-    call_oz(Config, privileges, space_privileges, []).
 
 
 %%--------------------------------------------------------------------
@@ -1246,7 +1218,7 @@ get_share_public_url(Config, ShareId) ->
 create_provider(Config, Name) when is_binary(Name) ->
     create_provider(Config, #{
         <<"name">> => Name,
-        <<"adminEmail">> => <<"admin@onedata.org">>,
+        <<"adminEmail">> => <<"admin@onezone.example.com">>,
         <<"domain">> => ?UNIQUE_DOMAIN,
         <<"subdomainDelegation">> => false,
         <<"latitude">> => 0.0,
@@ -1368,16 +1340,6 @@ unsupport_space(Config, ProviderId, SpaceId) ->
     ?assertMatch(ok, call_oz(Config, provider_logic, revoke_support, [
         ?ROOT, ProviderId, SpaceId
     ])).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Get all atoms representing handle service privileges.
-%% @end
-%%--------------------------------------------------------------------
--spec all_handle_service_privileges(Config :: term()) -> [atom()].
-all_handle_service_privileges(Config) ->
-    call_oz(Config, privileges, handle_service_privileges, []).
 
 
 %%--------------------------------------------------------------------
@@ -1635,16 +1597,6 @@ handle_service_set_group_privileges(
     ?assertMatch(ok, call_oz(Config, handle_service_logic,
         update_group_privileges, [?ROOT, HServiceId, GroupId, PrivsToGrant, PrivsToRevoke]
     )).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Get all atoms representing handles privileges.
-%% @end
-%%--------------------------------------------------------------------
--spec all_handle_privileges(Config :: term()) -> [atom()].
-all_handle_privileges(Config) ->
-    call_oz(Config, privileges, handle_privileges, []).
 
 
 %%--------------------------------------------------------------------
@@ -2155,8 +2107,11 @@ mock_handle_proxy(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     ok = test_utils:mock_new(Nodes, handle_proxy_client, [passthrough]),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, put,
-        fun(_, <<"/handle", _/binary>>, _, _) ->
-            {ok, 201, #{<<"location">> => <<"/test_location">>}, <<"">>}
+        fun(_, <<"/handle?hndl=", Hndl/binary>>, _, _) ->
+            ResponseBody = json_utils:encode(#{
+                <<"handle">> => <<"http://hndl.service.example.com/", Hndl/binary>>
+            }),
+            {ok, 201, #{}, ResponseBody}
         end),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, patch,
         fun(_, <<"/handle", _/binary>>, _, _) ->

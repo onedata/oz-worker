@@ -193,16 +193,21 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, User) ->
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
     #od_user{
         name = Name, alias = Alias, emails = Emails,
-        linked_accounts = LinkedAccounts
+        linked_accounts = LinkedAccounts, creation_time = CreationTime
     } = User,
     {ok, #{
         <<"name">> => Name, <<"alias">> => Alias,
         <<"emails">> => Emails,
-        <<"linkedAccounts">> => user_logic:linked_accounts_to_maps(LinkedAccounts)
+        <<"linkedAccounts">> => user_logic:linked_accounts_to_maps(LinkedAccounts),
+        <<"creationTime">> => CreationTime
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, User) ->
-    #od_user{name = Name, alias = Alias} = User,
-    {ok, #{<<"name">> => Name, <<"alias">> => Alias}};
+    #od_user{name = Name, alias = Alias, creation_time = CreationTime} = User,
+    {ok, #{
+        <<"name">> => Name,
+        <<"alias">> => Alias,
+        <<"creationTime">> => CreationTime
+    }};
 
 get(#el_req{gri = #gri{aspect = oz_privileges}}, User) ->
     {ok, entity_graph:get_oz_privileges(direct, User)};
@@ -392,16 +397,28 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
             true
     end;
 
-exists(Req = #el_req{gri = #gri{aspect = instance, scope = shared}}, User) ->
+exists(Req = #el_req{gri = #gri{id = UserId, aspect = instance, scope = shared}}, User) ->
     case Req#el_req.auth_hint of
         ?THROUGH_GROUP(GroupId) ->
-            user_logic:has_eff_group(User, GroupId);
+            user_logic:has_eff_group(User, GroupId) orelse begin
+                {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
+                Group#od_group.creator =:= ?USER(UserId)
+            end;
         ?THROUGH_SPACE(SpaceId) ->
-            user_logic:has_eff_space(User, SpaceId);
+            user_logic:has_eff_space(User, SpaceId) orelse begin
+                {ok, Space} = space_logic_plugin:fetch_entity(SpaceId),
+                Space#od_space.creator =:= ?USER(UserId)
+            end;
         ?THROUGH_HANDLE_SERVICE(HServiceId) ->
-            user_logic:has_eff_handle_service(User, HServiceId);
+            user_logic:has_eff_handle_service(User, HServiceId) orelse begin
+                {ok, HService} = handle_service_logic_plugin:fetch_entity(HServiceId),
+                HService#od_handle_service.creator =:= ?USER(UserId)
+            end;
         ?THROUGH_HANDLE(HandleId) ->
-            user_logic:has_eff_handle(User, HandleId);
+            user_logic:has_eff_handle(User, HandleId) orelse begin
+                {ok, Handle} = handle_logic_plugin:fetch_entity(HandleId),
+                Handle#od_handle.creator =:= ?USER(UserId)
+            end;
         undefined ->
             true
     end;
@@ -467,23 +484,43 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
             authorize(Req#el_req{gri = #gri{scope = private}}, User)
     end;
 
-authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = shared}}, User) ->
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = instance, scope = shared}}, User) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(ClientUserId), ?THROUGH_GROUP(GroupId)} ->
-            % User's membership in group is checked in 'exists'
-            group_logic:has_eff_privilege(GroupId, ClientUserId, ?GROUP_VIEW);
+            {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
+            % UserId's membership in group is checked in 'exists'
+            group_logic:has_eff_privilege(Group, ClientUserId, ?GROUP_VIEW) orelse begin
+            % Members of a group can see the shared data of its creator
+                group_logic:has_eff_user(Group, ClientUserId) andalso
+                    Group#od_group.creator =:= ?USER(UserId)
+            end;
 
         {?USER(ClientUserId), ?THROUGH_SPACE(SpaceId)} ->
-            % User's membership in space is checked in 'exists'
-            space_logic:has_eff_privilege(SpaceId, ClientUserId, ?SPACE_VIEW);
+            {ok, Space} = space_logic_plugin:fetch_entity(SpaceId),
+            % UserId's membership in space is checked in 'exists'
+            space_logic:has_eff_privilege(Space, ClientUserId, ?SPACE_VIEW) orelse begin
+            % Members of a space can see the shared data of its creator
+                space_logic:has_eff_user(Space, ClientUserId) andalso
+                    Space#od_space.creator =:= ?USER(UserId)
+            end;
 
         {?USER(ClientUserId), ?THROUGH_HANDLE_SERVICE(HServiceId)} ->
-            % User's membership in handle_service is checked in 'exists'
-            handle_service_logic:has_eff_privilege(HServiceId, ClientUserId, ?HANDLE_SERVICE_VIEW);
+            {ok, HService} = handle_service_logic_plugin:fetch_entity(HServiceId),
+            % UserId's membership in handle_service is checked in 'exists'
+            handle_service_logic:has_eff_privilege(HService, ClientUserId, ?HANDLE_SERVICE_VIEW) orelse begin
+            % Members of a handle service can see the shared data of its creator
+                handle_service_logic:has_eff_user(HService, ClientUserId) andalso
+                    HService#od_handle_service.creator =:= ?USER(UserId)
+            end;
 
         {?USER(ClientUserId), ?THROUGH_HANDLE(HandleId)} ->
-            % User's membership in handle is checked in 'exists'
-            handle_logic:has_eff_privilege(HandleId, ClientUserId, ?HANDLE_VIEW);
+            {ok, Handle} = handle_logic_plugin:fetch_entity(HandleId),
+            % UserId's membership in handle is checked in 'exists'
+            handle_logic:has_eff_privilege(Handle, ClientUserId, ?HANDLE_VIEW) orelse begin
+            % Members of a handle can see the shared data of its creator
+                handle_logic:has_eff_user(Handle, ClientUserId) andalso
+                    Handle#od_handle.creator =:= ?USER(UserId)
+            end;
 
         _ ->
             % Access to protected data also allows access to shared data

@@ -134,7 +134,7 @@ create_handle_service_test(Config) ->
     ExpProxyEndPoint = ?PROXY_ENDPOINT,
     ExpProperties = ?DOI_SERVICE_PROPERTIES,
 
-    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
+    AllPrivs = privileges:handle_service_privileges(),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(HServiceId) ->
@@ -291,7 +291,7 @@ get_handle_service_test(Config) ->
             module = user_logic,
             function = get_handle_service,
             args = [client, U1, HService],
-            expected_result = ?OK_MAP(ExpHServiceDetails)
+            expected_result = ?OK_MAP_CONTAINS(ExpHServiceDetails)
         }
         % TODO gs
     },
@@ -488,7 +488,7 @@ get_eff_handle_service_test(Config) ->
                     module = user_logic,
                     function = get_eff_handle_service,
                     args = [client, U1, HServiceId],
-                    expected_result = ?OK_MAP(HServiceDetails)
+                    expected_result = ?OK_MAP_CONTAINS(HServiceDetails)
                 }
                 % TODO gs
             },

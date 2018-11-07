@@ -50,7 +50,7 @@ type() ->
 %%      * alias - binary() | undefined
 %%      * emails - [binary()]
 %%      * entitlements - [binary()]
-%%      * custom - jiffy:json_value()
+%%      * custom - json_utils:json_term()
 %% The callback should return one of:
 %%      * {ok, Value} - upon success, but the Value is still subject to type
 %%          check. 'undefined' can be returned, in this case the attribute will

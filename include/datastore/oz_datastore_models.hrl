@@ -33,7 +33,7 @@
     % to specification in idp_group_mapping.
     entitlements = [] :: [entitlement_mapping:raw_entitlement()],
     % Custom attributes received from the IdP, opaque to Onezone (used in LUMA).
-    custom = #{} :: jiffy:json_value()
+    custom = #{} :: json_utils:json_term()
 }).
 
 %%%===================================================================
@@ -119,6 +119,8 @@
     eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
 
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+
     % Marks that the record's effective relations are not up to date.
     top_down_dirty = true :: boolean()
 }).
@@ -154,6 +156,9 @@
     eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
 
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
+
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.
     top_down_dirty = true :: boolean(),
@@ -178,6 +183,9 @@
     % track changes in spaces and propagate them top-down.
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
 
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
+
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.
     top_down_dirty = true :: boolean(),
@@ -195,7 +203,10 @@
     % Direct relations to other entities
     space = undefined :: undefined | od_space:id(),
     handle = undefined :: undefined | od_handle:id(),
-    root_file = undefined :: undefined | binary()
+    root_file = undefined :: undefined | binary(),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client()
 }).
 
 %% This record defines a provider who supports spaces and can be reached via url
@@ -203,6 +214,7 @@
     name = <<"">> :: od_provider:name(),
     admin_email :: undefined | binary(),
     root_macaroon :: undefined | macaroon_auth:id(),
+
     subdomain_delegation = false :: boolean(),
     domain :: binary(),
     subdomain = undefined :: undefined | binary(),
@@ -216,6 +228,8 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations(od_user:id()),
     eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -234,6 +248,9 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_service_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_service_privilege()]),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -254,6 +271,9 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_privilege()]),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()

@@ -56,7 +56,7 @@
     list_spaces_test/1,
     list_self_spaces_test/1,
     get_space_test/1,
-    get_self_space_test/1,
+    get_own_space_test/1,
     support_space_test/1,
     update_support_size_test/1,
     revoke_support_test/1,
@@ -93,7 +93,7 @@ all() ->
         list_spaces_test,
         list_self_spaces_test,
         get_space_test,
-        get_self_space_test,
+        get_own_space_test,
         support_space_test,
         update_support_size_test,
         revoke_support_test,
@@ -423,7 +423,7 @@ get_test(Config) ->
             module = provider_logic,
             function = get_protected_data,
             args = [client, P1],
-            expected_result = ?OK_MAP(ExpProtectedDetails)
+            expected_result = ?OK_MAP_CONTAINS(ExpProtectedDetails)
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -897,7 +897,7 @@ get_eff_user_test(Config) ->
                     module = provider_logic,
                     function = get_eff_user,
                     args = [client, P1, UserId],
-                    expected_result = ?OK_MAP(ExpDetails)
+                    expected_result = ?OK_MAP_CONTAINS(ExpDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -1137,7 +1137,7 @@ get_eff_group_test(Config) ->
                     module = provider_logic,
                     function = get_eff_group,
                     args = [client, P1, GroupId],
-                    expected_result = ?OK_MAP(GroupDetails)
+                    expected_result = ?OK_MAP_CONTAINS(GroupDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -1399,7 +1399,7 @@ get_space_test(Config) ->
                     module = provider_logic,
                     function = get_space,
                     args = [client, P1, SpaceId],
-                    expected_result = ?OK_MAP(SpaceDetails)
+                    expected_result = ?OK_MAP_CONTAINS(SpaceDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -1424,7 +1424,7 @@ get_space_test(Config) ->
     ).
 
 
-get_self_space_test(Config) ->
+get_own_space_test(Config) ->
     {
         {P1, P1Macaroon}, _, Spaces
     } = create_2_providers_and_5_supported_spaces(Config),
@@ -2001,7 +2001,7 @@ update_domain_test(Config) ->
     Subdomain = <<"prov-sub">>,
     ProviderDetails = #{
         <<"name">> => ?PROVIDER_NAME1,
-        <<"adminEmail">> => <<"admin@onedata.org">>,
+        <<"adminEmail">> => <<"admin@onezone.example.com">>,
         <<"subdomain">> => Subdomain,
         <<"ipList">> => [<<"2.4.6.8">>, <<"255.253.251.2">>],
         <<"subdomainDelegation">> => true
@@ -2102,7 +2102,7 @@ update_domain_is_idempotent_test(Config) ->
     NewDomain = <<"newdomain.com">>,
     ProviderDetails = #{
         <<"name">> => ?PROVIDER_NAME1,
-        <<"adminEmail">> => <<"admin@onedata.org">>,
+        <<"adminEmail">> => <<"admin@onezone.example.com">>,
         <<"domain">> => Domain,
         <<"subdomainDelegation">> => false
     },

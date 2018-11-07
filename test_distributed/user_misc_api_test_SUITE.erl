@@ -353,7 +353,7 @@ get_test(Config) ->
             module = user_logic,
             function = get_protected_data,
             args = [client, User],
-            expected_result = ?OK_MAP(ProtectedData)
+            expected_result = ?OK_MAP_CONTAINS(ProtectedData)
         },
         gs_spec = GsSpec = #gs_spec{
             operation = get,
@@ -380,7 +380,7 @@ get_test(Config) ->
         rest_spec = undefined,
         logic_spec = LogicSpec#logic_spec{
             function = get_shared_data,
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ExpName,
                 <<"alias">> => ExpAlias
             })
@@ -1124,7 +1124,7 @@ get_eff_provider_test(Config) ->
                     module = user_logic,
                     function = get_eff_provider,
                     args = [client, U2, ProvId],
-                    expected_result = ?OK_MAP(ProvDetails)
+                    expected_result = ?OK_MAP_CONTAINS(ProvDetails)
                 }
                 % @todo gs
 

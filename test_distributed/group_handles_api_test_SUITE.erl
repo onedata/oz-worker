@@ -136,7 +136,7 @@ create_handle_test(Config) ->
     {ok, G1} = oz_test_utils:handle_service_add_group(Config, HService, G1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    AllHandlePrivs = oz_test_utils:all_handle_privileges(Config),
+    AllHandlePrivs = privileges:handle_privileges(),
 
     ExpResourceType = <<"Share">>,
     VerifyFun = fun(HandleId) ->
@@ -227,9 +227,7 @@ create_handle_test(Config) ->
                 {<<"resourceId">>, <<"">>, ?ERROR_FORBIDDEN},
                 {<<"resourceId">>, 1234, ?ERROR_FORBIDDEN},
                 {<<"metadata">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
-                {<<"metadata">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"metadata">>)}
+                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
         }
     },
@@ -264,9 +262,7 @@ create_handle_test(Config) ->
                 {<<"resourceId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceId">>)},
                 {<<"metadata">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
-                {<<"metadata">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"metadata">>)}
+                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
         }
     },

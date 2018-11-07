@@ -220,7 +220,7 @@ get_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    AllPrivs = oz_test_utils:all_group_privileges(Config),
+    AllPrivs = privileges:group_privileges(),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     % Get and check private data
@@ -313,7 +313,7 @@ get_test(Config) ->
             module = group_logic,
             function = get_shared_data,
             args = [client, G1],
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1
             })
@@ -827,7 +827,7 @@ get_eff_provider_test(Config) ->
                     module = group_logic,
                     function = get_eff_provider,
                     args = [client, G1, ProvId],
-                    expected_result = ?OK_MAP(ProvDetails)
+                    expected_result = ?OK_MAP_CONTAINS(ProvDetails)
                 }
                 % @todo gs
             },

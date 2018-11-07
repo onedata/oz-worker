@@ -548,7 +548,7 @@ create_basic_group_env(Config, Privs) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllGroupPrivs = oz_test_utils:all_group_privileges(Config),
+    AllGroupPrivs = privileges:group_privileges(),
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     oz_test_utils:group_set_user_privileges(
         Config, Group, U1, AllGroupPrivs -- Privs, Privs
@@ -576,7 +576,7 @@ create_basic_space_env(Config, Privs) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllSpacePrivs = oz_test_utils:all_space_privileges(Config),
+    AllSpacePrivs = privileges:space_privileges(),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     oz_test_utils:space_set_user_privileges(
         Config, Space, U1, [], Privs
@@ -611,7 +611,7 @@ create_basic_doi_hservice_env(Config, Privs) ->
         Config, ?USER(U1), ?DOI_SERVICE
     ),
 
-    AllHServicePrivs = oz_test_utils:all_handle_service_privileges(Config),
+    AllHServicePrivs = privileges:handle_service_privileges(),
     oz_test_utils:handle_service_set_user_privileges(
         Config, HService, U1, [], Privs
     ),
@@ -652,7 +652,7 @@ create_basic_handle_env(Config, Privs) ->
     ),
 
     HandleDetails = ?HANDLE(HService, ShareId),
-    AllHandlePrivs = oz_test_utils:all_handle_privileges(Config),
+    AllHandlePrivs = privileges:handle_privileges(),
     {ok, HandleId} = oz_test_utils:create_handle(
         Config, ?USER(U1), HandleDetails
     ),
@@ -709,7 +709,7 @@ create_eff_parent_groups_env(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllGroupPrivs = oz_test_utils:all_group_privileges(Config),
+    AllGroupPrivs = privileges:group_privileges(),
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
     oz_test_utils:group_set_user_privileges(Config, G1, U1,
         [?GROUP_VIEW], AllGroupPrivs -- [?GROUP_VIEW]
@@ -813,7 +813,7 @@ create_space_eff_users_env(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllSpacePrivs = oz_test_utils:all_space_privileges(Config),
+    AllSpacePrivs = privileges:space_privileges(),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     oz_test_utils:space_set_user_privileges(Config, S1, U1, [],
         [?SPACE_VIEW]
@@ -906,7 +906,7 @@ create_hservice_eff_users_env(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllHServicePrivileges = oz_test_utils:all_handle_service_privileges(Config),
+    AllHServicePrivileges = privileges:handle_service_privileges(),
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?USER(U1), ?DOI_SERVICE
     ),
@@ -968,7 +968,7 @@ create_handle_eff_users_env(Config) ->
     ),
 
     HandleDetails = ?HANDLE(HService, ShareId),
-    AllHandlePrivs = oz_test_utils:all_handle_privileges(Config),
+    AllHandlePrivs = privileges:handle_privileges(),
     {ok, HandleId} = oz_test_utils:create_handle(
         Config, ?USER(U1), HandleDetails
     ),

@@ -217,12 +217,14 @@ get_record_struct(5) ->
     % The 'role' type is changed to 'role_holders', the structure does not change
     get_record_struct(4);
 get_record_struct(6) ->
-    % * protected group flag is added
+    % * new field - protected group flag
+    % * new field - creation_time
+    % * new field - creator
     % * privileges are translated
     {record, [
         {name, string},
         {type, atom},
-        {protected, boolean},
+        {protected, boolean}, % New field
         {oz_privileges, [atom]},
         {eff_oz_privileges, [atom]},
 
@@ -241,6 +243,12 @@ get_record_struct(6) ->
         {eff_providers, #{string => [{atom, string}]}},
         {eff_handle_services, #{string => [{atom, string}]}},
         {eff_handles, #{string => [{atom, string}]}},
+
+        {creation_time, integer}, % New field
+        {creator, {record, [ % New field
+            {type, atom},
+            {id, string}
+        ]}},
 
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
@@ -564,6 +572,9 @@ upgrade_record(5, Group) ->
         eff_providers = EffProviders,
         eff_handle_services = EffHandleServices,
         eff_handles = EffHandles,
+
+        creation_time = time_utils:system_time_seconds(),
+        creator = undefined,
 
         top_down_dirty = TopDownDirty,
         bottom_up_dirty = BottomUpDirty

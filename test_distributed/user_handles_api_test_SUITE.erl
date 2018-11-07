@@ -144,7 +144,7 @@ create_handle_test(Config) ->
     {ok, U1} = oz_test_utils:handle_service_add_user(Config, HService, U1),
     {ok, U2} = oz_test_utils:handle_service_add_user(Config, HService, U2),
 
-    AllPrivs = oz_test_utils:all_handle_privileges(Config),
+    AllPrivs = privileges:handle_privileges(),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     ExpResourceType = <<"Share">>,
@@ -205,9 +205,7 @@ create_handle_test(Config) ->
                 {<<"resourceId">>, <<"">>, ?ERROR_FORBIDDEN},
                 {<<"resourceId">>, 1234, ?ERROR_FORBIDDEN},
                 {<<"metadata">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
-                {<<"metadata">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"metadata">>)}
+                    ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
         }
     },

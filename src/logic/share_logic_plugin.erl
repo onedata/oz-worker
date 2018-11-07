@@ -85,7 +85,7 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
+create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, client = Client}) ->
     ShareId = maps:get(<<"shareId">>, Req#el_req.data),
     Name = maps:get(<<"name">>, Req#el_req.data),
     SpaceId = maps:get(<<"spaceId">>, Req#el_req.data),
@@ -93,7 +93,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     ShareDoc = #document{key = ShareId, value = #od_share{
         name = Name,
         root_file = RootFileId,
-        public_url = share_logic:share_id_to_public_url(ShareId)
+        public_url = share_logic:share_id_to_public_url(ShareId),
+        creator = Client
     }},
     case od_share:create(ShareDoc) of
         {ok, _} ->
@@ -127,11 +128,13 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Share) ->
 get(#el_req{gri = #gri{aspect = instance, scope = public}}, Share) ->
     #od_share{
         name = Name, public_url = PublicUrl,
-        root_file = RootFileId, handle = HandleId
+        root_file = RootFileId, handle = HandleId,
+        creation_time = CreationTime, creator = Creator
     } = Share,
     {ok, #{
         <<"name">> => Name, <<"publicUrl">> => PublicUrl,
-        <<"rootFileId">> => RootFileId, <<"handleId">> => HandleId
+        <<"rootFileId">> => RootFileId, <<"handleId">> => HandleId,
+        <<"creationTime">> => CreationTime, <<"creator">> => Creator
     }}.
 
 

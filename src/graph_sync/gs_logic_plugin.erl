@@ -181,6 +181,33 @@ is_authorized(Client, AuthHint, GRI, Operation, Entity) ->
     gs_protocol:rpc_result().
 handle_rpc(_, _, <<"authorizeUser">>, Args) ->
     user_logic:authorize(Args);
+handle_rpc(_, _, <<"getSupportedIdPs">>, Data) ->
+    TestMode = maps:get(<<"testMode">>, Data, false),
+    TestMode andalso auth_test_mode:process_enable_test_mode(),
+    case oz_worker:get_env(dev_mode, false) of
+        true ->
+            % If dev mode is enabled, always return basic auth and just one
+            % dummy provider which will redirect to /dev_login page.
+            {ok, #{
+                <<"idps">> => [
+                    #{
+                        <<"id">> => <<"onepanel">>,
+                        <<"displayName">> => <<"Onepanel account">>,
+                        <<"iconPath">> => <<"/assets/images/auth-providers/onepanel.svg">>,
+                        <<"iconBackgroundColor">> => <<"#4BD187">>
+                    },
+                    #{
+                        <<"id">> => <<"devLogin">>,
+                        <<"displayName">> => <<"Developer Login">>,
+                        <<"iconPath">> => <<"/assets/images/auth-providers/default.svg">>
+                    }
+                ]}
+            };
+        _ ->
+            {ok, #{
+                <<"idps">> => auth_config:get_supported_idps()
+            }}
+    end;
 handle_rpc(_, Client, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
     case oz_worker:get_env(dev_mode) of
         {ok, true} ->
@@ -199,7 +226,8 @@ handle_rpc(_, Client, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
                     {true, UserId}
             end,
             RedirectAfterLogin = maps:get(<<"redirectUrl">>, Data, <<?AFTER_LOGIN_PAGE_PATH>>),
-            auth_logic:get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin)
+            TestMode = maps:get(<<"testMode">>, Data, false),
+            auth_logic:get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode)
     end;
 handle_rpc(_, ?USER(UserId), <<"getProviderRedirectURL">>, Args) ->
     ProviderId = maps:get(<<"providerId">>, Args),
@@ -253,13 +281,43 @@ is_subscribable(#gri{type = EntityType, aspect = Aspect, scope = Scope}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize_by_session_cookie(cowboy_req:req()) ->
-    false | {true, gs_protocol:client()} | {error, term()}.
+    false | {true, gs_protocol:client()}.
 authorize_by_session_cookie(Req) ->
-    case new_gui_session:validate(Req) of
-        {ok, UserId, Cookie, NewReq} ->
-            {true, ?USER(UserId), Cookie, NewReq};
-        {error, no_session_cookie} ->
-            false;
-        {error, invalid} ->
+    case check_ws_origin(Req) of
+        true ->
+            case new_gui_session:validate(Req) of
+                {ok, UserId, Cookie, NewReq} ->
+                    {true, ?USER(UserId), Cookie, NewReq};
+                {error, no_session_cookie} ->
+                    false;
+                {error, invalid} ->
+                    false
+            end;
+        false ->
             false
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Checks if WebSocket connection origin is within the Onezone domain (or IP).
+%% If not, the connection is declined. The check_ws_origin env can be used
+%% to disable this check.
+%% @end
+%%--------------------------------------------------------------------
+-spec check_ws_origin(cowboy_req:req()) -> boolean().
+check_ws_origin(Req) ->
+    case oz_worker:get_env(check_ws_origin, true) of
+        false ->
+            true;
+        _ ->
+            OriginHeader = cowboy_req:header(<<"origin">>, Req),
+            URL = case OriginHeader of
+                <<"wss://", Rest/binary>> -> Rest;
+                _ -> OriginHeader
+            end,
+            Host = maps:get(host, url_utils:parse(URL)),
+            {_, IP} = inet:parse_ipv4strict_address(binary_to_list(Host)),
+            (oz_worker:get_domain() == Host) or (IP == node_manager:get_ip_address())
     end.

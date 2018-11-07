@@ -76,7 +76,7 @@ add_user_test(Config) ->
     {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    AllPrivs = oz_test_utils:all_handle_privileges(Config),
+    AllPrivs = privileges:handle_privileges(),
 
     VerifyEndFun =
         fun
@@ -242,74 +242,97 @@ list_users_test(Config) ->
 
 
 get_user_test(Config) ->
-    % create handle with 2 users:
-    %   U2 gets the HANDLE_VIEW privilege
-    %   U1 gets all remaining privileges
-    {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
-        Config, ?HANDLE_VIEW
-    ),
+    {ok, Creator} = oz_test_utils:create_user(Config, #od_user{name = <<"creator">>, alias = <<"creator">>}),
+    {ok, MemberWithViewPrivs} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, MemberWithoutViewPrivs} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Member} = oz_test_utils:create_user(Config, #od_user{name = <<"member">>, alias = <<"member">>}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    ExpAlias = ExpName = ?USER_NAME1,
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{
-        name = ExpName,
-        alias = ExpAlias
-    }),
-    {ok, U3} = oz_test_utils:handle_add_user(Config, HandleId, U3),
+    oz_test_utils:user_set_oz_privileges(Config, Creator, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ], []),
+    {ok, HService} = oz_test_utils:create_handle_service(
+        Config, ?USER(Creator), ?DOI_SERVICE
+    ),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(Creator), ?SPACE_NAME1),
+    {ok, ShareId} = oz_test_utils:create_share(
+        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
+    ),
 
-    ExpUserDetails = #{
-        <<"alias">> => ExpAlias,
-        <<"name">> => ExpName
-    },
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_USERS_VIEW]},
-                {user, U2},
-                {user, U3}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, NonAdmin},
-                {user, U1}
-            ]
+    {ok, Handle} = oz_test_utils:create_handle(Config, ?USER(Creator), ?HANDLE(HService, ShareId)),
+    {ok, _} = oz_test_utils:handle_add_user(Config, Handle, MemberWithViewPrivs),
+    {ok, _} = oz_test_utils:handle_add_user(Config, Handle, MemberWithoutViewPrivs),
+    {ok, _} = oz_test_utils:handle_add_user(Config, Handle, Member),
+
+    oz_test_utils:handle_set_user_privileges(Config, Handle, MemberWithViewPrivs, [?HANDLE_VIEW], []),
+    oz_test_utils:handle_set_user_privileges(Config, Handle, MemberWithoutViewPrivs, [], [?HANDLE_VIEW]),
+
+    % Shared data about creator should be available even if he is not longer in the handle
+    oz_test_utils:handle_remove_user(Config, Handle, Creator),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    lists:foreach(fun({SubjectUser, ExpName, ExpAlias}) ->
+        ExpUserDetails = #{
+            <<"alias">> => ExpAlias,
+            <<"name">> => ExpName
         },
-        rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/handles/">>, HandleId, <<"/users/">>, U3],
-            expected_code = ?HTTP_200_OK,
-            expected_body = ExpUserDetails#{
-                <<"userId">> => U3,
-                % TODO VFS-4506 deprecated, included for backward compatibility
-                <<"login">> => ExpAlias
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_USERS_VIEW]},
+                    {user, SubjectUser},
+                    {user, MemberWithViewPrivs}
+                ] ++ case SubjectUser of
+                    % Every member of the handle should be able to see the creator details
+                    Creator -> [{user, MemberWithoutViewPrivs}];
+                    _ -> []
+                end,
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, NonAdmin}
+                ] ++ case SubjectUser of
+                    Creator -> [];
+                    _ -> [{user, MemberWithoutViewPrivs}]
+                end
+            },
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/handles/">>, Handle, <<"/users/">>, SubjectUser],
+                expected_code = ?HTTP_200_OK,
+                expected_body = ExpUserDetails#{
+                    <<"userId">> => SubjectUser,
+                    % TODO VFS-4506 deprecated, included for backward compatibility
+                    <<"login">> => ExpAlias
+                }
+            },
+            logic_spec = #logic_spec{
+                module = handle_logic,
+                function = get_user,
+                args = [client, Handle, SubjectUser],
+                expected_result = ?OK_MAP_CONTAINS(ExpUserDetails)
+            },
+            gs_spec = #gs_spec{
+                operation = get,
+                gri = #gri{
+                    type = od_user, id = SubjectUser, aspect = instance, scope = shared
+                },
+                auth_hint = ?THROUGH_HANDLE(Handle),
+                expected_result = ?OK_MAP(ExpUserDetails#{
+                    <<"gri">> => fun(EncodedGri) ->
+                        ?assertMatch(
+                            #gri{id = SubjectUser},
+                            oz_test_utils:decode_gri(Config, EncodedGri)
+                        )
+                    end,
+                    % TODO VFS-4506 deprecated, included for backward compatibility
+                    <<"login">> => ExpAlias
+                })
             }
         },
-        logic_spec = #logic_spec{
-            module = handle_logic,
-            function = get_user,
-            args = [client, HandleId, U3],
-            expected_result = ?OK_MAP(ExpUserDetails)
-        },
-        gs_spec = #gs_spec{
-            operation = get,
-            gri = #gri{
-                type = od_user, id = U3, aspect = instance, scope = shared
-            },
-            auth_hint = ?THROUGH_HANDLE(HandleId),
-            expected_result = ?OK_MAP(ExpUserDetails#{
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = UserId} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    ?assertEqual(UserId, U3)
-                end,
-                % TODO VFS-4506 deprecated, included for backward compatibility
-                <<"login">> => ExpAlias
-            })
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end, [{Creator, <<"creator">>, <<"creator">>}, {Member, <<"member">>, <<"member">>}]).
 
 
 get_user_privileges_test(Config) ->
@@ -327,7 +350,7 @@ get_user_privileges_test(Config) ->
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:handle_add_user(Config, HandleId, U3),
 
-    AllPrivs = oz_test_utils:all_handle_privileges(Config),
+    AllPrivs = privileges:handle_privileges(),
     InitialPrivs = [?HANDLE_VIEW],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
@@ -387,7 +410,7 @@ update_user_privileges_test(Config) ->
     % to get user privileges and sometimes not)
     {ok, U3} = oz_test_utils:handle_add_user(Config, HandleId, U3),
 
-    AllPrivs = oz_test_utils:all_handle_privileges(Config),
+    AllPrivs = privileges:handle_privileges(),
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:handle_set_user_privileges(
             Config, HandleId, U3, PrivsToGrant, PrivsToRevoke
@@ -522,7 +545,7 @@ get_eff_user_test(Config) ->
                     module = handle_logic,
                     function = get_eff_user,
                     args = [client, HandleId, UserId],
-                    expected_result = ?OK_MAP(UserDetails)
+                    expected_result = ?OK_MAP_CONTAINS(UserDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -532,15 +555,15 @@ get_eff_user_test(Config) ->
                     },
                     auth_hint = ?THROUGH_HANDLE(HandleId),
                     expected_result = ?OK_MAP(UserDetails#{
-                            <<"gri">> => fun(EncodedGri) ->
-                                #gri{id = Id} = oz_test_utils:decode_gri(
-                                    Config, EncodedGri
-                                ),
-                                ?assertEqual(Id, UserId)
-                            end,
-                            % TODO VFS-4506 deprecated, included for backward compatibility
-                            <<"login">> => maps:get(<<"alias">>, UserDetails)
-                        })
+                        <<"gri">> => fun(EncodedGri) ->
+                            #gri{id = Id} = oz_test_utils:decode_gri(
+                                Config, EncodedGri
+                            ),
+                            ?assertEqual(Id, UserId)
+                        end,
+                        % TODO VFS-4506 deprecated, included for backward compatibility
+                        <<"login">> => maps:get(<<"alias">>, UserDetails)
+                    })
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
@@ -597,7 +620,7 @@ get_eff_user_privileges_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    AllPrivs = oz_test_utils:all_handle_privileges(Config),
+    AllPrivs = privileges:handle_privileges(),
     InitialPrivs = [?HANDLE_VIEW],
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 

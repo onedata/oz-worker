@@ -79,7 +79,10 @@ get_response(#gri{id = undefined, aspect = list}, Groups) ->
 
 get_response(#gri{id = GroupId, aspect = instance, scope = _}, GroupData) ->
     % scope can be protected or shared
-    rest_translator:ok_body_reply(GroupData#{<<"groupId">> => GroupId});
+    #{<<"name">> := Name, <<"type">> := Type} = GroupData,
+    rest_translator:ok_body_reply(#{
+        <<"groupId">> => GroupId, <<"name">> => Name, <<"type">> => Type
+    });
 
 get_response(#gri{aspect = oz_privileges}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});

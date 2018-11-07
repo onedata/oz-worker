@@ -344,7 +344,7 @@
     enabled/1,
     coalesce_entitlements/3,
     gen_group_id/1,
-    map_entitlement/2,
+    map_entitlement/2, map_entitlements/2,
     map_privileges/1
 ]).
 
@@ -433,15 +433,44 @@ map_entitlement(IdP, RawEntitlement) ->
             _ -> ParsedEntitlementWithVo
         end,
         GroupId = gen_group_id(IdPEntitlement),
-        ?debug("Successfully mapped entitlement '~ts' to Onedata group: '~s'", [
-            RawEntitlement, GroupId
+        ?auth_debug("Successfully mapped entitlement '~ts' to Onedata group: '~s', structure:~n~ts", [
+            RawEntitlement, GroupId, io_lib_pretty:print(IdPEntitlement, fun
+                (idp_entitlement, _) -> record_info(fields, idp_entitlement);
+                (idp_group, _) -> record_info(fields, idp_group)
+            end)
         ]),
         {ok, {GroupId, IdPEntitlement}}
     catch Type:Reason ->
-        ?debug_stacktrace("Cannot parse entitlement \"~s\" for IdP '~p' due to ~p:~p", [
+        ?auth_debug_stacktrace("Cannot parse entitlement \"~s\" for IdP '~p' due to ~p:~p", [
             RawEntitlement, IdP, Type, Reason
         ]),
         {error, malformed}
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Maps a list of raw entitlements into entitlements in Onedata format.
+%% Ignores malformed entitlements.
+%% @end
+%%--------------------------------------------------------------------
+-spec map_entitlements(od_user:linked_account()) -> [{od_group:id(), idp_entitlement()}].
+map_entitlements(#linked_account{idp = IdP, entitlements = Entitlements}) ->
+    map_entitlements(IdP, Entitlements).
+
+-spec map_entitlements(auth_config:idp(), [raw_entitlement()]) ->
+    [{od_group:id(), idp_entitlement()}].
+map_entitlements(IdP, Entitlements) ->
+    case ?CFG_ENTITLEMENT_MAPPING_ENABLED(IdP) of
+        false ->
+            [];
+        true ->
+            lists:filtermap(fun(RawEntitlement) ->
+                case map_entitlement(IdP, RawEntitlement) of
+                    {ok, IdpEntitlement} -> {true, IdpEntitlement};
+                    {error, malformed} -> false
+                end
+            end, Entitlements)
     end.
 
 
@@ -458,31 +487,6 @@ map_privileges(admin) -> privileges:group_admin().
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Maps a list of raw entitlements into entitlements in Onedata format.
-%% @end
-%%--------------------------------------------------------------------
--spec map_entitlements(od_user:linked_account()) -> [idp_entitlement()].
-map_entitlements(#linked_account{idp = IdP, entitlements = Entitlements}) ->
-    map_entitlements(IdP, Entitlements).
-
--spec map_entitlements(auth_config:idp(), [raw_entitlement()]) -> [idp_entitlement()].
-map_entitlements(IdP, Entitlements) ->
-    case ?CFG_ENTITLEMENT_MAPPING_ENABLED(IdP) of
-        false ->
-            [];
-        true ->
-            lists:filtermap(fun(RawEntitlement) ->
-                case map_entitlement(IdP, RawEntitlement) of
-                    {ok, IdpEntitlement} -> {true, IdpEntitlement};
-                    {error, malformed} -> false
-                end
-            end, Entitlements)
-    end.
-
 
 %%--------------------------------------------------------------------
 %% @private
@@ -515,7 +519,8 @@ ensure_group(Path, ParentId) ->
     {ok, _} = od_group:update(GroupId, fun(Group) -> {ok, Group} end, #od_group{
         name = entity_logic:normalize_name(Name),
         type = Type,
-        protected = true
+        protected = true,
+        creator = ?ROOT
     }),
     ParentId /= undefined andalso group_logic:add_group(
         ?ROOT, ParentId, GroupId, map_privileges(Privileges)

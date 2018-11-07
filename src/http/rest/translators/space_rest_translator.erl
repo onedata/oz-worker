@@ -63,6 +63,11 @@ create_response(#gri{id = SpaceId, aspect = {user, UserId}}, _, resource, _) ->
 create_response(#gri{id = SpaceId, aspect = {group, GroupId}}, _, resource, _) ->
     rest_translator:created_reply(
         [<<"spaces">>, SpaceId, <<"groups">>, GroupId]
+    );
+
+create_response(#gri{id = SpaceId, aspect = group}, _, resource, {#gri{id = GroupId}, _}) ->
+    rest_translator:created_reply(
+        [<<"spaces">>, SpaceId, <<"groups">>, GroupId]
     ).
 
 
@@ -75,9 +80,11 @@ create_response(#gri{id = SpaceId, aspect = {group, GroupId}}, _, resource, _) -
 get_response(#gri{id = undefined, aspect = list}, Spaces) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
 
-get_response(#gri{id = SpaceId, aspect = instance, scope = _}, SpaceData) ->
-    % scope can be protected or shared
-    rest_translator:ok_body_reply(SpaceData#{<<"spaceId">> => SpaceId});
+get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData) ->
+    #{<<"name">> := Name, <<"providers">> := Providers} = SpaceData,
+    rest_translator:ok_body_reply(#{
+        <<"spaceId">> => SpaceId, <<"name">> => Name, <<"providers">> => Providers
+    });
 
 get_response(#gri{aspect = users}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});
