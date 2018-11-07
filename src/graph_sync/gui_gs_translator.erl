@@ -229,10 +229,35 @@ translate_group(#gri{id = GroupId, aspect = instance, scope = private}, Group) -
     end;
 
 translate_group(#gri{aspect = instance, scope = protected}, Group) ->
-    Group#{<<"scope">> => <<"protected">>};
+    #{
+        <<"name">> := Name,
+        <<"type">> := Type,
+        <<"creator">> := Creator,
+        <<"creationTime">> := CreationTime
+    } = Group,
+    #{
+        <<"name">> => Name,
+        <<"type">> => Type,
+        <<"info">> => maps:merge(translate_creator(Creator), #{
+            <<"creationTime">> => CreationTime
+        }),
+        <<"scope">> => <<"protected">>
+    };
 
 translate_group(#gri{aspect = instance, scope = shared}, Group) ->
-    Group#{<<"scope">> => <<"shared">>};
+    #{
+        <<"name">> := Name,
+        <<"type">> := Type,
+        <<"creationTime">> := CreationTime
+    } = Group,
+    #{
+        <<"name">> => Name,
+        <<"type">> => Type,
+        <<"info">> =>  #{
+            <<"creationTime">> => CreationTime
+        },
+        <<"scope">> => <<"shared">>
+    };
 
 translate_group(#gri{aspect = parents}, Parents) ->
     #{

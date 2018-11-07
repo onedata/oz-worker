@@ -276,8 +276,7 @@ get(#el_req{gri = #gri{aspect = list}}, _) ->
 
 get(#el_req{gri = #gri{aspect = instance, scope = private}}, Group) ->
     {ok, Group};
-% Shared and protected data is (currently) the same
-get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Group) ->
+get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Group) ->
     #od_group{
         name = Name, type = Type, creation_time = CreationTime, creator = Creator
     } = Group,
@@ -287,7 +286,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Group) ->
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
     }};
-get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Group) ->
+get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Group) ->
     #od_group{name = Name, type = Type, creation_time = CreationTime} = Group,
     {ok, #{
         <<"name">> => Name,
