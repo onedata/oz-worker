@@ -48,13 +48,15 @@
 
     list_eff_users_test/1,
     get_eff_user_test/1,
+    get_eff_user_membership_intermediaries/1,
     list_eff_groups_test/1,
     get_eff_group_test/1,
+    get_eff_group_membership_intermediaries/1,
 
     list_spaces_test/1,
     list_self_spaces_test/1,
     get_space_test/1,
-    get_self_space_test/1,
+    get_own_space_test/1,
     support_space_test/1,
     update_support_size_test/1,
     revoke_support_test/1,
@@ -83,13 +85,15 @@ all() ->
 
         list_eff_users_test,
         get_eff_user_test,
+        get_eff_user_membership_intermediaries,
         list_eff_groups_test,
         get_eff_group_test,
+        get_eff_group_membership_intermediaries,
 
         list_spaces_test,
         list_self_spaces_test,
         get_space_test,
-        get_self_space_test,
+        get_own_space_test,
         support_space_test,
         update_support_size_test,
         revoke_support_test,
@@ -323,10 +327,6 @@ get_test(Config) ->
 
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST
-    ]),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     SupportSize = oz_test_utils:minimum_support_size(Config),
@@ -344,7 +344,7 @@ get_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
-                {user, Admin},
+                {admin, [?OZ_PROVIDERS_VIEW]},
                 {user, NonAdmin},
                 {provider, P2, P2Macaroon}
             ]
@@ -404,7 +404,7 @@ get_test(Config) ->
             correct = [
                 root,
                 {user, U1},
-                {user, Admin},
+                {admin, [?OZ_PROVIDERS_VIEW]},
                 {provider, P2, P2Macaroon}
             ],
             unauthorized = [nobody],
@@ -423,7 +423,7 @@ get_test(Config) ->
             module = provider_logic,
             function = get_protected_data,
             args = [client, P1],
-            expected_result = ?OK_MAP(ExpProtectedDetails)
+            expected_result = ?OK_MAP_CONTAINS(ExpProtectedDetails)
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -500,16 +500,12 @@ list_test(Config) ->
 
     % Create two users, grant one of them the privilege to list providers.
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST
-    ]),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_PROVIDERS_LIST]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -625,18 +621,22 @@ update_test(Config) ->
     )),
 
     % Check that clients can't make request on behalf of other client
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_PROVIDERS_LIST
-    ]),
+    ], []),
+
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
     ApiTestSpec2 = #api_test_spec{
         client_spec = ClientSpec#client_spec{
+            correct = [
+                {admin, [?OZ_PROVIDERS_UPDATE]}
+            ],
             unauthorized = [nobody],
             forbidden = [
-                {user, Admin},
+                {user, U1},
                 {provider, P2, P2Macaroon}
             ]
         },
@@ -663,10 +663,6 @@ delete_test(Config) ->
         Config, ?PROVIDER_NAME2
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_DELETE
-    ]),
 
     EnvSetUpFun = fun() ->
         {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
@@ -686,7 +682,7 @@ delete_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_PROVIDERS_DELETE]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -758,7 +754,7 @@ delete_self_test(Config) ->
 
 create_provider_registration_token_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [?OZ_PROVIDERS_INVITE]),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_PROVIDERS_INVITE], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -768,6 +764,7 @@ create_provider_registration_token_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_PROVIDERS_INVITE]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -801,10 +798,6 @@ list_eff_users_test(Config) ->
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_USERS
-    ]),
 
     [{U3, _}, {U4, _}, {U5, _}, {U6, _}] = Users,
     ExpUsers = [U1, U2, U3, U4, U5, U6],
@@ -813,7 +806,7 @@ list_eff_users_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {admin, [?OZ_PROVIDERS_LIST_RELATIONSHIPS]},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
@@ -865,11 +858,6 @@ get_eff_user_test(Config) ->
         Config, P2, S1, oz_test_utils:minimum_support_size(Config)
     ),
 
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_USERS
-    ]),
-
     lists:foreach(
         fun({UserId, UserDetails}) ->
             ExpDetails = UserDetails#{
@@ -881,7 +869,7 @@ get_eff_user_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, Admin},
+                        {admin, [?OZ_USERS_VIEW]},
                         {provider, P1, P1Macaroon}
                     ],
                     unauthorized = [nobody],
@@ -909,7 +897,7 @@ get_eff_user_test(Config) ->
                     module = provider_logic,
                     function = get_eff_user,
                     args = [client, P1, UserId],
-                    expected_result = ?OK_MAP(ExpDetails)
+                    expected_result = ?OK_MAP_CONTAINS(ExpDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -937,6 +925,113 @@ get_eff_user_test(Config) ->
     ).
 
 
+get_eff_user_membership_intermediaries(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%          Provider1    Provider2    Provider3
+    %%            |     \    /       \    /
+    %%       Space1      Space2     Space3
+    %%      /  |  \     /   |  \     /
+    %%  User2  |   \   /    |   \   /
+    %%          \   Group2  |   Group3
+    %%           \   /      |   /  |
+    %%            \ /       |  /   |
+    %%            Group1----|-'    |
+    %%                \     |     /
+    %%                 \    |    /
+    %%                  \   |   /
+    %%                    User1
+    %%      <<user>>
+    %%      NonAdmin
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+    {ok, G3} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+
+    {ok, {P1, P1Auth}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P2, P2Auth}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P3, P3Auth}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+
+    oz_test_utils:space_add_user(Config, S1, U2),
+
+    oz_test_utils:group_add_group(Config, G2, G1),
+    oz_test_utils:group_add_group(Config, G3, G1),
+
+    oz_test_utils:space_add_group(Config, S1, G1),
+    oz_test_utils:space_add_group(Config, S1, G2),
+    oz_test_utils:space_add_group(Config, S2, G2),
+    oz_test_utils:space_add_group(Config, S2, G3),
+    oz_test_utils:space_add_group(Config, S3, G3),
+
+    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space(Config, P1, S2),
+    oz_test_utils:support_space(Config, P2, S2),
+    oz_test_utils:support_space(Config, P2, S3),
+    oz_test_utils:support_space(Config, P3, S3),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    % {ProviderId, SubjectUser, CorrectClients, ExpIntermediariesRaw}
+    ExpectedMembershipIntermediaries = [
+        {P1, U1, [{provider, P1, P1Auth}, {user, U1}], ordsets:from_list([
+            {od_space, S1},
+            {od_space, S2}
+        ])},
+        {P1, U2, [{provider, P1, P1Auth}, {user, U2}], ordsets:from_list([
+            {od_space, S1}
+        ])},
+
+        {P2, U1, [{provider, P2, P2Auth}, {user, U1}], ordsets:from_list([
+            {od_space, S2},
+            {od_space, S3}
+        ])},
+
+        {P3, U1, [{provider, P3, P3Auth}, {user, U1}], ordsets:from_list([
+            {od_space, S3}
+        ])}
+    ],
+
+    lists:foreach(fun({ProviderId, SubjectUser, CorrectClients, ExpIntermediariesRaw}) ->
+        ExpIntermediaries = lists:map(fun({Type, Id}) ->
+            #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+        end, ExpIntermediariesRaw),
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_PROVIDERS_VIEW]}
+                ] ++ CorrectClients,
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, NonAdmin}, {user, U1}, {user, U2},
+                    {provider, P1, P1Auth}, {provider, P2, P2Auth}, {provider, P3, P3Auth}
+                ] -- CorrectClients
+            },
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/providers/">>, ProviderId, <<"/effective_users/">>, SubjectUser, <<"/membership">>],
+                expected_code = ?HTTP_200_OK,
+                expected_body = #{<<"intermediaries">> => ExpIntermediaries}
+            },
+            logic_spec = #logic_spec{
+                module = provider_logic,
+                function = get_eff_user_membership_intermediaries,
+                args = [client, ProviderId, SubjectUser],
+                expected_result = ?OK_LIST(ExpIntermediariesRaw)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end, ExpectedMembershipIntermediaries).
+
+
 list_eff_groups_test(Config) ->
     {
         {P1, P1Macaroon}, _S1, Groups, _Users, {U1, U2, NonAdmin}
@@ -945,10 +1040,6 @@ list_eff_groups_test(Config) ->
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_GROUPS
-    ]),
 
     [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}, {G6, _}] = Groups,
     ExpGroups = [G1, G2, G3, G4, G5, G6],
@@ -957,7 +1048,7 @@ list_eff_groups_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {admin, [?OZ_PROVIDERS_LIST_RELATIONSHIPS]},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
@@ -1009,11 +1100,6 @@ get_eff_group_test(Config) ->
         Config, P2, S1, oz_test_utils:minimum_support_size(Config)
     ),
 
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_GROUPS
-    ]),
-
     lists:foreach(
         fun({GroupId, GroupDetails}) ->
             GroupDetailsBinary = GroupDetails#{
@@ -1026,7 +1112,7 @@ get_eff_group_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, Admin},
+                        {admin, [?OZ_GROUPS_VIEW]},
                         {provider, P1, P1Macaroon}
                     ],
                     unauthorized = [nobody],
@@ -1051,7 +1137,7 @@ get_eff_group_test(Config) ->
                     module = provider_logic,
                     function = get_eff_group,
                     args = [client, P1, GroupId],
-                    expected_result = ?OK_MAP(GroupDetails)
+                    expected_result = ?OK_MAP_CONTAINS(GroupDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -1076,6 +1162,149 @@ get_eff_group_test(Config) ->
     ).
 
 
+get_eff_group_membership_intermediaries(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%          Provider1    Provider2    Provider3
+    %%            |     \    /       \    /     \
+    %%       Space1      Space2     Space3     Space4
+    %%      /  |  \     /   |  \     /            \
+    %%  User2  |   \   /    |   \   /            Group4
+    %%          \   Group2  |   Group3              \
+    %%           \   /      |   /  |               User2
+    %%            \ /       |  /   |        (the same as in Space1)
+    %%            Group1----|-'    |
+    %%                \     |     /
+    %%                 \    |    /
+    %%                  \   |   /
+    %%                  UserGroup
+    %%                      |
+    %%                    User1
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, UserGroup} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+    {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+    {ok, G3} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+    {ok, G4} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S4} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+
+    {ok, {P1, P1Auth}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P2, P2Auth}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P3, P3Auth}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+
+    oz_test_utils:group_add_user(Config, G4, U2),
+    oz_test_utils:space_add_user(Config, S1, U2),
+
+    oz_test_utils:group_add_group(Config, G1, UserGroup),
+    oz_test_utils:group_add_group(Config, G2, G1),
+    oz_test_utils:group_add_group(Config, G3, G1),
+    oz_test_utils:group_add_group(Config, G3, UserGroup),
+
+    oz_test_utils:space_add_group(Config, S1, G1),
+    oz_test_utils:space_add_group(Config, S1, G2),
+    oz_test_utils:space_add_group(Config, S2, UserGroup),
+    oz_test_utils:space_add_group(Config, S2, G2),
+    oz_test_utils:space_add_group(Config, S2, G3),
+    oz_test_utils:space_add_group(Config, S3, G3),
+    oz_test_utils:space_add_group(Config, S4, G4),
+
+    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space(Config, P1, S2),
+    oz_test_utils:support_space(Config, P2, S2),
+    oz_test_utils:support_space(Config, P2, S3),
+    oz_test_utils:support_space(Config, P3, S3),
+    oz_test_utils:support_space(Config, P3, S4),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    ExpectedMembershipIntermediaries = [
+        {P1, UserGroup, [{provider, P1, P1Auth}, {user, U1}], ordsets:from_list([
+            {od_space, S1},
+            {od_space, S2}
+        ])},
+        {P1, G1, [{provider, P1, P1Auth}, {user, U1}], ordsets:from_list([
+            {od_space, S1},
+            {od_space, S2}
+        ])},
+        {P1, G2, [{provider, P1, P1Auth}, {user, U1}], ordsets:from_list([
+            {od_space, S1},
+            {od_space, S2}
+        ])},
+        {P1, G3, [{provider, P1, P1Auth}, {user, U1}], ordsets:from_list([
+            {od_space, S2}
+        ])},
+
+        {P2, UserGroup, [{provider, P2, P2Auth}, {user, U1}], ordsets:from_list([
+            {od_space, S2},
+            {od_space, S3}
+        ])},
+        {P2, G1, [{provider, P2, P2Auth}, {user, U1}], ordsets:from_list([
+            {od_space, S2},
+            {od_space, S3}
+        ])},
+        {P2, G2, [{provider, P2, P2Auth}, {user, U1}], ordsets:from_list([
+            {od_space, S2}
+        ])},
+        {P2, G3, [{provider, P2, P2Auth}, {user, U1}], ordsets:from_list([
+            {od_space, S2},
+            {od_space, S3}
+        ])},
+
+        {P3, UserGroup, [{provider, P3, P3Auth}, {user, U1}], ordsets:from_list([
+            {od_space, S3}
+        ])},
+        {P3, G3, [{provider, P3, P3Auth}, {user, U1}], ordsets:from_list([
+            {od_space, S3}
+        ])},
+        {P3, G4, [{provider, P3, P3Auth}, {user, U2}], ordsets:from_list([
+            {od_space, S4}
+        ])}
+    ],
+
+    lists:foreach(fun({ProviderId, SubjectGroup, CorrectClients, ExpIntermediariesRaw}) ->
+        ExpIntermediaries = lists:map(fun({Type, Id}) ->
+            #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+        end, ExpIntermediariesRaw),
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_PROVIDERS_VIEW]}
+                ] ++ CorrectClients,
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, NonAdmin}, {user, U1}, {user, U2},
+                    {provider, P1, P1Auth}, {provider, P2, P2Auth}, {provider, P3, P3Auth}
+                ] -- CorrectClients
+            },
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/providers/">>, ProviderId, <<"/effective_groups/">>, SubjectGroup, <<"/membership">>],
+                expected_code = ?HTTP_200_OK,
+                expected_body = #{<<"intermediaries">> => ExpIntermediaries}
+            },
+            logic_spec = #logic_spec{
+                module = provider_logic,
+                function = get_eff_group_membership_intermediaries,
+                args = [client, ProviderId, SubjectGroup],
+                expected_result = ?OK_LIST(ExpIntermediariesRaw)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end, ExpectedMembershipIntermediaries).
+
+
 list_spaces_test(Config) ->
     {
         {P1, P1Macaroon}, {P2, P2Macaroon},
@@ -1083,17 +1312,13 @@ list_spaces_test(Config) ->
     } = create_2_providers_and_5_supported_spaces(Config),
 
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_SPACES
-    ]),
 
     ExpSpaces = [S1, S2, S3, S4, S5],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {admin, [?OZ_PROVIDERS_LIST_RELATIONSHIPS]},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
@@ -1147,10 +1372,6 @@ get_space_test(Config) ->
     } = create_2_providers_and_5_supported_spaces(Config),
 
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_SPACES
-    ]),
 
     lists:foreach(
         fun({SpaceId, SpaceDetails}) ->
@@ -1158,7 +1379,7 @@ get_space_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, Admin},
+                        {admin, [?OZ_SPACES_VIEW]},
                         {provider, P1, P1Macaroon}
                     ],
                     unauthorized = [nobody],
@@ -1178,7 +1399,7 @@ get_space_test(Config) ->
                     module = provider_logic,
                     function = get_space,
                     args = [client, P1, SpaceId],
-                    expected_result = ?OK_MAP(SpaceDetails)
+                    expected_result = ?OK_MAP_CONTAINS(SpaceDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -1203,7 +1424,7 @@ get_space_test(Config) ->
     ).
 
 
-get_self_space_test(Config) ->
+get_own_space_test(Config) ->
     {
         {P1, P1Macaroon}, _, Spaces
     } = create_2_providers_and_5_supported_spaces(Config),
@@ -1949,13 +2170,7 @@ get_domain_config_test(Config) ->
         Config, ?PROVIDER_DETAILS(?PROVIDER_NAME2, ?UNIQUE_DOMAIN)#{<<"subdomainDelegation">> => false}
     ),
 
-    % Create two users, grant one of them the privilege to list providers.
-    % They still shouldn't be able to read domain aspect
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST
-    ]),
 
     ExpBody = #{
         <<"subdomainDelegation">> => false,
@@ -1969,7 +2184,7 @@ get_domain_config_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, Admin},
+                {admin, [?OZ_PROVIDERS_VIEW]},
                 {user, NonAdmin},
                 {provider, P2, P2Macaroon}
             ]

@@ -199,7 +199,7 @@ reconcile_dns_config() ->
 %%--------------------------------------------------------------------
 -spec get_dns_dedicated_node() -> node().
 get_dns_dedicated_node() ->
-    consistent_hasing:get_node(build_dns_zone).
+    consistent_hashing:get_node(build_dns_zone).
 
 
 %%--------------------------------------------------------------------

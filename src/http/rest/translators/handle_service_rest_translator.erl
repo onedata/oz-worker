@@ -61,7 +61,17 @@ get_response(#gri{id = undefined, aspect = list}, HServices) ->
     rest_translator:ok_body_reply(#{<<"handle_services">> => HServices});
 
 get_response(#gri{id = HServiceId, aspect = instance, scope = protected}, HServiceData) ->
-    rest_translator:ok_body_reply(HServiceData#{<<"handleServiceId">> => HServiceId});
+    #{
+        <<"name">> := Name,
+        <<"proxyEndpoint">> := Proxy,
+        <<"serviceProperties">> := ServiceProps
+    } = HServiceData,
+    rest_translator:ok_body_reply(#{
+        <<"handleServiceId">> => HServiceId,
+        <<"name">> => Name,
+        <<"proxyEndpoint">> => Proxy,
+        <<"serviceProperties">> => ServiceProps
+    });
 
 get_response(#gri{aspect = users}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});

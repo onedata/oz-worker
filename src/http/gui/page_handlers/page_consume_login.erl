@@ -15,7 +15,6 @@
 
 -behaviour(dynamic_page_behaviour).
 
--include("entity_logic.hrl").
 -include("http/gui_paths.hrl").
 -include("registered_names.hrl").
 -include("auth/auth_errors.hrl").
@@ -44,16 +43,16 @@ handle(Method, Req) ->
         false ->
             {NewReq, RedirectURL} = case ValidateResult of
                 {ok, UserId, RedirectAfterLogin} ->
-                    Req2 = oz_gui_session:log_in(UserId, Req),
+                    Req2 = new_gui_session:log_in(UserId, Req),
                     {Req2, RedirectAfterLogin};
                 {auth_error, Error, State, RedirectAfterLogin} ->
-                    Req2 = new_gui:set_cookie(
-                        <<"authentication_error_reason">>, format_error_reason(Error),
-                        #{path => <<"/">>}, Req
+                    Req2 = cowboy_req:set_resp_cookie(
+                        <<"authentication_error_reason">>, format_error_reason(Error), Req,
+                        #{path => <<"/">>}
                     ),
-                    Req3 = new_gui:set_cookie(
-                        <<"authentication_error_state">>, State,
-                        #{path => <<"/">>}, Req2
+                    Req3 = cowboy_req:set_resp_cookie(
+                        <<"authentication_error_state">>, State, Req2,
+                        #{path => <<"/">>}
                     ),
                     {Req3, RedirectAfterLogin}
             end,

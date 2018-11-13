@@ -136,7 +136,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    3.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -163,6 +163,22 @@ get_record_struct(2) ->
         {space, string},
         {handle, string},
         {root_file, string}
+    ]};
+get_record_struct(3) ->
+    % * new field - creation_time
+    % * new field - creator
+    {record, [
+        {name, string},
+        {public_url, string},
+        {space, string},
+        {handle, string},
+        {root_file, string},
+
+        {creation_time, integer}, % New field
+        {creator, {record, [ % New field
+            {type, atom},
+            {id, string}
+        ]}}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -186,10 +202,29 @@ upgrade_record(1, Share) ->
 
         _BottomUpDirty
     } = Share,
-    {2, #od_share{
+    {2, {od_share,
+        Name,
+        PublicUrl,
+        SpaceId,
+        HandleId,
+        RootFileId
+    }};
+upgrade_record(2, Share) ->
+    {
+        od_share,
+        Name,
+        PublicUrl,
+        SpaceId,
+        HandleId,
+        RootFileId
+    } = Share,
+    {3, #od_share{
         name = Name,
         public_url = PublicUrl,
         space = SpaceId,
         handle = HandleId,
-        root_file = RootFileId
+        root_file = RootFileId,
+
+        creation_time = time_utils:system_time_seconds(),
+        creator = undefined
     }}.

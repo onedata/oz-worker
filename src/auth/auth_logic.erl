@@ -39,7 +39,7 @@
 %% API
 -export([get_login_endpoint/4, validate_login/2]).
 -export([authorize_by_external_access_token/1]).
--export([authorize_by_macaroons/2]).
+-export([authorize_by_macaroons/1, authorize_by_macaroons/2]).
 -export([authorize_by_basic_auth/1]).
 
 %%%===================================================================
@@ -128,9 +128,9 @@ validate_login(Method, Req) ->
 %% {error, term()} - authorization invalid
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_external_access_token(access_token()) ->
+-spec authorize_by_external_access_token(AccessToken :: binary() | cowboy_req:req()) ->
     {true, entity_logic:client()} | false | {error, term()}.
-authorize_by_external_access_token(AccessToken) ->
+authorize_by_external_access_token(AccessToken) when is_binary(AccessToken) ->
     case openid_protocol:authorize_by_external_access_token(AccessToken) of
         false ->
             false;
@@ -140,6 +140,28 @@ authorize_by_external_access_token(AccessToken) ->
             LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
             {ok, #document{key = UserId}} = acquire_user_by_linked_account(LinkedAccount),
             {true, ?USER(UserId)}
+    end;
+authorize_by_external_access_token(Req) ->
+    case cowboy_req:header(<<"x-auth-token">>, Req) of
+        undefined -> false;
+        AccessToken -> authorize_by_external_access_token(AccessToken)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Tries to a authorize a client by macaroons.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_macaroons(Req :: cowboy_req:req()) ->
+    false | {true, #client{}} | {error, term()}.
+authorize_by_macaroons(Req) ->
+    case parse_macaroons_from_headers(Req) of
+        {undefined, _} ->
+            false;
+        {Macaroon, DischargeMacaroons} ->
+            authorize_by_macaroons(Macaroon, DischargeMacaroons)
     end.
 
 
@@ -192,19 +214,25 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
 %% Tries to a authorize a client by basic auth credentials.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_basic_auth(UserPasswdB64 :: binary()) ->
-    {true, entity_logic:client()} | {error, bad_basic_credentials}.
-authorize_by_basic_auth(UserPasswdB64) ->
+-spec authorize_by_basic_auth(UserPasswdB64 :: binary() | cowboy_req:req()) ->
+    {true, #client{}} | {error, term()}.
+authorize_by_basic_auth(UserPasswdB64) when is_binary(UserPasswdB64) ->
     UserPasswd = base64:decode(UserPasswdB64),
     [User, Passwd] = binary:split(UserPasswd, <<":">>),
     case user_logic:authenticate_by_basic_credentials(User, Passwd) of
         {ok, #document{key = UserId}} ->
-            Client = #client{type = user, id = UserId},
-            {true, Client};
+            {true, ?USER(UserId)};
         {error, onepanel_auth_disabled} ->
             ?ERROR_NOT_SUPPORTED;
         _ ->
             ?ERROR_BAD_BASIC_CREDENTIALS
+    end;
+authorize_by_basic_auth(Req) ->
+    case cowboy_req:header(<<"authorization">>, Req) of
+        <<"Basic ", UserPasswdB64/binary>> ->
+            authorize_by_basic_auth(UserPasswdB64);
+        _ ->
+            false
     end.
 
 
@@ -354,6 +382,31 @@ acquire_user_by_linked_account(LinkedAccount) ->
         {error, not_found} ->
             user_logic:create_user_by_linked_account(LinkedAccount)
     end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Parses macaroon and discharge macaroons out of request's headers.
+%% @end
+%%--------------------------------------------------------------------
+-spec parse_macaroons_from_headers(cowboy_req:req()) ->
+    {Macaroon :: binary() | undefined, DischargeMacaroons :: [binary()]} |
+    no_return().
+parse_macaroons_from_headers(Req) ->
+    MacaroonHeader = cowboy_req:header(<<"macaroon">>, Req),
+    XAuthTokenHeader = cowboy_req:header(<<"x-auth-token">>, Req),
+    % X-Auth-Token is an alias for macaroon header, check if any of them is given.
+    SerializedMacaroon = case is_binary(MacaroonHeader) of
+        true -> MacaroonHeader;
+        false -> XAuthTokenHeader % binary or undefined
+    end,
+    DischargeMacaroons = case cowboy_req:header(<<"discharge-macaroons">>, Req) of
+        undefined -> [];
+        <<"">> -> [];
+        SerializedDischarges -> binary:split(SerializedDischarges, <<" ">>, [global])
+    end,
+    {SerializedMacaroon, DischargeMacaroons}.
 
 
 %%--------------------------------------------------------------------

@@ -35,7 +35,9 @@
 ]).
 -export([
     get_eff_users/2, get_eff_user/3,
+    get_eff_user_membership_intermediaries/3,
     get_eff_groups/2, get_eff_group/3,
+    get_eff_group_membership_intermediaries/3,
     get_spaces/2, get_space/3,
     support_space/4, support_space/3,
     update_support_size/4,
@@ -385,6 +387,23 @@ get_eff_user(Client, ProviderId, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves the membership intermediaries of specific effective user
+%% among effective users of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_user_membership_intermediaries(Client :: entity_logic:client(),
+    ProviderId :: od_provider:id(), UserId :: od_user:id()) ->
+    {ok, entity_graph:intermediaries()} | {error, term()}.
+get_eff_user_membership_intermediaries(Client, ProviderId, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {eff_user_membership, UserId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Retrieves the list of effective groups of given provider.
 %% @end
 %%--------------------------------------------------------------------
@@ -412,6 +431,23 @@ get_eff_group(Client, ProviderId, GroupId) ->
         client = Client,
         gri = #gri{type = od_group, id = GroupId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_PROVIDER(ProviderId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the membership intermediaries of specific effective group
+%% among effective groups of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_group_membership_intermediaries(Client :: entity_logic:client(),
+    ProviderId :: od_provider:id(), GroupId :: od_group:id()) ->
+    {ok, entity_graph:intermediaries()} | {error, term()}.
+get_eff_group_membership_intermediaries(Client, ProviderId, GroupId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {eff_group_membership, GroupId}}
     }).
 
 

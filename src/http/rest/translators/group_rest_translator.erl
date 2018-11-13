@@ -37,12 +37,17 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#g
         ?AS_USER(_UserId) ->
             [<<"user">>, <<"groups">>, GroupId];
         ?AS_GROUP(ChildGroupId) ->
-            [<<"groups">>, ChildGroupId, <<"parents">>, GroupId]
+            [<<"groups">>, ChildGroupId, <<"parents">>, GroupId];
+        _ ->
+            [<<"groups">>, GroupId]
     end,
     rest_translator:created_reply(LocationTokens);
 
 create_response(#gri{aspect = join} = Gri, AuthHint, resource, Result) ->
     create_response(Gri#gri{aspect = instance}, AuthHint, resource, Result);
+
+create_response(#gri{id = ParentGroupId, aspect = child}, _, resource, {#gri{id = GroupId}, _}) ->
+    rest_translator:created_reply([<<"groups">>, ParentGroupId, <<"children">>, GroupId]);
 
 create_response(#gri{aspect = invite_user_token}, _, value, Macaroon) ->
     {ok, Token} = onedata_macaroons:serialize(Macaroon),
@@ -74,13 +79,37 @@ get_response(#gri{id = undefined, aspect = list}, Groups) ->
 
 get_response(#gri{id = GroupId, aspect = instance, scope = _}, GroupData) ->
     % scope can be protected or shared
-    rest_translator:ok_body_reply(GroupData#{<<"groupId">> => GroupId});
+    #{<<"name">> := Name, <<"type">> := Type} = GroupData,
+    rest_translator:ok_body_reply(#{
+        <<"groupId">> => GroupId, <<"name">> => Name, <<"type">> => Type
+    });
 
 get_response(#gri{aspect = oz_privileges}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
 get_response(#gri{aspect = eff_oz_privileges}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
+
+get_response(#gri{aspect = parents}, Parents) ->
+    rest_translator:ok_body_reply(#{<<"groups">> => Parents});
+
+get_response(#gri{aspect = eff_parents}, Parents) ->
+    rest_translator:ok_body_reply(#{<<"groups">> => Parents});
+
+get_response(#gri{aspect = children}, Children) ->
+    rest_translator:ok_body_reply(#{<<"groups">> => Children});
+
+get_response(#gri{aspect = eff_children}, Children) ->
+    rest_translator:ok_body_reply(#{<<"groups">> => Children});
+
+get_response(#gri{aspect = {child_privileges, _ChildId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
+
+get_response(#gri{aspect = {eff_child_privileges, _ChildId}}, Privileges) ->
+    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
+
+get_response(#gri{aspect = {eff_child_membership, _ChildId}}, Intermediaries) ->
+    rest_translator:ok_encoded_intermediaries_reply(Intermediaries);
 
 get_response(#gri{aspect = users}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});
@@ -94,24 +123,8 @@ get_response(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
 get_response(#gri{aspect = {eff_user_privileges, _UserId}}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
-get_response(#gri{aspect = parents}, Parents) ->
-    rest_translator:ok_body_reply(#{<<"groups">> => Parents});
-
-get_response(#gri{aspect = eff_parents}, Parents) ->
-    rest_translator:ok_body_reply(#{<<"groups">> => Parents});
-
-
-get_response(#gri{aspect = children}, Children) ->
-    rest_translator:ok_body_reply(#{<<"groups">> => Children});
-
-get_response(#gri{aspect = eff_children}, Children) ->
-    rest_translator:ok_body_reply(#{<<"groups">> => Children});
-
-get_response(#gri{aspect = {child_privileges, _ChildId}}, Privileges) ->
-    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
-
-get_response(#gri{aspect = {eff_child_privileges, _ChildId}}, Privileges) ->
-    rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
+get_response(#gri{aspect = {eff_user_membership, _UserId}}, Intermediaries) ->
+    rest_translator:ok_encoded_intermediaries_reply(Intermediaries);
 
 get_response(#gri{aspect = spaces}, Spaces) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});

@@ -70,13 +70,35 @@ get_response(#gri{id = undefined, aspect = list}, Providers) ->
     rest_translator:ok_body_reply(#{<<"providers">> => Providers});
 
 get_response(#gri{id = ProviderId, aspect = instance, scope = protected}, ProviderData) ->
-    rest_translator:ok_body_reply(ProviderData#{<<"providerId">> => ProviderId});
+    #{
+        <<"name">> := Name, <<"domain">> := Domain,
+        <<"latitude">> := Latitude, <<"longitude">> := Longitude,
+        <<"online">> := Online
+    } = ProviderData,
+    rest_translator:ok_body_reply(#{
+        <<"providerId">> => ProviderId,
+        <<"name">> => Name, <<"domain">> => Domain,
+        <<"latitude">> => Latitude, <<"longitude">> => Longitude,
+        <<"online">> => Online
+    });
+
+get_response(#gri{aspect = {user_spaces, _}}, SpaceIds) ->
+    rest_translator:ok_body_reply(#{<<"spaces">> => SpaceIds});
+
+get_response(#gri{aspect = {group_spaces, _}}, SpaceIds) ->
+    rest_translator:ok_body_reply(#{<<"spaces">> => SpaceIds});
 
 get_response(#gri{aspect = eff_users}, UserIds) ->
     rest_translator:ok_body_reply(#{<<"users">> => UserIds});
 
+get_response(#gri{aspect = {eff_user_membership, _UserId}}, Intermediaries) ->
+    rest_translator:ok_encoded_intermediaries_reply(Intermediaries);
+
 get_response(#gri{aspect = eff_groups}, GroupIds) ->
     rest_translator:ok_body_reply(#{<<"groups">> => GroupIds});
+
+get_response(#gri{aspect = {eff_group_membership, _GroupId}}, Intermediaries) ->
+    rest_translator:ok_encoded_intermediaries_reply(Intermediaries);
 
 get_response(#gri{aspect = spaces}, SpaceIds) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => SpaceIds});

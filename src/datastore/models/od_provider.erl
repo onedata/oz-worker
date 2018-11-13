@@ -136,7 +136,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    4.
+    5.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -190,7 +190,30 @@ get_record_struct(3) ->
 get_record_struct(4) ->
     % There are no changes, but all records must be marked dirty to recalculate
     % effective relations (as intermediaries computing logic has changed).
-    get_record_struct(3).
+    get_record_struct(3);
+get_record_struct(5) ->
+    % * new field - creation_time
+    {record, [
+        {name, string},
+        {admin_email, string},
+        {root_macaroon, string},
+
+        {subdomain_delegation, boolean},
+        {domain, string},
+        {subdomain, string},
+
+        {latitude, float},
+        {longitude, float},
+
+        {spaces, #{string => integer}},
+
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+
+        {creation_time, integer}, % New field
+
+        {bottom_up_dirty, boolean}
+    ]}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -251,13 +274,88 @@ upgrade_record(2, Provider) ->
         BottomUpDirty
     } = Provider,
     #{host := Domain} = url_utils:parse(RedirectionPoint),
-    {3, #od_provider{
+    {3, {od_provider,
+        Name,
+        undefined,
+        undefined,
+        false,
+        Domain,
+        undefined,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+
+        BottomUpDirty
+    }};
+upgrade_record(3, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        _EffUsers,
+        _EffGroups,
+
+        _BottomUpDirty
+    } = Provider,
+
+    {4, {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        #{},
+        #{},
+
+        true
+    }};
+upgrade_record(4, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+
+        BottomUpDirty
+    } = Provider,
+    {5, #od_provider{
         name = Name,
-        admin_email = undefined,
-        root_macaroon = undefined,
-        subdomain_delegation = false,
-        subdomain = undefined,
+        admin_email = AdminEmail,
+        root_macaroon = RootMacaroon,
+        subdomain_delegation = SubdomainDelegation,
         domain = Domain,
+        subdomain = Subdomain,
 
         latitude = Latitude,
         longitude = Longitude,
@@ -267,12 +365,8 @@ upgrade_record(2, Provider) ->
         eff_users = EffUsers,
         eff_groups = EffGroups,
 
-        bottom_up_dirty = BottomUpDirty
-    }};
-upgrade_record(3, Provider) ->
-    {4, Provider#od_provider{
-        eff_users = #{},
-        eff_groups = #{},
+        creation_time = time_utils:system_time_seconds(),
 
-        bottom_up_dirty = true
+        bottom_up_dirty = BottomUpDirty
     }}.
+
