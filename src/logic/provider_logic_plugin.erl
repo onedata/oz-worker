@@ -363,7 +363,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = provider_registr
     user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_PROVIDERS_INVITE);
 
 authorize(#el_req{operation = create, gri = #gri{aspect = instance_dev}}, _) ->
-    true;
+    true =:= oz_worker:get_env(dev_mode, true);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, _) ->
     auth_by_self(Req);

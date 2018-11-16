@@ -245,6 +245,20 @@ plgrid_validation_examples() -> [
         ], privileges = member}
     },
     {
+        <<"plgg-team-alpha-research(plgg-team-alpha)">>,
+        #{},
+        #idp_entitlement{idp = plgrid, path = [
+            #idp_group{type = team, name = <<"plgg-team-alpha-research">>, privileges = member}
+        ], privileges = member}
+    },
+    {
+        <<"plgg-team-alpha-research(plgg-team-alpha)">>,
+        #{groupType => unit},
+        #idp_entitlement{idp = plgrid, path = [
+            #idp_group{type = unit, name = <<"plgg-team-alpha-research">>, privileges = member}
+        ], privileges = member}
+    },
+    {
         <<"plgg-admin-group(Longer description)">>,
         #{},
         #idp_entitlement{idp = plgrid, path = [

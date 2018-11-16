@@ -677,7 +677,11 @@ get_nested_cfg(NestedParams, Policy) ->
 get_nested_cfg([Key], Policy, Config, Trace) ->
     get_param(Key, Policy, Config, Trace);
 get_nested_cfg([Key | Rest], Policy, Config, Trace) ->
-    NestedCfg = get_param(Key, {default, #{}}, Config, Trace),
+    DefaultNestedCfg = case Rest of
+        [{proplist, _} | _] -> [];
+        _ -> #{}
+    end,
+    NestedCfg = get_param(Key, {default, DefaultNestedCfg}, Config, Trace),
     get_nested_cfg(Rest, Policy, NestedCfg, Trace ++ [Key]).
 
 -spec get_param(nested_param_key(), config_policy(), config_section()) ->

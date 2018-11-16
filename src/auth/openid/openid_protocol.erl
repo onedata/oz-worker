@@ -32,7 +32,7 @@
 -export([get_login_endpoint/2, validate_login/2]).
 
 %% API
--export([authorize_by_external_access_token/1]).
+-export([authorize_by_idp_access_token/1]).
 -export([request_idp/5, request_idp/6]).
 
 %%%===================================================================
@@ -76,9 +76,9 @@ validate_login(IdP, QueryParams) ->
 %% {error, term()} - authorization invalid
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_external_access_token(AccessToken :: binary()) ->
+-spec authorize_by_idp_access_token(AccessToken :: binary()) ->
     {true, entity_logic:client()} | false | {error, term()}.
-authorize_by_external_access_token(AccessTokenWithPrefix) ->
+authorize_by_idp_access_token(AccessTokenWithPrefix) ->
     case auth_config:find_openid_idp_by_access_token(AccessTokenWithPrefix) of
         false ->
             false;
@@ -97,7 +97,8 @@ authorize_by_external_access_token(AccessTokenWithPrefix) ->
                     ?error_stacktrace(
                         "Unexpected error during authorization by external access token - ~p:~p",
                         [Type, Reason]
-                    )
+                    ),
+                    ?ERROR_INTERNAL_SERVER_ERROR
             end
     end.
 

@@ -16,6 +16,15 @@
 -include_lib("xmerl/include/xmerl.hrl").
 
 
+% Use "Macaroon", "X-Auth-Token" and "Authorization: Bearer" headers variably,
+% as they all should be accepted.
+-define(ACCESS_TOKEN_HEADER(AccessToken), case rand:uniform(3) of
+    1 -> #{<<"Macaroon">> => AccessToken};
+    2 -> #{<<"X-Auth-Token">> => AccessToken};
+    3 -> #{<<"Authorization">> => <<"Bearer ", AccessToken/binary>>}
+end).
+
+
 %% API
 -export([get_rest_api_prefix/1, check_rest_call/2]).
 -export([get_oz_url/1]).
@@ -118,11 +127,7 @@ check_rest_call(Config, ArgsMap) ->
             nobody ->
                 ReqHeaders;
             {provider, _, Macaroon} ->
-                HeaderName = case rand:uniform(2) of
-                    1 -> <<"macaroon">>;
-                    2 -> <<"X-Auth-Token">>
-                end,
-                ReqHeaders#{HeaderName => Macaroon};
+                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Macaroon));
             {user, UserId} ->
                 % Cache user auth tokens, if none in cache create a new one.
                 Macaroon = case get({macaroon, UserId}) of
@@ -135,19 +140,9 @@ check_rest_call(Config, ArgsMap) ->
                     Mac ->
                         Mac
                 end,
-                % Use "macaroon" and "X-Auth-Token" headers variably, as they
-                % both should be accepted.
-                HeaderName = case rand:uniform(2) of
-                    1 -> <<"macaroon">>;
-                    2 -> <<"X-Auth-Token">>
-                end,
-                ReqHeaders#{HeaderName => Macaroon};
+                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Macaroon));
             {user, _, Macaroon} ->
-                HeaderName = case rand:uniform(2) of
-                    1 -> <<"macaroon">>;
-                    2 -> <<"X-Auth-Token">>
-                end,
-                ReqHeaders#{HeaderName => Macaroon}
+                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Macaroon))
         end,
 
 %%        %% Useful for debug

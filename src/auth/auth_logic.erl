@@ -38,8 +38,8 @@
 
 %% API
 -export([get_login_endpoint/4, validate_login/2]).
--export([authorize_by_external_access_token/1]).
--export([authorize_by_macaroons/2]).
+-export([authorize_by_access_token/1]).
+-export([authorize_by_macaroons/1, authorize_by_macaroons/2]).
 -export([authorize_by_basic_auth/1]).
 
 %%%===================================================================
@@ -61,6 +61,7 @@
     RedirectAfterLogin :: binary(), TestMode :: boolean()) ->
     {ok, maps:map()} | {error, term()}.
 get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
+    TestMode andalso auth_test_mode:process_enable_test_mode(),
     try
         StateToken = auth_tokens:generate_state_token(
             IdP, LinkAccount, RedirectAfterLogin, TestMode
@@ -76,8 +77,6 @@ get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
                 Err
         end
     catch
-        throw:{error, _} = Error ->
-            Error;
         Type:Reason ->
             ?error_stacktrace("Cannot resolve redirect URL for IdP '~p' - ~p:~p", [
                 IdP, Type, Reason
@@ -118,28 +117,61 @@ validate_login(Method, Req) ->
             end
     end.
 
-
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to a authorize a client by an access token originating from an
-%% Identity Provider.
+%% Tries to a authorize a client by an access token - either a macaroon issued
+%% by Onezone or an external access token - originating from an Identity Provider.
 %% {true, Client} - client was authorized
 %% false - this method cannot verify authorization, other methods should be tried
 %% {error, term()} - authorization invalid
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_external_access_token(access_token()) ->
+-spec authorize_by_access_token(AccessToken :: binary()) ->
     {true, entity_logic:client()} | false | {error, term()}.
-authorize_by_external_access_token(AccessToken) ->
-    case openid_protocol:authorize_by_external_access_token(AccessToken) of
-        false ->
+authorize_by_access_token(AccessToken) when is_binary(AccessToken) ->
+    case authorize_by_macaroons(AccessToken, <<"">>) of
+        {true, Client1} ->
+            {true, Client1};
+        _ ->
+            case openid_protocol:authorize_by_idp_access_token(AccessToken) of
+                {true, {IdP, Attributes}} ->
+                    LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
+                    {ok, #document{key = UserId}} = acquire_user_by_linked_account(LinkedAccount),
+                    {true, ?USER(UserId)};
+                {error, _} = Error ->
+                    Error;
+                false ->
+                    ?ERROR_BAD_MACAROON
+            end
+    end;
+authorize_by_access_token(Req) ->
+    case cowboy_req:header(<<"x-auth-token">>, Req) of
+        undefined ->
+            case cowboy_req:header(<<"authorization">>, Req) of
+                <<"Bearer ", AccessToken/binary>> ->
+                    authorize_by_access_token(AccessToken);
+                _ ->
+                    false
+            end;
+        XAuthToken ->
+            authorize_by_access_token(XAuthToken)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Tries to a authorize a client by macaroons based on cowboy req.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_macaroons(Req :: cowboy_req:req()) ->
+    false | {true, #client{}} | {error, term()}.
+authorize_by_macaroons(Req) ->
+    case cowboy_req:header(<<"macaroon">>, Req, undefined) of
+        undefined ->
             false;
-        {error, _} = Error ->
-            Error;
-        {true, {IdP, Attributes}} ->
-            LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
-            {ok, #document{key = UserId}} = acquire_user_by_linked_account(LinkedAccount),
-            {true, ?USER(UserId)}
+        Macaroon ->
+            DischargeMacaroons = cowboy_req:header(<<"discharge-macaroons">>, Req, <<"">>),
+            authorize_by_macaroons(Macaroon, DischargeMacaroons)
     end.
 
 
@@ -158,8 +190,8 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) when is_binary(Macaroon) ->
         {error, _} ->
             ?ERROR_BAD_MACAROON
     end;
-authorize_by_macaroons(Macaroon, <<"">>) ->
-    authorize_by_macaroons(Macaroon, []);
+authorize_by_macaroons(Macaroon, SerializedDischarges) when is_binary(SerializedDischarges) ->
+    authorize_by_macaroons(Macaroon, binary:split(SerializedDischarges, <<" ">>, [global, trim_all]));
 authorize_by_macaroons(Macaroon, [Bin | _] = DischMacaroons) when is_binary(Bin) ->
     try
         DeserializedDischMacaroons = [
@@ -192,19 +224,25 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
 %% Tries to a authorize a client by basic auth credentials.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_basic_auth(UserPasswdB64 :: binary()) ->
-    {true, entity_logic:client()} | {error, bad_basic_credentials}.
-authorize_by_basic_auth(UserPasswdB64) ->
+-spec authorize_by_basic_auth(UserPasswdB64 :: binary() | cowboy_req:req()) ->
+    {true, #client{}} | {error, term()}.
+authorize_by_basic_auth(UserPasswdB64) when is_binary(UserPasswdB64) ->
     UserPasswd = base64:decode(UserPasswdB64),
     [User, Passwd] = binary:split(UserPasswd, <<":">>),
     case user_logic:authenticate_by_basic_credentials(User, Passwd) of
         {ok, #document{key = UserId}} ->
-            Client = #client{type = user, id = UserId},
-            {true, Client};
+            {true, ?USER(UserId)};
         {error, onepanel_auth_disabled} ->
             ?ERROR_NOT_SUPPORTED;
         _ ->
             ?ERROR_BAD_BASIC_CREDENTIALS
+    end;
+authorize_by_basic_auth(Req) ->
+    case cowboy_req:header(<<"authorization">>, Req) of
+        <<"Basic ", UserPasswdB64/binary>> ->
+            authorize_by_basic_auth(UserPasswdB64);
+        _ ->
+            false
     end.
 
 
@@ -286,9 +324,9 @@ validate_link_account_request(LinkedAccount, UserId) ->
 -spec validate_test_login_by_linked_account(od_user:linked_account()) ->
     {ok, od_user:id()}.
 validate_test_login_by_linked_account(LinkedAccount) ->
-    UserData = user_logic:build_test_user_info(LinkedAccount),
+    {UserId, UserData} = user_logic:build_test_user_info(LinkedAccount),
     auth_test_mode:store_user_data(UserData),
-    {ok, maps:get(<<"userId">>, UserData)}.
+    {ok, UserId}.
 
 
 %% @private
@@ -427,8 +465,8 @@ log_error(?ERROR_INTERNAL_SERVER_ERROR, IdP, StateToken, _) ->
         "Cannot validate login request for IdP '~p' (state: ~s) - internal server error",
         [IdP, StateToken]
     );
-log_error({Type, Reason}, IdP, StateToken, Stacktrace) ->
+log_error(Error, IdP, StateToken, Stacktrace) ->
     ?auth_error(
-        "Cannot validate login request for IdP '~p' (state: ~s) - ~p:~p~n"
-        "Stacktrace: ~s", [IdP, StateToken, Type, Reason, iolist_to_binary(lager:pr_stacktrace(Stacktrace))]
+        "Cannot validate login request for IdP '~p' (state: ~s) - ~p~n"
+        "Stacktrace: ~s", [IdP, StateToken, Error, iolist_to_binary(lager:pr_stacktrace(Stacktrace))]
     ).

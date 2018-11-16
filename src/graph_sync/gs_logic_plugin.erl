@@ -48,15 +48,17 @@ authorize(Req) ->
     case authorize_by_session_cookie(Req) of
         {true, CookieClient} ->
             {ok, CookieClient};
+        ?ERROR_UNAUTHORIZED ->
+            ?ERROR_UNAUTHORIZED;
         false ->
-            case authorize_by_macaroon(Req) of
+            case auth_logic:authorize_by_macaroons(Req) of
                 {true, MacaroonClient} ->
                     {ok, MacaroonClient};
+                {error, _} ->
+                    ?ERROR_UNAUTHORIZED;
                 false ->
                     {ok, ?NOBODY}
-            end;
-        Error ->
-            Error
+            end
     end.
 
 
@@ -145,22 +147,14 @@ client_disconnected(_, _) ->
 %%--------------------------------------------------------------------
 -spec verify_auth_override(gs_protocol:auth_override()) ->
     {ok, gs_protocol:client()} | gs_protocol:error().
-verify_auth_override(AuthOverride) ->
-    AuthResult = case AuthOverride of
-        {token, Token} ->
-            authorize_by_token(Token);
-        {macaroon, Mac, DischMacs} ->
-            auth_logic:authorize_by_macaroons(Mac, DischMacs);
-        {basic, UserPasswdB64} ->
-            auth_logic:authorize_by_basic_auth(UserPasswdB64)
-    end,
-    case AuthResult of
-        {true, Client} -> 
-            {ok, Client};
-        Error ->
-            Error
-    end.
-    
+verify_auth_override({macaroon, Macaroon, DischMacaroons}) ->
+    case auth_logic:authorize_by_macaroons(Macaroon, DischMacaroons) of
+        {true, Client} -> {ok, Client};
+        {error, _} = Error -> Error
+    end;
+verify_auth_override(_) ->
+    ?ERROR_UNAUTHORIZED.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -286,7 +280,6 @@ subscribable_resources(od_handle) -> [
 %%% Internal functions
 %%%===================================================================
 
-
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -299,60 +292,21 @@ subscribable_resources(od_handle) -> [
 -spec authorize_by_session_cookie(cowboy_req:req()) ->
     {true, gs_protocol:client()} | false | gs_protocol:error().
 authorize_by_session_cookie(Req) ->
-    case gui_route_plugin:check_ws_origin(Req) of 
-        true ->
-            case get_cookie(?SESSION_COOKIE_KEY, Req) of
-                undefined ->
-                    false;
-                SessionCookie ->
-                    case oz_gui_session:get_user_id(SessionCookie) of
-                        {ok, UserId} ->
+    case get_cookie(?SESSION_COOKIE_KEY, Req) of
+        undefined ->
+            false;
+        SessionCookie ->
+            case oz_gui_session:get_user_id(SessionCookie) of
+                {ok, UserId} ->
+                    case gui_route_plugin:check_ws_origin(Req) of
+                        true ->
                             {true, ?USER(UserId)};
                         _ ->
                             ?ERROR_UNAUTHORIZED
-                    end
-            end;
-        _ ->
-            ?ERROR_UNAUTHORIZED
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Tries to authorize client by provider certificate.
-%% {true, Client} - client was authorized
-%% false - this method cannot verify authorization, other methods should be tried
-%% {error, term()} - authorization invalid
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_macaroon(cowboy_req:req()) ->
-    {true, gs_protocol:client()} | false | gs_protocol:error().
-authorize_by_macaroon(Req) ->
-    case get_macaroon(Req) of
-        undefined ->
-            false;
-        Macaroon ->
-            auth_logic:authorize_by_macaroons(Macaroon, [])
-    end.
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Tries to authorize requesting client by X-Auth-Token. Will be called
-%% only if a token was sent in the request.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_token(Token :: binary()) ->
-    false | {true, gs_protocol:client()} | {error, term()}.
-authorize_by_token(Token) ->
-    case auth_logic:authorize_by_external_access_token(Token) of
-        {true, Client} ->
-            {true, Client};
-        false ->
-            auth_logic:authorize_by_macaroons(Token, <<"">>);
-        {error, _} = Error ->
-            Error
+                    end;
+                _ ->
+                    ?ERROR_UNAUTHORIZED
+            end
     end.
 
 
@@ -367,22 +321,3 @@ authorize_by_token(Token) ->
 -spec get_cookie(Name :: binary(), cowboy_req:req()) -> binary() | undefined.
 get_cookie(Name, Req) ->
     proplists:get_value(Name, cowboy_req:parse_cookies(Req)).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Returns macaroon from "macaroon" or "X-Auth-token" header, if present.
-%% @end
-%%--------------------------------------------------------------------
--spec get_macaroon(cowboy_req:req()) -> binary() | undefined.
-get_macaroon(Req) ->
-    MacaroonHeader = cowboy_req:header(<<"macaroon">>, Req),
-    XAuthTokenHeader = cowboy_req:header(<<"x-auth-token">>, Req),
-    % X-Auth-Token is an alias for macaroon header, check if any of them is given.
-    case MacaroonHeader of
-        <<_/binary>> -> MacaroonHeader;
-        _ -> XAuthTokenHeader
-    end.
-
-
