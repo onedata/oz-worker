@@ -1377,10 +1377,10 @@ merge_linked_account_unsafe(UserId, LinkedAccount) ->
     NewEmails = lists:usort(Emails ++ normalize_idp_emails(LinkedEmails)),
     % Replace existing linked account, if present
     NewLinkedAccs = case find_linked_account(UserInfo, IdP, SubjectId) of
-        #linked_account{} = OldLinkedAcc ->
-            [LinkedAccount | lists:delete(OldLinkedAcc, LinkedAccounts)];
+        OldLinkedAcc = #linked_account{} ->
+            lists:delete(OldLinkedAcc, LinkedAccounts) ++ [LinkedAccount];
         undefined ->
-            [LinkedAccount | LinkedAccounts]
+            LinkedAccounts ++ [LinkedAccount]
     end,
 
     NewEntitlements = entitlement_mapping:coalesce_entitlements(
@@ -1404,7 +1404,7 @@ merge_linked_account_unsafe(UserId, LinkedAccount) ->
 %% analogous production login process.
 %% @end
 %%--------------------------------------------------------------------
--spec build_test_user_info(#linked_account{}) -> json_utils:json_term().
+-spec build_test_user_info(#linked_account{}) -> {od_user:id(), json_utils:json_term()}.
 build_test_user_info(LinkedAccount) ->
     #linked_account{
         idp = IdP,
@@ -1416,14 +1416,15 @@ build_test_user_info(LinkedAccount) ->
     } = LinkedAccount,
     MappedEntitlements = entitlement_mapping:map_entitlements(IdP, Entitlements),
     {GroupIds, _} = lists:unzip(MappedEntitlements),
-    #{
-        <<"userId">> => idp_uid_to_system_uid(IdP, SubjectId),
+    UserId = idp_uid_to_system_uid(IdP, SubjectId),
+    {UserId, #{
+        <<"userId">> => UserId,
         <<"name">> => normalize_name(Name),
         <<"alias">> => normalize_alias(Alias),
         <<"emails">> => normalize_idp_emails(Emails),
         <<"linkedAccounts">> => [linked_account_to_map(LinkedAccount)],
         <<"groups">> => GroupIds
-    }.
+    }}.
 
 
 %%--------------------------------------------------------------------
