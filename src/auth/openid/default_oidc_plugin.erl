@@ -289,8 +289,12 @@ headers_append_access_token(Headers, IdP, AccessToken) ->
     openid_protocol:endpoint_type()) -> http_client:headers().
 headers_append_custom(Headers, IdP, EndpointType) ->
     case ?CFG_CUSTOM_HEADERS(IdP, EndpointType) of
-        undefined -> Headers;
-        Custom -> maps:merge(Headers, Custom)
+        undefined ->
+            Headers;
+        Custom ->
+            maps:fold(fun(Key, Value, Acc) ->
+                Acc#{?bin(Key) => ?bin(Value)}
+            end, Headers, Custom)
     end.
 
 
@@ -324,6 +328,10 @@ parameters_append_access_token(Parameters, IdP, AccessToken) ->
     openid_protocol:endpoint_type()) -> auth_logic:query_params().
 parameters_append_custom(Parameters, IdP, EndpointType) ->
     case ?CFG_CUSTOM_PARAMETERS(IdP, EndpointType) of
-        undefined -> Parameters;
-        Custom -> maps:merge(Parameters, Custom)
+        undefined ->
+            Parameters;
+        Custom ->
+            maps:fold(fun(Key, Value, Acc) ->
+                Acc#{?bin(Key) => ?bin(Value)}
+            end, Parameters, Custom)
     end.

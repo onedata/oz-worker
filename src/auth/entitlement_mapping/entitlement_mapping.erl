@@ -537,6 +537,9 @@ add_admin_group_as_child(GroupId, GroupId) ->
     ok;
 add_admin_group_as_child(GroupId, AdminGroupId) ->
     group_logic:add_group(?ROOT, GroupId, AdminGroupId, map_privileges(admin)),
+    ?auth_debug("Added admin group '~s' as subgroup of '~s' with admin privileges", [
+        AdminGroupId, GroupId
+    ]),
     ok.
 
 
