@@ -68,7 +68,7 @@ init([]) ->
     couchbase_changes_worker:start_link(?DEFAULT_BUCKET, ?DEFAULT_SCOPE),
     {ok, _} = couchbase_changes_stream:start_link(
         ?DEFAULT_BUCKET, ?DEFAULT_SCOPE, Callback,
-        [{since, Since}, {until, infinity}]
+        [{since, Since}, {until, infinity}], []
     ),
     {ok, #state{}}.
 
