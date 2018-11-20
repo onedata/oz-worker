@@ -2015,6 +2015,11 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
                     not lists:member(GroupId, PredefinedGroups)
                 end, Groups)
     end,
+    lists:foreach(fun(GroupId) ->
+        call_oz(Config, od_group, update, [GroupId, fun(Group) ->
+            {ok, Group#od_group{protected = false}}
+        end])
+    end, GroupsToDelete),
     [?assertMatch(ok, delete_group(Config, GId)) || GId <- GroupsToDelete],
     [?assertMatch(ok, delete_user(Config, UId)) || UId <- Users],
     ok.

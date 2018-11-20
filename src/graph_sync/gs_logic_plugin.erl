@@ -296,7 +296,7 @@ authorize_by_session_cookie(Req) ->
         {error, no_session_cookie} ->
             false;
         {error, invalid} ->
-            ?ERROR_UNAUTHORIZED
+            false
     end.
 
 
