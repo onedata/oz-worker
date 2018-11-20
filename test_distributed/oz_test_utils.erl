@@ -19,6 +19,8 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("gui/include/gui_session.hrl").
 
+-define(OZ_NODES(Config), ?config(oz_worker_nodes, Config)).
+
 
 %% API
 -export([
@@ -195,7 +197,9 @@
     ensure_entity_graph_is_up_to_date/1, ensure_entity_graph_is_up_to_date/2,
     toggle_basic_auth/2,
     read_auth_config/1,
-    overwrite_auth_config/2
+    overwrite_config/3,
+    overwrite_auth_config/2,
+    overwrite_test_auth_config/2
 ]).
 
 % Convenience functions for gs
@@ -227,7 +231,7 @@ call_oz(Config, Module, Function, Args) ->
             {crash, Type, Reason, lager:pr_stacktrace(erlang:get_stacktrace())}
         end
     end,
-    Nodes = ?config(oz_worker_nodes, Config),
+    Nodes = ?OZ_NODES(Config),
     Node = lists:nth(rand:uniform(length(Nodes)), Nodes),
     case rpc:call(Node, erlang, apply, [FunWrapper, []]) of
         {crash, Type, Reason, Stacktrace} ->
@@ -2001,7 +2005,7 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
             Groups;
         false ->
             % Filter out predefined groups
-            [Node | _] = ?config(oz_worker_nodes, Config),
+            [Node | _] = ?OZ_NODES(Config),
             {ok, PredefinedGroupsMapping} = test_utils:get_env(
                 Node, oz_worker, predefined_groups
             ),
@@ -2011,6 +2015,11 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
                     not lists:member(GroupId, PredefinedGroups)
                 end, Groups)
     end,
+    lists:foreach(fun(GroupId) ->
+        call_oz(Config, od_group, update, [GroupId, fun(Group) ->
+            {ok, Group#od_group{protected = false}}
+        end])
+    end, GroupsToDelete),
     [?assertMatch(ok, delete_group(Config, GId)) || GId <- GroupsToDelete],
     [?assertMatch(ok, delete_user(Config, UId)) || UId <- Users],
     ok.
@@ -2104,7 +2113,7 @@ minimum_support_size(Config) ->
 %%--------------------------------------------------------------------
 -spec mock_handle_proxy(Config :: term()) -> ok.
 mock_handle_proxy(Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
+    Nodes = ?OZ_NODES(Config),
     ok = test_utils:mock_new(Nodes, handle_proxy_client, [passthrough]),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, put,
         fun(_, <<"/handle?hndl=", Hndl/binary>>, _, _) ->
@@ -2130,8 +2139,7 @@ mock_handle_proxy(Config) ->
 %%--------------------------------------------------------------------
 -spec unmock_handle_proxy(Config :: term()) -> ok.
 unmock_handle_proxy(Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, handle_proxy_client).
+    test_utils:mock_unload(?OZ_NODES(Config), handle_proxy_client).
 
 
 %%--------------------------------------------------------------------
@@ -2200,17 +2208,38 @@ read_auth_config(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Overwrites given config file (specified by OZ env) with given data.
+%% @end
+%%--------------------------------------------------------------------
+-spec overwrite_config(TestConfig :: term(), ConfigFileEnv :: atom(), ConfigData :: term()) -> ok.
+overwrite_config(TestConfig, ConfigFileEnv, ConfigData) ->
+    {ok, ConfigPath} = call_oz(TestConfig, oz_worker, get_env, [ConfigFileEnv]),
+    rpc:multicall(?OZ_NODES(TestConfig), file, write_file, [
+        ConfigPath, io_lib:format("~tp.~n", [ConfigData])
+    ]),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Overwrites auth.config with given data.
 %% @end
 %%--------------------------------------------------------------------
--spec overwrite_auth_config(Config :: term(), auth_config:config_v2()) -> ok.
-overwrite_auth_config(Config, AuthConfigData) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    {ok, AuthConfigPath} = call_oz(Config, oz_worker, get_env, [auth_config_file]),
-    rpc:multicall(Nodes, file, write_file, [
-        AuthConfigPath, io_lib:format("~tp.~n", [AuthConfigData#{version => 2}])
-    ]),
-    rpc:multicall(Nodes, auth_config, force_auth_config_reload, []),
+-spec overwrite_auth_config(TestConfig :: term(), auth_config:config_v2()) -> ok.
+overwrite_auth_config(TestConfig, AuthConfigData) ->
+    overwrite_config(TestConfig, auth_config_file, AuthConfigData#{version => 2}),
+    rpc:multicall(?OZ_NODES(TestConfig), auth_config, force_auth_config_reload, []),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overwrites test.auth.config with given data.
+%% @end
+%%--------------------------------------------------------------------
+-spec overwrite_test_auth_config(TestConfig :: term(), auth_config:config_v2()) -> ok.
+overwrite_test_auth_config(TestConfig, AuthConfigData) ->
+    overwrite_config(TestConfig, test_auth_config_file, AuthConfigData#{version => 2}),
     ok.
 
 

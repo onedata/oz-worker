@@ -57,7 +57,9 @@ type() ->
 -spec parse(auth_config:idp(), entitlement_mapping:raw_entitlement(), auth_config:parser_config()) ->
     entitlement_mapping:idp_entitlement().
 parse(egi, Entitlement, ParserConfig) ->
-    parse_egi_entitlement(Entitlement, ParserConfig).
+    parse_egi_entitlement(Entitlement, ParserConfig);
+parse(plgrid, Entitlement, ParserConfig) ->
+    parse_plgrid_entitlement(Entitlement, ParserConfig).
 
 
 %%--------------------------------------------------------------------
@@ -70,7 +72,8 @@ parse(egi, Entitlement, ParserConfig) ->
         entitlement_mapping:idp_entitlement() | {error, malformed}}].
 validation_examples() ->
     lists:flatten(
-        [{egi, Input, ParserConfig, Output} || {Input, ParserConfig, Output} <- egi_validation_examples()]
+        [{egi, Input, ParserConfig, Output} || {Input, ParserConfig, Output} <- egi_validation_examples()],
+        [{plgrid, Input, ParserConfig, Output} || {Input, ParserConfig, Output} <- plgrid_validation_examples()]
     ).
 
 %%%===================================================================
@@ -80,7 +83,7 @@ validation_examples() ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns a string that represents user's group membership for EGI.
+%% Returns an #idp_entitlement{} that represents user's group membership for EGI.
 %%
 %% Group format:
 %%      urn:mace:egi.eu:group:<VO>[[:<GROUP>][:<SUBGROUP>*]][:role=<ROLE>]#<GROUP-AUTHORITY>
@@ -137,6 +140,43 @@ parse_egi_entitlement(<<"urn:mace:egi.eu:group:", Group/binary>>, ParserConfig) 
         privileges = UserPrivileges
     }.
 
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns an #idp_entitlement{} that represents user's group membership for PlGrid.
+%%
+%% Group format:
+%%      group-short-name(Group long name)
+%% Examples:
+%%      plgg-group-1(plgg-group-1)
+%%      plgg-admins(PlGrid admin group)
+%%
+%% Long names are not always specified, in this case the short name is repeated.
+%% This parser adds a space before the parenthesis for better readability, or
+%% removes the part in parenthesis completely if the long name is a duplicated or
+%% a substring of the short name.
+%% @end
+%%--------------------------------------------------------------------
+-spec parse_plgrid_entitlement(entitlement_mapping:raw_entitlement(), auth_config:parser_config()) ->
+    entitlement_mapping:idp_entitlement().
+parse_plgrid_entitlement(RawEntitlement, ParserConfig) ->
+    GroupType = maps:get(groupType, ParserConfig, team),
+    GroupName = case binary:split(RawEntitlement, [<<"(">>, <<")">>], [global, trim_all]) of
+        [Name] ->
+            Name;
+        [ShortName, LongName] ->
+            case binary:match(ShortName, LongName) of
+                nomatch -> <<ShortName/binary, " (", LongName/binary, ")">>;
+                _ -> ShortName
+            end
+    end,
+
+    #idp_entitlement{
+        idp = plgrid,
+        path = [#idp_group{type = GroupType, name = GroupName}],
+        privileges = member
+    }.
+
 
 %%--------------------------------------------------------------------
 %% @private
@@ -177,6 +217,60 @@ egi_validation_examples() -> [
         <<"unconfromant-group-name">>,
         #{},
         {error, malformed}
+    }
+].
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns entitlement mapping validation examples for PlGrid.
+%% @end
+%%--------------------------------------------------------------------
+-spec plgrid_validation_examples() ->
+    [{entitlement_mapping:raw_entitlement(), auth_config:parser_config(), entitlement_mapping:idp_entitlement() | {error, malformed}}].
+plgrid_validation_examples() -> [
+    {
+        <<"plgg-group-1(plgg-group-1)">>,
+        #{},
+        #idp_entitlement{idp = plgrid, path = [
+            #idp_group{type = team, name = <<"plgg-group-1">>, privileges = member}
+        ], privileges = member}
+    },
+    {
+        <<"plgg-group-1(plgg-group-1)">>,
+        #{groupType => unit},
+        #idp_entitlement{idp = plgrid, path = [
+            #idp_group{type = unit, name = <<"plgg-group-1">>, privileges = member}
+        ], privileges = member}
+    },
+    {
+        <<"plgg-team-alpha-research(plgg-team-alpha)">>,
+        #{},
+        #idp_entitlement{idp = plgrid, path = [
+            #idp_group{type = team, name = <<"plgg-team-alpha-research">>, privileges = member}
+        ], privileges = member}
+    },
+    {
+        <<"plgg-team-alpha-research(plgg-team-alpha)">>,
+        #{groupType => unit},
+        #idp_entitlement{idp = plgrid, path = [
+            #idp_group{type = unit, name = <<"plgg-team-alpha-research">>, privileges = member}
+        ], privileges = member}
+    },
+    {
+        <<"plgg-admin-group(Longer description)">>,
+        #{},
+        #idp_entitlement{idp = plgrid, path = [
+            #idp_group{type = team, name = <<"plgg-admin-group (Longer description)">>, privileges = member}
+        ], privileges = member}
+    },
+    {
+        <<"plgg-admin-group(Longer description)">>,
+        #{groupType => role_holders},
+        #idp_entitlement{idp = plgrid, path = [
+            #idp_group{type = role_holders, name = <<"plgg-admin-group (Longer description)">>, privileges = member}
+        ], privileges = member}
     }
 ].
 

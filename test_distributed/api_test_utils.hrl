@@ -275,9 +275,9 @@
     {<<"name">>, <<".asd">>, Error},
     {<<"name">>, <<"asd ">>, Error},
     {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)}]).
--endif.
 
 -define(CORRECT_NAME, <<"_πœę ßþą_śðæŋ-əłżź.ćńµジ(ャパル)パスで 日本を- 旅す.る()"/utf8>>).
 
 -define(CORRECT_USER_NAME, <<"πœęßパル-µńćźżąśð日本を- 旅す. d'Arras, Jr."/utf8>>).
 
+-endif.

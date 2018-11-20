@@ -48,6 +48,8 @@ authorize(Req) ->
     case authorize_by_session_cookie(Req) of
         {true, CookieClient, Cookie, NewReq} ->
             {ok, CookieClient, new_gui_session:get_session_id(Cookie), NewReq};
+        ?ERROR_UNAUTHORIZED ->
+            ?ERROR_UNAUTHORIZED;
         false ->
             case auth_logic:authorize_by_macaroons(Req) of
                 {true, MacaroonClient} ->
@@ -283,17 +285,17 @@ is_subscribable(#gri{type = EntityType, aspect = Aspect, scope = Scope}) ->
 -spec authorize_by_session_cookie(cowboy_req:req()) ->
     false | {true, gs_protocol:client()}.
 authorize_by_session_cookie(Req) ->
-    case check_ws_origin(Req) of
-        true ->
-            case new_gui_session:validate(Req) of
-                {ok, UserId, Cookie, NewReq} ->
+    case new_gui_session:validate(Req) of
+        {ok, UserId, Cookie, NewReq} ->
+            case check_ws_origin(Req) of
+                true ->
                     {true, ?USER(UserId), Cookie, NewReq};
-                {error, no_session_cookie} ->
-                    false;
-                {error, invalid} ->
-                    false
+                false ->
+                    ?ERROR_UNAUTHORIZED
             end;
-        false ->
+        {error, no_session_cookie} ->
+            false;
+        {error, invalid} ->
             false
     end.
 

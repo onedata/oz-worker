@@ -140,7 +140,7 @@ is_authorized(Req, State) ->
     Result = try
         % Try to authorize the client using several methods.
         authorize(Req, [
-            fun auth_logic:authorize_by_external_access_token/1,
+            fun auth_logic:authorize_by_access_token/1,
             fun auth_logic:authorize_by_basic_auth/1,
             fun auth_logic:authorize_by_macaroons/1
         ])
@@ -398,8 +398,10 @@ authorize(Req, [AuthMethod | Rest]) ->
     case AuthMethod(Req) of
         false ->
             authorize(Req, Rest);
-        ClientOrError ->
-            ClientOrError
+        {true, Client} ->
+            {true, Client};
+        {error, Error} ->
+            {error, Error}
     end.
 
 

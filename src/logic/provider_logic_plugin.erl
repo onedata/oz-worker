@@ -399,7 +399,7 @@ authorize(#el_req{operation = create, gri = #gri{id = undefined, aspect = instan
     true;
 
 authorize(#el_req{operation = create, gri = #gri{id = undefined, aspect = instance_dev}}, _) ->
-    true;
+    true =:= oz_worker:get_env(dev_mode, true);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, _) ->
     auth_by_self(Req);

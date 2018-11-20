@@ -5,8 +5,9 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc This test verifies database upgrade process between versions
-%%% rc12 and rc13.
+%%% @doc
+%%% This test verifies if database documents are correctly upgraded through
+%%% all versions.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(model_upgrade_test_SUITE).
