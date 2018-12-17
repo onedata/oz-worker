@@ -119,7 +119,7 @@ delete_session(SessionId) ->
 %%--------------------------------------------------------------------
 -spec get_cookie_ttl() -> integer() | {error, term()}.
 get_cookie_ttl() ->
-    case oz_worker:get_env(gui_cookie_ttl_seconds) of
+    case oz_worker:get_env(session_ttl) of
         {ok, Val} when is_integer(Val) ->
             Val;
         _ ->
