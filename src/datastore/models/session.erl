@@ -36,7 +36,7 @@
     fold_enabled => true
 }).
 
--define(SESSION_TTL, oz_worker:get_env(session_ttl, 3600)).
+-define(SESSION_TTL, oz_worker:get_env(session_ttl, 604800)). % 1 week
 
 %%%===================================================================
 %%% API
