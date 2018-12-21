@@ -22,11 +22,6 @@
 %% API
 -export([handle/2]).
 
-% Session cookie id
--define(SESSION_COOKIE_KEY, <<"session_id">>).
-% Value of cookie when there is no session
--define(NO_SESSION_COOKIE, <<"no_session">>).
-
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -45,7 +40,7 @@ handle(<<"POST">>, Req) ->
         case user_logic:authenticate_by_basic_credentials(User, Passwd) of
             {ok, #document{key = UserId}} ->
                 ?info("User ~s logged in", [UserId]),
-                Req2 = oz_gui_session:log_in(UserId, Req),
+                Req2 = new_gui_session:log_in(UserId, Req),
                 JSONHeader = #{<<"content-type">> => <<"application/json">>},
                 Body = json_utils:encode(#{<<"url">> => <<"/">>}),
                 cowboy_req:reply(200, JSONHeader, Body, Req2);

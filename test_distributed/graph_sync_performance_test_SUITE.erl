@@ -14,9 +14,9 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("gui/include/gui_session.hrl").
 -include_lib("cluster_worker/include/global_definitions.hrl").
 -include_lib("cluster_worker/test_distributed/performance_test_utils.hrl").
--include_lib("gui/include/new_gui.hrl").
 
 %% API
 -export([
@@ -216,7 +216,7 @@ privileges_in_a_big_space_performance_base(Config) ->
     UserNum = ?USER_NUM,
     UpdateNum = ?UPDATE_NUM,
     ProviderNum = ?PROVIDER_NUM,
-    SpacePrivileges = oz_test_utils:all_space_privileges(Config),
+    SpacePrivileges = privileges:space_privileges(),
     PrivsNum = length(SpacePrivileges),
     [Creator | Rest] = Users = create_n_users(Config, UserNum),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(Creator), <<"space">>),
@@ -277,7 +277,9 @@ privileges_in_a_big_space_performance_base(Config) ->
             _ -> lists:sublist(SpacePrivileges, PrivsNum - 2 + (Seq rem 3))
         end,
         utils:pforeach(fun(User) ->
-            oz_test_utils:space_set_user_privileges(Config, Space, User, set, NewPrivileges)
+            oz_test_utils:space_set_user_privileges(
+                Config, Space, User, NewPrivileges, SpacePrivileges -- NewPrivileges
+            )
         end, Users)
     end, lists:seq(1, UpdateNum)),
     ?end_measurement(privileges_update_time),
@@ -378,7 +380,7 @@ spawn_clients(Config, Type, Clients, RetryFlag, CallbackFunction, OnSuccessFun) 
     AuthsAndIdentities = lists:map(fun(Client) ->
         case Type of
             gui ->
-                {ok, SessionId} = oz_test_utils:create_session(Config, Client, []),
+                {ok, SessionId} = oz_test_utils:log_in(Config, Client),
                 Auth = {cookie, {?SESSION_COOKIE_KEY, SessionId}},
                 Identity = {user, Client},
                 {Auth, Identity};

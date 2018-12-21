@@ -92,6 +92,8 @@
     linked_accounts = [] :: [od_user:linked_account()],
     entitlements = [] :: [od_group:id()],
 
+    active_sessions = [] :: [session:id()],
+
     default_space = undefined :: undefined | binary(),
     default_provider = undefined :: undefined | binary(),
 
@@ -117,6 +119,8 @@
     eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
 
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+
     % Marks that the record's effective relations are not up to date.
     top_down_dirty = true :: boolean()
 }).
@@ -126,6 +130,8 @@
 -record(od_group, {
     name = <<"">> :: od_group:name(),
     type = ?DEFAULT_GROUP_TYPE :: od_group:type(),
+    % if group is protected it cannot be deleted
+    protected = false :: boolean(),
 
     % Privileges of this group in admin's OZ API
     oz_privileges = [] :: [privileges:oz_privilege()],
@@ -149,6 +155,9 @@
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
     eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
 
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.
@@ -174,6 +183,9 @@
     % track changes in spaces and propagate them top-down.
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
 
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
+
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.
     top_down_dirty = true :: boolean(),
@@ -191,7 +203,10 @@
     % Direct relations to other entities
     space = undefined :: undefined | od_space:id(),
     handle = undefined :: undefined | od_handle:id(),
-    root_file = undefined :: undefined | binary()
+    root_file = undefined :: undefined | binary(),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client()
 }).
 
 %% This record defines a provider who supports spaces and can be reached via url
@@ -199,6 +214,7 @@
     name = <<"">> :: od_provider:name(),
     admin_email :: undefined | binary(),
     root_macaroon :: undefined | macaroon_auth:id(),
+
     subdomain_delegation = false :: boolean(),
     domain :: binary(),
     subdomain = undefined :: undefined | binary(),
@@ -212,6 +228,8 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations(od_user:id()),
     eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -230,6 +248,9 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_service_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_service_privilege()]),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -251,6 +272,9 @@
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_privilege()]),
 
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
+
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
 }).
@@ -262,7 +286,9 @@
 %% This record defines a GUI session
 -record(session, {
     user_id :: od_user:id(),
-    accessed = 0 :: non_neg_integer()
+    last_refresh = 0 :: non_neg_integer(),
+    nonce = <<"">> :: binary(),
+    previous_nonce = <<"">> :: binary()
 }).
 
 %% This record defines a token that can be used by user to do something
@@ -312,6 +338,11 @@
 %% Stores information about active provider connection
 -record(provider_connection, {
     connection_ref :: gs_server:conn_ref()
+}).
+
+%% Stores information about active user connections per session id
+-record(user_connections, {
+    connections = [] :: [gs_server:conn_ref()]
 }).
 
 % Token used to match together OIDC/SAML requests and responses and protect

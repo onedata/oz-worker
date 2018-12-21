@@ -139,7 +139,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    3.
+    4.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -174,7 +174,31 @@ get_record_struct(2) ->
 get_record_struct(3) ->
     % There are no changes, but all records must be marked dirty to recalculate
     % effective relations (as intermediaries computing logic has changed).
-    get_record_struct(2).
+    get_record_struct(2);
+get_record_struct(4) ->
+    % * new field - creation_time
+    % * new field - creator
+    {record, [
+        {name, string},
+        {proxy_endpoint, string},
+        {service_properties, #{term => term}},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {handles, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+
+        {creation_time, integer}, % New field
+        {creator, {record, [ % New field
+            {type, atom},
+            {id, string}
+        ]}},
+
+        {bottom_up_dirty, boolean}
+    ]}.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -198,24 +222,78 @@ upgrade_record(1, HandleService) ->
 
         _BottomUpDirty
     } = HandleService,
-    {2, #od_handle_service{
-        name = Name,
-        proxy_endpoint = ProxyEndpoint,
-        service_properties = maps:from_list(ServiceProperties),
+    {2, {od_handle_service,
+        Name,
+        ProxyEndpoint,
+        maps:from_list(ServiceProperties),
 
-        users = maps:from_list(Users),
-        groups = maps:from_list(Groups),
-        handles = [],
+        maps:from_list(Users),
+        maps:from_list(Groups),
+        [],
 
-        eff_users = #{},
-        eff_groups = #{},
+        #{},
+        #{},
 
-        bottom_up_dirty = true
+        true
     }};
 upgrade_record(2, HandleService) ->
-    {3, HandleService#od_handle_service{
-        eff_users = #{},
-        eff_groups = #{},
+    {od_handle_service,
+        Name,
+        ProxyEndpoint,
+        ServiceProperties,
 
-        bottom_up_dirty = true
+        Users,
+        Groups,
+        Handles,
+
+        _EffUsers,
+        _EffGroups,
+
+        _BottomUpDirty
+    } = HandleService,
+    {3, {od_handle_service,
+        Name,
+        ProxyEndpoint,
+        ServiceProperties,
+
+        Users,
+        Groups,
+        Handles,
+
+        #{},
+        #{},
+
+        true
+    }};
+upgrade_record(3, HandleService) ->
+    {od_handle_service,
+        Name,
+        ProxyEndpoint,
+        ServiceProperties,
+
+        Users,
+        Groups,
+        Handles,
+
+        EffUsers,
+        EffGroups,
+
+        BottomUpDirty
+    } = HandleService,
+    {4, #od_handle_service{
+        name = Name,
+        proxy_endpoint = ProxyEndpoint,
+        service_properties = ServiceProperties,
+
+        users = Users,
+        groups = Groups,
+        handles = Handles,
+
+        eff_users = EffUsers,
+        eff_groups = EffGroups,
+
+        creation_time = time_utils:system_time_seconds(),
+        creator = undefined,
+
+        bottom_up_dirty = BottomUpDirty
     }}.

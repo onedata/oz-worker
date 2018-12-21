@@ -150,7 +150,7 @@ actual_timestamp() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    3.
+    4.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -190,7 +190,33 @@ get_record_struct(2) ->
 get_record_struct(3) ->
     % There are no changes, but all records must be marked dirty to recalculate
     % effective relations (as intermediaries computing logic has changed).
-    get_record_struct(2).
+    get_record_struct(2);
+get_record_struct(4) ->
+    % * new field - creation_time
+    % * new field - creator
+    {record, [
+        {public_handle, string},
+        {resource_type, string},
+        {metadata, string},
+        {timestamp, {{integer, integer, integer}, {integer, integer, integer}}},
+        {resource_id, string},
+
+        {handle_service, string},
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+
+        {creation_time, integer}, % New field
+        {creator, {record, [ % New field
+            {type, atom},
+            {id, string}
+        ]}},
+
+        {bottom_up_dirty, boolean}
+    ]}.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -217,7 +243,73 @@ upgrade_record(1, Handle) ->
 
         _BottomUpDirty
     } = Handle,
-    {2, #od_handle{
+    {2, {od_handle,
+        PublicHandle,
+        ResourceType,
+        Metadata,
+        Timestamp,
+
+        ResourceId,
+        HandleService,
+        maps:from_list(Users),
+        maps:from_list(Groups),
+
+        #{},
+        #{},
+
+        true
+    }};
+upgrade_record(2, Handle) ->
+    {od_handle,
+        PublicHandle,
+        ResourceType,
+        Metadata,
+        Timestamp,
+
+        ResourceId,
+        HandleService,
+        Users,
+        Groups,
+
+        _EffUsers,
+        _EffGroups,
+
+        _BottomUpDirty
+    } = Handle,
+    {3, {od_handle,
+        PublicHandle,
+        ResourceType,
+        Metadata,
+        Timestamp,
+
+        ResourceId,
+        HandleService,
+        Users,
+        Groups,
+
+        #{},
+        #{},
+
+        true
+    }};
+upgrade_record(3, Handle) ->
+    {od_handle,
+        PublicHandle,
+        ResourceType,
+        Metadata,
+        Timestamp,
+
+        ResourceId,
+        HandleService,
+        Users,
+        Groups,
+
+        EffUsers,
+        EffGroups,
+
+        BottomUpDirty
+    } = Handle,
+    {4, #od_handle{
         public_handle = PublicHandle,
         resource_type = ResourceType,
         metadata = Metadata,
@@ -225,18 +317,14 @@ upgrade_record(1, Handle) ->
 
         resource_id = ResourceId,
         handle_service = HandleService,
-        users = maps:from_list(Users),
-        groups = maps:from_list(Groups),
+        users = Users,
+        groups = Groups,
 
-        eff_users = #{},
-        eff_groups = #{},
+        eff_users = EffUsers,
+        eff_groups = EffGroups,
 
-        bottom_up_dirty = true
-    }};
-upgrade_record(2, Handle) ->
-    {3, Handle#od_handle{
-        eff_users = #{},
-        eff_groups = #{},
+        creation_time = time_utils:system_time_seconds(),
+        creator = undefined,
 
-        bottom_up_dirty = true
+        bottom_up_dirty = BottomUpDirty
     }}.

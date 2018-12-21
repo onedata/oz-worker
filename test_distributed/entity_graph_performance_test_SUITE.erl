@@ -326,7 +326,7 @@ big_group_performance_base(Config) ->
 
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, AdminMacaroon} = oz_test_utils:create_client_token(Config, Admin),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, set, privileges:oz_admin()),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, privileges:oz_admin(), []),
 
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(User), <<"group">>),
@@ -388,11 +388,11 @@ update_privileges_performance(Config) ->
 update_privileges_performance_base(Config) ->
     UserNum = ?USER_NUM,
     ApiType = ?API_TYPE,
-    GroupPrivileges = oz_test_utils:all_group_privileges(Config),
+    GroupPrivileges = privileges:group_privileges(),
 
     {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, AdminMacaroon} = oz_test_utils:create_client_token(Config, Admin),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, set, privileges:oz_admin()),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, privileges:oz_admin(), []),
 
     {ok, GroupCreator} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(GroupCreator), <<"group">>),
@@ -408,7 +408,9 @@ update_privileges_performance_base(Config) ->
     ?begin_measurement(privileges_updating_time),
     ok = parallel_foreach(fun(User) ->
         RandomPrivileges = lists:sublist(GroupPrivileges, rand:uniform(length(GroupPrivileges))),
-        group_set_user_privileges(Config, ApiType, {Admin, AdminMacaroon}, Group, User, set, RandomPrivileges)
+        group_set_user_privileges(
+            Config, ApiType, {Admin, AdminMacaroon}, Group, User, RandomPrivileges, RandomPrivileges -- GroupPrivileges
+        )
     end, Users),
     ?end_measurement(privileges_updating_time),
 
@@ -453,7 +455,7 @@ reconcile_privileges_in_group_chain_performance(Config) ->
 reconcile_privileges_in_group_chain_performance_base(Config) ->
     GroupChainLength = ?GROUP_CHAIN_LENGTH,
     UserNum = ?USER_NUM,
-    GroupPrivileges = oz_test_utils:all_group_privileges(Config),
+    GroupPrivileges = privileges:group_privileges(),
     {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
     {BottomGroup, TopGroup} = create_group_chain(Config, rpc, {User, Macaroon}, GroupChainLength),
@@ -469,7 +471,9 @@ reconcile_privileges_in_group_chain_performance_base(Config) ->
 
 
     ?begin_measurement(privileges_update_time),
-    oz_test_utils:group_set_group_privileges(Config, TopGroup, SecondFromTopGroup, set, RandomPrivileges),
+    oz_test_utils:group_set_group_privileges(
+        Config, TopGroup, SecondFromTopGroup, RandomPrivileges, GroupPrivileges -- RandomPrivileges
+    ),
     ?end_measurement(privileges_update_time),
 
     ?begin_measurement(reconciliation_time),
@@ -582,13 +586,13 @@ group_add_group(Config, rest, {_User, Macaroon}, Group, ChildGroup) ->
     {ok, lists:last(binary:split(Location, <<"/">>, [global, trim_all]))}.
 
 
-group_set_user_privileges(Config, rpc, {User, _Macaroon}, Group, User, Operation, Privs) ->
-    oz_test_utils:group_set_user_privileges(Config, ?USER(User), Group, User, Operation, Privs);
-group_set_user_privileges(Config, rest, {_User, Macaroon}, Group, User, Operation, Privs) ->
+group_set_user_privileges(Config, rpc, {User, _Macaroon}, Group, User, PrivsToGrant, PrivsToRevoke) ->
+    oz_test_utils:group_set_user_privileges(Config, ?USER(User), Group, User, PrivsToGrant, PrivsToRevoke);
+group_set_user_privileges(Config, rest, {_User, Macaroon}, Group, User, PrivsToGrant, PrivsToRevoke) ->
     {ok, 204, _, _} = rest_req(
         Config, Macaroon, put, [<<"/groups/">>, Group, <<"/users/">>, User, <<"/privileges">>], #{
-            <<"operation">> => Operation,
-            <<"privileges">> => [atom_to_binary(P, utf8) || P <- Privs]
+            <<"grant">> => [atom_to_binary(P, utf8) || P <- PrivsToGrant],
+            <<"revoke">> => [atom_to_binary(P, utf8) || P <- PrivsToRevoke]
         }
     ),
     ok.

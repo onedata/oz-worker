@@ -37,14 +37,17 @@
 
     add_user/3, add_user/4,
     add_group/3, add_group/4,
+    create_group/3, create_group/4,
 
     get_users/2, get_eff_users/2,
     get_user/3, get_eff_user/3,
     get_user_privileges/3, get_eff_user_privileges/3,
+    get_eff_user_membership_intermediaries/3,
 
     get_groups/2, get_eff_groups/2,
     get_group/3, get_eff_group/3,
     get_group_privileges/3, get_eff_group_privileges/3,
+    get_eff_group_membership_intermediaries/3,
 
     get_shares/2, get_share/3,
 
@@ -61,6 +64,7 @@
 -export([
     exists/1,
     has_eff_privilege/3,
+    has_direct_user/2,
     has_eff_user/2,
     has_eff_group/2,
     has_provider/2
@@ -82,16 +86,11 @@
 create(Client, Name) when is_binary(Name) ->
     create(Client, #{<<"name">> => Name});
 create(Client, Data) ->
-    AuthHint = case Client of
-        ?USER(UserId) -> ?AS_USER(UserId);
-        _ -> undefined
-    end,
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
         client = Client,
         gri = #gri{type = od_space, id = undefined, aspect = instance},
-        data = Data,
-        auth_hint = AuthHint
+        data = Data
     })).
 
 
@@ -300,6 +299,40 @@ add_group(Client, SpaceId, GroupId, Data) ->
         data = Data
     })).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new group in the space based on group name and type.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_group(Client :: entity_logic:client(), od_space:id(), od_group:name(),
+    od_group:type()) -> {ok, od_group:id()} | {error, term()}.
+create_group(Client, SpaceId, Name, Type) ->
+    create_group(Client, SpaceId, #{<<"name">> => Name, <<"type">> => Type}).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new group in the space. Has two variants:
+%% 1) Group Name is given explicitly (the new group will be of default type)
+%% 2) Group name is provided in a proper Data object, group type is optional.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_group(Client :: entity_logic:client(), od_space:id(),
+    NameOrData :: od_group:name() | #{}) -> {ok, od_group:id()} | {error, term()}.
+create_group(Client, SpaceId, Name) when is_binary(Name) ->
+    create_group(Client, SpaceId, #{<<"name">> => Name});
+create_group(Client, SpaceId, Data) ->
+    AuthHint = case Client of
+        ?USER(UserId) -> ?AS_USER(UserId);
+        _ -> undefined
+    end,
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_space, id = SpaceId, aspect = group},
+        data = Data,
+        auth_hint = AuthHint
+    })).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -397,6 +430,23 @@ get_eff_user_privileges(Client, SpaceId, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves the membership intermediaries of specific effective user
+%% among effective users of given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_user_membership_intermediaries(Client :: entity_logic:client(),
+    SpaceId :: od_space:id(), UserId :: od_user:id()) ->
+    {ok, entity_graph:intermediaries()} | {error, term()}.
+get_eff_user_membership_intermediaries(Client, SpaceId, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_space, id = SpaceId, aspect = {eff_user_membership, UserId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Retrieves the list of groups of given space.
 %% @end
 %%--------------------------------------------------------------------
@@ -485,7 +535,24 @@ get_eff_group_privileges(Client, SpaceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_space, id = SpaceId, aspect =  {eff_group_privileges, GroupId}}
+        gri = #gri{type = od_space, id = SpaceId, aspect = {eff_group_privileges, GroupId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the membership intermediaries of specific effective group
+%% among effective groups of given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_group_membership_intermediaries(Client :: entity_logic:client(),
+    SpaceId :: od_space:id(), GroupId :: od_group:id()) ->
+    {ok, entity_graph:intermediaries()} | {error, term()}.
+get_eff_group_membership_intermediaries(Client, SpaceId, GroupId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_space, id = SpaceId, aspect = {eff_group_membership, GroupId}}
     }).
 
 
@@ -554,23 +621,23 @@ get_provider(Client, SpaceId, ProviderId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified user of given space.
-%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_user_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),
-    UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
-    Privs :: [privileges:space_privilege()]) -> ok | {error, term()}.
-update_user_privileges(Client, SpaceId, UserId, Operation, Privs) when is_list(Privs) ->
+    UserId :: od_user:id(), PrivsToGrant :: [privileges:space_privilege()],
+    PrivsToRevoke :: [privileges:space_privilege()]) -> ok | {error, term()}.
+update_user_privileges(Client, SpaceId, UserId, PrivsToGrant, PrivsToRevoke) ->
     update_user_privileges(Client, SpaceId, UserId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
+        <<"grant">> => PrivsToGrant,
+        <<"revoke">> => PrivsToRevoke
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified user of given space.
-%% Privileges must be included in proper Data object, operation is optional.
+%% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_user_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),
@@ -587,23 +654,23 @@ update_user_privileges(Client, SpaceId, UserId, Data) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified group of given space.
-%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_group_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),
-    GroupId :: od_group:id(), Operation :: entity_graph:privileges_operation(),
-    Privs :: [privileges:space_privilege()]) -> ok | {error, term()}.
-update_group_privileges(Client, SpaceId, GroupId, Operation, Privs) when is_list(Privs) ->
+    GroupId :: od_group:id(), PrivsToGrant :: [privileges:space_privilege()],
+    PrivsToRevoke :: [privileges:space_privilege()]) -> ok | {error, term()}.
+update_group_privileges(Client, SpaceId, GroupId, PrivsToGrant, PrivsToRevoke) ->
     update_group_privileges(Client, SpaceId, GroupId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
+        <<"grant">> => PrivsToGrant,
+        <<"revoke">> => PrivsToRevoke
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates privileges of specified group of given space.
-%% Privileges must be included in proper Data object, operation is optional.
+%% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_group_privileges(Client :: entity_logic:client(), SpaceId :: od_space:id(),
@@ -686,6 +753,19 @@ has_eff_privilege(SpaceId, UserId, Privilege) when is_binary(SpaceId) ->
     entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, od_space, SpaceId);
 has_eff_privilege(Space, UserId, Privilege) ->
     entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, Space).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified user is an direct user of given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_direct_user(SpaceOrId :: od_space:id() | #od_space{},
+    UserId :: od_space:id()) -> boolean().
+has_direct_user(SpaceId, UserId) when is_binary(SpaceId) ->
+    entity_graph:has_relation(direct, bottom_up, od_user, UserId, od_space, SpaceId);
+has_direct_user(Space, UserId) ->
+    entity_graph:has_relation(direct, bottom_up, od_user, UserId, Space).
 
 
 %%--------------------------------------------------------------------

@@ -81,6 +81,7 @@
     get_space/3, get_eff_space/3,
 
     get_eff_providers/2, get_eff_provider/3,
+    get_spaces_in_eff_provider/3,
 
     get_handle_services/2, get_eff_handle_services/2,
     get_handle_service/3, get_eff_handle_service/3,
@@ -396,23 +397,23 @@ update(Client, UserId, Data) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates oz privileges of given user.
-%% Allows to specify operation (set | grant | revoke) and the privileges.
+%% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_oz_privileges(Client :: entity_logic:client(), UserId :: od_user:id(),
-    Operation :: entity_graph:privileges_operation(),
-    Privs :: [privileges:oz_privilege()]) -> ok | {error, term()}.
-update_oz_privileges(Client, UserId, Operation, Privs) when is_list(Privs) ->
+    PrivsToGrant :: [privileges:oz_privilege()],
+    PrivsToRevoke :: [privileges:oz_privilege()]) -> ok | {error, term()}.
+update_oz_privileges(Client, UserId, PrivsToGrant, PrivsToRevoke) ->
     update_oz_privileges(Client, UserId, #{
-        <<"operation">> => Operation,
-        <<"privileges">> => Privs
+        <<"grant">> => PrivsToGrant,
+        <<"revoke">> => PrivsToRevoke
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates oz privileges of given user.
-%% Privileges must be included in proper Data object, operation is optional.
+%% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_oz_privileges(Client :: entity_logic:client(), UserId :: od_user:id(),
@@ -599,7 +600,7 @@ create_group(Client, UserId, Name, Type) ->
 -spec create_group(Client :: entity_logic:client(), UserId :: od_user:id(),
     NameOrData :: binary() | #{}) -> {ok, od_group:id()} | {error, term()}.
 create_group(Client, UserId, Name) when is_binary(Name) ->
-    create_group(Client, UserId, #{<<"name">> => Name, <<"type">> => team});
+    create_group(Client, UserId, #{<<"name">> => Name});
 create_group(Client, UserId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
@@ -899,12 +900,28 @@ get_eff_providers(Client, UserId) ->
 %%--------------------------------------------------------------------
 -spec get_eff_provider(Client :: entity_logic:client(), UserId :: od_user:id(),
     ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
-get_eff_provider(Client, UserId, GroupId) ->
+get_eff_provider(Client, UserId, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_provider, id = GroupId, aspect = instance, scope = protected},
+        gri = #gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_USER(UserId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of spaces supported by specific effective provider among
+%% effective providers of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_spaces_in_eff_provider(Client :: entity_logic:client(), UserId :: od_user:id(),
+    ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
+get_spaces_in_eff_provider(Client, UserId, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {user_spaces, UserId}}
     }).
 
 
@@ -1664,7 +1681,7 @@ setup_user(UserId, UserInfo) ->
                 Name ->
                     <<Name/binary, "'s space">>
             end,
-            {ok, SpaceId} = space_logic:create(?USER(UserId), SpaceName),
+            {ok, SpaceId} = user_logic:create_space(?USER(UserId), UserId, SpaceName),
             od_user:update(UserId, fun(User = #od_user{}) ->
                 {ok, User#od_user{default_space = SpaceId}}
             end);

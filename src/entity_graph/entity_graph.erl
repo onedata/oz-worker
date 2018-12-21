@@ -51,12 +51,12 @@
 -module(entity_graph).
 -author("Lukasz Opiola").
 
+-include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
 -define(ENTITY_GRAPH_LOCK, entity_graph).
--define(SELF_INTERMEDIARY, <<"self">>).
 % How often should effective graph state be checked during ensure_up_to_date -
 % exponential backoff is used.
 -define(UP_TO_DATE_CHECK_INTERVAL, 100).
@@ -120,13 +120,9 @@ end).
 -type eff_relations(EntityId) :: #{EntityId => intermediaries()}.
 -type eff_relations_with_attrs(EntityId, Attributes) :: #{EntityId => {Attributes, intermediaries()}}.
 
-% Types of operations on privileges
--type privileges_operation() :: set | grant | revoke.
-
 -export_type([
     relation_type/0, relations/1, relations_with_attrs/2,
-    intermediaries/0, eff_relations/1, eff_relations_with_attrs/2,
-    privileges_operation/0
+    intermediaries/0, eff_relations/1, eff_relations_with_attrs/2
 ]).
 
 % Types imported from entity_logic for shorter code
@@ -141,8 +137,8 @@ end).
 -type attributes() :: term().
 -type privileges() :: [atom()].
 % Possible values for attributes update - either new attributes or a pair
-% {attributes operation, attributes}
--type attributes_update() :: attributes() | {privileges_operation(), attributes()}.
+% {PrivsToGrant, PrivsToRevoke}
+-type attributes_update() :: attributes() | {PrivsToGrant :: privileges(), PrivsToRevoke :: privileges()}.
 
 -type relations() :: relations(entity_id()).
 -type relations_with_attrs() :: relations_with_attrs(entity_id(), attributes()).
@@ -164,7 +160,8 @@ entity_type() | oz_privileges => eff_relations() | eff_relations_with_attrs() | 
 -export([get_relations/4, get_relations_with_privileges/4]).
 -export([has_relation/5, has_relation/6]).
 -export([get_privileges/5, has_privilege/6, has_privilege/7]).
--export([delete_with_relations/2]).
+-export([get_intermediaries/4]).
+-export([delete_with_relations/2, delete_with_relations/3]).
 -export([update_oz_privileges/4]).
 -export([get_oz_privileges/2, has_oz_privilege/3, has_oz_privilege/4]).
 
@@ -307,13 +304,15 @@ add_relation(od_space, GroupId, od_provider, ProviderId, SupportSize) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Adds a relation between given entities. Used for relations with attributes.
+%% Adds a relation between given entities.
 %% @end
 %%--------------------------------------------------------------------
 -spec add_relation(ChildType :: entity_type(), ChildId :: entity_id(),
     ChildAttributes :: attributes(), ParentType :: entity_type(),
     ParentId :: entity_id(), ParentAttributes :: attributes()) ->
     ok | no_return().
+add_relation(EntityType, EntityId, _, EntityType, EntityId, _) ->
+    throw(?ERROR_CANNOT_ADD_RELATION_TO_SELF);
 add_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
     ParentUpdateFun = fun(Parent) ->
         case has_child(Parent, ChType, ChId) of
@@ -661,6 +660,30 @@ has_privilege(RelationType, Direction, SubjectEntityType, SubjectEntityId, Privi
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Returns the intermediaries of the effective relation between the
+%% Subject Entity and Entity.
+%% NOTE: will return empty list if there is no such relation, rather than an error.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_intermediaries(direction(), SubjectEntityType :: entity_type(),
+    SubjectEntityId :: entity_id(), entity()) -> intermediaries().
+get_intermediaries(Direction, SubjectEntityType, SubjectEntityId, Entity) ->
+    EffRelations = get_eff_relations(Direction, SubjectEntityType, Entity),
+    case maps:find(SubjectEntityId, EffRelations) of
+        error -> [];
+        {ok, Relation} -> get_intermediaries(Relation)
+    end.
+
+
+%% @private
+-spec get_intermediaries(#{entity_id() => intermediaries() | {attributes(), intermediaries()}}) ->
+    intermediaries().
+get_intermediaries({_Attributes, Intermediaries}) -> Intermediaries;
+get_intermediaries(Intermediaries) -> Intermediaries.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Safely deletes an entity, first removing all its relations and dependent
 %% entities. Fails when anything goes wrong in the cleanup procedure.
 %% @end
@@ -668,6 +691,10 @@ has_privilege(RelationType, Direction, SubjectEntityType, SubjectEntityId, Privi
 -spec delete_with_relations(entity_type(), entity_id()) -> ok.
 delete_with_relations(EntityType, EntityId) ->
     {ok, #document{value = Entity}} = EntityType:get(EntityId),
+    delete_with_relations(EntityType, EntityId, Entity).
+
+-spec delete_with_relations(entity_type(), entity_id(), entity()) -> ok | no_return().
+delete_with_relations(EntityType, EntityId, Entity) ->
     Parents = get_parents(Entity),
     DependentParents = maps:get(dependent, Parents, #{}),
     IndependentParents = maps:get(independent, Parents, #{}),
@@ -781,20 +808,15 @@ has_oz_privilege(RelationType, Privilege, Entity) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_oz_privileges(entity_type(), entity_id(),
-    privileges_operation(), [privileges:oz_privilege()]) -> ok.
-update_oz_privileges(EntityType, EntityId, Operation, Privileges) ->
+    [privileges:oz_privilege()], [privileges:oz_privilege()]) -> ok.
+update_oz_privileges(EntityType, EntityId, PrivsToGrant, PrivsToRevoke) ->
     sync_on_entity(EntityType, EntityId, fun() ->
         update_dirty_queue(top_down, true, EntityType, EntityId),
         ok = update_entity(EntityType, EntityId, fun(Entity) ->
             OzPrivileges = get_oz_privileges(direct, Entity),
-            NewOzPrivileges = case Operation of
-                set ->
-                    privileges:from_list(Privileges);
-                grant ->
-                    privileges:union(OzPrivileges, Privileges);
-                revoke ->
-                    privileges:subtract(OzPrivileges, Privileges)
-            end,
+            NewOzPrivileges = privileges:union(PrivsToGrant,
+                privileges:subtract(OzPrivileges, PrivsToRevoke)
+            ),
             {ok, mark_record_dirty(top_down, true, update_oz_privileges(
                 Entity, NewOzPrivileges)
             )}
@@ -1194,28 +1216,28 @@ add_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, Privs) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_child(entity(), entity_type(), entity_id(), attributes_update()) -> entity().
-update_child(#od_group{users = Users} = Group, od_user, UserId, {Operation, Privs}) ->
-    Group#od_group{users = update_privileges(UserId, Users, Operation, Privs)};
-update_child(#od_group{children = Children} = Group, od_group, GroupId, {Operation, Privs}) ->
-    Group#od_group{children = update_privileges(GroupId, Children, Operation, Privs)};
+update_child(#od_group{users = Users} = Group, od_user, UserId, {PrivsToGrant, PrivsToRevoke}) ->
+    Group#od_group{users = update_privileges(UserId, Users, PrivsToGrant, PrivsToRevoke)};
+update_child(#od_group{children = Children} = Group, od_group, GroupId, {PrivsToGrant, PrivsToRevoke}) ->
+    Group#od_group{children = update_privileges(GroupId, Children, PrivsToGrant, PrivsToRevoke)};
 
-update_child(#od_space{users = Users} = Space, od_user, UserId, {Operation, Privs}) ->
-    Space#od_space{users = update_privileges(UserId, Users, Operation, Privs)};
-update_child(#od_space{groups = Groups} = Space, od_group, GroupId, {Operation, Privs}) ->
-    Space#od_space{groups = update_privileges(GroupId, Groups, Operation, Privs)};
+update_child(#od_space{users = Users} = Space, od_user, UserId, {PrivsToGrant, PrivsToRevoke}) ->
+    Space#od_space{users = update_privileges(UserId, Users, PrivsToGrant, PrivsToRevoke)};
+update_child(#od_space{groups = Groups} = Space, od_group, GroupId, {PrivsToGrant, PrivsToRevoke}) ->
+    Space#od_space{groups = update_privileges(GroupId, Groups, PrivsToGrant, PrivsToRevoke)};
 
 update_child(#od_provider{spaces = Spaces} = Provider, od_space, SpaceId, NewSupportSize) ->
     Provider#od_provider{spaces = maps:put(SpaceId, NewSupportSize, Spaces)};
 
-update_child(#od_handle_service{users = Users} = HS, od_user, UserId, {Operation, Privs}) ->
-    HS#od_handle_service{users = update_privileges(UserId, Users, Operation, Privs)};
-update_child(#od_handle_service{groups = Groups} = HS, od_group, GroupId, {Operation, Privs}) ->
-    HS#od_handle_service{groups = update_privileges(GroupId, Groups, Operation, Privs)};
+update_child(#od_handle_service{users = Users} = HS, od_user, UserId, {PrivsToGrant, PrivsToRevoke}) ->
+    HS#od_handle_service{users = update_privileges(UserId, Users, PrivsToGrant, PrivsToRevoke)};
+update_child(#od_handle_service{groups = Groups} = HS, od_group, GroupId, {PrivsToGrant, PrivsToRevoke}) ->
+    HS#od_handle_service{groups = update_privileges(GroupId, Groups, PrivsToGrant, PrivsToRevoke)};
 
-update_child(#od_handle{users = Users} = Handle, od_user, UserId, {Operation, Privs}) ->
-    Handle#od_handle{users = update_privileges(UserId, Users, Operation, Privs)};
-update_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, {Operation, Privs}) ->
-    Handle#od_handle{groups = update_privileges(GroupId, Groups, Operation, Privs)};
+update_child(#od_handle{users = Users} = Handle, od_user, UserId, {PrivsToGrant, PrivsToRevoke}) ->
+    Handle#od_handle{users = update_privileges(UserId, Users, PrivsToGrant, PrivsToRevoke)};
+update_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, {PrivsToGrant, PrivsToRevoke}) ->
+    Handle#od_handle{groups = update_privileges(GroupId, Groups, PrivsToGrant, PrivsToRevoke)};
 update_child(Entity, _, _, undefined) ->
     % Other entities do not have updatable children relations.
     Entity.
@@ -1873,18 +1895,13 @@ update_oz_privileges(#od_group{} = Group, NewOzPrivileges) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_privileges(entity_id(), relations_with_attrs(entity_id(), privileges()),
-    privileges_operation(), privileges()) ->
+    privileges(), privileges()) ->
     relations_with_attrs(entity_id(), privileges()).
-update_privileges(EntityId, Relations, Operation, Privileges) ->
+update_privileges(EntityId, Relations, PrivsToGrant, PrivsToRevoke) ->
     OldPrivileges = maps:get(EntityId, Relations),
-    NewPrivileges = case Operation of
-        set ->
-            privileges:from_list(Privileges);
-        grant ->
-            privileges:union(OldPrivileges, Privileges);
-        revoke ->
-            privileges:subtract(OldPrivileges, Privileges)
-    end,
+    NewPrivileges = privileges:union(PrivsToGrant,
+        privileges:subtract(OldPrivileges, PrivsToRevoke)
+    ),
     maps:put(EntityId, NewPrivileges, Relations).
 
 
@@ -1953,18 +1970,6 @@ eff_relations_to_relations(Map) ->
         fun(_NeighbourId, {Attributes, _Intermediaries}) ->
             Attributes
         end, Map).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Returns intermediaries of an effective relation.
-%% @end
-%%--------------------------------------------------------------------
--spec get_intermediaries(#{entity_id() => intermediaries() | {attributes(), intermediaries()}}) ->
-    intermediaries().
-get_intermediaries({_Attributes, Intermediaries}) -> Intermediaries;
-get_intermediaries(Intermediaries) -> Intermediaries.
 
 
 %%--------------------------------------------------------------------

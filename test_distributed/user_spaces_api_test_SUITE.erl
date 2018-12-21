@@ -109,7 +109,8 @@ list_spaces_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -134,7 +135,7 @@ create_space_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
     ExpName = ?SPACE_NAME1,
-    AllPrivs = oz_test_utils:all_space_privileges(Config),
+    AllPrivs = privileges:space_privileges(),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(SpaceId) ->
@@ -155,7 +156,8 @@ create_space_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 {user, U1},
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_USERS_ADD_RELATIONSHIPS, ?OZ_SPACES_ADD_RELATIONSHIPS]}
             ]
         },
         rest_spec = #rest_spec{
@@ -281,6 +283,7 @@ join_space_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_USERS_ADD_RELATIONSHIPS]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -371,6 +374,7 @@ get_space_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_SPACES_VIEW]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -384,7 +388,7 @@ get_space_test(Config) ->
             module = user_logic,
             function = get_space,
             args = [client, U1, S1],
-            expected_result = ?OK_MAP(ExpDetails)
+            expected_result = ?OK_MAP_CONTAINS(ExpDetails)
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -440,7 +444,8 @@ leave_space_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_SPACES_REMOVE_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -908,7 +913,8 @@ list_eff_spaces_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -973,6 +979,7 @@ get_eff_space_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
+                        {admin, [?OZ_SPACES_VIEW]},
                         {user, U1}
                     ],
                     unauthorized = [nobody],
@@ -985,7 +992,7 @@ get_eff_space_test(Config) ->
                     module = user_logic,
                     function = get_eff_space,
                     args = [client, U1, SpaceId],
-                    expected_result = ?OK_MAP(SpaceDetails)
+                    expected_result = ?OK_MAP_CONTAINS(SpaceDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
