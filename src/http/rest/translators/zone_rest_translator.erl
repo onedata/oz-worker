@@ -29,7 +29,7 @@
 %%--------------------------------------------------------------------
 -spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
-    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
+    {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> no_return().
 create_response(_GRI, _, _Format, _Result) ->
     throw(?ERROR_NOT_SUPPORTED).
 

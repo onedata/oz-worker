@@ -37,7 +37,7 @@
 -spec fetch_entity(entity_logic:entity_id()) ->
     {ok, entity_logic:entity()} | entity_logic:error().
 fetch_entity(_) ->
-    {ok, nothing}.
+    {ok, undefined}.
 
 
 %%--------------------------------------------------------------------
@@ -72,9 +72,17 @@ create(_Req) ->
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = configuration}}, _) ->
-    % @fixme add domain to returned values
-    % @fixme move here
-    {ok, page_configuration:get_config()}.
+    CompatibleOpVersions = oz_worker:get_env(compatible_op_versions, []),
+    CompatibleOpVersionsBin = [list_to_binary(V) || V <- CompatibleOpVersions],
+    SubdomainDelegationEnabled = oz_worker:get_env(subdomain_delegation_enabled, true),
+    {ok, #{
+        name => oz_worker:get_name(),
+        version => oz_worker:get_version(),
+        build => oz_worker:get_build_version(),
+        domain => oz_worker:get_domain(),
+        compatibleOneproviderVersions => CompatibleOpVersionsBin,
+        subdomainDelegationEnabled => SubdomainDelegationEnabled
+    }}.
 
 
 %%--------------------------------------------------------------------
@@ -118,7 +126,7 @@ exists(_Req, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = configuration}}, _) ->
+authorize(#el_req{operation = get, gri = #gri{aspect = configuration}}, _) ->
     true;
 
 authorize(_Req = #el_req{}, _) ->
@@ -136,9 +144,3 @@ authorize(_Req = #el_req{}, _) ->
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
 validate(_Req) -> #{}.
-
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
