@@ -19,6 +19,7 @@
 -export([get_name/0]).
 -export([get_domain/0, get_url/0, get_uri/1]).
 -export([get_version/0, get_build_version/0]).
+-export([entity_logic_plugin/0]).
 
 %%%===================================================================
 %%% API
@@ -119,6 +120,16 @@ get_version() ->
 %%--------------------------------------------------------------------
 -spec get_build_version() -> binary().
 get_build_version() ->
-    get_env(build_version, <<"unknown">>).
+    str_utils:to_binary(get_env(build_version, <<"unknown">>)).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns an entity logic plugin module for type oz_worker.
+%% Used for queries concerning the Onezone service, which
+%% do not have a corresponding datastore model.
+%% @end
+%%--------------------------------------------------------------------
+-spec entity_logic_plugin() -> module().
+entity_logic_plugin() ->
+    zone_logic_plugin.

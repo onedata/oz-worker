@@ -18,6 +18,7 @@
 -include("registered_names.hrl").
 
 -export([handle/2]).
+-export([get_config/0]).
 
 %%%===================================================================
 %%% API
@@ -41,17 +42,15 @@ handle(<<"GET">>, Req) ->
 %%% Internal functions
 %%%===================================================================
 
--spec get_config() -> maps:map().
+-spec get_config() -> map().
 get_config() ->
     CompatibleOpVersions = oz_worker:get_env(compatible_op_versions, []),
     CompatibleOpVersionsBin = [list_to_binary(V) || V <- CompatibleOpVersions],
     SubdomainDelegationEnabled = oz_worker:get_env(subdomain_delegation_enabled, true),
-    ProviderRegistrationPolicy = oz_worker:get_env(provider_registration_policy, open),
     #{
-        <<"name">> => oz_worker:get_name(),
-        <<"version">> => oz_worker:get_version(),
-        <<"build">> => oz_worker:get_build_version(),
-        <<"compatibleOneproviderVersions">> => CompatibleOpVersionsBin,
-        <<"subdomainDelegationEnabled">> => SubdomainDelegationEnabled,
-        <<"providerRegistrationPolicy">> => ProviderRegistrationPolicy
+        name => oz_worker:get_name(),
+        version => oz_worker:get_version(),
+        build => oz_worker:get_build_version(),
+        compatibleOneproviderVersions => CompatibleOpVersionsBin,
+        subdomainDelegationEnabled => SubdomainDelegationEnabled
     }.
