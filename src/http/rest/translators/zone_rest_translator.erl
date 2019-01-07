@@ -41,7 +41,4 @@ create_response(_GRI, _, _Format, _Result) ->
 %%--------------------------------------------------------------------
 -spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
 get_response(#gri{id = undefined, aspect = configuration}, Configuration) ->
-    BinaryKeys = maps:from_list(
-        [{atom_to_binary(Key, utf8), Value} || {Key, Value} <- maps:to_list(Configuration)]
-    ),
-    rest_translator:ok_body_reply(BinaryKeys).
+    rest_translator:ok_body_reply(Configuration).

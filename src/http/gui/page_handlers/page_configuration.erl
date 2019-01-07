@@ -31,12 +31,7 @@
 %%--------------------------------------------------------------------
 -spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"GET">>, Req) ->
-    {ok, Config} = entity_logic:handle(#el_req{
-        operation = get,
-        client = ?NOBODY,
-        gri = #gri{type = oz_worker, id = undefined, aspect = configuration}
-    }),
-
+    {ok, Config} = oz_worker:get_config(),
     cowboy_req:reply(200,
         #{<<"content-type">> => <<"application/json">>},
         json_utils:encode(Config),

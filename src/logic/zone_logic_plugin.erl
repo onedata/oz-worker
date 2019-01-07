@@ -37,7 +37,7 @@
 -spec fetch_entity(entity_logic:entity_id()) ->
     {ok, entity_logic:entity()} | entity_logic:error().
 fetch_entity(_) ->
-    {ok, undefined}.
+    ?ERROR_NOT_SUPPORTED.
 
 
 %%--------------------------------------------------------------------
@@ -81,7 +81,7 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
         build => oz_worker:get_build_version(),
         domain => oz_worker:get_domain(),
         compatibleOneproviderVersions => CompatibleOpVersionsBin,
-        subdomainDelegationEnabled => SubdomainDelegationEnabled
+        subdomainDelegationSupported => SubdomainDelegationEnabled
     }}.
 
 
