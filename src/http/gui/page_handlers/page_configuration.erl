@@ -16,6 +16,7 @@
 -behaviour(dynamic_page_behaviour).
 
 -include("registered_names.hrl").
+-include("entity_logic.hrl").
 
 -export([handle/2]).
 
@@ -30,28 +31,9 @@
 %%--------------------------------------------------------------------
 -spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"GET">>, Req) ->
+    {ok, Config} = oz_worker:get_config(),
     cowboy_req:reply(200,
         #{<<"content-type">> => <<"application/json">>},
-        json_utils:encode(get_config()),
+        json_utils:encode(Config),
         Req
     ).
-
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
--spec get_config() -> maps:map().
-get_config() ->
-    CompatibleOpVersions = oz_worker:get_env(compatible_op_versions, []),
-    CompatibleOpVersionsBin = [list_to_binary(V) || V <- CompatibleOpVersions],
-    SubdomainDelegationEnabled = oz_worker:get_env(subdomain_delegation_enabled, true),
-    ProviderRegistrationPolicy = oz_worker:get_env(provider_registration_policy, open),
-    #{
-        <<"name">> => oz_worker:get_name(),
-        <<"version">> => oz_worker:get_version(),
-        <<"build">> => oz_worker:get_build_version(),
-        <<"compatibleOneproviderVersions">> => CompatibleOpVersionsBin,
-        <<"subdomainDelegationEnabled">> => SubdomainDelegationEnabled,
-        <<"providerRegistrationPolicy">> => ProviderRegistrationPolicy
-    }.
