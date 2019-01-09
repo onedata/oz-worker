@@ -236,7 +236,7 @@ create_test(Config) ->
 
     %% Create provider with provider registration policy set to strict
     rpc:multicall(Nodes, application, set_env, [
-        ?APP_NAME, provider_registration_policy, strict
+        ?APP_NAME, provider_registration_policy, restricted
     ]),
     ApiTestSpec2 = #api_test_spec{
         data_spec = #data_spec{
