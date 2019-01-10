@@ -53,6 +53,8 @@ get_rest_api_prefix(Config) ->
 %%          delete
 %%      path => % Mandatory
 %%          [<<"/parts">>, <<"/to/be">>, <<"/concatenated">>],
+%%      url => % Optional, default: {@link get_oz_url/1}
+%%          <<"oz-domain-with:port/and/api/prefix">>
 %%      headers => % Optional, default: content-type=app/json
 %%          [{<<"key">>, <<"value">>}]
 %%      body => % Optional, default: <<"">>
