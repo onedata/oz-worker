@@ -126,6 +126,7 @@ parse_egi_entitlement(<<"urn:mace:egi.eu:group:", Group/binary>>, ParserConfig) 
         <<"manager">> -> manager;
         <<"admin">> -> admin;
         <<"chair">> -> admin;
+        <<"owner">> -> admin;
         _ -> member
     end,
 
@@ -195,7 +196,7 @@ egi_validation_examples() -> [
         ], privileges = member}
     },
     {
-        <<"urn:mace:egi.eu:group:fedcloud.egi.eu:child:role=vm_operator#aai.egi.eu">>,
+        <<"urn:mace:egi.eu:group:fedcloud.egi.eu:child:role=member#aai.egi.eu">>,
         #{},
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = team, name = <<"fedcloud.egi.eu">>, privileges = member},
@@ -203,7 +204,7 @@ egi_validation_examples() -> [
         ], privileges = member}
     },
     {
-        <<"urn:mace:egi.eu:group:fedcloud.egi.eu:child:role=vm_operator#aai.egi.eu">>,
+        <<"urn:mace:egi.eu:group:fedcloud.egi.eu:child:role=owner#aai.egi.eu">>,
         #{
             topGroupType => organization,
             subGroupsType => role_holders
@@ -211,7 +212,28 @@ egi_validation_examples() -> [
         #idp_entitlement{idp = egi, path = [
             #idp_group{type = organization, name = <<"fedcloud.egi.eu">>, privileges = member},
             #idp_group{type = role_holders, name = <<"child">>, privileges = member}
-        ], privileges = member}
+        ], privileges = admin}
+    },
+    {
+        <<"urn:mace:egi.eu:group:egi-engage-members:role=manager#aai.egi.eu">>,
+        #{},
+        #idp_entitlement{idp = egi, path = [
+            #idp_group{type = team, name = <<"egi-engage-members">>, privileges = member}
+        ], privileges = manager}
+    },
+    {
+        <<"urn:mace:egi.eu:group:egi-engage-members:role=admin#aai.egi.eu">>,
+        #{},
+        #idp_entitlement{idp = egi, path = [
+            #idp_group{type = team, name = <<"egi-engage-members">>, privileges = member}
+        ], privileges = admin}
+    },
+    {
+        <<"urn:mace:egi.eu:group:egi-engage-members:role=chair#aai.egi.eu">>,
+        #{},
+        #idp_entitlement{idp = egi, path = [
+            #idp_group{type = team, name = <<"egi-engage-members">>, privileges = member}
+        ], privileges = admin}
     },
     {
         <<"unconfromant-group-name">>,
