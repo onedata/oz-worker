@@ -317,7 +317,7 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public},
     #{
         <<"publicHandle">> => PublicHandle,
         <<"metadata">> => Metadata,
-        <<"timestamp">> => Timestamp
+        <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp)
     };
 
 translate_resource(ProtocolVersion, GRI, Data) ->
