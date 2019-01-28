@@ -293,7 +293,9 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
     };
 
 translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public}, HandleData) ->
-    HandleData;
+    HandleData#{
+        <<"timestamp">> => time_utils:datetime_to_datestamp(maps:get(<<"timestamp">>, HandleData))
+    };
 
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync get result for:~n
