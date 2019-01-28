@@ -390,6 +390,9 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
             authorize(Req#el_req{gri = #gri{scope = private}}, Handle)
     end;
 
+authorize(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}}, _) ->
+    true;
+
 authorize(Req = #el_req{operation = get, client = ?USER}, Handle) ->
     % All other resources can be accessed with view privileges
     auth_by_privilege(Req, Handle, ?HANDLE_VIEW);
