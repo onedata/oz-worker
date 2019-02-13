@@ -49,7 +49,8 @@
     list_client_tokens/2,
     get_default_space/2,
     get_space_alias/3,
-    get_default_provider/2
+    get_default_provider/2,
+    acquire_idp_access_token/3
 ]).
 -export([
     update_name/3, update_alias/3, update/3,
@@ -111,6 +112,7 @@
     onepanel_uid_to_system_uid/1,
     create_user_by_linked_account/1,
     merge_linked_account/2,
+    reset_entitlements/1,
     build_test_user_info/1,
     authenticate_by_basic_credentials/2,
     change_user_password/3,
@@ -338,6 +340,22 @@ get_default_provider(Client, UserId) ->
         client = Client,
         gri = #gri{type = od_user, id = UserId, aspect = default_provider}
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves default provider of given user. Returns ?ERROR_NOT_FOUND if the user
+%% does not have a default provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec acquire_idp_access_token(entity_logic:client(), od_user:id(), auth_config:idp()) ->
+    {ok, {auth_logic:access_token(), auth_logic:access_token_ttl()}} | {error, term()}.
+acquire_idp_access_token(Client, UserId, IdP) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_user, id = UserId, aspect = {idp_access_token, IdP}}
+    })).
 
 
 %%--------------------------------------------------------------------
@@ -1290,7 +1308,7 @@ linked_account_to_map(LinkedAccount) ->
 %%--------------------------------------------------------------------
 -spec linked_accounts_to_maps([#linked_account{}]) -> [maps:map()].
 linked_accounts_to_maps(LinkedAccounts) ->
-    [linked_account_to_map(Acc) || Acc <- LinkedAccounts].
+    [linked_account_to_map(L) || L <- LinkedAccounts].
 
 
 %%--------------------------------------------------------------------
@@ -1371,14 +1389,20 @@ merge_linked_account_unsafe(UserId, LinkedAccount) ->
         emails = Emails, linked_accounts = LinkedAccounts, entitlements = OldEntitlements
     } = UserInfo}} = od_user:get(UserId),
     #linked_account{
-        idp = IdP, subject_id = SubjectId, emails = LinkedEmails
+        idp = IdP, subject_id = SubjectId, emails = LinkedEmails,
+        access_token = NewAccessT, refresh_token = NewRefreshT
     } = LinkedAccount,
-    % Add (normalized), valid emails from provider that are not yet added to account
+    % Add (normalized), valid emails from the IdP that are not yet added to the account
     NewEmails = lists:usort(Emails ++ normalize_idp_emails(LinkedEmails)),
+
     % Replace existing linked account, if present
     NewLinkedAccs = case find_linked_account(UserInfo, IdP, SubjectId) of
-        OldLinkedAcc = #linked_account{} ->
-            lists:delete(OldLinkedAcc, LinkedAccounts) ++ [LinkedAccount];
+        OldLinkedAcc = #linked_account{access_token = OldAccessT, refresh_token = OldRefreshT} ->
+            LinkedAccCoalescedTokens = LinkedAccount#linked_account{
+                access_token = case NewAccessT of {undefined, _} -> OldAccessT; _ -> NewAccessT end,
+                refresh_token = case NewRefreshT of undefined -> OldRefreshT; _ -> NewRefreshT end
+            },
+            lists:delete(OldLinkedAcc, LinkedAccounts) ++ [LinkedAccCoalescedTokens];
         undefined ->
             LinkedAccounts ++ [LinkedAccount]
     end,
@@ -1395,6 +1419,25 @@ merge_linked_account_unsafe(UserId, LinkedAccount) ->
             entitlements = NewEntitlements
         }}
     end).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Clears the list of entitlements of given user, which will cause full
+%% refresh of all entitlements from all IdPs upon the next login.
+%% Useful when the user was assigned new roles in the groups or the structure
+%% changed in a way that cannot be corrected automatically.
+%% @end
+%%--------------------------------------------------------------------
+-spec reset_entitlements(od_user:id()) -> ok | {error, term()}.
+reset_entitlements(UserId) ->
+    ResetEntitlements = fun(User) ->
+        {ok, User#od_user{entitlements = []}}
+    end,
+    case od_user:update(UserId, ResetEntitlements) of
+        {ok, _} -> ok;
+        {error, _} = Error -> Error
+    end.
 
 
 %%--------------------------------------------------------------------

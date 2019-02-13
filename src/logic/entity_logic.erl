@@ -377,8 +377,13 @@ fetch_entity(St = #state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}) -
 %% @end
 %%--------------------------------------------------------------------
 -spec call_create(State :: #state{}) -> create_result().
-call_create(#state{req = ElReq, plugin = Plugin}) ->
-    Plugin:create(ElReq).
+call_create(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
+    case Plugin:create(ElReq) of
+        Fun when is_function(Fun, 1) ->
+            Fun(Entity);
+        Result ->
+            Result
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -640,12 +645,14 @@ check_type(any, _Key, Term) ->
     Term;
 check_type(atom, _Key, Atom) when is_atom(Atom) ->
     Atom;
-check_type(atom, Key, Binary) when is_binary(Binary) ->
+check_type(atom, _Key, Binary) when is_binary(Binary) ->
     try
         binary_to_existing_atom(Binary, utf8)
     catch
         _:_ ->
-            throw(?ERROR_BAD_VALUE_ATOM(Key))
+            % return empty atom so it can fail on value verification
+            % (atoms can always have only predefined values)
+            ''
     end;
 check_type(atom, Key, _) ->
     throw(?ERROR_BAD_VALUE_ATOM(Key));
@@ -657,15 +664,7 @@ check_type(boolean, Key, _) ->
     throw(?ERROR_BAD_VALUE_BOOLEAN(Key));
 check_type(list_of_atoms, Key, Values) ->
     try
-        lists:map(
-            fun(Value) ->
-                case Value of
-                    Atom when is_atom(Atom) ->
-                        Atom;
-                    Bin when is_binary(Bin) ->
-                        binary_to_existing_atom(Bin, utf8)
-                end
-            end, Values)
+        [check_type(atom, Key, Val) || Val <- Values]
     catch
         _:_ ->
             throw(?ERROR_BAD_VALUE_LIST_OF_ATOMS(Key))
@@ -678,15 +677,10 @@ check_type(binary, Key, _) ->
     throw(?ERROR_BAD_VALUE_BINARY(Key));
 check_type(list_of_binaries, Key, Values) ->
     try
-        lists:map(
-            fun(Value) ->
-                case Value of
-                    Atom when is_atom(Atom) ->
-                        atom_to_binary(Atom, utf8);
-                    Bin when is_binary(Bin) ->
-                        Bin
-                end
-            end, Values)
+        lists:map(fun
+            (Atom) when is_atom(Atom) -> atom_to_binary(Atom, utf8);
+            (Bin) when is_binary(Bin) -> Bin
+        end, Values)
     catch
         _:_ ->
             throw(?ERROR_BAD_VALUE_LIST_OF_BINARIES(Key))

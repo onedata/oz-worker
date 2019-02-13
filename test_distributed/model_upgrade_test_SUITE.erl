@@ -97,8 +97,7 @@ test_record_upgrade(Config, Type, Versions) ->
         {NewVersion, NewRecord} = oz_test_utils:call_oz(
             Config, Type, upgrade_record, [Version - 1, RecordInOlderVersion]
         ),
-        ?assertEqual(NewVersion, Version),
-        ?assertEqual(NewRecord, get_record(Type, Version)),
+        ?assertEqual({NewVersion, NewRecord}, {Version, get_record(Type, Version)}),
         NewRecord
     end, get_record(Type, hd(Versions)), tl(Versions)).
 
@@ -442,7 +441,61 @@ get_record(od_user, 7) -> {od_user,
     #{},
     true
 };
-get_record(od_user, 8) -> #od_user{
+get_record(od_user, 8) -> {od_user,
+    <<"name">>,
+    <<"login">>,
+    [<<"email1@email.com">>, <<"email2@email.com">>],
+    true,
+    [
+        {linked_account,
+            google,
+            <<"user_id1">>,
+            <<"name1">>,
+            <<"login1">>,
+            [<<"email1@email.com">>],
+            [],
+            #{}
+        },
+        {linked_account,
+            github,
+            <<"user_id2">>,
+            <<"name2">>,
+            <<"login2">>,
+            [<<"email2@email.com">>],
+            [],
+            #{}
+        }
+    ],
+    [],
+
+    <<"default_space">>,
+    <<"default_provider">>,
+
+    [<<"token1">>, <<"token2">>],
+    #{
+        <<"sp1">> => <<"sp1Name">>,
+        <<"sp2">> => <<"sp2Name">>
+    },
+
+    [
+        ?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES,
+        ?OZ_USERS_LIST, ?OZ_SPACES_ADD_MEMBERS
+    ],
+    [],
+
+    [<<"group1">>, <<"group2">>, <<"group3">>],
+    [<<"space1">>, <<"space2">>, <<"space3">>],
+    [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
+    [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    true
+};
+get_record(od_user, 9) -> #od_user{
     name = <<"name">>,
     alias = <<"login">>,
     emails = [<<"email1@email.com">>, <<"email2@email.com">>],
@@ -455,7 +508,9 @@ get_record(od_user, 8) -> #od_user{
             alias = <<"login1">>,
             emails = [<<"email1@email.com">>],
             entitlements = [],
-            custom = #{}
+            custom = #{},
+            access_token = {undefined, 0},
+            refresh_token = undefined
         },
         #linked_account{
             idp = github,
@@ -464,7 +519,9 @@ get_record(od_user, 8) -> #od_user{
             alias = <<"login2">>,
             emails = [<<"email2@email.com">>],
             entitlements = [],
-            custom = #{}
+            custom = #{},
+            access_token = {undefined, 0},
+            refresh_token = undefined
         }
     ],
     entitlements = [],

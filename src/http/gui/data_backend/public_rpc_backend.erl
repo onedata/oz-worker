@@ -72,7 +72,7 @@ handle(<<"getSupportedAuthorizers">>, Data) ->
             ]};
         _ ->
             {ok, [
-                {<<"authorizers">>, auth_config:get_supported_idps()}
+                {<<"authorizers">>, auth_config:get_supported_idps_in_gui_format()}
             ]}
     end;
 

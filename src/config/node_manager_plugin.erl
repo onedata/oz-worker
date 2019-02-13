@@ -117,7 +117,7 @@ on_cluster_initialized(_Nodes) ->
 -spec after_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
 after_init([]) ->
     try
-        auth_plugins:init(),
+        onezone_plugins:init(),
 
         entity_graph:init_state(),
 

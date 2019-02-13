@@ -67,6 +67,8 @@
     validate_correct_login/1,
     validate_correct_login_test_mode/1,
     authority_delegation/1,
+    offline_access/1,
+    offline_access_internals/1,
     link_account/1,
     bad_oidc_config/1,
     bad_oidc_config_test_mode/1
@@ -80,6 +82,8 @@ all() -> ?ALL([
     validate_correct_login,
     validate_correct_login_test_mode,
     authority_delegation,
+    offline_access,
+    offline_access_internals,
     link_account,
     bad_oidc_config,
     bad_oidc_config_test_mode
@@ -96,18 +100,41 @@ init_per_suite(Config) ->
     [{?LOAD_MODULES, [oz_test_utils, rest_test_utils, oidc_server_mock]} | Config].
 
 
+init_per_testcase(offline_access_internals, Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_new(Nodes, openid_protocol, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, openid_protocol, refresh_idp_access_token,
+        fun call_mocked_refresh_endpoint/2
+    ),
+    init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
     oz_test_utils:delete_all_entities(Config),
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:set_env(Nodes, ?APP_NAME, openid_xrds_cache_ttl, -1),
+    oz_test_utils:mock_time(Config),
     Config.
 
-end_per_testcase(_, _Config) ->
+end_per_testcase(offline_access_internals, Config) ->
+    end_per_testcase(default, Config);
+end_per_testcase(_, Config) ->
+    oz_test_utils:unmock_time(Config),
     ok.
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
+
+
+% This code is evaluated on a Onezone node when the mocked refresh function is called
+call_mocked_refresh_endpoint(IdP, RefreshToken) ->
+    {ok, Fun} = application:get_env(oz_worker, mocked_refresh_endpoint),
+    Fun(IdP, RefreshToken).
+
+
+% This code is evaluated on the testmaster node (called in test code)
+mock_refresh_endpoint_response(Config, Fun) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:set_env(Nodes, oz_worker, mocked_refresh_endpoint, Fun).
 
 
 %%%===================================================================
@@ -385,6 +412,175 @@ authority_delegation(Config) ->
 
     ?assert(rest_test_utils:check_rest_call(Config, DelegationWorksSpec(false, xAuthToken))),
     ?assert(rest_test_utils:check_rest_call(Config, DelegationWorksSpec(false, bearer))).
+
+
+-define(ACQUIRE_IDP_ACCESS_TOKEN(UserId, IdP), oz_test_utils:call_oz(
+    Config, user_logic, acquire_idp_access_token, [?USER(UserId), UserId, IdP]
+)).
+offline_access(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    SubjectId = <<"1233456734534">>,
+    OidcSpec = ?CORRECT_OIDC_SPEC,
+    oidc_server_mock:mock(Config, OidcSpec),
+
+    % The IdP does not have offlineAccess enabled -> bad value
+    overwrite_auth_config(Config, false, [{?DUMMY_IDP, OidcSpec, #{
+        attributeMapping => #{
+            subjectId => {required, "sub"}
+        },
+        offlineAccess => false
+    }}]),
+    simulate_login_flow(Config, ?DUMMY_IDP, false, false, OidcSpec, #{<<"sub">> => SubjectId}),
+    UserId = user_logic:idp_uid_to_system_uid(?DUMMY_IDP, SubjectId),
+    ?assertMatch(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, []), ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+
+    % The user does not have any access/refresh token cached -> not found
+    overwrite_auth_config(Config, false, [{?DUMMY_IDP, OidcSpec, #{
+        attributeMapping => #{
+            subjectId => {required, "sub"}
+        },
+        offlineAccess => true
+    }}]),
+    ?assertMatch(?ERROR_NOT_FOUND, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+
+    % Logging in should cause the tokens to be cached
+    simulate_login_flow(Config, ?DUMMY_IDP, false, false, OidcSpec, #{<<"sub">> => SubjectId}),
+    {ok, #od_user{linked_accounts = [
+        #linked_account{access_token = {AccessToken, _}}
+    ]}} = oz_test_utils:get_user(Config, UserId),
+    ?assertMatch({ok, {AccessToken, ?MOCK_ACCESS_TOKEN_TTL}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+    {ok, #od_user{linked_accounts = [
+        #linked_account{refresh_token = RefreshToken1}
+    ]}} = oz_test_utils:get_user(Config, UserId),
+
+    % The same access token should be reused if possible (unless it reaches refresh threshold)
+    {ok, RefreshThreshold} = test_utils:get_env(hd(Nodes), oz_worker, idp_access_token_refresh_threshold),
+    oz_test_utils:simulate_time_passing(Config, ?MOCK_ACCESS_TOKEN_TTL - RefreshThreshold - 1),
+    NewTtl = RefreshThreshold + 1,
+    ?assertMatch({ok, {AccessToken, NewTtl}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+
+    % expired access token should be refreshed when refresh threshold is reached
+    oz_test_utils:simulate_time_passing(Config, 2),
+    {ok, {NewAccessToken, _}} =
+        ?assertMatch({ok, {_, ?MOCK_ACCESS_TOKEN_TTL}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+    ?assertNotMatch(NewAccessToken, AccessToken),
+    {ok, #od_user{linked_accounts = [
+        #linked_account{refresh_token = RefreshToken2}
+    ]}} = oz_test_utils:get_user(Config, UserId),
+    ?assertNotMatch(RefreshToken2, RefreshToken1).
+
+
+offline_access_internals(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    SubjectId = <<"offline_access_internals-abcdewq">>,
+    {ok, RefreshThreshold} = test_utils:get_env(hd(Nodes), oz_worker, idp_access_token_refresh_threshold),
+    overwrite_auth_config(Config, false, [{?DUMMY_IDP, ?CORRECT_OIDC_SPEC, #{
+        attributeMapping => #{
+            subjectId => {required, "sub"},
+            name => {optional, "name"}
+        },
+        offlineAccess => true
+    }}]),
+    % Simulate a user with some already cached tokens
+    {ok, #document{key = UserId}} = oz_test_utils:call_oz(
+        Config, user_logic, create_user_by_linked_account, [#linked_account{
+            idp = ?DUMMY_IDP,
+            subject_id = SubjectId,
+            access_token = {<<"at1">>, oz_test_utils:get_mocked_time(Config) + 1000},
+            refresh_token = <<"rt1">>
+        }]
+    ),
+    ?assertMatch(UserId, user_logic:idp_uid_to_system_uid(?DUMMY_IDP, SubjectId)),
+    ?assertMatch({ok, {<<"at1">>, 1000}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+
+    % Access token should be refreshed only when the RefreshThreshold is reached
+    Ttl1 = RefreshThreshold + 1,
+    oz_test_utils:simulate_time_passing(Config, 1000 - Ttl1),
+    ?assertMatch({ok, {<<"at1">>, Ttl1}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+    oz_test_utils:simulate_time_passing(Config, 2),
+    mock_refresh_endpoint_response(Config, fun(?DUMMY_IDP, <<"rt1">>) ->
+        {ok, #{
+            <<"sub">> => SubjectId,
+            <<"access_token">> => {<<"at2">>, oz_test_utils:get_mocked_time(Config) + 1200},
+            <<"refresh_token">> => <<"rt2">>
+        }}
+    end),
+    ?assertMatch({ok, {<<"at2">>, 1200}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+    ?assertMatch(
+        {ok, #od_user{linked_accounts = [#linked_account{refresh_token = <<"rt2">>}]}},
+        oz_test_utils:get_user(Config, UserId)
+    ),
+
+    % Refresh token should not be overwritten if a new one does not come in the refresh response
+    oz_test_utils:simulate_time_passing(Config, 1200),
+    mock_refresh_endpoint_response(Config, fun(?DUMMY_IDP, <<"rt2">>) ->
+        {ok, #{
+            <<"sub">> => SubjectId,
+            <<"access_token">> => {<<"at3">>, oz_test_utils:get_mocked_time(Config) + 800}
+        }}
+    end),
+    ?assertMatch({ok, {<<"at3">>, 800}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+    ?assertMatch(
+        {ok, #od_user{linked_accounts = [#linked_account{refresh_token = <<"rt2">>}]}},
+        oz_test_utils:get_user(Config, UserId)
+    ),
+
+    % If there is no refresh token cached, refreshing should not be attempted even when
+    % the RefreshThreshold is reached
+    ?assertMatch(
+        {ok, _},
+        oz_test_utils:call_oz(Config, od_user, update, [UserId, fun(User) ->
+            {ok, User#od_user{linked_accounts = [#linked_account{
+                idp = ?DUMMY_IDP,
+                subject_id = SubjectId,
+                access_token = {<<"at4">>, oz_test_utils:get_mocked_time(Config) + 1000},
+                refresh_token = undefined
+            }]}}
+        end
+        ])
+    ),
+    Ttl4 = RefreshThreshold - 100,
+    oz_test_utils:simulate_time_passing(Config, 1000 - Ttl4),
+    ?assertMatch({ok, {<<"at4">>, Ttl4}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+    % Though when the expiration time is reached, the token should no longer be served
+    oz_test_utils:simulate_time_passing(Config, Ttl4 + 1),
+    ?assertMatch(?ERROR_NOT_FOUND, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+
+    % Refreshing the token should also fetch user data and refresh it
+    ?assertMatch(
+        {ok, _},
+        oz_test_utils:call_oz(Config, user_logic, merge_linked_account, [UserId, #linked_account{
+            idp = ?DUMMY_IDP,
+            subject_id = SubjectId,
+            name = <<"Old Name">>,
+            access_token = {<<"at5">>, oz_test_utils:get_mocked_time(Config) + 1000},
+            refresh_token = <<"rt5">>
+        }])
+    ),
+    ?assertMatch(
+        {ok, #od_user{linked_accounts = [#linked_account{
+            name = <<"Old Name">>,
+            refresh_token = <<"rt5">>
+        }]}},
+        oz_test_utils:get_user(Config, UserId)
+    ),
+    oz_test_utils:simulate_time_passing(Config, 1001),
+    mock_refresh_endpoint_response(Config, fun(?DUMMY_IDP, <<"rt5">>) ->
+        {ok, #{
+            <<"sub">> => SubjectId,
+            <<"name">> => <<"New Name">>,
+            <<"access_token">> => {<<"at6">>, oz_test_utils:get_mocked_time(Config) + 1600},
+            <<"refresh_token">> => <<"rt6">>
+        }}
+    end),
+    ?assertMatch({ok, {<<"at6">>, 1600}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
+    ?assertMatch(
+        {ok, #od_user{linked_accounts = [#linked_account{
+            name = <<"New Name">>,
+            refresh_token = <<"rt6">>
+        }]}},
+        oz_test_utils:get_user(Config, UserId)
+    ).
 
 
 link_account(Config) ->

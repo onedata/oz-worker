@@ -47,6 +47,7 @@
     set_default_provider_test/1,
     get_default_provider_test/1,
     unset_default_provider_test/1,
+    acquire_idp_access_token_test/1,
 
     list_eff_providers_test/1,
     get_eff_provider_test/1
@@ -70,6 +71,7 @@ all() ->
         set_default_provider_test,
         get_default_provider_test,
         unset_default_provider_test,
+        acquire_idp_access_token_test,
 
         list_eff_providers_test,
         get_eff_provider_test
@@ -1023,6 +1025,141 @@ unset_default_provider_test(Config) ->
     ?assert(api_test_scenarios:run_scenario(delete_entity, [
         Config, ApiTestSpec2, EnvSetUpFun, VerifyEndFun, DeleteEntityFun
     ])).
+
+
+acquire_idp_access_token_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    % Offline access disabled in given IdP
+    oz_test_utils:overwrite_auth_config(Config, #{
+        openidConfig => #{
+            enabled => true
+        },
+        supportedIdps => [
+            {dummyIdP, #{
+                protocol => openid,
+                protocolConfig => #{
+                    plugin => default_oidc_plugin,
+                    offlineAccess => false
+                }
+            }}
+        ]
+    }),
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U1}
+            ]
+        },
+        rest_spec = RestSpec = #rest_spec{
+            method = post,
+            path = <<"/user/idp_access_token/dummyIdP">>,
+            expected_code = ?HTTP_400_BAD_REQUEST
+        },
+        logic_spec = LogicSpec = #logic_spec{
+            module = user_logic,
+            function = acquire_idp_access_token,
+            args = [client, U1, dummyIdP],
+            expected_result = ?ERROR_REASON(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, []))
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+
+    % Inexistent IdP
+    oz_test_utils:overwrite_auth_config(Config, #{
+        openidConfig => #{
+            enabled => true
+        },
+        supportedIdps => [
+            {dummyIdP, #{
+                protocol => openid,
+                protocolConfig => #{
+                    plugin => default_oidc_plugin,
+                    offlineAccess => true
+                }
+            }}
+        ]
+    }),
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
+            path = <<"/user/idp_access_token/inexistentIdP">>,
+            expected_code = ?HTTP_400_BAD_REQUEST
+        },
+        logic_spec = LogicSpec#logic_spec{
+            args = [client, U1, inexistentIdP],
+            expected_result = ?ERROR_REASON(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, [dummyIdP]))
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+
+    % Newly created user should not have any IdP access tokens cached
+    ApiTestSpec3 = ApiTestSpec#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
+            path = <<"/user/idp_access_token/dummyIdP">>,
+            expected_code = ?HTTP_404_NOT_FOUND
+        },
+        logic_spec = LogicSpec#logic_spec{
+            args = [client, U1, dummyIdP],
+            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
+
+    % Simulate user login
+    DummyAccessToken = <<"abcdef">>,
+    Now = oz_test_utils:call_oz(Config, time_utils, cluster_time_seconds, []),
+    oz_test_utils:call_oz(Config, user_logic, merge_linked_account, [
+        U1, #linked_account{
+            idp = dummyIdP,
+            subject_id = <<"123">>,
+            access_token = {DummyAccessToken, Now + 3600}
+        }
+    ]),
+
+    VerifyFun = fun(Token, Ttl) ->
+        Token =:= DummyAccessToken andalso Ttl =< 3600
+    end,
+
+    ApiTestSpec4 = ApiTestSpec#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
+            path = <<"/user/idp_access_token/dummyIdP">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = fun(#{<<"token">> := Token, <<"ttl">> := Ttl}) ->
+                VerifyFun(Token, Ttl)
+            end
+        },
+        logic_spec = LogicSpec#logic_spec{
+            args = [client, U1, dummyIdP],
+            expected_result = ?OK_TERM(fun({Token, Ttl}) ->
+                VerifyFun(Token, Ttl)
+            end)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec4)),
+
+    % Check that regular client can't make request on behalf of other client
+    ApiTestSpec5 = ApiTestSpec4#api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U1}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U2},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = undefined
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec5)).
+
+
 
 
 list_eff_providers_test(Config) ->
