@@ -6,10 +6,10 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Auth plugins are user-defined erlang modules that can be injected into the
-%%% Onezone service and used to customize OIDC / SAML sing-on procedure.
+%%% Plugins are user-defined erlang modules that can be injected into the
+%%% Onezone service and used to customize it.
 %%% All plugins are expected to be found in the directory
-%%% /etc/oz_worker/auth_plugins, and must be erlang files with ".erl" extension.
+%%% /etc/oz_worker/plugins, and must be erlang files with ".erl" extension.
 %%% They will be loaded upon Onezone startup. When using a deployment with more
 %%% than one node, the same plugins must be provisioned on all nodes.
 %%%
@@ -17,7 +17,7 @@
 %%% modules. Please refer to the oz-worker source code for the behaviours and
 %%% implementation guide.
 %%%
-%%% Each plugin must implement the 'auth_plugin_behaviour', which has one
+%%% Each plugin must implement the 'onezone_plugin_behaviour', which has one
 %%% callback - type/0, that returns the type of the plugin:
 %%%
 %%%   attribute_mapper - must implement attribute_mapper_behaviour
@@ -32,12 +32,12 @@
 %%%
 %%% @end
 %%%-------------------------------------------------------------------
--module(auth_plugins).
+-module(onezone_plugins).
 
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(PLUGINS_DIR, begin {ok, __Path} = oz_worker:get_env(auth_plugins_dir), __Path end).
+-define(PLUGINS_DIR, begin {ok, __Path} = oz_worker:get_env(plugins_directory), __Path end).
 -define(INCLUDES_DIR, filename:join(code:lib_dir(?APP_NAME), "include")).
 -define(COMPILE_OPTS, [return_errors, {i, ?INCLUDES_DIR}]).
 
@@ -58,15 +58,15 @@ init() ->
     PluginsDir = ?PLUGINS_DIR,
     PluginFiles = case file:list_dir(PluginsDir) of
         {error, Error} ->
-            ?warning("Cannot read auth plugins directory, no plugins will be loaded: ~p", [
+            ?warning("Cannot read plugins directory, no plugins will be loaded: ~p", [
                 {error, Error}
             ]),
             [];
         {ok, Files} ->
             ErlFiles = [F || F <- Files, filename:extension(F) == ".erl"],
             case length(ErlFiles) of
-                0 -> ?info("No auth plugins found");
-                N -> ?info("Found ~B auth plugins in ~s", [N, PluginsDir])
+                0 -> ?info("No plugins found in ~s", [PluginsDir]);
+                N -> ?info("Found ~B plugins in ~s", [N, PluginsDir])
             end,
             ErlFiles
     end,
@@ -96,7 +96,7 @@ init() ->
 validate_plugin(Module) ->
     validate_plugin(Module, Module:type()).
 
--spec validate_plugin(module(), auth_plugin_behaviour:type()) -> ok.
+-spec validate_plugin(module(), onezone_plugin_behaviour:type()) -> ok.
 validate_plugin(Module, entitlement_parser) ->
     try Module:validation_examples() of
         Examples ->

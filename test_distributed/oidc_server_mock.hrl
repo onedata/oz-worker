@@ -53,6 +53,7 @@
     %% @formatter:on
 }).
 
+-define(MOCK_ACCESS_TOKEN_TTL, 3600).
 
 -endif.
 

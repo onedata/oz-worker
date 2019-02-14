@@ -21,7 +21,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 -module(custom_entitlement_parser).
--behavior(auth_plugin_behaviour).
+-behavior(onezone_plugin_behaviour).
 -behavior(entitlement_parser_behaviour).
 
 -include("auth/entitlement_mapping.hrl").

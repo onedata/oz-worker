@@ -16,7 +16,7 @@
 -author("Lukasz Opiola").
 
 -include("auth/auth_common.hrl").
-
+-include_lib("ctool/include/api_errors.hrl").
 
 % Default configuration of the handler
 -define(DEFAULT_SCOPE, "openid email profile").
@@ -28,6 +28,7 @@
     accessToken -> {xrds, "token_endpoint"};
     userInfo -> {xrds, "userinfo_endpoint"}
 end).
+-define(ASSUMED_TOKEN_LIFESPAN, oz_worker:get_env(assumed_idp_access_token_lifespan, 3600)).
 
 
 % Macros for reading certain config params of given IdP
@@ -48,6 +49,9 @@ end).
 -define(CFG_SCOPE(__IdP),
     ?bin(?cfg(__IdP, [pluginConfig, scope], {default, ?DEFAULT_SCOPE}))
 ).
+-define(CFG_PROMPT(__IdP),
+    ?bin(?cfg(__IdP, [pluginConfig, prompt], {default, undefined}))
+).
 -define(CFG_ACCESS_TOKEN_ACQUIRE_METHOD(__IdP),
     ?cfg(__IdP, [pluginConfig, accessTokenAcquireMethod], {default, ?DEFAULT_ACCESS_TOKEN_ACQUIRE_METHOD})
 ).
@@ -66,7 +70,12 @@ end).
 
 
 %% openid_plugin_behaviour callbacks
--export([get_login_endpoint/3, validate_login/3, get_user_info/2]).
+-export([
+    get_login_endpoint/3,
+    validate_login/3,
+    refresh_access_token/2,
+    get_user_info/2
+]).
 
 
 %%%===================================================================
@@ -89,9 +98,17 @@ get_login_endpoint(IdP, State, RedirectUri) ->
         <<"redirect_uri">> => RedirectUri,
         <<"state">> => State
     },
-    Params2 = parameters_append_custom(Params1, IdP, authorize),
+    Params2 = case auth_config:has_offline_access_enabled(IdP) of
+        true -> Params1#{<<"access_type">> => <<"offline">>};
+        false -> Params1
+    end,
+    Params3 = case ?CFG_PROMPT(IdP) of
+        undefined -> Params2;
+        Prompt -> Params2#{<<"prompt">> => Prompt}
+    end,
+    Params4 = parameters_append_custom(Params3, IdP, authorize),
     AuthorizeEndpoint = idp_endpoint(IdP, authorize),
-    http_utils:append_url_parameters(AuthorizeEndpoint, Params2).
+    http_utils:append_url_parameters(AuthorizeEndpoint, Params4).
 
 
 %%--------------------------------------------------------------------
@@ -103,36 +120,46 @@ get_login_endpoint(IdP, State, RedirectUri) ->
     auth_logic:redirect_uri()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
 validate_login(IdP, #{<<"code">> := Code}, RedirectUri) ->
-    Parameters1 = #{
+    {AccessToken, Expires, RefreshToken} = acquire_access_token(IdP, #{
         <<"code">> => Code,
         <<"redirect_uri">> => RedirectUri,
         <<"grant_type">> => <<"authorization_code">>
-    },
-    Parameters2 = parameters_append_auth(Parameters1, IdP),
-    Parameters3 = parameters_append_custom(Parameters2, IdP, accessToken),
+    }),
+    {ok, Attributes} = get_user_info(IdP, AccessToken),
+    case auth_config:has_offline_access_enabled(IdP) of
+        false ->
+            {ok, Attributes};
+        true ->
+            {ok, Attributes#{
+                <<"access_token">> => {AccessToken, Expires},
+                <<"refresh_token">> => RefreshToken
+            }}
+    end.
 
-    Headers1 = #{
-        <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
-    },
-    Headers2 = headers_append_auth(Headers1, IdP),
-    Headers3 = headers_append_custom(Headers2, IdP, accessToken),
 
-    AccessTokenEndpoint = idp_endpoint(IdP, accessToken),
-    Method = ?CFG_ACCESS_TOKEN_ACQUIRE_METHOD(IdP),
-    {ResponseHeaders, ResponseBinary} = openid_protocol:request_idp(
-        Method, 200, AccessTokenEndpoint, Headers3, Parameters3
-    ),
-
-    AccessToken = case maps:get(<<"Content-Type">>, ResponseHeaders, undefined) of
-        <<"application/x-www-form-urlencoded", _/binary>> ->
-            Response = cow_qs:parse_qs(ResponseBinary),
-            proplists:get_value(<<"access_token">>, Response, <<"">>);
-        _ ->
-            Response = json_utils:decode(ResponseBinary),
-            maps:get(<<"access_token">>, Response, <<"">>)
-    end,
-
-    get_user_info(IdP, AccessToken).
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link openid_plugin_behaviour} callback refresh_access_token/2.
+%% @end
+%%--------------------------------------------------------------------
+-spec refresh_access_token(auth_config:idp(), auth_logic:refresh_token()) ->
+    {ok, attribute_mapping:idp_attributes()} | {error, term()}.
+refresh_access_token(IdP, RefreshToken) ->
+    case auth_config:has_offline_access_enabled(IdP) of
+        false ->
+            ?ERROR_NOT_SUPPORTED;
+        true ->
+            {NewAccessToken, Expires, NewRefreshToken} = acquire_access_token(IdP, #{
+                <<"grant_type">> => <<"refresh_token">>,
+                <<"refresh_token">> => RefreshToken,
+                <<"scope">> => ?CFG_SCOPE(IdP)
+            }),
+            {ok, Attributes} = get_user_info(IdP, NewAccessToken),
+            {ok, Attributes#{
+                <<"access_token">> => {NewAccessToken, Expires},
+                <<"refresh_token">> => NewRefreshToken
+            }}
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -173,6 +200,44 @@ get_user_info(IdP, AccessToken) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%% @private
+-spec acquire_access_token(auth_config:idp(), auth_logic:query_params()) ->
+    auth_config:access_token().
+acquire_access_token(IdP, Parameters) ->
+    Parameters2 = parameters_append_auth(Parameters, IdP),
+    Parameters3 = parameters_append_custom(Parameters2, IdP, accessToken),
+
+    Headers1 = #{
+        <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
+    },
+    Headers2 = headers_append_auth(Headers1, IdP),
+    Headers3 = headers_append_custom(Headers2, IdP, accessToken),
+
+    AccessTokenEndpoint = idp_endpoint(IdP, accessToken),
+    Method = ?CFG_ACCESS_TOKEN_ACQUIRE_METHOD(IdP),
+    {ResponseHeaders, ResponseBinary} = openid_protocol:request_idp(
+        Method, 200, AccessTokenEndpoint, Headers3, Parameters3
+    ),
+
+    case maps:get(<<"Content-Type">>, ResponseHeaders, undefined) of
+        <<"application/x-www-form-urlencoded", _/binary>> ->
+            Response = cow_qs:parse_qs(ResponseBinary),
+            AccessToken = proplists:get_value(<<"access_token">>, Response, undefined),
+            ExpiresIn = case proplists:get_value(<<"expires_in">>, Response, undefined) of
+                undefined -> ?ASSUMED_TOKEN_LIFESPAN;
+                ValueBin -> binary_to_integer(ValueBin)
+            end,
+            RefreshToken = proplists:get_value(<<"refresh_token">>, Response, undefined),
+            {AccessToken, time_utils:cluster_time_seconds() + ExpiresIn, RefreshToken};
+        _ ->
+            Response = json_utils:decode(ResponseBinary),
+            AccessToken = maps:get(<<"access_token">>, Response, undefined),
+            ExpiresIn = maps:get(<<"expires_in">>, Response, ?ASSUMED_TOKEN_LIFESPAN),
+            RefreshToken = maps:get(<<"refresh_token">>, Response, undefined),
+            {AccessToken, time_utils:cluster_time_seconds() + ExpiresIn, RefreshToken}
+    end.
+
 
 %% @private
 -spec request_user_info(http_client:url(), auth_logic:query_params(),

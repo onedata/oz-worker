@@ -200,6 +200,8 @@ oidc_protocol_plugin_config(IdP, Config) -> #{
     clientSecret => ?str(proplists:get_value(app_secret, Config, <<"unknown">>)),
     endpoints => oidc_endpoints(IdP, Config),
     scope => oidc_scope(IdP),
+    offlineAccess => false,
+    prompt => undefined,
     accessTokenAcquireMethod => oidc_access_token_acquire_method(IdP),
     clientSecretPassMethod => oidc_client_secret_pass_method(IdP),
     accessTokenPassMethod => oidc_access_token_pass_method(IdP),

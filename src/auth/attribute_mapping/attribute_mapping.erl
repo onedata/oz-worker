@@ -51,8 +51,8 @@
 %%%         Module:map_attribute(Attr, IdPAttributes) will be called and should
 %%%         return the resolved attribute value as {ok, Value}, or {error, Reason}
 %%%         if it could not be found. IdPAttributes is an Erlang map (keys are
-%%%         binaries). Module must be placed in the auth_plugins directory
-%%%         (/etc/oz_worker/auth_plugins) to be loaded during Onezone startup.
+%%%         binaries). Module must be placed in the plugins directory
+%%%         (/etc/oz_worker/plugins) to be loaded during Onezone startup.
 %%%         Example:
 %%%             name => {plugin, my_attr_mapper}
 %%%                 would call my_attr_mapper:map_attribute(name, IdPAttributes)
@@ -298,7 +298,10 @@ map_attributes(IdP, Attributes) ->
         alias = map_attribute(IdP, alias, binary_or_undef, Attributes),
         emails = map_attribute(IdP, emails, list_of_binaries, Attributes),
         entitlements = map_attribute(IdP, entitlements, list_of_binaries, Attributes),
-        custom = map_attribute(IdP, custom, json, Attributes)
+        custom = map_attribute(IdP, custom, json, Attributes),
+        % The mapping rules of below values are not configurable
+        access_token = maps:get(<<"access_token">>, Attributes, {undefined, 0}),
+        refresh_token = maps:get(<<"refresh_token">>, Attributes, undefined)
     }.
 
 

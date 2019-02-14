@@ -46,10 +46,13 @@
     {"IdP exists", fun idp_exists/0},
     {"get SAML cert in PEM format", fun get_saml_cert_pem/0},
     {"get SAML IdP config", fun get_saml_idp_config/0},
-    {"get supported IdPs", fun get_supported_idps/0},
+    {"get supported IdPs in GUI format", fun get_supported_idps_in_gui_format/0},
+    {"get supported IdPs in configuration format", fun get_supported_idps_in_configuration_format/0},
     {"get attribute mapping", fun get_attribute_mapping/0},
     {"get entitlement mapping config", fun get_entitlement_mapping_config/0},
-    {"get authority delegation config", fun get_authority_delegation_config/0}
+    {"get authority delegation config", fun get_authority_delegation_config/0},
+    {"get idps with offline access", fun get_idps_with_offline_access/0},
+    {"has offline access enabled", fun has_offline_access_enabled/0}
 ]).
 
 
@@ -248,7 +251,7 @@ get_saml_idp_config() ->
     ?assertMatch(CERNIdPConfig, auth_config:get_saml_idp_config(cern)).
 
 
-get_supported_idps() ->
+get_supported_idps_in_gui_format() ->
     Entry = fun(IdP, DisplayName, IconPath, IconBgColor) -> #{
         <<"id">> => IdP,
         <<"displayName">> => DisplayName,
@@ -261,43 +264,67 @@ get_supported_idps() ->
     ElixirEntry = Entry(elixir, <<"Elixir">>, <<"/assets/images/auth-providers/elixir.svg">>, <<"#FF7A04">>),
     CERNEntry = Entry(cern, <<"CERN">>, <<"/assets/images/auth-providers/cern.svg">>, <<"#0053A1">>),
 
-    ?assertMatch([OnepanelEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry], auth_config:get_supported_idps()),
+    get_supported_idps_base(
+        fun auth_config:get_supported_idps_in_gui_format/0,
+        OnepanelEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry
+    ).
+
+
+get_supported_idps_in_configuration_format() ->
+    Entry = fun(IdP, OfflineAccess) -> #{
+        <<"id">> => IdP,
+        <<"offlineAccess">> => OfflineAccess
+    } end,
+    OnepanelEntry = Entry(onepanel, false),
+    MyIdpEntry = Entry(my_idp, true),
+    EgiEntry = Entry(egi, false),
+    ElixirEntry = Entry(elixir, false),
+    CERNEntry = Entry(cern, false),
+
+    get_supported_idps_base(
+        fun auth_config:get_supported_idps_in_configuration_format/0,
+        OnepanelEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry
+    ).
+
+
+get_supported_idps_base(GetIdPsFun, OnepanelEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry) ->
+    ?assertMatch([OnepanelEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry], GetIdPsFun()),
 
     % Check if switching on/off certain protocols modifies IdPs list
     modify_config_mock(fun(MockConfig = #{samlConfig := SamlConfig}) ->
         maps:put(samlConfig, SamlConfig#{enabled => false}, MockConfig)
     end),
-    ?assertMatch([OnepanelEntry, MyIdpEntry, EgiEntry], auth_config:get_supported_idps()),
+    ?assertMatch([OnepanelEntry, MyIdpEntry, EgiEntry], GetIdPsFun()),
 
     modify_config_mock(fun(MockConfig = #{openidConfig := SamlConfig}) ->
         maps:put(openidConfig, SamlConfig#{enabled => false}, MockConfig)
     end),
-    ?assertMatch([OnepanelEntry], auth_config:get_supported_idps()),
+    ?assertMatch([OnepanelEntry], GetIdPsFun()),
 
     modify_config_mock(fun(MockConfig = #{onepanelAuthConfig := SamlConfig}) ->
         maps:put(onepanelAuthConfig, SamlConfig#{enabled => false}, MockConfig)
     end),
-    ?assertMatch([], auth_config:get_supported_idps()),
+    ?assertMatch([], GetIdPsFun()),
 
     modify_config_mock(fun(MockConfig = #{openidConfig := SamlConfig}) ->
         maps:put(openidConfig, SamlConfig#{enabled => true}, MockConfig)
     end),
-    ?assertMatch([MyIdpEntry, EgiEntry], auth_config:get_supported_idps()),
+    ?assertMatch([MyIdpEntry, EgiEntry], GetIdPsFun()),
 
     modify_config_mock(fun(MockConfig = #{samlConfig := SamlConfig}) ->
         maps:put(samlConfig, SamlConfig#{enabled => true}, MockConfig)
     end),
-    ?assertMatch([MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry], auth_config:get_supported_idps()),
+    ?assertMatch([MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry], GetIdPsFun()),
 
     modify_config_mock(fun(MockConfig = #{onepanelAuthConfig := SamlConfig}) ->
         maps:put(onepanelAuthConfig, SamlConfig#{enabled => true}, MockConfig)
     end),
-    ?assertMatch([OnepanelEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry], auth_config:get_supported_idps()),
+    ?assertMatch([OnepanelEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry], GetIdPsFun()),
 
     % Simulate no config file at all
     oz_worker:set_env(auth_config_file, "inexistent-file.config"),
     oz_worker:set_env(test_auth_config_file, "inexistent-file.config"),
-    ?assertMatch([], auth_config:get_supported_idps()).
+    ?assertMatch([], GetIdPsFun()).
 
 
 get_attribute_mapping() ->
@@ -388,10 +415,23 @@ get_entitlement_mapping_config() ->
 
 
 get_authority_delegation_config() ->
+    ?assertEqual(false, auth_config:get_authority_delegation_config(onepanel)),
     ?assertEqual(false, auth_config:get_authority_delegation_config(my_idp)),
     ?assertEqual({true, <<"egi:">>}, auth_config:get_authority_delegation_config(egi)),
     ?assertEqual(false, auth_config:get_authority_delegation_config(elixir)),
     ?assertEqual(false, auth_config:get_authority_delegation_config(cern)).
+
+
+get_idps_with_offline_access() ->
+    ?assertEqual([my_idp], auth_config:get_idps_with_offline_access()).
+
+
+has_offline_access_enabled() ->
+    ?assertEqual(false, auth_config:has_offline_access_enabled(onepanel)),
+    ?assertEqual(true, auth_config:has_offline_access_enabled(my_idp)),
+    ?assertEqual(false, auth_config:has_offline_access_enabled(egi)),
+    ?assertEqual(false, auth_config:has_offline_access_enabled(elixir)),
+    ?assertEqual(false, auth_config:has_offline_access_enabled(cern)).
 
 
 %%%===================================================================
@@ -492,14 +532,17 @@ mock_auth_config_file() ->
                 protocol => openid,
                 protocolConfig => #{
                     plugin => my_idp_oidc_plugin,
-                    clientId => "APP_ID",
-                    clientSecret => "APP_SECRET",
-                    endpoints => #{
-                        xrds => "https://accounts.google.com/.well-known/openid-configuration"
+                    pluginConfig => #{
+                        clientId => "APP_ID",
+                        clientSecret => "APP_SECRET",
+                        endpoints => #{
+                            xrds => "https://accounts.google.com/.well-known/openid-configuration"
+                        }
                     },
                     authorityDelegation => #{
                         enabled => false
                     },
+                    offlineAccess => true,
                     attributeMapping => #{
                         subjectId => {required, "id"},
                         custom => undefined
@@ -513,10 +556,12 @@ mock_auth_config_file() ->
                 displayName => "EGI",
                 protocol => openid,
                 protocolConfig => #{
-                    clientId => "APP_ID",
-                    clientSecret => "APP_SECRET",
-                    endpoints => #{
-                        xrds => "https://aai.egi.eu/oidc/.well-known/openid-configuration"
+                    pluginConfig => #{
+                        clientId => "APP_ID",
+                        clientSecret => "APP_SECRET",
+                        endpoints => #{
+                            xrds => "https://aai.egi.eu/oidc/.well-known/openid-configuration"
+                        }
                     },
                     authorityDelegation => #{
                         tokenPrefix => "egi:"

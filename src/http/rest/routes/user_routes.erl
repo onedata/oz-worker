@@ -182,6 +182,12 @@ routes() -> [
         method = 'PUT',
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = default_provider}
     }},
+    %% Acquire IdP access token
+    %% This operation does not require any specific privileges.
+    {<<"/user/idp_access_token/:idp">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {idp_access_token, ?BINDING(idp)}}
+    }},
     %% Create new group for the current user
     %% This operation does not require any specific privileges.
     {<<"/user/groups">>, #rest_req{

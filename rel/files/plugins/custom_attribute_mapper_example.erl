@@ -14,7 +14,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 -module(custom_attribute_mapper_example).
--behavior(auth_plugin_behaviour).
+-behavior(onezone_plugin_behaviour).
 -behavior(entitlement_parser_behaviour).
 
 %% API

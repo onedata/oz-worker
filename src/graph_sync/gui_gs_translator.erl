@@ -44,7 +44,7 @@ handshake_attributes(_) ->
             [<<"basicAuth">>, <<"plgrid">>];
         _ ->
             % Production mode, return providers from config
-            auth_config:get_supported_idps()
+            auth_config:get_supported_idps_in_gui_format()
     end,
     #{
         <<"zoneName">> => oz_worker:get_name(),
