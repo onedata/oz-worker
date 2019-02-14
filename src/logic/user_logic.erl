@@ -344,8 +344,8 @@ get_default_provider(Client, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves default provider of given user. Returns ?ERROR_NOT_FOUND if the user
-%% does not have a default provider.
+%% Acquires an access token issued by given IdP for specific user. This
+%% operation requires that the IdP is configured to support offline access.
 %% @end
 %%--------------------------------------------------------------------
 -spec acquire_idp_access_token(entity_logic:client(), od_user:id(), auth_config:idp()) ->

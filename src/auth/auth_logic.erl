@@ -261,7 +261,7 @@ authorize_by_basic_auth(Req) ->
 %% Returns ?ERROR_NOT_FOUND when:
 %%  * the user does not have an account in such IdP
 %%  * there is no access token stored
-%%  * the stored access token one has expired and there is no viable refresh token
+%%  * the stored access token has expired and there is no viable refresh token
 %% Can return ?ERROR_INTERNAL_SERVER_ERROR in case token refresh goes wrong.
 %% @end
 %%--------------------------------------------------------------------
