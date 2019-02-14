@@ -27,20 +27,29 @@
 -type query_params() :: #{}.
 % OpenID access token, used to retrieve user info from an IdP
 -type access_token() :: binary().
+-type access_token_ttl() :: non_neg_integer().
+% Refresh token - used to refresh access tokens
+-type refresh_token() :: binary().
 -export_type([
     login_endpoint/0,
     redirect_uri/0,
     query_params/0,
-    access_token/0
+    access_token/0,
+    access_token_ttl/0,
+    refresh_token/0
 ]).
 
 -type protocol_handler() :: saml_protocol | openid_protocol.
+
+-define(NOW(), time_utils:cluster_time_seconds()).
+-define(REFRESH_THRESHOLD, oz_worker:get_env(idp_access_token_refresh_threshold, 300)).
 
 %% API
 -export([get_login_endpoint/4, validate_login/2]).
 -export([authorize_by_access_token/1]).
 -export([authorize_by_macaroons/1, authorize_by_macaroons/2]).
 -export([authorize_by_basic_auth/1]).
+-export([acquire_idp_access_token/2, refresh_idp_access_token/2]).
 
 %%%===================================================================
 %%% API functions
@@ -246,6 +255,72 @@ authorize_by_basic_auth(Req) ->
     end.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Acquires an access token for given user, issued by given IdP.
+%% Returns ?ERROR_NOT_FOUND when:
+%%  * the user does not have an account in such IdP
+%%  * there is no access token stored
+%%  * the stored access token has expired and there is no viable refresh token
+%% Can return ?ERROR_INTERNAL_SERVER_ERROR in case token refresh goes wrong.
+%% @end
+%%--------------------------------------------------------------------
+-spec acquire_idp_access_token([od_user:linked_account()], auth_config:idp()) ->
+    {ok, {access_token(), access_token_ttl()}} | {error, term()}.
+acquire_idp_access_token(LinkedAccounts, IdP) ->
+    lists:foldl(fun
+        (_LinkedAccount, {ok, Result}) ->
+            {ok, Result};
+        (#linked_account{idp = CurrentIdP} = LinkedAcc, _) when CurrentIdP == IdP ->
+            acquire_idp_access_token(LinkedAcc);
+        (_, Acc) ->
+            Acc
+    end, ?ERROR_NOT_FOUND, LinkedAccounts).
+
+%% @private
+-spec acquire_idp_access_token(od_user:linked_account()) ->
+    {ok, {access_token(), access_token_ttl()}} | {error, term()}.
+acquire_idp_access_token(#linked_account{access_token = {undefined, 0}, refresh_token = _}) ->
+    ?ERROR_NOT_FOUND;
+acquire_idp_access_token(#linked_account{access_token = {AccessToken, Expires}, refresh_token = undefined}) ->
+    % No refresh token - no point in trying to refresh the access token
+    Now = ?NOW(),
+    case Expires > Now of
+        true -> {ok, {AccessToken, Expires - Now}};
+        false -> ?ERROR_NOT_FOUND
+    end;
+acquire_idp_access_token(#linked_account{idp = IdP, access_token = {AccessToken, Expires}, refresh_token = RefreshToken}) ->
+    Now = ?NOW(),
+    case Expires - ?REFRESH_THRESHOLD > Now of
+        true -> {ok, {AccessToken, Expires - Now}};
+        false -> refresh_idp_access_token(IdP, RefreshToken)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Acquires a new access token using given refresh token.
+%% @end
+%%--------------------------------------------------------------------
+-spec refresh_idp_access_token(auth_config:idp(), refresh_token()) ->
+    {ok, {auth_logic:access_token(), auth_logic:access_token_ttl()}} | {error, term()}.
+refresh_idp_access_token(IdP, RefreshToken) ->
+    try
+        {ok, Attributes} = openid_protocol:refresh_idp_access_token(IdP, RefreshToken),
+        LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
+        {ok, _} = acquire_user_by_linked_account(LinkedAccount),
+        #linked_account{access_token = {AccessToken, Expires}} = LinkedAccount,
+        {ok, {AccessToken, Expires - ?NOW()}}
+    catch
+        throw:Error ->
+            log_error(Error, IdP, <<"refresh_token_flow">>, erlang:get_stacktrace()),
+            ?ERROR_INTERNAL_SERVER_ERROR;
+        Type:Reason ->
+            log_error({Type, Reason}, IdP, <<"refresh_token_flow">>, erlang:get_stacktrace()),
+            ?ERROR_INTERNAL_SERVER_ERROR
+    end.
+
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -259,16 +334,23 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
     ?auth_debug("Login attempt from IdP '~p' (state: ~s), payload:~n~tp", [
         IdP, StateToken, Payload
     ]),
+
     {ok, Attributes} = Handler:validate_login(IdP, Payload),
+    % Do not print sensitive information
+    PrintableAttributes = maps:without([<<"access_token">>, <<"refresh_token">>], Attributes),
     ?auth_debug("Login from IdP '~p' (state: ~s) validated, attributes:~n~ts", [
-        IdP, StateToken, json_utils:encode(Attributes, [pretty])
+        IdP, StateToken, json_utils:encode(PrintableAttributes, [pretty])
     ]),
+
     LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
+    LinkedAccountMap = maps:without(
+        [<<"login">>, <<"emailList">>, <<"groups">>], % do not include deprecated fields
+        user_logic:linked_account_to_map(LinkedAccount)
+    ),
     ?auth_debug("Attributes from IdP '~p' (state: ~s) sucessfully mapped:~n~ts", [
-        IdP, StateToken, io_lib_pretty:print(
-            LinkedAccount, fun(_, _) -> record_info(fields, linked_account) end
-        )
+        IdP, StateToken, json_utils:encode(LinkedAccountMap, [pretty])
     ]),
+
     case {auth_test_mode:process_is_test_mode_enabled(), LinkAccount} of
         {true, _} ->
             validate_test_login_by_linked_account(LinkedAccount);
@@ -403,9 +485,12 @@ acquire_user_by_linked_account(LinkedAccount) ->
 %%--------------------------------------------------------------------
 -spec log_error({Type :: term(), Reason :: term()}, auth_config:idp(),
     state_token:id(), Stacktrace :: term()) -> ok.
-log_error(?ERROR_BAD_AUTH_CONFIG, _, _, _) ->
-    % Logging is done when this error is generated
-    ok;
+log_error(?ERROR_BAD_AUTH_CONFIG, _, _, Stacktrace) ->
+    ?auth_debug(
+        "Login request failed due to bad auth config: ~s", [
+            iolist_to_binary(lager:pr_stacktrace(Stacktrace))
+        ]
+    );
 log_error(?ERROR_INVALID_STATE, _, StateToken, _) ->
     ?auth_debug(
         "Cannot validate login request - invalid state ~s (not found)",

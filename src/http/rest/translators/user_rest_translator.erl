@@ -34,7 +34,13 @@ create_response(#gri{aspect = authorize}, _, value, DischargeMacaroon) ->
     rest_translator:ok_body_reply({binary, DischargeMacaroon});
 
 create_response(#gri{aspect = client_tokens}, _, resource, {_, Token}) ->
-    rest_translator:ok_body_reply(#{<<"token">> => Token}).
+    rest_translator:ok_body_reply(#{<<"token">> => Token});
+
+create_response(#gri{aspect = {idp_access_token, _}}, _, value, {AccessToken, Expires}) ->
+    rest_translator:ok_body_reply(#{
+        <<"token">> => AccessToken,
+        <<"ttl">> => Expires
+    }).
 
 
 %%--------------------------------------------------------------------

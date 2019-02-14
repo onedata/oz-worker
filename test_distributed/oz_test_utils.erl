@@ -19,6 +19,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 
 -define(OZ_NODES(Config), ?config(oz_worker_nodes, Config)).
+-define(TIME_MOCK_STARTING_TIMESTAMP, 1500000000).
 
 
 %% API
@@ -33,7 +34,7 @@
 % Operations corresponding to logic modules
 -export([
     list_users/1,
-    create_user/2,
+    create_user/2, create_user/3,
     get_user/2,
     delete_user/2,
 
@@ -199,6 +200,10 @@
     minimum_support_size/1,
     mock_handle_proxy/1,
     unmock_handle_proxy/1,
+    mock_time/1,
+    unmock_time/1,
+    get_mocked_time/1,
+    simulate_time_passing/2,
     gui_ca_certs/1,
     ensure_entity_graph_is_up_to_date/1, ensure_entity_graph_is_up_to_date/2,
     toggle_basic_auth/2,
@@ -264,6 +269,19 @@ call_oz(Config, Module, Function, Args) ->
 %%--------------------------------------------------------------------
 -spec create_user(Config :: term(), User :: #od_user{}) -> {ok, od_user:id()}.
 create_user(Config, User) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, user_logic, create, [User]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a user in onezone under given UserId.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_user(Config :: term(), User :: #od_user{}, od_user:id()) ->
+    {ok, od_user:id()}.
+create_user(Config, User, UserId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, user_logic, create, [User]
     )).
@@ -2102,6 +2120,56 @@ mock_handle_proxy(Config) ->
 -spec unmock_handle_proxy(Config :: term()) -> ok.
 unmock_handle_proxy(Config) ->
     test_utils:mock_unload(?OZ_NODES(Config), handle_proxy_client).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Mocks the time - stops the clock at one value and allows to manually
+%% simulate time passing.
+%% @end
+%%--------------------------------------------------------------------
+-spec mock_time(Config :: term()) -> ok.
+mock_time(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    simulate_time_passing(Config, 0),
+    ok = test_utils:mock_new(Nodes, time_utils, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, time_utils, cluster_time_seconds, fun() ->
+        oz_worker:get_env(mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP)
+    end).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Clears the time mock.
+%% @end
+%%--------------------------------------------------------------------
+-spec unmock_time(Config :: term()) -> ok.
+unmock_time(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_unload(Nodes, time_utils).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the current timestamp indicated by the mocked clock.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_mocked_time(Config :: term()) -> non_neg_integer().
+get_mocked_time(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    rpc:call(hd(Nodes), oz_worker, get_env, [mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP]).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Modifies the value returned by time mock by given amount of seconds.
+%% @end
+%%--------------------------------------------------------------------
+-spec simulate_time_passing(Config :: term(), Seconds :: non_neg_integer()) -> ok.
+simulate_time_passing(Config, Seconds) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    rpc:multicall(Nodes, oz_worker, set_env, [mocked_time, get_mocked_time(Config) + Seconds]),
+    ok.
 
 
 %%--------------------------------------------------------------------

@@ -52,19 +52,27 @@ unmock(Config) ->
 simulate_user_login(Config, OidcSpec, Url, UserAttributesByEndpoint) ->
     try
         #{qs := Qs} = url_utils:parse(Url),
+        QsMap = maps:from_list(cowboy_req:parse_qs(#{qs => Qs})),
         #{
             <<"client_id">> := ClientId,
             <<"response_type">> := <<"code">>,
             <<"scope">> := Scope,
             <<"redirect_uri">> := OnezoneRedirectUri,
             <<"state">> := State
-        } = maps:from_list(cowboy_req:parse_qs(#{qs => Qs})),
+        } = QsMap,
+        AccessType = maps:get(<<"access_type">>, QsMap, <<"online">>),
         ClientId = list_to_binary(OidcSpec#oidc_spec.clientId),
         Scope = list_to_binary(OidcSpec#oidc_spec.scope),
         AuthCode = datastore_utils:gen_key(),
+        RefreshToken = case AccessType of
+            <<"online">> -> undefined;
+            <<"offline">> -> datastore_utils:gen_key()
+        end,
         Token = datastore_utils:gen_key(),
-        testmaster_save_everywhere(Config, {auth, AuthCode}, {OnezoneRedirectUri, Token}),
         testmaster_save_everywhere(Config, {token, Token}, UserAttributesByEndpoint),
+        testmaster_save_everywhere(Config, {auth, AuthCode}, {OnezoneRedirectUri, Token, RefreshToken}),
+        RefreshToken /= undefined andalso
+            testmaster_save_everywhere(Config, {refresh_token, RefreshToken}, UserAttributesByEndpoint),
         RedirectUrl = http_utils:append_url_parameters(OnezoneRedirectUri, #{
             <<"code">> => AuthCode,
             <<"state">> => State
@@ -100,18 +108,22 @@ mock_request_idp(Method, ExpCode, Endpoint, Headers, Parameters) ->
     http_client:headers(), auth_logic:query_params(), http_client:opts()) ->
     {ResultHeaders :: http_client:headers(), ResultBody :: binary()}.
 mock_request_idp(Method, ExpCode, Endpoint, Headers, Parameters, _Opts) ->
-    {ok, OidcSpec} = node_get_saved(mock_spec),
+    {ok, OidcSpec} = onezone_get_saved(mock_spec),
     EndpointId = lookup_endpoint(Endpoint, OidcSpec),
     AccessTokenAcquireMethod = OidcSpec#oidc_spec.accessTokenAcquireMethod,
-    {RespCode, RespHeaders, RespBody} = case {Method, EndpointId} of
-        {get, xrds} ->
-            mock_xrds_endpoint(OidcSpec);
-        {AccessTokenAcquireMethod, accessToken} ->
-            mock_access_token_endpoint(OidcSpec, Headers, Parameters);
-        {get, userInfo} ->
-            mock_userinfo_endpoint(OidcSpec, Headers, Parameters);
-        _ ->
-            {404, #{}, <<"">>}
+    {RespCode, RespHeaders, RespBody} = try
+        case {Method, EndpointId} of
+            {get, xrds} ->
+                mock_xrds_endpoint(OidcSpec);
+            {AccessTokenAcquireMethod, accessToken} ->
+                mock_access_token_endpoint(OidcSpec, Headers, Parameters);
+            {get, userInfo} ->
+                mock_userinfo_endpoint(OidcSpec, Headers, Parameters);
+            _ ->
+                {404, #{}, <<"">>}
+        end
+    catch _:_ ->
+        {400, #{}, <<"">>}
     end,
     case RespCode of
         ExpCode -> {RespHeaders, RespBody};
@@ -123,77 +135,91 @@ mock_xrds_endpoint(OidcSpec) ->
     {200, #{<<"Content-Type">> => <<"application/json">>}, json_utils:encode(build_xrds(OidcSpec))}.
 
 
-mock_access_token_endpoint(OidcSpec, Headers, Parameters) ->
-    try
-        AuthCode = maps:get(<<"code">>, Parameters),
-        RedirectUri = maps:get(<<"redirect_uri">>, Parameters),
-        <<"authorization_code">> = maps:get(<<"grant_type">>, Parameters),
+mock_access_token_endpoint(OidcSpec, Headers, #{<<"grant_type">> := <<"authorization_code">>} = Parameters) ->
+    AuthCode = maps:get(<<"code">>, Parameters),
+    RedirectUri = maps:get(<<"redirect_uri">>, Parameters),
+    {ok, {ExpRedirectUri, Token, RefreshToken}} = onezone_get_saved({auth, AuthCode}),
+    RedirectUri = ExpRedirectUri,
+    mock_access_token_endpoint(OidcSpec, Headers, Parameters, Token, RefreshToken);
 
-        {ok, {ExpRedirectUri, Token}} = node_get_saved({auth, AuthCode}),
-        RedirectUri = ExpRedirectUri,
+mock_access_token_endpoint(OidcSpec, Headers, #{<<"grant_type">> := <<"refresh_token">>} = Parameters) ->
+    RefreshToken = maps:get(<<"refresh_token">>, Parameters),
+    case onezone_get_saved({refresh_token, RefreshToken}) of
+        {ok, UserAttributesByEndpoint} ->
+            Token = datastore_utils:gen_key(),
+            NewRefreshToken = datastore_utils:gen_key(),
+            onezone_save_everywhere({refresh_token, RefreshToken}, UserAttributesByEndpoint),
+            onezone_save_everywhere({token, Token}, UserAttributesByEndpoint),
+            mock_access_token_endpoint(OidcSpec, Headers, Parameters, Token, NewRefreshToken);
+        _ ->
+            {403, #{}, <<"">>}
+    end.
 
-        ClientSecretPassMethod = OidcSpec#oidc_spec.clientSecretPassMethod,
-        ExpClientId = list_to_binary(OidcSpec#oidc_spec.clientId),
-        ExpClientSecret = list_to_binary(OidcSpec#oidc_spec.clientSecret),
-        AuthValid = case ClientSecretPassMethod of
-            inAuthHeader ->
-                AuthHeader = maps:get(<<"Authorization">>, Headers, <<"">>),
-                ExpectedAuth = base64:encode(<<ExpClientId/binary, ":", ExpClientSecret/binary>>),
-                <<"Basic ", ExpectedAuth/binary>> =:= AuthHeader;
-            urlencoded ->
-                ClientId = maps:get(<<"client_id">>, Parameters, <<"">>),
-                ClientSecret = maps:get(<<"client_secret">>, Parameters, <<"">>),
-                {ClientId, ClientSecret} =:= {ExpClientId, ExpClientSecret}
-        end,
+mock_access_token_endpoint(OidcSpec, Headers, Parameters, Token, RefreshToken) ->
+    ClientSecretPassMethod = OidcSpec#oidc_spec.clientSecretPassMethod,
+    ExpClientId = list_to_binary(OidcSpec#oidc_spec.clientId),
+    ExpClientSecret = list_to_binary(OidcSpec#oidc_spec.clientSecret),
+    AuthValid = case ClientSecretPassMethod of
+        inAuthHeader ->
+            AuthHeader = maps:get(<<"Authorization">>, Headers, <<"">>),
+            ExpectedAuth = base64:encode(<<ExpClientId/binary, ":", ExpClientSecret/binary>>),
+            <<"Basic ", ExpectedAuth/binary>> =:= AuthHeader;
+        urlencoded ->
+            ClientId = maps:get(<<"client_id">>, Parameters, <<"">>),
+            ClientSecret = maps:get(<<"client_secret">>, Parameters, <<"">>),
+            {ClientId, ClientSecret} =:= {ExpClientId, ExpClientSecret}
+    end,
 
-        ExpCustomData = maps:get(accessToken, OidcSpec#oidc_spec.customData, #{}),
-        CustomDataValid = custom_data_valid(ExpCustomData, Headers, Parameters),
-        case {AuthValid, CustomDataValid} of
-            {false, _} ->
-                {403, #{}, <<"">>};
-            {true, false} ->
-                {400, #{}, <<"">>};
-            {true, true} ->
-                case rand:uniform(2) of
-                    1 ->
-                        {200, #{
-                            <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
-                        }, <<"access_token=", Token/binary>>};
-                    2 ->
-                        {200, #{
-                            <<"Content-Type">> => <<"application/json">>
-                        }, json_utils:encode(#{<<"access_token">> => Token})}
-                end
-        end
-    catch _:_ ->
-        {400, #{}, <<"">>}
+    ExpCustomData = maps:get(accessToken, OidcSpec#oidc_spec.customData, #{}),
+    CustomDataValid = custom_data_valid(ExpCustomData, Headers, Parameters),
+    Response1 = #{
+        <<"access_token">> => Token,
+        <<"expires_in">> => ?MOCK_ACCESS_TOKEN_TTL
+    },
+    Response2 = maps:merge(Response1, case RefreshToken of
+        undefined -> #{};
+        _ -> #{<<"refresh_token">> => RefreshToken}
+    end),
+
+    case {AuthValid, CustomDataValid} of
+        {false, _} ->
+            {403, #{}, <<"">>};
+        {true, false} ->
+            {400, #{}, <<"">>};
+        {true, true} ->
+            case rand:uniform(2) of
+                1 ->
+                    {200, #{
+                        <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
+                    }, http_utils:encode_http_parameters(Response2)};
+                2 ->
+                    {200, #{
+                        <<"Content-Type">> => <<"application/json">>
+                    }, json_utils:encode(Response2)}
+            end
     end.
 
 
 mock_userinfo_endpoint(OidcSpec, Headers, Parameters) ->
-    try
-        AccessTokenPassMethod = OidcSpec#oidc_spec.accessTokenPassMethod,
-        Token = case AccessTokenPassMethod of
-            inAuthHeader ->
-                <<"Bearer ", AccessToken/binary>> = maps:get(<<"Authorization">>, Headers, <<"Bearer ">>),
-                AccessToken;
-            urlencoded ->
-                maps:get(<<"access_token">>, Parameters, <<"">>)
-        end,
-        case node_get_saved({token, Token}) of
-            {error, not_found} ->
-                {403, #{}, <<"">>};
-            {ok, UserAttributesByEndpoint} ->
-                ExpCustomData = maps:get(userInfo, OidcSpec#oidc_spec.customData, #{}),
-                case custom_data_valid(ExpCustomData, Headers, Parameters) of
-                    true ->
-                        {200, #{}, json_utils:encode(UserAttributesByEndpoint)};
-                    false ->
-                        {400, #{}, <<"">>}
-                end
-        end
-    catch _:_ ->
-        {400, #{}, <<"">>}
+    AccessTokenPassMethod = OidcSpec#oidc_spec.accessTokenPassMethod,
+    Token = case AccessTokenPassMethod of
+        inAuthHeader ->
+            <<"Bearer ", AccessToken/binary>> = maps:get(<<"Authorization">>, Headers, <<"Bearer ">>),
+            AccessToken;
+        urlencoded ->
+            maps:get(<<"access_token">>, Parameters, <<"">>)
+    end,
+    case onezone_get_saved({token, Token}) of
+        {error, not_found} ->
+            {403, #{}, <<"">>};
+        {ok, UserAttributesByEndpoint} ->
+            ExpCustomData = maps:get(userInfo, OidcSpec#oidc_spec.customData, #{}),
+            case custom_data_valid(ExpCustomData, Headers, Parameters) of
+                true ->
+                    {200, #{}, json_utils:encode(UserAttributesByEndpoint)};
+                false ->
+                    {400, #{}, <<"">>}
+            end
     end.
 
 
@@ -261,6 +287,12 @@ testmaster_save_everywhere(Config, Key, Value) ->
     ok.
 
 
-node_get_saved(Key) ->
+onezone_save_everywhere(Key, Value) ->
+    {ok, Nodes} = node_manager:get_cluster_nodes(),
+    rpc:multicall(Nodes, simple_cache, put, [Key, Value]),
+    ok.
+
+
+onezone_get_saved(Key) ->
     simple_cache:get(Key).
 

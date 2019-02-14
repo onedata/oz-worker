@@ -123,7 +123,7 @@ routes() -> [
     }},
     %% Remove user from group
     %% This operation requires one of the following privileges:
-    %% - group_remove_user,
+    %% - group_remove_user
     %% - oz_groups_remove_members
     {<<"/groups/:id/users/:uid">>, #rest_req{
         method = 'DELETE',
@@ -167,19 +167,19 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {eff_user_privileges, ?BINDING(uid)}}
     }},
-    %% List parent groups
-    %% This operation requires one of the following privileges:
-    %% - group_view
-    {<<"/groups/:id/parents">>, #rest_req{
-        method = 'GET',
-        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = parents}
-    }},
     %% Create new group for the current group
     %% This operation does not require any specific privileges.
     {<<"/groups/:id/parents">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_group, id = undefined, aspect = instance},
         b_auth_hint = ?AS_GROUP(?BINDING(id))
+    }},
+    %% List parent groups
+    %% This operation requires one of the following privileges:
+    %% - group_view
+    {<<"/groups/:id/parents">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = parents}
     }},
     %% Join parent group
     %% This operation requires one of the following privileges:

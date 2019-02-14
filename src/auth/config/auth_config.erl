@@ -25,7 +25,7 @@
 -type config_v2() :: #{atom() => term()}.
 -type config_section() :: #{atom() => term()}.
 -type idp() :: atom().
--type protocol() :: saml | openid | onepanelAuth.
+-type protocol() :: saml | openid | onepanelAuth | undefined.
 -type parser_config() :: #{atom() => term()}.
 -export_type([config_v1/0, saml_config_v1/0, config_v2/0, config_section/0]).
 -export_type([idp/0, protocol/0, parser_config/0]).
@@ -43,7 +43,8 @@
 -type trace() :: nested_params().
 
 -export([
-    get_supported_idps/0,
+    get_supported_idps_in_gui_format/0,
+    get_supported_idps_in_configuration_format/0,
     idp_exists/1,
     is_onepanel_auth_enabled/0,
     get_protocol/1, get_protocol/2,
@@ -53,7 +54,9 @@
 ]).
 -export([
     get_authority_delegation_config/1,
-    find_openid_idp_by_access_token/1
+    find_openid_idp_by_access_token/1,
+    get_idps_with_offline_access/0,
+    has_offline_access_enabled/1
 ]).
 -export([
     get_saml_sp_config/0,
@@ -95,8 +98,8 @@
 -define(CFG_SUPPORTED_IDPS, get_nested_cfg(
     [supportedIdps], {default, []}
 )).
--define(CFG_IDP(__IdP), get_nested_cfg(
-    [supportedIdps, {proplist, __IdP}], {default, #{}}
+-define(CFG_IDP(IdP), get_nested_cfg(
+    [supportedIdps, {proplist, IdP}], {default, #{}}
 )).
 % SAML config
 -define(CFG_SAML_ENABLED, get_nested_cfg(
@@ -152,32 +155,35 @@
     [samlConfig, spConfig, wantAssertionsSigned], required
 )).
 % Specific IdP config
--define(CFG_IDP_DISPLAY_NAME(__IdP, __IdPConfig), ?bin(get_param(
-    displayName, {default, __IdP}, __IdPConfig)
+-define(CFG_IDP_DISPLAY_NAME(IdP, IdPConfig), ?bin(get_param(
+    displayName, {default, IdP}, IdPConfig)
 )).
--define(CFG_IDP_ICON_PATH(__IdPConfig), ?bin(get_param(
-    iconPath, {default, ?DEFAULT_ICON_PATH}, __IdPConfig)
+-define(CFG_IDP_ICON_PATH(IdPConfig), ?bin(get_param(
+    iconPath, {default, ?DEFAULT_ICON_PATH}, IdPConfig)
 )).
--define(CFG_IDP_ICON_BACKGROUND(__IdPConfig), ?bin(get_param(
-    iconBackgroundColor, {default, ?DEFAULT_ICON_BGCOLOR}, __IdPConfig)
+-define(CFG_IDP_ICON_BACKGROUND(IdPConfig), ?bin(get_param(
+    iconBackgroundColor, {default, ?DEFAULT_ICON_BGCOLOR}, IdPConfig)
 )).
--define(CFG_IDP_ATTRIBUTE_MAPPING(__IdP, __Attribute), get_protocol_config(
-    __IdP, [attributeMapping, __Attribute], {default, undefined}
+-define(CFG_IDP_ATTRIBUTE_MAPPING(IdP, Attribute), get_protocol_config(
+    IdP, [attributeMapping, Attribute], {default, undefined}
 )).
--define(CFG_IDP_ENTITLEMENT_MAPPING_CONFIG(__IdP, __NestedParams, __Policy), get_protocol_config(
-    __IdP, [entitlementMapping | __NestedParams], __Policy
+-define(CFG_IDP_ENTITLEMENT_MAPPING_CONFIG(IdP, NestedParams, Policy), get_protocol_config(
+    IdP, [entitlementMapping | NestedParams], Policy
 )).
--define(CFG_IDP_AUTHORITY_DELEGATION_CONFIG(__IdP, __IdPConfig), get_protocol_config(
-    __IdP, [authorityDelegation, enabled], {default, false}, __IdPConfig
+-define(CFG_IDP_AUTHORITY_DELEGATION_CONFIG(IdP, IdPConfig), get_protocol_config(
+    IdP, [authorityDelegation, enabled], {default, false}, IdPConfig
 )).
--define(CFG_IDP_AUTHORITY_DELEGATION_TOKEN_PREFIX(__IdP, __IdPConfig), ?bin(get_protocol_config(
-    __IdP, [authorityDelegation, tokenPrefix], {default, atom_to_list(__IdP) ++ ":"}, __IdPConfig)
+-define(CFG_IDP_AUTHORITY_DELEGATION_TOKEN_PREFIX(IdP, IdPConfig), ?bin(get_protocol_config(
+    IdP, [authorityDelegation, tokenPrefix], {default, atom_to_list(IdP) ++ ":"}, IdPConfig)
 )).
--define(CFG_IDP_SAML_METADATA_URL(__IdP, __IdPConfig), get_protocol_config(
-    __IdP, [metadataUrl], required, __IdPConfig
+-define(CFG_IDP_OFFLINE_ACCESS_ENABLED(IdP, IdPConfig), get_protocol_config(
+    IdP, [offlineAccess], {default, false}, IdPConfig
 )).
--define(CFG_IDP_SAML_PREFERRED_SSO_BINDING(__IdP, __IdPConfig), get_protocol_config(
-    __IdP, [preferredSsoBinding], {default, http_redirect}, __IdPConfig
+-define(CFG_IDP_SAML_METADATA_URL(IdP, IdPConfig), get_protocol_config(
+    IdP, [metadataUrl], required, IdPConfig
+)).
+-define(CFG_IDP_SAML_PREFERRED_SSO_BINDING(IdP, IdPConfig), get_protocol_config(
+    IdP, [preferredSsoBinding], {default, http_redirect}, IdPConfig
 )).
 
 
@@ -187,10 +193,31 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the list of all supported IdPs and their config as maps (convertible to JSON).
+%% Returns the list of all supported IdPs and their config formatted for GUI.
 %% @end
 %%--------------------------------------------------------------------
--spec get_supported_idps() -> [json_utils:json_term()].
+-spec get_supported_idps_in_gui_format() -> json_utils:json_term().
+get_supported_idps_in_gui_format() ->
+    [format_for_gui(IdP, IdPConfig) || {IdP, IdPConfig} <- get_supported_idps()].
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the list of all supported IdPs and their config formatted for the
+%% configuration endpoint.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_supported_idps_in_configuration_format() -> [json_utils:json_term()].
+get_supported_idps_in_configuration_format() ->
+    [format_for_configuration(IdP, IdPConfig) || {IdP, IdPConfig} <- get_supported_idps()].
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the list of all supported IdPs and their config.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_supported_idps() -> [{idp(), config_section()}].
 get_supported_idps() ->
     OnepanelAuthEnabled = ?CFG_ONEPANEL_AUTH_ENABLED,
     OpenIDEnabled = ?CFG_OPENID_ENABLED,
@@ -200,11 +227,12 @@ get_supported_idps() ->
         Enabled = case get_protocol(IdP, IdPConfig) of
             onepanelAuth -> OnepanelAuthEnabled;
             openid -> OpenIDEnabled;
-            saml -> SAMLEnabled
+            saml -> SAMLEnabled;
+            undefined -> false
         end,
         case Enabled of
             false -> false;
-            true -> {true, get_idp_config_json(IdP, IdPConfig)}
+            true -> {true, {IdP, IdPConfig}}
         end
     end, ?CFG_SUPPORTED_IDPS).
 
@@ -235,7 +263,7 @@ get_protocol(IdP) ->
 
 -spec get_protocol(idp(), config_section()) -> protocol().
 get_protocol(IdP, IdPConfig) ->
-    get_param(protocol, required, IdPConfig, [supportedIdps, IdP]).
+    get_param(protocol, {default, undefined}, IdPConfig, [supportedIdps, IdP]).
 
 
 %%--------------------------------------------------------------------
@@ -301,17 +329,27 @@ get_entitlement_mapping_config(IdP, NestedParams, Policy) ->
 %% Returns arbitrarily nested IdP's configuration concerning its authority delegation.
 %% @end
 %%--------------------------------------------------------------------
--spec get_authority_delegation_config(idp()) -> term().
+-spec get_authority_delegation_config(idp()) -> false | {true, binary()}.
 get_authority_delegation_config(IdP) ->
     get_authority_delegation_config(IdP, ?CFG_IDP(IdP)).
 
--spec get_authority_delegation_config(idp(), config_section()) -> term().
+-spec get_authority_delegation_config(idp(), config_section()) -> false | {true, binary()}.
 get_authority_delegation_config(IdP, IdPConfig) ->
     case ?CFG_IDP_AUTHORITY_DELEGATION_CONFIG(IdP, IdPConfig) of
         false ->
             false;
         true ->
-            {true, ?CFG_IDP_AUTHORITY_DELEGATION_TOKEN_PREFIX(IdP, IdPConfig)}
+            case get_protocol(IdP, IdPConfig) of
+                openid ->
+                    {true, ?CFG_IDP_AUTHORITY_DELEGATION_TOKEN_PREFIX(IdP, IdPConfig)};
+                OtherProtocol ->
+                    ?warning(
+                        "Authority delegation can only be enabled for the openid protocol - "
+                        "please adjust the auth.config entry for ~p (~p protocol)",
+                        [IdP, OtherProtocol]
+                    ),
+                    false
+            end
     end.
 
 
@@ -338,6 +376,56 @@ find_openid_idp_by_access_token(AccessTokenWithPrefix, [{IdP, IdPConfig} | Rest]
                     {true, {IdP, TokenPrefix}};
                 _ ->
                     find_openid_idp_by_access_token(AccessTokenWithPrefix, Rest)
+            end
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the list of all IdPs that have offline access enabled.
+%% Because of technical reasons, only OpenID IdPs are supported.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_idps_with_offline_access() -> [idp()].
+get_idps_with_offline_access() ->
+    case ?CFG_OPENID_ENABLED of
+        false ->
+            [];
+        true ->
+            lists:filtermap(fun({IdP, IdPConfig}) ->
+                case has_offline_access_enabled(IdP, IdPConfig) of
+                    false -> false;
+                    true -> {true, IdP}
+                end
+            end, ?CFG_SUPPORTED_IDPS)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns arbitrarily nested IdP's configuration concerning its authority delegation.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_offline_access_enabled(idp()) -> boolean().
+has_offline_access_enabled(IdP) ->
+    has_offline_access_enabled(IdP, ?CFG_IDP(IdP)).
+
+-spec has_offline_access_enabled(idp(), config_section()) -> boolean().
+has_offline_access_enabled(IdP, IdPConfig) ->
+    case ?CFG_IDP_OFFLINE_ACCESS_ENABLED(IdP, IdPConfig) of
+        false ->
+            false;
+        true ->
+            case get_protocol(IdP, IdPConfig) of
+                openid ->
+                    true;
+                OtherProtocol ->
+                    ?warning(
+                        "Offline access can only be enabled for the openid protocol - "
+                        "please adjust the auth.config entry for ~p (~p protocol)",
+                        [IdP, OtherProtocol]
+                    ),
+                    false
             end
     end.
 
@@ -464,16 +552,30 @@ ensure_str(Str) when is_list(Str) -> Str.
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns IdP's config as a map (convertible to JSON).
+%% Returns IdP's config formatted for GUI.
 %% @end
 %%--------------------------------------------------------------------
--spec get_idp_config_json(idp(), config_section()) -> json_utils:json_term().
-get_idp_config_json(IdP, IdPConfig) ->
+-spec format_for_gui(idp(), config_section()) -> json_utils:json_term().
+format_for_gui(IdP, IdPConfig) ->
     #{
         <<"id">> => IdP,
         <<"displayName">> => ?CFG_IDP_DISPLAY_NAME(IdP, IdPConfig),
         <<"iconPath">> => ?CFG_IDP_ICON_PATH(IdPConfig),
         <<"iconBackgroundColor">> => ?CFG_IDP_ICON_BACKGROUND(IdPConfig)
+    }.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns IdP's config formatted for the configuration endpoint.
+%% @end
+%%--------------------------------------------------------------------
+-spec format_for_configuration(idp(), config_section()) -> json_utils:json_term().
+format_for_configuration(IdP, IdPConfig) ->
+    #{
+        <<"id">> => IdP,
+        <<"offlineAccess">> => has_offline_access_enabled(IdP, IdPConfig)
     }.
 
 
@@ -662,7 +764,8 @@ get_default_protocol_config(Protocol, NestedParams, Policy, Trace) ->
     DefaultIdPConfig = case Protocol of
         openid -> ?CFG_OPENID_DEFAULT_PROTOCOL_CONFIG;
         saml -> ?CFG_SAML_DEFAULT_PROTOCOL_CONFIG;
-        onepanelAuth -> #{}
+        onepanelAuth -> #{};
+        undefined -> #{}
     end,
     get_nested_cfg(NestedParams, Policy, DefaultIdPConfig, Trace).
 

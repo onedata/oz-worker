@@ -27,7 +27,12 @@
 
 
 %% openid_plugin_behaviour callbacks
--export([get_login_endpoint/3, validate_login/3, get_user_info/2]).
+-export([
+    get_login_endpoint/3,
+    validate_login/3,
+    refresh_access_token/2,
+    get_user_info/2
+]).
 
 
 %%%===================================================================
@@ -110,6 +115,17 @@ validate_login(IdP, QueryParams, _RedirectUri) ->
         (Attr, Acc) ->
             Acc#{Attr => maps:get(Attr, QueryParams)}
     end, #{}, SignedAttrs)}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link openid_plugin_behaviour} callback refresh_access_token/2.
+%% @end
+%%--------------------------------------------------------------------
+-spec refresh_access_token(auth_config:idp(), auth_logic:refresh_token()) ->
+    {ok, attribute_mapping:idp_attributes()} | {error, term()}.
+refresh_access_token(_IdP, _RefreshToken) ->
+    ?ERROR_NOT_IMPLEMENTED.
 
 
 %%--------------------------------------------------------------------

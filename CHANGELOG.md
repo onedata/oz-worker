@@ -4,6 +4,22 @@
 CHANGELOG
 ---------
 
+### 18.02.1
+
+* VFS-5189 Add support for owner role in EGI group parser
+* VFS-5154 Clean no_dot_erlang scripts
+* VFS-5154 Fixed folly dependency in RPM spec
+* VFS-5161 Check the deprecated configuration endpoint in tests
+* VFS-5161 Rename subdomainDelegationEnabled to subdomainDelegationSupported
+* VFS-5161 Duplicate /configuration endpoint in a swagger-descried path
+* VFS-5133 Make GUI OZ session longer by default
+* VFS-5133 Add template.auth.config to onezone package
+* VFS-5106 Change the order how REST authorization is checked
+* VFS-4962 Implement openid mock server and use it in integration tests
+* VFS-4962 Add an extra auth_debug log to entitlement_mapping when admin group is added, implement custom_enetitlement_parser for plgrid
+* VFS-4970 Update cluster_worker to fix cache invalidation and expire documents
+
+
 ### 18.02.0-rc13
 
 * VFS-4614 Adjust logs during auth.config upgrade for clearer error reporting
