@@ -604,20 +604,20 @@ init_per_testcase(delete_entry_test, Config) ->
 init_per_testcase(query_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_new(Nodes, ?HARVESTER_MOCK_PLUGIN, [no_history, non_strict]),
-    test_utils:mock_expect(Nodes, ?HARVESTER_MOCK_PLUGIN, query, fun(_,_,_) -> {ok, value, ?TEST_DATA} end),
+    test_utils:mock_expect(Nodes, ?HARVESTER_MOCK_PLUGIN, query, fun(_,_,_) -> {ok, ?TEST_DATA} end),
     init_per_testcase(plugin_tests, Config);
 init_per_testcase(plugin_tests, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_new(Nodes, plugins_initializer),
+    test_utils:mock_new(Nodes, onezone_plugins),
     test_utils:mock_expect(Nodes, ?HARVESTER_MOCK_PLUGIN, type, fun() -> harvester_plugin end),
-    test_utils:mock_expect(Nodes, plugins_initializer, get_all_plugins, fun() -> {ok, [?HARVESTER_MOCK_PLUGIN]} end),
+    test_utils:mock_expect(Nodes, onezone_plugins, get_all_plugins, fun() -> {ok, [?HARVESTER_MOCK_PLUGIN]} end),
     Config;
 init_per_testcase(update_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_new(Nodes, plugins_initializer),
+    test_utils:mock_new(Nodes, onezone_plugins),
     test_utils:mock_new(Nodes, ?HARVESTER_MOCK_PLUGIN, [no_history, non_strict]),
     test_utils:mock_expect(Nodes, ?HARVESTER_MOCK_PLUGIN, type, fun() -> harvester_plugin end),
-    test_utils:mock_expect(Nodes, plugins_initializer, get_all_plugins, 
+    test_utils:mock_expect(Nodes, onezone_plugins, get_all_plugins, 
         fun() -> {ok, [?HARVESTER_MOCK_PLUGIN, binary_to_atom(?HARVESTER_PLUGIN_BINARY, utf8)]} end),
     Config;
 init_per_testcase(_, Config) ->
@@ -631,7 +631,7 @@ end_per_testcase(Case, Config) when
     Case =:= query_test ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_unload(Nodes, ?HARVESTER_MOCK_PLUGIN),
-    test_utils:mock_unload(Nodes, plugins_initializer);
+    test_utils:mock_unload(Nodes, onezone_plugins);
 end_per_testcase(_, _Config) ->
     ok.
 

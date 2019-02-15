@@ -40,12 +40,22 @@
 -define(PLUGINS_DIR, begin {ok, __Path} = oz_worker:get_env(plugins_directory), __Path end).
 -define(INCLUDES_DIR, filename:join(code:lib_dir(?APP_NAME), "include")).
 -define(COMPILE_OPTS, [return_errors, {i, ?INCLUDES_DIR}]).
+-define(PLUGINS_KEY, onezone_plugins).
 
--export([init/0]).
+-export([init/0, get_all_plugins/0]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns all loaded plugins. 
+%% @end
+%%--------------------------------------------------------------------
+-spec get_all_plugins() -> {ok, [module()]}.
+get_all_plugins() ->
+    oz_worker:get_env(?PLUGINS_KEY).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -70,17 +80,19 @@ init() ->
             end,
             ErlFiles
     end,
-    lists:foreach(fun(Plugin) ->
+    Plugins = lists:map(fun(Plugin) ->
         try
             {ok, Module} = compile:file(filename:join(PluginsDir, Plugin), ?COMPILE_OPTS),
             code:purge(Module),
             {module, Module} = code:load_file(Module),
             validate_plugin(Module),
-            ?info("  -> ~p: successfully loaded", [Module])
+            ?info("  -> ~p: successfully loaded", [Module]),
+            Module    
         catch Type:Reason ->
             ?error_stacktrace("Cannot load ~s plugin due to ~p:~p", [Plugin, Type, Reason])
         end
-    end, PluginFiles).
+    end, PluginFiles),
+    oz_worker:set_env(?PLUGINS_KEY, Plugins).
 
 %%%===================================================================
 %%% Internal functions
@@ -121,6 +133,9 @@ validate_plugin(Module, attribute_mapper) ->
     end;
 validate_plugin(_, openid_plugin) ->
     % openid_plugin does not undergo validation
+    ok;
+validate_plugin(_, harvester_plugin) ->
+    % harvester_plugin does not undergo validation
     ok;
 validate_plugin(_, Type) ->
     throw({bad_plugin_type, Type}).

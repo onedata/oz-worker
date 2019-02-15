@@ -6,19 +6,17 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% FIXME
+%%% This behaviour specifies the API for an harvester plugin.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(harvester_plugin_behaviour).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% FIXME
-%% @end
-%%--------------------------------------------------------------------
--callback submit_entry(binary(), binary(), binary(), maps:map()) -> ok | {error, term()}.
+-callback submit_entry(Endpoint :: binary(), IndexId :: binary(), Id :: binary(), Data :: binary()) -> 
+    ok | {error, term()}.
 
--callback delete_entry(binary(), binary(), binary()) -> ok | {error, term()}.
+-callback delete_entry(Endpoint :: binary(), IndexId :: binary(), Id :: binary()) -> 
+    ok | {error, term()}.
 
--callback query(binary(), binary(), binary()) -> {ok, value, binary()} | {error, term()}.
+-callback query(Endpoint :: binary(), IndexId :: binary(), Request :: binary()) -> 
+    {ok, binary()} | {error, term()}.

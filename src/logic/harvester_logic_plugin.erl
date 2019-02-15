@@ -281,7 +281,8 @@ create(#el_req{gri = #gri{aspect = {entry, FileId}, id = HarvesterId}, data = #{
 create(#el_req{gri = #gri{aspect = query, id = HarvesterId}, data = #{<<"request">> := Data}}) ->
     {ok, Harvester} = fetch_entity(HarvesterId),
     Plugin = Harvester#od_harvester.plugin,
-    Plugin:query(Harvester#od_harvester.endpoint, HarvesterId, Data).
+    {ok, Value} = Plugin:query(Harvester#od_harvester.endpoint, HarvesterId, Data),
+    {ok, value, Value}.
 
 
 %%--------------------------------------------------------------------
@@ -311,7 +312,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Harvester) ->
     }};
 
 get(#el_req{gri = #gri{aspect = all_plugins}}, _) ->
-    {ok, AllPlugins} = plugins_initializer:get_all_plugins(),
+    {ok, AllPlugins} = onezone_plugins:get_all_plugins(),
     {ok, [P || P <- AllPlugins, P:type() =:= harvester_plugin]};
     
 get(#el_req{gri = #gri{aspect = users}}, Harvester) ->

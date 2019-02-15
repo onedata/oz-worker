@@ -34,9 +34,9 @@
 -type entity_id() :: undefined | od_user:id() | od_group:id() | od_space:id() |
 od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id().
 -type entity_type() :: od_user | od_group | od_space | od_share | od_provider |
-od_handle_service | od_handle | oz_privileges.
+od_handle_service | od_handle | od_harvester | oz_privileges.
 -type entity() :: undefined | #od_user{} | #od_group{} | #od_space{} |
-#od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}.
+#od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{} | #od_harvester{}.
 -type aspect() :: gs_protocol:aspect().
 -type scope() :: gs_protocol:scope().
 -type data_format() :: gs_protocol:data_format().
@@ -51,8 +51,8 @@ od_handle_service | od_handle | oz_privileges.
 -type result() :: create_result() | get_result() | update_result() | delete_result().
 -type error() :: gs_protocol:error().
 
--type type_validator() :: any | atom | list_of_atoms | binary | alias |
-list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addresses.
+-type type_validator() :: any | atom | list_of_atoms | binary | alias | list_of_binaries 
+| integer | float | json | token | boolean | list_of_ipv4_addresses | plugin.
 
 -type value_validator() :: any | non_empty |
 fun((term()) -> boolean()) |
@@ -821,6 +821,12 @@ check_type(list_of_ipv4_addresses, Key, ListOfIPs) ->
     catch _:_ ->
         throw(?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(Key))
     end;
+check_type(plugin, _Key, Plugin) when is_binary(Plugin)->
+    binary_to_atom(Plugin, utf8);
+check_type(plugin, _Key, Plugin) when is_atom(Plugin)->
+    Plugin;
+check_type(plugin, Key, _) ->
+        throw(?ERROR_BAD_VALUE_PLUGIN);
 check_type(Rule, Key, _) ->
     ?error("Unknown type rule: ~p for key: ~p", [Rule, Key]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
@@ -984,6 +990,13 @@ check_value(binary, name, _Key, Value) ->
     case validate_name(Value) of
         true -> ok;
         false -> throw(?ERROR_BAD_VALUE_NAME)
+    end;
+check_value(plugin, Type, Key, Plugin) ->
+    try
+        {ok, AllPlugins} = onezone_plugins:get_all_plugins(),
+        true = (lists:member(Plugin, AllPlugins)) and (Plugin:type() =:= Type)
+    catch _:_  ->
+        throw(?ERROR_BAD_VALUE_PLUGIN)
     end;
 check_value(TypeRule, ValueRule, Key, _) ->
     ?error("Unknown {type, value} rule: {~p, ~p} for key: ~p", [
