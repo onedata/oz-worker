@@ -58,6 +58,11 @@ translate_value(_, #gri{aspect = invite_user_token}, Macaroon) ->
     Token;
 translate_value(_, #gri{type = od_provider, aspect = map_idp_group}, Id) ->
     Id;
+translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {AccessToken, Expires}) ->
+    #{
+        <<"token">> => AccessToken,
+        <<"ttl">> => Expires
+    };
 
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n

@@ -299,11 +299,11 @@
 %%%                               '----------------- <user>
 %%%
 %%% To implement your own entitlement parser, you must create an Erlang module
-%%% that implements the behaviour 'auth_plugin_behaviour' and returns the atom
+%%% that implements the behaviour 'onezone_plugin_behaviour' and returns the atom
 %%% 'entitlement_parser' from the type/0 callback, and implements the
 %%% 'entitlement_parser_behaviour'.
 %%% An exemplary custom entitlement parser that supports EGI group format can
-%%% be found in /etc/oz_worker/auth_plugins/custom_entitlement_parser.
+%%% be found in /etc/oz_worker/plugins/custom_entitlement_parser.erl.
 %%%
 %%% Custom entitlement parsers must be placed in the auth plugins directory.
 %%% They will be loaded (and validated) on Onezone startup.

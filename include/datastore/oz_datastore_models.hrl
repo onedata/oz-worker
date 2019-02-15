@@ -33,7 +33,9 @@
     % to specification in idp_group_mapping.
     entitlements = [] :: [entitlement_mapping:raw_entitlement()],
     % Custom attributes received from the IdP, opaque to Onezone (used in LUMA).
-    custom = #{} :: json_utils:json_term()
+    custom = #{} :: json_utils:json_term(),
+    access_token = {undefined, 0} :: {undefined | binary(), Expires :: non_neg_integer()},
+    refresh_token = undefined :: undefined | binary()
 }).
 
 %%%===================================================================
