@@ -35,7 +35,7 @@
 % Operations corresponding to logic modules
 -export([
     list_users/1,
-    create_user/2, create_user/3,
+    create_user/2,
     get_user/2,
     delete_user/2,
 
@@ -263,19 +263,6 @@ call_oz(Config, Module, Function, Args) ->
 %%--------------------------------------------------------------------
 -spec create_user(Config :: term(), User :: #od_user{}) -> {ok, od_user:id()}.
 create_user(Config, User) ->
-    ?assertMatch({ok, _}, call_oz(
-        Config, user_logic, create, [User]
-    )).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates a user in onezone under given UserId.
-%% @end
-%%--------------------------------------------------------------------
--spec create_user(Config :: term(), User :: #od_user{}, od_user:id()) ->
-    {ok, od_user:id()}.
-create_user(Config, User, UserId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, user_logic, create, [User]
     )).
