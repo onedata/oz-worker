@@ -34,7 +34,8 @@
     create_basic_group_env/2,
     create_basic_space_env/2,
     create_basic_doi_hservice_env/2,
-    create_basic_handle_env/2
+    create_basic_handle_env/2,
+    create_basic_harvester_env/2
 ]).
 -export([
     create_eff_parent_groups_env/1,
@@ -46,7 +47,9 @@
     create_eff_spaces_env/1,
     create_eff_providers_env/1,
     create_eff_handle_services_env/1,
-    create_eff_handles_env/1
+    create_eff_handles_env/1,
+    create_harvester_eff_users_env/1,
+    create_eff_harvesters_env/1
 ]).
 
 
@@ -669,6 +672,38 @@ create_basic_handle_env(Config, Privs) ->
     {HandleId, U1, U2}.
 
 
+create_basic_harvester_env(Config, Privs) when not is_list(Privs) ->
+    create_basic_harvester_env(Config, [Privs]);
+create_basic_harvester_env(Config, Privs) ->
+    %% Create environment with the following relations:
+    %%
+    %%                Harvester
+    %%                 /     \
+    %%                /       \
+    %%       [~privileges]  [privileges]
+    %%              /           \
+    %%           User1         User2
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+
+    AllHarvesterPrivs = privileges:harvester_privileges(),
+    {ok, Harvester} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_DATA),
+    {ok, _} = oz_test_utils:harvester_add_user(Config, Harvester, U1),
+%%    ct:print("Dupa1"),
+%%    ct:print("~p", [{Harvester, U1, Privs}]),
+%%    timer:sleep(timer:hours(10)),
+    oz_test_utils:harvester_set_user_privileges(
+        Config, Harvester, U1, [], Privs
+    ),
+    {ok, U2} = oz_test_utils:harvester_add_user(Config, Harvester, U2),
+    oz_test_utils:harvester_set_user_privileges(Config, Harvester, U2, Privs, AllHarvesterPrivs -- Privs),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {Harvester, U1, U2}.
+
+
 create_eff_parent_groups_env(Config) ->
     %% Create environment with the following relations:
     %%
@@ -986,6 +1021,55 @@ create_handle_eff_users_env(Config) ->
     {HandleId, Groups, Users, {U1, U2, NonAdmin}}.
 
 
+create_harvester_eff_users_env(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%                Harvester
+    %%                 /  |  \
+    %%                /   |   \
+    %%     [~space_view]  |  [space_view]
+    %%           /        |        \
+    %%        User1     Group1    User2
+    %%                 /      \
+    %%                /        \
+    %%             Group6     Group2
+    %%              /         /    \
+    %%           User6       /     User3
+    %%                    Group3
+    %%                    /    \
+    %%                   /      \
+    %%                Group4  Group5
+    %%                 /          \
+    %%               User4      User5
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {
+        [{G1, _} | _] = Groups, Users
+    } = create_eff_child_groups_env(Config),
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    AllHarvesterPrivs = privileges:harvester_privileges(),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_DATA),
+    {ok, _} = oz_test_utils:harvester_add_user(Config, H1, U1),
+    oz_test_utils:harvester_set_user_privileges(Config, H1, U1, [],
+        [?HARVESTER_VIEW]
+    ),
+    {ok, U2} = oz_test_utils:harvester_add_user(Config, H1, U2),
+    oz_test_utils:harvester_set_user_privileges(Config, H1, U2,
+        [?HARVESTER_VIEW], AllHarvesterPrivs -- [?HARVESTER_VIEW]
+    ),
+    {ok, G1} = oz_test_utils:harvester_add_group(Config, H1, G1),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {H1, Groups, Users, {U1, U2, NonAdmin}}.
+
+
 create_eff_spaces_env(Config) ->
     %% Create environment with the following relations:
     %%
@@ -1202,3 +1286,45 @@ create_eff_handles_env(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     {Handles, Groups, Users}.
+
+create_eff_harvesters_env(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%  Harvester4   Harvester5
+    %%          \     /
+    %%           \   /
+    %%          Group5    Harvester3
+    %%              \      /
+    %%               \    /
+    %%               Group4        Harvester2
+    %%                   \            /
+    %%                    \          /
+    %%                   Group3    Group2
+    %%                      \      /      Harvester1
+    %%                       \    /         /
+    %%                       Group1 --------
+    %%                      /      \
+    %%              [group_view]  [~group_view]
+    %%                   /            \
+    %%                User1          User2
+    %%
+    %%          <<user>>
+    %%          NonAdmin
+
+    {
+        [{G1, _}, {G2, _}, _, {G4, _}, {G5, _}] = Groups, Users
+    } = create_eff_parent_groups_env(Config),
+
+    Harvesters = lists:map(
+        fun(GroupId) ->
+            HarvesterDetails = ?HARVESTER_DATA(?UNIQUE_STRING),
+            {ok, HarvesterId} = oz_test_utils:group_create_harvester(
+                Config, GroupId, HarvesterDetails
+            ),
+            {HarvesterId, HarvesterDetails#{<<"spaces">> => []}}
+        end, [G1, G2, G4, G5, G5]
+    ),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {Harvesters, Groups, Users}.

@@ -642,12 +642,14 @@ get_record(od_user, 10) -> #od_user{
     spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
     handle_services = [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
     handles = [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+    harvesters = [],
 
     eff_groups = #{},
     eff_spaces = #{},
     eff_providers = #{},
     eff_handle_services = #{},
     eff_handles = #{},
+    eff_harvesters = #{},
 
     creation_time = ?DUMMY_TIMESTAMP,
 
@@ -794,12 +796,14 @@ get_record(od_group, 6) -> #od_group{
     spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
     handle_services = [<<"handle_service1">>],
     handles = [<<"handle1">>, <<"handle2">>],
+    harvesters = [],
 
     eff_users = #{},
     eff_spaces = #{},
     eff_providers = #{},
     eff_handle_services = #{},
     eff_handles = #{},
+    eff_harvesters = #{},
 
     creation_time = ?DUMMY_TIMESTAMP,
     creator = undefined,
@@ -906,6 +910,7 @@ get_record(od_space, 4) -> #od_space{
         <<"prov3">> => 19999999
     },
     shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+    harvesters = [],
 
     eff_users = #{},
     eff_groups = #{},

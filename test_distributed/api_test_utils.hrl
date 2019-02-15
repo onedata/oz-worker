@@ -263,6 +263,25 @@
     }
 ).
 
+%% Example test data for harvesters
+-define(HARVESTER_NAME1, <<"harvester1">>).
+-define(HARVESTER_NAME2, <<"harvester2">>).
+-define(HARVESTER_ENDPOINT, <<"test.endpoint:9200">>).
+-define(HARVESTER_MOCK_PLUGIN_BINARY, <<"harvester_mock_plugin">>).
+-define(HARVESTER_MOCK_PLUGIN, binary_to_atom(?HARVESTER_MOCK_PLUGIN_BINARY, utf8)).
+-define(HARVESTER_PLUGIN_BINARY, <<"elastic_search_plugin">>).
+-define(HARVESTER_CONFIG, #{<<"a">>=><<"b">>}).
+-define(HARVESTER_DATA(HarvesterName, HarvesterPlugin), 
+    #{
+        <<"name">> => HarvesterName,
+        <<"endpoint">> => ?HARVESTER_ENDPOINT,
+        <<"plugin">> => HarvesterPlugin,
+        <<"config">> => ?HARVESTER_CONFIG
+    }
+).
+-define(HARVESTER_DATA(HarvesterName), ?HARVESTER_DATA(HarvesterName, ?HARVESTER_PLUGIN_BINARY)). 
+-define(HARVESTER_DATA, ?HARVESTER_DATA(?HARVESTER_NAME1, ?HARVESTER_PLUGIN_BINARY)).
+
 -define(BAD_VALUES_NAME(Error),
     [{<<"name">>, <<"">>, Error},
     {<<"name">>, <<"a">>, Error},

@@ -46,6 +46,7 @@
     user_get_eff_oz_privileges/2,
     user_get_groups/2,
     user_get_spaces/2,
+    user_get_harvesters/2,
     user_get_eff_groups/2,
     user_set_oz_privileges/4,
     user_set_default_space/3,
@@ -58,7 +59,8 @@
     user_get_default_provider/2,
     user_unset_default_provider/2,
 
-    user_leave_space/3
+    user_leave_space/3,
+    user_leave_harvester/3
 ]).
 -export([
     list_groups/1,
@@ -73,6 +75,7 @@
     group_get_parents/2,
     group_get_spaces/2,
     group_get_users/2,
+    group_get_harvesters/2,
     group_get_oz_privileges/2,
     group_get_eff_oz_privileges/2,
     group_set_oz_privileges/4,
@@ -94,7 +97,8 @@
     group_get_group_privileges/3,
     group_set_group_privileges/5,
 
-    group_create_space/3
+    group_create_space/3,
+    group_create_harvester/3
 ]).
 -export([
     create_space/3,
@@ -106,8 +110,10 @@
     space_get_users/2,
     space_get_groups/2,
     space_get_providers/2,
+    space_get_harvesters/2,
 
     space_leave_provider/3,
+    space_leave_harvester/3,
 
     space_add_user/3,
     space_remove_user/3,
@@ -178,6 +184,33 @@
     handle_remove_group/3,
     handle_set_group_privileges/5,
     handle_get_group_privileges/3
+]).
+-export([
+    create_harvester/3,
+    get_harvester/2,
+    list_harvesters/1,
+    update_harvester/3,
+    delete_harvester/2,
+
+    harvester_get_users/2,
+    harvester_get_groups/2,
+    harvester_get_spaces/2,
+
+    harvester_add_user/3,
+    harvester_add_group/3,
+    harvester_add_space/3,
+    harvester_get_user_privileges/3,
+    harvester_set_user_privileges/5,
+    harvester_get_group_privileges/3,
+    harvester_set_group_privileges/5,
+    harvester_invite_user_token/3,
+    harvester_invite_group_token/3,
+    harvester_invite_space_token/3,
+    harvester_has_effective_user/3,
+
+    harvester_remove_user/3,
+    harvester_remove_group/3,
+    harvester_remove_space/3
 ]).
 -export([
     assert_token_exists/2,
@@ -354,6 +387,19 @@ user_get_groups(Config, UserId) ->
     {ok, [od_space:id()]}.
 user_get_spaces(Config, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, user_logic, get_spaces, [
+        ?ROOT, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns harvesters of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec user_get_harvesters(Config :: term(), UserId :: od_user:id()) ->
+    {ok, [od_harvester:id()]}.
+user_get_harvesters(Config, UserId) ->
+    ?assertMatch({ok, _}, call_oz(Config, user_logic, get_harvesters, [
         ?ROOT, UserId
     ])).
 
@@ -537,6 +583,17 @@ user_leave_space(Config, UserId, SpaceId) ->
         Config, user_logic, leave_space, [?ROOT, UserId, SpaceId]
     )).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves harvester as a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec user_leave_harvester(Config :: term(), UserId :: od_user:id(),
+    HarvesterId :: od_harvester:id()) -> ok.
+user_leave_harvester(Config, UserId, HarvesterId) ->
+    ?assertMatch(ok, call_oz(
+        Config, user_logic, leave_harvester, [?ROOT, UserId, HarvesterId]
+    )).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -644,6 +701,19 @@ group_get_spaces(Config, GroupId) ->
 group_get_users(Config, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, group_logic, get_users, [?ROOT, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves harvesters of given group from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_get_harvesters(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [od_harvester:id()]}.
+group_get_harvesters(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, get_harvesters, [?ROOT, GroupId]
     )).
 
 
@@ -985,6 +1055,19 @@ space_get_providers(Config, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves harvesters of given space from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_get_harvesters(Config :: term(),
+    SpaceId :: od_space:id()) -> {ok, [od_provider:id()]}.
+space_get_harvesters(Config, SpaceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, space_logic, get_harvesters, [?ROOT, SpaceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Leave space from given provider.
 %% @end
 %%--------------------------------------------------------------------
@@ -993,6 +1076,19 @@ space_get_providers(Config, SpaceId) ->
 space_leave_provider(Config, SpaceId, ProviderId) ->
     ?assertMatch(ok, call_oz(
         Config, space_logic, leave_provider, [?ROOT, SpaceId, ProviderId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Leave space from given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_leave_harvester(Config :: term(),
+    SpaceId :: od_space:id(), HarvesterId :: od_provider:id()) -> ok.
+space_leave_harvester(Config, SpaceId, HarvesterId) ->
+    ?assertMatch(ok, call_oz(
+        Config, space_logic, leave_harvester, [?ROOT, SpaceId, HarvesterId]
     )).
 
 
@@ -1850,6 +1946,299 @@ handle_get_group_privileges(Config, HandleId, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Creates a harvester in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_harvester(Config :: term(), Client :: entity_logic:client(),
+    Data :: #{}) -> {ok, od_harvester:id()}.
+create_harvester(Config, Client, Data) ->
+    Result = case Client of
+                 ?USER(UserId) ->
+                     call_oz(Config, user_logic, create_harvester, [Client, UserId, Data]);
+                 _ ->
+                     call_oz(Config, harvester_logic, create, [Client, Data])
+             end,
+
+    ?assertMatch({ok, _}, Result).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves harvester data from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_harvester(Config :: term(), HarvesterId :: od_harvester:id()) ->
+    {ok, #od_harvester{}}.
+get_harvester(Config, HarvesterId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, get, [?ROOT, HarvesterId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns list of all harvesters in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec list_harvesters(Config :: term()) -> {ok, [od_harvester:id()]}.
+list_harvesters(Config) ->
+    ?assertMatch({ok, _}, call_oz(Config, harvester_logic, list, [?ROOT])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates harvester name.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_harvester(Config :: term(), HarvesterId :: od_harvester:id(),
+    Name :: od_harvester:name()) -> ok.
+update_harvester(Config, HarvesterId, Name) ->
+    ?assertMatch(ok, call_oz(
+        Config, harvester_logic, update, [?ROOT, HarvesterId, Name]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes given harvester from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_harvester(Config :: term(), HarvesterId :: od_harvester:id()) -> ok.
+delete_harvester(Config, HarvesterId) ->
+    ?assertMatch(ok, call_oz(
+        Config, harvester_logic, delete, [?ROOT, HarvesterId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves users of given harvester from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_get_users(Config :: term(),
+    HarvesterId :: od_harvester:id()) -> {ok, [od_user:id()]}.
+harvester_get_users(Config, HarvesterId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, get_users, [?ROOT, HarvesterId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves groups of given harvester from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_get_groups(Config :: term(),
+    HarvesterId :: od_harvester:id()) -> {ok, [od_group:id()]}.
+harvester_get_groups(Config, HarvesterId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, get_groups, [?ROOT, HarvesterId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves supporting providers of given harvester from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_get_spaces(Config :: term(),
+    HarvesterId :: od_harvester:id()) -> {ok, [od_provider:id()]}.
+harvester_get_spaces(Config, HarvesterId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, get_spaces, [?ROOT, HarvesterId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Leave harvester from given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_remove_space(Config :: term(),
+    HarvesterId :: od_harvester:id(), ProviderId :: od_provider:id()) -> ok.
+harvester_remove_space(Config, HarvesterId, SpaceId) ->
+    ?assertMatch(ok, call_oz(
+        Config, harvester_logic, remove_space, [?ROOT, HarvesterId, SpaceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a user to a harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_add_user(Config :: term(), HarvesterId :: od_harvester:id(),
+    UserId :: od_user:id()) -> {ok, od_user:id()}.
+harvester_add_user(Config, HarvesterId, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, add_user, [?ROOT, HarvesterId, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Remove user from harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_remove_user(Config :: term(), HarvesterId :: od_harvester:id(),
+    UserId :: od_user:id()) -> {ok, od_user:id()}.
+harvester_remove_user(Config, HarvesterId, UserId) ->
+    ?assertMatch(ok, call_oz(
+        Config, harvester_logic, remove_user, [?ROOT, HarvesterId, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a group to a harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_add_group(Config :: term(), HarvesterId :: od_harvester:id(),
+    GroupId :: od_group:id()) -> {ok, od_group:id()}.
+harvester_add_group(Config, HarvesterId, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, add_group, [?ROOT, HarvesterId, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a space to a harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_add_space(Config :: term(), HarvesterId :: od_harvester:id(),
+    SpaceId :: od_space:id()) -> {ok, od_space:id()}.
+harvester_add_space(Config, HarvesterId, SpaceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, add_space, [?ROOT, HarvesterId, SpaceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves harvester privileges of given user from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_get_user_privileges(Config :: term(), HarvesterId :: od_harvester:id(),
+    UserId :: od_user:id()) -> {ok, [privileges:harvester_privilege()]}.
+harvester_get_user_privileges(Config, HarvesterId, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, get_user_privileges, [?ROOT, HarvesterId, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges of a user in a harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_set_user_privileges(Config :: term(), HarvesterId :: od_harvester:id(),
+    UserId :: od_user:id(), PrivsToGrant :: [privileges:harvester_privilege()],
+    PrivsToRevoke :: [privileges:harvester_privilege()]) -> ok.
+harvester_set_user_privileges(Config, HarvesterId, UserId, PrivsToGrant, PrivsToRevoke) ->
+    ?assertMatch(ok, call_oz(Config, harvester_logic, update_user_privileges, [
+        ?ROOT, HarvesterId, UserId, PrivsToGrant, PrivsToRevoke
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves harvester privileges of given group from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_get_group_privileges(Config :: term(), HarvesterId :: od_harvester:id(),
+    GroupId :: od_group:id()) -> {ok, [privileges:harvester_privilege()]}.
+harvester_get_group_privileges(Config, HarvesterId, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, get_group_privileges, [?ROOT, HarvesterId, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges of a group in a harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_set_group_privileges(Config :: term(), HarvesterId :: od_harvester:id(),
+    GroupId :: od_group:id(), PrivsToGrant :: [privileges:harvester_privilege()],
+    PrivsToRevoke :: [privileges:harvester_privilege()]) -> ok.
+harvester_set_group_privileges(Config, HarvesterId, GroupId, PrivsToGrant, PrivsToRevoke) ->
+    ?assertMatch(ok, call_oz(Config, harvester_logic, update_group_privileges, [
+        ?ROOT, HarvesterId, GroupId, PrivsToGrant, PrivsToRevoke
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a user invite token to given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_invite_user_token(Config :: term(),
+    Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+    {ok, macaroon:macaroon()}.
+harvester_invite_user_token(Config, Client, HarvesterId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, create_user_invite_token, [Client, HarvesterId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a group invite token to given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_invite_group_token(Config :: term(),
+    Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+    {ok, macaroon:macaroon()}.
+harvester_invite_group_token(Config, Client, HarvesterId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, create_group_invite_token, [Client, HarvesterId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a provider invite token to given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_invite_space_token(Config :: term(),
+    Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+    {ok, macaroon:macaroon()}.
+harvester_invite_space_token(Config, Client, HarvesterId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, create_space_invite_token, [Client, HarvesterId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Checks if given harvester has given effective user.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_has_effective_user(Config :: term(), HarvesterId :: od_harvester:id(),
+    UserId :: od_user:id()) -> boolean().
+harvester_has_effective_user(Config, HarvesterId, UserId) ->
+    {ok, EffUsers} = ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, get_eff_users, [?ROOT, HarvesterId]
+    )),
+    lists:member(UserId, EffUsers).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes group from harvester in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_remove_group(Config :: term(), HarvesterId :: od_harvester:id(),
+    GroupId :: od_group:id()) -> ok.
+harvester_remove_group(Config, HarvesterId, GroupId) ->
+    ?assertMatch(ok, call_oz(
+        Config, harvester_logic, remove_group, [?ROOT, HarvesterId, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Sets privileges for group's user with ?ROOT auth.
 %% @end
 %%--------------------------------------------------------------------
@@ -1899,6 +2288,19 @@ group_set_group_privileges(Config, GroupId, ChildGroupId, Operation, Privs) ->
 group_create_space(Config, GroupId, NameOrData) ->
     ?assertMatch({ok, _}, call_oz(
         Config, group_logic, create_space, [?ROOT, GroupId, NameOrData]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a harvester in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_create_harvester(Config :: term(), GroupId :: od_group:id(),
+    Data :: #{}) -> {ok, od_harvester:id()}.
+group_create_harvester(Config, GroupId, Data) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, create_harvester, [?ROOT, GroupId, Data]
     )).
 
 
@@ -1999,10 +2401,12 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     {ok, HServices} = list_handle_services(Config),
     {ok, Groups} = list_groups(Config),
     {ok, Users} = list_users(Config),
+    {ok, Harvesters} = list_harvesters(Config),
     [delete_provider(Config, PId) || PId <- Providers],
     [delete_handle(Config, HId) || HId <- Handles],
     [delete_share(Config, ShId) || ShId <- Shares],
     [delete_space(Config, SpId) || SpId <- Spaces],
+    [delete_harvester(Config, HId) || HId <- Harvesters],
     [delete_handle_service(Config, HSId) || HSId <- HServices],
     % Check if predefined groups should be removed too.
     GroupsToDelete = case RemovePredefinedGroups of
