@@ -120,6 +120,32 @@ expected_configuration(Config) ->
         ?APP_NAME, subdomain_delegation_enabled, SubdomainDelegation
     ]),
 
+    oz_test_utils:overwrite_auth_config(Config, #{
+        openidConfig => #{
+            enabled => true
+        },
+        supportedIdps => [
+            {idp1, #{
+                protocol => openid,
+                protocolConfig => #{
+                    plugin => default_oidc_plugin,
+                    offlineAccess => false
+                }
+            }},
+            {idp2, #{
+                protocol => openid,
+                protocolConfig => #{
+                    plugin => default_oidc_plugin,
+                    offlineAccess => true
+                }
+            }}
+        ]
+    }),
+    SupportedIdPs = [
+        #{<<"id">> =>  <<"idp1">>, <<"offlineAccess">> =>  false},
+        #{<<"id">> =>  <<"idp2">>, <<"offlineAccess">> =>  true}
+    ],
+
     #{
         <<"name">> => str_utils:to_binary(OZNameString),
         <<"domain">> => str_utils:to_binary(OZDomainString),
@@ -127,5 +153,6 @@ expected_configuration(Config) ->
         <<"build">> => str_utils:to_binary(OZBuildString),
         <<"compatibleOneproviderVersions">> =>
         [str_utils:to_binary(V) || V <- OZCompatibleOneproviders],
-        <<"subdomainDelegationSupported">> => SubdomainDelegation
+        <<"subdomainDelegationSupported">> => SubdomainDelegation,
+        <<"supportedIdPs">> => SupportedIdPs
     }.

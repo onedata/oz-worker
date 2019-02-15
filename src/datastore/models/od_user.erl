@@ -249,7 +249,7 @@ get_all_sessions(UserId) ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    9.
+    10.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -371,13 +371,12 @@ get_record_struct(8) ->
     %       * renamed groups to entitlements
     %       * renamed email_list to emails
     %       * renamed login to alias
-    %       * added custom field.
+    %       * added custom field
     {record, [
         {name, string},
         {alias, string},
         {emails, [string]},
         {basic_auth_enabled, boolean},
-
         {linked_accounts, [{record, [
             {idp, atom},
             {subject_id, string},
@@ -412,6 +411,50 @@ get_record_struct(8) ->
         {top_down_dirty, boolean}
     ]};
 get_record_struct(9) ->
+    % linked_account:
+    %   * added access_token field
+    %   * added refresh_token field
+    {record, [
+        {name, string},
+        {alias, string},
+        {emails, [string]},
+        {basic_auth_enabled, boolean},
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {name, string},
+            {alias, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, {json_utils, encode, decode}}},
+            {access_token, {string, integer}},
+            {refresh_token, string}
+        ]}]},
+        {entitlements, [string]},
+
+        {default_space, string},
+        {default_provider, string},
+
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(10) ->
     % Changes:
     %   * new field - active sessions
     %   * new field - creation_time
@@ -429,7 +472,9 @@ get_record_struct(9) ->
             {alias, string},
             {emails, [string]},
             {entitlements, [string]},
-            {custom, {custom, {json_utils, encode, decode}}}
+            {custom, {custom, {json_utils, encode, decode}}},
+            {access_token, {string, integer}},
+            {refresh_token, string}
         ]}]},
         {entitlements, [string]},
 
@@ -901,15 +946,16 @@ upgrade_record(7, User) ->
     TransformedLinkedAccounts = lists:map(fun(LinkedAccount) ->
         {linked_account, IdP, SubjectId, LALogin, LAName, LAEmailList, _LAGroups} = LinkedAccount,
 
-        #linked_account{
-            idp = IdP,
-            subject_id = SubjectId,
-            name = LAName,
-            alias = LALogin,
-            emails = LAEmailList,
+        {linked_account,
+            IdP,
+            SubjectId,
+            LAName,
+            LALogin,
+            LAEmailList,
             % Cannot be translated, but users will not lose their current entitlements
             % (resulting Onedata group id is the same as before)
-            entitlements = []
+            [], % entitlements
+            #{} % custom
         }
     end, LinkedAccounts),
 
@@ -947,7 +993,85 @@ upgrade_record(8, User) ->
     {od_user,
         Name,
         Alias,
-        EmailList,
+        Emails,
+        BasicAuthEnabled,
+        LinkedAccounts,
+        Entitlements,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    } = User,
+
+    TransformedLinkedAccounts = lists:map(fun(LinkedAccount) ->
+        {linked_account, IdP, SubjectId, LAName, LAAlias, LAEmails, LAEntitlements, Custom} = LinkedAccount,
+
+        #linked_account{
+            idp = IdP,
+            subject_id = SubjectId,
+            name = LAName,
+            alias = LAAlias,
+            emails = LAEmails,
+            entitlements = LAEntitlements,
+            custom = Custom,
+            access_token = {undefined, 0},
+            refresh_token = undefined
+        }
+    end, LinkedAccounts),
+
+    {9, {od_user,
+        Name,
+        Alias,
+        Emails,
+        BasicAuthEnabled,
+        TransformedLinkedAccounts,
+        Entitlements,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    }};
+upgrade_record(9, User) ->
+    {od_user,
+        Name,
+        Alias,
+        Emails,
         BasicAuthEnabled,
 
         LinkedAccounts,
@@ -1002,10 +1126,10 @@ upgrade_record(8, User) ->
         end, Privileges)))
     end,
 
-    {9, #od_user{
+    {10, #od_user{
         name = Name,
         alias = Alias,
-        emails = EmailList,
+        emails = Emails,
         basic_auth_enabled = BasicAuthEnabled,
 
         linked_accounts = LinkedAccounts,

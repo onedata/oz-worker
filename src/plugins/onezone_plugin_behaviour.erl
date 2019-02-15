@@ -6,11 +6,11 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This behaviour specifies the API for an auth plugin that can be used within
-%%% OIDC / SAML sing-on procedure.
+%%% This behaviour specifies the API for a plugin that can be used to
+%%% customize Onezone.
 %%% @end
 %%%-------------------------------------------------------------------
--module(auth_plugin_behaviour).
+-module(onezone_plugin_behaviour).
 
 
 -type type() :: entitlement_parser | openid_plugin | attribute_mapper.

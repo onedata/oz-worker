@@ -61,6 +61,7 @@ operation_supported(create, client_tokens, private) -> true;
 operation_supported(create, default_space, private) -> true;
 operation_supported(create, {space_alias, _}, private) -> true;
 operation_supported(create, default_provider, private) -> true;
+operation_supported(create, {idp_access_token, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
 
@@ -173,7 +174,17 @@ create(#el_req{gri = #gri{id = UserId, aspect = default_provider}, data = Data})
     {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
         {ok, User#od_user{default_provider = ProviderId}}
     end),
-    ok.
+    ok;
+
+create(Req = #el_req{gri = GRI = #gri{aspect = {idp_access_token, IdPBin}}}) when is_binary(IdPBin) ->
+    create(Req#el_req{gri = GRI#gri{aspect = {idp_access_token, binary_to_existing_atom(IdPBin, utf8)}}});
+create(#el_req{gri = #gri{aspect = {idp_access_token, IdP}}}) ->
+    fun(User) ->
+        case auth_logic:acquire_idp_access_token(User#od_user.linked_accounts, IdP) of
+            {ok, {AccessToken, Expires}} -> {ok, value, {AccessToken, Expires}};
+            {error, _} = Error -> Error
+        end
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -635,6 +646,12 @@ validate(#el_req{operation = create, gri = #gri{id = UserId, aspect = default_pr
             end}}
         }
     };
+
+validate(#el_req{operation = create, gri = #gri{aspect = {idp_access_token, _}}}) -> #{
+    required => #{
+        {aspect, <<"idp">>} => {atom, auth_config:get_idps_with_offline_access()}
+    }
+};
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{

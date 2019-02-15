@@ -33,6 +33,7 @@
 
 %% API
 -export([authorize_by_idp_access_token/1]).
+-export([refresh_idp_access_token/2]).
 -export([request_idp/5, request_idp/6]).
 
 %%%===================================================================
@@ -77,7 +78,7 @@ validate_login(IdP, QueryParams) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize_by_idp_access_token(AccessToken :: binary()) ->
-    {true, entity_logic:client()} | false | {error, term()}.
+    {true, {auth_logic:idp(), auth_logic:idp_attributes()}} | false | {error, term()}.
 authorize_by_idp_access_token(AccessTokenWithPrefix) ->
     case auth_config:find_openid_idp_by_access_token(AccessTokenWithPrefix) of
         false ->
@@ -101,6 +102,17 @@ authorize_by_idp_access_token(AccessTokenWithPrefix) ->
                     ?ERROR_INTERNAL_SERVER_ERROR
             end
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Acquires a new access token using given refresh token.
+%% @end
+%%--------------------------------------------------------------------
+-spec refresh_idp_access_token(auth_config:idp(), auth_logic:refresh_token()) ->
+    {ok, attribute_mapping:idp_attributes()} | {error, term()}.
+refresh_idp_access_token(IdP, RefreshToken) ->
+    call_plugin(IdP, refresh_access_token, [IdP, RefreshToken]).
 
 
 %%--------------------------------------------------------------------

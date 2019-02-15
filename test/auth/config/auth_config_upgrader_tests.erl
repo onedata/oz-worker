@@ -569,6 +569,8 @@ expected_openid_idps() -> [
                     userInfo => {xrds, "userinfo_endpoint"}
                 },
                 scope => "openid email profile",
+                offlineAccess => false,
+                prompt => undefined,
                 accessTokenAcquireMethod => post,
                 clientSecretPassMethod => urlencoded,
                 accessTokenPassMethod => urlencoded,
@@ -611,6 +613,8 @@ expected_openid_idps() -> [
                     userInfo => "https://graph.facebook.com/me"
                 },
                 scope => "email",
+                offlineAccess => false,
+                prompt => undefined,
                 accessTokenAcquireMethod => get,
                 clientSecretPassMethod => urlencoded,
                 accessTokenPassMethod => urlencoded,
@@ -667,7 +671,9 @@ expected_openid_idps() -> [
                         {"emails", "https://api.github.com/user/emails"}
                     ]
                 },
-                scope => "user,user:email"
+                scope => "user,user:email",
+                offlineAccess => false,
+                prompt => undefined
             },
             authorityDelegation => #{
                 enabled => false,
@@ -742,6 +748,8 @@ expected_openid_idps() -> [
                     xrds => "https://iam-test.indigo-datacloud.eu/.well-known/openid-configuration"
                 },
                 scope => "openid email profile",
+                offlineAccess => false,
+                prompt => undefined,
                 accessTokenAcquireMethod => post,
                 accessTokenPassMethod => urlencoded,
                 clientSecretPassMethod => inAuthHeader,
@@ -789,6 +797,8 @@ expected_openid_idps() -> [
                     xrds => "https://aai.egi.eu/oidc/.well-known/openid-configuration"
                 },
                 scope => "openid email profile",
+                offlineAccess => false,
+                prompt => undefined,
                 accessTokenAcquireMethod => post,
                 accessTokenPassMethod => urlencoded,
                 clientSecretPassMethod => inAuthHeader,
@@ -832,6 +842,8 @@ expected_openid_idps() -> [
                     xrds => "https://fed-id.nuv.la/auth/realms/SixSq/.well-known/openid-configuration"
                 },
                 scope => "openid email profile",
+                offlineAccess => false,
+                prompt => undefined,
                 accessTokenAcquireMethod => post,
                 accessTokenPassMethod => inAuthHeader,
                 clientSecretPassMethod => urlencoded,

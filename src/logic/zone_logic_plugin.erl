@@ -92,7 +92,8 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
         build => oz_worker:get_build_version(),
         domain => oz_worker:get_domain(),
         compatibleOneproviderVersions => CompatibleOpVersionsBin,
-        subdomainDelegationSupported => SubdomainDelegationEnabled
+        subdomainDelegationSupported => SubdomainDelegationEnabled,
+        supportedIdPs => auth_config:get_supported_idps_in_configuration_format()
     }}.
 
 

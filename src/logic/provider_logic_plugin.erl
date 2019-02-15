@@ -671,9 +671,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = check_my_ports}}) -> #{
 
 validate(#el_req{operation = create, gri = #gri{aspect = map_idp_group}}) -> #{
     required => #{
-        <<"idp">> => {atom, {exists, fun(IdP) ->
-            entitlement_mapping:enabled(IdP)
-        end}},
+        <<"idp">> => {atom, {exists, fun entitlement_mapping:enabled/1}},
         <<"groupId">> => {binary, non_empty}
     }
 };

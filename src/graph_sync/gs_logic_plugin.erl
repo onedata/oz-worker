@@ -207,7 +207,7 @@ handle_rpc(_, _, <<"getSupportedIdPs">>, Data) ->
             };
         _ ->
             {ok, #{
-                <<"idps">> => auth_config:get_supported_idps()
+                <<"idps">> => auth_config:get_supported_idps_in_gui_format()
             }}
     end;
 handle_rpc(_, Client, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
