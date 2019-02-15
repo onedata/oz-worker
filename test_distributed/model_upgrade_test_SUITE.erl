@@ -57,7 +57,7 @@ all() -> ?ALL([
 %%%===================================================================
 
 user_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_user, [1, 2, 3, 4, 5, 6, 7, 8]).
+    test_record_upgrade(Config, od_user, [1, 2, 3, 4, 5, 6, 7, 8, 9]).
 
 
 group_upgrade_test(Config) ->
