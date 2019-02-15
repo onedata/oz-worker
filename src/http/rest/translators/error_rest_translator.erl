@@ -232,6 +232,8 @@ translate(?ERROR_BAD_VALUE_USER_NAME) ->
         "Bad value: User name must be 2-50 characters long and composed of UTF-8 letters and digits."
         "Dashes, spaces, dots, commas and apostrophes are allowed (but not at the beginning or the end). "
     >>};
+translate(?ERROR_BAD_VALUE_PLUGIN) ->
+    {?HTTP_400_BAD_REQUEST, <<"Bad value: provided plugin is not valid.">>};
 translate(?ERROR_BAD_VALUE_IDENTIFIER(Key)) ->
     {?HTTP_400_BAD_REQUEST, {
         <<"Bad value: provided \"~s\" is not a valid identifier.">>, [Key]

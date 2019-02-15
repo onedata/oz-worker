@@ -26,7 +26,7 @@
 -type bound_gri() :: #b_gri{}.
 -type bound_auth_hint() :: undefined | {
     throughUser | throughGroup | throughSpace | throughProvider |
-    throughHandleService | throughHandle | asUser | asGroup,
+    throughHandleService | throughHandle | throughHarvester | asUser | asGroup,
     binding()
 }.
 
@@ -212,6 +212,7 @@ rest_routes() ->
         provider_routes:routes(),
         handle_service_routes:routes(),
         handle_routes:routes(),
+        harvester_routes:routes(),
         zone_routes:routes()
     ]),
     % Aggregate routes that share the same path

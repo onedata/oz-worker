@@ -38,6 +38,7 @@
     add_user/3, add_user/4,
     add_group/3, add_group/4,
     create_group/3, create_group/4,
+    create_harvester/3, create_harvester/6,
 
     get_users/2, get_eff_users/2,
     get_user/3, get_eff_user/3,
@@ -53,10 +54,13 @@
 
     get_providers/2, get_provider/3,
 
+    get_harvesters/2, get_harvester/3,
+
     update_user_privileges/5, update_user_privileges/4,
     update_group_privileges/5, update_group_privileges/4,
 
     leave_provider/3,
+    leave_harvester/3,
 
     remove_user/3,
     remove_group/3
@@ -67,12 +71,14 @@
     has_direct_user/2,
     has_eff_user/2,
     has_eff_group/2,
-    has_provider/2
+    has_provider/2,
+    has_harvester/2
 ]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -331,6 +337,45 @@ create_group(Client, SpaceId, Data) ->
         gri = #gri{type = od_space, id = SpaceId, aspect = group},
         data = Data,
         auth_hint = AuthHint
+    })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new harvester for given space. 
+%% Harvester name, endpoint, plugin and config are given explicitly
+%% @end
+%%--------------------------------------------------------------------
+-spec create_harvester(Client :: entity_logic:client(), SpaceId :: od_space:id(), Name :: binary(),
+    Endpoint :: binary(), Plugin :: binary(), Config :: #{}) -> {ok, od_harvester:id()} | {error, term()}.
+create_harvester(Client, SpaceId, Name, Endpoint, Plugin, Config) ->
+    create_harvester(Client, SpaceId, #{
+        <<"name">> => Name,
+        <<"endpoint">> => Endpoint,
+        <<"plugin">> => Plugin,
+        <<"config">> => Config
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new harvester for given space. 
+%% Harvester name, endpoint and plugin is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_harvester(Client :: entity_logic:client(), SpaceId :: od_space:id(),
+    Data :: #{}) -> {ok, od_harvester:id()} | {error, term()}.
+create_harvester(Client, SpaceId, Data) ->
+    AuthHint = case Client of
+        ?USER(UserId) -> ?AS_USER(UserId);
+        _ -> undefined
+    end,
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_space, id = SpaceId, aspect = harvester},
+        auth_hint = AuthHint,
+        data = Data
     })).
 
 
@@ -620,6 +665,39 @@ get_provider(Client, SpaceId, ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves the list of harvesters of given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_harvesters(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
+    {ok, [od_harvester:id()]} | {error, term()}.
+get_harvesters(Client, SpaceId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_space, id = SpaceId, aspect = harvesters}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific harvester among harvesters of given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_harvester(Client :: entity_logic:client(), SpaceId :: od_space:id(),
+    HarvesterId :: od_harvester:id()) -> {ok, #{}} | {error, term()}.
+get_harvester(Client, SpaceId, HarvesterId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = protected},
+        auth_hint = ?THROUGH_SPACE(SpaceId)
+    }).
+
+
+%%--------------------------------------------------------------------
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Updates privileges of specified user of given space.
 %% Allows to specify privileges to grant and to revoke.
 %% @end
@@ -696,6 +774,21 @@ leave_provider(Client, SpaceId, ProviderId) ->
         operation = delete,
         client = Client,
         gri = #gri{type = od_space, id = SpaceId, aspect = {provider, ProviderId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves specified harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec leave_harvester(Client :: entity_logic:client(), SpaceId :: od_space:id(),
+    HarvesterId :: od_harvester:id()) -> ok | {error, term()}.
+leave_harvester(Client, SpaceId, HarvesterId) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_space, id = SpaceId, aspect = {harvester, HarvesterId}}
     }).
 
 
@@ -805,3 +898,16 @@ has_provider(SpaceId, ProviderId) when is_binary(SpaceId) ->
     entity_graph:has_relation(direct, top_down, od_provider, ProviderId, od_space, SpaceId);
 has_provider(Space, ProviderId) ->
     entity_graph:has_relation(direct, top_down, od_provider, ProviderId, Space).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether given space is member of specified harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_harvester(SpaceOrId :: od_space:id() | #od_space{},
+    HarvesterId :: od_harvester:id()) -> boolean().
+has_harvester(SpaceId, HarvesterId) when is_binary(SpaceId) ->
+    entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, od_space, SpaceId);
+has_harvester(Space, HarvesterId) ->
+    entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, Space).

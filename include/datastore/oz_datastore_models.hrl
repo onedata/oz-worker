@@ -54,25 +54,26 @@
 %
 % The below ASCII visual shows possible relations in entities graph.
 %
-%       provider
-%           ^
-%           |
-%           |
-%         space    handle_service     handle
-%        ^ ^  ^       ^         ^       ^   ^
-%       /  |   \     /          |      /    |
-%      /   |    \   /           |     /     |
-%  share  user   group           user     group
-%                  ^                        ^
-%                  |                        |
-%                  |                        |
-%                group                     user
+%     provider  harvester
+%           ^    ^ ^ ^ 
+%           |   /  |  \
+%           | user |  space
+%           |      |
+%         space    |   handle_service     handle
+%        ^ ^  ^    |    ^         ^       ^   ^
+%       /  |   \   |   /          |      /    |
+%      /   |    \  |  /           |     /     |
+%  share  user   group             user     group
+%                  ^                          ^
+%                  |                          |
+%                  |                          |
+%                group                       user
 %                ^   ^
 %               /     \
 %              /       \
 %            user     user
 %
-% Members of groups, spaces, providers, handle_services and handles are
+% Members of groups, spaces, providers, handle_services, handles and harvesters are
 % calculated bottom-up.
 %
 % Memberships of users, groups and spaces are calculated top-down.
@@ -113,6 +114,7 @@
     spaces = [] :: entity_graph:relations(od_space:id()),
     handle_services = [] :: entity_graph:relations(od_handle_service:id()),
     handles = [] :: entity_graph:relations(od_handle:id()),
+    harvesters = [] :: entity_graph:relations(od_harvester:id()),
 
     % Effective relations to other entities
     eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
@@ -120,6 +122,7 @@
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
     eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
+    eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
 
@@ -150,6 +153,7 @@
     spaces = [] :: entity_graph:relations(od_space:id()),
     handle_services = [] :: entity_graph:relations(od_handle_service:id()),
     handles = [] :: entity_graph:relations(od_handle:id()),
+    harvesters = [] :: entity_graph:relations(od_harvester:id()),
 
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:group_privilege()]),
@@ -157,6 +161,7 @@
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
     eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
+    eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | entity_logic:client(),
@@ -177,6 +182,7 @@
     providers = #{} :: entity_graph:relations_with_attrs(od_provider:id(), Size :: pos_integer()),
     % All shares that belong to this space.
     shares = [] :: entity_graph:relations(od_share:id()),
+    harvesters = [] :: entity_graph:relations(od_harvester:id()),
 
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
@@ -273,6 +279,30 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_privilege()]),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
+
+    % Marks that the record's effective relations are not up to date.
+    bottom_up_dirty = true :: boolean()
+}).
+
+-record(od_harvester, {
+    name = <<"">> :: od_harvester:name(),
+    plugin = elastic_search_plugin :: module(),
+    endpoint :: binary(),
+    
+    config :: json_utils:json_term(),
+    public = false :: boolean(),
+
+    % Direct relations to other entities
+    users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
+    groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
+    spaces = [] :: entity_graph:relations(od_space:id()),
+
+    % Effective relations to other entities
+    eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
+    eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | entity_logic:client(),

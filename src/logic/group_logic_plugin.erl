@@ -99,6 +99,9 @@ operation_supported(get, eff_handle_services, private) -> true;
 operation_supported(get, handles, private) -> true;
 operation_supported(get, eff_handles, private) -> true;
 
+operation_supported(get, harvesters, private) -> true;
+operation_supported(get, eff_harvesters, private) -> true;
+
 operation_supported(update, instance, private) -> true;
 operation_supported(update, oz_privileges, private) -> true;
 operation_supported(update, {user_privileges, _}, private) -> true;
@@ -111,7 +114,8 @@ operation_supported(delete, {parent, _}, private) -> true;
 operation_supported(delete, {child, _}, private) -> true;
 operation_supported(delete, {space, _}, private) -> true;
 operation_supported(delete, {handle_service, _}, private) -> true;
-operation_supported(delete, {handle, _}, private) -> true.
+operation_supported(delete, {handle, _}, private) -> true;
+operation_supported(delete, {harvester, _}, private) -> true.
 
 
 %%--------------------------------------------------------------------
@@ -137,6 +141,7 @@ is_subscribable({user_privileges, _}, private) -> true;
 is_subscribable({eff_user_privileges, _}, private) -> true;
 is_subscribable({eff_user_membership, _}, private) -> true;
 is_subscribable(spaces, private) -> true;
+is_subscribable(harvesters, private) -> true;
 is_subscribable(_, _) -> false.
 
 
@@ -343,7 +348,12 @@ get(#el_req{gri = #gri{aspect = eff_handle_services}}, Group) ->
 get(#el_req{gri = #gri{aspect = handles}}, Group) ->
     {ok, entity_graph:get_relations(direct, top_down, od_handle, Group)};
 get(#el_req{gri = #gri{aspect = eff_handles}}, Group) ->
-    {ok, entity_graph:get_relations(effective, top_down, od_handle, Group)}.
+    {ok, entity_graph:get_relations(effective, top_down, od_handle, Group)};
+
+get(#el_req{gri = #gri{aspect = harvesters}}, Group) ->
+    {ok, entity_graph:get_relations(direct, top_down, od_harvester, Group)};
+get(#el_req{gri = #gri{aspect = eff_harvesters}}, Group) ->
+    {ok, entity_graph:get_relations(effective, top_down, od_harvester, Group)}.
 
 
 %%--------------------------------------------------------------------
@@ -439,6 +449,12 @@ delete(#el_req{gri = #gri{id = GroupId, aspect = {handle, HandleId}}}) ->
     entity_graph:remove_relation(
         od_group, GroupId,
         od_handle, HandleId
+    );
+
+delete(#el_req{gri = #gri{id = GroupId, aspect = {harvester, HarvesterId}}}) ->
+    entity_graph:remove_relation(
+        od_group, GroupId,
+        od_harvester, HarvesterId
     ).
 
 
@@ -471,6 +487,8 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = shared}}, Group) ->
             group_logic:has_eff_handle_service(Group, HServiceId);
         ?THROUGH_HANDLE(HandleId) ->
             group_logic:has_eff_handle(Group, HandleId);
+        ?THROUGH_HARVESTER(HarvesterId) ->
+            group_logic:has_eff_harvester(Group, HarvesterId);
         undefined ->
             true
     end;
@@ -510,6 +528,9 @@ exists(#el_req{gri = #gri{aspect = {handle_service, HServiceId}}}, Group) ->
 
 exists(#el_req{gri = #gri{aspect = {handle, HandleId}}}, Group) ->
     entity_graph:has_relation(direct, top_down, od_handle, HandleId, Group);
+
+exists(#el_req{gri = #gri{aspect = {harvester, HarvesterId}}}, Group) ->
+    entity_graph:has_relation(direct, top_down, od_harvester, HarvesterId, Group);
 
 % All other aspects exist if group record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_group{}) ->
@@ -626,6 +647,10 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             % Group's membership in handle is checked in 'exists'
             handle_logic:has_eff_privilege(HandleId, ClientUserId, ?HANDLE_VIEW);
 
+        {?USER(ClientUserId), ?THROUGH_HARVESTER(HarvesterId)} ->
+            % Group's membership in harvester is checked in 'exists'
+            harvester_logic:has_eff_privilege(HarvesterId, ClientUserId, ?HARVESTER_VIEW);
+
         {?USER(ClientUserId), undefined} ->
             auth_by_membership(ClientUserId, Group);
 
@@ -694,6 +719,9 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {handle_service,
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {handle, _}}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_LEAVE_HANDLE);
+
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {harvester, _}}}, Group) ->
+    auth_by_privilege(Req, Group, ?GROUP_REMOVE_HARVESTER);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {user, _}}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_REMOVE_USER);
@@ -794,6 +822,11 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = handles}}
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_handles}}) ->
     [?OZ_GROUPS_LIST_RELATIONSHIPS];
 
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = harvesters}}) ->
+    [?OZ_GROUPS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_harvesters}}) ->
+    [?OZ_GROUPS_LIST_RELATIONSHIPS];
+
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
     [?OZ_GROUPS_UPDATE];
 
@@ -817,6 +850,8 @@ required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {handl
     [?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_HANDLE_SERVICES_REMOVE_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {handle, _}}}) ->
     [?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_HANDLES_REMOVE_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {harvester, _}}}) ->
+    [?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_HARVESTERS_REMOVE_RELATIONSHIPS];
 
 required_admin_privileges(_) ->
     forbidden.

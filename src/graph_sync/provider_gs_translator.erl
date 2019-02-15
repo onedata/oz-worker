@@ -185,7 +185,8 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
         groups = Groups,
 
         providers = Providers,
-        shares = Shares
+        shares = Shares,
+        harvesters = Harvesters
     } = Space,
     #{
         <<"name">> => Name,
@@ -197,7 +198,8 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
         <<"effectiveGroups">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, Space),
 
         <<"providers">> => Providers,
-        <<"shares">> => Shares
+        <<"shares">> => Shares,
+        <<"harvesters">> => Harvesters
     };
 translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected}, SpaceData) ->
     #{<<"name">> := Name, <<"providers">> := Providers} = SpaceData,
@@ -324,6 +326,14 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public},
         <<"metadata">> => Metadata,
         <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp)
     };
+translate_resource(_, #gri{type = od_harvester, aspect = instance, scope = private}, Harvester) ->
+    #od_harvester{
+        spaces = Spaces
+    } = Harvester,
+    #{<<"spaces">> => Spaces};
+translate_resource(_, #gri{type = od_harvester, aspect = instance, scope = protected}, HarvesterData) ->
+    #{<<"spaces">> := Spaces} = HarvesterData,
+    #{<<"spaces">> => Spaces};
 
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync get result for:~n

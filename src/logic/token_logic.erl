@@ -22,10 +22,11 @@
 %% Atoms representing types of valid tokens.
 -type token_type() :: ?GROUP_INVITE_USER_TOKEN | ?GROUP_INVITE_GROUP_TOKEN |
 ?SPACE_INVITE_USER_TOKEN | ?SPACE_INVITE_GROUP_TOKEN |
-?SPACE_SUPPORT_TOKEN | ?PROVIDER_REGISTRATION_TOKEN.
+?SPACE_SUPPORT_TOKEN | ?PROVIDER_REGISTRATION_TOKEN |
+?HARVESTER_INVITE_USER_TOKEN | ?HARVESTER_INVITE_GROUP_TOKEN.
 
 %% Atoms representing valid resource types.
--type resource_type() :: od_user | od_group | od_space | od_provider.
+-type resource_type() :: od_user | od_group | od_space | od_provider | od_harvester.
 
 -export_type([token_type/0, resource_type/0]).
 

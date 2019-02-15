@@ -220,6 +220,8 @@ get_record_struct(6) ->
     % * new field - protected group flag
     % * new field - creation_time
     % * new field - creator
+    % * new field - harvesters
+    % * new field - eff_harvesters
     % * privileges are translated
     {record, [
         {name, string},
@@ -237,12 +239,14 @@ get_record_struct(6) ->
         {spaces, [string]},
         {handle_services, [string]},
         {handles, [string]},
+        {harvesters, [string]},
 
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_spaces, #{string => [{atom, string}]}},
         {eff_providers, #{string => [{atom, string}]}},
         {eff_handle_services, #{string => [{atom, string}]}},
         {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
 
         {creation_time, integer}, % New field
         {creator, {record, [ % New field
@@ -566,12 +570,14 @@ upgrade_record(5, Group) ->
         spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles,
+        harvesters = [],
 
         eff_users = TranslateField(EffUsers),
         eff_spaces = EffSpaces,
         eff_providers = EffProviders,
         eff_handle_services = EffHandleServices,
         eff_handles = EffHandles,
+        eff_harvesters = #{},
 
         creation_time = time_utils:system_time_seconds(),
         creator = undefined,

@@ -394,5 +394,51 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
+    }},
+    %% Create a new harvester for the current user
+    %% This operation does not require any specific privileges.
+    {<<"/user/harvesters">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_harvester, id = undefined, aspect = instance},
+        b_auth_hint = ?AS_USER(?CLIENT_ID)
+    }},
+    %% List user harvesters
+    %% This operation does not require any specific privileges.
+    {<<"/user/harvesters">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = harvesters}
+    }},
+    %% Join harvester
+    %% This operation does not require any specific privileges.
+    {<<"/user/harvesters/join">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_harvester, id = undefined, aspect = join},
+        b_auth_hint = ?AS_USER(?CLIENT_ID)
+    }},
+    %% Get harvester details
+    %% This operation does not require any specific privileges.
+    {<<"/user/harvesters/:hid">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(hid), aspect = instance, scope = protected},
+        b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
+    }},
+    %% Leave harvester
+    %% This operation does not require any specific privileges.
+    {<<"/user/harvesters/:hid">>, #rest_req{
+        method = 'DELETE',
+        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {harvester, ?BINDING(hid)}}
+    }},
+    %% List effective user harvesters
+    %% This operation does not require any specific privileges.
+    {<<"/user/effective_harvesters">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = eff_harvesters}
+    }},
+    %% Get effective harvester details
+    %% This operation does not require any specific privileges.
+    {<<"/user/effective_harvesters/:hid">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(hid), aspect = instance, scope = protected},
+        b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }}
 ].

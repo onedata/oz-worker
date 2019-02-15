@@ -178,6 +178,7 @@ get_record_struct(3) ->
 get_record_struct(4) ->
     % * new field - creation_time
     % * new field - creator
+    % * new field - harvesters       
     % * privileges are translated
     {record, [
         {name, string},
@@ -186,6 +187,7 @@ get_record_struct(4) ->
         {groups, #{string => [atom]}},
         {providers, #{string => integer}},
         {shares, [string]},
+        {harvesters, [string]},
 
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
@@ -319,6 +321,7 @@ upgrade_record(3, Space) ->
         groups = TranslateField(Groups),
         providers = Providers,
         shares = Shares,
+        harvesters = [],
 
         eff_users = TranslateField(EffUsers),
         eff_groups = TranslateField(EffGroups),
