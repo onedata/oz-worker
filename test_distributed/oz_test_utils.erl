@@ -113,7 +113,7 @@
     space_get_harvesters/2,
 
     space_leave_provider/3,
-    space_leave_harvester/3,
+    space_remove_harvester/3,
 
     space_add_user/3,
     space_remove_user/3,
@@ -1081,14 +1081,14 @@ space_leave_provider(Config, SpaceId, ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Leave space from given harvester.
+%% Remove space from given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec space_leave_harvester(Config :: term(),
+-spec space_remove_harvester(Config :: term(),
     SpaceId :: od_space:id(), HarvesterId :: od_provider:id()) -> ok.
-space_leave_harvester(Config, SpaceId, HarvesterId) ->
+space_remove_harvester(Config, SpaceId, HarvesterId) ->
     ?assertMatch(ok, call_oz(
-        Config, space_logic, leave_harvester, [?ROOT, SpaceId, HarvesterId]
+        Config, space_logic, remove_harvester, [?ROOT, SpaceId, HarvesterId]
     )).
 
 
@@ -2038,7 +2038,7 @@ harvester_get_groups(Config, HarvesterId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves supporting providers of given harvester from onezone.
+%% Retrieves spaces of given harvester from onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec harvester_get_spaces(Config :: term(),
@@ -2051,7 +2051,7 @@ harvester_get_spaces(Config, HarvesterId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Leave harvester from given provider.
+%% Remove space from given harvester.
 %% @end
 %%--------------------------------------------------------------------
 -spec harvester_remove_space(Config :: term(),
@@ -2198,7 +2198,7 @@ harvester_invite_group_token(Config, Client, HarvesterId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a provider invite token to given harvester.
+%% Creates a space invite token to given harvester.
 %% @end
 %%--------------------------------------------------------------------
 -spec harvester_invite_space_token(Config :: term(),
@@ -2293,7 +2293,7 @@ group_create_space(Config, GroupId, NameOrData) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a harvester in onezone.
+%% Creates a harvester for group.
 %% @end
 %%--------------------------------------------------------------------
 -spec group_create_harvester(Config :: term(), GroupId :: od_group:id(),

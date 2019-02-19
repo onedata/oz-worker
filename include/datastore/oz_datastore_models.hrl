@@ -289,7 +289,7 @@
 
 -record(od_harvester, {
     name = <<"">> :: od_harvester:name(),
-    plugin = elastic_search_plugin :: module(),
+    plugin = elasticsearch_plugin :: module(),
     endpoint :: binary(),
     
     config :: json_utils:json_term(),

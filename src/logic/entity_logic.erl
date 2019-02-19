@@ -388,12 +388,7 @@ fetch_entity(St = #state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}) -
 %%--------------------------------------------------------------------
 -spec call_create(State :: #state{}) -> create_result().
 call_create(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
-    case Plugin:create(ElReq) of
-        Fun when is_function(Fun, 1) ->
-            Fun(Entity);
-        Result ->
-            Result
-    end.
+    get_result(Plugin:create(ElReq), Entity).
 
 
 %%--------------------------------------------------------------------
@@ -428,8 +423,8 @@ call_update(#state{req = ElReq, plugin = Plugin}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_delete(State :: #state{}) -> delete_result().
-call_delete(#state{req = ElReq, plugin = Plugin}) ->
-    Plugin:delete(ElReq).
+call_delete(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
+    get_result(Plugin:delete(ElReq), Entity).
 
 
 %%--------------------------------------------------------------------
@@ -583,9 +578,9 @@ report_unauthorized(_) ->
 ensure_valid(State) ->
     #state{
         req = #el_req{gri = #gri{aspect = Aspect}, data = Data} = Req,
-        plugin = Plugin
+        plugin = Plugin, entity = Entity
     } = State,
-    ValidatorsMap = Plugin:validate(Req),
+    ValidatorsMap = get_result(Plugin:validate(Req), Entity),
     % Get all types of validators
     Required = maps:get(required, ValidatorsMap, #{}),
     Optional = maps:get(optional, ValidatorsMap, #{}),
@@ -821,12 +816,6 @@ check_type(list_of_ipv4_addresses, Key, ListOfIPs) ->
     catch _:_ ->
         throw(?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(Key))
     end;
-check_type(plugin, _Key, Plugin) when is_binary(Plugin)->
-    binary_to_atom(Plugin, utf8);
-check_type(plugin, _Key, Plugin) when is_atom(Plugin)->
-    Plugin;
-check_type(plugin, Key, _) ->
-        throw(?ERROR_BAD_VALUE_PLUGIN);
 check_type(Rule, Key, _) ->
     ?error("Unknown type rule: ~p for key: ~p", [Rule, Key]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
@@ -991,15 +980,24 @@ check_value(binary, name, _Key, Value) ->
         true -> ok;
         false -> throw(?ERROR_BAD_VALUE_NAME)
     end;
-check_value(plugin, Type, Key, Plugin) ->
-    try
-        {ok, AllPlugins} = onezone_plugins:get_all_plugins(),
-        true = (lists:member(Plugin, AllPlugins)) and (Plugin:type() =:= Type)
-    catch _:_  ->
-        throw(?ERROR_BAD_VALUE_PLUGIN)
-    end;
 check_value(TypeRule, ValueRule, Key, _) ->
     ?error("Unknown {type, value} rule: {~p, ~p} for key: ~p", [
         TypeRule, ValueRule, Key
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Retrieves result from entity logic response.
+%% @end
+%%--------------------------------------------------------------------
+get_result(Response, Entity) ->
+    case Response of
+        Fun when is_function(Fun, 1) ->
+            Fun(Entity);
+        Result ->
+            Result
+    end.
+    

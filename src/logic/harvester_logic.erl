@@ -23,10 +23,12 @@
     get/2,
     get_protected_data/2,
     list/1,
-    get_all_plugins/0
+    get_all_plugins/0,
+    get_config/2
 ]).
 -export([
-    update/3
+    update/3, update/5,
+    update_config/3
 ]).
 -export([
     delete/2
@@ -70,7 +72,8 @@
     has_eff_privilege/3,
     has_direct_user/2,
     has_eff_user/2,
-    has_eff_group/2
+    has_eff_group/2,
+    has_space/2
 ]).
 
 %%%===================================================================
@@ -140,6 +143,20 @@ get_protected_data(Client, HarvesterId) ->
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = protected}
     }).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a harvester config from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_config(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+    {ok, #od_harvester{}} | {error, term()}.
+get_config(Client, HarvesterId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = config}
+    }).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -158,21 +175,51 @@ list(Client) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates information of given harvester (currently only name is supported).
-%% Has two variants:
-%% 1) Harvester Name is given explicitly
-%% 2) Harvester name is provided in a proper Data object.
+%% Updates information of given harvester.
+%% Harvester Name, Endpoint and Plugin are given explicitly
+%% @end
+%%--------------------------------------------------------------------
+-spec update(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+    NewName :: binary(), NewEndpoint :: binary(), NewPlugin :: binary()) ->
+    ok | {error, term()}.
+update(Client, HarvesterId, NewName, NewEndpoint, NewPlugin) ->
+    update(Client, HarvesterId, #{
+        <<"name">> => NewName,
+        <<"endpoint">> => NewEndpoint,
+        <<"plugin">> => NewPlugin
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates information of given harvester.
+%% Harvester Name, Endpoint and Plugin are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
     Data :: #{}) -> ok | {error, term()}.
-update(Client, HarvesterId, NewName) when is_binary(NewName) ->
-    update(Client, HarvesterId, #{<<"name">> => NewName});
 update(Client, HarvesterId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
         client = Client,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance},
+        data = Data
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates configuration of given harvester.
+%% Config is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_config(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+    Data :: #{}) -> ok | {error, term()}.
+update_config(Client, HarvesterId, Data) ->
+    entity_logic:handle(#el_req{
+        operation = update,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = config},
         data = Data
     }).
 
@@ -821,7 +868,7 @@ has_eff_privilege(Harvester, UserId, Privilege) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec has_direct_user(HarvesterOrId :: od_harvester:id() | #od_harvester{},
-    UserId :: od_harvester:id()) -> boolean().
+    UserId :: od_user:id()) -> boolean().
 has_direct_user(HarvesterId, UserId) when is_binary(HarvesterId) ->
     entity_graph:has_relation(direct, bottom_up, od_user, UserId, od_harvester, HarvesterId);
 has_direct_user(Harvester, UserId) ->
@@ -834,7 +881,7 @@ has_direct_user(Harvester, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_user(HarvesterOrId :: od_harvester:id() | #od_harvester{},
-    UserId :: od_harvester:id()) -> boolean().
+    UserId :: od_user:id()) -> boolean().
 has_eff_user(HarvesterId, UserId) when is_binary(HarvesterId) ->
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, od_harvester, HarvesterId);
 has_eff_user(Harvester, UserId) ->
@@ -847,9 +894,23 @@ has_eff_user(Harvester, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_group(HarvesterOrId :: od_harvester:id() | #od_harvester{},
-    GroupId :: od_harvester:id()) -> boolean().
+    GroupId :: od_group:id()) -> boolean().
 has_eff_group(HarvesterId, GroupId) when is_binary(HarvesterId) ->
     entity_graph:has_relation(effective, bottom_up, od_group, GroupId, od_harvester, HarvesterId);
 has_eff_group(Harvester, GroupId) ->
     entity_graph:has_relation(effective, bottom_up, od_group, GroupId, Harvester).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified space is a member of given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_space(HarvesterOrId :: od_harvester:id() | #od_harvester{},
+    SpaceId :: od_space:id()) -> boolean().
+has_space(HarvesterId, SpaceId) when is_binary(HarvesterId) ->
+    entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, od_harvester, HarvesterId);
+has_space(Harvester, SpaceId) ->
+    entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, Harvester).
+
 

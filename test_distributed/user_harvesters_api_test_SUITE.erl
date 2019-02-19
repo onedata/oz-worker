@@ -187,20 +187,6 @@ create_harvester_test(Config) ->
             function = create_harvester,
             args = [client, U1, data],
             expected_result = ?OK_TERM(VerifyFun)
-        },
-        gs_spec = #gs_spec{
-            operation = create,
-            gri = #gri{type = od_harvester, aspect = instance},
-            auth_hint = ?AS_USER(U1),
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"spaces">> => [],
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    VerifyFun(Id)
-                end
-            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
@@ -338,9 +324,7 @@ get_harvester_test(Config) ->
     ExpDetails = #{
         <<"name">> => ?HARVESTER_NAME1,
         <<"endpoint">> => ?HARVESTER_ENDPOINT,
-        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
-        <<"config">> => ?HARVESTER_CONFIG,
-        <<"spaces">> => []
+        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY
     },
 
     ApiTestSpec = #api_test_spec{
@@ -379,22 +363,6 @@ get_harvester_test(Config) ->
             function = get_harvester,
             args = [client, U1, H1],
             expected_result = ?OK_MAP_CONTAINS(ExpDetails)
-        },
-        gs_spec = #gs_spec{
-            operation = get,
-            gri = #gri{
-                type = od_harvester, id = H1, aspect = instance, scope = protected
-            },
-            auth_hint = ?THROUGH_USER(U1),
-            expected_result = ?OK_MAP(#{
-                <<"spaces">> => [],
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    ?assertEqual(Id, H1)
-                end
-            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
@@ -532,15 +500,13 @@ get_eff_harvester_test(Config) ->
     H6Details = #{
         <<"name">> => ?HARVESTER_NAME1,
         <<"endpoint">> => ?HARVESTER_ENDPOINT,
-        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
-        <<"config">> => ?HARVESTER_CONFIG,
-        <<"spaces">> => []
+        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY
     },
     {ok, U1} = oz_test_utils:harvester_add_user(Config, H6, U1),
 
     NewEffHarvestersList = [{H6, H6Details} | EffHarvestersList],
     lists:foreach(
-        fun({HarvesterId, #{<<"spaces">> := Spaces} = HarvesterDetails}) ->
+        fun({HarvesterId, HarvesterDetails}) ->
             ApiTestSpec = #api_test_spec{
                 client_spec = #client_spec{
                     correct = [
@@ -577,23 +543,6 @@ get_eff_harvester_test(Config) ->
                     function = get_eff_harvester,
                     args = [client, U1, HarvesterId],
                     expected_result = ?OK_MAP_CONTAINS(HarvesterDetails)
-                },
-                gs_spec = #gs_spec{
-                    operation = get,
-                    gri = #gri{
-                        type = od_harvester, id = HarvesterId,
-                        aspect = instance, scope = protected
-                    },
-                    auth_hint = ?THROUGH_USER(U1),
-                    expected_result = ?OK_MAP(#{
-                        <<"spaces">> => Spaces,
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
-                            ?assertEqual(Id, HarvesterId)
-                        end
-                    })
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec2))

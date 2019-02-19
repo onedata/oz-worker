@@ -64,7 +64,6 @@ operation_supported(create, join, private) -> true;
 operation_supported(create, {user, _}, private) -> true;
 operation_supported(create, {group, _}, private) -> true;
 operation_supported(create, group, private) -> true;
-operation_supported(create, harvester, private) -> true;
 
 operation_supported(get, list, private) -> true;
 
@@ -241,18 +240,6 @@ create(Req = #el_req{gri = GRI = #gri{id = SpaceId, aspect = group}}) ->
     ),
     {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
     {ok, resource, {NewGRI, Group}};
-
-create(Req = #el_req{gri = GRI = #gri{id = SpaceId, aspect = harvester}}) ->
-    % Create a new harvester for a user and add this space as a member of the harvester.
-    {ok, resource, {NewGRI = #gri{id = HarvesterId}, _}} = harvester_logic_plugin:create(
-        Req#el_req{gri = GRI#gri{type = od_harvester, id = undefined, aspect = instance}}
-    ),
-    entity_graph:add_relation(
-        od_space, SpaceId,
-        od_harvester, HarvesterId
-    ),
-    {ok, Harvester} = harvester_logic_plugin:fetch_entity(HarvesterId),
-    {ok, resource, {NewGRI, Harvester}};
 
 create(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:space_user()),
@@ -496,15 +483,6 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Space) 
             false
     end;
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = harvester}}, Space) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
-        {?USER(UserId), ?AS_USER(UserId)} ->
-            auth_by_privilege(Req, Space, ?SPACE_ADD_HARVESTER) andalso
-                user_logic_plugin:auth_by_oz_privilege(UserId, ?OZ_HARVESTERS_CREATE);
-        _ ->
-            false
-    end;
-
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_INVITE_USER);
 
@@ -645,9 +623,6 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {group
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = group}}) ->
     [?OZ_GROUPS_CREATE, ?OZ_SPACES_ADD_RELATIONSHIPS];
 
-required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = harvester}}) ->
-    [?OZ_HARVESTERS_CREATE, ?OZ_SPACES_ADD_RELATIONSHIPS];
-
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
     [?OZ_SPACES_LIST];
 
@@ -704,7 +679,7 @@ required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {group
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {provider, _}}}) ->
     [?OZ_SPACES_REMOVE_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {harvester, _}}}) ->
-    [?OZ_SPACES_REMOVE_RELATIONSHIPS];
+    [?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_HARVESTERS_REMOVE_RELATIONSHIPS];
 
 required_admin_privileges(_) ->
     forbidden.

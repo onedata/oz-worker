@@ -33,7 +33,9 @@
     create_test/1,
     list_test/1,
     get_test/1,
+    get_config_test/1,
     update_test/1,
+    update_config_test/1,
     delete_test/1,
     
     submit_entry_test/1,
@@ -46,7 +48,9 @@ all() ->
         create_test,
         list_test,
         get_test,
+        get_config_test,
         update_test,
+        update_config_test,
         delete_test,
         
         submit_entry_test,
@@ -64,7 +68,7 @@ all() ->
 
 create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-
+    [Node | _] = ?config(oz_worker_nodes, Config),
     VerifyFun = fun(HarvesterId) ->
         {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
         ?assertEqual(?CORRECT_NAME, Harvester#od_harvester.name),
@@ -98,19 +102,6 @@ create_test(Config) ->
             args = [client, data],
             expected_result = ?OK_TERM(VerifyFun)
         },
-        gs_spec = #gs_spec{
-            operation = create,
-            gri = #gri{type = od_harvester, aspect = instance},
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"spaces">> => [],
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    VerifyFun(Id)
-                end
-            })
-        },
         data_spec = #data_spec{
             required = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"config">>],
             correct_values = #{
@@ -120,7 +111,9 @@ create_test(Config) ->
                 <<"config">> => [?HARVESTER_CONFIG]
             },
             bad_values = 
-                [{<<"plugin">>, <<"not_existing_plugin">>, ?ERROR_BAD_VALUE_PLUGIN} 
+                [{<<"plugin">>, <<"not_existing_plugin">>, 
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>, 
+                        rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))} 
                     | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)]
         }
     },
@@ -244,19 +237,6 @@ get_test(Config) ->
                     })
                 end
             )
-        },
-        gs_spec = #gs_spec{
-            operation = get,
-            gri = #gri{type = od_harvester, id = H1, aspect = instance},
-            expected_result = ?OK_MAP(#{
-                <<"spaces">> => [S],
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    ?assertEqual(H1, Id)
-                end
-            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
@@ -283,9 +263,7 @@ get_test(Config) ->
                 <<"harvesterId">> => H1,
                 <<"name">> => ?HARVESTER_NAME1,
                 <<"endpoint">> => ?HARVESTER_ENDPOINT,
-                <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
-                <<"config">> => ?HARVESTER_CONFIG,
-                <<"spaces">> => [S]
+                <<"plugin">> => ?HARVESTER_PLUGIN_BINARY
             }
         },
         logic_spec = #logic_spec{
@@ -295,31 +273,64 @@ get_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?HARVESTER_NAME1,
                 <<"endpoint">> => ?HARVESTER_ENDPOINT,
-                <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
-                <<"config">> => ?HARVESTER_CONFIG,
-                <<"spaces">> => [S]
-            })
-        },
-        gs_spec = #gs_spec{
-            operation = get,
-            gri = #gri{
-                type = od_harvester, id = H1, aspect = instance, scope = protected
-            },
-            expected_result = ?OK_MAP(#{
-                <<"spaces">> => [S],
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    ?assertEqual(H1, Id)
-                end
+                <<"plugin">> => ?HARVESTER_PLUGIN_BINARY
             })
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
 
 
+get_config_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    AllPrivs = privileges:harvester_privileges(),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_DATA),
+    oz_test_utils:harvester_set_user_privileges(Config, H1, U1,
+        AllPrivs -- [?HARVESTER_VIEW], [?HARVESTER_VIEW]
+    ),
+    oz_test_utils:harvester_add_user(Config, H1, U2),
+    oz_test_utils:harvester_set_user_privileges(Config, H1, U2,
+        [?HARVESTER_VIEW], AllPrivs -- [?HARVESTER_VIEW]
+    ),
+
+    {ok, S} = oz_test_utils:create_space(
+        Config, ?USER(U1), ?SPACE_NAME1
+    ),
+
+    oz_test_utils:harvester_add_space(Config, H1, S),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_HARVESTERS_VIEW]},
+                {user, U2}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {user, U1}
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = harvester_logic,
+            function = get_config,
+            args = [client, H1],
+            expected_result = ?OK_TERM(
+                fun(Conf) -> ?assertEqual(?HARVESTER_CONFIG, Conf) end
+            )
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
 update_test(Config) ->
+    [Node | _] = ?config(oz_worker_nodes, Config),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
@@ -338,7 +349,6 @@ update_test(Config) ->
     end,
     Endpoint = <<"172.17.0.2:9200">>,
     Plugin = ?HARVESTER_MOCK_PLUGIN_BINARY,
-    Conf = #{<<"a">>=><<"b">>, <<"c">>=><<"d">>},
     
     ExpValueFun = fun(ShouldSucceed, Key, Data, Default) ->
         case ShouldSucceed of
@@ -353,12 +363,10 @@ update_test(Config) ->
         ExpName = ExpValueFun(ShouldSucceed, <<"name">>, Data, ?CORRECT_NAME),
         ExpEndpoint = ExpValueFun(ShouldSucceed, <<"endpoint">>, Data, ?HARVESTER_ENDPOINT),
         ExpPlugin = ExpValueFun(ShouldSucceed, <<"plugin">>, Data, ?HARVESTER_PLUGIN_BINARY),
-        ExpConfig = ExpValueFun(ShouldSucceed, <<"config">>, Data, ?HARVESTER_CONFIG),
         
         ?assertEqual(ExpName, Harvester#od_harvester.name),
         ?assertEqual(ExpEndpoint, Harvester#od_harvester.endpoint),
-        ?assertEqual(binary_to_atom(ExpPlugin, utf8), Harvester#od_harvester.plugin),
-        ?assertEqual(ExpConfig, Harvester#od_harvester.config)
+        ?assertEqual(binary_to_atom(ExpPlugin, utf8), Harvester#od_harvester.plugin)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -391,14 +399,88 @@ update_test(Config) ->
             expected_result = ?OK
         },
         data_spec = #data_spec{
-            at_least_one = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"config">>],
+            at_least_one = [<<"name">>, <<"endpoint">>, <<"plugin">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"endpoint">> => [Endpoint],
-                <<"plugin">> => [Plugin],
+                <<"plugin">> => [Plugin]
+            },
+            bad_values =
+            [{<<"plugin">>, <<"not_existing_plugin">>,
+                ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>,
+                    rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))}
+                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)]
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+    )).
+
+
+update_config_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    EnvSetUpFun = fun() ->
+        {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_DATA(?CORRECT_NAME)),
+        oz_test_utils:harvester_set_user_privileges(Config, H1, U1, [], [
+            ?HARVESTER_UPDATE
+        ]),
+        oz_test_utils:harvester_add_user(Config, H1, U2),
+        oz_test_utils:harvester_set_user_privileges(Config, H1, U2, [
+            ?HARVESTER_UPDATE
+        ], []),
+        #{harvesterId => H1}
+    end,
+    Conf = ?HARVESTER_CONFIG#{<<"x">> => <<"y">>},
+
+    ExpValueFun = fun(ShouldSucceed, Key, Data, Default) ->
+        case ShouldSucceed of
+            false -> Default;
+            true -> maps:get(Key, Data, Default)
+        end
+    end,
+
+    VerifyEndFun = fun(ShouldSucceed, #{harvesterId := HarvesterId} = _Env, Data) ->
+        {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
+
+        ExpConfig = ExpValueFun(ShouldSucceed, <<"config">>, Data, ?HARVESTER_CONFIG),
+
+        ?assertEqual(ExpConfig, Harvester#od_harvester.config)
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_HARVESTERS_UPDATE]},
+                {user, U2}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
+                {user, NonAdmin}
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = harvester_logic,
+            function = update_config,
+            args = [client, harvesterId, data],
+            expected_result = ?OK
+        },
+        gs_spec = #gs_spec{
+            operation = update,
+            gri = #gri{type = od_harvester, id = harvesterId, aspect = config},
+            expected_result = ?OK
+        },
+        data_spec = #data_spec{
+            required = [<<"config">>],
+            correct_values = #{
                 <<"config">> => [Conf]
             },
-            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+            bad_values = [{<<"config">>, <<"bad_config">>, ?ERROR_BAD_VALUE_JSON(<<"config">>)}]
         }
     },
     ?assert(api_test_utils:run_tests(
@@ -473,20 +555,30 @@ submit_entry_test(Config) ->
         ?HARVESTER_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)),
     oz_test_utils:harvester_add_user(Config, H1, U1),
     
-    {ok, {P, M}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-
+    {ok, {P1, M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    SpacePrivs = privileges:space_privileges(),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    oz_test_utils:space_set_user_privileges(Config, S1, U1, [], SpacePrivs),
+    {ok, S1} = oz_test_utils:support_space(
+        Config, P1, S1, oz_test_utils:minimum_support_size(Config)
+    ),
+    {ok, {P2, M2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    
+    oz_test_utils:harvester_add_space(Config, H1, S1),
+    
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    FileId = <<"1234">>,
+    {ok, FileId} = file_id:guid_to_objectid(file_id:pack_guid(<<"1234">>, S1)),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {provider, P,M}
+                {provider, P1,M1}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, U1}
+                {user, U1},
+                {provider, P2,M2}
             ]
         },
         logic_spec = #logic_spec{
@@ -515,20 +607,30 @@ delete_entry_test(Config) ->
         ?HARVESTER_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)),
     oz_test_utils:harvester_add_user(Config, H1, U1),
 
-    {ok, {P, M}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P1, M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    SpacePrivs = privileges:space_privileges(),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    oz_test_utils:space_set_user_privileges(Config, S1, U1, [], SpacePrivs),
+    {ok, S1} = oz_test_utils:support_space(
+        Config, P1, S1, oz_test_utils:minimum_support_size(Config)
+    ),
+    {ok, {P2, M2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+
+    oz_test_utils:harvester_add_space(Config, H1, S1),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    FileId = <<"1234">>,
+    {ok, FileId} = file_id:guid_to_objectid(file_id:pack_guid(<<"1234">>, S1)),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {provider, P,M}
+                {provider, P1,M1}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, U1}
+                {user, U1},
+                {provider, P2,M2}
             ]
         },
         logic_spec = #logic_spec{
@@ -574,8 +676,18 @@ query_test(Config) ->
             expected_result = ?OK_BINARY(?TEST_DATA)
         },
         data_spec = #data_spec{
-            required = [<<"request">>],
-            correct_values = #{<<"request">> => [<<"example_request">>]}
+            required = [<<"path">>, <<"method">>],
+            optional = [<<"body">>],
+            correct_values = #{
+                <<"path">> => [<<"example_request">>],
+                <<"method">> => [<<"get">>, <<"post">>],
+                <<"body">> => [<<"example_data">>]
+            },
+            bad_values = [
+                {<<"method">>, <<"bad_method">>, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"method">>, [post, get])},
+                {<<"path">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"path">>)},
+                {<<"body">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"body">>)}
+            ]
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -605,20 +717,22 @@ init_per_testcase(query_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_new(Nodes, ?HARVESTER_MOCK_PLUGIN, [no_history, non_strict]),
     test_utils:mock_expect(Nodes, ?HARVESTER_MOCK_PLUGIN, query, fun(_,_,_) -> {ok, ?TEST_DATA} end),
+    test_utils:mock_expect(Nodes, ?HARVESTER_MOCK_PLUGIN, query_validator, fun() -> 
+        erlang:apply(binary_to_atom(?HARVESTER_PLUGIN_BINARY, utf8), query_validator, []) end),
     init_per_testcase(plugin_tests, Config);
 init_per_testcase(plugin_tests, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_new(Nodes, onezone_plugins),
     test_utils:mock_expect(Nodes, ?HARVESTER_MOCK_PLUGIN, type, fun() -> harvester_plugin end),
-    test_utils:mock_expect(Nodes, onezone_plugins, get_all_plugins, fun() -> {ok, [?HARVESTER_MOCK_PLUGIN]} end),
+    test_utils:mock_expect(Nodes, onezone_plugins, get_plugins, fun(_) -> [?HARVESTER_MOCK_PLUGIN] end),
     Config;
 init_per_testcase(update_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_new(Nodes, onezone_plugins),
     test_utils:mock_new(Nodes, ?HARVESTER_MOCK_PLUGIN, [no_history, non_strict]),
     test_utils:mock_expect(Nodes, ?HARVESTER_MOCK_PLUGIN, type, fun() -> harvester_plugin end),
-    test_utils:mock_expect(Nodes, onezone_plugins, get_all_plugins, 
-        fun() -> {ok, [?HARVESTER_MOCK_PLUGIN, binary_to_atom(?HARVESTER_PLUGIN_BINARY, utf8)]} end),
+    test_utils:mock_expect(Nodes, onezone_plugins, get_plugins, 
+        fun(_) -> [?HARVESTER_MOCK_PLUGIN, binary_to_atom(?HARVESTER_PLUGIN_BINARY, utf8)] end),
     Config;
 init_per_testcase(_, Config) ->
     Config.

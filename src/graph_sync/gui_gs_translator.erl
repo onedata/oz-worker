@@ -510,7 +510,7 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, 
             <<"effUserList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = eff_users}),
             <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = groups}),
             <<"effGroupList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = eff_groups}),
-            <<"spaces">> => Spaces,
+            <<"spaceList">> => Spaces,
             <<"info">> => maps:merge(translate_creator(Harvester#od_harvester.creator), #{
                 <<"creationTime">> => Harvester#od_harvester.creation_time
             })
@@ -520,16 +520,16 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, 
 translate_harvester(#gri{aspect = instance, scope = protected}, HarvesterData) ->
     #{
         <<"name">> := Name,
-        <<"spaces">> := Spaces,
-        <<"config">> := Config,
+        <<"endpoint">> := Endpoint,
+        <<"plugin">> := Plugin,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator
     } = HarvesterData,
     #{
         <<"name">> => Name,
         <<"scope">> => <<"protected">>,
-        <<"spaces">> => Spaces,
-        <<"config">> => Config,
+        <<"endpoint">> => Endpoint,
+        <<"plugin">> => Plugin,
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
         })

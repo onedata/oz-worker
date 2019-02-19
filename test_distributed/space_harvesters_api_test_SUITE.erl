@@ -31,16 +31,14 @@
     init_per_suite/1, end_per_suite/1
 ]).
 -export([
-    create_harvester_test/1,
-    leave_harvester_test/1,
+    remove_harvester_test/1,
     list_harvesters_test/1,
     get_harvester_test/1
 ]).
 
 all() ->
     ?ALL([
-        create_harvester_test,
-        leave_harvester_test,
+        remove_harvester_test,
         list_harvesters_test,
         get_harvester_test
     ]).
@@ -51,79 +49,11 @@ all() ->
 %%%===================================================================
 
 
-create_harvester_test(Config) ->
-    % create space with 2 users:
-    %   U2 gets the SPACE_ADD_HARVESTER privilege
-    %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
-        Config, ?SPACE_ADD_HARVESTER
-    ),
-    oz_test_utils:user_set_oz_privileges(Config, U2, [?OZ_HARVESTERS_CREATE], []),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    VerifyFun = fun(HarvesterId) ->
-        {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
-        ?assertEqual(?CORRECT_NAME, Harvester#od_harvester.name),
-        {ok, Harvesters} = oz_test_utils:space_get_harvesters(Config, S1),
-        ?assert(lists:member(HarvesterId, Harvesters)),
-        true
-    end,
-    
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U2},
-                {admin, [?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_HARVESTERS_CREATE]}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, NonAdmin},
-                {user, U1}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = post,
-            path = [<<"/spaces/">>, S1, <<"/harvesters">>],
-            expected_code = ?HTTP_201_CREATED,
-            expected_headers = ?OK_ENV(fun(_, _) ->
-                BaseURL = ?URL(Config, [<<"/spaces/">>, S1, <<"/harvesters/">>]),
-
-                fun(#{<<"Location">> := Location} = _Headers) ->
-                    [HarvesterId] = binary:split(Location, [BaseURL], [global, trim_all]),
-                    VerifyFun(HarvesterId)
-                end
-            end)
-        },
-        logic_spec = #logic_spec{
-            module = space_logic,
-            function = create_harvester,
-            args = [client, S1, data],
-            expected_result = ?OK_ENV(fun(_, _) ->
-                ?OK_TERM(fun(SpaceId) -> VerifyFun(SpaceId) end)
-        end)
-        },
-        % TODO gs
-        data_spec = #data_spec{
-            required = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"config">>],
-            correct_values = #{
-                <<"name">> => [?CORRECT_NAME],
-                <<"endpoint">> => [?HARVESTER_ENDPOINT],
-                <<"plugin">> => [?HARVESTER_PLUGIN_BINARY],
-                <<"config">> => [?HARVESTER_CONFIG]
-            },
-            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
-
-
 join_harvester_test(Config) ->
     % create space with 2 users:
     %   U2 gets the SPACE_ADD_HARVESTER privilege
     %   U1 gets all remaining privileges
-    {G1, U1, U2} = api_test_scenarios:create_basic_space_env(
+    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_ADD_HARVESTER
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
@@ -141,7 +71,7 @@ join_harvester_test(Config) ->
         }
     end,
     VerifyEndFun = fun(ShouldSucceed, #{harvesterId := HarvesterId, macaroonId := MacaroonId} = _Env, _) ->
-        {ok, Harvesters} = oz_test_utils:space_get_harvesters(Config, G1),
+        {ok, Harvesters} = oz_test_utils:space_get_harvesters(Config, S1),
         ?assertEqual(lists:member(HarvesterId, Harvesters), ShouldSucceed),
         case ShouldSucceed of
             true ->
@@ -165,12 +95,12 @@ join_harvester_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = post,
-            path = [<<"/spaces/">>, G1, <<"/harvesters/join">>],
+            path = [<<"/spaces/">>, S1, <<"/harvesters/join">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(#{harvesterId := HarvesterId} = _Env, _) ->
                 fun(#{<<"Location">> := Location} = _Headers) ->
                     ExpLocation = ?URL(Config,
-                        [<<"/spaces/">>, G1, <<"/harvesters/">>, HarvesterId]
+                        [<<"/spaces/">>, S1, <<"/harvesters/">>, HarvesterId]
                     ),
                     ?assertMatch(ExpLocation, Location),
                     true
@@ -180,7 +110,7 @@ join_harvester_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = join_harvester,
-            args = [client, G1, data],
+            args = [client, S1, data],
             expected_result = ?OK_ENV(fun(#{harvesterId := HarvesterId} = _Env, _) ->
                 ?OK_BINARY(HarvesterId)
             end)
@@ -214,7 +144,7 @@ join_harvester_test(Config) ->
         Config, ?ROOT, Harvester
     ),
     {ok, Token} = onedata_macaroons:serialize(Macaroon1),
-    oz_test_utils:harvester_add_space(Config, Harvester, G1),
+    oz_test_utils:harvester_add_space(Config, Harvester, S1),
 
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
@@ -224,14 +154,14 @@ join_harvester_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = post,
-            path = [<<"/spaces/">>, G1, <<"/harvesters/join">>],
+            path = [<<"/spaces/">>, S1, <<"/harvesters/join">>],
             expected_code = ?HTTP_400_BAD_REQUEST
         },
         logic_spec = #logic_spec{
             module = space_logic,
             function = join_harvester,
-            args = [client, G1, data],
-            expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_space, G1, od_harvester, Harvester))
+            args = [client, S1, data],
+            expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_space, S1, od_harvester, Harvester))
         },
         % TODO gs
         data_spec = #data_spec{
@@ -247,7 +177,7 @@ join_harvester_test(Config) ->
     )).
 
 
-leave_harvester_test(Config) ->
+remove_harvester_test(Config) ->
     % create space with 2 users:
     %   U2 gets the REMOVE_HARVESTER privilege
     %   U1 gets all remaining privileges
@@ -262,7 +192,7 @@ leave_harvester_test(Config) ->
         #{harvesterId => H1}
     end,
     DeleteEntityFun = fun(#{harvesterId := HarvesterId} = _Env) ->
-        oz_test_utils:space_leave_harvester(Config, S1, HarvesterId)
+        oz_test_utils:space_remove_harvester(Config, S1, HarvesterId)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{harvesterId := HarvesterId} = _Env, _) ->
         {ok, Harvesters} = oz_test_utils:space_get_harvesters(Config, S1),
@@ -289,7 +219,7 @@ leave_harvester_test(Config) ->
         },
         logic_spec = #logic_spec{
             module = space_logic,
-            function = leave_harvester,
+            function = remove_harvester,
             args = [client, S1, harvesterId],
             expected_result = ?OK
         }
@@ -385,9 +315,7 @@ get_harvester_test(Config) ->
                 <<"harvesterId">> => H1,
                 <<"name">> => ?HARVESTER_NAME2,
                 <<"endpoint">> => ?HARVESTER_ENDPOINT,
-                <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
-                <<"config">> => ?HARVESTER_CONFIG,
-                <<"spaces">> => [S1]
+                <<"plugin">> => ?HARVESTER_PLUGIN_BINARY
             }
         },
         logic_spec = #logic_spec{
@@ -397,25 +325,7 @@ get_harvester_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?HARVESTER_NAME2,
                 <<"endpoint">> => ?HARVESTER_ENDPOINT,
-                <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
-                <<"config">> => ?HARVESTER_CONFIG,
-                <<"spaces">> => [S1]
-            })
-        },
-        gs_spec = #gs_spec{
-            operation = get,
-            gri = #gri{
-                type = od_harvester, id = H1, aspect = instance, scope = protected
-            },
-            auth_hint = ?THROUGH_SPACE(S1),
-            expected_result = ?OK_MAP(#{
-                <<"spaces">> => [S1],
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    ?assertEqual(Id, H1)
-                end
+                <<"plugin">> => ?HARVESTER_PLUGIN_BINARY
             })
         }
     },

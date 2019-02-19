@@ -690,9 +690,7 @@ create_basic_harvester_env(Config, Privs) ->
     AllHarvesterPrivs = privileges:harvester_privileges(),
     {ok, Harvester} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_DATA),
     {ok, _} = oz_test_utils:harvester_add_user(Config, Harvester, U1),
-%%    ct:print("Dupa1"),
-%%    ct:print("~p", [{Harvester, U1, Privs}]),
-%%    timer:sleep(timer:hours(10)),
+    
     oz_test_utils:harvester_set_user_privileges(
         Config, Harvester, U1, [], Privs
     ),
@@ -1317,11 +1315,15 @@ create_eff_harvesters_env(Config) ->
 
     Harvesters = lists:map(
         fun(GroupId) ->
-            HarvesterDetails = ?HARVESTER_DATA(?UNIQUE_STRING),
+            Name = ?UNIQUE_STRING,
             {ok, HarvesterId} = oz_test_utils:group_create_harvester(
-                Config, GroupId, HarvesterDetails
+                Config, GroupId, ?HARVESTER_DATA(Name)
             ),
-            {HarvesterId, HarvesterDetails#{<<"spaces">> => []}}
+            {HarvesterId, #{
+                <<"name">> => Name,
+                <<"endpoint">> => ?HARVESTER_ENDPOINT,
+                <<"plugin">> => ?HARVESTER_PLUGIN_BINARY
+            }}
         end, [G1, G2, G4, G5, G5]
     ),
 

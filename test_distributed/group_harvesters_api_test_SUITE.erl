@@ -66,11 +66,11 @@ list_harvesters_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, S1} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
-    {ok, S2} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
-    {ok, S3} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
-    {ok, S4} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
-    ExpHarvesters = [S1, S2, S3, S4],
+    {ok, H1} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
+    {ok, H2} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
+    {ok, H3} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
+    {ok, H4} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
+    ExpHarvesters = [H1, H2, H3, H4],
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -111,13 +111,11 @@ get_harvester_details_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, S1} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
+    {ok, H1} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
     ExpDetails = #{
         <<"name">> => ?HARVESTER_NAME1,
         <<"endpoint">> => ?HARVESTER_ENDPOINT,
-        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
-        <<"config">> => ?HARVESTER_CONFIG,
-        <<"spaces">> => []
+        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY
     },
 
     ApiTestSpec = #api_test_spec{
@@ -135,31 +133,15 @@ get_harvester_details_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/groups/">>, G1, <<"/harvesters/">>, S1],
+            path = [<<"/groups/">>, G1, <<"/harvesters/">>, H1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpDetails#{<<"harvesterId">> => S1}
+            expected_body = ExpDetails#{<<"harvesterId">> => H1}
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_harvester,
-            args = [client, G1, S1],
+            args = [client, G1, H1],
             expected_result = ?OK_MAP_CONTAINS(ExpDetails)
-        },
-        gs_spec = #gs_spec{
-            operation = get,
-            gri = #gri{
-                type = od_harvester, id = S1, aspect = instance, scope = protected
-            },
-            auth_hint = ?THROUGH_GROUP(G1),
-            expected_result = ?OK_MAP(#{
-                <<"spaces">> => [],
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    ?assertEqual(Id, S1)
-                end
-            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -223,20 +205,6 @@ create_harvester_test(Config) ->
             function = create_harvester,
             args = [client, G1, data],
             expected_result = ?OK_TERM(VerifyFun)
-        },
-        gs_spec = #gs_spec{
-            operation = create,
-            gri = #gri{type = od_harvester, aspect = instance},
-            auth_hint = ?AS_GROUP(G1),
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"spaces">> => [],
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    VerifyFun(Id)
-                end
-            })
         },
         data_spec = #data_spec{
             required = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"config">>],
@@ -390,10 +358,10 @@ leave_harvester_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     EnvSetUpFun = fun() ->
-        {ok, S1} = oz_test_utils:group_create_harvester(
+        {ok, H1} = oz_test_utils:group_create_harvester(
             Config, G1, ?HARVESTER_DATA
         ),
-        #{harvesterId => S1}
+        #{harvesterId => H1}
                   end,
     DeleteEntityFun = fun(#{harvesterId := HarvesterId} = _Env) ->
         oz_test_utils:harvester_remove_group(Config, HarvesterId, G1)
@@ -437,11 +405,11 @@ leave_harvester_test(Config) ->
 
 list_eff_harvesters_test(Config) ->
     {
-        [{S1, _}, {S2, _}, {S3, _}, {S4, _}, {S5, _}],
+        [{H1, _}, {H2, _}, {H3, _}, {H4, _}, {H5, _}],
         [{G1, _} | _Groups], {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_harvesters_env(Config),
 
-    ExpHarvesters = [S1, S2, S3, S4, S5],
+    ExpHarvesters = [H1, H2, H3, H4, H5],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -491,7 +459,7 @@ get_eff_harvester_details_test(Config) ->
     } = api_test_scenarios:create_eff_harvesters_env(Config),
 
     lists:foreach(
-        fun({HarvesterId, #{<<"spaces">> := Spaces} = HarvesterDetails}) ->
+        fun({HarvesterId, HarvesterDetails}) ->
             ApiTestSpec = #api_test_spec{
                 client_spec = #client_spec{
                     correct = [
@@ -518,23 +486,6 @@ get_eff_harvester_details_test(Config) ->
                     function = get_eff_harvester,
                     args = [client, G1, HarvesterId],
                     expected_result = ?OK_MAP_CONTAINS(HarvesterDetails)
-                },
-                gs_spec = #gs_spec{
-                    operation = get,
-                    gri = #gri{
-                        type = od_harvester, id = HarvesterId,
-                        aspect = instance, scope = protected
-                    },
-                    auth_hint = ?THROUGH_GROUP(G1),
-                    expected_result = ?OK_MAP(#{
-                        <<"spaces">> => Spaces,
-                        <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
-                            ?assertEqual(Id, HarvesterId)
-                        end
-                    })
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))

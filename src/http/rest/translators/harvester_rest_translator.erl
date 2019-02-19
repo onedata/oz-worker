@@ -89,14 +89,12 @@ get_response(#gri{id = undefined, aspect = list}, Harvesters) ->
 get_response(#gri{id = HarvesterId, aspect = instance, scope = protected}, HarvesterData) -> 
     #{
         <<"name">> := Name, <<"endpoint">> := Endpoint, 
-        <<"plugin">> := Plugin, <<"config">> := Config, 
-        <<"spaces">> := Spaces
+        <<"plugin">> := Plugin
     } = HarvesterData,
     rest_translator:ok_body_reply(#{
         <<"harvesterId">> => HarvesterId, 
         <<"name">> => Name, <<"endpoint">> => Endpoint, 
-        <<"plugin">> => Plugin, <<"config">> => Config, 
-        <<"spaces">> => Spaces
+        <<"plugin">> => Plugin
     });
 
 get_response(#gri{aspect = users}, Users) ->

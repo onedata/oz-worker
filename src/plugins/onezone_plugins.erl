@@ -42,7 +42,7 @@
 -define(COMPILE_OPTS, [return_errors, {i, ?INCLUDES_DIR}]).
 -define(PLUGINS_KEY, onezone_plugins).
 
--export([init/0, get_all_plugins/0]).
+-export([init/0, get_all_plugins/0, get_plugins/1]).
 
 %%%===================================================================
 %%% API functions
@@ -55,7 +55,19 @@
 %%--------------------------------------------------------------------
 -spec get_all_plugins() -> {ok, [module()]}.
 get_all_plugins() ->
-    oz_worker:get_env(?PLUGINS_KEY).
+    simple_cache:get(?PLUGINS_KEY).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns all loaded plugins of specified type. 
+%% @end
+%%--------------------------------------------------------------------
+-spec get_plugins(Type :: atom()) -> [module()].
+get_plugins(Type) ->
+    {ok, AllPlugins} = get_all_plugins(),
+    [P || P <- AllPlugins, P:type() =:= Type].
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -80,19 +92,20 @@ init() ->
             end,
             ErlFiles
     end,
-    Plugins = lists:map(fun(Plugin) ->
+    Plugins = lists:filtermap(fun(Plugin) ->
         try
             {ok, Module} = compile:file(filename:join(PluginsDir, Plugin), ?COMPILE_OPTS),
             code:purge(Module),
             {module, Module} = code:load_file(Module),
             validate_plugin(Module),
             ?info("  -> ~p: successfully loaded", [Module]),
-            Module    
+            {true, Module}  
         catch Type:Reason ->
-            ?error_stacktrace("Cannot load ~s plugin due to ~p:~p", [Plugin, Type, Reason])
+            ?error_stacktrace("Cannot load ~s plugin due to ~p:~p", [Plugin, Type, Reason]),
+            false
         end
     end, PluginFiles),
-    oz_worker:set_env(?PLUGINS_KEY, Plugins).
+    simple_cache:put(?PLUGINS_KEY, Plugins).
 
 %%%===================================================================
 %%% Internal functions

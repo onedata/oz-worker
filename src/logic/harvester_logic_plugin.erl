@@ -71,10 +71,12 @@ operation_supported(create, {entry, _}, private) -> true;
 operation_supported(create, query, private) -> true;
 
 operation_supported(get, list, private) -> true;
-operation_supported(get, all_plugins, private) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
+
+operation_supported(get, all_plugins, private) -> true;
+operation_supported(get, config, private) -> true;
 
 operation_supported(get, users, private) -> true;
 operation_supported(get, eff_users, private) -> true;
@@ -91,6 +93,7 @@ operation_supported(get, {eff_group_membership, _}, private) -> true;
 operation_supported(get, spaces, private) -> true;
 
 operation_supported(update, instance, private) -> true;
+operation_supported(update, config, private) -> true;
 operation_supported(update, {user_privileges, _}, private) -> true;
 operation_supported(update, {group_privileges, _}, private) -> true;
 
@@ -274,15 +277,17 @@ create(Req = #el_req{gri = GRI = #gri{id = HarvesterId, aspect = group}}) ->
     {ok, resource, {NewGRI, Group}};
 
 create(#el_req{gri = #gri{aspect = {entry, FileId}, id = HarvesterId}, data = #{<<"payload">> := Payload}}) ->
-    {ok, Harvester} = fetch_entity(HarvesterId),
-    Plugin = Harvester#od_harvester.plugin,
-    Plugin:submit_entry(Harvester#od_harvester.endpoint, HarvesterId, FileId, Payload);
+    fun(#od_harvester{plugin = Plugin, endpoint = Endpoint}) ->
+        Plugin:submit_entry(Endpoint, HarvesterId, FileId, Payload)
+    end;
 
-create(#el_req{gri = #gri{aspect = query, id = HarvesterId}, data = #{<<"request">> := Data}}) ->
-    {ok, Harvester} = fetch_entity(HarvesterId),
-    Plugin = Harvester#od_harvester.plugin,
-    {ok, Value} = Plugin:query(Harvester#od_harvester.endpoint, HarvesterId, Data),
-    {ok, value, Value}.
+create(#el_req{gri = #gri{aspect = query, id = HarvesterId}, data = Data}) ->
+    fun(#od_harvester{plugin = Plugin, endpoint = Endpoint}) ->
+        case Plugin:query(Endpoint, HarvesterId, Data) of
+            {ok, Value} -> {ok, value, Value};
+            {error, _} = Error -> Error
+        end
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -301,20 +306,19 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Harvester) ->
     {ok, Harvester};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Harvester) ->
     #od_harvester{
-        name = Name, endpoint = Endpoint, plugin = Plugin, config = Config, spaces = Spaces
+        name = Name, endpoint = Endpoint, plugin = Plugin
     } = Harvester,
     {ok, #{
         <<"name">> => Name,
         <<"endpoint">> => Endpoint,
-        <<"plugin">> => atom_to_binary(Plugin, utf8),
-        <<"config">> => Config,
-        <<"spaces">> => Spaces
+        <<"plugin">> => atom_to_binary(Plugin, utf8)
     }};
 
 get(#el_req{gri = #gri{aspect = all_plugins}}, _) ->
-    {ok, AllPlugins} = onezone_plugins:get_all_plugins(),
-    {ok, [P || P <- AllPlugins, P:type() =:= harvester_plugin]};
-    
+    {ok, onezone_plugins:get_plugins(harvester_plugin)};
+get(#el_req{gri = #gri{aspect = config}}, #od_harvester{config = Config}) ->
+    {ok, Config};    
+
 get(#el_req{gri = #gri{aspect = users}}, Harvester) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_user, Harvester)};
 get(#el_req{gri = #gri{aspect = eff_users}}, Harvester) ->
@@ -349,17 +353,22 @@ get(#el_req{gri = #gri{aspect = spaces}}, Harvester) ->
 
 update(#el_req{gri = #gri{id = HarvesterId, aspect = instance}, data = Data}) ->
     {ok, _} = od_harvester:update(HarvesterId, fun(Harvester) ->
-        #od_harvester{name = Name, endpoint = Endpoint, plugin = Plugin, config = Config} = Harvester,
+        #od_harvester{name = Name, endpoint = Endpoint, plugin = Plugin} = Harvester,
         NewName = maps:get(<<"name">>, Data, Name),
         NewEndpoint = maps:get(<<"endpoint">>, Data, Endpoint),
         NewPlugin = maps:get(<<"plugin">>, Data, Plugin),
-        NewConfig = maps:get(<<"config">>, Data, Config),
         {ok, Harvester#od_harvester{
             name = NewName, 
             endpoint = NewEndpoint, 
-            plugin = NewPlugin, 
-            config = NewConfig
+            plugin = NewPlugin
         }}
+    end),
+    ok;
+
+update(#el_req{gri = #gri{id = HarvesterId, aspect = config}, data = Data}) ->
+    {ok, _} = od_harvester:update(HarvesterId, fun(#od_harvester{config = Config} = Harvester) ->
+        NewConfig = maps:get(<<"config">>, Data, Config),
+        {ok, Harvester#od_harvester{config = NewConfig}}
     end),
     ok;
 
@@ -410,9 +419,9 @@ delete(#el_req{gri = #gri{id = HarvesterId, aspect = {space, SpaceId}}}) ->
     );
 
 delete(#el_req{gri = #gri{aspect = {entry, FileId}, id = HarvesterId}}) ->
-    {ok, Harvester} = fetch_entity(HarvesterId),
-    Plugin = Harvester#od_harvester.plugin,
-    Plugin:delete_entry(Harvester#od_harvester.endpoint, HarvesterId, FileId).
+    fun(#od_harvester{plugin = Plugin, endpoint = Endpoint}) ->
+        Plugin:delete_entry(Endpoint, HarvesterId, FileId)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -429,7 +438,7 @@ exists(Req = #el_req{gri = #gri{aspect = instance}}, Harvester) ->
         ?THROUGH_GROUP(GroupId) ->
             harvester_logic:has_eff_group(Harvester, GroupId);
         ?THROUGH_SPACE(SpaceId) ->
-            entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, Harvester);
+            harvester_logic:has_space(Harvester, SpaceId);
         undefined ->
             true
     end;
@@ -592,6 +601,8 @@ authorize(Req = #el_req{operation = get, client = ?USER}, Harvester) ->
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_UPDATE);
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = config}}, Harvester) ->
+    auth_by_privilege(Req, Harvester, ?HARVESTER_UPDATE);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_SET_PRIVILEGES);
@@ -612,11 +623,12 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, Ha
     auth_by_privilege(Req, Harvester, ?HARVESTER_REMOVE_SPACE);
 
 % operation create and delete
-authorize(#el_req{gri = #gri{aspect = {entry, _}}, client = Client}, _) -> %data = #{<<"spaceId">> := SpaceId}}, _) ->
+authorize(#el_req{gri = #gri{aspect = {entry, FileId}}, client = Client}, Harvester) -> 
     case Client of
-        ?PROVIDER(_ProviderId) ->
-            true;
-%%            entity_graph:has_relation(direct, top_down, od_provider, ProviderId, od_space, SpaceId);
+        ?PROVIDER(ProviderId) ->
+            {ok, Guid} = file_id:objectid_to_guid(FileId),
+            SpaceId = file_id:guid_to_space_id(Guid),
+            provider_logic:supports_space(ProviderId, SpaceId) and harvester_logic:has_space(Harvester, SpaceId);
         _Other ->
             false
     end;
@@ -673,6 +685,9 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) -
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}) ->
     [?OZ_HARVESTERS_VIEW];
 
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = config}}) ->
+    [?OZ_HARVESTERS_VIEW];
+
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}) ->
     [?OZ_HARVESTERS_VIEW_PRIVILEGES];
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {eff_user_privileges, _}}}) ->
@@ -700,6 +715,8 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = spaces}})
     [?OZ_HARVESTERS_LIST_RELATIONSHIPS];
 
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
+    [?OZ_HARVESTERS_UPDATE];
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = config}}) ->
     [?OZ_HARVESTERS_UPDATE];
 
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}) ->
@@ -734,7 +751,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"name">> => {binary, name},
         <<"endpoint">> => {binary, non_empty},
-        <<"plugin">> => {plugin, harvester_plugin},
+        <<"plugin">> => {atom, onezone_plugins:get_plugins(harvester_plugin)},
         <<"config">> => {json, any}
     }
 };
@@ -745,11 +762,10 @@ validate(#el_req{operation = create, gri = #gri{aspect = {entry, _}}}) -> #{
     }
 };
 
-validate(#el_req{operation = create, gri = #gri{aspect = query}}) -> #{
-    required => #{
-        <<"request">> => {binary, non_empty}
-    }
-};
+validate(#el_req{operation = create, gri = #gri{aspect = query}}) -> 
+    fun(#od_harvester{plugin = Plugin}) ->
+        Plugin:query_validator()
+    end;
 
 validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
     TokenType = case Req#el_req.auth_hint of
@@ -802,9 +818,6 @@ validate(#el_req{operation = create, gri = #gri{aspect = {space, _}}}) -> #{
         {aspect, <<"spaceId">>} => {any, {exists, fun(SpaceId) ->
             space_logic:exists(SpaceId) end}
         }
-    },
-    optional => #{
-        <<"privileges">> => {list_of_atoms, privileges:harvester_privileges()}
     }
 };
 
@@ -817,10 +830,17 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
         <<"endpoint">> => {binary, non_empty},
-        <<"plugin">> => {plugin, harvester_plugin},
+        <<"plugin">> => {atom, onezone_plugins:get_plugins(harvester_plugin)}
+    }
+};
+
+
+validate(#el_req{operation = update, gri = #gri{aspect = config}}) -> #{
+    required => #{
         <<"config">> => {json, any}
     }
 };
+
 
 validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}) ->
     #{

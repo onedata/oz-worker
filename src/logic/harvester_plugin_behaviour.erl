@@ -12,11 +12,41 @@
 -module(harvester_plugin_behaviour).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Submits given Data to server located at Endpoint.
+%% IndexId is equal to HarvesterId and Id is file's CDMI Id.
+%% @end
+%%--------------------------------------------------------------------
 -callback submit_entry(Endpoint :: binary(), IndexId :: binary(), Id :: binary(), Data :: binary()) -> 
     ok | {error, term()}.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes entry in server located at Endpoint. 
+%% IndexId is equal to HarvesterId and Id is file's CDMI Id.
+%% @end
+%%--------------------------------------------------------------------
 -callback delete_entry(Endpoint :: binary(), IndexId :: binary(), Id :: binary()) -> 
     ok | {error, term()}.
 
--callback query(Endpoint :: binary(), IndexId :: binary(), Request :: binary()) -> 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Makes query to server located at Endpoint. 
+%% Data must conform to specification in query_validator/0.
+%% @end
+%%--------------------------------------------------------------------
+-callback query(Endpoint :: binary(), IndexId :: binary(), Data :: #{}) -> 
     {ok, binary()} | {error, term()}.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns validity verificators for given request.
+%% Returns a map with 'required', 'optional' and 'at_least_one' keys.
+%% Under each of them, there is a map:
+%%      Key => {type_verificator, value_verificator}
+%% Which means how value of given Key should be validated.
+%% @end
+%%--------------------------------------------------------------------
+-callback query_validator() -> entity_logic:validity_verificator().
