@@ -327,6 +327,18 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public},
         <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp)
     };
 
+translate_resource(_, #gri{type = od_harvester, aspect = instance, scope = protected}, HarvesterData) ->
+    #{
+        <<"entryTypeField">> := EntryTypeField, 
+        <<"acceptedEntryTypes">> := AcceptedEntryTypes,
+        <<"defaultEntryType">> := DefaultEntryType
+    } = HarvesterData,
+    #{
+        <<"entryTypeField">> => EntryTypeField,
+        <<"acceptedEntryTypes">> => AcceptedEntryTypes,
+        <<"defaultEntryType">> => DefaultEntryType
+    };
+
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync get result for:~n
     ProtocolVersion: ~p~n

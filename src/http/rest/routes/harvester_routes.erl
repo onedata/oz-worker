@@ -195,7 +195,7 @@ routes() -> [
         method = 'PUT',
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {group, ?BINDING(gid)}}
     }},
-    %% Get group details
+    %% Get harvester's group details
     %% This operation requires one of the following privileges:
     %% - harvester_view
     %% - oz_groups_view
@@ -269,7 +269,7 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = spaces}
     }},
-    %% Create harvester support token
+    %% Create harvester invite token for space
     %% This operation requires one of the following privileges:
     %% - harvester_invite_space
     %% - oz_harvesters_add_relationships

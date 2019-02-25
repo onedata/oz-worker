@@ -15,30 +15,28 @@
 %%--------------------------------------------------------------------
 %% @doc
 %% Submits given Data to server located at Endpoint.
-%% IndexId is equal to HarvesterId and Id is file's CDMI Id.
 %% @end
 %%--------------------------------------------------------------------
--callback submit_entry(Endpoint :: binary(), IndexId :: binary(), Id :: binary(), Data :: binary()) -> 
-    ok | {error, term()}.
+-callback submit_entry(Endpoint :: binary(), HarvesterId :: binary(), 
+    Id :: binary(), Data :: binary()) -> ok | {error, term()}.
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Deletes entry in server located at Endpoint. 
-%% IndexId is equal to HarvesterId and Id is file's CDMI Id.
 %% @end
 %%--------------------------------------------------------------------
--callback delete_entry(Endpoint :: binary(), IndexId :: binary(), Id :: binary()) -> 
-    ok | {error, term()}.
+-callback delete_entry(Endpoint :: binary(), HarvesterId :: binary(),  
+    Id :: binary()) -> ok | {error, term()}.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Makes query to server located at Endpoint. 
+%% Performs query to server located at Endpoint. 
 %% Data must conform to specification in query_validator/0.
 %% @end
 %%--------------------------------------------------------------------
 -callback query(Endpoint :: binary(), IndexId :: binary(), Data :: #{}) -> 
-    {ok, binary()} | {error, term()}.
+    {ok, maps:map()} | {error, term()}.
 
 %%--------------------------------------------------------------------
 %% @doc

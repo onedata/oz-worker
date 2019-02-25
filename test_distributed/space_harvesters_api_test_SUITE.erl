@@ -31,6 +31,7 @@
     init_per_suite/1, end_per_suite/1
 ]).
 -export([
+    join_harvester_test/1,
     remove_harvester_test/1,
     list_harvesters_test/1,
     get_harvester_test/1
@@ -38,6 +39,7 @@
 
 all() ->
     ?ALL([
+        join_harvester_test,
         remove_harvester_test,
         list_harvesters_test,
         get_harvester_test
@@ -137,9 +139,7 @@ join_harvester_test(Config) ->
 
     % Check that token is not consumed upon failed operation
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
-    {ok, Harvester} = oz_test_utils:create_harvester(Config, ?USER(U1),
-        #{<<"name">> => ?HARVESTER_DATA}
-    ),
+    {ok, Harvester} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_DATA),
     {ok, Macaroon1} = oz_test_utils:harvester_invite_space_token(
         Config, ?ROOT, Harvester
     ),
@@ -313,9 +313,7 @@ get_harvester_test(Config) ->
             expected_code = ?HTTP_200_OK,
             expected_body = #{
                 <<"harvesterId">> => H1,
-                <<"name">> => ?HARVESTER_NAME2,
-                <<"endpoint">> => ?HARVESTER_ENDPOINT,
-                <<"plugin">> => ?HARVESTER_PLUGIN_BINARY
+                <<"name">> => ?HARVESTER_NAME2
             }
         },
         logic_spec = #logic_spec{
@@ -324,8 +322,9 @@ get_harvester_test(Config) ->
             args = [client, S1, H1],
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?HARVESTER_NAME2,
-                <<"endpoint">> => ?HARVESTER_ENDPOINT,
-                <<"plugin">> => ?HARVESTER_PLUGIN_BINARY
+                <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
+                <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
+                <<"defaultEntryType">> => undefined
             })
         }
     },

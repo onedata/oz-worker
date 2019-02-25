@@ -118,6 +118,7 @@ list_harvesters_test(Config) ->
 
 
 create_harvester_test(Config) ->
+    [Node | _] = ?config(oz_worker_nodes, Config),
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
@@ -159,14 +160,23 @@ create_harvester_test(Config) ->
             end
         },
         data_spec = #data_spec{
-            required = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"config">>],
+            required = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"config">>,
+                <<"entryTypeField">>, <<"acceptedEntryTypes">>],
+            optional = [<<"defaultEntryType">>],
             correct_values = #{
                 <<"name">> => [ExpName],
                 <<"endpoint">> => [?HARVESTER_ENDPOINT],
                 <<"plugin">> => [?HARVESTER_PLUGIN_BINARY],
-                <<"config">> => [?HARVESTER_CONFIG]
+                <<"config">> => [?HARVESTER_CONFIG],
+                <<"entryTypeField">> => [?HARVESTER_ENTRY_TYPE_FIELD],
+                <<"acceptedEntryTypes">> => [?HARVESTER_ACCEPTED_ENTRY_TYPES],
+                <<"defaultEntryType">> => [<<"deafult">>]
             },
-            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+            bad_values =
+            [{<<"plugin">>, <<"not_existing_plugin">>,
+                ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>,
+                    rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))}
+                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)]
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -321,11 +331,6 @@ get_harvester_test(Config) ->
     {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_DATA),
     {ok, U1} = oz_test_utils:harvester_add_user(Config, H1, U1),
     {ok, U2} = oz_test_utils:harvester_add_user(Config, H1, U2),
-    ExpDetails = #{
-        <<"name">> => ?HARVESTER_NAME1,
-        <<"endpoint">> => ?HARVESTER_ENDPOINT,
-        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY
-    },
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -338,7 +343,10 @@ get_harvester_test(Config) ->
             method = get,
             path = [<<"/user/harvesters/">>, H1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpDetails#{<<"harvesterId">> => H1}
+            expected_body = #{
+                <<"harvesterId">> => H1,
+                <<"name">> => ?HARVESTER_NAME1
+            }
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -362,7 +370,12 @@ get_harvester_test(Config) ->
             module = user_logic,
             function = get_harvester,
             args = [client, U1, H1],
-            expected_result = ?OK_MAP_CONTAINS(ExpDetails)
+            expected_result = ?OK_MAP_CONTAINS(#{
+                <<"name">> => ?HARVESTER_NAME1,
+                <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
+                <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
+                <<"defaultEntryType">> => undefined
+            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
@@ -499,14 +512,15 @@ get_eff_harvester_test(Config) ->
     {ok, H6} = oz_test_utils:create_harvester(Config, ?USER(U2), ?HARVESTER_DATA),
     H6Details = #{
         <<"name">> => ?HARVESTER_NAME1,
-        <<"endpoint">> => ?HARVESTER_ENDPOINT,
-        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY
+        <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
+        <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
+        <<"defaultEntryType">> => undefined
     },
     {ok, U1} = oz_test_utils:harvester_add_user(Config, H6, U1),
 
     NewEffHarvestersList = [{H6, H6Details} | EffHarvestersList],
     lists:foreach(
-        fun({HarvesterId, HarvesterDetails}) ->
+        fun({HarvesterId, #{<<"name">> := Name} = HarvesterDetails}) ->
             ApiTestSpec = #api_test_spec{
                 client_spec = #client_spec{
                     correct = [
@@ -518,7 +532,10 @@ get_eff_harvester_test(Config) ->
                     method = get,
                     path = [<<"/user/effective_harvesters/">>, HarvesterId],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = HarvesterDetails#{<<"harvesterId">> => HarvesterId}
+                    expected_body = #{
+                        <<"harvesterId">> => HarvesterId,
+                        <<"name">> => Name
+                    }
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),

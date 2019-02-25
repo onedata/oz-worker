@@ -38,6 +38,8 @@
     add_user/3, add_user/4,
     add_group/3, add_group/4,
     create_group/3, create_group/4,
+    
+    join_harvester/3,
 
     get_users/2, get_eff_users/2,
     get_user/3, get_eff_user/3,
@@ -337,6 +339,29 @@ create_group(Client, SpaceId, Data) ->
         data = Data,
         auth_hint = AuthHint
     })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Joins a harvester on behalf of given group based on harvester_invite_space token.
+%% Has two variants:
+%% 1) Token is given explicitly (as binary() or macaroon())
+%% 2) Token is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec join_harvester(Client :: entity_logic:client(), SpaceId :: od_group:id(),
+    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    {ok, od_harvester:id()} | {error, term()}.
+join_harvester(Client, SpaceId, Data) when is_map(Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_harvester, id = undefined, aspect = join},
+        auth_hint = ?AS_SPACE(SpaceId),
+        data = Data
+    }));
+join_harvester(Client, SpaceId, Token) ->
+    join_harvester(Client, SpaceId, #{<<"token">> => Token}).
 
 
 %%--------------------------------------------------------------------

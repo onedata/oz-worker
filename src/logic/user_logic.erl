@@ -71,7 +71,7 @@
     create_space/3,
     create_handle_service/5, create_handle_service/3,
     create_handle/6, create_handle/3,
-    create_harvester/3, create_harvester/6,
+    create_harvester/3, create_harvester/8,
 
     join_group/3,
     join_space/3,
@@ -733,18 +733,23 @@ create_handle(Client, UserId, Data) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a new harvester for given user. 
-%% Harvester name, endpoint, plugin and config are given explicitly
+%% Harvester name, endpoint plugin, config, entry type field 
+%% and accepted entry types are given explicitly
 %% @end
 %%--------------------------------------------------------------------
--spec create_harvester(Client :: entity_logic:client(), UserId :: od_user:id(), Name :: binary(), 
-    Endpoint :: binary(), Plugin :: binary(), Config :: #{}) -> {ok, od_harvester:id()} | {error, term()}.
-create_harvester(Client, UserId, Name, Endpoint, Plugin, Config) ->
+-spec create_harvester(Client :: entity_logic:client(), UserId :: od_user:id(), Name :: binary(),
+    Endpoint :: binary(), Plugin :: binary(), Config :: #{}, EntryTypeField :: binary(),
+    AcceptedEntryTypes :: [binary()]) -> {ok, od_harvester:id()} | {error, term()}.
+create_harvester(Client, UserId, Name, Endpoint, Plugin, Config, EntryTypeField, AcceptedEntryTypes) ->
     create_harvester(Client, UserId, #{
         <<"name">> => Name,
         <<"endpoint">> => Endpoint,
         <<"plugin">> => Plugin,
-        <<"config">> => Config
+        <<"config">> => Config,
+        <<"entryTypeField">> => EntryTypeField,
+        <<"acceptedEntryTypes">> => AcceptedEntryTypes
     }).
+
 
 
 %%--------------------------------------------------------------------

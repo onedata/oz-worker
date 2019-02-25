@@ -289,11 +289,14 @@
 
 -record(od_harvester, {
     name = <<"">> :: od_harvester:name(),
-    plugin = elasticsearch_plugin :: module(),
+    plugin :: module(),
     endpoint :: binary(),
     
-    config :: json_utils:json_term(),
+    config = #{} :: json_utils:json_term(),
     public = false :: boolean(),
+    entry_type_field :: binary(),
+    accepted_entry_types = [] :: [binary()],
+    default_entry_type = undefined :: binary() | undefined,
 
     % Direct relations to other entities
     users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:space_privilege()]),

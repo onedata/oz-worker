@@ -42,21 +42,11 @@
 -define(COMPILE_OPTS, [return_errors, {i, ?INCLUDES_DIR}]).
 -define(PLUGINS_KEY, onezone_plugins).
 
--export([init/0, get_all_plugins/0, get_plugins/1]).
+-export([init/0, get_plugins/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns all loaded plugins. 
-%% @end
-%%--------------------------------------------------------------------
--spec get_all_plugins() -> {ok, [module()]}.
-get_all_plugins() ->
-    simple_cache:get(?PLUGINS_KEY).
-
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -65,7 +55,7 @@ get_all_plugins() ->
 %%--------------------------------------------------------------------
 -spec get_plugins(Type :: atom()) -> [module()].
 get_plugins(Type) ->
-    {ok, AllPlugins} = get_all_plugins(),
+    {ok, AllPlugins} = simple_cache:get(?PLUGINS_KEY),
     [P || P <- AllPlugins, P:type() =:= Type].
 
 

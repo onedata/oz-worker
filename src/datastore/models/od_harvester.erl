@@ -151,9 +151,12 @@ get_record_struct(1) ->
         {name, string},
         {plugin, atom},
         {endpoint, string},
-        {config, json},
         
+        {config, json},
         {public, boolean},
+        {entry_type_field, string},
+        {accepted_entry_types, [string]},
+        {default_entry_type, string},
 
         {users, #{string => [atom]}},
         {groups, #{string => [atom]}},

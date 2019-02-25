@@ -115,6 +115,10 @@ operation_supported(_, _, _) -> false.
 %%--------------------------------------------------------------------
 -spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
     boolean().
+is_subscribable(instance, private) -> true;
+is_subscribable(instance, protected) -> true;
+is_subscribable({space, _}, private) -> true;
+is_subscribable(config, private) -> true;
 is_subscribable(spaces, private) -> true;
 is_subscribable(_, _) -> false.
 
@@ -131,8 +135,12 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, client = Client,
         <<"name">> := Name,
         <<"endpoint">> := Endpoint,
         <<"plugin">> := Plugin,
-        <<"config">> := Config
+        <<"config">> := Config,
+        <<"entryTypeField">> := EntryTypeField,
+        <<"acceptedEntryTypes">> := AcceptedEntryTypes
     } = Data,
+    
+    DefaultEntryType = maps:get(<<"defaultEntryType">>, Data, undefined),
 
     {ok, #document{key = HarvesterId}} = od_harvester:create(#document{
         value = #od_harvester{
@@ -140,6 +148,9 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, client = Client,
             endpoint = Endpoint, 
             plugin = Plugin, 
             config = Config,
+            entry_type_field = EntryTypeField,
+            accepted_entry_types = AcceptedEntryTypes,
+            default_entry_type = DefaultEntryType,
             creator = Client
         }
     }),
@@ -184,8 +195,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
             ?AS_SPACE(SpaceId) ->
                 entity_graph:add_relation(
                     od_space, SpaceId,
-                    od_harvester, HarvesterId,
-                    Privileges
+                    od_harvester, HarvesterId
                 );
             _ ->
                 ok
@@ -276,7 +286,8 @@ create(Req = #el_req{gri = GRI = #gri{id = HarvesterId, aspect = group}}) ->
     {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
     {ok, resource, {NewGRI, Group}};
 
-create(#el_req{gri = #gri{aspect = {entry, FileId}, id = HarvesterId}, data = #{<<"payload">> := Payload}}) ->
+create(#el_req{gri = #gri{aspect = {entry, FileId}, id = HarvesterId}, 
+    data = #{<<"payload">> := Payload}}) ->
     fun(#od_harvester{plugin = Plugin, endpoint = Endpoint}) ->
         Plugin:submit_entry(Endpoint, HarvesterId, FileId, Payload)
     end;
@@ -306,12 +317,16 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Harvester) ->
     {ok, Harvester};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Harvester) ->
     #od_harvester{
-        name = Name, endpoint = Endpoint, plugin = Plugin
+        name = Name, 
+        entry_type_field = EntryTypeField, 
+        accepted_entry_types = AcceptedEntryTypes,
+        default_entry_type = DefaultEntryType
     } = Harvester,
     {ok, #{
         <<"name">> => Name,
-        <<"endpoint">> => Endpoint,
-        <<"plugin">> => atom_to_binary(Plugin, utf8)
+        <<"entryTypeField">> => EntryTypeField,
+        <<"acceptedEntryTypes">> => AcceptedEntryTypes,
+        <<"defaultEntryType">> => DefaultEntryType
     }};
 
 get(#el_req{gri = #gri{aspect = all_plugins}}, _) ->
@@ -353,14 +368,30 @@ get(#el_req{gri = #gri{aspect = spaces}}, Harvester) ->
 
 update(#el_req{gri = #gri{id = HarvesterId, aspect = instance}, data = Data}) ->
     {ok, _} = od_harvester:update(HarvesterId, fun(Harvester) ->
-        #od_harvester{name = Name, endpoint = Endpoint, plugin = Plugin} = Harvester,
+        #od_harvester{
+            name = Name, endpoint = Endpoint, 
+            plugin = Plugin, public = Public,
+            entry_type_field = EntryTypeField,
+            accepted_entry_types = AcceptedEntryTypes,
+            default_entry_type = DefaultEntryType
+        } = Harvester,
+        
         NewName = maps:get(<<"name">>, Data, Name),
         NewEndpoint = maps:get(<<"endpoint">>, Data, Endpoint),
         NewPlugin = maps:get(<<"plugin">>, Data, Plugin),
+        NewPublic = maps:get(<<"public">>, Data, Public),
+        NewEntryTypeField = maps:get(<<"entryTypeField">>, Data, EntryTypeField),
+        NewAcceptedEntryTypes = maps:get(<<"acceptedEntryTypes">>, Data, AcceptedEntryTypes),
+        NewDefaultEntryType = maps:get(<<"defaultEntryType">>, Data, DefaultEntryType),
+        
         {ok, Harvester#od_harvester{
             name = NewName, 
             endpoint = NewEndpoint, 
-            plugin = NewPlugin
+            plugin = NewPlugin,
+            public = NewPublic,
+            entry_type_field = NewEntryTypeField,
+            accepted_entry_types = NewAcceptedEntryTypes,
+            default_entry_type = NewDefaultEntryType
         }}
     end),
     ok;
@@ -541,6 +572,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Harvest
     end;
 
 authorize(#el_req{operation = create, gri = #gri{aspect = query}, client = ?USER(UserId)}, Harvester) ->
+    Harvester#od_harvester.public or
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, Harvester);
 
 authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = instance, scope = private}}, Harvester) ->
@@ -565,6 +597,10 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
 
         {?USER(ClientUserId), _} ->
             harvester_logic:has_eff_user(Harvester, ClientUserId);
+
+        {?PROVIDER(ProviderId), _} ->
+            lists:any(fun(SpaceId) -> provider_logic:supports_space(ProviderId, SpaceId) end, 
+                Harvester#od_harvester.spaces);
 
         _ ->
             % Access to private data also allows access to protected data
@@ -623,7 +659,7 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, Ha
     auth_by_privilege(Req, Harvester, ?HARVESTER_REMOVE_SPACE);
 
 % operation create and delete
-authorize(#el_req{gri = #gri{aspect = {entry, FileId}}, client = Client}, Harvester) -> 
+authorize(#el_req{gri = #gri{aspect = {entry, FileId}}, client = Client}, Harvester) ->
     case Client of
         ?PROVIDER(ProviderId) ->
             {ok, Guid} = file_id:objectid_to_guid(FileId),
@@ -752,7 +788,12 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"name">> => {binary, name},
         <<"endpoint">> => {binary, non_empty},
         <<"plugin">> => {atom, onezone_plugins:get_plugins(harvester_plugin)},
-        <<"config">> => {json, any}
+        <<"config">> => {json, any},
+        <<"entryTypeField">> => {binary, non_empty},
+        <<"acceptedEntryTypes">> => {list_of_binaries, non_empty}
+    },
+    optional => #{
+        <<"defaultEntryType">> => {binary, non_empty}
     }
 };
 
@@ -830,7 +871,11 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
         <<"endpoint">> => {binary, non_empty},
-        <<"plugin">> => {atom, onezone_plugins:get_plugins(harvester_plugin)}
+        <<"plugin">> => {atom, onezone_plugins:get_plugins(harvester_plugin)},
+        <<"public">> => {boolean, any},
+        <<"entryTypeField">> => {binary, non_empty},
+        <<"acceptedEntryTypes">> => {list_of_binaries, non_empty},
+        <<"defaultEntryType">> => {binary, non_empty}
     }
 };
 

@@ -41,7 +41,7 @@
     create_space/3,
     create_handle_service/5, create_handle_service/3,
     create_handle/6, create_handle/3,
-    create_harvester/3, create_harvester/6,
+    create_harvester/3, create_harvester/8,
 
     create_user_invite_token/2,
     create_group_invite_token/2,
@@ -440,17 +440,21 @@ create_handle(Client, GroupId, Data) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a new harvester for given group. 
-%% Harvester name, endpoint plugin and config are given explicitly
+%% Harvester name, endpoint plugin, config, entry type field 
+%% and accepted entry types are given explicitly
 %% @end
 %%--------------------------------------------------------------------
 -spec create_harvester(Client :: entity_logic:client(), GroupId :: od_group:id(), Name :: binary(),
-    Endpoint :: binary(), Plugin :: binary(), Config :: #{}) -> {ok, od_harvester:id()} | {error, term()}.
-create_harvester(Client, GroupId, Name, Endpoint, Plugin, Config) ->
+    Endpoint :: binary(), Plugin :: binary(), Config :: #{}, EntryTypeField :: binary(), 
+    AcceptedEntryTypes :: [binary()]) -> {ok, od_harvester:id()} | {error, term()}.
+create_harvester(Client, GroupId, Name, Endpoint, Plugin, Config, EntryTypeField, AcceptedEntryTypes) ->
     create_harvester(Client, GroupId, #{
         <<"name">> => Name,
         <<"endpoint">> => Endpoint,
         <<"plugin">> => Plugin,
-        <<"config">> => Config
+        <<"config">> => Config,
+        <<"entryTypeField">> => EntryTypeField,
+        <<"acceptedEntryTypes">> => AcceptedEntryTypes
     }).
 
 
@@ -594,7 +598,7 @@ join_space(Client, GroupId, Token) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Joins a harvester on behalf of given user based on harvester_invite_user token.
+%% Joins a harvester on behalf of given group based on harvester_invite_group token.
 %% Has two variants:
 %% 1) Token is given explicitly (as binary() or macaroon())
 %% 2) Token is provided in a proper Data object.

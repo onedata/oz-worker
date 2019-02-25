@@ -112,11 +112,6 @@ get_harvester_details_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, H1} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
-    ExpDetails = #{
-        <<"name">> => ?HARVESTER_NAME1,
-        <<"endpoint">> => ?HARVESTER_ENDPOINT,
-        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY
-    },
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -135,13 +130,21 @@ get_harvester_details_test(Config) ->
             method = get,
             path = [<<"/groups/">>, G1, <<"/harvesters/">>, H1],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpDetails#{<<"harvesterId">> => H1}
+            expected_body = #{
+                <<"harvesterId">> => H1,
+                <<"name">> => ?HARVESTER_NAME1
+            }
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_harvester,
             args = [client, G1, H1],
-            expected_result = ?OK_MAP_CONTAINS(ExpDetails)
+            expected_result = ?OK_MAP_CONTAINS(#{
+                <<"name">> => ?HARVESTER_NAME1,
+                <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
+                <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
+                <<"defaultEntryType">> => undefined
+            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -151,6 +154,7 @@ create_harvester_test(Config) ->
     % create group with 2 users:
     %   U2 gets the GROUP_ADD_HARVESTER privilege
     %   U1 gets all remaining privileges
+    [Node | _] = ?config(oz_worker_nodes, Config),
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_ADD_HARVESTER
     ),
@@ -207,14 +211,23 @@ create_harvester_test(Config) ->
             expected_result = ?OK_TERM(VerifyFun)
         },
         data_spec = #data_spec{
-            required = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"config">>],
+            required = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"config">>,
+                <<"entryTypeField">>, <<"acceptedEntryTypes">>],
+            optional = [<<"defaultEntryType">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"endpoint">> => [?HARVESTER_ENDPOINT],
                 <<"plugin">> => [?HARVESTER_PLUGIN_BINARY],
-                <<"config">> => [?HARVESTER_CONFIG]
+                <<"config">> => [?HARVESTER_CONFIG],
+                <<"entryTypeField">> => [?HARVESTER_ENTRY_TYPE_FIELD],
+                <<"acceptedEntryTypes">> => [?HARVESTER_ACCEPTED_ENTRY_TYPES],
+                <<"defaultEntryType">> => [<<"deafult">>]
             },
-            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+            bad_values =
+            [{<<"plugin">>, <<"not_existing_plugin">>,
+                ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>,
+                    rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))}
+                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)]
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -459,7 +472,7 @@ get_eff_harvester_details_test(Config) ->
     } = api_test_scenarios:create_eff_harvesters_env(Config),
 
     lists:foreach(
-        fun({HarvesterId, HarvesterDetails}) ->
+        fun({HarvesterId, #{<<"name">> := Name} = HarvesterDetails}) ->
             ApiTestSpec = #api_test_spec{
                 client_spec = #client_spec{
                     correct = [
@@ -479,7 +492,10 @@ get_eff_harvester_details_test(Config) ->
                         <<"/groups/">>, G1, <<"/effective_harvesters/">>, HarvesterId
                     ],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = HarvesterDetails#{<<"harvesterId">> => HarvesterId}
+                    expected_body = #{
+                        <<"harvesterId">> => HarvesterId,
+                        <<"name">> => Name
+                    }
                 },
                 logic_spec = #logic_spec{
                     module = group_logic,

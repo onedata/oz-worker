@@ -103,12 +103,17 @@ create_test(Config) ->
             expected_result = ?OK_TERM(VerifyFun)
         },
         data_spec = #data_spec{
-            required = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"config">>],
+            required = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"config">>, 
+                <<"entryTypeField">>, <<"acceptedEntryTypes">>],
+            optional = [<<"defaultEntryType">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"endpoint">> => [?HARVESTER_ENDPOINT],
                 <<"plugin">> => [?HARVESTER_PLUGIN_BINARY],
-                <<"config">> => [?HARVESTER_CONFIG]
+                <<"config">> => [?HARVESTER_CONFIG],
+                <<"entryTypeField">> => [?HARVESTER_ENTRY_TYPE_FIELD],
+                <<"acceptedEntryTypes">> => [?HARVESTER_ACCEPTED_ENTRY_TYPES],
+                <<"defaultEntryType">> => [<<"deafult">>]
             },
             bad_values = 
                 [{<<"plugin">>, <<"not_existing_plugin">>, 
@@ -261,9 +266,7 @@ get_test(Config) ->
             expected_code = ?HTTP_200_OK,
             expected_body = #{
                 <<"harvesterId">> => H1,
-                <<"name">> => ?HARVESTER_NAME1,
-                <<"endpoint">> => ?HARVESTER_ENDPOINT,
-                <<"plugin">> => ?HARVESTER_PLUGIN_BINARY
+                <<"name">> => ?HARVESTER_NAME1
             }
         },
         logic_spec = #logic_spec{
@@ -272,8 +275,9 @@ get_test(Config) ->
             args = [client, H1],
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?HARVESTER_NAME1,
-                <<"endpoint">> => ?HARVESTER_ENDPOINT,
-                <<"plugin">> => ?HARVESTER_PLUGIN_BINARY
+                <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
+                <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
+                <<"defaultEntryType">> => undefined
             })
         }
     },
@@ -349,6 +353,7 @@ update_test(Config) ->
     end,
     Endpoint = <<"172.17.0.2:9200">>,
     Plugin = ?HARVESTER_MOCK_PLUGIN_BINARY,
+    AcceptedEntryTypes = [<<"type1">>],
     
     ExpValueFun = fun(ShouldSucceed, Key, Data, Default) ->
         case ShouldSucceed of
@@ -363,10 +368,18 @@ update_test(Config) ->
         ExpName = ExpValueFun(ShouldSucceed, <<"name">>, Data, ?CORRECT_NAME),
         ExpEndpoint = ExpValueFun(ShouldSucceed, <<"endpoint">>, Data, ?HARVESTER_ENDPOINT),
         ExpPlugin = ExpValueFun(ShouldSucceed, <<"plugin">>, Data, ?HARVESTER_PLUGIN_BINARY),
+        ExpPublic = ExpValueFun(ShouldSucceed, <<"public">>, Data, false),
+        ExpEntryTypeField = ExpValueFun(ShouldSucceed, <<"entryTypeField">>, Data, ?HARVESTER_ENTRY_TYPE_FIELD),
+        ExpAcceptedEntryTypes = ExpValueFun(ShouldSucceed, <<"acceptedEntryTypes">>, Data, ?HARVESTER_ACCEPTED_ENTRY_TYPES),
+        ExpDefaultEntryType = ExpValueFun(ShouldSucceed, <<"defaultEntryType">>, Data, undefined),
         
         ?assertEqual(ExpName, Harvester#od_harvester.name),
         ?assertEqual(ExpEndpoint, Harvester#od_harvester.endpoint),
-        ?assertEqual(binary_to_atom(ExpPlugin, utf8), Harvester#od_harvester.plugin)
+        ?assertEqual(binary_to_atom(ExpPlugin, utf8), Harvester#od_harvester.plugin),
+        ?assertEqual(ExpPublic, Harvester#od_harvester.public),
+        ?assertEqual(ExpEntryTypeField, Harvester#od_harvester.entry_type_field),
+        ?assertEqual(ExpAcceptedEntryTypes, Harvester#od_harvester.accepted_entry_types),
+        ?assertEqual(ExpDefaultEntryType, Harvester#od_harvester.default_entry_type)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -399,16 +412,22 @@ update_test(Config) ->
             expected_result = ?OK
         },
         data_spec = #data_spec{
-            at_least_one = [<<"name">>, <<"endpoint">>, <<"plugin">>],
+            at_least_one = [<<"name">>, <<"endpoint">>, <<"plugin">>, 
+                <<"public">>, <<"entryTypeField">>, <<"acceptedEntryTypes">>, <<"defaultEntryType">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"endpoint">> => [Endpoint],
-                <<"plugin">> => [Plugin]
+                <<"plugin">> => [Plugin],
+                <<"public">> => [true, false],
+                <<"entryTypeField">> => [<<"type1">>],
+                <<"acceptedEntryTypes">> => [AcceptedEntryTypes],
+                <<"defaultEntryType">> => [<<"default">>]
             },
             bad_values =
             [{<<"plugin">>, <<"not_existing_plugin">>,
                 ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>,
-                    rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))}
+                    rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))},
+             {<<"public">>, not_boolean, ?ERROR_BAD_VALUE_BOOLEAN(<<"public">>)}
                 | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)]
         }
     },
@@ -556,9 +575,7 @@ submit_entry_test(Config) ->
     oz_test_utils:harvester_add_user(Config, H1, U1),
     
     {ok, {P1, M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    SpacePrivs = privileges:space_privileges(),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, U1, [], SpacePrivs),
     {ok, S1} = oz_test_utils:support_space(
         Config, P1, S1, oz_test_utils:minimum_support_size(Config)
     ),
@@ -568,7 +585,7 @@ submit_entry_test(Config) ->
     
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     {ok, FileId} = file_id:guid_to_objectid(file_id:pack_guid(<<"1234">>, S1)),
-
+    
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -608,9 +625,7 @@ delete_entry_test(Config) ->
     oz_test_utils:harvester_add_user(Config, H1, U1),
 
     {ok, {P1, M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    SpacePrivs = privileges:space_privileges(),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, U1, [], SpacePrivs),
     {ok, S1} = oz_test_utils:support_space(
         Config, P1, S1, oz_test_utils:minimum_support_size(Config)
     ),
@@ -690,7 +705,20 @@ query_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    
+    oz_test_utils:update_harvester(Config, H1, #{<<"public">> => true}),
+    
+    % Anyone can query public harvester
+    PublicHarvesterApiTestSpec = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {user, U1},
+                {user, U2}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, PublicHarvesterApiTestSpec)).
 
 
 %%%===================================================================

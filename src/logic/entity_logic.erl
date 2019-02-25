@@ -370,10 +370,10 @@ fetch_entity(State = #state{entity = Entity}) when Entity /= undefined ->
     State;
 fetch_entity(State = #state{req = #el_req{gri = #gri{id = undefined}}}) ->
     State;
-fetch_entity(St = #state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}) ->
-    case Plugin:fetch_entity(Id) of
+fetch_entity(State) ->
+    case call_plugin(State, fetch_entity) of
         {ok, Entity} ->
-            St#state{entity = Entity};
+            State#state{entity = Entity};
         ?ERROR_NOT_FOUND ->
             throw(?ERROR_NOT_FOUND)
     end.
@@ -387,8 +387,8 @@ fetch_entity(St = #state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}) -
 %% @end
 %%--------------------------------------------------------------------
 -spec call_create(State :: #state{}) -> create_result().
-call_create(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
-    get_result(Plugin:create(ElReq), Entity).
+call_create(State) ->
+    call_plugin(State, create).
 
 
 %%--------------------------------------------------------------------
@@ -399,8 +399,8 @@ call_create(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_get(State :: #state{}) -> get_result().
-call_get(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
-    Plugin:get(ElReq, Entity).
+call_get(State) ->
+    call_plugin(State, get).
 
 
 %%--------------------------------------------------------------------
@@ -411,8 +411,8 @@ call_get(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_update(State :: #state{}) -> update_result().
-call_update(#state{req = ElReq, plugin = Plugin}) ->
-    Plugin:update(ElReq).
+call_update(State) ->
+    call_plugin(State, update).
 
 
 %%--------------------------------------------------------------------
@@ -423,8 +423,8 @@ call_update(#state{req = ElReq, plugin = Plugin}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_delete(State :: #state{}) -> delete_result().
-call_delete(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
-    get_result(Plugin:delete(ElReq), Entity).
+call_delete(State) ->
+    call_plugin(State, delete).
 
 
 %%--------------------------------------------------------------------
@@ -446,10 +446,9 @@ ensure_operation_supported(State) ->
 
 
 -spec ensure_operation_supported_internal(#state{}) -> boolean().
-ensure_operation_supported_internal(#state{req = Req, plugin = Plugin}) ->
+ensure_operation_supported_internal(State) ->
     try
-        #el_req{operation = Operation, gri = #gri{aspect = Aspect, scope = Scope}} = Req,
-        Plugin:operation_supported(Operation, Aspect, Scope)
+        call_plugin(State, operation_supported)
     catch _:_ ->
         % No need for log here, 'operation_supported' may crash depending on
         % what the request contains and this is expected.
@@ -474,15 +473,14 @@ ensure_exists(State) ->
 -spec ensure_exists_internal(#state{}) -> boolean().
 ensure_exists_internal(#state{req = #el_req{gri = #gri{id = undefined}}}) ->
     true;
-ensure_exists_internal(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
+ensure_exists_internal(State) ->
     try
-        Plugin:exists(ElReq, Entity)
+        call_plugin(State, exists)
     catch _:_ ->
         % No need for log here, 'exists' may crash depending on what the
         % request contains and this is expected.
         false
     end.
-
 
 %%--------------------------------------------------------------------
 %% @private
@@ -534,18 +532,18 @@ resolve_auto_scope([Scope | Rest], State = #state{req = Req = #el_req{operation 
 
 
 -spec is_client_authorized(#state{}) -> boolean().
-is_client_authorized(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
+is_client_authorized(State) ->
     try
-        Plugin:authorize(ElReq, Entity)
+        call_plugin(State, authorize)
     catch _:_ ->
         false
     end.
 
 
 -spec is_authorized_as_admin(#state{}) -> boolean().
-is_authorized_as_admin(#state{req = ElReq, plugin = Plugin}) ->
+is_authorized_as_admin(#state{req = ElReq} = State) ->
     try
-        case Plugin:required_admin_privileges(ElReq) of
+        case call_plugin(State, required_admin_privileges) of
             forbidden ->
                 false;
             Privileges ->
@@ -577,10 +575,9 @@ report_unauthorized(_) ->
 -spec ensure_valid(State :: #state{}) -> #state{}.
 ensure_valid(State) ->
     #state{
-        req = #el_req{gri = #gri{aspect = Aspect}, data = Data} = Req,
-        plugin = Plugin, entity = Entity
+        req = #el_req{gri = #gri{aspect = Aspect}, data = Data} = Req
     } = State,
-    ValidatorsMap = get_result(Plugin:validate(Req), Entity),
+    ValidatorsMap = call_plugin(State, validate),
     % Get all types of validators
     Required = maps:get(required, ValidatorsMap, #{}),
     Optional = maps:get(optional, ValidatorsMap, #{}),
@@ -990,14 +987,30 @@ check_value(TypeRule, ValueRule, Key, _) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Retrieves result from entity logic response.
+%% Performs operation on proper entity logic plugin.
 %% @end
 %%--------------------------------------------------------------------
-get_result(Response, Entity) ->
-    case Response of
+-spec call_plugin(#state{}, Operation :: atom()) -> term().
+call_plugin(#state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}, fetch_entity) ->
+    Plugin:fetch_entity(Id);
+call_plugin(#state{plugin = Plugin, req = #el_req{operation = Operation, 
+    gri = #gri{aspect = Aspect, scope = Scope}}}, operation_supported) ->
+    Plugin:operation_supported(Operation, Aspect, Scope);
+call_plugin(#state{plugin = Plugin, req = ElReq, entity = Entity}, exists) ->
+    Plugin:exists(ElReq, Entity);
+call_plugin(#state{plugin = Plugin, req = ElReq, entity = Entity}, authorize) ->
+    Plugin:authorize(ElReq, Entity);
+call_plugin(#state{plugin = Plugin, req = ElReq}, required_admin_privileges) ->
+    Plugin:required_admin_privileges(ElReq);
+call_plugin(#state{plugin = Plugin, req = ElReq, entity = Entity}, get) ->
+    Plugin:get(ElReq, Entity);
+call_plugin(#state{plugin = Plugin, req = ElReq}, update) ->
+    Plugin:update(ElReq);
+call_plugin(#state{plugin = Plugin, req = ElReq, entity = Entity}, Operation) ->
+    % covers create, delete, validate
+    case Plugin:Operation(ElReq) of
         Fun when is_function(Fun, 1) ->
             Fun(Entity);
         Result ->
             Result
     end.
-    

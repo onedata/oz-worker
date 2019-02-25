@@ -17,7 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([
-    create/2, create/5
+    create/2, create/7
 ]).
 -export([
     get/2,
@@ -82,18 +82,21 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new group document in database based on harvester name, endpoint, plugin and config.
+%% Creates a new group document in database based on harvester name, endpoint, plugin, config, 
+%% entry type field and accepted entry types.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client(), Name :: binary(), Endpoint :: binary(), 
-    Plugin :: binary(), Config :: #{}) ->
+    Plugin :: binary(), Config :: #{}, EntryTypeField :: binary(), AcceptedEntryTypes :: [binary()]) ->
     {ok, od_harvester:id()} | {error, term()}.
-create(Client, Name, Endpoint, Plugin, Config) ->
+create(Client, Name, Endpoint, Plugin, Config, EntryTypeField, AcceptedEntryTypes) ->
     create(Client, #{
         <<"name">> => Name,
         <<"endpoint">> => Endpoint,
         <<"plugin">> => Plugin,
-        <<"config">> => Config
+        <<"config">> => Config,
+        <<"entryTypeField">> => EntryTypeField,
+        <<"acceptedEntryTypes">> => AcceptedEntryTypes
     }).
 
 

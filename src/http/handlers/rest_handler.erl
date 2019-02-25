@@ -26,7 +26,7 @@
 -type bound_gri() :: #b_gri{}.
 -type bound_auth_hint() :: undefined | {
     throughUser | throughGroup | throughSpace | throughProvider |
-    throughHandleService | throughHandle | throughHarvester | asUser | asGroup,
+    throughHandleService | throughHandle | throughHarvester | asUser | asGroup | asSpace,
     binding()
 }.
 

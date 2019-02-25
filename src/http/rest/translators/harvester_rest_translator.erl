@@ -35,6 +35,8 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#g
             [<<"user">>, <<"harvesters">>, HarvesterId];
         ?AS_GROUP(GroupId) ->
             [<<"groups">>, GroupId, <<"harvesters">>, HarvesterId];
+        ?AS_SPACE(SpaceId) ->
+            [<<"spaces">>, SpaceId, <<"harvesters">>, HarvesterId];
         _ ->
             [<<"harvesters">>, HarvesterId]
     end,
@@ -87,14 +89,10 @@ get_response(#gri{id = undefined, aspect = list}, Harvesters) ->
     rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters});
 
 get_response(#gri{id = HarvesterId, aspect = instance, scope = protected}, HarvesterData) -> 
-    #{
-        <<"name">> := Name, <<"endpoint">> := Endpoint, 
-        <<"plugin">> := Plugin
-    } = HarvesterData,
+    #{<<"name">> := Name} = HarvesterData,
     rest_translator:ok_body_reply(#{
         <<"harvesterId">> => HarvesterId, 
-        <<"name">> => Name, <<"endpoint">> => Endpoint, 
-        <<"plugin">> => Plugin
+        <<"name">> => Name
     });
 
 get_response(#gri{aspect = users}, Users) ->

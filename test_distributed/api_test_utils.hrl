@@ -270,13 +270,18 @@
 -define(HARVESTER_MOCK_PLUGIN_BINARY, <<"harvester_mock_plugin">>).
 -define(HARVESTER_MOCK_PLUGIN, binary_to_atom(?HARVESTER_MOCK_PLUGIN_BINARY, utf8)).
 -define(HARVESTER_PLUGIN_BINARY, <<"elasticsearch_plugin">>).
+-define(HARVESTER_ENTRY_TYPE_FIELD, <<"type">>).
+-define(HARVESTER_ACCEPTED_ENTRY_TYPES, [<<"study">>, <<"data_object">>]).
+-define(HARVESTER_DEFAULT_ENTRY_TYPE, <<"default">>).
 -define(HARVESTER_CONFIG, #{<<"a">>=><<"b">>}).
 -define(HARVESTER_DATA(HarvesterName, HarvesterPlugin), 
     #{
         <<"name">> => HarvesterName,
         <<"endpoint">> => ?HARVESTER_ENDPOINT,
         <<"plugin">> => HarvesterPlugin,
-        <<"config">> => ?HARVESTER_CONFIG
+        <<"config">> => ?HARVESTER_CONFIG,
+        <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
+        <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES
     }
 ).
 -define(HARVESTER_DATA(HarvesterName), ?HARVESTER_DATA(HarvesterName, ?HARVESTER_PLUGIN_BINARY)). 
