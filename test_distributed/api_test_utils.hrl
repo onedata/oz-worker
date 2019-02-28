@@ -274,16 +274,16 @@
 -define(HARVESTER_ACCEPTED_ENTRY_TYPES, [<<"study">>, <<"data_object">>]).
 -define(HARVESTER_DEFAULT_ENTRY_TYPE, <<"default">>).
 -define(HARVESTER_CONFIG, #{<<"a">>=><<"b">>}).
--define(HARVESTER_DATA(HarvesterName, HarvesterPlugin), 
+-define(HARVESTER_DATA(HarvesterName, HarvesterPlugin),
     #{
-        <<"name">> => HarvesterName,
-        <<"endpoint">> => ?HARVESTER_ENDPOINT,
-        <<"plugin">> => HarvesterPlugin,
-        <<"config">> => ?HARVESTER_CONFIG,
-        <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
-        <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES
-    }
-).
+    <<"name">> => HarvesterName,
+    <<"endpoint">> => ?HARVESTER_ENDPOINT,
+    <<"plugin">> => HarvesterPlugin,
+    <<"config">> => ?HARVESTER_CONFIG,
+    <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
+    <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
+    <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE
+    }).
 -define(HARVESTER_DATA(HarvesterName), ?HARVESTER_DATA(HarvesterName, ?HARVESTER_PLUGIN_BINARY)). 
 -define(HARVESTER_DATA, ?HARVESTER_DATA(?HARVESTER_NAME1, ?HARVESTER_PLUGIN_BINARY)).
 

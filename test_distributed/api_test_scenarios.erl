@@ -1321,9 +1321,10 @@ create_eff_harvesters_env(Config) ->
             ),
             {HarvesterId, #{
                 <<"name">> => Name,
+                <<"public">> => <<"false">>,
                 <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
                 <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
-                <<"defaultEntryType">> => undefined
+                <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE
             }}
         end, [G1, G2, G4, G5, G5]
     ),

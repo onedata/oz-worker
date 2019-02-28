@@ -89,11 +89,24 @@ get_response(#gri{id = undefined, aspect = list}, Harvesters) ->
     rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters});
 
 get_response(#gri{id = HarvesterId, aspect = instance, scope = protected}, HarvesterData) -> 
-    #{<<"name">> := Name} = HarvesterData,
+    #{
+        <<"name">> := Name,
+        <<"public">> := Public,
+        <<"entryTypeField">> := EntryTypeField,
+        <<"acceptedEntryTypes">> := AcceptedEntryTypes,
+        <<"defaultEntryType">> := DefaultEntryType
+    } = HarvesterData,
     rest_translator:ok_body_reply(#{
-        <<"harvesterId">> => HarvesterId, 
-        <<"name">> => Name
+        <<"harvesterId">> => HarvesterId,
+        <<"name">> => Name,
+        <<"public">> => Public,
+        <<"entryTypeField">> => EntryTypeField,
+        <<"acceptedEntryTypes">> => AcceptedEntryTypes,
+        <<"defaultEntryType">> => DefaultEntryType
     });
+
+get_response(#gri{aspect = config}, Config) ->
+    rest_translator:ok_body_reply(#{<<"config">> => Config});
 
 get_response(#gri{aspect = users}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});

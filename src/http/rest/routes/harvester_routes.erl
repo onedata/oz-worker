@@ -302,5 +302,20 @@ routes() -> [
     {<<"/harvesters/:id/spaces/:sid">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {space, ?BINDING(sid)}}
+    }},
+    %% Get harvester configuration
+    %% This operation requires one of the following privileges:
+    %% - oz_harvesters_view
+    {<<"/harvesters/:id/config">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = config, scope = private}
+    }},
+    %% Modify harvester configuration
+    %% This operation requires one of the following privileges:
+    %% - harvester_update
+    %% - oz_harvesters_update
+    {<<"/harvesters/:id/config">>, #rest_req{
+        method = 'PATCH',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = config}
     }}
 ].

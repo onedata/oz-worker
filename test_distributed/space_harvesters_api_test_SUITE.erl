@@ -294,6 +294,15 @@ get_harvester_test(Config) ->
     ),
     oz_test_utils:harvester_add_space(Config, H1, S1),
 
+
+    ExpData = #{
+        <<"name">> => ?HARVESTER_NAME2,
+        <<"public">> => <<"false">>,
+        <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
+        <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
+        <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE
+    },
+    
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -311,21 +320,13 @@ get_harvester_test(Config) ->
             method = get,
             path = [<<"/spaces/">>, S1, <<"/harvesters/">>, H1],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"harvesterId">> => H1,
-                <<"name">> => ?HARVESTER_NAME2
-            }
+            expected_body = ExpData#{<<"harvesterId">> => H1}
         },
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_harvester,
             args = [client, S1, H1],
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?HARVESTER_NAME2,
-                <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
-                <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
-                <<"defaultEntryType">> => undefined
-            })
+            expected_result = ?OK_MAP_CONTAINS(ExpData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).

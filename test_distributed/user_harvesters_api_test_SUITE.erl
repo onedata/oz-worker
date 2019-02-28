@@ -332,6 +332,15 @@ get_harvester_test(Config) ->
     {ok, U1} = oz_test_utils:harvester_add_user(Config, H1, U1),
     {ok, U2} = oz_test_utils:harvester_add_user(Config, H1, U2),
 
+
+    ExpData = #{
+        <<"name">> => ?HARVESTER_NAME1,
+        <<"public">> => <<"false">>,
+        <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
+        <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
+        <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE
+    },
+    
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -343,10 +352,7 @@ get_harvester_test(Config) ->
             method = get,
             path = [<<"/user/harvesters/">>, H1],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"harvesterId">> => H1,
-                <<"name">> => ?HARVESTER_NAME1
-            }
+            expected_body = ExpData#{<<"harvesterId">> => H1}
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
@@ -370,12 +376,7 @@ get_harvester_test(Config) ->
             module = user_logic,
             function = get_harvester,
             args = [client, U1, H1],
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?HARVESTER_NAME1,
-                <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
-                <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
-                <<"defaultEntryType">> => undefined
-            })
+            expected_result = ?OK_MAP_CONTAINS(ExpData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
@@ -512,15 +513,16 @@ get_eff_harvester_test(Config) ->
     {ok, H6} = oz_test_utils:create_harvester(Config, ?USER(U2), ?HARVESTER_DATA),
     H6Details = #{
         <<"name">> => ?HARVESTER_NAME1,
+        <<"public">> => <<"false">>,
         <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
         <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
-        <<"defaultEntryType">> => undefined
+        <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE
     },
     {ok, U1} = oz_test_utils:harvester_add_user(Config, H6, U1),
 
     NewEffHarvestersList = [{H6, H6Details} | EffHarvestersList],
     lists:foreach(
-        fun({HarvesterId, #{<<"name">> := Name} = HarvesterDetails}) ->
+        fun({HarvesterId, HarvesterDetails}) ->
             ApiTestSpec = #api_test_spec{
                 client_spec = #client_spec{
                     correct = [
@@ -532,10 +534,7 @@ get_eff_harvester_test(Config) ->
                     method = get,
                     path = [<<"/user/effective_harvesters/">>, HarvesterId],
                     expected_code = ?HTTP_200_OK,
-                    expected_body = #{
-                        <<"harvesterId">> => HarvesterId,
-                        <<"name">> => Name
-                    }
+                    expected_body = HarvesterDetails#{<<"harvesterId">> => HarvesterId}
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),

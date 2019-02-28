@@ -560,11 +560,19 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, 
 translate_harvester(#gri{aspect = instance, scope = protected}, HarvesterData) ->
     #{
         <<"name">> := Name,
+        <<"public">> := Public,
+        <<"entryTypeField">> := EntryTypeField,
+        <<"acceptedEntryTypes">> := AcceptedEntryTypes,
+        <<"defaultEntryType">> := DefaultEntryType,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator
     } = HarvesterData,
     #{
         <<"name">> => Name,
+        <<"public">> => Public,
+        <<"entryTypeField">> => EntryTypeField,
+        <<"acceptedEntryTypes">> => AcceptedEntryTypes,
+        <<"defaultEntryType">> => gs_protocol:undefined_to_null(DefaultEntryType),
         <<"scope">> => <<"protected">>,
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
@@ -640,6 +648,11 @@ translate_harvester(#gri{aspect = {group_privileges, _GroupId}}, Privileges) ->
 translate_harvester(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
     #{
         <<"privileges">> => Privileges
+    };
+
+translate_harvester(#gri{aspect = all_plugins}, Plugins) ->
+    #{
+        <<"allPlugins">> => Plugins
     }.
 
 

@@ -117,9 +117,21 @@ operation_supported(_, _, _) -> false.
     boolean().
 is_subscribable(instance, private) -> true;
 is_subscribable(instance, protected) -> true;
+is_subscribable(users, private) -> true;
+is_subscribable(eff_users, private) -> true;
+is_subscribable(groups, private) -> true;
+is_subscribable(eff_groups, private) -> true;
+is_subscribable(group, private) -> true;
+is_subscribable({group, _}, private) -> true;
+is_subscribable({user_privileges, _}, private) -> true;
+is_subscribable({eff_user_privileges, _}, private) -> true;
+is_subscribable({eff_user_membership, _}, private) -> true;
+is_subscribable({group_privileges, _}, private) -> true;
+is_subscribable({eff_group_privileges, _}, private) -> true;
+is_subscribable({eff_group_membership, _}, private) -> true;
+is_subscribable(spaces, private) -> true;
 is_subscribable({space, _}, private) -> true;
 is_subscribable(config, private) -> true;
-is_subscribable(spaces, private) -> true;
 is_subscribable(_, _) -> false.
 
 
@@ -318,12 +330,14 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Harvester) ->
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Harvester) ->
     #od_harvester{
         name = Name, 
+        public = Public,
         entry_type_field = EntryTypeField, 
         accepted_entry_types = AcceptedEntryTypes,
         default_entry_type = DefaultEntryType
     } = Harvester,
     {ok, #{
         <<"name">> => Name,
+        <<"public">> => atom_to_binary(Public, utf8),
         <<"entryTypeField">> => EntryTypeField,
         <<"acceptedEntryTypes">> => AcceptedEntryTypes,
         <<"defaultEntryType">> => DefaultEntryType
@@ -357,7 +371,7 @@ get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Harvester) ->
     {ok, entity_graph:get_intermediaries(bottom_up, od_group, GroupId, Harvester)};
 
 get(#el_req{gri = #gri{aspect = spaces}}, Harvester) ->
-    {ok, Harvester#od_harvester.spaces}.
+    {ok, entity_graph:get_relations(direct, bottom_up, od_space, Harvester)}.
 
 %%--------------------------------------------------------------------
 %% @doc

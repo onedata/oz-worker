@@ -247,6 +247,14 @@ get_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
 
     % Get and check protected data
+    ExpData = #{
+        <<"name">> => ?HARVESTER_NAME1,
+        <<"public">> => <<"false">>,
+        <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
+        <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
+        <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE
+    },
+    
     GetProtectedDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -264,21 +272,13 @@ get_test(Config) ->
             method = get,
             path = [<<"/harvesters/">>, H1],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"harvesterId">> => H1,
-                <<"name">> => ?HARVESTER_NAME1
-            }
+            expected_body = ExpData#{<<"harvesterId">> => H1}
         },
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_protected_data,
             args = [client, H1],
-            expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ?HARVESTER_NAME1,
-                <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
-                <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
-                <<"defaultEntryType">> => undefined
-            })
+            expected_result = ?OK_MAP_CONTAINS(ExpData)
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
@@ -321,6 +321,14 @@ get_config_test(Config) ->
                 {user, U1}
             ]
         },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/harvesters/">>, H1, <<"/config">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{
+                <<"config">> => ?HARVESTER_CONFIG
+            }
+        },
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_config,
@@ -354,6 +362,7 @@ update_test(Config) ->
     Endpoint = <<"172.17.0.2:9200">>,
     Plugin = ?HARVESTER_MOCK_PLUGIN_BINARY,
     AcceptedEntryTypes = [<<"type1">>],
+    DefaultEntryType = <<"default1">>,
     
     ExpValueFun = fun(ShouldSucceed, Key, Data, Default) ->
         case ShouldSucceed of
@@ -371,7 +380,7 @@ update_test(Config) ->
         ExpPublic = ExpValueFun(ShouldSucceed, <<"public">>, Data, false),
         ExpEntryTypeField = ExpValueFun(ShouldSucceed, <<"entryTypeField">>, Data, ?HARVESTER_ENTRY_TYPE_FIELD),
         ExpAcceptedEntryTypes = ExpValueFun(ShouldSucceed, <<"acceptedEntryTypes">>, Data, ?HARVESTER_ACCEPTED_ENTRY_TYPES),
-        ExpDefaultEntryType = ExpValueFun(ShouldSucceed, <<"defaultEntryType">>, Data, undefined),
+        ExpDefaultEntryType = ExpValueFun(ShouldSucceed, <<"defaultEntryType">>, Data, ?HARVESTER_DEFAULT_ENTRY_TYPE),
         
         ?assertEqual(ExpName, Harvester#od_harvester.name),
         ?assertEqual(ExpEndpoint, Harvester#od_harvester.endpoint),
@@ -421,7 +430,7 @@ update_test(Config) ->
                 <<"public">> => [true, false],
                 <<"entryTypeField">> => [<<"type1">>],
                 <<"acceptedEntryTypes">> => [AcceptedEntryTypes],
-                <<"defaultEntryType">> => [<<"default">>]
+                <<"defaultEntryType">> => [DefaultEntryType]
             },
             bad_values =
             [{<<"plugin">>, <<"not_existing_plugin">>,
@@ -482,6 +491,11 @@ update_config_test(Config) ->
                 {user, U1},
                 {user, NonAdmin}
             ]
+        },
+        rest_spec = #rest_spec{
+            method = patch,
+            path = [<<"/harvesters/">>, harvesterId, <<"/config">>],
+            expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = harvester_logic,
