@@ -572,7 +572,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Harvest
     end;
 
 authorize(#el_req{operation = create, gri = #gri{aspect = query}, client = ?USER(UserId)}, Harvester) ->
-    Harvester#od_harvester.public or
+    Harvester#od_harvester.public orelse
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, Harvester);
 
 authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = instance, scope = private}}, Harvester) ->

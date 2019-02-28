@@ -71,7 +71,7 @@
     create_space/3,
     create_handle_service/5, create_handle_service/3,
     create_handle/6, create_handle/3,
-    create_harvester/3, create_harvester/8,
+    create_harvester/3, create_harvester/9,
 
     join_group/3,
     join_space/3,
@@ -733,21 +733,22 @@ create_handle(Client, UserId, Data) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a new harvester for given user. 
-%% Harvester name, endpoint plugin, config, entry type field 
-%% and accepted entry types are given explicitly
+%% Harvester name, endpoint plugin, config, entry type field, 
+%% accepted entry types and default entry type are given explicitly.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_harvester(Client :: entity_logic:client(), UserId :: od_user:id(), Name :: binary(),
     Endpoint :: binary(), Plugin :: binary(), Config :: #{}, EntryTypeField :: binary(),
-    AcceptedEntryTypes :: [binary()]) -> {ok, od_harvester:id()} | {error, term()}.
-create_harvester(Client, UserId, Name, Endpoint, Plugin, Config, EntryTypeField, AcceptedEntryTypes) ->
+    AcceptedEntryTypes :: [binary()], DefaultEntryType :: binary()) -> {ok, od_harvester:id()} | {error, term()}.
+create_harvester(Client, UserId, Name, Endpoint, Plugin, Config, EntryTypeField, AcceptedEntryTypes, DefaultEntryType) ->
     create_harvester(Client, UserId, #{
         <<"name">> => Name,
         <<"endpoint">> => Endpoint,
         <<"plugin">> => Plugin,
         <<"config">> => Config,
         <<"entryTypeField">> => EntryTypeField,
-        <<"acceptedEntryTypes">> => AcceptedEntryTypes
+        <<"acceptedEntryTypes">> => AcceptedEntryTypes,
+        <<"defaultEntryType">> => DefaultEntryType
     }).
 
 
@@ -755,7 +756,8 @@ create_harvester(Client, UserId, Name, Endpoint, Plugin, Config, EntryTypeField,
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a new harvester for given user. 
-%% Harvester name, endpoint and plugin is provided in a proper Data object.
+%% Harvester name, endpoint plugin, config, entry type field, 
+%% accepted entry types and default entry type are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_harvester(Client :: entity_logic:client(), UserId :: od_user:id(),

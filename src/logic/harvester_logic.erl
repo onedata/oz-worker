@@ -17,7 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([
-    create/2, create/7
+    create/2, create/8
 ]).
 -export([
     get/2,
@@ -27,7 +27,7 @@
     get_config/2
 ]).
 -export([
-    update/3, update/5,
+    update/3, update/9,
     update_config/3
 ]).
 -export([
@@ -82,28 +82,31 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new group document in database based on harvester name, endpoint, plugin, config, 
-%% entry type field and accepted entry types.
+%% Creates a new group document in database. 
+%% Harvester name, endpoint plugin, config, entry type field, 
+%% accepted entry types  and default entry type are given explicitly.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client(), Name :: binary(), Endpoint :: binary(), 
-    Plugin :: binary(), Config :: #{}, EntryTypeField :: binary(), AcceptedEntryTypes :: [binary()]) ->
-    {ok, od_harvester:id()} | {error, term()}.
-create(Client, Name, Endpoint, Plugin, Config, EntryTypeField, AcceptedEntryTypes) ->
+    Plugin :: binary(), Config :: #{}, EntryTypeField :: binary(), AcceptedEntryTypes :: [binary()], 
+    DefaultEntryType :: binary()) -> {ok, od_harvester:id()} | {error, term()}.
+create(Client, Name, Endpoint, Plugin, Config, EntryTypeField, AcceptedEntryTypes, DefaultEntryType) ->
     create(Client, #{
         <<"name">> => Name,
         <<"endpoint">> => Endpoint,
         <<"plugin">> => Plugin,
         <<"config">> => Config,
         <<"entryTypeField">> => EntryTypeField,
-        <<"acceptedEntryTypes">> => AcceptedEntryTypes
+        <<"acceptedEntryTypes">> => AcceptedEntryTypes,
+        <<"defaultEntryType">> => DefaultEntryType
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new group document in database. Harvester name, endpoint 
-%% and plugin is provided in a proper Data object.
+%% Creates a new group document in database. 
+%% Harvester name, endpoint plugin, config, entry type field, 
+%% accepted entry types  and default entry type are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client(), Data :: #{}) -> 
@@ -179,24 +182,30 @@ list(Client) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates information of given harvester.
-%% Harvester Name, Endpoint and Plugin are given explicitly
+%% Harvester name, endpoint plugin, config, entry type field, 
+%% accepted entry types and default entry type are given explicitly.
 %% @end
 %%--------------------------------------------------------------------
--spec update(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
-    NewName :: binary(), NewEndpoint :: binary(), NewPlugin :: binary()) ->
-    ok | {error, term()}.
-update(Client, HarvesterId, NewName, NewEndpoint, NewPlugin) ->
+-spec update(Client :: entity_logic:client(), Name :: binary(), HarvesterId :: od_harvester:id(), Endpoint :: binary(),
+    Plugin :: binary(), Config :: #{}, EntryTypeField :: binary(), AcceptedEntryTypes :: [binary()],
+    DefaultEntryType :: binary()) -> {ok, od_harvester:id()} | {error, term()}.
+update(Client, HarvesterId, Name, Endpoint, Plugin, Config, EntryTypeField, AcceptedEntryTypes, DefaultEntryType) ->
     update(Client, HarvesterId, #{
-        <<"name">> => NewName,
-        <<"endpoint">> => NewEndpoint,
-        <<"plugin">> => NewPlugin
+        <<"name">> => Name,
+        <<"endpoint">> => Endpoint,
+        <<"plugin">> => Plugin,
+        <<"config">> => Config,
+        <<"entryTypeField">> => EntryTypeField,
+        <<"acceptedEntryTypes">> => AcceptedEntryTypes,
+        <<"defaultEntryType">> => DefaultEntryType
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates information of given harvester.
-%% Harvester Name, Endpoint and Plugin are provided in a proper Data object.
+%% Harvester name, endpoint plugin, config, entry type field, 
+%% accepted entry types and default entry type are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
@@ -248,7 +257,7 @@ delete(Client, HarvesterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec submit_entry(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
-    Data :: maps:map(), FileId :: binary()) -> ok | {error, term()}.
+    FileId :: binary(), Data :: maps:map()) -> ok | {error, term()}.
 submit_entry(Client, HarvesterId, FileId, Data) ->
     entity_logic:handle(#el_req{
         operation = create,

@@ -23,6 +23,8 @@
 -behaviour(onezone_plugin_behaviour).
 -behaviour(harvester_plugin_behaviour).
 
+-define(INDEX_ID(HarvesterId), string:lowercase(HarvesterId)).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -41,7 +43,7 @@ type() ->
 -spec submit_entry(Endpoint :: binary(), HarvesterId :: binary(), 
     Id :: binary(), Data :: binary()) -> ok | {error, term()}.
 submit_entry(Endpoint, HarvesterId, Id, Data) ->
-    case do_request(Endpoint, create_index_id(HarvesterId), Id, Data, put, true) of
+    case do_request(Endpoint, ?INDEX_ID(HarvesterId), Id, Data, put, [200]) of
         {ok,_,_,_} -> ok;
         {error, _} = Error -> Error
     end.
@@ -55,7 +57,7 @@ submit_entry(Endpoint, HarvesterId, Id, Data) ->
 -spec delete_entry(Endpoint :: binary(), HarvesterId :: binary(), 
     Id :: binary()) -> ok | {error, term()}.
 delete_entry(Endpoint, HarvesterId, Id) ->
-    case do_request(Endpoint, create_index_id(HarvesterId), Id, <<>>, delete, true) of
+    case do_request(Endpoint, ?INDEX_ID(HarvesterId), Id, <<>>, delete, [200, 404]) of
         {ok,_,_,_} -> ok;
         {error, _} = Error -> Error
     end.
@@ -74,7 +76,7 @@ query(Endpoint, HarvesterId, Data) ->
         <<"path">> := Path
     } = Data,
     Body = maps:get(<<"body">>, Data, <<>>),
-    case do_request(Endpoint, create_index_id(HarvesterId), Path, Body, Method, false) of
+    case do_request(Endpoint, ?INDEX_ID(HarvesterId), Path, Body, Method) of
         {ok, Code, Headers, ResponseBody} ->
             {ok, #{
                 <<"code">> => Code,
@@ -110,32 +112,37 @@ query_validator() -> #{
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Creates IndexId for HarvesterId.
+%% Makes request to elastic search.
 %% @end
 %%--------------------------------------------------------------------
-create_index_id(HarvesterId) -> 
-    string:lowercase(HarvesterId).
+-spec do_request(Endpoint :: binary(), IndexId :: binary(), Path :: binary(), 
+    Data :: binary(), Request :: http_client:method()) -> ok.
+do_request(Endpoint, IndexId, Path, Data, Method) ->
+    do_request(Endpoint, IndexId, Path, Data, Method, undefined).
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% Makes request to elastic search.
-%% When CheckCode is set to true returns error when response 
-%% has status code other than 2xx.
+%% When ExpectedCodes lists is provided returns error
+%% when response has wrong status code.
 %% @end
 %%--------------------------------------------------------------------
--spec do_request(Endpoint :: binary(), IndexId :: binary(), Path :: binary(), 
-    Data :: binary(), Request :: http_client:method(), CheckCode :: boolean()) -> ok.
-do_request(Endpoint, IndexId, Path, Data, Method, CheckCode) ->
+-spec do_request(Endpoint :: binary(), IndexId :: binary(), Path :: binary(), Data :: binary(), 
+    Request :: http_client:method(), ExpectedCodes :: [integer()] | undefined) -> ok.
+do_request(Endpoint, IndexId, Path, Data, Method, ExpectedCodes) ->
     Url = <<Endpoint/binary, "/", IndexId/binary, "/_doc/", Path/binary>>,
     case http_client:Method(Url, #{<<"content-type">> => <<"application/json">>}, Data) of
-        {ok, 404, _, _} = Response when Method =:= delete ->
-            Response;
-        {ok, Code, Headers, Body} when CheckCode and (((Code < 200) or (Code >= 300))) ->
-            ?debug("~p ~p in harvester ~p ended with status code ~p:\n ~p\n~p", 
-                [Method, Url, IndexId, Code, Headers, json_utils:decode(Body)]),
-            ?ERROR_BAD_DATA(Data);
+        {ok, Code, Headers, Body} = Response when is_list(ExpectedCodes) ->
+            case lists:member(Code, ExpectedCodes) of
+                true -> 
+                    Response;
+                _ ->
+                    ?debug("~p ~p in harvester ~p returned unexpected response ~p:~n ~p~n~p",
+                        [Method, Url, IndexId, Code, Headers, json_utils:decode(Body)]),
+                    ?ERROR_BAD_DATA(<<"payload">>)
+            end;
         {ok,_,_,_} = Response ->
             Response;
         {error, _} = Error ->
