@@ -202,7 +202,10 @@ error_to_rest_expectations(Config, ErrorType) ->
     end,
     ExpBody = case Body of
         {binary, <<"">>} -> undefined;
-        _ -> Body
+        _ ->
+            %% Encoding to json transforms all atoms in response to binary strings
+            EncodedBody = json_utils:encode(Body),
+            json_utils:decode(EncodedBody)
     end,
     {ExpCode, ExpHeaders, ExpBody}.
 
