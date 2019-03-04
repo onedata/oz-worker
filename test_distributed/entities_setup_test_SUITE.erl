@@ -24,13 +24,15 @@
 -export([predefined_groups_test/1, global_groups_test/1]).
 -export([automatic_space_membership_via_global_group_test/1]).
 -export([automatic_first_space_test/1]).
+-export([default_onezone_plugins_pass_validation/1]).
 
 all() ->
     ?ALL([
         predefined_groups_test,
         global_groups_test,
         automatic_space_membership_via_global_group_test,
-        automatic_first_space_test
+        automatic_first_space_test,
+        default_onezone_plugins_pass_validation
     ]).
 
 %%%===================================================================
@@ -269,6 +271,9 @@ automatic_first_space_test(Config) ->
     {ok, #od_space{users = Users}} = oz_test_utils:get_space(Config, SpaceId2),
     ?assert(maps:is_key(UserId2, Users)).
 
+
+default_onezone_plugins_pass_validation(Config) ->
+    ?assert(oz_test_utils:call_oz(Config, onezone_plugins, init, [])).
 
 %%%===================================================================
 %%% Setup/teardown functions
