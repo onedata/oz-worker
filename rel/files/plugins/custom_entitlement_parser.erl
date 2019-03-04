@@ -106,10 +106,11 @@ validation_examples() ->
 parse_egi_entitlement(<<"urn:mace:egi.eu:group:", Group/binary>>, ParserConfig) ->
     % Strip out the prefix standard for EGI
 
+    OriginGroupType = maps:get(originGroupType, ParserConfig, organization),
     TopGroupType = maps:get(topGroupType, ParserConfig, team),
     SubGroupsType = maps:get(subGroupsType, ParserConfig, team),
 
-    [GroupStructureEncoded, _GroupAuthority] = binary:split(Group, <<"#">>),
+    [GroupStructureEncoded, Origin] = binary:split(Group, <<"#">>),
     % Replace plus sings with spaces
     GroupStructure = binary:replace(GroupStructureEncoded, <<"+">>, <<" ">>, [global]),
     GroupTokens = binary:split(GroupStructure, <<":">>, [global, trim_all]),
@@ -131,6 +132,7 @@ parse_egi_entitlement(<<"urn:mace:egi.eu:group:", Group/binary>>, ParserConfig) 
     end,
 
     Path = lists:flatten([
+        #idp_group{type = OriginGroupType, name = Origin},
         #idp_group{type = TopGroupType, name = hd(Groups)},
         [#idp_group{type = SubGroupsType, name = G, privileges = member} || G <- tl(Groups)]
     ]),
@@ -192,13 +194,15 @@ egi_validation_examples() -> [
         <<"urn:mace:egi.eu:group:fedcloud.egi.eu:role=vm_operator#aai.egi.eu">>,
         #{},
         #idp_entitlement{idp = egi, path = [
+            #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
             #idp_group{type = team, name = <<"fedcloud.egi.eu">>, privileges = member}
         ], privileges = member}
     },
     {
-        <<"urn:mace:egi.eu:group:fedcloud.egi.eu:child:role=member#aai.egi.eu">>,
+        <<"urn:mace:egi.eu:group:fedcloud.egi.eu:child:role=member#sso.egi.eu">>,
         #{},
         #idp_entitlement{idp = egi, path = [
+            #idp_group{type = organization, name = <<"sso.egi.eu">>, privileges = member},
             #idp_group{type = team, name = <<"fedcloud.egi.eu">>, privileges = member},
             #idp_group{type = team, name = <<"child">>, privileges = member}
         ], privileges = member}
@@ -206,18 +210,21 @@ egi_validation_examples() -> [
     {
         <<"urn:mace:egi.eu:group:fedcloud.egi.eu:child:role=owner#aai.egi.eu">>,
         #{
-            topGroupType => organization,
+            originGroupType => unit,
+            topGroupType => team,
             subGroupsType => role_holders
         },
         #idp_entitlement{idp = egi, path = [
-            #idp_group{type = organization, name = <<"fedcloud.egi.eu">>, privileges = member},
+            #idp_group{type = unit, name = <<"aai.egi.eu">>, privileges = member},
+            #idp_group{type = team, name = <<"fedcloud.egi.eu">>, privileges = member},
             #idp_group{type = role_holders, name = <<"child">>, privileges = member}
         ], privileges = admin}
     },
     {
-        <<"urn:mace:egi.eu:group:egi-engage-members:role=manager#aai.egi.eu">>,
+        <<"urn:mace:egi.eu:group:egi-engage-members:role=manager#sso.egi.eu">>,
         #{},
         #idp_entitlement{idp = egi, path = [
+            #idp_group{type = organization, name = <<"sso.egi.eu">>, privileges = member},
             #idp_group{type = team, name = <<"egi-engage-members">>, privileges = member}
         ], privileges = manager}
     },
@@ -225,15 +232,27 @@ egi_validation_examples() -> [
         <<"urn:mace:egi.eu:group:egi-engage-members:role=admin#aai.egi.eu">>,
         #{},
         #idp_entitlement{idp = egi, path = [
+            #idp_group{type = organization, name = <<"aai.egi.eu">>, privileges = member},
             #idp_group{type = team, name = <<"egi-engage-members">>, privileges = member}
         ], privileges = admin}
     },
     {
-        <<"urn:mace:egi.eu:group:egi-engage-members:role=chair#aai.egi.eu">>,
+        <<"urn:mace:egi.eu:group:egi-engage-members:role=chair#other.origin.com">>,
         #{},
         #idp_entitlement{idp = egi, path = [
+            #idp_group{type = organization, name = <<"other.origin.com">>, privileges = member},
             #idp_group{type = team, name = <<"egi-engage-members">>, privileges = member}
         ], privileges = admin}
+    },
+    {
+        <<"urn:mace:egi.eu:bad-prefix:egi-engage-members:role=chair#other.origin.com">>,
+        #{},
+        {error, malformed}
+    },
+    {
+        <<"urn:mace:egi.eu:group:group-without-origin">>,
+        #{},
+        {error, malformed}
     },
     {
         <<"unconfromant-group-name">>,
