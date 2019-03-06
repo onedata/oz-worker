@@ -298,6 +298,7 @@ get_harvester_test(Config) ->
     ExpData = #{
         <<"name">> => ?HARVESTER_NAME2,
         <<"public">> => <<"false">>,
+        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
         <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
         <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
         <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE

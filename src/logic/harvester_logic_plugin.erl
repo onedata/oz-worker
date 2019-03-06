@@ -147,12 +147,12 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, client = Client,
         <<"name">> := Name,
         <<"endpoint">> := Endpoint,
         <<"plugin">> := Plugin,
-        <<"config">> := Config,
         <<"entryTypeField">> := EntryTypeField,
         <<"acceptedEntryTypes">> := AcceptedEntryTypes
     } = Data,
     
     DefaultEntryType = maps:get(<<"defaultEntryType">>, Data, undefined),
+    Config = maps:get(<<"config">>, Data, #{}),
 
     {ok, #document{key = HarvesterId}} = od_harvester:create(#document{
         value = #od_harvester{
@@ -330,6 +330,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Harvester) ->
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Harvester) ->
     #od_harvester{
         name = Name, 
+        plugin = Plugin,
         public = Public,
         entry_type_field = EntryTypeField, 
         accepted_entry_types = AcceptedEntryTypes,
@@ -338,6 +339,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Harvester) ->
     {ok, #{
         <<"name">> => Name,
         <<"public">> => atom_to_binary(Public, utf8),
+        <<"plugin">> => atom_to_binary(Plugin, utf8),
         <<"entryTypeField">> => EntryTypeField,
         <<"acceptedEntryTypes">> => AcceptedEntryTypes,
         <<"defaultEntryType">> => DefaultEntryType
@@ -802,11 +804,11 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"name">> => {binary, name},
         <<"endpoint">> => {binary, non_empty},
         <<"plugin">> => {atom, onezone_plugins:get_plugins(harvester_plugin)},
-        <<"config">> => {json, any},
         <<"entryTypeField">> => {binary, non_empty},
         <<"acceptedEntryTypes">> => {list_of_binaries, non_empty}
     },
     optional => #{
+        <<"config">> => {json, any},
         <<"defaultEntryType">> => {binary, non_empty}
     }
 };

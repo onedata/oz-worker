@@ -529,7 +529,7 @@ translate_provider(#gri{aspect = {user_spaces, _UserId}}, Spaces) ->
 translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, Harvester) ->
     #od_harvester{
         name = Name, endpoint = Endpoint, 
-        plugin = Plugin, config = Config,
+        plugin = Plugin, 
         entry_type_field = EntryTypeField,
         accepted_entry_types = AcceptedEntryTypes,
         default_entry_type = DefaultEntryType
@@ -540,7 +540,6 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, 
             <<"scope">> => <<"private">>,
             <<"endpoint">> => Endpoint,
             <<"plugin">> => atom_to_binary(Plugin, utf8),
-            <<"config">> => Config,
             <<"entryTypeField">> => EntryTypeField,
             <<"acceptedEntryTypes">> => AcceptedEntryTypes,
             <<"defaultEntryType">> => gs_protocol:undefined_to_null(DefaultEntryType),
@@ -561,6 +560,7 @@ translate_harvester(#gri{aspect = instance, scope = protected}, HarvesterData) -
     #{
         <<"name">> := Name,
         <<"public">> := Public,
+        <<"plugin">> := Plugin,
         <<"entryTypeField">> := EntryTypeField,
         <<"acceptedEntryTypes">> := AcceptedEntryTypes,
         <<"defaultEntryType">> := DefaultEntryType,
@@ -570,6 +570,7 @@ translate_harvester(#gri{aspect = instance, scope = protected}, HarvesterData) -
     #{
         <<"name">> => Name,
         <<"public">> => Public,
+        <<"plugin">> => Plugin,
         <<"entryTypeField">> => EntryTypeField,
         <<"acceptedEntryTypes">> => AcceptedEntryTypes,
         <<"defaultEntryType">> => gs_protocol:undefined_to_null(DefaultEntryType),

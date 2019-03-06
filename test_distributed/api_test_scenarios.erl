@@ -1322,6 +1322,7 @@ create_eff_harvesters_env(Config) ->
             {HarvesterId, #{
                 <<"name">> => Name,
                 <<"public">> => <<"false">>,
+                <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
                 <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
                 <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
                 <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE

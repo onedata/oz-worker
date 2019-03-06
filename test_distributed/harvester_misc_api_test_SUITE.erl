@@ -103,9 +103,9 @@ create_test(Config) ->
             expected_result = ?OK_TERM(VerifyFun)
         },
         data_spec = #data_spec{
-            required = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"config">>, 
+            required = [<<"name">>, <<"endpoint">>, <<"plugin">>, 
                 <<"entryTypeField">>, <<"acceptedEntryTypes">>],
-            optional = [<<"defaultEntryType">>],
+            optional = [<<"defaultEntryType">>, <<"config">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"endpoint">> => [?HARVESTER_ENDPOINT],
@@ -227,10 +227,19 @@ get_test(Config) ->
                 fun(#od_harvester{
                     name = Name, users = Users, groups = #{},
                     spaces = Spaces,
+                    plugin = Plugin, public = Public,
+                    entry_type_field = EntryTypeField,
+                    accepted_entry_types = AcceptedEntryTypes,
+                    default_entry_type = DefaultEntryType,
                     eff_users = EffUsers, eff_groups = #{},
                     bottom_up_dirty = false
                 }) ->
                     ?assertEqual(?HARVESTER_NAME1, Name),
+                    ?assertEqual(?HARVESTER_PLUGIN, Plugin),
+                    ?assertEqual(false,Public),
+                    ?assertEqual(?HARVESTER_ENTRY_TYPE_FIELD, EntryTypeField),
+                    ?assertEqual(?HARVESTER_ACCEPTED_ENTRY_TYPES, AcceptedEntryTypes),
+                    ?assertEqual(?HARVESTER_DEFAULT_ENTRY_TYPE, DefaultEntryType),
                     ?assertEqual(Users, #{
                         U1 => AllPrivs -- [?HARVESTER_VIEW],
                         U2 => [?HARVESTER_VIEW]}
@@ -250,6 +259,7 @@ get_test(Config) ->
     ExpData = #{
         <<"name">> => ?HARVESTER_NAME1,
         <<"public">> => <<"false">>,
+        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
         <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
         <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
         <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE

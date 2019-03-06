@@ -269,6 +269,7 @@
 -define(HARVESTER_ENDPOINT, <<"test.endpoint:9200">>).
 -define(HARVESTER_MOCK_PLUGIN_BINARY, <<"harvester_mock_plugin">>).
 -define(HARVESTER_MOCK_PLUGIN, binary_to_atom(?HARVESTER_MOCK_PLUGIN_BINARY, utf8)).
+-define(HARVESTER_PLUGIN, elasticsearch_plugin).
 -define(HARVESTER_PLUGIN_BINARY, <<"elasticsearch_plugin">>).
 -define(HARVESTER_ENTRY_TYPE_FIELD, <<"type">>).
 -define(HARVESTER_ACCEPTED_ENTRY_TYPES, [<<"study">>, <<"data_object">>]).

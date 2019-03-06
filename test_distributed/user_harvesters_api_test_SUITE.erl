@@ -160,9 +160,9 @@ create_harvester_test(Config) ->
             end
         },
         data_spec = #data_spec{
-            required = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"config">>,
+            required = [<<"name">>, <<"endpoint">>, <<"plugin">>, 
                 <<"entryTypeField">>, <<"acceptedEntryTypes">>],
-            optional = [<<"defaultEntryType">>],
+            optional = [<<"config">>, <<"defaultEntryType">>],
             correct_values = #{
                 <<"name">> => [ExpName],
                 <<"endpoint">> => [?HARVESTER_ENDPOINT],
@@ -190,7 +190,8 @@ create_harvester_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [{user, U2}]
-        },
+        }, 
+            
         rest_spec = undefined,
         logic_spec = #logic_spec{
             module = user_logic,
@@ -336,6 +337,7 @@ get_harvester_test(Config) ->
     ExpData = #{
         <<"name">> => ?HARVESTER_NAME1,
         <<"public">> => <<"false">>,
+        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
         <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
         <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
         <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE
@@ -514,6 +516,7 @@ get_eff_harvester_test(Config) ->
     H6Details = #{
         <<"name">> => ?HARVESTER_NAME1,
         <<"public">> => <<"false">>,
+        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
         <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
         <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
         <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE

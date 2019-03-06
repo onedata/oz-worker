@@ -116,6 +116,7 @@ get_harvester_details_test(Config) ->
     ExpData = #{
         <<"name">> => ?HARVESTER_NAME1,
         <<"public">> => <<"false">>,
+        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
         <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
         <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
         <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE
@@ -211,9 +212,9 @@ create_harvester_test(Config) ->
             expected_result = ?OK_TERM(VerifyFun)
         },
         data_spec = #data_spec{
-            required = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"config">>,
+            required = [<<"name">>, <<"endpoint">>, <<"plugin">>, 
                 <<"entryTypeField">>, <<"acceptedEntryTypes">>],
-            optional = [<<"defaultEntryType">>],
+            optional = [<<"config">>, <<"defaultEntryType">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"endpoint">> => [?HARVESTER_ENDPOINT],

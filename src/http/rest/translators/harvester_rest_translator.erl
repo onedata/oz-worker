@@ -92,6 +92,7 @@ get_response(#gri{id = HarvesterId, aspect = instance, scope = protected}, Harve
     #{
         <<"name">> := Name,
         <<"public">> := Public,
+        <<"plugin">> := Plugin,
         <<"entryTypeField">> := EntryTypeField,
         <<"acceptedEntryTypes">> := AcceptedEntryTypes,
         <<"defaultEntryType">> := DefaultEntryType
@@ -100,6 +101,7 @@ get_response(#gri{id = HarvesterId, aspect = instance, scope = protected}, Harve
         <<"harvesterId">> => HarvesterId,
         <<"name">> => Name,
         <<"public">> => Public,
+        <<"plugin">> => Plugin,
         <<"entryTypeField">> => EntryTypeField,
         <<"acceptedEntryTypes">> => AcceptedEntryTypes,
         <<"defaultEntryType">> => DefaultEntryType
