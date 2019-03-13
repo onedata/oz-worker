@@ -53,7 +53,7 @@
 %% validation, if possible.
 %% @end
 %%--------------------------------------------------------------------
--spec init() -> ok.
+-spec init() -> boolean().
 init() ->
     PluginsDir = ?PLUGINS_DIR,
     PluginFiles = case file:list_dir(PluginsDir) of
@@ -70,17 +70,22 @@ init() ->
             end,
             ErlFiles
     end,
-    lists:foreach(fun(Plugin) ->
+
+    ValidationResults = lists:map(fun(Plugin) ->
         try
             {ok, Module} = compile:file(filename:join(PluginsDir, Plugin), ?COMPILE_OPTS),
             code:purge(Module),
             {module, Module} = code:load_file(Module),
             validate_plugin(Module),
-            ?info("  -> ~p: successfully loaded", [Module])
+            ?info("  -> ~p: successfully loaded", [Module]),
+            ok
         catch Type:Reason ->
-            ?error_stacktrace("Cannot load ~s plugin due to ~p:~p", [Plugin, Type, Reason])
+            ?error_stacktrace("Cannot load ~s plugin due to ~p:~p", [Plugin, Type, Reason]),
+            error
         end
-    end, PluginFiles).
+    end, PluginFiles),
+
+    lists:all(fun(Res) -> Res =:= ok end, ValidationResults).
 
 %%%===================================================================
 %%% Internal functions
