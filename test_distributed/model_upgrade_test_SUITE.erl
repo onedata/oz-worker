@@ -20,6 +20,8 @@
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 
+-define(OZ_NODES(Config), ?config(oz_worker_nodes, Config)).
+
 %% API
 -export([
     all/0, init_per_suite/1, end_per_suite/1
@@ -92,14 +94,38 @@ token_upgrade_test(Config) ->
     test_record_upgrade(Config, token, [1, 2]).
 
 
-test_record_upgrade(Config, Type, Versions) ->
-    lists:foldl(fun(Version, RecordInOlderVersion) ->
-        {NewVersion, NewRecord} = oz_test_utils:call_oz(
-            Config, Type, upgrade_record, [Version - 1, RecordInOlderVersion]
-        ),
-        ?assertEqual({NewVersion, NewRecord}, {Version, get_record(Type, Version)}),
-        NewRecord
-    end, get_record(Type, hd(Versions)), tl(Versions)).
+test_record_upgrade(Config, RecordType, Versions) ->
+    Nodes = ?OZ_NODES(Config),
+    ok = test_utils:mock_new(Nodes, RecordType, [passthrough]),
+
+    % Force saving data to disc
+    % Due to that record will be upgraded when fetching
+    MockCtx = #{model => RecordType, memory_driver => undefined},
+    Key = datastore_utils:gen_key(),
+
+    % Simulate record in first version
+    mock_record_version(Config, RecordType, hd(Versions)),
+
+    Doc = #document{
+        key = Key,
+        value = get_record(RecordType, hd(Versions))
+    },
+    oz_test_utils:call_oz(Config, datastore_model, save, [MockCtx, Doc]),
+
+    lists:foreach(fun(Version) ->
+        % Simulate new record version
+        mock_record_version(Config, RecordType, Version),
+
+        % Fetch record which should cause upgrade to the new version
+        Result = ?assertMatch({ok, _Doc}, oz_test_utils:call_oz(
+            Config, datastore_model, get, [MockCtx, Key]
+        )),
+        {ok, #document{value = NewRecord}} = Result,
+
+        ?assertEqual(NewRecord, get_record(RecordType, Version))
+    end, tl(Versions)),
+
+    test_utils:mock_unload(Nodes, RecordType).
 
 
 %%%===================================================================
@@ -111,6 +137,19 @@ init_per_suite(Config) ->
 
 end_per_suite(_Config) ->
     ok.
+
+
+%%%===================================================================
+%%% Internal definitions
+%%%===================================================================
+
+mock_record_version(Config, RecordType, Version) ->
+    Nodes = ?OZ_NODES(Config),
+    ok = test_utils:mock_expect(Nodes, RecordType, get_record_version,
+        fun() ->
+            Version
+        end
+    ).
 
 %%%===================================================================
 %%% Record definitions
