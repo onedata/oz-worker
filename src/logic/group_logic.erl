@@ -41,7 +41,7 @@
     create_space/3,
     create_handle_service/5, create_handle_service/3,
     create_handle/6, create_handle/3,
-    create_harvester/3, create_harvester/9,
+    create_harvester/3, create_harvester/6,
 
     create_user_invite_token/2,
     create_group_invite_token/2,
@@ -440,30 +440,24 @@ create_handle(Client, GroupId, Data) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a new harvester for given group. 
-%% Harvester name, endpoint plugin, config, entry type field, 
-%% accepted entry types and default entry type are given explicitly.
+%% Harvester name, endpoint plugin and config are given explicitly.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_harvester(Client :: entity_logic:client(), GroupId :: od_group:id(), Name :: binary(),
-    Endpoint :: binary(), Plugin :: binary(), Config :: #{}, EntryTypeField :: binary(), 
-    AcceptedEntryTypes :: [binary()], DefaultEntryType :: binary()) -> {ok, od_harvester:id()} | {error, term()}.
-create_harvester(Client, GroupId, Name, Endpoint, Plugin, Config, EntryTypeField, AcceptedEntryTypes, DefaultEntryType) ->
+    Endpoint :: binary(), Plugin :: binary(), Config :: maps:map()) -> {ok, od_harvester:id()} | {error, term()}.
+create_harvester(Client, GroupId, Name, Endpoint, Plugin, Config) ->
     create_harvester(Client, GroupId, #{
         <<"name">> => Name,
         <<"endpoint">> => Endpoint,
         <<"plugin">> => Plugin,
-        <<"config">> => Config,
-        <<"entryTypeField">> => EntryTypeField,
-        <<"acceptedEntryTypes">> => AcceptedEntryTypes,
-        <<"defaultEntryType">> => DefaultEntryType
+        <<"guiPluginConfig">> => Config
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a new harvester for given group. 
-%% Harvester name, endpoint plugin, config, entry type field, 
-%% accepted entry types and default entry type are provided in a proper Data object.
+%% Harvester name, endpoint plugin and config are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_harvester(Client :: entity_logic:client(), GroupId :: od_group:id(),

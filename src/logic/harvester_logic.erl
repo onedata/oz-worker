@@ -17,26 +17,29 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([
-    create/2, create/8
+    create/2, create/5
 ]).
 -export([
     get/2,
     get_protected_data/2,
     list/1,
     get_all_plugins/0,
-    get_config/2
+    get_gui_plugin_config/2
 ]).
 -export([
-    update/3, update/9,
-    update_config/3
+    update/3, update/5,
+    update_gui_plugin_config/3
 ]).
 -export([
     delete/2
 ]).
 -export([
-    submit_entry/4,
-    delete_entry/3,
-    query/3
+    create_index/3, create_index/5, 
+    get_index/3, update_index/4,
+    delete_index/3,
+    get_indices/2,
+    submit_entry/4, delete_entry/4,
+    query/4
 ]).
 -export([
     create_user_invite_token/2,
@@ -83,30 +86,24 @@
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a new group document in database. 
-%% Harvester name, endpoint plugin, config, entry type field, 
-%% accepted entry types  and default entry type are given explicitly.
+%% Harvester name, endpoint plugin and config are given explicitly.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client(), Name :: binary(), Endpoint :: binary(), 
-    Plugin :: binary(), Config :: #{}, EntryTypeField :: binary(), AcceptedEntryTypes :: [binary()], 
-    DefaultEntryType :: binary()) -> {ok, od_harvester:id()} | {error, term()}.
-create(Client, Name, Endpoint, Plugin, Config, EntryTypeField, AcceptedEntryTypes, DefaultEntryType) ->
+    Plugin :: binary(), Config :: #{}) -> {ok, od_harvester:id()} | {error, term()}.
+create(Client, Name, Endpoint, Plugin, Config) ->
     create(Client, #{
         <<"name">> => Name,
         <<"endpoint">> => Endpoint,
         <<"plugin">> => Plugin,
-        <<"config">> => Config,
-        <<"entryTypeField">> => EntryTypeField,
-        <<"acceptedEntryTypes">> => AcceptedEntryTypes,
-        <<"defaultEntryType">> => DefaultEntryType
+        <<"guiPLuginConfig">> => Config
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a new group document in database. 
-%% Harvester name, endpoint plugin, config, entry type field, 
-%% accepted entry types  and default entry type are provided in a proper Data object.
+%% Harvester name, endpoint plugin and config are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client(), Data :: #{}) -> 
@@ -154,13 +151,13 @@ get_protected_data(Client, HarvesterId) ->
 %% Retrieves a harvester config from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_config(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec get_gui_plugin_config(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
     {ok, #od_harvester{}} | {error, term()}.
-get_config(Client, HarvesterId) ->
+get_gui_plugin_config(Client, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = config}
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}
     }).
 
 
@@ -182,30 +179,23 @@ list(Client) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates information of given harvester.
-%% Harvester name, endpoint plugin, config, entry type field, 
-%% accepted entry types and default entry type are given explicitly.
+%% Harvester name, endpoint and plugin are given explicitly.
 %% @end
 %%--------------------------------------------------------------------
--spec update(Client :: entity_logic:client(), Name :: binary(), HarvesterId :: od_harvester:id(), Endpoint :: binary(),
-    Plugin :: binary(), Config :: #{}, EntryTypeField :: binary(), AcceptedEntryTypes :: [binary()],
-    DefaultEntryType :: binary()) -> {ok, od_harvester:id()} | {error, term()}.
-update(Client, HarvesterId, Name, Endpoint, Plugin, Config, EntryTypeField, AcceptedEntryTypes, DefaultEntryType) ->
+-spec update(Client :: entity_logic:client(), Name :: binary(), HarvesterId :: od_harvester:id(), 
+    Endpoint :: binary(), Plugin :: binary()) -> {ok, od_harvester:id()} | {error, term()}.
+update(Client, HarvesterId, Name, Endpoint, Plugin) ->
     update(Client, HarvesterId, #{
         <<"name">> => Name,
         <<"endpoint">> => Endpoint,
-        <<"plugin">> => Plugin,
-        <<"config">> => Config,
-        <<"entryTypeField">> => EntryTypeField,
-        <<"acceptedEntryTypes">> => AcceptedEntryTypes,
-        <<"defaultEntryType">> => DefaultEntryType
+        <<"plugin">> => Plugin
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates information of given harvester.
-%% Harvester name, endpoint plugin, config, entry type field, 
-%% accepted entry types and default entry type are provided in a proper Data object.
+%% Harvester name, endpoint and plugin are provided in proper data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
@@ -221,17 +211,17 @@ update(Client, HarvesterId, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates configuration of given harvester.
+%% Updates gui plugin configuration of given harvester.
 %% Config is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update_config(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+-spec update_gui_plugin_config(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
     Data :: #{}) -> ok | {error, term()}.
-update_config(Client, HarvesterId, Data) ->
+update_gui_plugin_config(Client, HarvesterId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
         client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = config},
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config},
         data = Data
     }).
 
@@ -253,47 +243,140 @@ delete(Client, HarvesterId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Submits given data to harvesters search engine.
+%% Creates index in given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec submit_entry(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
-    FileId :: binary(), Data :: maps:map()) -> ok | {error, term()}.
-submit_entry(Client, HarvesterId, FileId, Data) ->
-    entity_logic:handle(#el_req{
+-spec create_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+    Name :: binary(), Schema :: binary(), GuiPluginName :: binary()) -> ok | {error, term()}.
+create_index(Client, HarvesterId, Name, Schema, GuiPluginName) ->
+    create_index(Client, HarvesterId, #{
+        <<"name">> => Name,
+        <<"schema">> => Schema,
+        <<"guiPluginName">> => GuiPluginName
+    }).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates index in given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+    Data :: maps:map()) -> ok | {error, term()}.
+create_index(Client, HarvesterId, Data) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
         client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {entry, FileId}},
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = index},
+        data = Data
+    })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes given index in given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+    IndexId :: od_harvester:index_id()) -> ok | {error, term()}.
+delete_index(Client, HarvesterId, IndexId) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Lists all indices in given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_indices(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) -> 
+    ok | {error, term()}.
+get_indices(Client, HarvesterId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = indices}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a harvester index from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+    IndexId :: od_harvester:index_id()) -> {ok, #od_harvester{}} | {error, term()}.
+get_index(Client, HarvesterId, IndexId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates name and guiPluginName of given index.
+%% Name and guiPluginName are provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+    IndexId :: od_harvester:index_id(), Data :: maps:map()) -> ok | {error, term()}.
+update_index(Client, HarvesterId, IndexId, Data) ->
+    entity_logic:handle(#el_req{
+        operation = update,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}},
         data = Data
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Removes given FileId from harvesters search engine.
+%% Submits given data to harvesters backend.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_entry(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
-    FileId :: binary()) -> ok | {error, term()}.
-delete_entry(Client, HarvesterId, FileId) ->
-    entity_logic:handle(#el_req{
-        operation = delete,
+-spec submit_entry(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+    FileId :: binary(), Data :: binary()) -> {ok, maps:map()} | {error, term()}.
+submit_entry(Client, HarvesterId, FileId, Data) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
         client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {entry, FileId}}
-    }).
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {submit_entry, FileId}},
+        data = Data
+    })).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Query harvester engine using given data.
+%% Removes given FileId from harvesters backend.
 %% @end
 %%--------------------------------------------------------------------
--spec query(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
-    Data :: maps:map()) -> ok | {error, term()}.
-query(Client, HarvesterId, Data) ->
+-spec delete_entry(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+    FileId :: binary(), Data :: maps:map()) -> {ok, maps:map()} | {error, term()}.
+delete_entry(Client, HarvesterId, FileId, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
         client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = query},
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {delete_entry, FileId}},
+        data = Data
+    })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Query harvester backend using given data.
+%% @end
+%%--------------------------------------------------------------------
+-spec query(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+    IndexId :: od_harvester:index_id(), Data :: maps:map()) -> ok | {error, term()}.
+query(Client, HarvesterId, IndexId, Data) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {query, IndexId}},
         data = Data
     })).
 
@@ -460,9 +543,9 @@ create_group(Client, HarvesterId, Name) when is_binary(Name) ->
     create_group(Client, HarvesterId, #{<<"name">> => Name});
 create_group(Client, HarvesterId, Data) ->
     AuthHint = case Client of
-                   ?USER(UserId) -> ?AS_USER(UserId);
-                   _ -> undefined
-               end,
+        ?USER(UserId) -> ?AS_USER(UserId);
+        _ -> undefined
+    end,
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
         client = Client,

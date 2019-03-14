@@ -63,6 +63,10 @@ translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {Access
         <<"token">> => AccessToken,
         <<"ttl">> => Expires
     };
+translate_value(_, #gri{type = od_harvester, aspect = {submit_entry, _}}, FailedIndices) ->
+    FailedIndices;
+translate_value(_, #gri{type = od_harvester, aspect = {delete_entry, _}}, FailedIndices) ->
+    FailedIndices;
 
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n
@@ -329,14 +333,10 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public},
 
 translate_resource(_, #gri{type = od_harvester, aspect = instance, scope = protected}, HarvesterData) ->
     #{
-        <<"entryTypeField">> := EntryTypeField, 
-        <<"acceptedEntryTypes">> := AcceptedEntryTypes,
-        <<"defaultEntryType">> := DefaultEntryType
+        <<"indices">> := Indices
     } = HarvesterData,
     #{
-        <<"entryTypeField">> => EntryTypeField,
-        <<"acceptedEntryTypes">> => AcceptedEntryTypes,
-        <<"defaultEntryType">> => DefaultEntryType
+        <<"indices">> => Indices
     };
 
 translate_resource(ProtocolVersion, GRI, Data) ->

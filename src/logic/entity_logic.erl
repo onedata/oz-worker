@@ -52,7 +52,7 @@ od_handle_service | od_handle | od_harvester | oz_privileges.
 -type error() :: gs_protocol:error().
 
 -type type_validator() :: any | atom | list_of_atoms | binary | alias | list_of_binaries 
-| integer | float | json | token | boolean | list_of_ipv4_addresses | plugin.
+| integer | float | json | token | boolean | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
 fun((term()) -> boolean()) |

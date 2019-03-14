@@ -38,6 +38,16 @@
     refresh_token = undefined :: undefined | binary()
 }).
 
+
+%% This record must be defined here as od_harvester depends on it.
+-record(harvester_index, {
+    name :: binary(),
+    schema = #{} :: maps:map(),
+    guiPluginName = <<>> :: binary(),
+    seqs = #{} :: maps:map()
+}).
+
+
 %%%===================================================================
 %%% Records synchronized via Graph Sync
 %%%===================================================================
@@ -292,11 +302,10 @@
     plugin :: module(),
     endpoint :: binary(),
     
-    config = #{} :: json_utils:json_term(),
+    gui_plugin_config = #{} :: json_utils:json_term(),
     public = false :: boolean(),
-    entry_type_field :: binary(),
-    accepted_entry_types = [] :: [binary()],
-    default_entry_type = undefined :: binary() | undefined,
+    
+    indices = #{} :: od_harvester:indices(),
 
     % Direct relations to other entities
     users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
@@ -394,5 +403,6 @@
     password_hash :: binary(),
     props :: maps:map()
 }).
+
 
 -endif.

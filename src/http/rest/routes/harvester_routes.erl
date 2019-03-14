@@ -295,7 +295,7 @@ routes() -> [
         b_gri = #b_gri{type = od_space, id = ?BINDING(sid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_HARVESTER(?BINDING(id))
     }},
-    %% Remove harvester support
+    %% Remove harvester space
     %% This operation requires one of the following privileges:
     %% - harvester_remove_space
     %% - oz_harvesters_remove_relationships
@@ -308,7 +308,7 @@ routes() -> [
     %% - oz_harvesters_view
     {<<"/harvesters/:id/config">>, #rest_req{
         method = 'GET',
-        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = config, scope = private}
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = gui_plugin_config, scope = private}
     }},
     %% Modify harvester configuration
     %% This operation requires one of the following privileges:
@@ -316,6 +316,51 @@ routes() -> [
     %% - oz_harvesters_update
     {<<"/harvesters/:id/config">>, #rest_req{
         method = 'PATCH',
-        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = config}
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = gui_plugin_config}
+    }},
+    %% Create new index in harvester
+    %% This operation requires one of the following privileges:
+    %% - oz_harvesters_update
+    {<<"/harvesters/:id/indices">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = index}
+    }},
+    %% List harvester indices
+    %% This operation requires one of the following privileges:
+    %% - harvester_view
+    %% - oz_harvesters_view
+    {<<"/harvesters/:id/indices">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = indices}
+    }},
+    %% Get harvester index details
+    %% This operation requires one of the following privileges:
+    %% - harvester_view
+    %% - oz_harvesters_view
+    {<<"/harvesters/:id/indices/:iid">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {index, ?BINDING(iid)}, scope = private}
+    }},
+    %% Modify harvester index
+    %% This operation requires one of the following privileges:
+    %% - harvester_update
+    %% - oz_harvesters_update
+    {<<"/harvesters/:id/indices/:iid">>, #rest_req{
+        method = 'PATCH',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {index, ?BINDING(iid)}}
+    }},
+    %% Query harvester index.
+    %% This operation does not require any specific privileges.
+    {<<"/harvesters/:id/indices/:iid">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {query, ?BINDING(iid)}}
+    }},
+    %% Remove harvester index
+    %% This operation requires one of the following privileges:
+    %% - harvester_update
+    %% - oz_harvesters_update
+    {<<"/harvesters/:id/indices/:iid">>, #rest_req{
+        method = 'DELETE',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {index, ?BINDING(iid)}}
     }}
 ].

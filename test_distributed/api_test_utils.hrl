@@ -270,23 +270,37 @@
 -define(HARVESTER_MOCK_PLUGIN_BINARY, <<"harvester_mock_plugin">>).
 -define(HARVESTER_MOCK_PLUGIN, binary_to_atom(?HARVESTER_MOCK_PLUGIN_BINARY, utf8)).
 -define(HARVESTER_PLUGIN, elasticsearch_plugin).
--define(HARVESTER_PLUGIN_BINARY, <<"elasticsearch_plugin">>).
--define(HARVESTER_ENTRY_TYPE_FIELD, <<"type">>).
--define(HARVESTER_ACCEPTED_ENTRY_TYPES, [<<"study">>, <<"data_object">>]).
--define(HARVESTER_DEFAULT_ENTRY_TYPE, <<"default">>).
--define(HARVESTER_CONFIG, #{<<"a">>=><<"b">>}).
--define(HARVESTER_DATA(HarvesterName, HarvesterPlugin),
+-define(HARVESTER_PLUGIN_BINARY, atom_to_binary(?HARVESTER_PLUGIN, utf8)).
+-define(HARVESTER_GUI_PLUGIN_CONFIG, #{<<"a">>=><<"b">>}).
+
+-define(HARVESTER_INDEX_NAME, <<"index_name">>).
+-define(HARVESTER_INDEX_SCHEMA, <<"{}">>).
+-define(HARVESTER_INDEX_CREATE_DATA, #{
+    <<"name">> => ?HARVESTER_INDEX_NAME,
+    <<"schema">> => ?HARVESTER_INDEX_SCHEMA,
+    <<"guiPluginName">> => ?HARVESTER_INDEX_NAME
+}).
+
+-define(HARVESTER_PROTECTED_DATA(HarvesterName),
+    #{
+        <<"name">> => HarvesterName,
+        <<"endpoint">> => ?HARVESTER_ENDPOINT,
+        <<"plugin">> => ?HARVESTER_MOCK_PLUGIN_BINARY,
+        <<"public">> => false,
+        <<"indices">> => []
+    }).
+
+-define(HARVESTER_CREATE_DATA(HarvesterName, HarvesterPlugin),
     #{
     <<"name">> => HarvesterName,
     <<"endpoint">> => ?HARVESTER_ENDPOINT,
     <<"plugin">> => HarvesterPlugin,
-    <<"config">> => ?HARVESTER_CONFIG,
-    <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
-    <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
-    <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE
+    <<"guiPluginConfig">> => ?HARVESTER_GUI_PLUGIN_CONFIG
     }).
--define(HARVESTER_DATA(HarvesterName), ?HARVESTER_DATA(HarvesterName, ?HARVESTER_PLUGIN_BINARY)). 
--define(HARVESTER_DATA, ?HARVESTER_DATA(?HARVESTER_NAME1, ?HARVESTER_PLUGIN_BINARY)).
+-define(HARVESTER_CREATE_DATA(HarvesterName), ?HARVESTER_CREATE_DATA(HarvesterName, ?HARVESTER_MOCK_PLUGIN_BINARY)). 
+-define(HARVESTER_CREATE_DATA, ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)).
+
+-define(MOCKED_QUERY_DATA, <<"mocked_query_data">>).
 
 -define(BAD_VALUES_NAME(Error),
     [{<<"name">>, <<"">>, Error},

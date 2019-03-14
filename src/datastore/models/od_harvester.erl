@@ -30,7 +30,10 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
--export_type([name/0]).
+-type index_id() :: binary().
+-type index() :: #harvester_index{}.
+-type indices() :: #{index_id() => #harvester_index{}}.
+-export_type([name/0, index_id/0, index/0, indices/0]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -151,12 +154,18 @@ get_record_struct(1) ->
         {name, string},
         {plugin, atom},
         {endpoint, string},
-        
-        {config, json},
+
+        {config, {custom, {json_utils, encode, decode}}},
         {public, boolean},
-        {entry_type_field, string},
-        {accepted_entry_types, [string]},
-        {default_entry_type, string},
+        
+        {indices, #{string => 
+            {record, [
+                {name, string},
+                {schema, string},
+                {guiPluginName, string},
+                {seqs, #{string => #{string => {integer, integer}}}}
+            ]}
+        }},
 
         {users, #{string => [atom]}},
         {groups, #{string => [atom]}},

@@ -28,6 +28,7 @@
 
 -export([
     all/0,
+    init_per_testcase/2, end_per_testcase/2,
     init_per_suite/1, end_per_suite/1
 ]).
 -export([
@@ -81,7 +82,7 @@ add_group_test(Config) ->
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(User), ?GROUP_NAME1),
     oz_test_utils:user_set_oz_privileges(Config, User, [?OZ_HARVESTERS_CREATE], []),
-    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(User), ?HARVESTER_DATA),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(User), ?HARVESTER_CREATE_DATA),
 
     oz_test_utils:harvester_add_user(Config, H1, UserNoAddGroupPriv),
     oz_test_utils:group_add_user(Config, G1, UserNoAddGroupPriv),
@@ -161,7 +162,7 @@ add_group_with_privileges_test(Config) ->
 
     oz_test_utils:user_set_oz_privileges(Config, User, [?OZ_HARVESTERS_CREATE], []),
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(User), ?GROUP_NAME1),
-    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(User), ?HARVESTER_DATA),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(User), ?HARVESTER_CREATE_DATA),
 
     oz_test_utils:harvester_add_user(Config, H1, UserNoSetPrivsPriv),
     oz_test_utils:group_add_user(Config, G1, UserNoSetPrivsPriv),
@@ -894,9 +895,9 @@ get_eff_group_membership_intermediaries(Config) ->
     {ok, G3} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G4} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
 
-    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_DATA),
-    {ok, H2} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_DATA),
-    {ok, H3} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_DATA),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
+    {ok, H2} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
+    {ok, H3} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
 
     oz_test_utils:group_add_user(Config, G4, U2),
 
@@ -1005,6 +1006,11 @@ init_per_suite(Config) ->
     hackney:start(),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
+init_per_testcase(_, Config) ->
+    oz_test_utils:mock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN).
+
+end_per_testcase(_, Config) ->
+    oz_test_utils:unmock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN).
 
 end_per_suite(_Config) ->
     hackney:stop(),

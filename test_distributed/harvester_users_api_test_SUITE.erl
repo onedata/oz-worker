@@ -29,6 +29,7 @@
 
 -export([
     all/0,
+    init_per_testcase/2, end_per_testcase/2,
     init_per_suite/1, end_per_suite/1
 ]).
 -export([
@@ -79,7 +80,7 @@ add_user_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
-    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_DATA),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
 
     % EffectiveUser belongs to harvester H1 effectively via SubGroup1, with the
     % effective privilege to INVITE_USER, so he should be able to join the harvester as a user
@@ -150,7 +151,7 @@ add_user_with_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
-    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_DATA),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
 
     AllPrivs = privileges:harvester_privileges(),
 
@@ -375,7 +376,7 @@ get_user_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     oz_test_utils:user_set_oz_privileges(Config, Creator, [?OZ_HARVESTERS_CREATE], []),
-    {ok, Harvester} = oz_test_utils:create_harvester(Config, ?USER(Creator), ?HARVESTER_DATA),
+    {ok, Harvester} = oz_test_utils:create_harvester(Config, ?USER(Creator), ?HARVESTER_CREATE_DATA),
     {ok, _} = oz_test_utils:harvester_add_user(Config, Harvester, MemberWithViewPrivs),
     {ok, _} = oz_test_utils:harvester_add_user(Config, Harvester, MemberWithoutViewPrivs),
     {ok, _} = oz_test_utils:harvester_add_user(Config, Harvester, Member),
@@ -812,9 +813,9 @@ get_eff_user_membership_intermediaries(Config) ->
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G3} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
 
-    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_DATA),
-    {ok, H2} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_DATA),
-    {ok, H3} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_DATA),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
+    {ok, H2} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
+    {ok, H3} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
 
     oz_test_utils:harvester_add_user(Config, H1, U1),
     oz_test_utils:harvester_add_user(Config, H3, U2),
@@ -894,6 +895,11 @@ init_per_suite(Config) ->
     hackney:start(),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
+init_per_testcase(_, Config) ->
+    oz_test_utils:mock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN).
+
+end_per_testcase(_, Config) ->
+    oz_test_utils:unmock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN).
 
 end_per_suite(_Config) ->
     hackney:stop(),

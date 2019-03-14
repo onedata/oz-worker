@@ -75,9 +75,13 @@ create_response(#gri{id = HarvesterId, aspect = group}, _, resource, {#gri{id = 
 create_response(#gri{id = HarvesterId, aspect = {space, SpaceId}}, _, resource, _) ->
     rest_translator:created_reply(
         [<<"harvesters">>, HarvesterId, <<"spaces">>, SpaceId]
-    ).
+    );
 
+create_response(#gri{aspect = index}, _, value, IndexId) ->
+    rest_translator:ok_body_reply(#{<<"indexId">> => IndexId});
 
+create_response(#gri{aspect = {query, _}}, _, value, Response) ->
+    rest_translator:ok_body_reply(#{<<"response">> => Response}).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -88,27 +92,31 @@ create_response(#gri{id = HarvesterId, aspect = {space, SpaceId}}, _, resource, 
 get_response(#gri{id = undefined, aspect = list}, Harvesters) ->
     rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters});
 
-get_response(#gri{id = HarvesterId, aspect = instance, scope = protected}, HarvesterData) -> 
+get_response(#gri{id = HarvesterId, aspect = instance, scope = protected}, HarvesterData) ->
     #{
         <<"name">> := Name,
         <<"public">> := Public,
         <<"plugin">> := Plugin,
-        <<"entryTypeField">> := EntryTypeField,
-        <<"acceptedEntryTypes">> := AcceptedEntryTypes,
-        <<"defaultEntryType">> := DefaultEntryType
+        <<"endpoint">> := Endpoint,
+        <<"indices">> := Indices
     } = HarvesterData,
     rest_translator:ok_body_reply(#{
         <<"harvesterId">> => HarvesterId,
         <<"name">> => Name,
         <<"public">> => Public,
         <<"plugin">> => Plugin,
-        <<"entryTypeField">> => EntryTypeField,
-        <<"acceptedEntryTypes">> => AcceptedEntryTypes,
-        <<"defaultEntryType">> => DefaultEntryType
+        <<"endpoint">> => Endpoint,
+        <<"indices">> => Indices
     });
 
-get_response(#gri{aspect = config}, Config) ->
-    rest_translator:ok_body_reply(#{<<"config">> => Config});
+get_response(#gri{aspect = indices}, Indices) ->
+    rest_translator:ok_body_reply(#{<<"indices">> => Indices});
+
+get_response(#gri{aspect = {index, IndexId}}, IndexData) ->
+    rest_translator:ok_body_reply(IndexData#{<<"indexId">> => IndexId});
+
+get_response(#gri{aspect = gui_plugin_config}, Config) ->
+    rest_translator:ok_body_reply(#{<<"guiPluginConfig">> => Config});
 
 get_response(#gri{aspect = users}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});

@@ -688,7 +688,7 @@ create_basic_harvester_env(Config, Privs) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
 
     AllHarvesterPrivs = privileges:harvester_privileges(),
-    {ok, Harvester} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_DATA),
+    {ok, Harvester} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
     {ok, _} = oz_test_utils:harvester_add_user(Config, Harvester, U1),
     
     oz_test_utils:harvester_set_user_privileges(
@@ -1052,7 +1052,7 @@ create_harvester_eff_users_env(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     AllHarvesterPrivs = privileges:harvester_privileges(),
-    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_DATA),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
     {ok, _} = oz_test_utils:harvester_add_user(Config, H1, U1),
     oz_test_utils:harvester_set_user_privileges(Config, H1, U1, [],
         [?HARVESTER_VIEW]
@@ -1317,16 +1317,9 @@ create_eff_harvesters_env(Config) ->
         fun(GroupId) ->
             Name = ?UNIQUE_STRING,
             {ok, HarvesterId} = oz_test_utils:group_create_harvester(
-                Config, GroupId, ?HARVESTER_DATA(Name)
+                Config, GroupId, ?HARVESTER_CREATE_DATA(Name)
             ),
-            {HarvesterId, #{
-                <<"name">> => Name,
-                <<"public">> => <<"false">>,
-                <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
-                <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
-                <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
-                <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE
-            }}
+            {HarvesterId, ?HARVESTER_PROTECTED_DATA(Name)}
         end, [G1, G2, G4, G5, G5]
     ),
 

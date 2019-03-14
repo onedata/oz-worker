@@ -28,6 +28,7 @@
 
 -export([
     all/0,
+    init_per_testcase/2, end_per_testcase/2,
     init_per_suite/1, end_per_suite/1
 ]).
 -export([
@@ -61,7 +62,7 @@ join_harvester_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     EnvSetUpFun = fun() ->
-        {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_DATA),
+        {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
         {ok, Macaroon} = oz_test_utils:harvester_invite_space_token(
             Config, ?ROOT, HarvesterId
         ),
@@ -139,7 +140,7 @@ join_harvester_test(Config) ->
 
     % Check that token is not consumed upon failed operation
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
-    {ok, Harvester} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_DATA),
+    {ok, Harvester} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
     {ok, Macaroon1} = oz_test_utils:harvester_invite_space_token(
         Config, ?ROOT, Harvester
     ),
@@ -187,7 +188,7 @@ remove_harvester_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     EnvSetUpFun = fun() ->
-        {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_DATA),
+        {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
         {ok, S1} = oz_test_utils:harvester_add_space(Config, H1, S1),
         #{harvesterId => H1}
     end,
@@ -243,7 +244,7 @@ list_harvesters_test(Config) ->
     ExpHarvesters = lists:map(
         fun(_) ->
             {ok, HarvesterId} = oz_test_utils:create_harvester(
-                Config, ?ROOT, ?HARVESTER_DATA
+                Config, ?ROOT, ?HARVESTER_CREATE_DATA
             ),
             oz_test_utils:harvester_add_space(Config, HarvesterId, S1),
             HarvesterId
@@ -290,19 +291,12 @@ get_harvester_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     {ok, H1} = oz_test_utils:create_harvester(
-        Config, ?ROOT, ?HARVESTER_DATA(?HARVESTER_NAME2)
+        Config, ?ROOT, ?HARVESTER_CREATE_DATA(?HARVESTER_NAME2)
     ),
     oz_test_utils:harvester_add_space(Config, H1, S1),
 
 
-    ExpData = #{
-        <<"name">> => ?HARVESTER_NAME2,
-        <<"public">> => <<"false">>,
-        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
-        <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
-        <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
-        <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE
-    },
+    ExpData = ?HARVESTER_PROTECTED_DATA(?HARVESTER_NAME2),
     
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -327,7 +321,7 @@ get_harvester_test(Config) ->
             module = space_logic,
             function = get_harvester,
             args = [client, S1, H1],
-            expected_result = ?OK_MAP_CONTAINS(ExpData)
+            expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"plugin">> => ?HARVESTER_MOCK_PLUGIN})
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -343,6 +337,11 @@ init_per_suite(Config) ->
     hackney:start(),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
+init_per_testcase(_, Config) ->
+    oz_test_utils:mock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN).
+
+end_per_testcase(_, Config) ->
+    oz_test_utils:unmock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN).
 
 end_per_suite(_Config) ->
     hackney:stop(),

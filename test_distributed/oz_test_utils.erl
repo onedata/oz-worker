@@ -210,7 +210,9 @@
 
     harvester_remove_user/3,
     harvester_remove_group/3,
-    harvester_remove_space/3
+    harvester_remove_space/3,
+    
+    harvester_create_index/3
 ]).
 -export([
     assert_token_exists/2,
@@ -225,6 +227,8 @@
     create_3_nested_groups/2, create_3_nested_groups/5,
     create_and_support_3_spaces/2,
     minimum_support_size/1,
+    mock_harvester_plugin/2,
+    unmock_harvester_plugin/2,
     mock_handle_proxy/1,
     unmock_handle_proxy/1,
     mock_time/1,
@@ -1953,11 +1957,11 @@ handle_get_group_privileges(Config, HandleId, GroupId) ->
     Data :: #{}) -> {ok, od_harvester:id()}.
 create_harvester(Config, Client, Data) ->
     Result = case Client of
-                 ?USER(UserId) ->
-                     call_oz(Config, user_logic, create_harvester, [Client, UserId, Data]);
-                 _ ->
-                     call_oz(Config, harvester_logic, create, [Client, Data])
-             end,
+        ?USER(UserId) ->
+            call_oz(Config, user_logic, create_harvester, [Client, UserId, Data]);
+        _ ->
+            call_oz(Config, harvester_logic, create, [Client, Data])
+    end,
 
     ?assertMatch({ok, _}, Result).
 
@@ -2239,6 +2243,19 @@ harvester_remove_group(Config, HarvesterId, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Creates index in harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_create_index(Config :: term(), HarvesterId :: od_harvester:id(), 
+    Data :: maps:map()) -> ok.
+harvester_create_index(Config, HarvesterId, Data) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, create_index, [?ROOT, HarvesterId, Data]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Sets privileges for group's user with ?ROOT auth.
 %% @end
 %%--------------------------------------------------------------------
@@ -2513,6 +2530,40 @@ minimum_support_size(Config) ->
         Config, application, get_env, [oz_worker, minimum_space_support_size]
     ),
     MinimumSupportSize.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates mocked harvester plugin on all nodes of onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec mock_harvester_plugin(Config :: term(), PluginName :: atom()) -> ok.
+mock_harvester_plugin(Config, PluginName) ->
+    Nodes = ?OZ_NODES(Config),
+    test_utils:mock_new(Nodes, onezone_plugins),
+    test_utils:mock_new(Nodes, PluginName, [no_history, non_strict]),
+    test_utils:mock_expect(Nodes, PluginName, type, fun() -> harvester_plugin end),
+    test_utils:mock_expect(Nodes, PluginName, ping, fun(_) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, submit_entry, fun(_,_,_,_,_) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, delete_entry, fun(_,_,_,_) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, create_index, fun(_,_,_,_) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, delete_index, fun(_,_,_) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, query, fun(_,_,_,_) -> {ok, ?MOCKED_QUERY_DATA} end),
+    test_utils:mock_expect(Nodes, PluginName, query_validator, fun() -> ?HARVESTER_PLUGIN:query_validator() end),
+    test_utils:mock_expect(Nodes, onezone_plugins, get_plugins,
+        fun(Type) -> [PluginName | meck:passthrough([Type])] end),
+    Config.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Unmocks harvester plugin on all nodes of onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec unmock_harvester_plugin(Config :: term(), PluginName :: atom()) -> ok.
+unmock_harvester_plugin(Config, PluginName) ->
+    test_utils:mock_unload(?OZ_NODES(Config), onezone_plugins),
+    test_utils:mock_unload(?OZ_NODES(Config), PluginName).
 
 
 %%--------------------------------------------------------------------

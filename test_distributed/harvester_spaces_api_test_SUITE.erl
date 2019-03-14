@@ -28,6 +28,7 @@
 
 -export([
     all/0,
+    init_per_testcase/2, end_per_testcase/2,
     init_per_suite/1, end_per_suite/1
 ]).
 -export([
@@ -61,7 +62,7 @@ add_space_test(Config) ->
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     oz_test_utils:user_set_oz_privileges(Config, User, [?OZ_HARVESTERS_CREATE], []),
-    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(User), ?HARVESTER_DATA),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(User), ?HARVESTER_CREATE_DATA),
 
     oz_test_utils:harvester_add_user(Config, H1, UserNoAddSpacePriv),
     oz_test_utils:space_add_user(Config, S1, UserNoAddSpacePriv),
@@ -354,6 +355,11 @@ init_per_suite(Config) ->
     hackney:start(),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
+init_per_testcase(_, Config) ->
+    oz_test_utils:mock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN).
+
+end_per_testcase(_, Config) ->
+    oz_test_utils:unmock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN).
 
 end_per_suite(_Config) ->
     hackney:stop(),

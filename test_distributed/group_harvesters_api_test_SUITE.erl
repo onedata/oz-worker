@@ -28,6 +28,7 @@
 
 -export([
     all/0,
+    init_per_testcase/2, end_per_testcase/2,
     init_per_suite/1, end_per_suite/1
 ]).
 -export([
@@ -66,10 +67,10 @@ list_harvesters_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, H1} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
-    {ok, H2} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
-    {ok, H3} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
-    {ok, H4} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
+    {ok, H1} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_CREATE_DATA),
+    {ok, H2} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_CREATE_DATA),
+    {ok, H3} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_CREATE_DATA),
+    {ok, H4} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_CREATE_DATA),
     ExpHarvesters = [H1, H2, H3, H4],
 
     ApiTestSpec = #api_test_spec{
@@ -111,16 +112,9 @@ get_harvester_details_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, H1} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_DATA),
-    
-    ExpData = #{
-        <<"name">> => ?HARVESTER_NAME1,
-        <<"public">> => <<"false">>,
-        <<"plugin">> => ?HARVESTER_PLUGIN_BINARY,
-        <<"entryTypeField">> => ?HARVESTER_ENTRY_TYPE_FIELD,
-        <<"acceptedEntryTypes">> => ?HARVESTER_ACCEPTED_ENTRY_TYPES,
-        <<"defaultEntryType">> => ?HARVESTER_DEFAULT_ENTRY_TYPE
-    },
+    {ok, H1} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_CREATE_DATA),
+
+    ExpData = ?HARVESTER_PROTECTED_DATA(?HARVESTER_NAME1),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -145,7 +139,7 @@ get_harvester_details_test(Config) ->
             module = group_logic,
             function = get_harvester,
             args = [client, G1, H1],
-            expected_result = ?OK_MAP_CONTAINS(ExpData)
+            expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"plugin">> => ?HARVESTER_MOCK_PLUGIN})
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -212,17 +206,13 @@ create_harvester_test(Config) ->
             expected_result = ?OK_TERM(VerifyFun)
         },
         data_spec = #data_spec{
-            required = [<<"name">>, <<"endpoint">>, <<"plugin">>, 
-                <<"entryTypeField">>, <<"acceptedEntryTypes">>],
-            optional = [<<"config">>, <<"defaultEntryType">>],
+            required = [<<"name">>, <<"endpoint">>, <<"plugin">>],
+            optional = [<<"guiPluginConfig">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"endpoint">> => [?HARVESTER_ENDPOINT],
-                <<"plugin">> => [?HARVESTER_PLUGIN_BINARY],
-                <<"config">> => [?HARVESTER_CONFIG],
-                <<"entryTypeField">> => [?HARVESTER_ENTRY_TYPE_FIELD],
-                <<"acceptedEntryTypes">> => [?HARVESTER_ACCEPTED_ENTRY_TYPES],
-                <<"defaultEntryType">> => [<<"deafult">>]
+                <<"plugin">> => [?HARVESTER_MOCK_PLUGIN_BINARY],
+                <<"guiPluginConfig">> => [?HARVESTER_GUI_PLUGIN_CONFIG]
             },
             bad_values =
             [{<<"plugin">>, <<"not_existing_plugin">>,
@@ -244,7 +234,7 @@ join_harvester_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     EnvSetUpFun = fun() ->
-        {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_DATA),
+        {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
         {ok, Macaroon} = oz_test_utils:harvester_invite_group_token(
             Config, ?ROOT, HarvesterId
         ),
@@ -323,7 +313,7 @@ join_harvester_test(Config) ->
     % Check that token is not consumed upon failed operation
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
     {ok, Harvester} = oz_test_utils:create_harvester(Config, ?USER(U1),
-        ?HARVESTER_DATA
+        ?HARVESTER_CREATE_DATA
     ),
     {ok, Macaroon1} = oz_test_utils:harvester_invite_group_token(
         Config, ?ROOT, Harvester
@@ -373,7 +363,7 @@ leave_harvester_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, H1} = oz_test_utils:group_create_harvester(
-            Config, G1, ?HARVESTER_DATA
+            Config, G1, ?HARVESTER_CREATE_DATA
         ),
         #{harvesterId => H1}
                   end,
@@ -499,7 +489,7 @@ get_eff_harvester_details_test(Config) ->
                     module = group_logic,
                     function = get_eff_harvester,
                     args = [client, G1, HarvesterId],
-                    expected_result = ?OK_MAP_CONTAINS(HarvesterDetails)
+                    expected_result = ?OK_MAP_CONTAINS(HarvesterDetails#{<<"plugin">> => ?HARVESTER_MOCK_PLUGIN})
                 }
             },
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
@@ -518,6 +508,11 @@ init_per_suite(Config) ->
     hackney:start(),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
+init_per_testcase(_, Config) ->
+    oz_test_utils:mock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN).
+
+end_per_testcase(_, Config) ->
+    oz_test_utils:unmock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN).
 
 end_per_suite(_Config) ->
     hackney:stop(),
