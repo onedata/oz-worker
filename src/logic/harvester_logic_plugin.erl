@@ -706,8 +706,14 @@ authorize(#el_req{operation = create, gri = #gri{aspect = {query, _}}, client = 
     Harvester#od_harvester.public orelse
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, Harvester);
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = instance, scope = private}}, Harvester) ->
-    auth_by_privilege(UserId, Harvester, ?HARVESTER_VIEW);
+authorize(#el_req{operation = get, client = Client, gri = #gri{aspect = instance, scope = private}}, Harvester) ->
+    case Client of
+        ?USER(UserId) ->
+            auth_by_privilege(UserId, Harvester, ?HARVESTER_VIEW);
+        ?PROVIDER(ProviderId) ->
+            lists:any(fun(SpaceId) -> provider_logic:supports_space(ProviderId, SpaceId) end,
+                Harvester#od_harvester.spaces)
+    end;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}, Harvester) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
@@ -728,10 +734,6 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
 
         {?USER(ClientUserId), _} ->
             harvester_logic:has_eff_user(Harvester, ClientUserId);
-
-        {?PROVIDER(ProviderId), _} ->
-            lists:any(fun(SpaceId) -> provider_logic:supports_space(ProviderId, SpaceId) end, 
-                Harvester#od_harvester.spaces);
 
         _ ->
             % Access to private data also allows access to protected data
@@ -1180,17 +1182,17 @@ perform_entry_operation(Operation, Indices, SubmitIndices, ProviderId, Seqs, Sta
 set_seqs(IndexRecord, SpaceId, ProviderId, UpdateCurrentSeq, {NewSeq, NewMaxSeq}) -> 
     SeqsPerSpace = IndexRecord#harvester_index.seqs,
     SeqsPerProvider = maps:get(SpaceId, SeqsPerSpace, #{}),
-    {CurrentSeq, _CurrentMaxSeq} = maps:get(ProviderId, SeqsPerProvider, {0,0}),
+    {CurrentSeq, CurrentMaxSeq} = maps:get(ProviderId, SeqsPerProvider, {0,0}),
     
     NewCurrentSeq = case UpdateCurrentSeq of
-        true-> NewSeq;
+        true-> max(NewSeq, CurrentSeq);
         false -> CurrentSeq
     end, 
     
     IndexRecord#harvester_index{
         seqs = SeqsPerSpace#{
             SpaceId => SeqsPerProvider#{
-                ProviderId => {NewCurrentSeq, NewMaxSeq}
+                ProviderId => {NewCurrentSeq, max(CurrentMaxSeq, NewMaxSeq)}
             }
         }
     }.

@@ -331,12 +331,11 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public},
         <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp)
     };
 
-translate_resource(_, #gri{type = od_harvester, aspect = instance, scope = protected}, HarvesterData) ->
+translate_resource(_, #gri{type = od_harvester, aspect = instance, scope = private}, Harvester) ->
+    #od_harvester{indices = Indices} = Harvester,
     #{
-        <<"indices">> := Indices
-    } = HarvesterData,
-    #{
-        <<"indices">> => Indices
+        <<"indices">> => maps:keys(Indices),
+        <<"spaces">> => entity_graph:get_relations(direct, bottom_up, od_space, Harvester)
     };
 
 translate_resource(ProtocolVersion, GRI, Data) ->

@@ -257,6 +257,21 @@ get_test(Config) ->
                     })
                 end
             )
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = od_harvester, id = H1, aspect = instance, scope = private},
+            expected_result = ?OK_MAP(#{
+                <<"indices">> => [],
+                <<"spaces">> => [S],
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = oz_test_utils:decode_gri(
+                        Config, EncodedGri
+                    ),
+                    ?assertEqual(H1, Id)
+                end
+
+            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
@@ -288,20 +303,6 @@ get_test(Config) ->
             function = get_protected_data,
             args = [client, H1],
             expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"plugin">> => ?HARVESTER_MOCK_PLUGIN})
-        },
-        gs_spec = #gs_spec{
-            operation = get,
-            gri = #gri{type = od_harvester, id = H1, aspect = instance, scope = protected},
-            expected_result = ?OK_MAP(#{
-                <<"indices">> => [],
-                <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
-                    ?assertEqual(H1, Id)
-                end
-
-            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
