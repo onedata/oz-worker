@@ -105,7 +105,6 @@ operation_supported(get, {eff_group_privileges, _}, private) -> true;
 operation_supported(get, {eff_group_membership, _}, private) -> true;
 
 operation_supported(get, spaces, private) -> true;
-
 operation_supported(get, indices, private) -> true;
 
 operation_supported(update, instance, private) -> true;
@@ -147,6 +146,7 @@ is_subscribable({eff_group_membership, _}, private) -> true;
 is_subscribable(spaces, private) -> true;
 is_subscribable({space, _}, private) -> true;
 is_subscribable(gui_plugin_config, private) -> true;
+is_subscribable(indices, private) -> true;
 is_subscribable({index, _}, private) -> true;
 is_subscribable(_, _) -> false.
 
