@@ -189,8 +189,7 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
         groups = Groups,
 
         providers = Providers,
-        shares = Shares,
-        harvesters = Harvesters
+        shares = Shares
     } = Space,
     #{
         <<"name">> => Name,
@@ -202,8 +201,7 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
         <<"effectiveGroups">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, Space),
 
         <<"providers">> => Providers,
-        <<"shares">> => Shares,
-        <<"harvesters">> => Harvesters
+        <<"shares">> => Shares
     };
 translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected}, SpaceData) ->
     #{<<"name">> := Name, <<"providers">> := Providers} = SpaceData,
