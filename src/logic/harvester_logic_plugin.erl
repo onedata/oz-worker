@@ -955,8 +955,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = {delete_entry, _}}}) ->
 validate(#el_req{operation = create, gri = #gri{aspect = index}}) -> #{
     required => #{
         <<"name">> => {binary, name},
-        <<"guiPluginName">> => {binary, name},
-        <<"schema">> => {binary, non_empty}
+        <<"guiPluginName">> => {binary, any},
+        <<"schema">> => {binary, any}
     }
 };
 
