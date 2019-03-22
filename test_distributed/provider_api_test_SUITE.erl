@@ -378,6 +378,7 @@ get_test(Config) ->
                 <<"online">> => true,
                 <<"name">> => ExpName, <<"domain">> => ExpDomain,
                 <<"effectiveGroups">> => [], <<"effectiveUsers">> => [U1],
+                <<"effectiveHarvesters">> => [],
                 <<"latitude">> => ExpLatitude, <<"longitude">> => ExpLongitude,
                 <<"spaces">> => #{S1 => SupportSize},
                 <<"subdomain">> => <<"undefined">>,

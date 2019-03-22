@@ -262,7 +262,8 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
 
         <<"spaces">> => Spaces,
         <<"effectiveUsers">> => entity_graph:get_relations(effective, bottom_up, od_user, Provider),
-        <<"effectiveGroups">> => entity_graph:get_relations(effective, bottom_up, od_group, Provider)
+        <<"effectiveGroups">> => entity_graph:get_relations(effective, bottom_up, od_group, Provider),
+        <<"effectiveHarvesters">> => entity_graph:get_relations(effective, bottom_up, od_harvester, Provider)
 
     };
 
@@ -333,7 +334,7 @@ translate_resource(_, #gri{type = od_harvester, aspect = instance, scope = priva
     #od_harvester{indices = Indices} = Harvester,
     #{
         <<"indices">> => maps:keys(Indices),
-        <<"spaces">> => entity_graph:get_relations(direct, bottom_up, od_space, Harvester)
+        <<"spaces">> => entity_graph:get_relations(direct, top_down, od_space, Harvester)
     };
 
 translate_resource(ProtocolVersion, GRI, Data) ->

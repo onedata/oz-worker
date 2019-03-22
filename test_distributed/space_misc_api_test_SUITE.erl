@@ -261,7 +261,6 @@ get_test(Config) ->
                 },
                 <<"groups">> => #{},
                 <<"shares">> => [],
-                <<"harvesters">> => [],
                 <<"providers">> => #{P1 => SupportSize},
                 <<"effectiveUsers">> => #{
                     U1 => AllPrivsBin -- [<<"space_view">>],

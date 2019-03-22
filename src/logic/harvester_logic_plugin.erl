@@ -220,8 +220,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
                 );
             ?AS_SPACE(SpaceId) ->
                 entity_graph:add_relation(
-                    od_space, SpaceId,
-                    od_harvester, HarvesterId
+                    od_harvester, HarvesterId,
+                    od_space, SpaceId
                 );
             _ ->
                 ok
@@ -290,8 +290,8 @@ create(#el_req{gri = #gri{id = HarvesterId, aspect = {group, GroupId}}, data = D
 
 create(#el_req{gri = #gri{id = HarvesterId, aspect = {space, SpaceId}}}) ->
     entity_graph:add_relation(
-        od_space, SpaceId,
-        od_harvester, HarvesterId
+        od_harvester, HarvesterId,
+        od_space, SpaceId
     ),
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
     {ok, Space} = space_logic_plugin:fetch_entity(SpaceId),
@@ -325,34 +325,24 @@ create(#el_req{gri = #gri{aspect = index, id = HarvesterId}, data = Data}) ->
     end;
     
 create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_entry, FileId}, id = HarvesterId}, data = Data}) ->
-    #{
-        <<"seq">> := Seq,
-        <<"maxSeq">> := MaxSeq,
-        <<"indices">> := SubmitIndices,
-        <<"json">> := Json
-    } = Data,
     fun(#od_harvester{plugin = Plugin, endpoint = Endpoint, indices = Indices}) ->
         State = #state{
             plugin = Plugin, endpoint = Endpoint,
             harvester_id = HarvesterId, file_id = FileId, 
-            data = Json
+            data = Data
         },
-        {ok, FailedIndices} = perform_entry_operation(submit_entry, Indices, SubmitIndices, ProviderId, {Seq, MaxSeq}, State),
+        {ok, FailedIndices} = perform_entry_operation(submit_entry, Indices, ProviderId, State),
         {ok, value, #{<<"failedIndices">> => FailedIndices}}
     end;
     
 create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {delete_entry, FileId}, id = HarvesterId}, data = Data}) ->
-    #{
-        <<"seq">> := Seq,
-        <<"maxSeq">> := MaxSeq,
-        <<"indices">> := SubmitIndices
-    } = Data,
     fun(#od_harvester{plugin = Plugin, endpoint = Endpoint, indices = Indices}) ->
         State = #state{
             plugin = Plugin, endpoint = Endpoint,
-            harvester_id = HarvesterId, file_id = FileId
+            harvester_id = HarvesterId, file_id = FileId,
+            data = Data
         },
-        {ok, FailedIndices} = perform_entry_operation(delete_entry, Indices, SubmitIndices, ProviderId, {Seq, MaxSeq}, State),
+        {ok, FailedIndices} = perform_entry_operation(delete_entry, Indices, ProviderId, State),
         {ok, value, #{<<"failedIndices">> => FailedIndices}}
     end;
 
@@ -425,7 +415,7 @@ get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Harvester) ->
     {ok, entity_graph:get_intermediaries(bottom_up, od_group, GroupId, Harvester)};
 
 get(#el_req{gri = #gri{aspect = spaces}}, Harvester) ->
-    {ok, entity_graph:get_relations(direct, bottom_up, od_space, Harvester)};
+    {ok, entity_graph:get_relations(direct, top_down, od_space, Harvester)};
 
 get(#el_req{gri = #gri{aspect = indices}}, Harvester) ->
     {ok, maps:keys(Harvester#od_harvester.indices)};
@@ -545,8 +535,8 @@ delete(#el_req{gri = #gri{id = HarvesterId, aspect = {group, GroupId}}}) ->
 
 delete(#el_req{gri = #gri{id = HarvesterId, aspect = {space, SpaceId}}}) ->
     entity_graph:remove_relation(
-        od_space, SpaceId,
-        od_harvester, HarvesterId
+        od_harvester, HarvesterId,
+        od_space, SpaceId
     );
 
 delete(#el_req{gri = #gri{aspect = {index, IndexId}, id = HarvesterId}}) ->
@@ -604,7 +594,7 @@ exists(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Harvester)
     entity_graph:has_relation(effective, bottom_up, od_group, GroupId, Harvester);
 
 exists(#el_req{gri = #gri{aspect = {space, SpaceId}}}, Harvester) ->
-    entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, Harvester);
+    entity_graph:has_relation(direct, top_down, od_space, SpaceId, Harvester);
 
 exists(#el_req{gri = #gri{aspect = {index, IndexId}}}, Harvester) ->
     maps:is_key(IndexId, Harvester#od_harvester.indices);
@@ -1134,10 +1124,14 @@ update_indices(delete_index, Indices, IndexId, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec perform_entry_operation(Operation :: atom(), Indices :: od_harvester:indices(), 
-    SubmitIndices :: [od_harvester:index_id()], ProviderId :: od_provider:id(), 
-    Seqs :: {integer(), integer()}, State :: #state{}) -> {ok, [od_harvester:index_id()]}.
-perform_entry_operation(Operation, Indices, SubmitIndices, ProviderId, Seqs, State) ->
-    #state{file_id = FileId, harvester_id = HarvesterId} = State,
+    ProviderId :: od_provider:id(), State :: #state{}) -> {ok, [od_harvester:index_id()]}.
+perform_entry_operation(Operation, Indices, ProviderId, State) ->
+    #state{file_id = FileId, harvester_id = HarvesterId, data = Data} = State,
+    #{
+        <<"seq">> := Seq,
+        <<"maxSeq">> := MaxSeq,
+        <<"indices">> := SubmitIndices
+    } = Data,
     
     IndicesToUpdate = lists:filtermap(
         fun(Index) ->
@@ -1147,7 +1141,9 @@ perform_entry_operation(Operation, Indices, SubmitIndices, ProviderId, Seqs, Sta
                         ok -> {true, {Index, true}};
                         _ -> {true, {Index, false}}
                     end;
-                _ -> false
+                _ ->
+                    % Ignore not found index.
+                    false
             end
         end, SubmitIndices),
 
@@ -1160,7 +1156,7 @@ perform_entry_operation(Operation, Indices, SubmitIndices, ProviderId, Seqs, Sta
                 fun({IndexId, UpdateCurrentSeq}, ExistingIndices) ->
                     #{IndexId := IndexRecord} = ExistingIndices,
                     ExistingIndices#{
-                        IndexId => set_seqs(IndexRecord, SpaceId, ProviderId, UpdateCurrentSeq, Seqs)
+                        IndexId => set_seqs(IndexRecord, SpaceId, ProviderId, UpdateCurrentSeq, Seq, MaxSeq)
                     }
                 end, Indices, IndicesToUpdate),
             {ok, Harvester#od_harvester{indices = FinalIndices}}
@@ -1177,9 +1173,9 @@ perform_entry_operation(Operation, Indices, SubmitIndices, ProviderId, Seqs, Sta
 %% Sequence numbers are stored per space per provider
 %% @end
 %%--------------------------------------------------------------------
--spec set_seqs(#harvester_index{}, od_space:id(), od_provider:id(), boolean(), {integer(), integer()}) -> 
+-spec set_seqs(#harvester_index{}, od_space:id(), od_provider:id(), boolean(), integer(), integer()) -> 
     #harvester_index{}.
-set_seqs(IndexRecord, SpaceId, ProviderId, UpdateCurrentSeq, {NewSeq, NewMaxSeq}) -> 
+set_seqs(IndexRecord, SpaceId, ProviderId, UpdateCurrentSeq, NewSeq, NewMaxSeq) -> 
     SeqsPerSpace = IndexRecord#harvester_index.seqs,
     SeqsPerProvider = maps:get(SpaceId, SeqsPerSpace, #{}),
     {CurrentSeq, CurrentMaxSeq} = maps:get(ProviderId, SeqsPerProvider, {0,0}),
@@ -1213,9 +1209,9 @@ call_plugin(ping, State) ->
 call_plugin(submit_entry, State) ->
     #state{
         plugin = Plugin, endpoint = Endpoint, harvester_id = HarvesterId, 
-        index_id = IndexId, file_id = FileId, data = Data
+        index_id = IndexId, file_id = FileId, data = #{<<"json">> := Json}
     } = State,
-    Plugin:submit_entry(Endpoint, HarvesterId, IndexId, FileId, Data);
+    Plugin:submit_entry(Endpoint, HarvesterId, IndexId, FileId, Json);
 call_plugin(delete_entry, State) ->
     #state{
         plugin = Plugin, endpoint = Endpoint, harvester_id = HarvesterId,

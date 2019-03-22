@@ -310,7 +310,7 @@ get(#el_req{gri = #gri{aspect = providers}}, Space) ->
     {ok, entity_graph:get_relations(direct, top_down, od_provider, Space)};
 
 get(#el_req{gri = #gri{aspect = harvesters}}, Space) ->
-    {ok, Space#od_space.harvesters}.
+    {ok, entity_graph:get_relations(direct, bottom_up, od_harvester, Space)}.
 
 
 %%--------------------------------------------------------------------
@@ -374,8 +374,8 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {provider, ProviderId}}}) ->
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {harvester, HarvesterId}}}) ->
     entity_graph:remove_relation(
-        od_space, SpaceId,
-        od_harvester, HarvesterId
+        od_harvester, HarvesterId,
+        od_space, SpaceId
     ).
 
 
@@ -428,7 +428,7 @@ exists(#el_req{gri = #gri{aspect = {provider, ProviderId}}}, Space) ->
     entity_graph:has_relation(direct, top_down, od_provider, ProviderId, Space);
 
 exists(#el_req{gri = #gri{aspect = {harvester, HarvesterId}}}, Space) ->
-    entity_graph:has_relation(direct, top_down, od_harvester, HarvesterId, Space);
+    entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, Space);
 
 % All other aspects exist if space record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_space{}) ->

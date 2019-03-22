@@ -1004,8 +1004,8 @@ has_eff_group(Harvester, GroupId) ->
 -spec has_space(HarvesterOrId :: od_harvester:id() | #od_harvester{},
     SpaceId :: od_space:id()) -> boolean().
 has_space(HarvesterId, SpaceId) when is_binary(HarvesterId) ->
-    entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, od_harvester, HarvesterId);
+    entity_graph:has_relation(direct, top_down, od_space, SpaceId, od_harvester, HarvesterId);
 has_space(Harvester, SpaceId) ->
-    entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, Harvester).
+    entity_graph:has_relation(direct, top_down, od_space, SpaceId, Harvester).
 
 

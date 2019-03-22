@@ -180,6 +180,7 @@ get_record_struct(1) ->
             {id, string}
         ]}},
 
-        {bottom_up_dirty, boolean}
+        {bottom_up_dirty, boolean},
+        {top_down_dirty, boolean}
     ]}.
 

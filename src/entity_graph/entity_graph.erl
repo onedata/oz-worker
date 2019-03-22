@@ -268,8 +268,8 @@ add_relation(od_handle, HandleId, od_share, ShareId) ->
     add_relation(od_handle, HandleId, undefined, od_share, ShareId, undefined);
 add_relation(od_handle, HandleId, od_handle_service, HServiceId) ->
     add_relation(od_handle, HandleId, undefined, od_handle_service, HServiceId, undefined);
-add_relation(od_space, SpaceId, od_harvester, HarvesterId) ->
-    add_relation(od_space, SpaceId, undefined, od_harvester, HarvesterId, undefined).
+add_relation(od_harvester, HarvesterId, od_space, SpaceId) ->
+    add_relation(od_harvester, HarvesterId, undefined, od_space, SpaceId, undefined).
 
 
 %%--------------------------------------------------------------------
@@ -1091,6 +1091,7 @@ get_priority(bottom_up, od_space) -> 1;
 get_priority(bottom_up, od_handle_service) -> 1;
 get_priority(bottom_up, od_handle) -> 1;
 get_priority(bottom_up, od_harvester) -> 1;
+get_priority(top_down, od_harvester) -> 1;
 get_priority(bottom_up, od_provider) -> 2;
 get_priority(top_down, od_space) -> 0;
 get_priority(top_down, od_group) -> 1;
@@ -1128,7 +1129,9 @@ mark_record_dirty(top_down, Flag, #od_user{} = User) ->
 mark_record_dirty(top_down, Flag, #od_group{} = Group) ->
     Group#od_group{top_down_dirty = Flag};
 mark_record_dirty(top_down, Flag, #od_space{} = Space) ->
-    Space#od_space{top_down_dirty = Flag}.
+    Space#od_space{top_down_dirty = Flag};
+mark_record_dirty(top_down, Flag, #od_harvester{} = Harvester) ->
+    Harvester#od_harvester{top_down_dirty = Flag}.
 
 
 %%--------------------------------------------------------------------
@@ -1145,6 +1148,7 @@ is_dirty(bottom_up, #od_space{bottom_up_dirty = Flag}) -> Flag;
 is_dirty(bottom_up, #od_provider{bottom_up_dirty = Flag}) -> Flag;
 is_dirty(bottom_up, #od_handle_service{bottom_up_dirty = Flag}) -> Flag;
 is_dirty(bottom_up, #od_handle{bottom_up_dirty = Flag}) -> Flag;
+is_dirty(top_down, #od_harvester{top_down_dirty = Flag}) -> Flag;
 is_dirty(bottom_up, #od_harvester{bottom_up_dirty = Flag}) -> Flag;
 is_dirty(_, _) -> false.
 
@@ -1167,6 +1171,8 @@ has_child(#od_space{groups = Groups}, od_group, GroupId) ->
     maps:is_key(GroupId, Groups);
 has_child(#od_space{shares = Shares}, od_share, ShareId) ->
     lists:member(ShareId, Shares);
+has_child(#od_space{harvesters = Harvesters}, od_harvester, HarvesterId) ->
+    lists:member(HarvesterId, Harvesters);
 
 has_child(#od_share{handle = Handle}, od_handle, HandleId) ->
     Handle =:= HandleId;
@@ -1189,9 +1195,7 @@ has_child(#od_handle{groups = Groups}, od_group, GroupId) ->
 has_child(#od_harvester{users = Users}, od_user, UserId) ->
     maps:is_key(UserId, Users);
 has_child(#od_harvester{groups = Groups}, od_group, GroupId) ->
-    maps:is_key(GroupId, Groups);
-has_child(#od_harvester{spaces = Spaces}, od_space, SpaceId) ->
-    lists:member(SpaceId, Spaces).
+    maps:is_key(GroupId, Groups).
 
 
 %%--------------------------------------------------------------------
@@ -1212,6 +1216,8 @@ add_child(#od_space{groups = Groups} = Space, od_group, GroupId, Privs) ->
     Space#od_space{groups = maps:put(GroupId, Privs, Groups)};
 add_child(#od_space{shares = Shares} = Space, od_share, ShareId, _) ->
     Space#od_space{shares = [ShareId | Shares]};
+add_child(#od_space{harvesters = Harvesters} = Space, od_harvester, HarvesterId, _) ->
+    Space#od_space{harvesters = [HarvesterId | Harvesters]};
 
 add_child(#od_share{} = Share, od_handle, HandleId, _) ->
     Share#od_share{handle = HandleId};
@@ -1234,9 +1240,7 @@ add_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, Privs) ->
 add_child(#od_harvester{users = Users} = Harvester, od_user, UserId, Privs) ->
     Harvester#od_harvester{users = maps:put(UserId, Privs, Users)};
 add_child(#od_harvester{groups = Groups} = Harvester, od_group, GroupId, Privs) ->
-    Harvester#od_harvester{groups = maps:put(GroupId, Privs, Groups)};
-add_child(#od_harvester{spaces = Spaces} = Harvester, od_space, SpaceId, _) ->
-    Harvester#od_harvester{spaces = [SpaceId | Spaces]}.
+    Harvester#od_harvester{groups = maps:put(GroupId, Privs, Groups)}.
 
 
 %%--------------------------------------------------------------------
@@ -1298,6 +1302,8 @@ remove_child(#od_space{groups = Groups} = Space, od_group, GroupId) ->
     Space#od_space{groups = maps:remove(GroupId, Groups)};
 remove_child(#od_space{shares = Shares} = Space, od_share, ShareId) ->
     Space#od_space{shares = lists:delete(ShareId, Shares)};
+remove_child(#od_space{harvesters = Harvesters} = Space, od_harvester, HarvesterId) ->
+    Space#od_space{harvesters = lists:delete(HarvesterId, Harvesters)};
 
 remove_child(#od_share{} = Share, od_handle, _HandleId) ->
     Share#od_share{handle = undefined};
@@ -1320,9 +1326,7 @@ remove_child(#od_handle{groups = Groups} = Handle, od_group, GroupId) ->
 remove_child(#od_harvester{users = Users} = Harvester, od_user, UserId) ->
     Harvester#od_harvester{users = maps:remove(UserId, Users)};
 remove_child(#od_harvester{groups = Groups} = Harvester, od_group, GroupId) ->
-    Harvester#od_harvester{groups = maps:remove(GroupId, Groups)};
-remove_child(#od_harvester{spaces = Spaces} = Harvester, od_space, SpaceId) ->
-    Harvester#od_harvester{spaces = lists:delete(SpaceId, Spaces)}.
+    Harvester#od_harvester{groups = maps:remove(GroupId, Groups)}.
 
 
 %%--------------------------------------------------------------------
@@ -1356,8 +1360,6 @@ has_parent(#od_group{harvesters = Harvesters}, od_harvester, HarvesterId) ->
 
 has_parent(#od_space{providers = Providers}, od_provider, ProviderId) ->
     maps:is_key(ProviderId, Providers);
-has_parent(#od_space{harvesters = Harvesters}, od_harvester, HarvesterId) ->
-    lists:member(HarvesterId, Harvesters);
 
 has_parent(#od_share{space = Space}, od_space, SpaceId) ->
     SpaceId =:= Space;
@@ -1365,7 +1367,10 @@ has_parent(#od_share{space = Space}, od_space, SpaceId) ->
 has_parent(#od_handle{resource_type = ResType, resource_id = ResId}, od_share, ShareId) ->
     ResType =:= <<"Share">> andalso ResId =:= ShareId;
 has_parent(#od_handle{handle_service = HService}, od_handle_service, HServiceId) ->
-    HService =:= HServiceId.
+    HService =:= HServiceId;
+
+has_parent(#od_harvester{spaces = Spaces}, od_space, SpaceId) ->
+    lists:member(SpaceId, Spaces).
 
 
 %%--------------------------------------------------------------------
@@ -1400,8 +1405,6 @@ add_parent(#od_group{harvesters = Harvesters} = Group, od_harvester, HarvesterId
 
 add_parent(#od_space{providers = Providers} = Space, od_provider, ProviderId, SupportSize) ->
     Space#od_space{providers = maps:put(ProviderId, SupportSize, Providers)};
-add_parent(#od_space{harvesters = Harvesters} = Space, od_harvester, HarvesterId, _) ->
-    Space#od_space{harvesters = [HarvesterId | Harvesters]};
 
 add_parent(#od_share{} = Share, od_space, SpaceId, _) ->
     Share#od_share{space = SpaceId};
@@ -1410,7 +1413,10 @@ add_parent(#od_handle{} = Handle, od_share, ShareId, _) ->
     Handle#od_handle{resource_type = <<"Share">>, resource_id = ShareId};
 
 add_parent(#od_handle{} = Handle, od_handle_service, HServiceId, _) ->
-    Handle#od_handle{handle_service = HServiceId}.
+    Handle#od_handle{handle_service = HServiceId};
+
+add_parent(#od_harvester{spaces = Spaces} = Harvester, od_space, SpaceId, _) ->
+    Harvester#od_harvester{spaces = [SpaceId | Spaces]}.
 
 
 %%--------------------------------------------------------------------
@@ -1459,8 +1465,6 @@ remove_parent(#od_group{harvesters = Harvesters} = Group, od_harvester, Harveste
 
 remove_parent(#od_space{providers = Providers} = Space, od_provider, ProviderId) ->
     Space#od_space{providers = maps:remove(ProviderId, Providers)};
-remove_parent(#od_space{harvesters = Harvesters} = Space, od_harvester, HarvesterId) ->
-    Space#od_space{harvesters = lists:delete(HarvesterId, Harvesters)};
 
 remove_parent(#od_share{} = Share, od_space, _SpaceId) ->
     Share#od_share{space = undefined};
@@ -1469,7 +1473,10 @@ remove_parent(#od_handle{} = Handle, od_share, _ShareId) ->
     Handle#od_handle{resource_type = undefined, resource_id = undefined};
 
 remove_parent(#od_handle{} = Handle, od_handle_service, _HServiceId) ->
-    Handle#od_handle{handle_service = undefined}.
+    Handle#od_handle{handle_service = undefined};
+
+remove_parent(#od_harvester{spaces = Spaces} = Harvester, od_space, SpaceId) ->
+    Harvester#od_harvester{spaces = lists:delete(SpaceId, Spaces)}.
 
 
 %%--------------------------------------------------------------------
@@ -1486,10 +1493,11 @@ gather_eff_from_itself(bottom_up, #od_group{} = Group) ->
         od_group => relations_to_eff_relations(Groups, [{od_group, ?SELF_INTERMEDIARY}])
     };
 gather_eff_from_itself(bottom_up, #od_space{} = Space) ->
-    #od_space{users = Users, groups = Groups} = Space,
+    #od_space{users = Users, groups = Groups, harvesters = Harvesters} = Space,
     #{
         od_user => relations_to_eff_relations(Users, [{od_space, ?SELF_INTERMEDIARY}]),
-        od_group => relations_to_eff_relations(Groups, [{od_space, ?SELF_INTERMEDIARY}])
+        od_group => relations_to_eff_relations(Groups, [{od_space, ?SELF_INTERMEDIARY}]),
+        od_harvester => relations_to_eff_relations(Harvesters, [{od_space, ?SELF_INTERMEDIARY}])
     };
 gather_eff_from_itself(bottom_up, #od_provider{} = Provider) ->
     #od_provider{spaces = Spaces} = Provider,
@@ -1511,6 +1519,9 @@ gather_eff_from_itself(bottom_up, #od_harvester{} = Harvester) ->
     #{
         od_user => relations_to_eff_relations(Users, [{od_harvester, ?SELF_INTERMEDIARY}]),
         od_group => relations_to_eff_relations(Groups, [{od_harvester, ?SELF_INTERMEDIARY}])
+    };
+gather_eff_from_itself(top_down, #od_harvester{}) ->
+    #{
     };
 gather_eff_from_itself(top_down, #od_user{} = User) ->
     #od_user{
@@ -1572,7 +1583,7 @@ gather_eff_from_neighbours(bottom_up, #od_provider{} = Provider) ->
     lists:map(
         fun({SpaceId, _SupportSize}) ->
             EffRelations = get_all_eff_relations(bottom_up, od_space, SpaceId),
-            override_eff_relations(EffRelations, [od_user, od_group], [{od_space, SpaceId}])
+            override_eff_relations(EffRelations, [od_user, od_group, od_harvester], [{od_space, SpaceId}])
         end, maps:to_list(Spaces));
 gather_eff_from_neighbours(bottom_up, #od_handle_service{} = HService) ->
     #od_handle_service{groups = Groups} = HService,
@@ -1595,6 +1606,8 @@ gather_eff_from_neighbours(bottom_up, #od_harvester{} = Harvester) ->
             EffRelations = get_all_eff_relations(bottom_up, od_group, GroupId),
             override_eff_relations(EffRelations, [od_user, od_group], {Privileges, [{od_group, GroupId}]})
         end, maps:to_list(Groups));
+gather_eff_from_neighbours(top_down, #od_harvester{}) ->
+    [];
 gather_eff_from_neighbours(top_down, #od_user{} = User) ->
     #od_user{groups = Groups, spaces = Spaces} = User,
     FromGroups = lists:map(
@@ -1655,12 +1668,14 @@ update_eff_relations(bottom_up, #od_group{} = Group, EffNeighbours) ->
 update_eff_relations(bottom_up, #od_space{} = Space, EffNeighbours) ->
     Space#od_space{
         eff_users = maps:get(od_user, EffNeighbours, #{}),
-        eff_groups = maps:get(od_group, EffNeighbours, #{})
+        eff_groups = maps:get(od_group, EffNeighbours, #{}),
+        eff_harvesters = maps:get(od_harvester, EffNeighbours, #{})
     };
 update_eff_relations(bottom_up, #od_provider{} = Provider, EffNeighbours) ->
     Provider#od_provider{
         eff_users = maps:get(od_user, EffNeighbours, #{}),
-        eff_groups = maps:get(od_group, EffNeighbours, #{})
+        eff_groups = maps:get(od_group, EffNeighbours, #{}),
+        eff_harvesters = maps:get(od_harvester, EffNeighbours, #{})
     };
 update_eff_relations(bottom_up, #od_handle_service{} = HService, EffNeighbours) ->
     HService#od_handle_service{
@@ -1701,7 +1716,9 @@ update_eff_relations(top_down, #od_group{} = Group, EffNeighbours) ->
 update_eff_relations(top_down, #od_space{} = Space, EffNeighbours) ->
     Space#od_space{
         eff_providers = maps:get(od_provider, EffNeighbours, #{})
-    }.
+    };
+update_eff_relations(top_down, #od_harvester{} = Harvester, _EffNeighbours) ->
+    Harvester.
 
 
 %%--------------------------------------------------------------------
@@ -1797,8 +1814,8 @@ get_all_direct_relations(bottom_up, #od_handle{} = Handle) ->
     #od_handle{users = Users, groups = Groups} = Handle,
     #{od_user => Users, od_group => Groups};
 get_all_direct_relations(bottom_up, #od_harvester{} = Harvester) ->
-    #od_harvester{users = Users, groups = Groups, spaces = Spaces} = Harvester,
-    #{od_user => Users, od_group => Groups, od_space => Spaces};
+    #od_harvester{users = Users, groups = Groups} = Harvester,
+    #{od_user => Users, od_group => Groups};
 
 get_all_direct_relations(top_down, #od_user{} = User) ->
     #od_user{
@@ -1823,13 +1840,14 @@ get_all_direct_relations(top_down, #od_group{} = Group) ->
         od_harvester => Harvesters
     };
 get_all_direct_relations(top_down, #od_space{} = Space) ->
-    #od_space{providers = Providers, harvesters = Harvesters} = Space,
+    #od_space{providers = Providers} = Space,
     #{
-        od_provider => Providers,
-        od_harvester => Harvesters
+        od_provider => Providers
     };
 get_all_direct_relations(top_down, #od_handle{handle_service = HServiceId}) ->
-    #{od_handle_service => [HServiceId]}.
+    #{od_handle_service => [HServiceId]};
+get_all_direct_relations(top_down, #od_harvester{spaces = Spaces}) ->
+    #{od_space => Spaces}.
 
 
 %%--------------------------------------------------------------------
@@ -1869,8 +1887,8 @@ get_all_eff_relations(bottom_up, #od_group{} = Group) ->
     #od_group{eff_users = EffUsers, eff_children = EffGroups} = Group,
     #{od_user => EffUsers, od_group => EffGroups};
 get_all_eff_relations(bottom_up, #od_space{} = Space) ->
-    #od_space{eff_users = EffUsers, eff_groups = EffGroups} = Space,
-    #{od_user => EffUsers, od_group => EffGroups};
+    #od_space{eff_users = EffUsers, eff_groups = EffGroups, eff_harvesters = EffHarvesters} = Space,
+    #{od_user => EffUsers, od_group => EffGroups, od_harvester => EffHarvesters};
 get_all_eff_relations(bottom_up, #od_provider{} = Provider) ->
     #od_provider{eff_users = EffUsers, eff_groups = EffGroups} = Provider,
     #{od_user => EffUsers, od_group => EffGroups};
@@ -1916,7 +1934,11 @@ get_all_eff_relations(top_down, #od_group{} = Group) ->
     };
 get_all_eff_relations(top_down, #od_space{} = Space) ->
     #od_space{eff_providers = EffProviders} = Space,
-    #{od_provider => EffProviders}.
+    #{od_provider => EffProviders};
+
+get_all_eff_relations(top_down, #od_harvester{}) ->
+    #{}.
+
 
 
 %%--------------------------------------------------------------------
@@ -1934,6 +1956,13 @@ get_successors(bottom_up, #od_group{} = Group) ->
 get_successors(bottom_up, #od_space{} = Space) ->
     #{od_provider := Providers} = get_all_direct_relations(top_down, Space),
     #{od_provider => get_ids(Providers)};
+get_successors(bottom_up, #od_harvester{} = Harvester) ->
+    #{
+        od_space := Spaces
+    } = get_all_direct_relations(top_down, Harvester),
+    #{
+        od_space => get_ids(Spaces)
+    };
 
 get_successors(top_down, #od_group{} = Group) ->
     #{

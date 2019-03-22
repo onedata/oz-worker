@@ -162,7 +162,7 @@ join_harvester_test(Config) ->
             module = space_logic,
             function = join_harvester,
             args = [client, S1, data],
-            expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_space, S1, od_harvester, Harvester))
+            expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_harvester, Harvester, od_space, S1))
         },
         % TODO gs
         data_spec = #data_spec{

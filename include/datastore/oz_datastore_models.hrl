@@ -200,6 +200,9 @@
     % Effective providers contain only direct providers, but this is needed to
     % track changes in spaces and propagate them top-down.
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
+    % Effective harvesters contain only direct harvesters, but this is needed to
+    % track changes in spaces and propagate them bottom-up.
+    eff_harvesters = #{} :: entity_graph:eff_relations(od_provider:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | entity_logic:client(),
@@ -246,6 +249,7 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations(od_user:id()),
     eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
+    eff_harvesters = #{} :: entity_graph:eff_relations(od_group:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
 
@@ -320,7 +324,8 @@
     creator = undefined :: undefined | entity_logic:client(),
 
     % Marks that the record's effective relations are not up to date.
-    bottom_up_dirty = true :: boolean()
+    bottom_up_dirty = true :: boolean(),
+    top_down_dirty = true :: boolean()
 }).
 
 %%%===================================================================
