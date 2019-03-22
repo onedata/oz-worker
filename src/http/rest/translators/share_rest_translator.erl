@@ -13,7 +13,7 @@
 -behaviour(rest_translator_behaviour).
 -author("Lukasz Opiola").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
 -export([create_response/4, get_response/2]).
@@ -48,7 +48,8 @@ get_response(#gri{id = ShareId, aspect = instance, scope = private}, Share) ->
     rest_translator:ok_body_reply(#{
         <<"shareId">> => ShareId, <<"name">> => Name,
         <<"publicUrl">> => PublicUrl, <<"spaceId">> => SpaceId,
-        <<"rootFileId">> => RootFileId, <<"handleId">> => HandleId
+        <<"rootFileId">> => RootFileId,
+        <<"handleId">> => gs_protocol:undefined_to_null(HandleId)
     });
 get_response(#gri{id = undefined, aspect = list, scope = private}, Shares) ->
     rest_translator:ok_body_reply(#{<<"shares">> => Shares}).

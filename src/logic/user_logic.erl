@@ -18,6 +18,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/oz/oz_users.hrl").
 
 % (Artificial) identity provider id used for creating user ids for users
 % coming from onepanel.
@@ -44,6 +45,7 @@
     get/2,
     get_protected_data/2, get_protected_data/3,
     get_shared_data/2, get_shared_data/3,
+    get_as_user_details/1, get_as_user_details/2,
     list/1,
     get_oz_privileges/2, get_eff_oz_privileges/2,
     list_client_tokens/2,
@@ -67,6 +69,7 @@
     unset_default_provider/2
 ]).
 -export([
+    create_provider_registration_token/2,
     create_group/3, create_group/4,
     create_space/3,
     create_handle_service/5, create_handle_service/3,
@@ -74,6 +77,7 @@
 
     join_group/3,
     join_space/3,
+    join_cluster/3,
 
     get_groups/2, get_eff_groups/2,
     get_group/3, get_eff_group/3,
@@ -90,10 +94,14 @@
     get_handles/2, get_eff_handles/2,
     get_handle/3, get_eff_handle/3,
 
+    get_clusters/1, get_clusters/2, get_eff_clusters/2,
+    get_cluster/3, get_eff_cluster/3,
+
     leave_group/3,
     leave_space/3,
     leave_handle_service/3,
-    leave_handle/3
+    leave_handle/3,
+    leave_cluster/3
 ]).
 -export([
     exists/1,
@@ -102,7 +110,8 @@
     has_eff_space/2,
     has_eff_provider/2,
     has_eff_handle_service/2,
-    has_eff_handle/2
+    has_eff_handle/2,
+    has_eff_cluster/2
 ]).
 -export([
     validate_name/1, normalize_name/1,
@@ -115,7 +124,7 @@
     merge_linked_account/2,
     reset_entitlements/1,
     build_test_user_info/1,
-    authenticate_by_basic_credentials/2,
+    authenticate_by_basic_credentials/2, acquire_onepanel_user/3,
     change_user_password/3,
     get_default_provider_if_online/1
 ]).
@@ -126,6 +135,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Not available in REST/GS API - reserved for internal Onezone logic.
 %% Creates a new user document in database based on user record.
 %% @end
 %%--------------------------------------------------------------------
@@ -136,6 +146,7 @@ create(UserInfo) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Not available in REST/GS API - reserved for internal Onezone logic.
 %% Creates a new user document in database based on user record.
 %% Allows to specify UserId (it must be not occupied).
 %% @end
@@ -148,7 +159,7 @@ create(UserInfo, ProposedUserId) ->
             {error, already_exists} ->
                 ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"userId">>);
             {ok, #document{key = UserId}} ->
-                setup_user(UserId, UserInfo),
+                set_up_user(UserId, UserInfo),
                 {ok, UserId}
         end
     catch
@@ -248,6 +259,42 @@ get_shared_data(Client, UserId, AuthHint) ->
         gri = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
         auth_hint = AuthHint
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns protected data of current user emulating format returned by
+%% {@link oz_users:get_details/1}
+%% @end
+%%--------------------------------------------------------------------
+-spec get_as_user_details(Client :: entity_logic:client()) ->
+    {ok, #user_details{}} | {error, term()}.
+get_as_user_details(#client{type = user, id = UserId} = Client) ->
+    get_as_user_details(Client, UserId).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns protected data of given user emulating format returned by
+%% {@link oz_users:get_details/1}
+%% @end
+%%--------------------------------------------------------------------
+-spec get_as_user_details(Client :: entity_logic:client(), UserId :: od_user:id()) ->
+    {ok, #user_details{}} | {error, term()}.
+get_as_user_details(Client, UserId) ->
+    case get_protected_data(Client, UserId) of
+        {ok, Map} ->
+            #{<<"name">> := Name, <<"alias">> := Alias,
+                <<"linkedAccounts">> := Accounts, <<"emails">> := Emails
+            } = Map,
+            {ok, #user_details{
+                id = UserId,
+                name = Name,
+                email_list = Emails,
+                linked_accounts = json_utils:map_to_list(Accounts),
+                alias = Alias
+            }};
+        Error -> Error
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -597,6 +644,24 @@ unset_default_provider(Client, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Creates a provider registration token for given user, which can be used to
+%% register a new Oneprovider cluster in Onezone. The user is automatically
+%% linked to the newly created Oneprovider cluster after successful
+%% registration, which makes the user an admin of the cluster.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_provider_registration_token(Client :: entity_logic:client(),
+    UserId :: od_user:id()) -> {ok, macaroon:macaroon()} | {error, term()}.
+create_provider_registration_token(Client, UserId) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_user, id = UserId, aspect = provider_registration_token}
+    })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a new group for given user.
 %% Allows to specify group name and type.
 %% @end
@@ -767,6 +832,29 @@ join_space(Client, UserId, Data) when is_map(Data) ->
     }));
 join_space(Client, UserId, Token) ->
     join_space(Client, UserId, #{<<"token">> => Token}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Joins a cluster on behalf of given user based on cluster_invite_user token.
+%% Has two variants:
+%% 1) Token is given explicitly (as binary() or macaroon())
+%% 2) Token is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec join_cluster(Client :: entity_logic:client(), UserId :: od_user:id(),
+    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    {ok, od_cluster:id()} | {error, term()}.
+join_cluster(Client, UserId, Data) when is_map(Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_cluster, id = undefined, aspect = join},
+        auth_hint = ?AS_USER(UserId),
+        data = Data
+    }));
+join_cluster(Client, UserId, Token) ->
+    join_cluster(Client, UserId, #{<<"token">> => Token}).
 
 
 %%--------------------------------------------------------------------
@@ -1045,11 +1133,11 @@ get_eff_handles(Client, UserId) ->
 %%--------------------------------------------------------------------
 -spec get_handle(Client :: entity_logic:client(), UserId :: od_user:id(),
     HandleId :: od_handle:id()) -> {ok, #{}} | {error, term()}.
-get_handle(Client, UserId, GroupId) ->
+get_handle(Client, UserId, HandleId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_handle, id = GroupId, aspect = instance, scope = protected},
+        gri = #gri{type = od_handle, id = HandleId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_USER(UserId)
     }).
 
@@ -1062,11 +1150,84 @@ get_handle(Client, UserId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec get_eff_handle(Client :: entity_logic:client(), UserId :: od_user:id(),
     HandleId :: od_handle:id()) -> {ok, #{}} | {error, term()}.
-get_eff_handle(Client, UserId, GroupId) ->
+get_eff_handle(Client, UserId, HandleId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_handle, id = GroupId, aspect = instance, scope = protected},
+        gri = #gri{type = od_handle, id = HandleId, aspect = instance, scope = protected},
+        auth_hint = ?THROUGH_USER(UserId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of clusters of the authenticated user.
+%% @end
+%%--------------------------------------------------------------------
+get_clusters(#client{type = user, id = UserId} = Client) ->
+    get_clusters(Client, UserId).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of clusters of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_clusters(Client :: entity_logic:client(), UserId :: od_user:id()) ->
+    {ok, [od_cluster:id()]} | {error, term()}.
+get_clusters(Client, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_user, id = UserId, aspect = clusters}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective clusters of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_clusters(Client :: entity_logic:client(), UserId :: od_user:id()) ->
+    {ok, [od_cluster:id()]} | {error, term()}.
+get_eff_clusters(Client, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_user, id = UserId, aspect = eff_clusters}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific cluster among
+%% clusters of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_cluster(Client :: entity_logic:client(), UserId :: od_user:id(),
+    ClusterId :: od_cluster:id()) -> {ok, #{}} | {error, term()}.
+get_cluster(Client, UserId, ClusterId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_cluster, id = ClusterId, aspect = instance, scope = protected},
+        auth_hint = ?THROUGH_USER(UserId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective cluster among
+%% effective clusters of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_cluster(Client :: entity_logic:client(), UserId :: od_user:id(),
+    ClusterId :: od_cluster:id()) -> {ok, #{}} | {error, term()}.
+get_eff_cluster(Client, UserId, ClusterId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_cluster, id = ClusterId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_USER(UserId)
     }).
 
@@ -1133,6 +1294,21 @@ leave_handle(Client, UserId, HandleId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Leaves specified cluster on behalf of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec leave_cluster(Client :: entity_logic:client(), UserId :: od_user:id(),
+    ClusterId :: od_cluster:id()) -> ok | {error, term()}.
+leave_cluster(Client, UserId, ClusterId) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_user, id = UserId, aspect = {cluster, ClusterId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Predicate saying whether a user exists.
 %% @end
 %%--------------------------------------------------------------------
@@ -1161,7 +1337,7 @@ has_eff_oz_privilege(User, Privilege) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_group(UserIdOrUser :: od_user:id() | #od_user{},
-    GroupId :: od_space:id()) -> boolean().
+    GroupId :: od_group:id()) -> boolean().
 has_eff_group(UserId, GroupId) when is_binary(UserId) ->
     entity_graph:has_relation(effective, top_down, od_group, GroupId, od_user, UserId);
 has_eff_group(User, GroupId) ->
@@ -1218,6 +1394,19 @@ has_eff_handle(UserId, HandleId) when is_binary(UserId) ->
     entity_graph:has_relation(effective, top_down, od_handle, HandleId, od_user, UserId);
 has_eff_handle(User, HandleId) ->
     entity_graph:has_relation(effective, top_down, od_handle, HandleId, User).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether given user belongs to specified effective cluster.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_cluster(UserIdOrUser :: od_user:id() | #od_user{},
+    ClusterId :: od_cluster:id()) -> boolean().
+has_eff_cluster(UserId, ClusterId) when is_binary(UserId) ->
+    entity_graph:has_relation(effective, top_down, od_cluster, ClusterId, od_user, UserId);
+has_eff_cluster(User, ClusterId) ->
+    entity_graph:has_relation(effective, top_down, od_cluster, ClusterId, User).
 
 
 %%--------------------------------------------------------------------
@@ -1500,53 +1689,64 @@ build_test_user_info(LinkedAccount) ->
 %% take the admin rights away from the user).
 %% @end
 %%--------------------------------------------------------------------
--spec authenticate_by_basic_credentials(Login :: binary(),
-    Password :: binary()) ->
-    {ok, UserDoc :: #document{}} | {error, term()}.
+-spec authenticate_by_basic_credentials(Login :: binary(), Password :: binary()) ->
+    {ok, od_user:id()} | {error, term()}.
 authenticate_by_basic_credentials(Login, Password) ->
     case get_or_fetch_user_info(Login, Password) of
         {error, Reason} ->
             {error, Reason};
         Props ->
             OnepanelUserId = maps:get(<<"userId">>, Props),
-            UserId = onepanel_uid_to_system_uid(OnepanelUserId),
             UserRole = maps:get(<<"userRole">>, Props),
-            UserDocument = case od_user:get(UserId) of
-                {error, not_found} ->
-                    UserRecord = #od_user{
-                        name = normalize_name(Login),
-                        basic_auth_enabled = true
-                    },
-                    {ok, UserId} = create(UserRecord, UserId),
-                    % Ensure no race conditions (update_alias uses a critical section)
-                    update_alias(?USER(UserId), UserId, normalize_alias(Login)),
-                    ?info("Created new account for user '~s' from onepanel "
-                    "(role: '~s'), id: '~s'", [Login, UserRole, UserId]),
-                    {ok, UserDoc} = od_user:get(UserId),
-                    UserDoc;
-                {ok, Doc} ->
-                    Doc
-            end,
-            % Check if user's role entitles him to belong to any groups
-            {ok, GroupMapping} = application:get_env(
-                ?APP_NAME, onepanel_role_to_group_mapping
-            ),
-            Groups = maps:get(UserRole, GroupMapping, []),
-            lists:foreach(
-                fun(GroupId) ->
-                    case group_logic:add_user(?ROOT, GroupId, UserId) of
-                        {ok, UserId} ->
-                            {ok, #od_group{
-                                name = GroupName
-                            }} = group_logic:get(?ROOT, GroupId),
-                            ?info("Added user '~s' to group '~s' based on "
-                            "role '~s'", [Login, GroupName, UserRole]);
-                        ?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _) ->
-                            ok
-                    end
-                end, Groups),
-            {ok, UserDocument}
+            acquire_onepanel_user(OnepanelUserId, Login, UserRole)
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Acquires (creates if does not exist) a user account related to given
+%% Onezone panel account.
+%% @end
+%%--------------------------------------------------------------------
+-spec acquire_onepanel_user(OnepanelUserId :: binary(), Login :: binary(),
+    UserRole :: binary()) -> {ok, od_user:id()}.
+acquire_onepanel_user(OnepanelUserId, Login, UserRole) ->
+    UserId = onepanel_uid_to_system_uid(OnepanelUserId),
+    case od_user:get(UserId) of
+        {error, not_found} ->
+            UserRecord = #od_user{
+                name = normalize_name(Login),
+                basic_auth_enabled = true
+            },
+            {ok, UserId} = create(UserRecord, UserId),
+            % Ensure no race conditions (update_alias uses a critical section)
+            update_alias(?USER(UserId), UserId, normalize_alias(Login)),
+            ?info("Created new account for user '~s' from onepanel "
+            "(role: '~s'), id: '~s'", [Login, UserRole, UserId]);
+        {ok, _} ->
+            ok
+    end,
+    % Check if user's role entitles him to belong to any groups
+    GroupMapping = oz_worker:get_env(onepanel_role_to_group_mapping, #{}),
+    Groups = maps:get(UserRole, GroupMapping, []),
+    lists:foreach(
+        fun(GroupId) ->
+            case group_logic:add_user(?ROOT, GroupId, UserId) of
+                {ok, UserId} ->
+                    {ok, #od_group{
+                        name = GroupName
+                    }} = group_logic:get(?ROOT, GroupId),
+                    ?info("Added user '~s' to group '~s' based on "
+                    "role '~s'", [Login, GroupName, UserRole]);
+                ?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _) ->
+                    ok
+            end
+        end, Groups),
+    case UserRole of
+        <<"admin">> -> make_cluster_admin(UserId);
+        _ -> ok
+    end,
+    {ok, UserId}.
 
 
 %%--------------------------------------------------------------------
@@ -1632,7 +1832,7 @@ get_default_provider_if_online(#od_user{default_provider = DefaultProv}) ->
     http_client:headers().
 basic_auth_header(Login, Password) ->
     UserAndPassword = base64:encode(<<Login/binary, ":", Password/binary>>),
-    #{<<"Authorization">> => <<"Basic ", UserAndPassword/binary>>}.
+    #{<<"authorization">> => <<"Basic ", UserAndPassword/binary>>}.
 
 
 %%--------------------------------------------------------------------
@@ -1643,10 +1843,8 @@ basic_auth_header(Login, Password) ->
 %%--------------------------------------------------------------------
 -spec get_onepanel_rest_user_url(Login :: binary()) -> URL :: binary().
 get_onepanel_rest_user_url(Login) ->
-    {ok, OnepanelRESTURL} =
-        oz_worker:get_env(onepanel_rest_url),
-    {ok, OnepanelGetUsersEndpoint} =
-        oz_worker:get_env(onepanel_users_endpoint),
+    OnepanelRESTURL = oz_worker:get_env(onepanel_rest_url),
+    OnepanelGetUsersEndpoint = oz_worker:get_env(onepanel_users_endpoint),
     <<(str_utils:to_binary(OnepanelRESTURL))/binary,
         (str_utils:to_binary(OnepanelGetUsersEndpoint))/binary, Login/binary>>.
 
@@ -1709,15 +1907,36 @@ get_or_fetch_user_info(Login, Password) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns onepanel REST endpoint for user management.
+%% Adds user with given Id as a member of the Onezone cluster with
+%% admin privileges.
 %% @end
 %%--------------------------------------------------------------------
--spec setup_user(UserId :: od_user:id(), UserInfo :: #od_user{}) -> ok.
-setup_user(UserId, UserInfo) ->
+-spec make_cluster_admin(od_user:id()) -> ok | {error, term()}.
+make_cluster_admin(UserId) ->
+    case cluster_logic:add_user(?ROOT, ?ONEZONE_CLUSTER_ID, UserId,
+        privileges:cluster_admin()) of
+        {ok, _} ->
+            ?info("Added user '~s' as admin of cluster '~s'",
+                [UserId, ?ONEZONE_CLUSTER_ID]),
+            ok;
+        ?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _) -> ok;
+        Error -> Error
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Sets up environment for a new user by granting automatic space/group
+%% memberships (depending on Onezone config).
+%% @end
+%%--------------------------------------------------------------------
+-spec set_up_user(UserId :: od_user:id(), UserInfo :: #od_user{}) -> ok.
+set_up_user(UserId, UserInfo) ->
     % Check if automatic first space is enabled, if so create a space
     % for the user.
-    case oz_worker:get_env(enable_automatic_first_space) of
-        {ok, true} ->
+    case oz_worker:get_env(enable_automatic_first_space, false) of
+        true ->
             SpaceName = case UserInfo#od_user.name of
                 <<"">> ->
                     <<"Your First Space">>;
@@ -1733,9 +1952,9 @@ setup_user(UserId, UserInfo) ->
     end,
 
     % Check if global groups are enabled, if so add the user to the groups.
-    case oz_worker:get_env(enable_global_groups) of
-        {ok, true} ->
-            {ok, GlobalGroups} = oz_worker:get_env(global_groups),
+    case oz_worker:get_env(enable_global_groups, false) of
+        true ->
+            GlobalGroups = oz_worker:get_env(global_groups),
             lists:foreach(
                 fun({GroupId, Privileges}) ->
                     {ok, UserId} = group_logic:add_user(

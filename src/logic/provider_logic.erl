@@ -19,7 +19,6 @@
 -include_lib("hackney/include/hackney_lib.hrl").
 
 -export([
-    create_provider_registration_token/1,
     create/4, create/6, create/2, create_dev/2
 ]).
 -export([
@@ -58,6 +57,7 @@
 -export([
     exists/1,
     has_eff_user/2,
+    has_eff_privilege_in_cluster/3,
     has_eff_group/2,
     supports_space/2
 ]).
@@ -110,8 +110,7 @@ create(Client, Name, Domain, AdminEmail, Latitude, Longitude) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new provider document in database. Name, URLs, Domain and
-%% CSR (Certificate Signing Request) are provided in a
+%% Creates a new provider document in database. Required data is provided in a
 %% proper Data object, Latitude and Longitude are optional.
 %% @end
 %%--------------------------------------------------------------------
@@ -127,8 +126,8 @@ create(Client, Data) ->
     case Res of
         Error = {error, _} ->
             Error;
-        {ok, resource, {#gri{id = ProviderId}, {_, Certificate}}} ->
-            {ok, {ProviderId, Certificate}}
+        {ok, resource, {#gri{id = ProviderId}, {_, Macaroon, AdminUserId}}} ->
+            {ok, {ProviderId, Macaroon, AdminUserId}}
     end.
 
 
@@ -237,22 +236,6 @@ delete(Client, ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a provider registration token,
-%% which can be used by any provider to join Onezone.
-%% @end
-%%--------------------------------------------------------------------
--spec create_provider_registration_token(Client :: entity_logic:client()) ->
-    {ok, macaroon:macaroon()} | {error, term()}.
-create_provider_registration_token(Client) ->
-    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
-        operation = create,
-        client = Client,
-        gri = #gri{type = od_provider, aspect = provider_registration_token}
-    })).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Supports a space based on support_space_token and support size.
 %% @end
 %%--------------------------------------------------------------------
@@ -321,7 +304,10 @@ set_dns_txt_record(Client, ProviderId, Name, Content, TTL) ->
         operation = create,
         client = Client,
         gri = #gri{type = od_provider, id = ProviderId, aspect = {dns_txt_record, Name}},
-        data = #{<<"content">> => Content, <<"ttl">> => TTL}
+        data = case TTL of
+            undefined -> #{<<"content">> => Content};
+            _ -> #{<<"content">> => Content, <<"ttl">> => TTL}
+        end
     }).
 
 %%--------------------------------------------------------------------
@@ -611,6 +597,24 @@ has_eff_user(Provider, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Predicate saying whether specified user is an effective user of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_privilege_in_cluster(ProviderOrId :: od_provider:id() | #od_provider{},
+    UserId :: od_provider:id(), privileges:cluster_privilege()) -> boolean().
+has_eff_privilege_in_cluster(ProviderId, UserId, Privilege) when is_binary(ProviderId) ->
+    case od_provider:get(ProviderId) of
+        {ok, #document{value = Provider}} ->
+            has_eff_privilege_in_cluster(Provider, UserId, Privilege);
+        _ ->
+            false
+    end;
+has_eff_privilege_in_cluster(Provider, UserId, Privilege) ->
+    cluster_logic:has_eff_privilege(Provider#od_provider.cluster, UserId, Privilege).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Predicate saying whether specified group is an effective group of given provider.
 %% @end
 %%--------------------------------------------------------------------
@@ -640,10 +644,12 @@ supports_space(Provider, SpaceId) ->
 %% Returns full provider URL.
 %% @end
 %%--------------------------------------------------------------------
--spec get_url(ProviderId :: od_provider:id()) -> {ok, ProviderURL :: binary()}.
+-spec get_url(od_provider:id() | od_provider:record()) -> {ok, ProviderURL :: binary()}.
+get_url(#od_provider{domain = Domain}) ->
+    {ok, str_utils:format_bin("https://~s", [Domain])};
 get_url(ProviderId) ->
-    {ok, #od_provider{domain = Domain}} = get(?ROOT, ProviderId),
-    {ok, str_utils:format_bin("https://~s", [Domain])}.
+    {ok, Provider} = get(?ROOT, ProviderId),
+    get_url(Provider).
 
 
 %%--------------------------------------------------------------------

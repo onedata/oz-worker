@@ -15,7 +15,7 @@
 
 -behaviour(dynamic_page_behaviour).
 
--include("registered_names.hrl").
+-include("http/codes.hrl").
 
 -export([handle/2]).
 
@@ -28,20 +28,18 @@
 %% {@link dynamic_page_behaviour} callback handle/2.
 %% @end
 %%--------------------------------------------------------------------
--spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
+-spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"GET">>, Req) ->
     QsVals = cowboy_req:parse_qs(Req),
     Test = proplists:get_value(<<"test">>, QsVals, <<"false">>),
     Test =:= <<"true">> andalso auth_test_mode:process_enable_test_mode(),
     case auth_config:get_saml_sp_config() of
         {error, saml_disabled} ->
-            cowboy_req:reply(404, Req);
-        SpConfig ->
+            cowboy_req:reply(?HTTP_404_NOT_FOUND, Req);
+        {ok, SpConfig} ->
             SignedXml = esaml_sp:generate_metadata(SpConfig),
             Metadata = xmerl:export([SignedXml], xmerl_xml),
-            cowboy_req:reply(200,
-                #{<<"content-type">> => <<"text/xml">>},
-                Metadata,
-                Req
-            )
+            cowboy_req:reply(?HTTP_200_OK, #{
+                <<"content-type">> => <<"text/xml">>
+            }, Metadata, Req)
     end.

@@ -12,7 +12,7 @@
 %%%--------------------------------------------------------------------
 -module(user_routes).
 
--include("rest.hrl").
+-include("http/rest.hrl").
 
 -export([routes/0]).
 
@@ -75,6 +75,12 @@ routes() -> [
     {<<"/users/:id/effective_privileges">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_user, id = ?BINDING(id), aspect = eff_oz_privileges}
+    }},
+    %% Create provider registration token for a user
+    %% This operation does not require any specific privileges.
+    {<<"/users/:id/clusters/provider_registration_token">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_user, id = ?BINDING(id), aspect = provider_registration_token}
     }},
     %% Get current user details
     %% This operation does not require any specific privileges.
@@ -336,7 +342,7 @@ routes() -> [
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(hsid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
-    %% Remove user handle service
+    %% Leave handle service
     %% This operation does not require any specific privileges.
     {<<"/user/handle_services/:hsid">>, #rest_req{
         method = 'DELETE',
@@ -376,7 +382,7 @@ routes() -> [
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
-    %% Remove handle
+    %% Leave handle
     %% This operation does not require any specific privileges.
     {<<"/user/handles/:hid">>, #rest_req{
         method = 'DELETE',
@@ -393,6 +399,51 @@ routes() -> [
     {<<"/user/effective_handles/:hid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hid), aspect = instance, scope = protected},
+        b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
+    }},
+    %% List user's clusters
+    %% This operation does not require any specific privileges.
+    {<<"/user/clusters">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = clusters}
+    }},
+    %% Create provider registration token for self
+    %% This operation does not require any specific privileges.
+    {<<"/user/clusters/provider_registration_token">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = provider_registration_token}
+    }},
+    %% Join cluster
+    %% This operation does not require any specific privileges.
+    {<<"/user/clusters/join">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_cluster, id = undefined, aspect = join},
+        b_auth_hint = ?AS_USER(?CLIENT_ID)
+    }},
+    %% Get user's cluster details
+    %% This operation does not require any specific privileges.
+    {<<"/user/clusters/:cid">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_cluster, id = ?BINDING(cid), aspect = instance, scope = protected},
+        b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
+    }},
+    %% Leave cluster
+    %% This operation does not require any specific privileges.
+    {<<"/user/clusters/:cid">>, #rest_req{
+        method = 'DELETE',
+        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {cluster, ?BINDING(cid)}}
+    }},
+    %% List user's effective clusters
+    %% This operation does not require any specific privileges.
+    {<<"/user/effective_clusters">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = eff_clusters}
+    }},
+    %% Get user's effective cluster details
+    %% This operation does not require any specific privileges.
+    {<<"/user/effective_clusters/:cid">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_cluster, id = ?BINDING(cid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }}
 ].

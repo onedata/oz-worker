@@ -12,7 +12,7 @@
 -module(user_misc_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -504,7 +504,7 @@ update_test(Config) ->
             gri = #gri{type = od_user, id = ?SELF, aspect = instance},
             expected_result = ?OK
         },
-        data_spec = #data_spec{
+        data_spec = DataSpec = #data_spec{
             at_least_one = [<<"name">>, <<"alias">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_USER_NAME],
@@ -547,10 +547,30 @@ update_test(Config) ->
         },
         gs_spec = GsSpec#gs_spec{
             gri = #gri{type = od_user, id = userId, aspect = instance}
+        },
+        data_spec = DataSpec#data_spec{
+            correct_values = #{
+                <<"name">> => [?CORRECT_USER_NAME],
+                <<"alias">> => [fun() -> ?UNIQUE_STRING end, OwnedAlias, null]
+            }
         }
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, EnvSetUpFun, EnvTeardownFun, VerifyEndFun
+    )),
+
+    % Check that user alias can be se to undefined via user_logic
+    ApiTestSpec3 = ApiTestSpec2#api_test_spec{
+        gs_spec = undefined,
+        data_spec = DataSpec#data_spec{
+            correct_values = #{
+                <<"name">> => [?CORRECT_USER_NAME],
+                <<"alias">> => [undefined]
+            }
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec3, EnvSetUpFun, EnvTeardownFun, VerifyEndFun
     )).
 
 

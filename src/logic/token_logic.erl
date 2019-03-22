@@ -22,16 +22,17 @@
 %% Atoms representing types of valid tokens.
 -type token_type() :: ?GROUP_INVITE_USER_TOKEN | ?GROUP_INVITE_GROUP_TOKEN |
 ?SPACE_INVITE_USER_TOKEN | ?SPACE_INVITE_GROUP_TOKEN |
-?SPACE_SUPPORT_TOKEN | ?PROVIDER_REGISTRATION_TOKEN.
+?SPACE_SUPPORT_TOKEN | ?PROVIDER_REGISTRATION_TOKEN |
+?CLUSTER_INVITE_USER_TOKEN | ?CLUSTER_INVITE_GROUP_TOKEN.
 
 %% Atoms representing valid resource types.
--type resource_type() :: od_user | od_group | od_space | od_provider.
+-type resource_type() :: od_user | od_group | od_space | od_provider | od_cluster.
 
 -export_type([token_type/0, resource_type/0]).
 
 %% API
 -export([serialize/1, deserialize/1]).
--export([validate/2, create/3, get_issuer/1, consume/2, delete/1]).
+-export([validate/2, create/3, consume/2, delete/1]).
 
 %%%===================================================================
 %%% API
@@ -105,30 +106,10 @@ create(Issuer, TokenType, {ResourceType, ResourceId}) ->
     {ok, #document{key = Identifier}} = token:save(#document{value = TokenData}),
 
     % @todo expiration time
-    M1 = macaroon:create("onezone", Secret, Identifier),
+    M1 = macaroon:create(oz_worker:get_domain(), Secret, Identifier),
     M2 = macaroon:add_first_party_caveat(M1,
         ["tokenType = ", atom_to_list(TokenType)]),
     {ok, M2}.
-
-
-%%--------------------------------------------------------------------
-%% @doc Returns token issuer.
-%% Throws exception when the token is invalid, a call to dao fails,
-%% or token doesn't exist in db.
-%% @end
-%%--------------------------------------------------------------------
--spec get_issuer(macaroon:macaroon()) -> {ok, maps:map()}.
-get_issuer(Macaroon) ->
-    Identifier = macaroon:identifier(Macaroon),
-    {ok, TokenDoc} = token:get(Identifier),
-    #document{value = #token{
-        issuer = #client{type = ClientType, id = ClientId}
-    }} = TokenDoc,
-
-    {ok, #{
-        <<"clientType">> => ClientType,
-        <<"clientId">> => ClientId
-    }}.
 
 
 %%--------------------------------------------------------------------

@@ -446,9 +446,9 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
     end;
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, client = ?USER(UserId), data = #{<<"privileges">> := _}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_INVITE_USER) andalso auth_by_privilege(Req, Space, ?SPACE_SET_PRIVILEGES);
+    auth_by_privilege(Req, Space, ?SPACE_ADD_USER) andalso auth_by_privilege(Req, Space, ?SPACE_SET_PRIVILEGES);
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, client = ?USER(UserId), data = _}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_INVITE_USER);
+    auth_by_privilege(Req, Space, ?SPACE_ADD_USER);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, GroupId}}, client = ?USER(UserId), data = #{<<"privileges">> := _}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_GROUP) andalso
@@ -467,13 +467,13 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Space) 
     end;
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_INVITE_USER);
+    auth_by_privilege(Req, Space, ?SPACE_ADD_USER);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_GROUP);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_provider_token}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_INVITE_PROVIDER);
+    auth_by_privilege(Req, Space, ?SPACE_ADD_PROVIDER);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Space) ->
     case Req#el_req.client of
@@ -502,6 +502,10 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
 
         {?PROVIDER(_ProviderId), ?THROUGH_PROVIDER(_OtherProviderId)} ->
             false;
+
+        {?USER(ClientUserId), ?THROUGH_PROVIDER(ProviderId)} ->
+            % Provider's support in this space is checked in 'exists'
+            provider_logic:has_eff_privilege_in_cluster(ProviderId, ClientUserId, ?CLUSTER_VIEW);
 
         {?USER(ClientUserId), _} ->
             space_logic:has_eff_user(Space, ClientUserId);

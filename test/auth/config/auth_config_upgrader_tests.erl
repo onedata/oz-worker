@@ -47,7 +47,7 @@ setup() ->
     oz_worker:set_env(?SAML_CONFIG_FILE, SamlConfigPath).
 
 teardown(_) ->
-    {ok, TempDir} = oz_worker:get_env(test_tempdir),
+    TempDir = oz_worker:get_env(test_tempdir),
     mochitemp:rmtempdir(TempDir).
 
 
@@ -60,8 +60,7 @@ mock_file(Type, Cfg) ->
 
 % Type :: ?AUTH_CONFIG_FILE | ?SAML_CONFIG_FILE
 get_path(Type) ->
-    {ok, Path} = oz_worker:get_env(Type),
-    Path.
+    oz_worker:get_env(Type).
 
 
 %%%===================================================================

@@ -17,7 +17,7 @@
 -include("registered_names.hrl").
 -include("api_test_utils.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
--include_lib("gui/include/gui_session.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -define(OZ_NODES(Config), ?config(oz_worker_nodes, Config)).
 -define(TIME_MOCK_STARTING_TIMESTAMP, 1500000000).
@@ -26,10 +26,10 @@
 %% API
 -export([
     call_oz/4,
-    get_env/3,
-    get_oz_domain/1,
-    get_rest_api_prefix/1,
-    get_rest_port/1,
+    get_env/2,
+    oz_domain/1,
+    oz_url/2, oz_url/3,
+    oz_rest_url/2,
     all_oz_privileges/1
 ]).
 % Operations corresponding to logic modules
@@ -45,8 +45,9 @@
     user_get_oz_privileges/2,
     user_get_eff_oz_privileges/2,
     user_get_groups/2,
-    user_get_spaces/2,
     user_get_eff_groups/2,
+    user_get_spaces/2,
+    user_get_clusters/2,
     user_set_oz_privileges/4,
     user_set_default_space/3,
     user_get_default_space/2,
@@ -58,7 +59,10 @@
     user_get_default_provider/2,
     user_unset_default_provider/2,
 
-    user_leave_space/3
+    user_leave_space/3,
+    user_leave_cluster/3,
+
+    create_provider_registration_token/3
 ]).
 -export([
     list_groups/1,
@@ -71,8 +75,9 @@
 
     group_get_children/2,
     group_get_parents/2,
-    group_get_spaces/2,
     group_get_users/2,
+    group_get_spaces/2,
+    group_get_clusters/2,
     group_get_oz_privileges/2,
     group_get_eff_oz_privileges/2,
     group_set_oz_privileges/4,
@@ -132,8 +137,7 @@
     get_share_public_url/2
 ]).
 -export([
-    create_provider/2,
-    create_provider_registration_token/2,
+    create_provider/2, create_provider/3,
     get_provider/2,
     list_providers/1,
     delete_provider/2,
@@ -160,8 +164,8 @@
     handle_service_set_group_privileges/5
 ]).
 -export([
-    list_handles/1,
     create_handle/6, create_handle/3,
+    list_handles/1,
     get_handle/2,
     update_handle/3, update_handle/5,
     delete_handle/2,
@@ -178,6 +182,28 @@
     handle_remove_group/3,
     handle_set_group_privileges/5,
     handle_get_group_privileges/3
+]).
+-export([
+    list_clusters/1,
+    get_cluster/2,
+    get_provider_cluster/2,
+    update_cluster/3,
+    delete_cluster/2,
+
+    cluster_get_groups/2,
+    cluster_get_users/2,
+
+    cluster_add_user/3,
+    cluster_remove_user/3,
+    cluster_set_user_privileges/5,
+    cluster_get_user_privileges/3,
+    cluster_invite_user_token/3,
+    cluster_invite_group_token/3,
+
+    cluster_add_group/3,
+    cluster_remove_group/3,
+    cluster_set_group_privileges/5,
+    cluster_get_group_privileges/3
 ]).
 -export([
     assert_token_exists/2,
@@ -204,15 +230,21 @@
     read_auth_config/1,
     overwrite_config/3,
     overwrite_auth_config/2,
-    overwrite_test_auth_config/2
+    overwrite_test_auth_config/2,
+    create_dummy_gui_package/0,
+    deploy_dummy_gui/2,
+    copy_file_to_onezone_nodes/2,
+    copy_file_to_node/2
 ]).
 
 % Convenience functions for gs
 -export([
     log_in/2, log_out/2,
-    get_gs_ws_url/1,
+    graph_sync_url/2,
     get_gs_supported_proto_versions/1,
-    decode_gri/2
+    decode_gri/2,
+    acquire_onezone_gui_token/2,
+    acquire_gui_token/4
 ]).
 
 %%%===================================================================
@@ -347,6 +379,19 @@ user_get_groups(Config, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Returns effective groups of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec user_get_eff_groups(Config :: term(), UserId :: od_user:id()) ->
+    {ok, [od_group:id()]}.
+user_get_eff_groups(Config, UserId) ->
+    ?assertMatch({ok, _}, call_oz(Config, user_logic, get_eff_groups, [
+        ?ROOT, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Returns spaces of a user.
 %% @end
 %%--------------------------------------------------------------------
@@ -360,13 +405,13 @@ user_get_spaces(Config, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns effective groups of a user.
+%% Returns clusters of a user.
 %% @end
 %%--------------------------------------------------------------------
--spec user_get_eff_groups(Config :: term(), UserId :: od_user:id()) ->
-    {ok, [od_group:id()]}.
-user_get_eff_groups(Config, UserId) ->
-    ?assertMatch({ok, _}, call_oz(Config, user_logic, get_eff_groups, [
+-spec user_get_clusters(Config :: term(), UserId :: od_user:id()) ->
+    {ok, [od_cluster:id()]}.
+user_get_clusters(Config, UserId) ->
+    ?assertMatch({ok, _}, call_oz(Config, user_logic, get_clusters, [
         ?ROOT, UserId
     ])).
 
@@ -540,6 +585,32 @@ user_leave_space(Config, UserId, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Leaves cluster as a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec user_leave_cluster(Config :: term(), UserId :: od_user:id(),
+    ClusterId :: od_cluster:id()) -> ok.
+user_leave_cluster(Config, UserId, ClusterId) ->
+    ?assertMatch(ok, call_oz(
+        Config, user_logic, leave_cluster, [?ROOT, UserId, ClusterId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a provider registration token.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_provider_registration_token(Config :: term(),
+    Client :: entity_logic:client(), od_user:id()) -> {ok, macaroon:macaroon()}.
+create_provider_registration_token(Config, Client, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, user_logic, create_provider_registration_token, [Client, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates group in onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -623,6 +694,19 @@ group_get_parents(Config, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves users of given group from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_get_users(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [od_user:id()]}.
+group_get_users(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, get_users, [?ROOT, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Retrieves spaces of given group from onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -636,14 +720,14 @@ group_get_spaces(Config, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves users of given group from onezone.
+%% Retrieves clusters of given group from onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec group_get_users(Config :: term(), GroupId :: od_group:id()) ->
-    {ok, [od_user:id()]}.
-group_get_users(Config, GroupId) ->
+-spec group_get_clusters(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [od_cluster:id()]}.
+group_get_clusters(Config, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, get_users, [?ROOT, GroupId]
+        Config, group_logic, get_clusters, [?ROOT, GroupId]
     )).
 
 
@@ -1218,40 +1302,47 @@ get_share_public_url(Config, ShareId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a provider (automatically generates certificates).
+%% Creates a provider without an admin user.
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider(Config :: term(),
+-spec create_provider(Config :: term(), NameOrData :: od_provider:name() | #{}) ->
+    {ok, {ProviderId :: binary(), Macaroon :: binary()}}.
+create_provider(Config, NameOrData) ->
+    create_provider(Config, undefined, NameOrData).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a provider with given admin id, who is automatically added to the
+%% corresponding cluster.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_provider(Config :: term(), AdminUserId :: od_user:id(),
     NameOrData :: od_provider:name() | #{}) ->
-    {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
-create_provider(Config, Name) when is_binary(Name) ->
-    create_provider(Config, #{
+    {ok, {ProviderId :: binary(), Macaroon :: binary()}}.
+create_provider(Config, AdminUserId, Name) when is_binary(Name) ->
+    create_provider(Config, AdminUserId, #{
         <<"name">> => Name,
-        <<"adminEmail">> => <<"admin@onezone.example.com">>,
-        <<"domain">> => ?UNIQUE_DOMAIN,
+        <<"adminEmail">> => <<"admin@oneprovider.example.com">>,
+        <<"domain">> => <<"oneprovider.example.com">>,
         <<"subdomainDelegation">> => false,
         <<"latitude">> => 0.0,
         <<"longitude">> => 0.0
     });
-create_provider(Config, Data) ->
-    {ok, {ProviderId, Macaroon}} = ?assertMatch({ok, _}, call_oz(
-        Config, provider_logic, create, [?NOBODY, Data]
+create_provider(Config, AdminUserId, Data) ->
+    DataWithToken = case AdminUserId of
+        undefined ->
+            Data;
+        _ ->
+            {ok, Token} = create_provider_registration_token(
+                Config, ?USER(AdminUserId), AdminUserId
+            ),
+            Data#{<<"token">> => Token}
+    end,
+    {ok, {ProviderId, Macaroon, AdminUserId}} = ?assertMatch({ok, _}, call_oz(
+        Config, provider_logic, create, [?NOBODY, DataWithToken]
     )),
     {ok, MacaroonBin} = onedata_macaroons:serialize(Macaroon),
     {ok, {ProviderId, MacaroonBin}}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates a provider registration token.
-%% @end
-%%--------------------------------------------------------------------
--spec create_provider_registration_token(Config :: term(),
-    Client :: entity_logic:client()) -> {ok, macaroon:macaroon()}.
-create_provider_registration_token(Config, Client) ->
-    ?assertMatch({ok, _}, call_oz(
-        Config, provider_logic, create_provider_registration_token, [Client]
-    )).
 
 
 %%--------------------------------------------------------------------
@@ -1651,6 +1742,18 @@ create_handle(Config, Client, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Returns list of all handles in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec list_handles(Config :: term()) -> {ok, [od_handle:id()]}.
+list_handles(Config) ->
+    ?assertMatch({ok, _}, call_oz(Config, handle_logic, list, [
+        ?ROOT
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Retrieves handle data from onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -1660,44 +1763,6 @@ get_handle(Config, HandleId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, handle_logic, get, [?ROOT, HandleId]
     )).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves groups belonging to handle from onezone.
-%% @end
-%%--------------------------------------------------------------------
--spec handle_get_groups(Config :: term(), HandleId :: od_handle:id()) ->
-    {ok, [od_group:id()]}.
-handle_get_groups(Config, HandleId) ->
-    ?assertMatch({ok, _}, call_oz(
-        Config, handle_logic, get_groups, [?ROOT, HandleId]
-    )).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves users belonging to handle from onezone.
-%% @end
-%%--------------------------------------------------------------------
--spec handle_get_users(Config :: term(), HandleId :: od_handle:id()) ->
-    {ok, [od_user:id()]}.
-handle_get_users(Config, HandleId) ->
-    ?assertMatch({ok, _}, call_oz(
-        Config, handle_logic, get_users, [?ROOT, HandleId]
-    )).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all handles in onezone.
-%% @end
-%%--------------------------------------------------------------------
--spec list_handles(Config :: term()) -> {ok, [od_handle:id()]}.
-list_handles(Config) ->
-    ?assertMatch({ok, _}, call_oz(Config, handle_logic, list, [
-        ?ROOT
-    ])).
 
 
 %%--------------------------------------------------------------------
@@ -1738,6 +1803,32 @@ update_handle(Config, HandleId, NewResourceType, NewResourceId, NewMetadata) ->
 -spec delete_handle(Config :: term(), HandleId :: od_handle:id()) -> ok.
 delete_handle(Config, HandleId) ->
     ?assertMatch(ok, call_oz(Config, handle_logic, delete, [?ROOT, HandleId])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves groups belonging to handle from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_get_groups(Config :: term(), HandleId :: od_handle:id()) ->
+    {ok, [od_group:id()]}.
+handle_get_groups(Config, HandleId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_logic, get_groups, [?ROOT, HandleId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves users belonging to handle from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_get_users(Config :: term(), HandleId :: od_handle:id()) ->
+    {ok, [od_user:id()]}.
+handle_get_users(Config, HandleId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_logic, get_users, [?ROOT, HandleId]
+    )).
 
 
 %%--------------------------------------------------------------------
@@ -1845,6 +1936,230 @@ handle_set_group_privileges(Config, HandleId, GroupId, Operation, Privs) ->
 handle_get_group_privileges(Config, HandleId, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, handle_logic, get_group_privileges, [?ROOT, HandleId, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns list of all clusters in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec list_clusters(Config :: term()) -> {ok, [od_cluster:id()]}.
+list_clusters(Config) ->
+    ?assertMatch({ok, _}, call_oz(Config, cluster_logic, list, [
+        ?ROOT
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves cluster data from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_cluster(Config :: term(), ClusterId :: od_cluster:id()) ->
+    {ok, #od_cluster{}}.
+get_cluster(Config, ClusterId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, cluster_logic, get, [?ROOT, ClusterId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the cluster Id of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_provider_cluster(Config :: term(), ProviderId :: od_provider:id()) ->
+    od_cluster:id().
+get_provider_cluster(Config, ProviderId) ->
+    {ok, #od_provider{
+        cluster = ClusterId
+    }} = oz_test_utils:get_provider(Config, ProviderId),
+    ClusterId.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates a cluster
+%% @end
+%%--------------------------------------------------------------------
+-spec update_cluster(Config :: term(), ClusterId :: od_cluster:id(),
+    Data :: maps:map()) -> ok.
+update_cluster(Config, ClusterId, Data) ->
+    ?assertMatch(ok, call_oz(Config, cluster_logic, update, [
+        ?ROOT, ClusterId, Data
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes given cluster from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_cluster(Config :: term(), ClusterId :: od_cluster:id()) -> ok.
+delete_cluster(Config, ClusterId) ->
+    ?assertMatch(ok, call_oz(Config, cluster_logic, delete, [?ROOT, ClusterId])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves groups belonging to cluster from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec cluster_get_groups(Config :: term(), ClusterId :: od_cluster:id()) ->
+    {ok, [od_group:id()]}.
+cluster_get_groups(Config, ClusterId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, cluster_logic, get_groups, [?ROOT, ClusterId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves users belonging to cluster from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec cluster_get_users(Config :: term(), ClusterId :: od_cluster:id()) ->
+    {ok, [od_user:id()]}.
+cluster_get_users(Config, ClusterId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, cluster_logic, get_users, [?ROOT, ClusterId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a user to a cluster.
+%% @end
+%%--------------------------------------------------------------------
+-spec cluster_add_user(Config :: term(), ClusterId :: od_cluster:id(),
+    UserId :: od_user:id()) -> {ok, od_user:id()}.
+cluster_add_user(Config, ClusterId, UserId) ->
+    ?assertMatch({ok, _}, call_oz(Config, cluster_logic, add_user, [
+        ?ROOT, ClusterId, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes user from cluster.
+%% @end
+%%--------------------------------------------------------------------
+-spec cluster_remove_user(Config :: term(), ClusterId :: od_cluster:id(),
+    UserId :: od_user:id()) -> {ok, od_user:id()}.
+cluster_remove_user(Config, ClusterId, UserId) ->
+    ?assertMatch(ok, call_oz(Config, cluster_logic, remove_user, [
+        ?ROOT, ClusterId, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges of a user in a cluster
+%% @end
+%%--------------------------------------------------------------------
+-spec cluster_set_user_privileges(Config :: term(),
+    ClusterId :: od_cluster:id(), UserId :: od_user:id(),
+    PrivsToGrant :: [privileges:cluster_privilege()],
+    PrivsToRevoke :: [privileges:cluster_privilege()]) -> ok.
+cluster_set_user_privileges(Config, ClusterId, UserId, PrivsToGrant, PrivsToRevoke) ->
+    ?assertMatch(ok, call_oz(Config, cluster_logic,
+        update_user_privileges, [?ROOT, ClusterId, UserId, PrivsToGrant, PrivsToRevoke]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves privileges of user belonging to cluster from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec cluster_get_user_privileges(Config :: term(),
+    ClusterId :: od_service:id(), UserId :: od_user:id()) -> {ok, [atom()]}.
+cluster_get_user_privileges(Config, ClusterId, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, cluster_logic, get_user_privileges, [?ROOT, ClusterId, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a user invite token to given cluster.
+%% @end
+%%--------------------------------------------------------------------
+-spec cluster_invite_user_token(Config :: term(),
+    Client :: entity_logic:client(), ClusterId :: od_cluster:id()) ->
+    {ok, macaroon:macaroon()}.
+cluster_invite_user_token(Config, Client, ClusterId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, cluster_logic, create_user_invite_token, [Client, ClusterId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a group invite token to given cluster.
+%% @end
+%%--------------------------------------------------------------------
+-spec cluster_invite_group_token(Config :: term(),
+    Client :: entity_logic:client(), ClusterId :: od_cluster:id()) ->
+    {ok, macaroon:macaroon()}.
+cluster_invite_group_token(Config, Client, ClusterId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, cluster_logic, create_group_invite_token, [Client, ClusterId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a group to a cluster.
+%% @end
+%%--------------------------------------------------------------------
+-spec cluster_add_group(Config :: term(), ClusterId :: od_cluster:id(),
+    GroupId :: od_group:id()) -> {ok, od_group:id()}.
+cluster_add_group(Config, ClusterId, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(Config, cluster_logic, add_group, [
+        ?ROOT, ClusterId, GroupId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes group from cluster.
+%% @end
+%%--------------------------------------------------------------------
+-spec cluster_remove_group(Config :: term(), ClusterId :: od_cluster:id(),
+    GroupId :: od_group:id()) -> {ok, od_user:id()}.
+cluster_remove_group(Config, ClusterId, GroupId) ->
+    ?assertMatch(ok, call_oz(Config, cluster_logic, remove_group, [
+        ?ROOT, ClusterId, GroupId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges of a group in a cluster.
+%% @end
+%%--------------------------------------------------------------------
+-spec cluster_set_group_privileges(Config :: term(),
+    ClusterId :: od_cluster:id(), GroupId :: od_user:id(),
+    Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:cluster_privilege()]) -> ok.
+cluster_set_group_privileges(Config, ClusterId, GroupId, Operation, Privs) ->
+    ?assertMatch(ok, call_oz(Config, cluster_logic,
+        update_group_privileges, [?ROOT, ClusterId, GroupId, Operation, Privs]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves privileges of group belonging to cluster from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec cluster_get_group_privileges(Config :: term(),
+    ClusterId :: od_service:id(), GroupId :: od_user:id()) -> {ok, [atom()]}.
+cluster_get_group_privileges(Config, ClusterId, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, cluster_logic, get_group_privileges, [?ROOT, ClusterId, GroupId]
     )).
 
 
@@ -2004,16 +2319,14 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     [delete_share(Config, ShId) || ShId <- Shares],
     [delete_space(Config, SpId) || SpId <- Spaces],
     [delete_handle_service(Config, HSId) || HSId <- HServices],
+    % Clusters are removed together with providers
     % Check if predefined groups should be removed too.
     GroupsToDelete = case RemovePredefinedGroups of
         true ->
             Groups;
         false ->
             % Filter out predefined groups
-            [Node | _] = ?OZ_NODES(Config),
-            {ok, PredefinedGroupsMapping} = test_utils:get_env(
-                Node, oz_worker, predefined_groups
-            ),
+            PredefinedGroupsMapping = get_env(Config, predefined_groups),
             PredefinedGroups = [Id || #{id := Id} <- PredefinedGroupsMapping],
             lists:filter(
                 fun(GroupId) ->
@@ -2105,10 +2418,7 @@ create_and_support_3_spaces(Config, ProviderId) ->
 %%--------------------------------------------------------------------
 -spec minimum_support_size(Config :: term()) -> integer().
 minimum_support_size(Config) ->
-    {ok, MinimumSupportSize} = call_oz(
-        Config, application, get_env, [oz_worker, minimum_space_support_size]
-    ),
-    MinimumSupportSize.
+    get_env(Config, minimum_space_support_size).
 
 
 %%--------------------------------------------------------------------
@@ -2181,8 +2491,7 @@ unmock_time(Config) ->
 %%--------------------------------------------------------------------
 -spec get_mocked_time(Config :: term()) -> non_neg_integer().
 get_mocked_time(Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    rpc:call(hd(Nodes), oz_worker, get_env, [mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP]).
+    get_env(Config, mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP).
 
 
 %%--------------------------------------------------------------------
@@ -2256,7 +2565,7 @@ toggle_basic_auth(Config, Flag) ->
 %%--------------------------------------------------------------------
 -spec read_auth_config(Config :: term()) -> auth_config:config_v2().
 read_auth_config(Config) ->
-    {ok, AuthConfigPath} = call_oz(Config, oz_worker, get_env, [auth_config_file]),
+    AuthConfigPath = get_env(Config, auth_config_file),
     {ok, [AuthConfig]} = oz_test_utils:call_oz(Config, file, consult, [AuthConfigPath]),
     AuthConfig.
 
@@ -2268,7 +2577,7 @@ read_auth_config(Config) ->
 %%--------------------------------------------------------------------
 -spec overwrite_config(TestConfig :: term(), ConfigFileEnv :: atom(), ConfigData :: term()) -> ok.
 overwrite_config(TestConfig, ConfigFileEnv, ConfigData) ->
-    {ok, ConfigPath} = call_oz(TestConfig, oz_worker, get_env, [ConfigFileEnv]),
+    ConfigPath = get_env(TestConfig, ConfigFileEnv),
     rpc:multicall(?OZ_NODES(TestConfig), file, write_file, [
         ConfigPath, io_lib:format("~tp.~n", [ConfigData])
     ]),
@@ -2300,20 +2609,77 @@ overwrite_test_auth_config(TestConfig, AuthConfigData) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Creates a dummy GUI package on the test master node and returns path to the
+%% package tarball.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_dummy_gui_package() -> string().
+create_dummy_gui_package() ->
+    TempDir = mochitemp:mkdtemp(),
+    DummyGuiRoot = filename:join(TempDir, "gui_static"),
+    ok = file:make_dir(DummyGuiRoot),
+    DummyIndex = filename:join(DummyGuiRoot, "index.html"),
+    IndexContent = datastore_utils:gen_key(),
+    ok = file:write_file(DummyIndex, IndexContent),
+
+    DummyPackage = filename:join(TempDir, "gui_static.tar.gz"),
+    % Use tar to create archive as erl_tar is limited when it comes to tarring directories
+    [] = os:cmd(str_utils:format("tar -C ~s -czf ~s ~s", [TempDir, DummyPackage, "gui_static"])),
+    {DummyPackage, IndexContent}.
+
+
+-spec deploy_dummy_gui(Config :: term(), onedata:service()) -> {ok, GuiHash :: binary()}.
+deploy_dummy_gui(Config, Service) ->
+    {GuiPackage, IndexContent} = create_dummy_gui_package(),
+    {ok, GuiHash} = gui:package_hash(GuiPackage),
+    copy_file_to_onezone_nodes(Config, GuiPackage),
+    ok = call_oz(Config, gui_static, deploy_package, [
+        Service, GuiPackage
+    ]),
+    {GuiHash, IndexContent}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Copies given file from the test master node to given node, under the same path.
+%% @end
+%%--------------------------------------------------------------------
+-spec copy_file_to_onezone_nodes(Config :: term(), file:filename_all()) -> ok.
+copy_file_to_onezone_nodes(Config, Path) ->
+    lists:foreach(fun(Node) ->
+        copy_file_to_node(Node, Path)
+    end, ?OZ_NODES(Config)).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Copies given file from the test master node to given node, under the same path.
+%% @end
+%%--------------------------------------------------------------------
+-spec copy_file_to_node(node(), file:filename_all()) -> ok.
+copy_file_to_node(Node, Path) ->
+    {ok, Content} = file:read_file(Path),
+    ok = rpc:call(Node, filelib, ensure_dir, [Path]),
+    ok = rpc:call(Node, file, write_file, [Path, Content]).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a session for user, simulating a login.
 %% @end
 %%--------------------------------------------------------------------
 -spec log_in(Config :: term(), UserId :: od_user:id()) -> {ok, Cookie :: binary()}.
 log_in(Config, UserId) ->
     MockedReq = #{},
-    #{resp_cookies := #{?SESSION_COOKIE_KEY := CookieIoList}} = ?assertMatch(#{}, call_oz(
-        Config, new_gui_session, log_in, [UserId, MockedReq]
+    CookieKey = ?SESSION_COOKIE_KEY,
+    #{resp_cookies := #{CookieKey := CookieIoList}} = ?assertMatch(#{}, call_oz(
+        Config, gui_session, log_in, [UserId, MockedReq]
     )),
     Cookie = iolist_to_binary(CookieIoList),
-    CookieKey = ?SESSION_COOKIE_KEY,
     CookieLen = byte_size(?SESSION_COOKIE_KEY),
     [<<CookieKey:CookieLen/binary, "=", CookieVal/binary>> | _] = binary:split(Cookie, <<";">>, [global, trim_all]),
-    {ok, CookieVal}.
+    SessionId = call_oz(Config, gui_session, get_session_id, [CookieVal]),
+    {ok, {SessionId, CookieVal}}.
 
 
 %%--------------------------------------------------------------------
@@ -2325,10 +2691,10 @@ log_in(Config, UserId) ->
 log_out(Config, Cookie) ->
     MockedReq = #{
         resp_headers => #{},
-        headers => #{<<"cookie">> => <<?SESSION_COOKIE_KEY/binary, "=", Cookie/binary>>}
+        headers => #{<<"cookie">> => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>}
     },
     ?assertMatch(#{}, call_oz(
-        Config, new_gui_session, log_out, [MockedReq]
+        Config, gui_session, log_out, [MockedReq]
     )),
     ok.
 
@@ -2345,25 +2711,23 @@ all_oz_privileges(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the value of the environment variable 'Name' for 'Application'.
+%% Returns the value of the oz_worker's environment variable 'Name'.
 %% @end
 %%--------------------------------------------------------------------
--spec get_env(Config :: term(), Application :: atom(), Name :: atom()) ->
-    {ok, Value :: term()}.
-get_env(Config, Application, Name) ->
-    ?assertMatch({ok, _}, call_oz(
-        Config, application, get_env, [Application, Name]
-    )).
+-spec get_env(Config :: term(), Name :: atom()) -> term().
+get_env(Config, Name) ->
+    call_oz(Config, oz_worker, get_env, [Name]).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Get REST listener port for zone.
+%% Returns the value of the oz_worker's environment variable 'Name' or default
+%% if undefined.
 %% @end
 %%--------------------------------------------------------------------
--spec get_rest_port(Config :: term()) -> {ok, Port :: inet:port_number()}.
-get_rest_port(Config) ->
-    get_env(Config, ?APP_NAME, https_server_port).
+-spec get_env(Config :: term(), Name :: atom(), Default :: term()) -> term().
+get_env(Config, Name, Default) ->
+    call_oz(Config, oz_worker, get_env, [Name, Default]).
 
 
 %%--------------------------------------------------------------------
@@ -2371,34 +2735,77 @@ get_rest_port(Config) ->
 %% Get zone domain.
 %% @end
 %%--------------------------------------------------------------------
--spec get_oz_domain(Config :: term()) -> {ok, Domain :: string()}.
-get_oz_domain(Config) ->
-    get_env(Config, ?APP_NAME, http_domain).
+-spec oz_domain(Config :: term()) -> binary().
+oz_domain(Config) ->
+    call_oz(Config, oz_worker, get_domain, []).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Get rest api prefix.
+%% Get Onezone's URL to a specific resource defined by Path or Tokens, e.g.:
+%%      Path = <<"/ozw/onezone/gui-upload">> OR
+%%      Tokens = [<<"/ozw/">>, <<"onezone">>, <<"/gui-upload">>]
+%%      -> https://onezone.example.com/ozw/onezone/gui-upload
 %% @end
 %%--------------------------------------------------------------------
--spec get_rest_api_prefix(Config :: term()) -> {ok, Prefix :: string()}.
-get_rest_api_prefix(Config) ->
-    get_env(Config, ?APP_NAME, rest_api_prefix).
+-spec oz_url(Config :: term(), PathOrTokens :: binary() | [binary()]) -> binary().
+oz_url(Config, PathOrTokens) ->
+    oz_url(Config, <<"https">>, PathOrTokens).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Get graph sync ws url for zone.
+%% Get Onezone's URL to a specific resource with given Scheme defined by Path or Tokens, e.g.:
+%%      Scheme = <<"ftp">>
+%%      Path = <<"/ozw/onezone/gui-upload">> OR
+%%      Tokens = [<<"/ozw/">>, <<"onezone">>, <<"/gui-upload">>]
+%%      -> ftp://onezone.example.com/ozw/onezone/gui-upload
 %% @end
 %%--------------------------------------------------------------------
--spec get_gs_ws_url(Config :: term()) -> binary().
-get_gs_ws_url(Config) ->
-    {ok, ZoneDomain} = get_oz_domain(Config),
-    {ok, GsPort} = get_rest_port(Config),
-    str_utils:format_bin(
-        "wss://~s:~B/~s",
-        [ZoneDomain, GsPort, string:strip(?PROVIDER_GRAPH_SYNC_WS_PATH, both, $/)]
-    ).
+-spec oz_url(Config :: term(), Scheme :: binary(), PathOrTokens :: binary() | [binary()]) ->
+    binary().
+oz_url(Config, Scheme, Tokens) when is_list(Tokens) ->
+    oz_url(Config, Scheme, str_utils:join_binary(Tokens));
+oz_url(Config, Scheme, Path) ->
+    PortStr = case get_env(Config, https_server_port) of
+        443 -> <<"">>;
+        Port -> <<":", Port/binary>>
+    end,
+    str_utils:format_bin("~s://~s~s~s", [
+        Scheme,
+        oz_domain(Config),
+        PortStr,
+        Path
+    ]).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get Onezone's REST URL to a specific resource defined by Path or Tokens, e.g.:
+%%      Path = <<"/providers/12sdfagsregsdg/domain_config">> OR
+%%      Tokens = [<<"/providers">>, <<"/12sdfagsregsdg">>, <<"/domain_config">>]
+%%      -> https://onezone.example.com/api/v3/onezone/providers/12sdfagsregsdg/domain_config
+%% @end
+%%--------------------------------------------------------------------
+-spec oz_rest_url(Config :: term(), PathOrTokens :: binary() | [binary()]) -> binary().
+oz_rest_url(Config, PathOrTokens) ->
+    RestPrefix = list_to_binary(get_env(Config, rest_api_prefix)),
+    case PathOrTokens of
+        Tokens when is_list(Tokens) -> oz_url(Config, [RestPrefix | Tokens]);
+        Path when is_binary(Path) -> oz_url(Config, [RestPrefix, Path])
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get graph sync WebSocket URL for zone.
+%% @end
+%%--------------------------------------------------------------------
+-spec graph_sync_url(Config :: term(), Type :: provider | gui) -> binary().
+graph_sync_url(Config, provider) ->
+    oz_url(Config, <<"wss">>, <<?PROVIDER_GRAPH_SYNC_WS_PATH>>);
+graph_sync_url(Config, gui) ->
+    oz_url(Config, <<"wss">>, <<?GUI_GRAPH_SYNC_WS_PATH>>).
 
 
 %%--------------------------------------------------------------------
@@ -2419,9 +2826,54 @@ get_gs_supported_proto_versions(Config) ->
 %% Get supported graph sync protocol versions.
 %% @end
 %%--------------------------------------------------------------------
--spec decode_gri(Config :: term(),
-    EncodedGri :: binary()) -> Gri :: #gri{}.
+-spec decode_gri(Config :: term(), EncodedGri :: binary()) -> #gri{}.
 decode_gri(Config, EncodedGri) ->
     ?assertMatch(#gri{}, call_oz(
         Config, gs_protocol, string_to_gri, [EncodedGri])
     ).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Acquires a Onezone gui token issued for the session denoted by given cookie.
+%% @end
+%%--------------------------------------------------------------------
+-spec acquire_onezone_gui_token(Config :: term(), Cookie :: binary()) ->
+    {ok, Token :: binary()} | {error, term()}.
+acquire_onezone_gui_token(Config, Cookie) ->
+    acquire_gui_token(Config, Cookie, ?ONEZONE, ?ONEZONE_CLUSTER_ID).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Acquires a gui token issued for the session denoted by given cookie,
+%% for use by given service (defined via cluster type and id).
+%% @end
+%%--------------------------------------------------------------------
+-spec acquire_gui_token(Config :: term(), Cookie :: binary(),
+    od_cluster:id(), od_cluster:type()) ->
+    {ok, Token :: binary()} | {error, term()}.
+acquire_gui_token(Config, Cookie, ClusterType, ClusterId) ->
+    Result = http_client:post(
+        str_utils:format("https://~s/gui-token", [oz_domain(Config)]),
+        #{
+            <<"content-type">> => <<"application/json">>,
+            <<"cookie">> => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
+        },
+        json_utils:encode(#{
+            <<"clusterType">> => ClusterType,
+            <<"clusterId">> => ClusterId
+        }),
+        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
+    ),
+    case Result of
+        {ok, 200, _, Response} ->
+            #{<<"token">> := Token} = json_utils:decode(Response),
+            {ok, Token};
+        {ok, 400, _, _} ->
+            ?ERROR_MALFORMED_DATA;
+        {ok, 401, _, _} ->
+            ?ERROR_UNAUTHORIZED;
+        {ok, 403, _, _} ->
+            ?ERROR_FORBIDDEN
+    end.

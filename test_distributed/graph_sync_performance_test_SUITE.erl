@@ -376,12 +376,12 @@ concurrent_active_clients_spawning_performance_base(Config) ->
 %%%===================================================================
 
 spawn_clients(Config, Type, Clients, RetryFlag, CallbackFunction, OnSuccessFun) ->
-    URL = oz_test_utils:get_gs_ws_url(Config),
+    URL = oz_test_utils:graph_sync_url(Config, Type),
     AuthsAndIdentities = lists:map(fun(Client) ->
         case Type of
             gui ->
-                {ok, SessionId} = oz_test_utils:log_in(Config, Client),
-                Auth = {cookie, {?SESSION_COOKIE_KEY, SessionId}},
+                {ok, {_SessionId, Cookie}} = oz_test_utils:log_in(Config, Client),
+                Auth = {cookie, {?SESSION_COOKIE_KEY, Cookie}},
                 Identity = {user, Client},
                 {Auth, Identity};
             provider ->

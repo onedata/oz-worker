@@ -13,7 +13,7 @@
 -behaviour(rest_translator_behaviour).
 -author("Lukasz Opiola").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -147,4 +147,11 @@ get_response(#gri{aspect = handles}, Handles) ->
     rest_translator:ok_body_reply(#{<<"handles">> => Handles});
 
 get_response(#gri{aspect = eff_handles}, Handles) ->
-    rest_translator:ok_body_reply(#{<<"handles">> => Handles}).
+    rest_translator:ok_body_reply(#{<<"handles">> => Handles});
+
+
+get_response(#gri{aspect = clusters}, Clusters) ->
+    rest_translator:ok_body_reply(#{<<"clusters">> => Clusters});
+
+get_response(#gri{aspect = eff_clusters}, Clusters) ->
+    rest_translator:ok_body_reply(#{<<"clusters">> => Clusters}).

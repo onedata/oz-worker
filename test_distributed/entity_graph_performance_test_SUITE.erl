@@ -610,11 +610,9 @@ create_space(Config, rest, {_User, Macaroon}, Name) ->
 rest_req(Config, Macaroon, Method, Path) ->
     rest_req(Config, Macaroon, Method, Path, #{}).
 
-rest_req(Config, Macaroon, Method, Path, Body) when is_binary(Path) ->
-    rest_req(Config, Macaroon, Method, [Path], Body);
 rest_req(Config, Macaroon, Method, Path, Body) ->
     Opts = [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}],
-    URL = str_utils:join_binary([rest_test_utils:get_oz_url(Config) | Path], <<"">>),
+    URL = oz_test_utils:oz_rest_url(Config, Path),
     Headers = #{
         <<"content-type">> => <<"application/json">>,
         <<"macaroon">> => Macaroon

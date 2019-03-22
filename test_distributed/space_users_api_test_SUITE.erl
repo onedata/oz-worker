@@ -12,7 +12,7 @@
 -module(space_users_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -83,7 +83,7 @@ add_user_test(Config) ->
     % effective privilege to INVITE_USER, so he should be able to join the space as a user
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
     {ok, SubGroup1} = oz_test_utils:space_add_group(Config, S1, SubGroup1),
-    oz_test_utils:space_set_group_privileges(Config, S1, SubGroup1, [?SPACE_INVITE_USER], []),
+    oz_test_utils:space_set_group_privileges(Config, S1, SubGroup1, [?SPACE_ADD_USER], []),
 
     % EffectiveUserWithoutInvitePriv belongs to group S1 effectively via SubGroup2,
     % but without the effective privilege to INVITE_USER, so he should NOT be able
@@ -155,7 +155,7 @@ add_user_with_privileges_test(Config) ->
     % effective privilege to INVITE_USER, so he should be able to join the space as a user
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
     {ok, SubGroup1} = oz_test_utils:space_add_group(Config, S1, SubGroup1),
-    oz_test_utils:space_set_group_privileges(Config, S1, SubGroup1, [?SPACE_INVITE_USER, ?SPACE_SET_PRIVILEGES], []),
+    oz_test_utils:space_set_group_privileges(Config, S1, SubGroup1, [?SPACE_ADD_USER, ?SPACE_SET_PRIVILEGES], []),
 
     % EffectiveUserWithoutInvitePriv belongs to group S1 effectively via SubGroup2,
     % but without the effective privilege to INVITE_USER, so he should NOT be able
@@ -231,7 +231,7 @@ create_user_invite_token_test(Config) ->
     %   U2 gets the SPACE_INVITE_USER privilege
     %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
-        Config, ?SPACE_INVITE_USER
+        Config, ?SPACE_ADD_USER
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 

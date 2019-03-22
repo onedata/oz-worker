@@ -18,6 +18,7 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("auth/entitlement_mapping.hrl").
+-include("http/gui_paths.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
@@ -117,12 +118,10 @@ basic_auth_cache_test(Config) ->
 basic_auth_login_test(Config) ->
     % To resolve user details, OZ asks onepanel via a REST endpoint. In this
     % test, onepanel is simulated by mocking http_client.
-    Nodes = ?config(oz_worker_nodes, Config),
-    {ok, Domain} = test_utils:get_env(hd(Nodes), ?APP_NAME, http_domain),
     % now just try to log in into OZ using basic auth endpoint and
     % check if it works correctly.
     BasicAuthEndpoint = str_utils:format_bin(
-        "https://~s/do_login", [Domain]
+        "https://~s~s", [oz_test_utils:oz_domain(Config), ?LOGIN_PATH]
     ),
     UserPasswordB64 = base64:encode(<<"user1:password1">>),
     BasicAuthHeaders = #{
@@ -164,7 +163,6 @@ basic_auth_login_test(Config) ->
 % groups based on 'onepanel_role_to_group_mapping' env setting.
 automatic_group_membership_test(Config) ->
     Nodes = [Node | _] = ?config(oz_worker_nodes, Config),
-    {ok, Domain} = test_utils:get_env(Node, ?APP_NAME, http_domain),
     % First make sure that groups for tests exist in the system. We can use
     % the predefined groups mechanism here.
     PredefinedGroups = [
@@ -192,7 +190,7 @@ automatic_group_membership_test(Config) ->
     % Try to log in using credentials user2:password2 (user with id user2Id)
     % and see if he was added to both groups.
     BasicAuthEndpoint = str_utils:format_bin(
-        "https://~s/do_login", [Domain]
+        "https://~s~s", [oz_test_utils:oz_domain(Config), ?LOGIN_PATH]
     ),
     % See mock_onepanel_rest_get/1.
     UserPasswordB64 = base64:encode(<<"user2:password2">>),
@@ -563,7 +561,7 @@ mock_onepanel_rest_get(Nodes) ->
                 nomatch -> meck:passthrough([Url, Headers, Body, Options]);
                 _ ->
                     <<"Basic ", UserAndPassword/binary>> =
-                        maps:get(<<"Authorization">>, Headers),
+                        maps:get(<<"authorization">>, Headers),
                     [User, Passwd] =
                         binary:split(base64:decode(UserAndPassword), <<":">>),
                     case {User, Passwd} of
@@ -592,7 +590,7 @@ mock_onepanel_rest_patch(Nodes) ->
                 nomatch -> meck:passthrough([Url, Headers, Body, Options]);
                 _ ->
                     <<"Basic ", UserAndPassword/binary>> =
-                        maps:get(<<"Authorization">>, Headers),
+                        maps:get(<<"authorization">>, Headers),
                     [User, Passwd] =
                         binary:split(base64:decode(UserAndPassword), <<":">>),
                     case {User, Passwd} of

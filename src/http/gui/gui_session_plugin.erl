@@ -6,12 +6,12 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module implements new_gui_session_plugin behaviour and integrates GUI
+%%% This module implements gui_session_plugin behaviour and integrates GUI
 %%% session handling with internal Onezone session.
 %%% @end
 %%%-------------------------------------------------------------------
--module(new_gui_session_plugin).
--behavior(new_gui_session_plugin_behaviour).
+-module(gui_session_plugin).
+-behavior(gui_session_plugin_behaviour).
 
 -author("Lukasz Opiola").
 
@@ -25,7 +25,14 @@
     {error, _} = __Error -> __Error
 end).
 
--export([create/2, get/1, update/2, delete/1, timestamp/0]).
+-export([
+    create/2,
+    get/1,
+    update/2,
+    delete/1,
+    timestamp/0,
+    session_cookie_key/0
+]).
 
 %%%===================================================================
 %%% API
@@ -33,31 +40,31 @@ end).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link new_gui_session_plugin_behaviour} callback create/2.
+%% {@link gui_session_plugin_behaviour} callback create/2.
 %% @end
 %%--------------------------------------------------------------------
--spec create(new_gui_session:id(), new_gui_session:details()) -> ok | {error, term()}.
+-spec create(gui_session:id(), gui_session:details()) -> ok | {error, term()}.
 create(Id, Details) ->
     session:create(Id, details_to_session(Details)).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link new_gui_session_plugin_behaviour} callback get/1.
+%% {@link gui_session_plugin_behaviour} callback get/1.
 %% @end
 %%--------------------------------------------------------------------
--spec get(new_gui_session:id()) -> {ok, new_gui_session:details()} | {error, term()}.
+-spec get(gui_session:id()) -> {ok, gui_session:details()} | {error, term()}.
 get(Id) ->
     ?TO_DETAILS(session:get(Id)).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link new_gui_session_plugin_behaviour} callback update/2.
+%% {@link gui_session_plugin_behaviour} callback update/2.
 %% @end
 %%--------------------------------------------------------------------
--spec update(new_gui_session:id(), fun((new_gui_session:details()) -> new_gui_session:details())) ->
-    ok | {error, term()}.
+-spec update(gui_session:id(), fun((gui_session:details()) -> gui_session:details())) ->
+    {ok, gui_session:details()} | {error, term()}.
 update(Id, Diff) ->
     UpdateFun = fun(Session) ->
         {ok, details_to_session(Diff(session_to_details(Session)))}
@@ -67,17 +74,17 @@ update(Id, Diff) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link new_gui_session_plugin_behaviour} callback delete/1.
+%% {@link gui_session_plugin_behaviour} callback delete/1.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(new_gui_session:id()) -> ok | {error, term()}.
+-spec delete(gui_session:id()) -> ok | {error, term()}.
 delete(Id) ->
     session:delete(Id).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link new_gui_session_plugin_behaviour} callback timestamp/0.
+%% {@link gui_session_plugin_behaviour} callback timestamp/0.
 %% @end
 %%--------------------------------------------------------------------
 -spec timestamp() -> non_neg_integer().
@@ -85,15 +92,25 @@ timestamp() ->
     time_utils:cluster_time_seconds().
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link gui_session_plugin_behaviour} callback session_cookie_key/0.
+%% @end
+%%--------------------------------------------------------------------
+-spec session_cookie_key() -> binary().
+session_cookie_key() ->
+    <<"SID">>.
+
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
--spec session_to_details(session:record()) -> new_gui_session:details().
+-spec session_to_details(session:record()) -> gui_session:details().
 session_to_details(#session{user_id = UserId, last_refresh = Refreshed, nonce = Nonce, previous_nonce = PrevNonce}) ->
     #gui_session{client = UserId, last_refresh = Refreshed, nonce = Nonce, previous_nonce = PrevNonce}.
 
 
--spec details_to_session(new_gui_session:details()) -> session:record().
+-spec details_to_session(gui_session:details()) -> session:record().
 details_to_session(#gui_session{client = UserId, last_refresh = Refreshed, nonce = Nonce, previous_nonce = PrevNonce}) ->
     #session{user_id = UserId, last_refresh = Refreshed, nonce = Nonce, previous_nonce = PrevNonce}.

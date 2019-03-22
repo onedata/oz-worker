@@ -13,9 +13,15 @@
 -define(OZ_DATASTORE_MODELS_HRL, 1).
 
 -include("entity_logic.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_models.hrl").
 
 -define(DEFAULT_GROUP_TYPE, team).
+-define(ONEZONE_CLUSTER_ID, <<"onezone">>).
+-define(ONEZONE_SERVICE_ID, <<"onezone">>).
+-define(DEFAULT_RELEASE_VERSION, <<"18.02.*">>).
+-define(DEFAULT_BUILD_VERSION, <<"unknown">>).
+-define(EMPTY_GUI_HASH, <<"empty">>).
 
 %%%===================================================================
 %%% DB records definitions
@@ -54,19 +60,20 @@
 %
 % The below ASCII visual shows possible relations in entities graph.
 %
-%       provider
-%           ^
-%           |
-%           |
-%         space    handle_service     handle
-%        ^ ^  ^       ^         ^       ^   ^
-%       /  |   \     /          |      /    |
-%      /   |    \   /           |     /     |
-%  share  user   group           user     group
-%                  ^                        ^
-%                  |                        |
-%                  |                        |
-%                group                     user
+%       provider----------------------------------->cluster
+%           ^                                          ^
+%           |                         share            |
+%           |                           ^              |
+%           |                           |              |
+%         space    handle_service<----handle           |
+%        ^ ^  ^       ^         ^       ^   ^          /
+%       /  |   \     /          |      /    |         /
+%      /   |    \   /           |     /     |        /
+%  share  user   group           user     group     /
+%                  ^                        ^      /
+%                  |                        |     /
+%                  |                        |    /
+%                group                     user-'
 %                ^   ^
 %               /     \
 %              /       \
@@ -113,6 +120,7 @@
     spaces = [] :: entity_graph:relations(od_space:id()),
     handle_services = [] :: entity_graph:relations(od_handle_service:id()),
     handles = [] :: entity_graph:relations(od_handle:id()),
+    clusters = [] :: entity_graph:relations(od_cluster:id()),
 
     % Effective relations to other entities
     eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
@@ -120,6 +128,7 @@
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
     eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
+    eff_clusters = #{} :: entity_graph:eff_relations(od_cluster:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
 
@@ -150,6 +159,7 @@
     spaces = [] :: entity_graph:relations(od_space:id()),
     handle_services = [] :: entity_graph:relations(od_handle_service:id()),
     handles = [] :: entity_graph:relations(od_handle:id()),
+    clusters = [] :: entity_graph:relations(od_cluster:id()),
 
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:group_privilege()]),
@@ -157,6 +167,7 @@
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
     eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
+    eff_clusters = #{} :: entity_graph:eff_relations(od_cluster:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | entity_logic:client(),
@@ -215,7 +226,7 @@
 -record(od_provider, {
     name = <<"">> :: od_provider:name(),
     admin_email :: undefined | binary(),
-    root_macaroon :: undefined | macaroon_auth:id(),
+    root_macaroon :: undefined | macaroon_logic:id(),
 
     subdomain_delegation = false :: boolean(),
     domain :: binary(),
@@ -226,6 +237,7 @@
 
     % Direct relations to other entities
     spaces = #{} :: entity_graph:relations_with_attrs(od_space:id(), Size :: pos_integer()),
+    cluster = undefined :: undefined | od_cluster:id(),
 
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations(od_user:id()),
@@ -281,6 +293,32 @@
     bottom_up_dirty = true :: boolean()
 }).
 
+%% This record defines a Onezone/Oneprovider cluster.
+-record(od_cluster, {
+    type = ?ONEZONE :: onedata:cluster_type(),
+    service_id = ?ONEZONE_SERVICE_ID :: od_cluster:service_id(),
+
+    % Version 18.02.* is default for legacy providers
+    worker_version = {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH} :: od_cluster:version_info(),
+    onepanel_version = {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH} :: od_cluster:version_info(),
+    % If enabled, onepanel is served on port 443 by oneprovider/onezone (rather than 9443)
+    onepanel_proxy = false :: boolean(),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
+
+    % Direct relations to other entities
+    users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:cluster_privilege()]),
+    groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:cluster_privilege()]),
+
+    % Effective relations to other entities
+    eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:cluster_privilege()]),
+    eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:cluster_privilege()]),
+
+    % Marks that the record's effective relations are not up to date.
+    bottom_up_dirty = true :: boolean()
+}).
+
 %%%===================================================================
 %%% Records specific for onezone
 %%%===================================================================
@@ -290,7 +328,8 @@
     user_id :: od_user:id(),
     last_refresh = 0 :: non_neg_integer(),
     nonce = <<"">> :: binary(),
-    previous_nonce = <<"">> :: binary()
+    previous_nonce = <<"">> :: binary(),
+    gui_macaroons = #{} :: session:gui_macaroons_cache()
 }).
 
 %% This record defines a token that can be used by user to do something
@@ -312,9 +351,17 @@
 %% Stores information about authorization correlated with a macaroon.
 %% Record id serves as macaroon identifier.
 -record(macaroon_auth, {
-    secret :: macaroon_auth:secret(),
-    type :: macaroon_auth:type(),
-    issuer :: macaroon_auth:issuer()
+    secret :: macaroon_logic:secret(),
+    type :: macaroon_logic:type(),
+    issuer :: macaroon_logic:issuer()
+}).
+
+%% Stores information about the issuer of a macaroon.
+%% Record id serves as macaroon identifier.
+%% Stored in memory only.
+-record(volatile_macaroon, {
+    secret :: macaroon_logic:secret(),
+    issuer :: macaroon_logic:issuer()
 }).
 
 
@@ -322,8 +369,9 @@
     subdomain_to_provider = #{} :: #{dns_state:subdomain() => od_provider:id()},
     provider_to_subdomain = #{} :: #{od_provider:id() => dns_state:subdomain()},
     provider_to_ips = #{} :: #{od_provider:id() => [inet:ipv4_address()]},
-    provider_to_txt_records = #{} :: #{od_provider:id() =>
-        [{binary(), binary(), integer() | undefined}]}
+    provider_to_txt_records = #{} :: #{
+        od_provider:id() => [{binary(), binary(), integer() | undefined}]
+    }
 }).
 
 -record(entity_graph_state, {

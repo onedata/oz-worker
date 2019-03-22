@@ -114,9 +114,9 @@ get_ns_hosts() ->
 %%--------------------------------------------------------------------
 -spec get_soa_admin(OneZoneDomain :: binary()) -> binary().
 get_soa_admin(OneZoneDomain) ->
-    case oz_worker:get_env(dns_soa_admin_mailbox) of
-        {ok, Admin} -> str_utils:to_binary(Admin);
-        undefined -> <<"admin.", OneZoneDomain/binary>>
+    case oz_worker:get_env(dns_soa_admin_mailbox, undefined) of
+        undefined -> <<"admin.", OneZoneDomain/binary>>;
+        Admin -> str_utils:to_binary(Admin)
     end.
 
 

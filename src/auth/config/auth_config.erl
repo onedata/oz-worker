@@ -71,8 +71,8 @@
     ensure_str/1
 ]).
 
--define(AUTH_CONFIG_FILE, begin {ok, __Path} = oz_worker:get_env(auth_config_file), __Path end).
--define(TEST_AUTH_CONFIG_FILE, begin {ok, __Path} = oz_worker:get_env(test_auth_config_file), __Path end).
+-define(AUTH_CONFIG_FILE, oz_worker:get_env(auth_config_file)).
+-define(TEST_AUTH_CONFIG_FILE, oz_worker:get_env(test_auth_config_file)).
 -define(CONFIG_CACHE_TTL, oz_worker:get_env(auth_config_cache_ttl, timer:minutes(1))).
 
 -define(LEGACY_SAML_CONFIG_NAME, "saml.config").
@@ -435,7 +435,7 @@ has_offline_access_enabled(IdP, IdPConfig) ->
 %% Returns the config of the SAML Service Provider represented by this Onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec get_saml_sp_config() -> #esaml_sp{} | {error, saml_disabled}.
+-spec get_saml_sp_config() -> {ok, #esaml_sp{}} | {error, saml_disabled}.
 get_saml_sp_config() ->
     case ?CFG_SAML_ENABLED of
         false ->
@@ -464,7 +464,7 @@ get_saml_sp_config() ->
             end,
 
 
-            #esaml_sp{
+            {ok, #esaml_sp{
                 entity_id = ?CFG_SAML_SP_ENTITY_ID,
                 certificate = Cert,
                 key = Key,
@@ -485,7 +485,7 @@ get_saml_sp_config() ->
                 sign_metadata = ?CFG_SAML_SP_SIGN_METADATA,
                 sign_requests = ?CFG_SAML_SP_SIGN_REQUESTS,
                 want_assertions_signed = ?CFG_SAML_SP_WANT_ASSERTIONS_SIGNED
-            }
+            }}
     end.
 
 
@@ -495,7 +495,7 @@ get_saml_sp_config() ->
 %% present, it is returned, otherwise the standard cert.
 %% @end
 %%--------------------------------------------------------------------
--spec get_saml_cert_pem() -> binary() | {error, saml_disabled}.
+-spec get_saml_cert_pem() -> {ok, binary()} | {error, saml_disabled}.
 get_saml_cert_pem() ->
     case ?CFG_SAML_ENABLED of
         false ->
@@ -506,8 +506,7 @@ get_saml_cert_pem() ->
                 Path -> Path
             end,
             ensure_file_exists(CertificatePath),
-            {ok, CertPem} = file:read_file(CertificatePath),
-            CertPem
+            {ok, _} = file:read_file(CertificatePath)
     end.
 
 
@@ -560,7 +559,7 @@ format_for_gui(IdP, IdPConfig) ->
     #{
         <<"id">> => IdP,
         <<"displayName">> => ?CFG_IDP_DISPLAY_NAME(IdP, IdPConfig),
-        <<"iconPath">> => ?CFG_IDP_ICON_PATH(IdPConfig),
+        <<"iconPath">> => gui_static:oz_worker_gui_path(?CFG_IDP_ICON_PATH(IdPConfig)),
         <<"iconBackgroundColor">> => ?CFG_IDP_ICON_BACKGROUND(IdPConfig)
     }.
 

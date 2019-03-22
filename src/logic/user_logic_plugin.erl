@@ -62,6 +62,7 @@ operation_supported(create, default_space, private) -> true;
 operation_supported(create, {space_alias, _}, private) -> true;
 operation_supported(create, default_provider, private) -> true;
 operation_supported(create, {idp_access_token, _}, private) -> true;
+operation_supported(create, provider_registration_token, private) -> true;
 
 operation_supported(get, list, private) -> true;
 
@@ -94,6 +95,9 @@ operation_supported(get, eff_handle_services, private) -> true;
 operation_supported(get, handles, private) -> true;
 operation_supported(get, eff_handles, private) -> true;
 
+operation_supported(get, clusters, private) -> true;
+operation_supported(get, eff_clusters, private) -> true;
+
 operation_supported(update, instance, private) -> true;
 operation_supported(update, oz_privileges, private) -> true;
 
@@ -109,6 +113,7 @@ operation_supported(delete, {group, _}, private) -> true;
 operation_supported(delete, {space, _}, private) -> true;
 operation_supported(delete, {handle_service, _}, private) -> true;
 operation_supported(delete, {handle, _}, private) -> true;
+operation_supported(delete, {cluster, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -129,6 +134,7 @@ is_subscribable({linked_account, _}, private) -> true;
 is_subscribable(eff_groups, private) -> true;
 is_subscribable(eff_spaces, private) -> true;
 is_subscribable(eff_providers, private) -> true;
+is_subscribable(clusters, private) -> true;
 is_subscribable(_, _) -> false.
 
 %%--------------------------------------------------------------------
@@ -184,7 +190,15 @@ create(#el_req{gri = #gri{aspect = {idp_access_token, IdP}}}) ->
             {ok, {AccessToken, Expires}} -> {ok, value, {AccessToken, Expires}};
             {error, _} = Error -> Error
         end
-    end.
+    end;
+
+create(Req = #el_req{gri = #gri{id = UserId, aspect = provider_registration_token}}) ->
+    {ok, Macaroon} = token_logic:create(
+        Req#el_req.client,
+        ?PROVIDER_REGISTRATION_TOKEN,
+        {od_user, UserId}
+    ),
+    {ok, value, Macaroon}.
 
 
 %%--------------------------------------------------------------------
@@ -264,7 +278,12 @@ get(#el_req{gri = #gri{aspect = eff_handle_services}}, User) ->
 get(#el_req{gri = #gri{aspect = handles}}, User) ->
     {ok, entity_graph:get_relations(direct, top_down, od_handle, User)};
 get(#el_req{gri = #gri{aspect = eff_handles}}, User) ->
-    {ok, entity_graph:get_relations(effective, top_down, od_handle, User)}.
+    {ok, entity_graph:get_relations(effective, top_down, od_handle, User)};
+
+get(#el_req{gri = #gri{aspect = clusters}}, User) ->
+    {ok, entity_graph:get_relations(direct, top_down, od_cluster, User)};
+get(#el_req{gri = #gri{aspect = eff_clusters}}, User) ->
+    {ok, entity_graph:get_relations(effective, top_down, od_cluster, User)}.
 
 
 %%--------------------------------------------------------------------
@@ -390,6 +409,12 @@ delete(#el_req{gri = #gri{id = UserId, aspect = {handle, HandleId}}}) ->
     entity_graph:remove_relation(
         od_user, UserId,
         od_handle, HandleId
+    );
+
+delete(#el_req{gri = #gri{id = UserId, aspect = {cluster, ClusterId}}}) ->
+    entity_graph:remove_relation(
+        od_user, UserId,
+        od_cluster, ClusterId
     ).
 
 
@@ -430,6 +455,11 @@ exists(Req = #el_req{gri = #gri{id = UserId, aspect = instance, scope = shared}}
                 {ok, Handle} = handle_logic_plugin:fetch_entity(HandleId),
                 Handle#od_handle.creator =:= ?USER(UserId)
             end;
+        ?THROUGH_CLUSTER(ClusterId) ->
+            user_logic:has_eff_cluster(User, ClusterId) orelse begin
+                {ok, Cluster} = cluster_logic_plugin:fetch_entity(ClusterId),
+                Cluster#od_cluster.creator =:= ?USER(UserId)
+            end;
         undefined ->
             true
     end;
@@ -461,6 +491,9 @@ exists(#el_req{gri = #gri{aspect = {handle_service, HServiceId}}}, User) ->
 exists(#el_req{gri = #gri{aspect = {handle, HandleId}}}, User) ->
     entity_graph:has_relation(direct, top_down, od_handle, HandleId, User);
 
+exists(#el_req{gri = #gri{aspect = {cluster, ClusterId}}}, User) ->
+    entity_graph:has_relation(direct, top_down, od_cluster, ClusterId, User);
+
 % All other aspects exist if user record exists.
 exists(#el_req{gri = #gri{id = Id}}, #od_user{}) ->
     Id =/= undefined.
@@ -476,6 +509,16 @@ exists(#el_req{gri = #gri{id = Id}}, #od_user{}) ->
 authorize(#el_req{operation = create, gri = #gri{aspect = authorize}}, _) ->
     true;
 
+authorize(Req = #el_req{operation = create, gri = #gri{id = UserId, aspect = provider_registration_token}}, _) ->
+    case Req#el_req.client of
+        ?USER(UserId) ->
+            % Issuing provider registration token for self. In case of 'restricted'
+            % policy, the admin rights will be checked in required_admin_privileges/1
+            open =:= oz_worker:get_env(provider_registration_policy, open);
+        _ ->
+            false
+    end;
+
 authorize(Req = #el_req{client = ?USER(UserId), operation = update, gri = #gri{aspect = oz_privileges}}, _) ->
     auth_by_oz_privilege(Req, UserId, ?OZ_SET_PRIVILEGES);
 authorize(Req = #el_req{client = ?USER(UserId), operation = delete, gri = #gri{aspect = oz_privileges}}, _) ->
@@ -490,6 +533,11 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
         {?PROVIDER(ProviderId), ?THROUGH_PROVIDER(ProviderId)} ->
             % User's membership in provider is checked in 'exists'
             true;
+
+        {?USER(ClientUserId), ?THROUGH_PROVIDER(ProviderId)} ->
+            % Group's membership in provider is checked in 'exists'
+            provider_logic:has_eff_privilege_in_cluster(ProviderId, ClientUserId, ?CLUSTER_VIEW);
+
         _ ->
             % Access to private data also allows access to protected data
             authorize(Req#el_req{gri = #gri{scope = private}}, User)
@@ -533,6 +581,18 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
                     Handle#od_handle.creator =:= ?USER(UserId)
             end;
 
+        {?USER(ClientUserId), ?THROUGH_CLUSTER(ClusterId)} ->
+            {ok, Cluster} = cluster_logic_plugin:fetch_entity(ClusterId),
+            % UserId's membership in cluster is checked in 'exists'
+            cluster_logic:has_eff_privilege(Cluster, ClientUserId, ?CLUSTER_VIEW) orelse begin
+            % Members of a cluster can see the shared data of its creator
+                cluster_logic:has_eff_user(Cluster, ClientUserId) andalso
+                    Cluster#od_cluster.creator =:= ?USER(UserId)
+            end;
+
+        {?PROVIDER(ProviderId), ?THROUGH_CLUSTER(ClusterId)} ->
+            cluster_logic:is_linked_to_provider(ClusterId, ProviderId);
+
         _ ->
             % Access to protected data also allows access to shared data
             authorize(Req#el_req{gri = GRI#gri{scope = protected}}, User)
@@ -548,6 +608,9 @@ authorize(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = provider_registration_token}}) ->
+    [?OZ_PROVIDERS_INVITE];
+
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
     [?OZ_USERS_LIST];
 
@@ -579,6 +642,10 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = handles}}
     [?OZ_USERS_LIST_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_handles}}) ->
     [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = clusters}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_clusters}}) ->
+    [?OZ_USERS_LIST_RELATIONSHIPS];
 
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
     [?OZ_USERS_UPDATE];
@@ -594,6 +661,8 @@ required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {handl
     [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_HANDLE_SERVICES_REMOVE_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {handle, _}}}) ->
     [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_HANDLES_REMOVE_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {cluster, _}}}) ->
+    [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_CLUSTERS_REMOVE_RELATIONSHIPS];
 
 required_admin_privileges(_) ->
     forbidden.
@@ -651,6 +720,9 @@ validate(#el_req{operation = create, gri = #gri{aspect = {idp_access_token, _}}}
     required => #{
         {aspect, <<"idp">>} => {atom, auth_config:get_idps_with_offline_access()}
     }
+};
+
+validate(#el_req{operation = create, gri = #gri{aspect = provider_registration_token}}) -> #{
 };
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{

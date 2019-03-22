@@ -61,11 +61,11 @@ teardown(_) ->
 
 
 get_mocked_attribute_mapping_cfg() ->
-    application:get_env(oz_worker, mocked_attribute_mapping_cfg, #{}).
+    oz_worker:get_env(mocked_attribute_mapping_cfg, #{}).
 
 
 set_mocked_attribute_mapping_cfg(Cfg) ->
-    application:set_env(oz_worker, mocked_attribute_mapping_cfg, Cfg).
+    oz_worker:set_env(mocked_attribute_mapping_cfg, Cfg).
 
 
 %%%===================================================================

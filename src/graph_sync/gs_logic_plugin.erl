@@ -26,7 +26,7 @@
 -export([authorize/1]).
 -export([client_to_identity/1, root_client/0]).
 -export([client_connected/3, client_disconnected/3]).
--export([verify_auth_override/1]).
+-export([verify_auth_override/2]).
 -export([is_authorized/5]).
 -export([handle_rpc/4]).
 -export([handle_graph_request/6]).
@@ -45,20 +45,15 @@
     {ok, gs_protocol:client(), gs_server:connection_info(), cowboy_req:req()}  |
     gs_protocol:error().
 authorize(Req) ->
-    case authorize_by_session_cookie(Req) of
-        {true, CookieClient, Cookie, NewReq} ->
-            {ok, CookieClient, new_gui_session:get_session_id(Cookie), NewReq};
-        ?ERROR_UNAUTHORIZED ->
+    case authorize_by_macaroons(Req) of
+        {true, MacaroonClient, ConnectionInfo, NewReq} ->
+            {ok, MacaroonClient, ConnectionInfo, NewReq};
+        {true, MacaroonClient} ->
+            {ok, MacaroonClient, undefined, Req};
+        {error, _} ->
             ?ERROR_UNAUTHORIZED;
         false ->
-            case auth_logic:authorize_by_macaroons(Req) of
-                {true, MacaroonClient} ->
-                    {ok, MacaroonClient, undefined, Req};
-                {error, _} ->
-                    ?ERROR_UNAUTHORIZED;
-                false ->
-                    {ok, ?NOBODY, undefined, Req}
-            end
+            {ok, ?NOBODY, undefined, Req}
     end.
 
 
@@ -94,7 +89,7 @@ client_connected(?PROVIDER(ProvId), _, ConnectionRef) ->
     {ok, ProviderRecord = #od_provider{
         name = Name
     }} = provider_logic:get(?ROOT, ProvId),
-    ?info("Provider '~s' (~s) has connected", [Name, ProvId]),
+    ?info("Provider '~ts' has connected (~s)", [Name, ProvId]),
     provider_connection:add_connection(ProvId, ConnectionRef),
     % Generate a dummy update which will cause a push to GUI clients so that
     % they can learn the provider is now online.
@@ -119,7 +114,7 @@ client_connected(_, _, _) ->
 client_disconnected(?PROVIDER(ProvId), _, _ConnectionRef) ->
     case provider_logic:get(?ROOT, ProvId) of
         {ok, ProviderRecord = #od_provider{name = Name}} ->
-            ?info("Provider '~s' (~s) went offline", [Name, ProvId]),
+            ?info("Provider '~ts' went offline (~s)", [Name, ProvId]),
             % Generate a dummy update which will cause a push to GUI clients so that
             % they can learn the provider is now offline.
             gs_server:updated(
@@ -141,17 +136,30 @@ client_disconnected(_, _, _) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link gs_logic_plugin_behaviour} callback verify_auth_override/1.
+%% {@link gs_logic_plugin_behaviour} callback verify_auth_override/2.
 %% @end
 %%--------------------------------------------------------------------
--spec verify_auth_override(gs_protocol:auth_override()) ->
+-spec verify_auth_override(gs_protocol:client(), gs_protocol:auth_override()) ->
     {ok, gs_protocol:client()} | gs_protocol:error().
-verify_auth_override({macaroon, Macaroon, DischMacaroons}) ->
+verify_auth_override(Client, {macaroon, Macaroon, DischMacaroons}) ->
     case auth_logic:authorize_by_macaroons(Macaroon, DischMacaroons) of
-        {true, Client} -> {ok, Client};
-        {error, _} = Error -> Error
+        {true, OverrideClient1} ->
+            {ok, OverrideClient1};
+        {error, _} = Error1 ->
+            case Client of
+                ?PROVIDER(ProviderId) ->
+                    case auth_logic:authorize_by_gui_macaroon(Macaroon, undefined, ?ONEPROVIDER, ProviderId) of
+                        {true, OverrideClient2} ->
+                            {ok, OverrideClient2};
+                        {error, _} = Error2 ->
+                            Error2
+                    end;
+                _ ->
+                    Error1
+            end
+
     end;
-verify_auth_override(_) ->
+verify_auth_override(_, _) ->
     ?ERROR_UNAUTHORIZED.
 
 
@@ -195,13 +203,17 @@ handle_rpc(_, _, <<"getSupportedIdPs">>, Data) ->
                     #{
                         <<"id">> => <<"onepanel">>,
                         <<"displayName">> => <<"Onepanel account">>,
-                        <<"iconPath">> => <<"/assets/images/auth-providers/onepanel.svg">>,
+                        <<"iconPath">> => gui_static:oz_worker_gui_path(
+                            <<"/assets/images/auth-providers/onepanel.svg">>
+                        ),
                         <<"iconBackgroundColor">> => <<"#4BD187">>
                     },
                     #{
                         <<"id">> => <<"devLogin">>,
                         <<"displayName">> => <<"Developer Login">>,
-                        <<"iconPath">> => <<"/assets/images/auth-providers/default.svg">>
+                        <<"iconPath">> => gui_static:oz_worker_gui_path(
+                            <<"/assets/images/auth-providers/default.svg">>
+                        )
                     }
                 ]}
             };
@@ -211,8 +223,8 @@ handle_rpc(_, _, <<"getSupportedIdPs">>, Data) ->
             }}
     end;
 handle_rpc(_, Client, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
-    case oz_worker:get_env(dev_mode) of
-        {ok, true} ->
+    case oz_worker:get_env(dev_mode, false) of
+        true ->
             {ok, #{
                 <<"method">> => <<"get">>,
                 <<"url">> => <<"/dev_login">>,
@@ -279,47 +291,21 @@ is_subscribable(#gri{type = EntityType, aspect = Aspect, scope = Scope}) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Tries to authorize the client based on session cookie.
+%% Tries to authorize the client based on a token in URL params or a proper header.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_session_cookie(cowboy_req:req()) ->
-    false | {true, gs_protocol:client()}.
-authorize_by_session_cookie(Req) ->
-    case new_gui_session:validate(Req) of
-        {ok, UserId, Cookie, NewReq} ->
-            case check_ws_origin(Req) of
-                true ->
-                    {true, ?USER(UserId), Cookie, NewReq};
-                false ->
-                    ?ERROR_UNAUTHORIZED
-            end;
-        {error, no_session_cookie} ->
-            false;
-        {error, invalid} ->
-            false
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Checks if WebSocket connection origin is within the Onezone domain (or IP).
-%% If not, the connection is declined. The check_ws_origin env can be used
-%% to disable this check.
-%% @end
-%%--------------------------------------------------------------------
--spec check_ws_origin(cowboy_req:req()) -> boolean().
-check_ws_origin(Req) ->
-    case oz_worker:get_env(check_ws_origin, true) of
-        false ->
-            true;
-        _ ->
-            OriginHeader = cowboy_req:header(<<"origin">>, Req),
-            URL = case OriginHeader of
-                <<"wss://", Rest/binary>> -> Rest;
-                _ -> OriginHeader
-            end,
-            Host = maps:get(host, url_utils:parse(URL)),
-            {_, IP} = inet:parse_ipv4strict_address(binary_to_list(Host)),
-            (oz_worker:get_domain() == Host) or (IP == node_manager:get_ip_address())
+-spec authorize_by_macaroons(cowboy_req:req()) ->
+    false | {error, term()} | {true, gs_protocol:client()} |
+    {true, gs_protocol:client(), gs_server:connection_info(), cowboy_req:req()}.
+authorize_by_macaroons(Req) ->
+    QueryParams = cowboy_req:parse_qs(Req),
+    case proplists:get_value(<<"token">>, QueryParams, undefined) of
+        undefined ->
+            auth_logic:authorize_by_macaroons(Req);
+        Token ->
+            SessionId = gui_session:get_session_id(Req),
+            case auth_logic:authorize_by_onezone_gui_macaroon(Token, SessionId) of
+                {true, Client} -> {true, Client, SessionId, Req};
+                {error, _} = Error -> Error
+            end
     end.

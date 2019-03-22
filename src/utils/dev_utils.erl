@@ -5,8 +5,8 @@
 %%% cited in 'LICENSE.txt'
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc This module contains functionas used for development purposes,
-%%% mostly setting up test environment.
+%%% @doc This module contains functions used for development purposes,
+%%% mostly setting up test environment using the env_up script.
 %%% The input arguments for set_up_test_entities/3, destroy_test_entities/3 are as follows:
 %%%
 %%%     Users = [
@@ -50,12 +50,14 @@
 %%%-------------------------------------------------------------------
 -module(dev_utils).
 
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([set_up_test_entities/3, destroy_test_entities/3]).
+-export([dev_provider_registration_route/0]).
+-export([set_up_users/1, set_up_test_entities/3, destroy_test_entities/3]).
 -export([create_user_with_uuid/2]).
 -export([create_group_with_uuid/3]).
 -export([create_space_with_uuid/3, create_space_with_provider/4]).
@@ -64,37 +66,56 @@
 %%% API
 %%%===================================================================
 
+dev_provider_registration_route() ->
+    {<<"/providers/dev">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_provider, aspect = instance_dev}
+    }}.
+
 %%--------------------------------------------------------------------
-%% @doc Creates given entities in GR database, with all the dependencies (supports, group joining etc).
-%% Used for development purposes to set up an environment using the env_up script.
+%% @doc
+%% Creates users in Onezone database. Must be done before registering
+%% providers so that they are linked to the provider clusters.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_up_users(Users :: term()) -> ok | error.
+set_up_users(Users) ->
+    try
+        lists:foreach(fun({UserId, Props}) ->
+            DefaultSpace = proplists:get_value(<<"default_space">>, Props),
+            UserInfo = #od_user{
+                name = UserId,
+                alias = UserId,
+                emails = [<<UserId/binary, "@gmail.com">>],
+                linked_accounts = [
+                    #linked_account{idp = google,
+                        subject_id = <<UserId/binary, "#oauth_id">>,
+                        alias = <<UserId/binary, "#oauth_login">>,
+                        name = UserId,
+                        emails = [<<UserId/binary, "@gmail.com">>]
+                    }
+                ],
+                spaces = [],
+                default_space = DefaultSpace,
+                groups = []
+            },
+            {ok, UserId} = create_user_with_uuid(UserInfo, UserId)
+        end, Users)
+    catch
+        T:M ->
+            ?error_stacktrace("Cannot set up users - ~p:~p", [T, M]),
+            error
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates given entities in Onezone database, with all the
+%% dependencies (supports, group joining etc).
 %% @end
 %%--------------------------------------------------------------------
 -spec set_up_test_entities(Users :: term(), Groups :: term(), Spaces :: term()) -> ok | error.
 set_up_test_entities(Users, Groups, Spaces) ->
     try
-        % Create users
-        lists:foreach(
-            fun({UserId, Props}) ->
-                DefaultSpace = proplists:get_value(<<"default_space">>, Props),
-                UserInfo = #od_user{
-                    name = UserId,
-                    alias = UserId,
-                    emails = [<<UserId/binary, "@gmail.com">>],
-                    linked_accounts = [
-                        #linked_account{idp = google,
-                            subject_id = <<UserId/binary, "#oauth_id">>,
-                            alias = <<UserId/binary, "#oauth_login">>,
-                            name = UserId,
-                            emails = [<<UserId/binary, "@gmail.com">>]
-                        }
-                    ],
-                    spaces = [],
-                    default_space = DefaultSpace,
-                    groups = []
-                },
-                {ok, UserId} = create_user_with_uuid(UserInfo, UserId)
-            end, Users),
-
         % Create groups
         lists:foldl(
             fun({GroupId, Props}, Acc) ->

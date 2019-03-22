@@ -12,7 +12,7 @@
 -module(group_users_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -116,7 +116,7 @@ create_user_invite_token_test(Config) ->
     %   U2 gets the GROUP_INVITE_USER privilege
     %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_INVITE_USER
+        Config, ?GROUP_ADD_USER
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -250,7 +250,7 @@ add_user_test(Config) ->
     % group as a user
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
     {ok, SubGroup1} = oz_test_utils:group_add_group(Config, G1, SubGroup1),
-    oz_test_utils:group_set_group_privileges(Config, G1, SubGroup1, [?GROUP_INVITE_USER], []),
+    oz_test_utils:group_set_group_privileges(Config, G1, SubGroup1, [?GROUP_ADD_USER], []),
 
     % EffectiveUserWithoutInvitePriv belongs to group G1 effectively via SubGroup2,
     % but without the effective privilege to INVITE_USER, so he should NOT be able
@@ -324,7 +324,7 @@ add_user_with_privileges_test(Config) ->
     % able to join the parent group as a user with given privileges
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
     {ok, SubGroup1} = oz_test_utils:group_add_group(Config, G1, SubGroup1),
-    oz_test_utils:group_set_group_privileges(Config, G1, SubGroup1, [?GROUP_INVITE_USER, ?GROUP_SET_PRIVILEGES], []),
+    oz_test_utils:group_set_group_privileges(Config, G1, SubGroup1, [?GROUP_ADD_USER, ?GROUP_SET_PRIVILEGES], []),
 
     % EffectiveUserWithoutInvitePriv belongs to group G1 effectively via SubGroup2,
     % but without the effective privilege to INVITE_USER and SET_PRIVILEGES, so
@@ -381,7 +381,7 @@ add_user_with_privileges_test(Config) ->
             correct_values = #{
                 <<"privileges">> => [
                     [?GROUP_ADD_PARENT, ?GROUP_REMOVE_CHILD],
-                    [?GROUP_INVITE_USER, ?GROUP_VIEW]
+                    [?GROUP_ADD_USER, ?GROUP_VIEW]
                 ]
             },
             bad_values = [

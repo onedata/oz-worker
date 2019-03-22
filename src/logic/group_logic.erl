@@ -48,6 +48,7 @@
     create_child_group/3, create_child_group/4,
     join_group/3,
     join_space/3,
+    join_cluster/3,
 
     add_user/3, add_user/4,
     add_group/3, add_group/4,
@@ -77,6 +78,9 @@
     get_handles/2, get_eff_handles/2,
     get_handle/3, get_eff_handle/3,
 
+    get_clusters/2, get_eff_clusters/2,
+    get_cluster/3, get_eff_cluster/3,
+
     update_user_privileges/5, update_user_privileges/4,
     update_child_privileges/5, update_child_privileges/4,
 
@@ -84,6 +88,7 @@
     leave_space/3,
     leave_handle_service/3,
     leave_handle/3,
+    leave_cluster/3,
 
     remove_user/3,
     remove_group/3
@@ -98,6 +103,7 @@
     has_eff_provider/2,
     has_eff_handle_service/2,
     has_eff_handle/2,
+    has_eff_cluster/2,
     has_eff_privilege/3
 ]).
 -export([
@@ -549,6 +555,29 @@ join_space(Client, GroupId, Data) when is_map(Data) ->
     }));
 join_space(Client, GroupId, Token) ->
     join_space(Client, GroupId, #{<<"token">> => Token}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Joins a cluster on behalf of given user based on cluster_invite_user token.
+%% Has two variants:
+%% 1) Token is given explicitly (as binary() or macaroon())
+%% 2) Token is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec join_cluster(Client :: entity_logic:client(), GroupId :: od_group:id(),
+    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    {ok, od_cluster:id()} | {error, term()}.
+join_cluster(Client, GroupId, Data) when is_map(Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_cluster, id = undefined, aspect = join},
+        auth_hint = ?AS_GROUP(GroupId),
+        data = Data
+    }));
+join_cluster(Client, GroupId, Token) ->
+    join_cluster(Client, GroupId, #{<<"token">> => Token}).
 
 
 %%--------------------------------------------------------------------
@@ -1151,6 +1180,69 @@ get_eff_handle(Client, GroupId, HandleId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves the list of clusters of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_clusters(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_cluster:id()]} | {error, term()}.
+get_clusters(Client, GroupId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_group, id = GroupId, aspect = clusters}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective clusters of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_clusters(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, [od_cluster:id()]} | {error, term()}.
+get_eff_clusters(Client, GroupId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_group, id = GroupId, aspect = eff_clusters}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific cluster among clusters of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_cluster(Client :: entity_logic:client(), GroupId :: od_group:id(),
+    ClusterId :: od_cluster:id()) -> {ok, #{}} | {error, term()}.
+get_cluster(Client, GroupId, ClusterId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_cluster, id = ClusterId, aspect = instance, scope = protected},
+        auth_hint = ?THROUGH_GROUP(GroupId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective cluster among
+%% effective clusters of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_cluster(Client :: entity_logic:client(), GroupId :: od_group:id(),
+    ClusterId :: od_cluster:id()) -> {ok, #{}} | {error, term()}.
+get_eff_cluster(Client, GroupId, ClusterId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_cluster, id = ClusterId, aspect = instance, scope = protected},
+        auth_hint = ?THROUGH_GROUP(GroupId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Updates privileges of specified user of given group.
 %% Allows to specify privileges to grant and to revoke.
 %% @end
@@ -1274,6 +1366,20 @@ leave_handle(Client, GroupId, HandleId) ->
         gri = #gri{type = od_group, id = GroupId, aspect = {handle, HandleId}}
     }).
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves specified cluster on behalf of given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec leave_cluster(Client :: entity_logic:client(), GroupId :: od_user:id(),
+    ClusterId :: od_cluster:id()) -> ok | {error, term()}.
+leave_cluster(Client, GroupId, ClusterId) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_group, id = GroupId, aspect = {cluster, ClusterId}}
+    }).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -1435,6 +1541,19 @@ has_eff_handle(Group, HandleId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Predicate saying whether specified group is an effective group in given cluster.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_cluster(GroupOrId :: od_group:id() | #od_group{},
+    ClusterId :: od_cluster:id()) -> boolean().
+has_eff_cluster(GroupId, ClusterId) when is_binary(GroupId) ->
+    entity_graph:has_relation(effective, top_down, od_cluster, ClusterId, od_group, GroupId);
+has_eff_cluster(Group, ClusterId) ->
+    entity_graph:has_relation(effective, top_down, od_cluster, ClusterId, Group).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Predicate saying whether specified effective user has specified
 %% effective privilege in given group.
 %% @end
@@ -1455,7 +1574,7 @@ has_eff_privilege(Group, UserId, Privilege) ->
 %%--------------------------------------------------------------------
 -spec create_predefined_groups() -> ok.
 create_predefined_groups() ->
-    {ok, PredefinedGroups} = oz_worker:get_env(predefined_groups),
+    PredefinedGroups = oz_worker:get_env(predefined_groups),
     lists:foreach(
         fun(GroupMap) ->
             Id = maps:get(id, GroupMap),
@@ -1486,9 +1605,9 @@ create_predefined_groups() ->
     Privileges :: [privileges:oz_privilege()]) -> ok | error.
 create_predefined_group(GroupId, Name, Privileges) ->
     NormalizedName = entity_logic:normalize_name(Name),
-    case od_group:exists(GroupId) of
+    Result = case od_group:exists(GroupId) of
         {ok, true} ->
-            ?info("Predefined group '~s' already exists, skipping.", [
+            ?info("Predefined group '~ts' already exists, refreshing name and privileges.", [
                 NormalizedName
             ]),
             ok;
@@ -1503,12 +1622,16 @@ create_predefined_group(GroupId, Name, Privileges) ->
                 }},
             case od_group:create(NewGroup) of
                 {ok, _} ->
-                    ok = update_oz_privileges(?ROOT, GroupId, Privileges, []),
-                    ?info("Created predefined group '~s'", [NormalizedName]),
+                    ?info("Created predefined group '~ts'", [NormalizedName]),
                     ok;
                 Other ->
-                    ?error("Cannot create predefined group '~s' - ~p",
-                        [GroupId, Other]),
+                    ?error("Cannot create predefined group '~ts' - ~p",
+                        [NormalizedName, Other]),
                     error
             end
-    end.
+    end,
+    Result == ok andalso begin
+        ok = update(?ROOT, GroupId, #{<<"name">> => NormalizedName}),
+        ok = update_oz_privileges(?ROOT, GroupId, Privileges, privileges:oz_admin() -- Privileges)
+    end,
+    Result.

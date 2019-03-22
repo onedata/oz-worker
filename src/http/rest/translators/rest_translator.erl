@@ -12,7 +12,7 @@
 -module(rest_translator).
 -author("Lukasz Opiola").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("registered_names.hrl").
 
 -export([response/2]).
@@ -83,7 +83,7 @@ ok_no_content_reply() ->
 created_reply([<<"/", Path/binary>> | Tail]) ->
     created_reply([Path | Tail]);
 created_reply(PathTokens) ->
-    {ok, RestPrefix} = oz_worker:get_env(rest_api_prefix),
+    RestPrefix = oz_worker:get_env(rest_api_prefix),
     Path = filename:join([RestPrefix | PathTokens]),
     LocationHeader = #{<<"Location">> => oz_worker:get_uri(Path)},
     #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
@@ -139,4 +139,5 @@ entity_type_to_translator(od_share) -> share_rest_translator;
 entity_type_to_translator(od_provider) -> provider_rest_translator;
 entity_type_to_translator(od_handle_service) -> handle_service_rest_translator;
 entity_type_to_translator(od_handle) -> handle_rest_translator;
+entity_type_to_translator(od_cluster) -> cluster_rest_translator;
 entity_type_to_translator(oz_worker) -> zone_rest_translator.

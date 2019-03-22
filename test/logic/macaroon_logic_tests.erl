@@ -18,6 +18,7 @@
 -include("datastore/oz_datastore_models.hrl").
 
 -define(MOCK_MAX_PROVIDER_MACAROON_TTL, 3600).
+-define(TIME_MOCK_STARTING_TIMESTAMP, 1500000000).
 
 %%%===================================================================
 %%% Tests generator
@@ -30,7 +31,11 @@ macaroon_logic_test_() ->
         [
             fun create_provider_auth/0,
             fun verify_provider_auth/0,
-            fun verify_provider_identity/0
+            fun verify_provider_identity/0,
+            fun create_gui_macaroon/0,
+            fun verify_gui_macaroon/0,
+            fun should_refresh_gui_macaroon/0,
+            fun delete_gui_macaroon/0
         ]
     }.
 
@@ -40,45 +45,60 @@ macaroon_logic_test_() ->
 
 setup() ->
     % Use process memory for storing macaroons data
-    meck:new(macaroon_auth, []),
-    meck:expect(macaroon_auth, create, fun(Secret, Type, Issuer) ->
-        Id = datastore_utils:gen_key(),
-        put(Id, {Secret, Type, Issuer}),
-        {ok, Id}
-    end),
-    meck:expect(macaroon_auth, get, fun(Id) ->
-        case get(Id) of
-            {Secret, Type, Issuer} ->
-                {ok, #macaroon_auth{secret = Secret, type = Type, issuer = Issuer}};
-            _ ->
-                {error, not_found}
-        end
-    end),
-    meck:expect(macaroon_auth, delete, fun(Id) ->
-        put(Id, undefined),
-        ok
-    end),
+    MacaroonRecords = [macaroon_auth, volatile_macaroon],
+    lists:foreach(fun(Module) ->
+        meck:new(Module, []),
+        meck:expect(Module, create, fun(Secret, Issuer) ->
+            Id = datastore_utils:gen_key(),
+            put(Id, {Secret, Issuer}),
+            {ok, Id}
+        end),
+        meck:expect(Module, get, fun(Id) ->
+            case get(Id) of
+                {Secret, Issuer} ->
+                    {ok, Secret, Issuer};
+                _ ->
+                    {error, not_found}
+            end
+        end),
+        meck:expect(Module, delete, fun(Id) ->
+            put(Id, undefined),
+            ok
+        end)
+    end, MacaroonRecords),
 
     meck:new(time_utils, [passthrough]),
     meck:expect(time_utils, cluster_time_seconds, fun() ->
-        time_utils:system_time_seconds()
+        get_mocked_time()
     end),
 
     oz_worker:set_env(http_domain, "dummy-location.org"),
     oz_worker:set_env(max_provider_macaroon_ttl, ?MOCK_MAX_PROVIDER_MACAROON_TTL).
 
 teardown(_) ->
-    ?assert(meck:validate(macaroon_auth)),
+    MacaroonRecords = [macaroon_auth, volatile_macaroon],
+    lists:foreach(fun(Module) ->
+        ?assert(meck:validate(Module)),
+        ok = meck:unload(Module)
+    end, MacaroonRecords),
     ?assert(meck:validate(time_utils)),
-    ok = meck:unload(macaroon_auth),
     ok = meck:unload(time_utils).
 
+get_mocked_time() ->
+    oz_worker:get_env(mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP).
 
+simulate_time_passing(Seconds) ->
+    oz_worker:set_env(mocked_time, get_mocked_time() + Seconds),
+    ok.
+
+%%%===================================================================
+%%% Tests
+%%%===================================================================
 
 create_provider_auth() ->
     ProviderId = <<"12345">>,
     {ok, {_Macaroon, Identifier}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
-    {ok, _} = macaroon_auth:get(Identifier).
+    ?assertMatch({ok, _, _}, macaroon_auth:get(Identifier)).
 
 
 verify_provider_auth() ->
@@ -147,3 +167,85 @@ verify_provider_identity() ->
         ?AUTHORIZATION_NONE_CAVEAT
     ),
     ?assertEqual({ok, ProviderId}, macaroon_logic:verify_provider_identity(MacaroonWithTTLAndNoAuth)).
+
+
+create_gui_macaroon() ->
+    create_gui_macaroon(?ONEPROVIDER, <<"12345">>),
+    create_gui_macaroon(?ONEZONE, ?ONEZONE_SERVICE_ID).
+
+create_gui_macaroon(ClusterType, ServiceId) ->
+    SessionId = <<ServiceId/binary, "-session">>,
+    {ok, {Identifier, _Macaroon, _Expires}} = macaroon_logic:create_gui_macaroon(
+        <<"user">>, SessionId, ClusterType, ServiceId
+    ),
+    ?assertMatch({ok, _, _}, volatile_macaroon:get(Identifier)).
+
+
+verify_gui_macaroon() ->
+    verify_gui_macaroon(?ONEPROVIDER, <<"abcds">>),
+    verify_gui_macaroon(?ONEZONE, ?ONEZONE_SERVICE_ID).
+
+verify_gui_macaroon(ClusterType, ServiceId) ->
+    [OtherClusterType] = [?ONEPROVIDER, ?ONEZONE] -- [ClusterType],
+    SessionId = <<ServiceId/binary, "-session">>,
+    UserId = <<"mockuserid789992">>,
+    {ok, {Identifier, Macaroon, Expires}} = macaroon_logic:create_gui_macaroon(
+        UserId,SessionId, ClusterType, ServiceId
+    ),
+    SessionVerifyFun = fun(VerifySessionId, VerifyId) ->
+        VerifySessionId == SessionId andalso VerifyId == Identifier
+    end,
+    ?assertEqual(
+        {ok, UserId},
+        macaroon_logic:verify_gui_macaroon(Macaroon, ClusterType, ServiceId, SessionVerifyFun)
+    ),
+    ?assertEqual(
+        ?ERROR_MACAROON_INVALID,
+        macaroon_logic:verify_gui_macaroon(Macaroon, OtherClusterType, ServiceId, SessionVerifyFun)
+    ),
+    ?assertEqual(
+        ?ERROR_MACAROON_INVALID,
+        macaroon_logic:verify_gui_macaroon(Macaroon, ClusterType, <<"asdad">>, SessionVerifyFun)
+    ),
+
+    simulate_time_passing(Expires - get_mocked_time() + 1),
+    ?assertEqual(
+        ?ERROR_MACAROON_INVALID,
+        macaroon_logic:verify_gui_macaroon(Macaroon, ClusterType, <<"asdad">>, SessionVerifyFun)
+    ).
+
+
+should_refresh_gui_macaroon() ->
+    should_refresh_gui_macaroon(?ONEPROVIDER, <<"dfvaerwfasdf">>),
+    should_refresh_gui_macaroon(?ONEZONE, ?ONEZONE_SERVICE_ID).
+
+should_refresh_gui_macaroon(ClusterType, ServiceId) ->
+    {ok, {_Identifier, _Macaroon, Expires}} = macaroon_logic:create_gui_macaroon(
+        <<"user">>, <<"session">>, ClusterType, ServiceId
+    ),
+    ?assertEqual(false, macaroon_logic:should_refresh_gui_macaroon(Expires)),
+    simulate_time_passing(Expires - get_mocked_time() + 1),
+    ?assertEqual(true, macaroon_logic:should_refresh_gui_macaroon(Expires)).
+
+
+delete_gui_macaroon() ->
+    delete_gui_macaroon(?ONEPROVIDER, <<"12345abcd">>),
+    delete_gui_macaroon(?ONEZONE, ?ONEZONE_SERVICE_ID).
+
+delete_gui_macaroon(ClusterType, ServiceId) ->
+    UserId = <<"kosdhfsdf">>,
+    SessionVerifyFun = fun(_, _) -> true end,
+    {ok, {Identifier, Macaroon, _Expires}} = macaroon_logic:create_gui_macaroon(
+        UserId, <<"session">>, ClusterType, ServiceId
+    ),
+
+    ?assertEqual(
+        {ok, UserId},
+        macaroon_logic:verify_gui_macaroon(Macaroon, ClusterType, ServiceId, SessionVerifyFun)
+    ),
+    ?assertEqual(ok, macaroon_logic:delete_gui_macaroon(Macaroon)),
+    ?assertEqual({error, not_found}, volatile_macaroon:get(Identifier)),
+    ?assertEqual(
+        ?ERROR_MACAROON_INVALID,
+        macaroon_logic:verify_gui_macaroon(Macaroon, ClusterType, ServiceId, SessionVerifyFun)
+    ).
