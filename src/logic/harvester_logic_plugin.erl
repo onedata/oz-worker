@@ -1032,7 +1032,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = gui_plugin_config}}) ->
 validate(#el_req{operation = update, gri = #gri{aspect = {index, _}}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"guiPluginName">> => {binary, name}
+        <<"guiPluginName">> => {binary, any}
     }
 };
 
