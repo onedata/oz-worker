@@ -38,6 +38,7 @@
     get_eff_user_membership_intermediaries/3,
     get_eff_groups/2, get_eff_group/3,
     get_eff_group_membership_intermediaries/3,
+    get_eff_harvesters/2,
     get_spaces/2, get_space/3,
     support_space/4, support_space/3,
     update_support_size/4,
@@ -59,6 +60,7 @@
     exists/1,
     has_eff_user/2,
     has_eff_group/2,
+    has_eff_harvester/2,
     supports_space/2
 ]).
 -export([
@@ -453,6 +455,21 @@ get_eff_group_membership_intermediaries(Client, ProviderId, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves the list of effective harvesters of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_harvesters(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+    {ok, [od_harvester:id()]} | {error, term()}.
+get_eff_harvesters(Client, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = eff_harvesters}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Retrieves the list of spaces of given provider.
 %% @end
 %%--------------------------------------------------------------------
@@ -620,6 +637,19 @@ has_eff_group(ProviderId, GroupId) when is_binary(ProviderId) ->
     entity_graph:has_relation(effective, bottom_up, od_group, GroupId, od_provider, ProviderId);
 has_eff_group(Provider, GroupId) ->
     entity_graph:has_relation(effective, bottom_up, od_group, GroupId, Provider).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified harvester is an effective harvester of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_harvester(ProviderOrId :: od_provider:id() | #od_provider{},
+    HarvesterId :: od_provider:id()) -> boolean().
+has_eff_harvester(ProviderId, HarvesterId) when is_binary(ProviderId) ->
+    entity_graph:has_relation(effective, bottom_up, od_harvester, HarvesterId, od_provider, ProviderId);
+has_eff_harvester(Provider, HarvesterId) ->
+    entity_graph:has_relation(effective, bottom_up, od_harvester, HarvesterId, Provider).
 
 
 %%--------------------------------------------------------------------

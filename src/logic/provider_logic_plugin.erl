@@ -247,6 +247,8 @@ get(#el_req{gri = #gri{aspect = eff_groups}}, Provider) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_group, Provider)};
 get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Provider) ->
     {ok, entity_graph:get_intermediaries(bottom_up, od_group, GroupId, Provider)};
+get(#el_req{gri = #gri{aspect = eff_harvesters}}, Provider) ->
+    {ok, entity_graph:get_relations(effective, bottom_up, od_harvester, Provider)};
 
 get(#el_req{gri = #gri{aspect = spaces}}, Provider) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_space, Provider)};
@@ -470,6 +472,9 @@ authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_group_membership, _}}}, _) ->
     auth_by_self(Req);
 
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_harvesters}}, _) ->
+    auth_by_self(Req);
+
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = spaces}}, _) ->
     auth_by_self(Req);
 
@@ -527,6 +532,8 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_group
     [?OZ_PROVIDERS_LIST_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {eff_group_membership, _}}}) ->
     [?OZ_PROVIDERS_VIEW];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_harvesters}}) ->
+    [?OZ_PROVIDERS_LIST_RELATIONSHIPS];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = spaces}}) ->
     [?OZ_PROVIDERS_LIST_RELATIONSHIPS];

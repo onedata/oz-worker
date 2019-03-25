@@ -1890,8 +1890,8 @@ get_all_eff_relations(bottom_up, #od_space{} = Space) ->
     #od_space{eff_users = EffUsers, eff_groups = EffGroups, eff_harvesters = EffHarvesters} = Space,
     #{od_user => EffUsers, od_group => EffGroups, od_harvester => EffHarvesters};
 get_all_eff_relations(bottom_up, #od_provider{} = Provider) ->
-    #od_provider{eff_users = EffUsers, eff_groups = EffGroups} = Provider,
-    #{od_user => EffUsers, od_group => EffGroups};
+    #od_provider{eff_users = EffUsers, eff_groups = EffGroups, eff_harvesters = EffHarvesters} = Provider,
+    #{od_user => EffUsers, od_group => EffGroups, od_harvester => EffHarvesters};
 get_all_eff_relations(bottom_up, #od_handle_service{} = HService) ->
     #od_handle_service{eff_users = EffUsers, eff_groups = EffGroups} = HService,
     #{od_user => EffUsers, od_group => EffGroups};
