@@ -157,9 +157,6 @@ is_authorized(Req, State) ->
 
     case Result of
         % Always return true - authorization is checked by entity_logic later.
-        {true, {Client, _SessionId}} ->
-            % Returned from auth_logic:authorize_by_oneprovider_gui_macaroon/1
-            {true, Req, State#state{client = Client}};
         {true, Client} ->
             {true, Req, State#state{client = Client}};
         {error, _} = Error ->
@@ -404,6 +401,9 @@ authorize(Req, [AuthMethod | Rest]) ->
     case AuthMethod(Req) of
         false ->
             authorize(Req, Rest);
+        {true, Client, _SessionId} ->
+            % Can be returned from auth_logic:authorize_by_oneprovider_gui_macaroon/1
+            {true, Client};
         {true, Client} ->
             {true, Client};
         {error, Error} ->
