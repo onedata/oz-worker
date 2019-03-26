@@ -1081,7 +1081,7 @@ refresh_entity(Direction, EntityType, EntityId, Entity) ->
 %%    3) providers
 %% For top-down:
 %%    1) spaces
-%%    2) groups
+%%    2) groups, harvesters
 %%    3) users
 %% @end
 %%--------------------------------------------------------------------
@@ -1091,10 +1091,10 @@ get_priority(bottom_up, od_space) -> 1;
 get_priority(bottom_up, od_handle_service) -> 1;
 get_priority(bottom_up, od_handle) -> 1;
 get_priority(bottom_up, od_harvester) -> 1;
-get_priority(top_down, od_harvester) -> 1;
 get_priority(bottom_up, od_provider) -> 2;
 get_priority(top_down, od_space) -> 0;
 get_priority(top_down, od_group) -> 1;
+get_priority(top_down, od_harvester) -> 1;
 get_priority(top_down, od_user) -> 2.
 
 

@@ -43,10 +43,10 @@
     get_index_test/1,
     update_index_test/1,
     delete_index_test/1,
+    query_index_test/1,
     
     submit_entry_test/1,
-    delete_entry_test/1,
-    query_test/1
+    delete_entry_test/1
 ]).
 
 all() ->
@@ -64,10 +64,10 @@ all() ->
         get_index_test,
         update_index_test,
         delete_index_test,
+        query_index_test,
 
         submit_entry_test,
-        delete_entry_test,
-        query_test
+        delete_entry_test
     ]).
 
 
@@ -844,6 +844,74 @@ delete_index_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
 
 
+query_index_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT,
+        ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)),
+    oz_test_utils:harvester_add_user(Config, H1, U1),
+    {ok, IndexId} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U1}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U2}
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = harvester_logic,
+            function = query_index,
+            args = [client, H1, indexId, data],
+            expected_result = ?OK_BINARY(?MOCKED_QUERY_DATA)
+        },
+        rest_spec = #rest_spec{
+            method = post,
+            path = [<<"/harvesters/">>, H1, <<"/indices/">>, IndexId],
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{
+                <<"response">> => ?MOCKED_QUERY_DATA
+            }
+        },
+        data_spec = #data_spec{
+            required = [ <<"indexId">>, <<"path">>, <<"method">>],
+            optional = [<<"body">>],
+            correct_values = #{
+                <<"path">> => [<<"example_request">>],
+                <<"method">> => [<<"get">>, <<"post">>],
+                <<"indexId">> => [IndexId],
+                <<"body">> => [?TEST_DATA]
+            },
+            bad_values = [
+                {<<"method">>, <<"bad_method">>, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"method">>, [post, get])},
+                {<<"path">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"path">>)},
+                {<<"body">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"body">>)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % Test that anyone can query public harvester
+    oz_test_utils:update_harvester(Config, H1, #{<<"public">> => true}),
+
+    PublicHarvesterApiTestSpec = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {user, U1},
+                {user, U2}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, PublicHarvesterApiTestSpec)).
+
+
 list_indices_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
@@ -1005,74 +1073,6 @@ delete_entry_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
-
-
-query_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-
-    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT,  
-        ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)),
-    oz_test_utils:harvester_add_user(Config, H1, U1),
-    {ok, IndexId} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
-    
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U1}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U2}
-            ]
-        },
-        logic_spec = #logic_spec{
-            module = harvester_logic,
-            function = query,
-            args = [client, H1, indexId, data],
-            expected_result = ?OK_BINARY(?MOCKED_QUERY_DATA)
-        },
-        rest_spec = #rest_spec{
-            method = post,
-            path = [<<"/harvesters/">>, H1, <<"/indices/">>, IndexId],
-            expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"response">> => ?MOCKED_QUERY_DATA
-            }
-        },
-        data_spec = #data_spec{
-            required = [ <<"indexId">>, <<"path">>, <<"method">>],
-            optional = [<<"body">>],
-            correct_values = #{
-                <<"path">> => [<<"example_request">>],
-                <<"method">> => [<<"get">>, <<"post">>],
-                <<"indexId">> => [IndexId],
-                <<"body">> => [?TEST_DATA]
-            },
-            bad_values = [
-                {<<"method">>, <<"bad_method">>, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"method">>, [post, get])},
-                {<<"path">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"path">>)},
-                {<<"body">>, <<>>, ?ERROR_BAD_VALUE_EMPTY(<<"body">>)}
-            ]
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-    
-    % Test that anyone can query public harvester
-    oz_test_utils:update_harvester(Config, H1, #{<<"public">> => true}),
-    
-    PublicHarvesterApiTestSpec = ApiTestSpec#api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                {user, U1},
-                {user, U2}
-            ]
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, PublicHarvesterApiTestSpec)).
 
 
 %%%===================================================================

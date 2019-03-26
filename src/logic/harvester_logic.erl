@@ -36,10 +36,10 @@
 -export([
     create_index/3, create_index/5, 
     get_index/3, update_index/4,
-    delete_index/3,
+    delete_index/3, query_index/4,
     get_indices/2,
-    submit_entry/4, delete_entry/4,
-    query/4
+    
+    submit_entry/4, delete_entry/4
 ]).
 -export([
     create_user_invite_token/2,
@@ -319,7 +319,7 @@ get_index(Client, HarvesterId, IndexId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Updates name and guiPluginName of given index.
-%% Name and guiPluginName are provided in a proper Data object.
+%% Name and/or guiPluginName are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
@@ -370,9 +370,9 @@ delete_entry(Client, HarvesterId, FileId, Data) ->
 %% Query harvester backend using given data.
 %% @end
 %%--------------------------------------------------------------------
--spec query(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+-spec query_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
     IndexId :: od_harvester:index_id(), Data :: maps:map()) -> ok | {error, term()}.
-query(Client, HarvesterId, IndexId, Data) ->
+query_index(Client, HarvesterId, IndexId, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
         client = Client,

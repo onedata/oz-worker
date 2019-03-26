@@ -17,7 +17,7 @@
 %% Checks availability of server located at Endpoint.
 %% @end
 %%--------------------------------------------------------------------
--callback ping(Endpoint :: binary()) -> {ok | {error, term()}}.
+-callback ping(od_harvester:endpoint()) -> {ok | {error, term()}}.
 
 
 %%--------------------------------------------------------------------
@@ -25,8 +25,8 @@
 %% Creates index with given schema in server located at Endpoint.
 %% @end
 %%--------------------------------------------------------------------
--callback create_index(Endpoint :: binary(), HarvesterId :: od_harvester:id(), 
-    IndexId :: od_harvester:index_id(), Schema :: binary()) -> {ok | {error, term()}}.
+-callback create_index(od_harvester:endpoint(), od_harvester:id(), 
+    od_harvester:index_id(), od_harvester:schema()) -> {ok | {error, term()}}.
 
 
 %%--------------------------------------------------------------------
@@ -34,8 +34,8 @@
 %% Deletes given index from server located at Endpoint.
 %% @end
 %%--------------------------------------------------------------------
--callback delete_index(Endpoint :: binary(), HarvesterId :: od_harvester:id(), 
-    IndexId :: od_harvester:index_id()) -> {ok | {error, term()}}.
+-callback delete_index(od_harvester:endpoint(), od_harvester:id(), 
+    od_harvester:index_id()) -> {ok | {error, term()}}.
 
 
 %%--------------------------------------------------------------------
@@ -43,8 +43,8 @@
 %% Submits given Data to server located at Endpoint.
 %% @end
 %%--------------------------------------------------------------------
--callback submit_entry(Endpoint :: binary(), HarvesterId :: od_harvester:id(), 
-    IndexId :: od_harvester:index_id(), Id :: binary(), Data :: binary()) -> ok | {error, term()}.
+-callback submit_entry(od_harvester:endpoint(), od_harvester:id(), 
+    od_harvester:index_id(), Id :: binary(), Data :: binary()) -> ok | {error, term()}.
 
 
 %%--------------------------------------------------------------------
@@ -52,8 +52,8 @@
 %% Deletes entry in server located at Endpoint. 
 %% @end
 %%--------------------------------------------------------------------
--callback delete_entry(Endpoint :: binary(), HarvesterId :: od_harvester:id(), 
-    IndexId :: od_harvester:index_id(), Id :: binary()) -> ok | {error, term()}.
+-callback delete_entry(od_harvester:endpoint(), od_harvester:id(), 
+    od_harvester:index_id(), Id :: binary()) -> ok | {error, term()}.
 
 
 %%--------------------------------------------------------------------
@@ -62,8 +62,8 @@
 %% Data must conform to specification in query_validator/0.
 %% @end
 %%--------------------------------------------------------------------
--callback query(Endpoint :: binary(), HarvesterId :: od_harvester:id(), 
-    IndexId :: od_harvester:index_id(), Data :: #{}) -> {ok, maps:map()} | {error, term()}.
+-callback query(od_harvester:endpoint(), od_harvester:id(), 
+    od_harvester:index_id(), Data :: map()) -> {ok, map()} | {error, term()}.
 
 
 %%--------------------------------------------------------------------

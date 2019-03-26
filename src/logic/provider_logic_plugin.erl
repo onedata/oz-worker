@@ -76,7 +76,6 @@ operation_supported(get, {eff_user_membership, _}, private) -> true;
 operation_supported(get, eff_groups, private) -> true;
 operation_supported(get, {eff_group_membership, _}, private) -> true;
 operation_supported(get, eff_harvesters, private) -> true;
-operation_supported(get, {eff_harvesters_membership, _}, private) -> true;
 operation_supported(get, spaces, private) -> true;
 operation_supported(get, {user_spaces, _}, private) -> true;
 operation_supported(get, {group_spaces, _}, private) -> true;

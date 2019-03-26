@@ -893,6 +893,6 @@ has_provider(Space, ProviderId) ->
 -spec has_harvester(SpaceOrId :: od_space:id() | #od_space{},
     HarvesterId :: od_harvester:id()) -> boolean().
 has_harvester(SpaceId, HarvesterId) when is_binary(SpaceId) ->
-    entity_graph:has_relation(direct, top_down, od_harvester, HarvesterId, od_space, SpaceId);
+    entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, od_space, SpaceId);
 has_harvester(Space, HarvesterId) ->
-    entity_graph:has_relation(direct, top_down, od_harvester, HarvesterId, Space).
+    entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, Space).

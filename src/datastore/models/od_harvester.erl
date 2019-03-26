@@ -30,10 +30,14 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
+-type endpoint() :: binary().
+%fixme explain scheme
+-type schema() :: binary().
 -type index_id() :: binary().
 -type index() :: #harvester_index{}.
 -type indices() :: #{index_id() => #harvester_index{}}.
--export_type([name/0, index_id/0, index/0, indices/0]).
+-export_type([name/0, endpoint/0, schema/0, 
+    index_id/0, index/0, indices/0]).
 
 -define(CTX, #{
     model => ?MODULE,

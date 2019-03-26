@@ -440,7 +440,7 @@ get(#el_req{gri = #gri{aspect = {index, IndexId}}}, Harvester) ->
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 
 update(#el_req{gri = #gri{id = HarvesterId, aspect = instance}, data = Data}) ->
-    case od_harvester:update(HarvesterId, fun(Harvester) ->
+    UpdateFun = fun(Harvester) ->
         #od_harvester{
             name = Name, endpoint = Endpoint, 
             plugin = Plugin, public = Public
@@ -466,7 +466,8 @@ update(#el_req{gri = #gri{id = HarvesterId, aspect = instance}, data = Data}) ->
                     {error, _} = Error -> Error
                 end
         end
-    end) of
+    end,
+    case od_harvester:update(HarvesterId, UpdateFun) of
         {ok, _} -> ok;
         {error, _} = Error -> Error
     end;
@@ -945,8 +946,10 @@ validate(#el_req{operation = create, gri = #gri{aspect = {delete_entry, _}}}) ->
 validate(#el_req{operation = create, gri = #gri{aspect = index}}) -> #{
     required => #{
         <<"name">> => {binary, name},
-        <<"guiPluginName">> => {binary, any},
-        <<"schema">> => {binary, any}
+        <<"guiPluginName">> => {binary, any}
+    },
+    optional => #{
+        <<"schema">> => {binary, non_empty}
     }
 };
 
@@ -1098,8 +1101,8 @@ perform_index_operation(Operation, #state{harvester_id = HarvesterId, index_id =
 %% Updates given Indices appropriately for given Operation.
 %% @end
 %%--------------------------------------------------------------------
--spec update_indices(Operation :: atom(), Indices :: od_harvester:indices(), 
-    IndexId :: od_harvester:index_id(), Data :: maps:map()) -> od_harvester:indices().
+-spec update_indices(Operation :: atom(), od_harvester:indices(), 
+    od_harvester:index_id(), Data :: maps:map()) -> od_harvester:indices().
 update_indices(create_index, Indices, IndexId, Data) ->
     Name = maps:get(<<"name">>, Data),
     Schema = maps:get(<<"schema">>, Data),
@@ -1123,8 +1126,8 @@ update_indices(delete_index, Indices, IndexId, _) ->
 %% Returns lists of indices for which operation failed.
 %% @end
 %%--------------------------------------------------------------------
--spec perform_entry_operation(Operation :: atom(), Indices :: od_harvester:indices(), 
-    ProviderId :: od_provider:id(), State :: #state{}) -> {ok, [od_harvester:index_id()]}.
+-spec perform_entry_operation(Operation :: atom(), od_harvester:indices(), 
+    od_provider:id(), State :: #state{}) -> {ok, [od_harvester:index_id()]}.
 perform_entry_operation(Operation, Indices, ProviderId, State) ->
     #state{file_id = FileId, harvester_id = HarvesterId, data = Data} = State,
     #{
@@ -1170,11 +1173,11 @@ perform_entry_operation(Operation, Indices, ProviderId, State) ->
 %% @doc
 %% Updates max sequence number for given index record.
 %% When UpdateCurrentSeq flag is set to true value of current sequence number will also be updated.
-%% Sequence numbers are stored per space per provider
+%% Sequence numbers are stored per space per provider.
 %% @end
 %%--------------------------------------------------------------------
--spec set_seqs(#harvester_index{}, od_space:id(), od_provider:id(), boolean(), integer(), integer()) -> 
-    #harvester_index{}.
+-spec set_seqs(od_harvester:index(), od_space:id(), od_provider:id(), UpdateCurrentSeq :: boolean(), 
+    NewSeq :: non_neg_integer(), NewMaxSeq :: non_neg_integer()) -> od_harvester:index().
 set_seqs(IndexRecord, SpaceId, ProviderId, UpdateCurrentSeq, NewSeq, NewMaxSeq) -> 
     SeqsPerSpace = IndexRecord#harvester_index.seqs,
     SeqsPerProvider = maps:get(SpaceId, SeqsPerSpace, #{}),
@@ -1221,8 +1224,9 @@ call_plugin(delete_entry, State) ->
 call_plugin(create_index, State) ->
     #state{
         plugin = Plugin, endpoint = Endpoint, harvester_id = HarvesterId,
-        index_id = IndexId, data = #{<<"schema">> := Schema}
+        index_id = IndexId, data = Data
     } = State,
+    Schema = maps:get(<<"schema">>, Data, undefined),
     Plugin:create_index(Endpoint, HarvesterId, IndexId, Schema);
 call_plugin(delete_index, State) ->
     #state{

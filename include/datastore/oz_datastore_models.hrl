@@ -42,7 +42,7 @@
 %% This record must be defined here as od_harvester depends on it.
 -record(harvester_index, {
     name :: binary(),
-    schema = #{} :: maps:map(),
+    schema = undefined :: od_harvester:schema() | undefined,
     guiPluginName = <<>> :: binary(),
     seqs = #{} :: maps:map()
 }).
@@ -64,24 +64,26 @@
 %
 % The below ASCII visual shows possible relations in entities graph.
 %
-%     provider  harvester
-%           ^    ^ ^ ^ 
-%           |   /  |  \
-%           | user |  space
-%           |      |
-%         space    |   handle_service     handle
-%        ^ ^  ^    |    ^         ^       ^   ^
-%       /  |   \   |   /          |      /    |
-%      /   |    \  |  /           |     /     |
-%  share  user   group             user     group
-%                  ^                          ^
-%                  |                          |
-%                  |                          |
-%                group                       user
-%                ^   ^
-%               /     \
-%              /       \
-%            user     user
+%            provider
+%              ^
+%              |
+%              |
+%              |
+%            space            handle_service     handle
+%           ^ ^ ^ ^             ^         ^       ^  ^
+%          /  | |  \           /          |      /   |
+%         /   | |   \         /           |     /    |
+%        /   /   \   \       /            |    /     |
+%       /   /     \   \     /             |   /      |
+% share user harvester group             user      group
+%              ^    ^     ^                          ^
+%             /      \    |                          |
+%            /        \   |                          |
+%          user        group                        user
+%                      ^   ^
+%                     /     \
+%                    /       \
+%                  user      user
 %
 % Members of groups, spaces, providers, handle_services, handles and harvesters are
 % calculated bottom-up.
@@ -304,7 +306,7 @@
 -record(od_harvester, {
     name = <<"">> :: od_harvester:name(),
     plugin :: module(),
-    endpoint :: binary(),
+    endpoint :: od_harvester:endpoint(),
     
     gui_plugin_config = #{} :: json_utils:json_term(),
     public = false :: boolean(),
