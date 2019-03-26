@@ -190,13 +190,13 @@ verify_gui_macaroon(ClusterType, ServiceId) ->
     SessionId = <<ServiceId/binary, "-session">>,
     UserId = <<"mockuserid789992">>,
     {ok, {Identifier, Macaroon, Expires}} = macaroon_logic:create_gui_macaroon(
-        UserId,SessionId, ClusterType, ServiceId
+        UserId, SessionId, ClusterType, ServiceId
     ),
-    SessionVerifyFun = fun(VerifySessionId, VerifyId) ->
-        VerifySessionId == SessionId andalso VerifyId == Identifier
+    SessionVerifyFun = fun(_VerifySessionId, VerifyId) ->
+        VerifyId == Identifier
     end,
     ?assertEqual(
-        {ok, UserId},
+        {ok, UserId, SessionId},
         macaroon_logic:verify_gui_macaroon(Macaroon, ClusterType, ServiceId, SessionVerifyFun)
     ),
     ?assertEqual(
@@ -234,13 +234,14 @@ delete_gui_macaroon() ->
 
 delete_gui_macaroon(ClusterType, ServiceId) ->
     UserId = <<"kosdhfsdf">>,
+    SessionId = <<UserId/binary, "-session">>,
     SessionVerifyFun = fun(_, _) -> true end,
     {ok, {Identifier, Macaroon, _Expires}} = macaroon_logic:create_gui_macaroon(
-        UserId, <<"session">>, ClusterType, ServiceId
+        UserId, SessionId, ClusterType, ServiceId
     ),
 
     ?assertEqual(
-        {ok, UserId},
+        {ok, UserId, SessionId},
         macaroon_logic:verify_gui_macaroon(Macaroon, ClusterType, ServiceId, SessionVerifyFun)
     ),
     ?assertEqual(ok, macaroon_logic:delete_gui_macaroon(Macaroon)),

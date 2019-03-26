@@ -156,8 +156,11 @@ is_authorized(Req, State) ->
     end,
 
     case Result of
+        % Always return true - authorization is checked by entity_logic later.
+        {true, {Client, _SessionId}} ->
+            % Returned from auth_logic:authorize_by_oneprovider_gui_macaroon/1
+            {true, Req, State#state{client = Client}};
         {true, Client} ->
-            % Always return true - authorization is checked by entity_logic later.
             {true, Req, State#state{client = Client}};
         {error, _} = Error ->
             RestResp = error_rest_translator:response(Error),

@@ -49,8 +49,8 @@
 -export([get_login_endpoint/4, validate_login/2]).
 -export([authorize_by_access_token/1]).
 -export([authorize_by_macaroons/1, authorize_by_macaroons/2]).
--export([authorize_by_oneprovider_gui_macaroon/1, authorize_by_onezone_gui_macaroon/2]).
--export([authorize_by_gui_macaroon/4]).
+-export([authorize_by_oneprovider_gui_macaroon/1, authorize_by_onezone_gui_macaroon/1]).
+-export([authorize_by_gui_macaroon/3]).
 -export([authorize_by_basic_auth/1]).
 -export([acquire_idp_access_token/2, refresh_idp_access_token/2]).
 
@@ -238,7 +238,7 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize_by_oneprovider_gui_macaroon(cowboy_req:req()) ->
-    false | {true, entity_logic:client()} | {error, term()}.
+    false | {true, entity_logic:client(), session:id()} | {error, term()}.
 authorize_by_oneprovider_gui_macaroon(Req) ->
     SubjectToken = cowboy_req:header(<<"subject-token">>, Req, undefined),
     AudienceToken = cowboy_req:header(<<"audience-token">>, Req, undefined),
@@ -255,14 +255,14 @@ authorize_by_oneprovider_gui_macaroon(Req) ->
 
 %% @private
 -spec authorize_by_oneprovider_gui_macaroon(binary(), binary()) ->
-    {true, entity_logic:client()} | {error, term()}.
+    {true, entity_logic:client(), session:id()} | {error, term()}.
 authorize_by_oneprovider_gui_macaroon(SubjectToken, AudienceToken) ->
     try
         {ok, SubjectMacaroon} = onedata_macaroons:deserialize(SubjectToken),
         {ok, AudienceMacaroon} = onedata_macaroons:deserialize(AudienceToken),
         case macaroon_logic:verify_provider_auth(AudienceMacaroon) of
             {ok, ProviderId} ->
-                authorize_by_gui_macaroon(SubjectMacaroon, undefined, ?ONEPROVIDER, ProviderId);
+                authorize_by_gui_macaroon(SubjectMacaroon, ?ONEPROVIDER, ProviderId);
             {error, _} ->
                 ?ERROR_MACAROON_INVALID
         end
@@ -278,26 +278,26 @@ authorize_by_oneprovider_gui_macaroon(SubjectToken, AudienceToken) ->
 %% oz_worker or oz_panel service.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_onezone_gui_macaroon(macaroon:macaroon(), undefined | session:id()) ->
-    {true, entity_logic:client()} | {error, term()}.
-authorize_by_onezone_gui_macaroon(Macaroon, SessionId) ->
-    authorize_by_gui_macaroon(Macaroon, SessionId, ?ONEZONE, ?ONEZONE_SERVICE_ID).
+-spec authorize_by_onezone_gui_macaroon(macaroon:macaroon() | binary()) ->
+    {true, entity_logic:client(), session:id()} | {error, term()}.
+authorize_by_onezone_gui_macaroon(Macaroon) ->
+    authorize_by_gui_macaroon(Macaroon, ?ONEZONE, ?ONEZONE_SERVICE_ID).
 
 
 %% @private
--spec authorize_by_gui_macaroon(macaroon:macaroon() | binary(), session:id() | undefined,
+-spec authorize_by_gui_macaroon(macaroon:macaroon() | binary(),
     onedata:cluster_type(), od_cluster:service_id()) ->
-    {true, entity_logic:client()} | {error, term()}.
-authorize_by_gui_macaroon(Token, SessionId, ClusterType, ServiceId) when is_binary(Token) ->
+    {true, entity_logic:client(), session:id()} | {error, term()}.
+authorize_by_gui_macaroon(Token, ClusterType, ServiceId) when is_binary(Token) ->
     case onedata_macaroons:deserialize(Token) of
         {ok, Macaroon} ->
-            authorize_by_gui_macaroon(Macaroon, SessionId, ClusterType, ServiceId);
+            authorize_by_gui_macaroon(Macaroon, ClusterType, ServiceId);
         {error, _} = Error ->
             Error
     end;
-authorize_by_gui_macaroon(Macaroon, SessionId, ClusterType, ServiceId) ->
-    case session:verify_gui_macaroon(Macaroon, SessionId, ClusterType, ServiceId) of
-        {ok, UserId} -> {true, ?USER(UserId)};
+authorize_by_gui_macaroon(Macaroon, ClusterType, ServiceId) ->
+    case session:verify_gui_macaroon(Macaroon, ClusterType, ServiceId) of
+        {ok, UserId, SessionId} -> {true, ?USER(UserId), SessionId};
         {error, _} = Error -> Error
     end.
 

@@ -149,7 +149,7 @@ verify_auth_override(Client, {macaroon, Macaroon, DischMacaroons}) ->
             case Client of
                 ?PROVIDER(ProviderId) ->
                     case auth_logic:authorize_by_gui_macaroon(Macaroon, undefined, ?ONEPROVIDER, ProviderId) of
-                        {true, OverrideClient2} ->
+                        {true, OverrideClient2, _SessionId} ->
                             {ok, OverrideClient2};
                         {error, _} = Error2 ->
                             Error2
@@ -303,9 +303,8 @@ authorize_by_macaroons(Req) ->
         undefined ->
             auth_logic:authorize_by_macaroons(Req);
         Token ->
-            SessionId = gui_session:get_session_id(Req),
-            case auth_logic:authorize_by_onezone_gui_macaroon(Token, SessionId) of
-                {true, Client} -> {true, Client, SessionId, Req};
+            case auth_logic:authorize_by_onezone_gui_macaroon(Token) of
+                {true, Client, SessionId} -> {true, Client, SessionId, Req};
                 {error, _} = Error -> Error
             end
     end.

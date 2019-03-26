@@ -21,7 +21,7 @@
 -type id() :: binary().
 -type secret() :: binary().
 -type type() :: authorization.
--type issuer() :: entity_logic:client().
+-type issuer() :: entity_logic:client() | {entity_logic:client(), session:id()}.
 % Timestamp (in seconds) when the macaroon expires
 -type expires() :: non_neg_integer().
 -export_type([id/0, secret/0, type/0, issuer/0]).
@@ -110,7 +110,7 @@ verify_provider_identity(Macaroon) ->
 create_gui_macaroon(UserId, SessionId, ClusterType, ServiceId) ->
     Secret = generate_secret(),
     {ok, Identifier} = volatile_macaroon:create(
-        Secret, ?USER(UserId)
+        Secret, {?USER(UserId), SessionId}
     ),
     Now = ?NOW(),
     TTL = ?GUI_MACAROON_TTL,
@@ -132,22 +132,27 @@ create_gui_macaroon(UserId, SessionId, ClusterType, ServiceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_gui_macaroon(macaroon:macaroon(), onedata:cluster_type(), od_cluster:service_id(), session_verify_fun()) ->
-    {ok, od_user:id()} | {error, term()}.
+    {ok, od_user:id(), session:id()} | {error, term()}.
 verify_gui_macaroon(SubjectMacaroon, ClusterType, ServiceId, SessionVerifyFun) ->
     Identifier = macaroon:identifier(SubjectMacaroon),
-    SessionCaveatVerifyFun = fun(SessionId) ->
-        SessionVerifyFun(SessionId, Identifier)
-    end,
-    Caveats = [
-        ?SESSION_ID_CAVEAT(SessionCaveatVerifyFun),
-        ?CLUSTER_TYPE_CAVEAT(ClusterType),
-        ?SERVICE_ID_CAVEAT(ServiceId),
-        ?TIME_CAVEAT(?NOW(), ?GUI_MACAROON_TTL)
-    ],
-    case verify_issuer(SubjectMacaroon, Caveats, volatile) of
-        {ok, ?USER(UserId)} -> {ok, UserId};
-        {ok, _} -> ?ERROR_MACAROON_INVALID;
-        Error = {error, _} -> Error
+    case volatile_macaroon:get(Identifier) of
+        {ok, Secret, {?USER(UserId), IssuerSessionId}} ->
+            SessionCaveatVerifyFun = fun(CaveatSessionId) ->
+                CaveatSessionId == IssuerSessionId andalso
+                    SessionVerifyFun(CaveatSessionId, Identifier)
+            end,
+            Caveats = [
+                ?SESSION_ID_CAVEAT(SessionCaveatVerifyFun),
+                ?CLUSTER_TYPE_CAVEAT(ClusterType),
+                ?SERVICE_ID_CAVEAT(ServiceId),
+                ?TIME_CAVEAT(?NOW(), ?GUI_MACAROON_TTL)
+            ],
+            case onedata_macaroons:verify(SubjectMacaroon, Secret, [], Caveats) of
+                ok -> {ok, UserId, IssuerSessionId};
+                Error = {error, _} -> Error
+            end;
+        _ ->
+            ?ERROR_MACAROON_INVALID
     end.
 
 
@@ -184,36 +189,18 @@ create(Identifier, Secret, Caveats) ->
 
 
 -spec verify_provider_issuer(macaroon:macaroon(), [onedata_macaroons:caveat()]) ->
-    {ok, od_provider:id()} | {error, term()}.
-verify_provider_issuer(Macaroon, Caveats) ->
-    case verify_issuer(Macaroon, Caveats, persistent) of
-        {ok, ?PROVIDER(ProviderId)} -> {ok, ProviderId};
-        {ok, _} -> ?ERROR_MACAROON_INVALID;
-        Error = {error, _} -> Error
-    end.
-
-
--spec verify_issuer(macaroon:macaroon(), [onedata_macaroons:caveat()], Type :: persistent | volatile) ->
     {ok, issuer()} | {error, term()}.
-verify_issuer(Macaroon, Caveats, Type) ->
+verify_provider_issuer(Macaroon, Caveats) ->
     Identifier = macaroon:identifier(Macaroon),
-    case retrieve_secret_and_issuer(Identifier, Type) of
-        {ok, Secret, Issuer} ->
+    case macaroon_auth:get(Identifier) of
+        {ok, Secret, ?PROVIDER(ProviderId)} ->
             case onedata_macaroons:verify(Macaroon, Secret, [], Caveats) of
-                ok -> {ok, Issuer};
+                ok -> {ok, ProviderId};
                 Error = {error, _} -> Error
             end;
         _ ->
             ?ERROR_MACAROON_INVALID
     end.
-
-
--spec retrieve_secret_and_issuer(Identifier :: binary(), Type :: persistent | volatile) ->
-    {ok, secret(), issuer()} | {error, term()}.
-retrieve_secret_and_issuer(Identifier, persistent) ->
-    macaroon_auth:get(Identifier);
-retrieve_secret_and_issuer(Identifier, volatile) ->
-    volatile_macaroon:get(Identifier).
 
 
 -spec generate_secret() -> binary().

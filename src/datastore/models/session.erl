@@ -24,7 +24,7 @@
     delete/1, delete/2, delete/3,
     list/0,
     acquire_gui_macaroon/3,
-    verify_gui_macaroon/4
+    verify_gui_macaroon/3
 ]).
 
 %% datastore_model callbacks
@@ -191,25 +191,16 @@ acquire_gui_macaroon(SessionId, ClusterType, ServiceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Verifies given GUI macaroon against GuiSessionId, ClusterType and ServiceId.
-%% GuiSessionId can be:
-%%  * Web client's cookie session id in case of Onezone GUI
-%%  * undefined in case it is a delegated token (e.g. from Oneprovider that is
-%%      handling a user request in its GUI).
+%% Verifies given GUI macaroon against ClusterType and ServiceId.
+%% The session id is one of the caveats in the macaroon. During verification, it
+%% is checked if given macaroon was actually created within the session.
 %% @end
 %%--------------------------------------------------------------------
--spec verify_gui_macaroon(macaroon:macaroon(), session:id() | undefined, onedata:cluster_type(),
-    od_cluster:service_id()) -> {ok, od_user:id()} | {error, term()}.
-verify_gui_macaroon(SubjectMacaroon, GuiSessionId, ClusterType, ServiceId) ->
-    SessionVerifyFun = fun(SessionId, Identifier) ->
-        case {SessionId, GuiSessionId} of
-            {_, undefined} ->
-                has_gui_macaroon(SessionId, ClusterType, ServiceId, Identifier);
-            {MatchingSessId, MatchingSessId} ->
-                has_gui_macaroon(SessionId, ClusterType, ServiceId, Identifier);
-            {_, _} ->
-                false
-        end
+-spec verify_gui_macaroon(macaroon:macaroon(), onedata:cluster_type(),
+    od_cluster:service_id()) -> {ok, od_user:id(), session:id()} | {error, term()}.
+verify_gui_macaroon(SubjectMacaroon, ClusterType, ServiceId) ->
+    SessionVerifyFun = fun(CaveatSessionId, Identifier) ->
+        has_gui_macaroon(CaveatSessionId, ClusterType, ServiceId, Identifier)
     end,
     macaroon_logic:verify_gui_macaroon(SubjectMacaroon, ClusterType, ServiceId, SessionVerifyFun).
 
