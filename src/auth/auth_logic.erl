@@ -49,7 +49,7 @@
 -export([get_login_endpoint/4, validate_login/2]).
 -export([authorize_by_access_token/1]).
 -export([authorize_by_macaroons/1, authorize_by_macaroons/2]).
--export([authorize_by_provider_gui_macaroon/1, authorize_by_onezone_gui_macaroon/2]).
+-export([authorize_by_oneprovider_gui_macaroon/1, authorize_by_onezone_gui_macaroon/2]).
 -export([authorize_by_gui_macaroon/4]).
 -export([authorize_by_basic_auth/1]).
 -export([acquire_idp_access_token/2, refresh_idp_access_token/2]).
@@ -237,9 +237,9 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
 %% op_worker or op_panel service.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_provider_gui_macaroon(cowboy_req:req()) ->
+-spec authorize_by_oneprovider_gui_macaroon(cowboy_req:req()) ->
     false | {true, entity_logic:client()} | {error, term()}.
-authorize_by_provider_gui_macaroon(Req) ->
+authorize_by_oneprovider_gui_macaroon(Req) ->
     SubjectToken = cowboy_req:header(<<"subject-token">>, Req, undefined),
     AudienceToken = cowboy_req:header(<<"audience-token">>, Req, undefined),
     case {SubjectToken, AudienceToken} of
@@ -250,13 +250,13 @@ authorize_by_provider_gui_macaroon(Req) ->
         {undefined, _} ->
             ?ERROR_UNAUTHORIZED;
         {_, _} ->
-            authorize_by_provider_gui_macaroon(SubjectToken, AudienceToken)
+            authorize_by_oneprovider_gui_macaroon(SubjectToken, AudienceToken)
     end.
 
 %% @private
--spec authorize_by_provider_gui_macaroon(binary(), binary()) ->
+-spec authorize_by_oneprovider_gui_macaroon(binary(), binary()) ->
     {true, entity_logic:client()} | {error, term()}.
-authorize_by_provider_gui_macaroon(SubjectToken, AudienceToken) ->
+authorize_by_oneprovider_gui_macaroon(SubjectToken, AudienceToken) ->
     try
         {ok, SubjectMacaroon} = onedata_macaroons:deserialize(SubjectToken),
         {ok, AudienceMacaroon} = onedata_macaroons:deserialize(AudienceToken),

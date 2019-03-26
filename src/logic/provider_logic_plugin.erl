@@ -835,7 +835,7 @@ create_provider(Data, ProviderId, GRI) ->
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
     AdminEmail = maps:get(<<"adminEmail">>, Data),
 
-    CreateProviderFun = fun(od_user, AdminUserId) ->
+    CreateProviderFun = fun(od_user, CreatorUserId) ->
         {ok, {Macaroon, Identity}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
 
         {Domain, Subdomain} = case SubdomainDelegation of
@@ -862,10 +862,10 @@ create_provider(Data, ProviderId, GRI) ->
 
         try
             {ok, _} = od_provider:create(#document{key = ProviderId, value = ProviderRecord}),
-            cluster_logic:create_provider_cluster(AdminUserId, ProviderId),
+            cluster_logic:create_provider_cluster(CreatorUserId, ProviderId),
             {ok, Provider} = fetch_entity(ProviderId),
             ?info("Provider '~ts' has registered (~s)", [Name, ProviderId]),
-            {ok, resource, {GRI#gri{id = ProviderId}, {Provider, Macaroon, AdminUserId}}}
+            {ok, resource, {GRI#gri{id = ProviderId}, {Provider, Macaroon}}}
         catch Type:Reason ->
             ?error_stacktrace("Cannot create a new provider due to ~p:~p", [Type, Reason]),
             dns_state:remove_delegation_config(ProviderId),

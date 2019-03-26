@@ -115,7 +115,7 @@ create(Client, Name, Domain, AdminEmail, Latitude, Longitude) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client(), Data :: #{}) ->
-    {ok, od_provider:id()} | {error, term()}.
+    {ok, {od_provider:id(), ProviderMacaroon :: macaroon:macaroon()}} | {error, term()}.
 create(Client, Data) ->
     Res = entity_logic:handle(#el_req{
         operation = create,
@@ -126,8 +126,8 @@ create(Client, Data) ->
     case Res of
         Error = {error, _} ->
             Error;
-        {ok, resource, {#gri{id = ProviderId}, {_, Macaroon, AdminUserId}}} ->
-            {ok, {ProviderId, Macaroon, AdminUserId}}
+        {ok, resource, {#gri{id = ProviderId}, {_, Macaroon}}} ->
+            {ok, {ProviderId, Macaroon}}
     end.
 
 

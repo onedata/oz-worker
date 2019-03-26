@@ -380,8 +380,12 @@ spawn_clients(Config, Type, Clients, RetryFlag, CallbackFunction, OnSuccessFun) 
     AuthsAndIdentities = lists:map(fun(Client) ->
         case Type of
             gui ->
-                {ok, {_SessionId, Cookie}} = oz_test_utils:log_in(Config, Client),
-                Auth = {cookie, {?SESSION_COOKIE_KEY, Cookie}},
+                {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, Client),
+                {ok, {Macaroon, _}} = oz_test_utils:call_oz(Config, session, acquire_gui_macaroon, [
+                    SessionId, ?ONEZONE, ?ONEZONE_SERVICE_ID
+                ]),
+                {ok, Token} = onedata_macaroons:serialize(Macaroon),
+                Auth = {urlToken, Token},
                 Identity = {user, Client},
                 {Auth, Identity};
             provider ->

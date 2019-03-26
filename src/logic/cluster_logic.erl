@@ -84,13 +84,13 @@
 %% and provider admin, if specified.
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider_cluster(AdminUserId :: undefined | od_user:id(), od_provider:id()) ->
+-spec create_provider_cluster(CreatorUserId :: undefined | od_user:id(), od_provider:id()) ->
     ok | no_return().
-create_provider_cluster(AdminUserId, ProviderId) ->
+create_provider_cluster(CreatorUserId, ProviderId) ->
     {ok, #document{key = ClusterId}} = od_cluster:create(#document{value = #od_cluster{
-        creator = case AdminUserId of
+        creator = case CreatorUserId of
             undefined -> ?ROOT;
-            _ -> ?USER(AdminUserId)
+            _ -> ?USER(CreatorUserId)
         end
     }}),
 
@@ -99,8 +99,8 @@ create_provider_cluster(AdminUserId, ProviderId) ->
         od_cluster, ClusterId
     ),
 
-    AdminUserId /= undefined andalso entity_graph:add_relation(
-        od_user, AdminUserId,
+    CreatorUserId /= undefined andalso entity_graph:add_relation(
+        od_user, CreatorUserId,
         od_cluster, ClusterId,
         privileges:cluster_admin()
     ),

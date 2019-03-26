@@ -116,12 +116,11 @@ all() ->
 
 create_test(Config) ->
     ExpName = ?CORRECT_NAME,
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, CreatorUserId} = oz_test_utils:create_user(Config, #od_user{}),
 
     OZDomain = oz_test_utils:oz_domain(Config),
 
-    VerifyFun = fun(ProviderId, Macaroon, AdminUserId, Data) ->
-        % AdminUserId is undefined if registering without a token
+    VerifyFun = fun(ProviderId, Macaroon, Data) ->
         ExpSubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
         ExpAdminEmail = maps:get(<<"adminEmail">>, Data),
         ExpLatitude = maps:get(<<"latitude">>, Data, 0.0),
@@ -167,11 +166,11 @@ create_test(Config) ->
         ),
         ?assertEqual(ProviderURL, ExpProviderURL),
 
-        case AdminUserId of
+        case Data of
             undefined ->
                 ok;
-            _ ->
-                {ok, UserClusters} = oz_test_utils:user_get_clusters(Config, AdminUserId),
+            #{<<"token">> := _} ->
+                {ok, UserClusters} = oz_test_utils:user_get_clusters(Config, CreatorUserId),
                 ?assert(lists:member(ExpClusterId, UserClusters))
         end,
 
@@ -196,8 +195,7 @@ create_test(Config) ->
             expected_body = ?OK_ENV(fun(_Env, Data) -> fun(Value) ->
                 Macaroon = maps:get(<<"macaroon">>, Value),
                 ProviderId = maps:get(<<"providerId">>, Value),
-                AdminUserId = gs_protocol:null_to_undefined(maps:get(<<"adminUserId">>, Value)),
-                VerifyFun(ProviderId, Macaroon, AdminUserId, Data)
+                VerifyFun(ProviderId, Macaroon, Data)
             end
             end)
         },
@@ -207,8 +205,8 @@ create_test(Config) ->
             function = create,
             args = [client, data],
             expected_result = ?OK_ENV(fun(_Env, Data) ->
-                ?OK_TERM(fun({ProviderId, Macaroon, AdminUserId}) ->
-                    VerifyFun(ProviderId, Macaroon, AdminUserId, Data)
+                ?OK_TERM(fun({ProviderId, Macaroon}) ->
+                    VerifyFun(ProviderId, Macaroon, Data)
                 end)
             end)
         },
@@ -220,7 +218,7 @@ create_test(Config) ->
             optional = [<<"token">>, <<"latitude">>, <<"longitude">>],
             correct_values = #{
                 <<"token">> => [fun() ->
-                    {ok, Token} = oz_test_utils:create_provider_registration_token(Config, ?USER(U1), U1),
+                    {ok, Token} = oz_test_utils:create_provider_registration_token(Config, ?USER(CreatorUserId), CreatorUserId),
                     {ok, Macaroon} = onedata_macaroons:serialize(Token),
                     Macaroon
                 end],
@@ -270,7 +268,7 @@ create_test(Config) ->
             optional = [<<"token">>, <<"latitude">>, <<"longitude">>],
             correct_values = #{
                 <<"token">> => [fun() ->
-                    {ok, Token} = oz_test_utils:create_provider_registration_token(Config, ?USER(U1), U1),
+                    {ok, Token} = oz_test_utils:create_provider_registration_token(Config, ?USER(CreatorUserId), CreatorUserId),
                     {ok, Macaroon} = onedata_macaroons:serialize(Token),
                     Macaroon
                 end],
@@ -313,17 +311,17 @@ get_test(Config) ->
         <<"latitude">> => ExpLatitude,
         <<"longitude">> => ExpLongitude
     },
-    {ok, P1Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, P1Creator} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-        Config, P1Admin, PrivateProviderDetails#{<<"subdomainDelegation">> => false}
+        Config, P1Creator, PrivateProviderDetails#{<<"subdomainDelegation">> => false}
     ),
-    {ok, P2Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, P2Creator} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
-        Config, P2Admin, ?PROVIDER_NAME2
+        Config, P2Creator, ?PROVIDER_NAME2
     ),
     Cluster1 = oz_test_utils:get_provider_cluster(Config, P1),
 
-    P1AdminNoViewPrivs = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_VIEW]),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
 
     ExpProviderDetails = PrivateProviderDetails#{
         <<"cluster">> => Cluster1
@@ -343,15 +341,15 @@ get_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, P1Admin},
+                {user, P1Creator},
                 {provider, P1, P1Macaroon},
                 {admin, [?OZ_PROVIDERS_VIEW]}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
-                {user, P1AdminNoViewPrivs},
-                {user, P2Admin},
+                {user, Cluster1MemberNoViewPrivs},
+                {user, P2Creator},
                 {user, NonAdmin},
                 {provider, P2, P2Macaroon}
             ]
@@ -411,14 +409,14 @@ get_test(Config) ->
             correct = [
                 root,
                 {user, U1},
-                {user, P1Admin},
-                {user, P1AdminNoViewPrivs},
+                {user, P1Creator},
+                {user, Cluster1MemberNoViewPrivs},
                 {admin, [?OZ_PROVIDERS_VIEW]},
                 {provider, P2, P2Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, P2Admin},
+                {user, P2Creator},
                 {user, NonAdmin}
             ]
         },
@@ -566,14 +564,14 @@ update_test(Config) ->
     },
 
     EnvSetUpFun = fun() ->
-        {ok, P1Admin} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, Cluster1Member} = oz_test_utils:create_user(Config, #od_user{}),
         {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-            Config, P1Admin, ProviderDetails#{<<"domain">> => ?UNIQUE_DOMAIN}
+            Config, Cluster1Member, ProviderDetails#{<<"domain">> => ?UNIQUE_DOMAIN}
         ),
-        P1AdminNoUpdatePrivs = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_UPDATE]),
+        Cluster1MemberNoUpdatePrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_UPDATE]),
         #{
             providerId => P1, providerClient => {provider, P1, P1Macaroon},
-            adminClient => {user, P1Admin}, adminClientNoDeletePrivs => {user, P1AdminNoUpdatePrivs}
+            clusterMember => {user, Cluster1Member}, clusterMemberNoDeletePrivs => {user, Cluster1MemberNoUpdatePrivs}
         }
     end,
     VerifyEndFun = fun(ShouldSucceed, #{providerId := ProvId} = _Env, Data) ->
@@ -642,23 +640,23 @@ update_test(Config) ->
         ?OZ_PROVIDERS_LIST
     ], []),
 
-    {ok, P2Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Cluster2Member} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
-        Config, P2Admin, ?PROVIDER_NAME2
+        Config, Cluster2Member, ?PROVIDER_NAME2
     ),
-    P2AdminNoUpdatePrivs = create_admin_and_set_privs(Config, P2, [], [?CLUSTER_UPDATE]),
+    Cluster2MemberNoUpdatePrivs = new_cluster_member_with_privs(Config, P2, [], [?CLUSTER_UPDATE]),
 
     ApiTestSpec2 = #api_test_spec{
         client_spec = ClientSpec#client_spec{
             correct = [
-                adminClient,
+                clusterMember,
                 {admin, [?OZ_PROVIDERS_UPDATE]}
             ],
             unauthorized = [nobody],
             forbidden = [
-                adminClientNoDeletePrivs,
+                clusterMemberNoDeletePrivs,
                 {user, U1},
-                {user, P2AdminNoUpdatePrivs},
+                {user, Cluster2MemberNoUpdatePrivs},
                 {provider, P2, P2Macaroon}
             ]
         },
@@ -687,15 +685,15 @@ delete_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     EnvSetUpFun = fun() ->
-        {ok, P1Admin} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, Cluster1Member} = oz_test_utils:create_user(Config, #od_user{}),
         {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-            Config, P1Admin, ?PROVIDER_NAME1
+            Config, Cluster1Member, ?PROVIDER_NAME1
         ),
-        P1AdminNoDeletePrivs = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_DELETE]),
+        Cluster1MemberNoDeletePrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_DELETE]),
         #{
             providerId => P1, providerClient => {provider, P1, P1Macaroon},
             clusterId => oz_test_utils:get_provider_cluster(Config, P1),
-            adminClient => {user, P1Admin}, adminClientNoDeletePrivs => {user, P1AdminNoDeletePrivs}
+            clusterMember => {user, Cluster1Member}, clusterMemberNoDeletePrivs => {user, Cluster1MemberNoDeletePrivs}
         }
     end,
     DeleteEntityFun = fun(#{providerId := ProviderId} = _Env) ->
@@ -711,13 +709,13 @@ delete_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                adminClient,
+                clusterMember,
                 root,
                 {admin, [?OZ_PROVIDERS_DELETE]}
             ],
             unauthorized = [nobody],
             forbidden = [
-                adminClientNoDeletePrivs,
+                clusterMemberNoDeletePrivs,
                 {user, NonAdmin},
                 {provider, P2, P2Macaroon}
             ]
@@ -793,8 +791,8 @@ list_eff_users_test(Config) ->
         Config, ?PROVIDER_NAME2
     ),
 
-    P1Admin = create_admin_and_set_privs(Config, P1, [?CLUSTER_VIEW], []),
-    P1AdminNoViewPrivs = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_VIEW]),
+    Cluster1Member = new_cluster_member_with_privs(Config, P1, [?CLUSTER_VIEW], []),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
 
     [{U3, _}, {U4, _}, {U5, _}, {U6, _}] = Users,
     ExpUsers = [U1, U2, U3, U4, U5, U6],
@@ -803,13 +801,13 @@ list_eff_users_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, P1Admin},
+                {user, Cluster1Member},
                 {admin, [?OZ_PROVIDERS_LIST_RELATIONSHIPS]},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, P1AdminNoViewPrivs},
+                {user, Cluster1MemberNoViewPrivs},
                 {user, U1},
                 {user, U2},
                 {user, NonAdmin},
@@ -853,8 +851,8 @@ get_eff_user_test(Config) ->
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    P1Admin = create_admin_and_set_privs(Config, P1, [?CLUSTER_VIEW], []),
-    P1AdminNoViewPrivs = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_VIEW]),
+    Cluster1Member = new_cluster_member_with_privs(Config, P1, [?CLUSTER_VIEW], []),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
 
     {ok, S1} = oz_test_utils:support_space(
         Config, P2, S1, oz_test_utils:minimum_support_size(Config)
@@ -871,13 +869,13 @@ get_eff_user_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, P1Admin},
+                        {user, Cluster1Member},
                         {admin, [?OZ_USERS_VIEW]},
                         {provider, P1, P1Macaroon}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
-                        {user, P1AdminNoViewPrivs},
+                        {user, Cluster1MemberNoViewPrivs},
                         {user, U1},
                         {user, U2},
                         {user, NonAdmin},
@@ -960,15 +958,15 @@ get_eff_user_membership_intermediaries(Config) ->
     {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
 
-    {ok, P1Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, P2Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, P3Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, {P1, P1Auth}} = oz_test_utils:create_provider(Config, P1Admin, ?PROVIDER_NAME1),
-    {ok, {P2, P2Auth}} = oz_test_utils:create_provider(Config, P2Admin, ?PROVIDER_NAME1),
-    {ok, {P3, P3Auth}} = oz_test_utils:create_provider(Config, P3Admin, ?PROVIDER_NAME1),
-    P1AdminNoViewPrivs = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_VIEW]),
-    P2AdminNoViewPrivs = create_admin_and_set_privs(Config, P2, [], [?CLUSTER_VIEW]),
-    P3AdminNoViewPrivs = create_admin_and_set_privs(Config, P3, [], [?CLUSTER_VIEW]),
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Cluster2Member} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Cluster3Member} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, {P1, P1Auth}} = oz_test_utils:create_provider(Config, Cluster1Member, ?PROVIDER_NAME1),
+    {ok, {P2, P2Auth}} = oz_test_utils:create_provider(Config, Cluster2Member, ?PROVIDER_NAME1),
+    {ok, {P3, P3Auth}} = oz_test_utils:create_provider(Config, Cluster3Member, ?PROVIDER_NAME1),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
+    Cluster2MemberNoViewPrivs = new_cluster_member_with_privs(Config, P2, [], [?CLUSTER_VIEW]),
+    Cluster3MemberNoViewPrivs = new_cluster_member_with_privs(Config, P3, [], [?CLUSTER_VIEW]),
 
     oz_test_utils:space_add_user(Config, S1, U2),
 
@@ -991,20 +989,20 @@ get_eff_user_membership_intermediaries(Config) ->
 
     % {ProviderId, SubjectUser, CorrectClients, ExpIntermediariesRaw}
     ExpectedMembershipIntermediaries = [
-        {P1, U1, [{provider, P1, P1Auth}, {user, P1Admin}, {user, U1}], ordsets:from_list([
+        {P1, U1, [{provider, P1, P1Auth}, {user, Cluster1Member}, {user, U1}], ordsets:from_list([
             {od_space, S1},
             {od_space, S2}
         ])},
-        {P1, U2, [{provider, P1, P1Auth}, {user, P1Admin}, {user, U2}], ordsets:from_list([
+        {P1, U2, [{provider, P1, P1Auth}, {user, Cluster1Member}, {user, U2}], ordsets:from_list([
             {od_space, S1}
         ])},
 
-        {P2, U1, [{provider, P2, P2Auth}, {user, P2Admin}, {user, U1}], ordsets:from_list([
+        {P2, U1, [{provider, P2, P2Auth}, {user, Cluster2Member}, {user, U1}], ordsets:from_list([
             {od_space, S2},
             {od_space, S3}
         ])},
 
-        {P3, U1, [{provider, P3, P3Auth}, {user, P3Admin}, {user, U1}], ordsets:from_list([
+        {P3, U1, [{provider, P3, P3Auth}, {user, Cluster3Member}, {user, U1}], ordsets:from_list([
             {od_space, S3}
         ])}
     ],
@@ -1023,8 +1021,8 @@ get_eff_user_membership_intermediaries(Config) ->
                 forbidden = [
                     {user, NonAdmin}, {user, U1}, {user, U2},
                     {provider, P1, P1Auth}, {provider, P2, P2Auth}, {provider, P3, P3Auth},
-                    {user, P1Admin}, {user, P2Admin}, {user, P3Admin},
-                    {user, P1AdminNoViewPrivs}, {user, P2AdminNoViewPrivs}, {user, P3AdminNoViewPrivs}
+                    {user, Cluster1Member}, {user, Cluster2Member}, {user, Cluster3Member},
+                    {user, Cluster1MemberNoViewPrivs}, {user, Cluster2MemberNoViewPrivs}, {user, Cluster3MemberNoViewPrivs}
                 ] -- CorrectClients
             },
             rest_spec = #rest_spec{
@@ -1052,8 +1050,8 @@ list_eff_groups_test(Config) ->
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    P1Admin = create_admin_and_set_privs(Config, P1, [?CLUSTER_VIEW], []),
-    P1AdminNoViewPrivs = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_VIEW]),
+    Cluster1Member = new_cluster_member_with_privs(Config, P1, [?CLUSTER_VIEW], []),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
 
     [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}, {G6, _}] = Groups,
     ExpGroups = [G1, G2, G3, G4, G5, G6],
@@ -1062,13 +1060,13 @@ list_eff_groups_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, P1Admin},
+                {user, Cluster1Member},
                 {admin, [?OZ_PROVIDERS_LIST_RELATIONSHIPS]},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, P1AdminNoViewPrivs},
+                {user, Cluster1MemberNoViewPrivs},
                 {user, U1},
                 {user, U2},
                 {user, NonAdmin},
@@ -1112,8 +1110,8 @@ get_eff_group_test(Config) ->
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    P1Admin = create_admin_and_set_privs(Config, P1, [?CLUSTER_VIEW], []),
-    P1AdminNoViewPrivs = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_VIEW]),
+    Cluster1Member = new_cluster_member_with_privs(Config, P1, [?CLUSTER_VIEW], []),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
 
     {ok, S1} = oz_test_utils:support_space(
         Config, P2, S1, oz_test_utils:minimum_support_size(Config)
@@ -1131,13 +1129,13 @@ get_eff_group_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, P1Admin},
+                        {user, Cluster1Member},
                         {admin, [?OZ_GROUPS_VIEW]},
                         {provider, P1, P1Macaroon}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
-                        {user, P1AdminNoViewPrivs},
+                        {user, Cluster1MemberNoViewPrivs},
                         {user, U1},
                         {user, U2},
                         {user, NonAdmin},
@@ -1220,15 +1218,15 @@ get_eff_group_membership_intermediaries(Config) ->
     {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
     {ok, S4} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
 
-    {ok, P1Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, P2Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, P3Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, {P1, P1Auth}} = oz_test_utils:create_provider(Config, P1Admin, ?PROVIDER_NAME1),
-    {ok, {P2, P2Auth}} = oz_test_utils:create_provider(Config, P2Admin, ?PROVIDER_NAME1),
-    {ok, {P3, P3Auth}} = oz_test_utils:create_provider(Config, P3Admin, ?PROVIDER_NAME1),
-    P1AdminNoViewPrivs = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_VIEW]),
-    P2AdminNoViewPrivs = create_admin_and_set_privs(Config, P2, [], [?CLUSTER_VIEW]),
-    P3AdminNoViewPrivs = create_admin_and_set_privs(Config, P3, [], [?CLUSTER_VIEW]),
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Cluster2Member} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Cluster3Member} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, {P1, P1Auth}} = oz_test_utils:create_provider(Config, Cluster1Member, ?PROVIDER_NAME1),
+    {ok, {P2, P2Auth}} = oz_test_utils:create_provider(Config, Cluster2Member, ?PROVIDER_NAME1),
+    {ok, {P3, P3Auth}} = oz_test_utils:create_provider(Config, Cluster3Member, ?PROVIDER_NAME1),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
+    Cluster2MemberNoViewPrivs = new_cluster_member_with_privs(Config, P2, [], [?CLUSTER_VIEW]),
+    Cluster3MemberNoViewPrivs = new_cluster_member_with_privs(Config, P3, [], [?CLUSTER_VIEW]),
 
     oz_test_utils:group_add_user(Config, G4, U2),
     oz_test_utils:space_add_user(Config, S1, U2),
@@ -1256,45 +1254,45 @@ get_eff_group_membership_intermediaries(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ExpectedMembershipIntermediaries = [
-        {P1, UserGroup, [{provider, P1, P1Auth}, {user, P1Admin}, {user, U1}], ordsets:from_list([
+        {P1, UserGroup, [{provider, P1, P1Auth}, {user, Cluster1Member}, {user, U1}], ordsets:from_list([
             {od_space, S1},
             {od_space, S2}
         ])},
-        {P1, G1, [{provider, P1, P1Auth}, {user, P1Admin}, {user, U1}], ordsets:from_list([
+        {P1, G1, [{provider, P1, P1Auth}, {user, Cluster1Member}, {user, U1}], ordsets:from_list([
             {od_space, S1},
             {od_space, S2}
         ])},
-        {P1, G2, [{provider, P1, P1Auth}, {user, P1Admin}, {user, U1}], ordsets:from_list([
+        {P1, G2, [{provider, P1, P1Auth}, {user, Cluster1Member}, {user, U1}], ordsets:from_list([
             {od_space, S1},
             {od_space, S2}
         ])},
-        {P1, G3, [{provider, P1, P1Auth}, {user, P1Admin}, {user, U1}], ordsets:from_list([
+        {P1, G3, [{provider, P1, P1Auth}, {user, Cluster1Member}, {user, U1}], ordsets:from_list([
             {od_space, S2}
         ])},
 
-        {P2, UserGroup, [{provider, P2, P2Auth}, {user, P2Admin}, {user, U1}], ordsets:from_list([
+        {P2, UserGroup, [{provider, P2, P2Auth}, {user, Cluster2Member}, {user, U1}], ordsets:from_list([
             {od_space, S2},
             {od_space, S3}
         ])},
-        {P2, G1, [{provider, P2, P2Auth}, {user, P2Admin}, {user, U1}], ordsets:from_list([
+        {P2, G1, [{provider, P2, P2Auth}, {user, Cluster2Member}, {user, U1}], ordsets:from_list([
             {od_space, S2},
             {od_space, S3}
         ])},
-        {P2, G2, [{provider, P2, P2Auth}, {user, P2Admin}, {user, U1}], ordsets:from_list([
+        {P2, G2, [{provider, P2, P2Auth}, {user, Cluster2Member}, {user, U1}], ordsets:from_list([
             {od_space, S2}
         ])},
-        {P2, G3, [{provider, P2, P2Auth}, {user, P2Admin}, {user, U1}], ordsets:from_list([
+        {P2, G3, [{provider, P2, P2Auth}, {user, Cluster2Member}, {user, U1}], ordsets:from_list([
             {od_space, S2},
             {od_space, S3}
         ])},
 
-        {P3, UserGroup, [{provider, P3, P3Auth}, {user, P3Admin}, {user, U1}], ordsets:from_list([
+        {P3, UserGroup, [{provider, P3, P3Auth}, {user, Cluster3Member}, {user, U1}], ordsets:from_list([
             {od_space, S3}
         ])},
-        {P3, G3, [{provider, P3, P3Auth}, {user, P3Admin}, {user, U1}], ordsets:from_list([
+        {P3, G3, [{provider, P3, P3Auth}, {user, Cluster3Member}, {user, U1}], ordsets:from_list([
             {od_space, S3}
         ])},
-        {P3, G4, [{provider, P3, P3Auth}, {user, P3Admin}, {user, U2}], ordsets:from_list([
+        {P3, G4, [{provider, P3, P3Auth}, {user, Cluster3Member}, {user, U2}], ordsets:from_list([
             {od_space, S4}
         ])}
     ],
@@ -1313,8 +1311,8 @@ get_eff_group_membership_intermediaries(Config) ->
                 forbidden = [
                     {user, NonAdmin}, {user, U1}, {user, U2},
                     {provider, P1, P1Auth}, {provider, P2, P2Auth}, {provider, P3, P3Auth},
-                    {user, P1Admin}, {user, P2Admin}, {user, P3Admin},
-                    {user, P1AdminNoViewPrivs}, {user, P2AdminNoViewPrivs}, {user, P3AdminNoViewPrivs}
+                    {user, Cluster1Member}, {user, Cluster2Member}, {user, Cluster3Member},
+                    {user, Cluster1MemberNoViewPrivs}, {user, Cluster2MemberNoViewPrivs}, {user, Cluster3MemberNoViewPrivs}
                 ] -- CorrectClients
             },
             rest_spec = #rest_spec{
@@ -1339,8 +1337,8 @@ list_spaces_test(Config) ->
         {P1, P1Macaroon}, {P2, P2Macaroon},
         [{S1, _}, {S2, _}, {S3, _}, {S4, _}, {S5, _}]
     } = create_2_providers_and_5_supported_spaces(Config),
-    P1Admin = create_admin_and_set_privs(Config, P1, [?CLUSTER_VIEW], []),
-    P1AdminNoViewPrivs = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_VIEW]),
+    Cluster1Member = new_cluster_member_with_privs(Config, P1, [?CLUSTER_VIEW], []),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
 
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -1349,13 +1347,13 @@ list_spaces_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, P1Admin},
+                {user, Cluster1Member},
                 {admin, [?OZ_PROVIDERS_LIST_RELATIONSHIPS]},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, P1AdminNoViewPrivs},
+                {user, Cluster1MemberNoViewPrivs},
                 {user, NonAdmin},
                 {provider, P2, P2Macaroon}
             ]
@@ -1403,8 +1401,8 @@ get_space_test(Config) ->
     {
         {P1, P1Macaroon}, {P2, P2Macaroon}, Spaces
     } = create_2_providers_and_5_supported_spaces(Config),
-    P1Admin = create_admin_and_set_privs(Config, P1, [?CLUSTER_VIEW], []),
-    P1AdminNoViewPrivs = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_VIEW]),
+    Cluster1Member = new_cluster_member_with_privs(Config, P1, [?CLUSTER_VIEW], []),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
 
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -1414,13 +1412,13 @@ get_space_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, P1Admin},
+                        {user, Cluster1Member},
                         {admin, [?OZ_SPACES_VIEW]},
                         {provider, P1, P1Macaroon}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
-                        {user, P1AdminNoViewPrivs},
+                        {user, Cluster1MemberNoViewPrivs},
                         {user, NonAdmin},
                         {provider, P2, P2Macaroon}
                     ]
@@ -1487,11 +1485,11 @@ get_own_space_test(Config) ->
 
 support_space_test(Config) ->
     MinSupportSize = oz_test_utils:minimum_support_size(Config),
-    {ok, P1Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-        Config, P1Admin, ?PROVIDER_NAME1
+        Config, Cluster1Member, ?PROVIDER_NAME1
     ),
-    P1AdminNoUpdatePriv = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_UPDATE]),
+    Cluster1MemberNoUpdatePriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_UPDATE]),
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
@@ -1580,13 +1578,13 @@ support_space_test(Config) ->
             % behalf of provider 1.
             correct = [
                 root,
-                {user, P1Admin},
+                {user, Cluster1Member},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
-                {user, P1AdminNoUpdatePriv},
+                {user, Cluster1MemberNoUpdatePriv},
                 {provider, P2, P2Macaroon}
             ]
         },
@@ -1634,11 +1632,11 @@ support_space_test(Config) ->
 
 update_support_size_test(Config) ->
     MinSupportSize = oz_test_utils:minimum_support_size(Config),
-    {ok, P1Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-        Config, P1Admin, ?PROVIDER_NAME1
+        Config, Cluster1Member, ?PROVIDER_NAME1
     ),
-    P1AdminNoUpdatePriv = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_UPDATE]),
+    Cluster1MemberNoUpdatePriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_UPDATE]),
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
@@ -1695,13 +1693,13 @@ update_support_size_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, P1Admin},
+                {user, Cluster1Member},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
-                {user, P1AdminNoUpdatePriv},
+                {user, Cluster1MemberNoUpdatePriv},
                 {provider, P2, P2Macaroon}
             ]
         },
@@ -1721,11 +1719,11 @@ update_support_size_test(Config) ->
 
 revoke_support_test(Config) ->
     MinSupportSize = oz_test_utils:minimum_support_size(Config),
-    {ok, P1Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-        Config, P1Admin, ?PROVIDER_NAME1
+        Config, Cluster1Member, ?PROVIDER_NAME1
     ),
-    P1AdminNoUpdatePriv = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_UPDATE]),
+    Cluster1MemberNoUpdatePriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_UPDATE]),
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
@@ -1771,13 +1769,13 @@ revoke_support_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, P1Admin},
+                {user, Cluster1Member},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
-                {user, P1AdminNoUpdatePriv},
+                {user, Cluster1MemberNoUpdatePriv},
                 {provider, P2, P2Macaroon}
             ]
         },
@@ -1953,14 +1951,14 @@ update_subdomain_test(Config) ->
     Domain = ?UNIQUE_DOMAIN,
 
     EnvSetUpFun = fun() ->
-        {ok, P1Admin} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, Cluster1Member} = oz_test_utils:create_user(Config, #od_user{}),
         {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-            Config, P1Admin, ?PROVIDER_DETAILS(?PROVIDER_NAME1, Domain)#{<<"subdomainDelegation">> => false}
+            Config, Cluster1Member, ?PROVIDER_DETAILS(?PROVIDER_NAME1, Domain)#{<<"subdomainDelegation">> => false}
         ),
-        P1AdminNoUpdatePriv = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_UPDATE]),
+        Cluster1MemberNoUpdatePriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_UPDATE]),
         #{
             providerId => P1, providerClient => {provider, P1, P1Macaroon},
-            adminClient => {user, P1Admin}, adminClientNoUpdatePriv => {user, P1AdminNoUpdatePriv}
+            clusterMember => {user, Cluster1Member}, clusterMemberNoUpdatePriv => {user, Cluster1MemberNoUpdatePriv}
         }
     end,
     EnvTearDownFun = fun(#{providerId := ProviderId} = _Env) ->
@@ -1983,12 +1981,12 @@ update_subdomain_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                adminClient,
+                clusterMember,
                 providerClient
             ],
             unauthorized = [nobody],
             forbidden = [
-                adminClientNoUpdatePriv,
+                clusterMemberNoUpdatePriv,
                 {user, NonAdmin},
                 {provider, P2, P2Macaroon}
             ]
@@ -2069,11 +2067,11 @@ update_domain_test(Config) ->
     ),
 
     EnvSetUpFun = fun() ->
-        {ok, P1Admin} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, Cluster1Member} = oz_test_utils:create_user(Config, #od_user{}),
         {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-            Config, P1Admin, ProviderDetails
+            Config, Cluster1Member, ProviderDetails
         ),
-        P1AdminNoUpdatePriv = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_UPDATE]),
+        Cluster1MemberNoUpdatePriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_UPDATE]),
 
         % Disable subdomain delegation in onezone to test
         % ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED
@@ -2083,7 +2081,7 @@ update_domain_test(Config) ->
 
         #{
             providerId => P1, providerClient => {provider, P1, P1Macaroon},
-            adminClient => {user, P1Admin}, adminClientNoUpdatePriv => {user, P1AdminNoUpdatePriv}
+            clusterMember => {user, Cluster1Member}, clusterMemberNoUpdatePriv => {user, Cluster1MemberNoUpdatePriv}
         }
     end,
     EnvTearDownFun = fun(#{providerId := ProviderId} = _Env) ->
@@ -2109,12 +2107,12 @@ update_domain_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                adminClient,
+                clusterMember,
                 providerClient
             ],
             unauthorized = [nobody],
             forbidden = [
-                adminClientNoUpdatePriv,
+                clusterMemberNoUpdatePriv,
                 {provider, P2, P2Macaroon}
             ]
         },
@@ -2167,9 +2165,9 @@ update_domain_is_idempotent_test(Config) ->
         <<"domain">> => Domain,
         <<"subdomainDelegation">> => false
     },
-    {ok, P1Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-        Config, P1Admin, ProviderDetails
+        Config, Cluster1Member, ProviderDetails
     ),
 
     EnvSetUpFun = fun() ->
@@ -2187,7 +2185,7 @@ update_domain_is_idempotent_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, P1Admin},
+                {user, Cluster1Member},
                 providerClient
             ],
             unauthorized = [],
@@ -2226,11 +2224,11 @@ get_domain_config_test(Config) ->
 
     ExpDomain = ?UNIQUE_DOMAIN,
 
-    {ok, P1Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-        Config, P1Admin, ?PROVIDER_DETAILS(?PROVIDER_NAME1, ExpDomain)#{<<"subdomainDelegation">> => false}
+        Config, Cluster1Member, ?PROVIDER_DETAILS(?PROVIDER_NAME1, ExpDomain)#{<<"subdomainDelegation">> => false}
     ),
-    P1AdminNoViewPriv = create_admin_and_set_privs(Config, P1, [], [?CLUSTER_VIEW]),
+    Cluster1MemberNoViewPriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_DETAILS(?PROVIDER_NAME2, ?UNIQUE_DOMAIN)#{<<"subdomainDelegation">> => false}
     ),
@@ -2247,14 +2245,14 @@ get_domain_config_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, P1Admin},
+                {user, Cluster1Member},
                 {provider, P1, P1Macaroon},
                 {admin, [?OZ_PROVIDERS_VIEW]}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {user, P1AdminNoViewPriv},
+                {user, Cluster1MemberNoViewPriv},
                 {provider, P2, P2Macaroon}
             ]
         },
@@ -2543,11 +2541,11 @@ create_2_providers_and_5_supported_spaces(Config) ->
     {{P1, P1Macaroon}, {P2, P2Macaroon}, Spaces}.
 
 
-create_admin_and_set_privs(Config, ProviderId, ToGrant, ToRevoke) ->
+new_cluster_member_with_privs(Config, ProviderId, ToGrant, ToRevoke) ->
     ClusterId = oz_test_utils:get_provider_cluster(Config, ProviderId),
-    {ok, NewAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:cluster_add_user(Config, ClusterId, NewAdmin),
+    {ok, NewMember} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:cluster_add_user(Config, ClusterId, NewMember),
     oz_test_utils:cluster_set_user_privileges(
-        Config, ClusterId, NewAdmin, ToGrant, ToRevoke
+        Config, ClusterId, NewMember, ToGrant, ToRevoke
     ),
-    NewAdmin.
+    NewMember.

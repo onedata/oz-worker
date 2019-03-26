@@ -1302,7 +1302,7 @@ get_share_public_url(Config, ShareId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a provider without an admin user.
+%% Creates a provider without a creator user.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_provider(Config :: term(), NameOrData :: od_provider:name() | #{}) ->
@@ -1312,15 +1312,15 @@ create_provider(Config, NameOrData) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a provider with given admin id, who is automatically added to the
-%% corresponding cluster.
-%% @end
+%% Creates a provider with given creator user id, who is automatically added to
+%% the corresponding cluster.
+%% %% @end
 %%--------------------------------------------------------------------
--spec create_provider(Config :: term(), AdminUserId :: od_user:id(),
+-spec create_provider(Config :: term(), CreatorUserId :: od_user:id(),
     NameOrData :: od_provider:name() | #{}) ->
     {ok, {ProviderId :: binary(), Macaroon :: binary()}}.
-create_provider(Config, AdminUserId, Name) when is_binary(Name) ->
-    create_provider(Config, AdminUserId, #{
+create_provider(Config, CreatorUserId, Name) when is_binary(Name) ->
+    create_provider(Config, CreatorUserId, #{
         <<"name">> => Name,
         <<"adminEmail">> => <<"admin@oneprovider.example.com">>,
         <<"domain">> => <<"oneprovider.example.com">>,
@@ -1328,17 +1328,17 @@ create_provider(Config, AdminUserId, Name) when is_binary(Name) ->
         <<"latitude">> => 0.0,
         <<"longitude">> => 0.0
     });
-create_provider(Config, AdminUserId, Data) ->
-    DataWithToken = case AdminUserId of
+create_provider(Config, CreatorUserId, Data) ->
+    DataWithToken = case CreatorUserId of
         undefined ->
             Data;
         _ ->
             {ok, Token} = create_provider_registration_token(
-                Config, ?USER(AdminUserId), AdminUserId
+                Config, ?USER(CreatorUserId), CreatorUserId
             ),
             Data#{<<"token">> => Token}
     end,
-    {ok, {ProviderId, Macaroon, AdminUserId}} = ?assertMatch({ok, _}, call_oz(
+    {ok, {ProviderId, Macaroon}} = ?assertMatch({ok, _}, call_oz(
         Config, provider_logic, create, [?NOBODY, DataWithToken]
     )),
     {ok, MacaroonBin} = onedata_macaroons:serialize(Macaroon),
