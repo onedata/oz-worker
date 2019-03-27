@@ -15,6 +15,7 @@
 %%%     - od_provider
 %%%     - od_handle_service
 %%%     - od_handle
+%%%     - od_cluster
 %%% There are two main jobs of the entity graph:
 %%%     - encapsulate all logic concerning relations between entities
 %%%     - ensure that effective relations are always up to date

@@ -6,8 +6,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module implements dynamic_page_behaviour and is called to
-%%% resolve the origin of the GUI data backend for given cluster.
+%%% This module implements dynamic_page_behaviour and returns
+%%% the origin (domain) of the GUI data backend for given cluster.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(page_gui_origin).

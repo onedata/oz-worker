@@ -61,14 +61,14 @@
 % The below ASCII visual shows possible relations in entities graph.
 %
 %       provider----------------------------------->cluster
-%           ^                                          ^
-%           |                         share            |
-%           |                           ^              |
-%           |                           |              |
-%         space    handle_service<----handle           |
-%        ^ ^  ^       ^         ^       ^   ^          /
-%       /  |   \     /          |      /    |         /
-%      /   |    \   /           |     /     |        /
+%           ^                                        ^  ^
+%           |                         share          |  |
+%           |                           ^           /   |
+%           |                           |          /    |
+%         space    handle_service<----handle      /     |
+%        ^ ^  ^       ^         ^       ^   ^    /     /
+%       /  |   \     /          |      /    |   /     /
+%      /   |    \   /           |     /     |  /     /
 %  share  user   group           user     group     /
 %                  ^                        ^      /
 %                  |                        |     /
@@ -225,8 +225,8 @@
 %% This record defines a provider who supports spaces and can be reached via url
 -record(od_provider, {
     name = <<"">> :: od_provider:name(),
-    admin_email :: undefined | binary(),
-    root_macaroon :: undefined | macaroon_logic:id(),
+    admin_email = undefined :: undefined | binary(),
+    root_macaroon = undefined :: undefined | macaroon_logic:id(),
 
     subdomain_delegation = false :: boolean(),
     domain :: binary(),

@@ -121,7 +121,7 @@ after_init([]) ->
         onezone_plugins:init(),
 
         % Logic that should be run on a single node
-        is_dedicated_node(set_up_service) andalso cluster_logic:set_up_onezone_service(),
+        is_dedicated_node(set_up_service) andalso cluster_logic:set_up_oz_worker_service(),
         is_dedicated_node(init_entity_graph) andalso entity_graph:init_state(),
         is_dedicated_node(dns) andalso broadcast_dns_config(),
         is_dedicated_node(predefined_groups) andalso group_logic:create_predefined_groups(),

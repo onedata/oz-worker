@@ -559,7 +559,7 @@ update_test(Config) ->
         Config, ApiTestSpec2, EnvSetUpFun, EnvTeardownFun, VerifyEndFun
     )),
 
-    % Check that user alias can be se to undefined via user_logic
+    % Check that user alias can be set to undefined via user_logic
     ApiTestSpec3 = ApiTestSpec2#api_test_spec{
         gs_spec = undefined,
         data_spec = DataSpec#data_spec{

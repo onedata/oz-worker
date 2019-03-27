@@ -122,7 +122,6 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     Macaroon = maps:get(<<"token">>, Req#el_req.data),
-    % In the future, privileges can be included in token
     Privileges = privileges:cluster_user(),
     JoinClusterFun = fun(od_cluster, ClusterId) ->
         case Req#el_req.auth_hint of
@@ -184,7 +183,8 @@ create(#el_req{gri = #gri{id = ClusterId, aspect = {user, UserId}}, data = Data}
     {ok, resource, {NewGRI, ?THROUGH_CLUSTER(ClusterId), UserData}};
 
 create(Req = #el_req{gri = GRI = #gri{id = ClusterId, aspect = group}}) ->
-    % Create a new group for a user and add the group as a member of this cluster.
+    % Create a new group for the requesting client and add the group as a member
+    % of this cluster.
     {ok, resource, {NewGRI = #gri{id = GroupId}, _}} = group_logic_plugin:create(
         Req#el_req{gri = GRI#gri{type = od_group, id = undefined, aspect = instance}}
     ),

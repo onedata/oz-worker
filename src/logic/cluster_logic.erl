@@ -62,7 +62,7 @@
     is_linked_to_provider/2
 ]).
 -export([
-    set_up_onezone_service/0,
+    set_up_oz_worker_service/0,
     get_onezone_cluster_id/0
 ]).
 -export([
@@ -244,7 +244,7 @@ create_group_invite_token(Client, ClusterId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Adds specified user to given cluster.
+%% Adds specified user to given cluster with default member privileges.
 %% @end
 %%--------------------------------------------------------------------
 -spec add_user(Client :: entity_logic:client(),
@@ -736,11 +736,11 @@ is_linked_to_provider(Cluster, ProviderId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a new onezone cluster singleton if it does not exist and sets up
-%% Onezone worker GUI.
+%% oz_worker GUI.
 %% @end
 %%--------------------------------------------------------------------
--spec set_up_onezone_service() -> ok.
-set_up_onezone_service() ->
+-spec set_up_oz_worker_service() -> ok.
+set_up_oz_worker_service() ->
     ?info("Setting up Onezone worker service"),
     ok = od_cluster:ensure_onezone_cluster(),
     {ok, GuiHash} = gui:package_hash(?GUI_PACKAGE_PATH),

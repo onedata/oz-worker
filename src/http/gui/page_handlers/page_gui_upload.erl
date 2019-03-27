@@ -6,8 +6,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module implements dynamic_page_behaviour and is called to handle a GUI
-%%% upload from an OP worker or OP panel.
+%%% This module implements dynamic_page_behaviour and is called to handle
+%%% GUI package uploads from op_worker or op_panel services.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(page_gui_upload).
@@ -65,7 +65,7 @@ handle_gui_upload(Req) ->
 
     Service = try
         onedata:service_from_shortname(ServiceShortname)
-    catch _:_ ->
+    catch error:badarg ->
         throw(?HTTP_400_BAD_REQUEST)
     end,
     lists:member(Service, [?OP_WORKER, ?OP_PANEL]) orelse throw(?HTTP_400_BAD_REQUEST),

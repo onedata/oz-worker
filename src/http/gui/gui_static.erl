@@ -60,7 +60,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Verifies given GUI package, and upon success, deploys the GUI package for
+%% Reads given GUI package, and upon success, deploys the GUI package for
 %% given service on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
@@ -206,15 +206,18 @@ oz_worker_gui_path(RelPath) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Cowboy callback for resolving file mimetype. Compared do default cowboy
+%% Cowboy callback for resolving file mimetype. Compared to default cowboy
 %% behaviour, recognizes json files and returns text/html mimetype for the
 %% ./i file (alias for ./index.html).
+%% Used in cowboy_static handler opts (routes/0).
 %% @end
 %%--------------------------------------------------------------------
 -spec mimetype(binary()) -> {binary(), binary(), []}.
 mimetype(Path) ->
     case filename:extension(Path) of
         <<>> ->
+            % Special ./i file in every service is an alias
+            % (symbolic link) for index.html
             case filename:basename(Path) of
                 <<"i">> -> {<<"text">>, <<"html">>, []};
                 _ -> {<<"application">>, <<"octet-stream">>, []}
@@ -245,10 +248,11 @@ gui_exists_unsafe(Service, GuiHash) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns the path (on the filesystem) to the static GUI root of given service.
+%% Returns the path (on the filesystem) to the static GUI root of given service
+%% or gui package.
 %% Examples:
 %%      /etc/oz_worker/gui_static/ozw/74afc09f584276186894b82caf466886
-%%      /etc/oz_worker/gui_static/opp/4fc0679a9fa6ca685dbe1a89dc65c552
+%%      /etc/oz_worker/gui_static/opp/4fc98577cee89c3dfb7817b11c0027ec3084f8ba455a162c9038ed568b9d3b7d
 %% Identifier can be a ClusterId or a GuiHash.
 %% @end
 %%--------------------------------------------------------------------
@@ -262,15 +266,15 @@ service_static_root(Service, Identifier) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns the path (URN) to the web GUI root of given service.
+%% Returns the path (URN) to the web GUI root of given service or gui package.
 %% Examples:
 %%      /ozw/74afc09f584276186894b82caf466886
-%%      /opp/4fc0679a9fa6ca685dbe1a89dc65c552
+%%      /opp/4fc98577cee89c3dfb7817b11c0027ec3084f8ba455a162c9038ed568b9d3b7d
 %% @end
 %%--------------------------------------------------------------------
--spec service_gui_path(onedata:service(), od_cluster:id()) -> binary().
-service_gui_path(Service, ClusterId) ->
-    <<"/", (onedata:service_shortname(Service))/binary, "/", ClusterId/binary>>.
+-spec service_gui_path(onedata:service(), od_cluster:id() | gui:package_hash()) -> binary().
+service_gui_path(Service, Identifier) ->
+    <<"/", (onedata:service_shortname(Service))/binary, "/", Identifier/binary>>.
 
 
 %%--------------------------------------------------------------------
@@ -288,15 +292,16 @@ ensure_link_to_index_html(ServiceStaticRoot) ->
     ok.
 
 
+%% @private
+-spec link_exists(Path :: file:name_all()) -> boolean().
 link_exists(Path) ->
     case file:read_link(Path) of
-        {ok, _} ->
-            true;
-        _ ->
-            false
+        {ok, _} -> true;
+        _ -> false
     end.
 
 
+%% @private
 -spec mimetype_by_ext(binary()) -> {binary(), binary(), []}.
 mimetype_by_ext(<<"css">>) -> {<<"text">>, <<"css">>, []};
 mimetype_by_ext(<<"gif">>) -> {<<"image">>, <<"gif">>, []};

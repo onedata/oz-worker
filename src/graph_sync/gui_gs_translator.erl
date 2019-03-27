@@ -60,13 +60,12 @@ handshake_attributes(_Client) ->
 -spec translate_value(gs_protocol:protocol_version(), gs_protocol:gri(),
     Value :: term()) -> Result | fun((gs_protocol:client()) -> Result) when
     Result :: gs_protocol:data() | gs_protocol:error().
-translate_value(ProtoVersion, #gri{aspect = invite_group_token}, Macaroon) ->
-    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
-translate_value(ProtoVersion, #gri{aspect = invite_provider_token}, Macaroon) ->
-    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
-translate_value(ProtoVersion, #gri{aspect = provider_registration_token}, Macaroon) ->
-    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
-translate_value(_, #gri{aspect = invite_user_token}, Macaroon) ->
+translate_value(_, #gri{aspect = TokenType}, Macaroon) when
+    TokenType == invite_user_token;
+    TokenType == invite_group_token;
+    TokenType == invite_provider_token;
+    TokenType == provider_registration_token ->
+
     {ok, Token} = onedata_macaroons:serialize(Macaroon),
     Token;
 
