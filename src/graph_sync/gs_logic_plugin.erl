@@ -148,7 +148,7 @@ verify_auth_override(Client, {macaroon, Macaroon, DischMacaroons}) ->
         {error, _} = Error1 ->
             case Client of
                 ?PROVIDER(ProviderId) ->
-                    case auth_logic:authorize_by_gui_macaroon(Macaroon, undefined, ?ONEPROVIDER, ProviderId) of
+                    case auth_logic:authorize_by_gui_macaroon(Macaroon, ?ONEPROVIDER, ProviderId) of
                         {true, OverrideClient2, _SessionId} ->
                             {ok, OverrideClient2};
                         {error, _} = Error2 ->

@@ -466,11 +466,12 @@ error_to_gs_expectations(Config, ErrorType) ->
 prepare_gs_client(Config, {user, UserId, _Macaroon}) ->
     prepare_gs_client(Config, {user, UserId});
 prepare_gs_client(Config, {user, UserId}) ->
-    {ok, {_SessionId, Cookie}} = oz_test_utils:log_in(Config, UserId),
+    {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, UserId),
+    {ok, GuiToken} = oz_test_utils:request_gui_token_endpoint(Config, CookieValue),
     prepare_gs_client(
         Config,
         {user, UserId},
-        {cookie, {?SESSION_COOKIE_KEY, Cookie}},
+        {urlToken, GuiToken},
         [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
     );
 prepare_gs_client(_Config, nobody) ->
@@ -484,27 +485,16 @@ prepare_gs_client(Config, {provider, ProviderId, Macaroon}) ->
     ).
 
 
-% Authorization :: {cookie, Cookie} | {macaroon, Macaroon}.
+% Authorization :: {urlToken, Token} | {macaroon, Macaroon}.
+% Provider   - {macaroon, Macaroon} - macaroon is sent in headers
+% User (GUI) - {urlToken, Token} - macaroon is retrieved from /gui-token
+%              endpoint based on cookie and sent in QueryString
 prepare_gs_client(Config, ExpIdentity, Authorization, Opts) ->
-    % Provider   - macaroon is sent in headers
-    % User (GUI) - macaroon is retrieved from /gui-token endpoint based on
-    %              cookie and sent in QueryString, but SessionId cookie is
-    %              still expected
-    WebsocketEndpoint = case Authorization of
-        {macaroon, _Macaroon} ->
-            oz_test_utils:graph_sync_url(Config, provider);
-        {cookie, {_CookieKey, CookieValue}} ->
-            {ok, GuiToken} = oz_test_utils:acquire_onezone_gui_token(Config, CookieValue),
-            str_utils:format_bin("~s?token=~s", [
-                % @todo VFS-4520 currently only provider GS is supported in tests
-                oz_test_utils:graph_sync_url(Config, provider),
-                GuiToken
-            ])
-    end,
     {ok, GsClient, #gs_resp_handshake{
         identity = ExpIdentity
     }} = gs_client:start_link(
-        WebsocketEndpoint,
+        % @todo VFS-4520 Currently only provider endpoint is tested
+        oz_test_utils:graph_sync_url(Config, provider),
         Authorization,
         oz_test_utils:get_gs_supported_proto_versions(Config),
         fun(_) -> ok end,

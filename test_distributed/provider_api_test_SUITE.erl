@@ -167,11 +167,11 @@ create_test(Config) ->
         ?assertEqual(ProviderURL, ExpProviderURL),
 
         case Data of
-            undefined ->
-                ok;
             #{<<"token">> := _} ->
                 {ok, UserClusters} = oz_test_utils:user_get_clusters(Config, CreatorUserId),
-                ?assert(lists:member(ExpClusterId, UserClusters))
+                ?assert(lists:member(ExpClusterId, UserClusters));
+            _ ->
+                ok
         end,
 
         % delete provider to avoid "subdomain occupied" errors

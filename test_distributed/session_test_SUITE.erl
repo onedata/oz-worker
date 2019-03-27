@@ -310,48 +310,40 @@ create_gui_macaroons(Config) ->
         Config, session, acquire_gui_macaroon, [Session2, ?ONEPROVIDER, <<"1123123">>]
     )),
 
-    ?assertMatch({ok, UserId}, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon1, Session1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
-    )),
-    % GuiSessionId can be undefined in case the request comes via other interface (REST, GS)
-    ?assertMatch({ok, UserId}, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon1, undefined, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    ?assertMatch({ok, UserId, Session1}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
     )),
     ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon1, Session2, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEZONE, ?ONEZONE_SERVICE_ID]
     )),
     ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon1, Session1, ?ONEPROVIDER, ?ONEZONE_SERVICE_ID]
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEPROVIDER, ?ONEZONE_SERVICE_ID]
     )),
     ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon1, Session1, ?ONEPROVIDER, <<"1123123">>]
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEPROVIDER, <<"1123123">>]
     )),
 
-    ?assertMatch({ok, UserId}, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon2, Session2, ?ONEPROVIDER, <<"1123123">>]
-    )),
-    % GuiSessionId can be undefined in case the request comes via other interface (REST, GS)
-    ?assertMatch({ok, UserId}, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon2, undefined, ?ONEPROVIDER, <<"1123123">>]
+    ?assertMatch({ok, UserId, Session2}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEPROVIDER, <<"1123123">>]
     )),
     ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon2, Session1, ?ONEPROVIDER, <<"1123123">>]
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEPROVIDER, <<"zxvcsdgadg">>]
     )),
 
     oz_test_utils:log_out(Config, Cookie1),
     ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon1, Session1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
     )),
     ?assertMatch({error, not_found}, oz_test_utils:call_oz(
         Config, session, acquire_gui_macaroon, [Session1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
     )),
-    ?assertMatch({ok, UserId}, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon2, Session2, ?ONEPROVIDER, <<"1123123">>]
+    ?assertMatch({ok, UserId, Session2}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEPROVIDER, <<"1123123">>]
     )),
 
     oz_test_utils:log_out(Config, Cookie2),
     ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon2, Session2, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEZONE, ?ONEZONE_SERVICE_ID]
     )),
     ?assertMatch({error, not_found}, oz_test_utils:call_oz(
         Config, session, acquire_gui_macaroon, [Session2, ?ONEZONE, ?ONEZONE_SERVICE_ID]
@@ -365,15 +357,15 @@ create_gui_macaroons_via_endpoint(Config) ->
 
     {ok, Token1} = ?assertMatch(
         {ok, _},
-        oz_test_utils:acquire_gui_token(Config, Cookie, ?ONEZONE, ?ONEZONE_CLUSTER_ID)
+        oz_test_utils:request_gui_token_endpoint(Config, Cookie, ?ONEZONE, ?ONEZONE_CLUSTER_ID)
     ),
     {ok, Macaroon1} = onedata_macaroons:deserialize(Token1),
-    ?assertMatch({ok, UserId}, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon1, Session, ?ONEZONE, ?ONEZONE_CLUSTER_ID]
+    ?assertMatch({ok, UserId, Session}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEZONE, ?ONEZONE_CLUSTER_ID]
     )),
     % GuiSessionId can be undefined in case the request comes via other interface (REST, GS)
-    ?assertMatch({ok, UserId}, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon1, undefined, ?ONEZONE, ?ONEZONE_CLUSTER_ID]
+    ?assertMatch({ok, UserId, Session}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEZONE, ?ONEZONE_CLUSTER_ID]
     )),
 
     % The user will belong to the cluster as the provider admin
@@ -384,29 +376,29 @@ create_gui_macaroons_via_endpoint(Config) ->
 
     {ok, Token2} = ?assertMatch(
         {ok, _},
-        oz_test_utils:acquire_gui_token(Config, Cookie, ?ONEPROVIDER, ClusterId)
+        oz_test_utils:request_gui_token_endpoint(Config, Cookie, ?ONEPROVIDER, ClusterId)
     ),
     {ok, Macaroon2} = onedata_macaroons:deserialize(Token2),
     % GuiSessionId can be undefined in case the request comes via other interface (REST, GS)
-    ?assertMatch({ok, UserId}, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon2, undefined, ?ONEPROVIDER, ProviderId]
+    ?assertMatch({ok, UserId, Session}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEPROVIDER, ProviderId]
     )),
 
     ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon2, Session, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEZONE, ?ONEZONE_SERVICE_ID]
     )),
     ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon2, undefined, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEZONE, ?ONEZONE_SERVICE_ID]
     )),
     ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon1, undefined, ?ONEPROVIDER, ProviderId]
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEPROVIDER, ProviderId]
     )),
 
     % A user not belonging to the provider/cluster cannot generate GUI tokens for it
     {ok, User2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, {_Session2, Cookie2}} = oz_test_utils:log_in(Config, User2),
+    {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, User2),
     ?assertMatch(
-        ?ERROR_FORBIDDEN, oz_test_utils:acquire_gui_token(Config, Cookie2, ?ONEPROVIDER, ClusterId)
+        ?ERROR_FORBIDDEN, oz_test_utils:request_gui_token_endpoint(Config, Cookie2, ?ONEPROVIDER, ClusterId)
     ),
 
     % But after becoming an effective member, he can
@@ -415,34 +407,29 @@ create_gui_macaroons_via_endpoint(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     {ok, Token3} = ?assertMatch(
         {ok, _},
-        oz_test_utils:acquire_gui_token(Config, Cookie2, ?ONEPROVIDER, ClusterId)
+        oz_test_utils:request_gui_token_endpoint(Config, Cookie2, ?ONEPROVIDER, ClusterId)
     ),
     {ok, Macaroon3} = onedata_macaroons:deserialize(Token3),
-    ?assertMatch({ok, User2}, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon3, undefined, ?ONEPROVIDER, ProviderId]
+    ?assertMatch({ok, User2, Session2}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon3, ?ONEPROVIDER, ProviderId]
     )),
 
     % Tokens can be generated only for existing clusters
     ?assertMatch(
-        ?ERROR_MALFORMED_DATA, oz_test_utils:acquire_gui_token(Config, Cookie2, ?ONEPROVIDER, <<"bad-cluster">>)
+        ?ERROR_MALFORMED_DATA, oz_test_utils:request_gui_token_endpoint(Config, Cookie2, ?ONEPROVIDER, <<"bad-cluster">>)
     ),
-    try
-        {ok, ProviderToken} = onedata_macaroons:deserialize(ProviderMacaroon),
-        % Make sure provider gui tokens are properly accepted in REST
-        {ok, _, _, UserData} = ?assertMatch({ok, 200, _, _}, http_client:get(
-            ?URL(Config, [<<"/user">>]),
-            #{
-                <<"Subject-Token">> => Token3,
-                <<"Audience-Token">> => ProviderToken
-            },
-            <<"">>,
-            [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
-        )),
-        ?assertMatch(#{<<"userId">> := User2}, json_utils:decode(UserData)),
-        ok
-    catch T:M ->
-        ct:print("WAT ~p~n~s", [{T, M}, lager:pr_stacktrace(erlang:get_stacktrace())])
-    end,
+
+    % Make sure provider gui tokens are properly accepted in REST
+    {ok, _, _, UserData} = ?assertMatch({ok, 200, _, _}, http_client:get(
+        ?URL(Config, [<<"/user">>]),
+        #{
+            <<"Subject-Token">> => Token3,
+            <<"Audience-Token">> => ProviderMacaroon
+        },
+        <<"">>,
+        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
+    )),
+    ?assertMatch(#{<<"userId">> := User2}, json_utils:decode(UserData)),
     ok.
 
 
@@ -459,27 +446,27 @@ expiration_of_gui_macaroons(Config) ->
         Config, session, acquire_gui_macaroon, [Session2, ?ONEPROVIDER, <<"1123123">>]
     )),
 
-    ?assertMatch({ok, UserId}, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon1, Session1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    ?assertMatch({ok, UserId, Session1}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
     )),
-    ?assertMatch({ok, UserId}, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon2, Session2, ?ONEPROVIDER, <<"1123123">>]
+    ?assertMatch({ok, UserId, Session2}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEPROVIDER, <<"1123123">>]
     )),
 
     wait_for_expiration(Config, Expires1),
     ?assertMatch(?ERROR_MACAROON_EXPIRED, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon1, Session1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
     )),
-    ?assertMatch({ok, UserId}, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon2, Session2, ?ONEPROVIDER, <<"1123123">>]
+    ?assertMatch({ok, UserId, Session2}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEPROVIDER, <<"1123123">>]
     )),
 
     oz_test_utils:simulate_time_passing(Config, 10),
     ?assertMatch(?ERROR_MACAROON_EXPIRED, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon1, Session1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
     )),
     ?assertMatch(?ERROR_MACAROON_EXPIRED, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon2, Session2, ?ONEPROVIDER, <<"1123123">>]
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEPROVIDER, <<"1123123">>]
     )).
 
 
@@ -604,7 +591,7 @@ unmock_user_connected_callback(Config) ->
 
 
 start_gs_connection(Config, Cookie) ->
-    case oz_test_utils:acquire_onezone_gui_token(Config, Cookie) of
+    case oz_test_utils:request_gui_token_endpoint(Config, Cookie) of
         {error, _} = Error ->
             Error;
         {ok, GuiToken} ->
@@ -612,13 +599,9 @@ start_gs_connection(Config, Cookie) ->
             process_flag(trap_exit, true),
             Nodes = ?config(oz_worker_nodes, Config),
             rpc:multicall(Nodes, oz_worker, set_env, [mocked_pid, self()]),
-            WebsocketEndpoint = str_utils:format_bin("~s?token=~s", [
-                oz_test_utils:graph_sync_url(Config, gui),
-                GuiToken
-            ]),
             {ok, ClientPid, #gs_resp_handshake{identity = Identity}} = gs_client:start_link(
-                WebsocketEndpoint,
-                {cookie, {?SESSION_COOKIE_KEY, Cookie}},
+                oz_test_utils:graph_sync_url(Config, gui),
+                {urlToken, GuiToken},
                 oz_test_utils:get_gs_supported_proto_versions(Config),
                 fun(_) -> ok end,
                 [{cacerts, oz_test_utils:gui_ca_certs(Config)}]

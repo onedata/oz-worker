@@ -243,8 +243,8 @@
     graph_sync_url/2,
     get_gs_supported_proto_versions/1,
     decode_gri/2,
-    acquire_onezone_gui_token/2,
-    acquire_gui_token/4
+    request_gui_token_endpoint/2,
+    request_gui_token_endpoint/4
 ]).
 
 %%%===================================================================
@@ -2838,10 +2838,10 @@ decode_gri(Config, EncodedGri) ->
 %% Acquires a Onezone gui token issued for the session denoted by given cookie.
 %% @end
 %%--------------------------------------------------------------------
--spec acquire_onezone_gui_token(Config :: term(), Cookie :: binary()) ->
+-spec request_gui_token_endpoint(Config :: term(), Cookie :: binary()) ->
     {ok, Token :: binary()} | {error, term()}.
-acquire_onezone_gui_token(Config, Cookie) ->
-    acquire_gui_token(Config, Cookie, ?ONEZONE, ?ONEZONE_CLUSTER_ID).
+request_gui_token_endpoint(Config, Cookie) ->
+    request_gui_token_endpoint(Config, Cookie, ?ONEZONE, ?ONEZONE_CLUSTER_ID).
 
 
 %%--------------------------------------------------------------------
@@ -2850,10 +2850,10 @@ acquire_onezone_gui_token(Config, Cookie) ->
 %% for use by given service (defined via cluster type and id).
 %% @end
 %%--------------------------------------------------------------------
--spec acquire_gui_token(Config :: term(), Cookie :: binary(),
+-spec request_gui_token_endpoint(Config :: term(), Cookie :: binary(),
     od_cluster:id(), od_cluster:type()) ->
     {ok, Token :: binary()} | {error, term()}.
-acquire_gui_token(Config, Cookie, ClusterType, ClusterId) ->
+request_gui_token_endpoint(Config, Cookie, ClusterType, ClusterId) ->
     Result = http_client:post(
         str_utils:format("https://~s/gui-token", [oz_domain(Config)]),
         #{
