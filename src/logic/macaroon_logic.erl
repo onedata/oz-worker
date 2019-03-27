@@ -141,13 +141,13 @@ verify_gui_macaroon(SubjectMacaroon, ClusterType, ServiceId, SessionVerifyFun) -
                 CaveatSessionId == IssuerSessionId andalso
                     SessionVerifyFun(CaveatSessionId, Identifier)
             end,
-            Caveats = [
-                ?SESSION_ID_CAVEAT(SessionCaveatVerifyFun),
+            CaveatVerifiers = [
+                ?SESSION_ID_VERIFIER(SessionCaveatVerifyFun),
                 ?CLUSTER_TYPE_CAVEAT(ClusterType),
                 ?SERVICE_ID_CAVEAT(ServiceId),
                 ?TIME_CAVEAT(?NOW(), ?GUI_MACAROON_TTL)
             ],
-            case onedata_macaroons:verify(SubjectMacaroon, Secret, [], Caveats) of
+            case onedata_macaroons:verify(SubjectMacaroon, Secret, [], CaveatVerifiers) of
                 ok -> {ok, UserId, IssuerSessionId};
                 Error = {error, _} -> Error
             end;

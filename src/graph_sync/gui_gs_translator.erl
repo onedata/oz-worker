@@ -206,7 +206,7 @@ translate_user(#gri{aspect = eff_providers}, Providers) ->
             end, Providers)
     };
 
-translate_user(#gri{aspect = clusters}, Clusters) ->
+translate_user(#gri{aspect = eff_clusters}, Clusters) ->
     #{
         <<"list">> => lists:map(
             fun(ClusterId) ->

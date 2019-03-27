@@ -570,6 +570,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}
             <<"adminEmail">> => {binary, email}
         },
         optional => #{
+            % Registration token is not required for compatibility with older providers
             <<"token">> => {token, ?PROVIDER_REGISTRATION_TOKEN},
             <<"latitude">> => {float, {between, -90, 90}},
             <<"longitude">> => {float, {between, -180, 180}}
@@ -828,6 +829,7 @@ update_provider_subomain(ProviderId, Data) ->
 -spec create_provider(Data :: maps:map(), ProviderId :: od_provider:id(),
     GRI :: entity_logic:gri()) -> entity_logic:create_result().
 create_provider(Data, ProviderId, GRI) ->
+    % Registration token is not required for compatibility with older providers
     Token = maps:get(<<"token">>, Data, undefined),
     Name = maps:get(<<"name">>, Data),
     Latitude = maps:get(<<"latitude">>, Data, 0.0),

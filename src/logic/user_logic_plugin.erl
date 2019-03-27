@@ -134,7 +134,7 @@ is_subscribable({linked_account, _}, private) -> true;
 is_subscribable(eff_groups, private) -> true;
 is_subscribable(eff_spaces, private) -> true;
 is_subscribable(eff_providers, private) -> true;
-is_subscribable(clusters, private) -> true;
+is_subscribable(eff_clusters, private) -> true;
 is_subscribable(_, _) -> false.
 
 %%--------------------------------------------------------------------
