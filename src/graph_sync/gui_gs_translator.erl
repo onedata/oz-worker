@@ -138,7 +138,7 @@ translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, U
         <<"groupList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_groups, scope = private}),
         <<"spaceList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_spaces, scope = private}),
         <<"providerList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_providers, scope = private}),
-        <<"clusterList">> => gs_protocol:gri_to_string(GRI#gri{aspect = clusters, scope = private}),
+        <<"clusterList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_clusters, scope = private}),
         <<"info">> => #{
             <<"creationTime">> => User#od_user.creation_time
         }
