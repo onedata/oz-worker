@@ -77,11 +77,13 @@ create_response(#gri{id = HarvesterId, aspect = {space, SpaceId}}, _, resource, 
         [<<"harvesters">>, HarvesterId, <<"spaces">>, SpaceId]
     );
 
-create_response(#gri{aspect = index}, _, value, IndexId) ->
-    rest_translator:ok_body_reply(#{<<"indexId">> => IndexId});
+create_response(#gri{id = HarvesterId, aspect = index}, _, value, IndexId) ->
+    rest_translator:created_reply(
+        [<<"harvesters">>, HarvesterId, <<"indices">>, IndexId]
+    );
 
 create_response(#gri{aspect = {query, _}}, _, value, Response) ->
-    rest_translator:ok_body_reply(#{<<"response">> => Response}).
+    rest_translator:ok_body_reply(Response).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -97,16 +99,14 @@ get_response(#gri{id = HarvesterId, aspect = instance, scope = protected}, Harve
         <<"name">> := Name,
         <<"public">> := Public,
         <<"plugin">> := Plugin,
-        <<"endpoint">> := Endpoint,
-        <<"indices">> := Indices
+        <<"endpoint">> := Endpoint
     } = HarvesterData,
     rest_translator:ok_body_reply(#{
         <<"harvesterId">> => HarvesterId,
         <<"name">> => Name,
         <<"public">> => Public,
         <<"plugin">> => Plugin,
-        <<"endpoint">> => Endpoint,
-        <<"indices">> => Indices
+        <<"endpoint">> => Endpoint
     });
 
 get_response(#gri{aspect = indices}, Indices) ->

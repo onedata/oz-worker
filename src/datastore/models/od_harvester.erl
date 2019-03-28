@@ -31,11 +31,12 @@
 
 -type name() :: binary().
 -type endpoint() :: binary().
-%fixme explain scheme
+% Schema is stored as binary and it can contain e.g. encoded json.
 -type schema() :: binary().
 -type index_id() :: binary().
 -type index() :: #harvester_index{}.
 -type indices() :: #{index_id() => #harvester_index{}}.
+
 -export_type([name/0, endpoint/0, schema/0, 
     index_id/0, index/0, indices/0]).
 

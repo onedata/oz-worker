@@ -81,11 +81,12 @@ all() ->
 create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     [Node | _] = ?config(oz_worker_nodes, Config),
-    VerifyFun = fun(HarvesterId) ->
+    VerifyFun = fun(HarvesterId, ExpConfig) ->
         {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
         ?assertEqual(?CORRECT_NAME, Harvester#od_harvester.name),
         ?assertEqual(?HARVESTER_ENDPOINT, Harvester#od_harvester.endpoint),
         ?assertEqual(?HARVESTER_MOCK_PLUGIN, Harvester#od_harvester.plugin),
+        ?assertEqual(ExpConfig, Harvester#od_harvester.gui_plugin_config),
         true
     end,
 
@@ -104,17 +105,23 @@ create_test(Config) ->
             method = post,
             path = <<"/harvesters">>,
             expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                BaseURL = ?URL(Config, [<<"/harvesters/">>]),
-                [HarvesterId] = binary:split(Location, [BaseURL], [global, trim_all]),
-                VerifyFun(HarvesterId)
-            end
+            expected_headers = ?OK_ENV(fun(_, Data) ->
+                ExpConfig = maps:get(<<"guiPluginConfig">>, Data, #{}),
+                fun(#{<<"Location">> := Location} = _Headers) ->
+                    BaseURL = ?URL(Config, [<<"/harvesters/">>]),
+                    [HarvesterId] = binary:split(Location, [BaseURL], [global, trim_all]),
+                    VerifyFun(HarvesterId, ExpConfig)
+                end
+            end)
         },
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = create,
             args = [client, data],
-            expected_result = ?OK_TERM(VerifyFun)
+            expected_result = ?OK_ENV(fun(_, Data) ->
+                ExpConfig = maps:get(<<"guiPluginConfig">>, Data, #{}),
+                ?OK_TERM(fun(HarvesterId) -> VerifyFun(HarvesterId, ExpConfig) end)
+            end)
         },
         data_spec = #data_spec{
             required = [<<"name">>, <<"endpoint">>, <<"plugin">>],
@@ -597,14 +604,15 @@ create_index_test(Config) ->
     oz_test_utils:harvester_add_user(Config, H1, U2),
     oz_test_utils:harvester_set_user_privileges(Config, H1, U2, [?HARVESTER_UPDATE], []),
 
-    VerifyFun = fun(IndexId) ->
+    VerifyFun = fun(IndexId, ExpSchema) ->
         {ok, Harvester} = oz_test_utils:get_harvester(Config, H1),
         Indices = Harvester#od_harvester.indices,
         ?assertEqual(true, lists:member(IndexId, maps:keys(Indices))),
         Index = maps:get(IndexId, Indices),
         ?assertEqual(?CORRECT_NAME, Index#harvester_index.name),
-        ?assertEqual(?HARVESTER_INDEX_SCHEMA, Index#harvester_index.schema),
-        ?assertEqual(?CORRECT_NAME, Index#harvester_index.guiPluginName)
+        ?assertEqual(ExpSchema, Index#harvester_index.schema),
+        ?assertEqual(?CORRECT_NAME, Index#harvester_index.guiPluginName),
+        true
     end,
         
     ApiTestSpec = #api_test_spec{
@@ -620,19 +628,31 @@ create_index_test(Config) ->
                 {user, NonAdmin}
             ]
         },
+        rest_spec = #rest_spec{
+            method = post,
+            path = [<<"/harvesters/">>, H1, <<"/indices">>],
+            expected_code = ?HTTP_201_CREATED,
+            expected_headers = ?OK_ENV(fun(_, Data) ->
+                ExpSchema = maps:get(<<"schema">>, Data, undefined),
+                fun(#{<<"Location">> := Location} = _Headers) ->
+                    BaseURL = ?URL(Config, [<<"/harvesters/">>, H1, <<"/indices/">>]),
+                    [IndexId] = binary:split(Location, [BaseURL], [global, trim_all]),
+                    VerifyFun(IndexId, ExpSchema)
+                end
+            end)
+        },
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = create_index,
             args = [client, H1, data],
-            expected_result = ?OK_TERM(VerifyFun)
-        },
-        rest_spec = #rest_spec{
-            method = post,
-            path = [<<"/harvesters/">>, H1, <<"/indices">>],
-            expected_code = ?HTTP_200_OK
+            expected_result = ?OK_ENV(fun(_, Data) ->
+                ExpSchema = maps:get(<<"schema">>, Data, undefined),
+                ?OK_TERM(fun(IndexId) -> VerifyFun(IndexId, ExpSchema) end)
+            end)
         },
         data_spec = #data_spec{
-            required = [<<"schema">>, <<"name">>, <<"guiPluginName">>],
+            required = [<<"name">>, <<"guiPluginName">>],
+            optional = [<<"schema">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"schema">> => [?HARVESTER_INDEX_SCHEMA],
@@ -859,7 +879,8 @@ query_index_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_HARVESTERS_VIEW]}
             ],
             unauthorized = [nobody],
             forbidden = [

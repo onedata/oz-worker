@@ -274,7 +274,7 @@
 -define(HARVESTER_GUI_PLUGIN_CONFIG, #{<<"a">>=><<"b">>}).
 
 -define(HARVESTER_INDEX_NAME, <<"index_name">>).
--define(HARVESTER_INDEX_SCHEMA, <<"{}">>).
+-define(HARVESTER_INDEX_SCHEMA, <<"{ \"mappings\": { \"properties\": { \"foo\": { \"type\": \"keyword\" } } } }">>).
 -define(HARVESTER_INDEX_CREATE_DATA, #{
     <<"name">> => ?HARVESTER_INDEX_NAME,
     <<"schema">> => ?HARVESTER_INDEX_SCHEMA,
@@ -286,8 +286,7 @@
         <<"name">> => HarvesterName,
         <<"endpoint">> => ?HARVESTER_ENDPOINT,
         <<"plugin">> => ?HARVESTER_MOCK_PLUGIN_BINARY,
-        <<"public">> => false,
-        <<"indices">> => []
+        <<"public">> => false
     }).
 
 -define(HARVESTER_CREATE_DATA(HarvesterName, HarvesterPlugin),

@@ -43,6 +43,7 @@
 -record(harvester_index, {
     name :: binary(),
     schema = undefined :: od_harvester:schema() | undefined,
+    %fixme explain guiPluginName
     guiPluginName = <<>> :: binary(),
     seqs = #{} :: maps:map()
 }).

@@ -296,7 +296,7 @@ create(#el_req{gri = #gri{id = HarvesterId, aspect = {space, SpaceId}}}) ->
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
     {ok, Space} = space_logic_plugin:fetch_entity(SpaceId),
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
-    {ok, resource, {NewGRI, ?THROUGH_GROUP(HarvesterId), SpaceData}};
+    {ok, resource, {NewGRI, ?THROUGH_SPACE(HarvesterId), SpaceData}};
 
 create(Req = #el_req{gri = GRI = #gri{id = HarvesterId, aspect = group}}) ->
     % Create a new group for a user and add the group as a member of this harvester.
@@ -375,14 +375,13 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Harvester) ->
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Harvester) ->
     #od_harvester{
         name = Name, plugin = Plugin, endpoint = Endpoint, public = Public,
-        indices = Indices, creator = Creator, creation_time = CreationTime
+        creator = Creator, creation_time = CreationTime
     } = Harvester,
     {ok, #{
         <<"name">> => Name,
         <<"public">> => Public,
         <<"plugin">> => Plugin,
         <<"endpoint">> => Endpoint,
-        <<"indices">> => maps:keys(Indices),
         <<"creator">> => Creator,
         <<"creationTime">> => CreationTime
     }};
@@ -836,6 +835,9 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = group}
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = index}}) ->
     [?OZ_HARVESTERS_UPDATE];
 
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = {query, _}}}) ->
+    [?OZ_HARVESTERS_VIEW];
+
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
     [?OZ_HARVESTERS_LIST];
 
@@ -1105,7 +1107,7 @@ perform_index_operation(Operation, #state{harvester_id = HarvesterId, index_id =
     od_harvester:index_id(), Data :: maps:map()) -> od_harvester:indices().
 update_indices(create_index, Indices, IndexId, Data) ->
     Name = maps:get(<<"name">>, Data),
-    Schema = maps:get(<<"schema">>, Data),
+    Schema = maps:get(<<"schema">>, Data, undefined),
     GuiPluginName = maps:get(<<"guiPluginName">>, Data),
     Index = #harvester_index{
         name = Name,

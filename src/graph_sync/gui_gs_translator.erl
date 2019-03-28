@@ -558,8 +558,7 @@ translate_harvester(#gri{aspect = instance, scope = protected}, HarvesterData) -
         <<"name">> := Name,
         <<"public">> := Public,
         <<"plugin">> := Plugin,
-        <<"encpoint">> := Endpoint,
-        <<"indices">> := Indices,
+        <<"endpoint">> := Endpoint,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator
     } = HarvesterData,
@@ -567,8 +566,7 @@ translate_harvester(#gri{aspect = instance, scope = protected}, HarvesterData) -
         <<"name">> => Name,
         <<"public">> => Public,
         <<"plugin">> => Plugin,
-        <<"encpoint">> => Endpoint,
-        <<"indices">> => Indices,
+        <<"endpoint">> => Endpoint,
         <<"scope">> => <<"protected">>,
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
