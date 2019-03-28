@@ -557,7 +557,6 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Clus
     } = Cluster,
 
     fun(?USER(UserId)) -> #{
-        <<"scope">> => <<"private">>,
         <<"type">> => Type,
         <<"provider">> => case Type of
             ?ONEZONE ->
@@ -567,6 +566,9 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Clus
                     type = od_provider, id = ServiceId, aspect = instance, scope = auto
                 })
         end,
+        <<"scope">> => <<"private">>,
+        <<"canViewPrivileges">> => cluster_logic:has_eff_privilege(Cluster, UserId, ?CLUSTER_VIEW_PRIVILEGES),
+        <<"directMembership">> => cluster_logic:has_direct_user(Cluster, UserId),
         <<"workerVersion">> => cluster_logic:version_info_to_json(WorkerVersion),
         <<"onepanelVersion">> => cluster_logic:version_info_to_json(OnepanelVersion),
         <<"onepanelProxy">> => OnepanelProxy,

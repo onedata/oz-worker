@@ -58,6 +58,7 @@
     exists/1,
     has_eff_privilege/3,
     has_eff_user/2,
+    has_direct_user/2,
     has_eff_group/2,
     is_linked_to_provider/2
 ]).
@@ -705,6 +706,24 @@ has_eff_user(ClusterId, UserId) when is_binary(ClusterId) ->
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, od_cluster, ClusterId);
 has_eff_user(Cluster, UserId) ->
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, Cluster).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified user is a direct member of given cluster.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_direct_user(ClusterOrId :: od_cluster:id() | #od_cluster{},
+    UserId :: od_cluster:id()) -> boolean().
+has_direct_user(ClusterId, UserId) when is_binary(ClusterId) ->
+    case od_cluster:get(ClusterId) of
+        {ok, #document{value = Cluster}} ->
+            has_direct_user(Cluster, UserId);
+        _ ->
+            false
+    end;
+has_direct_user(#od_cluster{users = Users}, UserId) ->
+    maps:is_key(UserId, Users).
 
 
 %%--------------------------------------------------------------------
