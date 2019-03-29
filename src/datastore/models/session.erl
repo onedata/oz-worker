@@ -179,9 +179,9 @@ acquire_gui_macaroon(SessionId, ClusterType, ServiceId) ->
                     {ok, {Identifier, Macaroon, Expires}} = macaroon_logic:create_gui_macaroon(
                         UserId, SessionId, ClusterType, ServiceId
                     ),
-                    update(SessionId, fun(Session = #session{gui_macaroons = GuiMacaroons}) ->
+                    update(SessionId, fun(Session = #session{gui_macaroons = OldGuiMacaroons}) ->
                         {ok, Session#session{gui_macaroons = add_gui_macaroon(
-                            GuiMacaroons, ClusterType, ServiceId, Identifier, Macaroon, Expires
+                            OldGuiMacaroons, ClusterType, ServiceId, Identifier, Macaroon, Expires
                         )}}
                     end),
                     {ok, {Macaroon, Expires}}

@@ -117,7 +117,10 @@ all() ->
 create_test(Config) ->
     ExpName = ?CORRECT_NAME,
     {ok, CreatorUserId} = oz_test_utils:create_user(Config, #od_user{}),
+    % Create invalid tokens to verify error codes
     {ok, ClientToken} = oz_test_utils:create_client_token(Config, CreatorUserId),
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(CreatorUserId), ?UNIQUE_STRING),
+    {ok, SpaceInviteToken} = oz_test_utils:space_invite_user_token(Config, ?USER(CreatorUserId), Space),
 
     OZDomain = oz_test_utils:oz_domain(Config),
 
@@ -250,7 +253,8 @@ create_test(Config) ->
                 {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
                 {<<"token">>, <<"zxvcsadfgasdfasdf">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
-                {<<"token">>, ClientToken, ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(<<"token">>)}
+                {<<"token">>, ClientToken, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
+                {<<"token">>, SpaceInviteToken, ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(<<"token">>)}
                 | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]
         }
