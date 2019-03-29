@@ -1974,11 +1974,12 @@ get_successors(top_down, #od_group{} = Group) ->
     };
 get_successors(top_down, #od_space{} = Space) ->
     #{
-        od_user := Users, od_group := Groups
+        od_user := Users, od_group := Groups, od_harvester := Harvesters
     } = get_all_direct_relations(bottom_up, Space),
     #{
         od_user => get_ids(Users),
-        od_group => get_ids(Groups)
+        od_group => get_ids(Groups),
+        od_harvester => get_ids(Harvesters)
     };
 get_successors(top_down, #od_provider{} = Provider) ->
     #{od_space := Spaces} = get_all_direct_relations(bottom_up, Provider),

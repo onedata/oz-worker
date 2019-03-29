@@ -43,7 +43,7 @@
 -record(harvester_index, {
     name :: binary(),
     schema = undefined :: od_harvester:schema() | undefined,
-    %fixme explain guiPluginName
+    % mapping of index name to one recognized by gui plugin.
     guiPluginName = <<>> :: binary(),
     seqs = #{} :: maps:map()
 }).
@@ -306,7 +306,7 @@
 
 -record(od_harvester, {
     name = <<"">> :: od_harvester:name(),
-    plugin :: module(),
+    plugin :: od_harvester:plugin(),
     endpoint :: od_harvester:endpoint(),
     
     gui_plugin_config = #{} :: json_utils:json_term(),

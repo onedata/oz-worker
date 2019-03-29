@@ -227,7 +227,7 @@
     create_3_nested_groups/2, create_3_nested_groups/5,
     create_and_support_3_spaces/2,
     minimum_support_size/1,
-    mock_harvester_plugin/2,
+    mock_harvester_plugins/2,
     unmock_harvester_plugin/2,
     mock_handle_proxy/1,
     unmock_handle_proxy/1,
@@ -2534,25 +2534,36 @@ minimum_support_size(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Mocks harvester plugins on all nodes of onezone.
+%% @end
+%%--------------------------------------------------------------------
+mock_harvester_plugins(Config, Plugins) when is_list(Plugins) ->
+    Nodes = ?OZ_NODES(Config),
+    lists:foreach(fun(Plugin) -> mock_harvester_plugin(Nodes, Plugin) end, Plugins),
+    test_utils:mock_new(Nodes, onezone_plugins),
+    
+    test_utils:mock_expect(Nodes, onezone_plugins, get_plugins,
+        fun(Type) -> Plugins ++  meck:passthrough([Type]) end),
+    Config;
+mock_harvester_plugins(Config, Plugin) ->
+    mock_harvester_plugin(Config, [Plugin]).
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates mocked harvester plugin on all nodes of onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec mock_harvester_plugin(Config :: term(), PluginName :: atom()) -> ok.
-mock_harvester_plugin(Config, PluginName) ->
-    Nodes = ?OZ_NODES(Config),
-    test_utils:mock_new(Nodes, onezone_plugins),
-    test_utils:mock_new(Nodes, PluginName, [no_history, non_strict]),
+-spec mock_harvester_plugin(Nodes :: list(), PluginName :: atom()) -> ok.
+mock_harvester_plugin(Nodes, PluginName) ->
+    test_utils:mock_new(Nodes, PluginName, [non_strict]),
     test_utils:mock_expect(Nodes, PluginName, type, fun() -> harvester_plugin end),
     test_utils:mock_expect(Nodes, PluginName, ping, fun(_) -> ok end),
     test_utils:mock_expect(Nodes, PluginName, submit_entry, fun(_,_,_,_,_) -> ok end),
     test_utils:mock_expect(Nodes, PluginName, delete_entry, fun(_,_,_,_) -> ok end),
     test_utils:mock_expect(Nodes, PluginName, create_index, fun(_,_,_,_) -> ok end),
     test_utils:mock_expect(Nodes, PluginName, delete_index, fun(_,_,_) -> ok end),
-    test_utils:mock_expect(Nodes, PluginName, query, fun(_,_,_,_) -> {ok, ?MOCKED_QUERY_DATA} end),
-    test_utils:mock_expect(Nodes, PluginName, query_validator, fun() -> ?HARVESTER_PLUGIN:query_validator() end),
-    test_utils:mock_expect(Nodes, onezone_plugins, get_plugins,
-        fun(Type) -> [PluginName | meck:passthrough([Type])] end),
-    Config.
+    test_utils:mock_expect(Nodes, PluginName, query_index, fun(_,_,_,_) -> {ok, ?MOCKED_QUERY_DATA_MAP} end),
+    test_utils:mock_expect(Nodes, PluginName, query_validator, fun() -> ?HARVESTER_PLUGIN:query_validator() end).
 
 
 %%--------------------------------------------------------------------

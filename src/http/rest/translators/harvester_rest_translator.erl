@@ -115,6 +115,9 @@ get_response(#gri{aspect = indices}, Indices) ->
 get_response(#gri{aspect = {index, IndexId}}, IndexData) ->
     rest_translator:ok_body_reply(IndexData#{<<"indexId">> => IndexId});
 
+get_response(#gri{aspect = {index_progress, _}}, IndexProgress) ->
+    rest_translator:ok_body_reply(IndexProgress);
+
 get_response(#gri{aspect = gui_plugin_config}, Config) ->
     rest_translator:ok_body_reply(#{<<"guiPluginConfig">> => Config});
 

@@ -269,6 +269,8 @@
 -define(HARVESTER_ENDPOINT, <<"test.endpoint:9200">>).
 -define(HARVESTER_MOCK_PLUGIN_BINARY, <<"harvester_mock_plugin">>).
 -define(HARVESTER_MOCK_PLUGIN, binary_to_atom(?HARVESTER_MOCK_PLUGIN_BINARY, utf8)).
+-define(HARVESTER_MOCK_PLUGIN2_BINARY, <<"harvester_mock_plugin2">>).
+-define(HARVESTER_MOCK_PLUGIN2, binary_to_atom(?HARVESTER_MOCK_PLUGIN2_BINARY, utf8)).
 -define(HARVESTER_PLUGIN, elasticsearch_plugin).
 -define(HARVESTER_PLUGIN_BINARY, atom_to_binary(?HARVESTER_PLUGIN, utf8)).
 -define(HARVESTER_GUI_PLUGIN_CONFIG, #{<<"a">>=><<"b">>}).
@@ -280,6 +282,7 @@
     <<"schema">> => ?HARVESTER_INDEX_SCHEMA,
     <<"guiPluginName">> => ?HARVESTER_INDEX_NAME
 }).
+-define(HARVESTER_INDEX_PROGRESS, #{}).
 
 -define(HARVESTER_PROTECTED_DATA(HarvesterName),
     #{
@@ -299,7 +302,7 @@
 -define(HARVESTER_CREATE_DATA(HarvesterName), ?HARVESTER_CREATE_DATA(HarvesterName, ?HARVESTER_MOCK_PLUGIN_BINARY)). 
 -define(HARVESTER_CREATE_DATA, ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)).
 
--define(MOCKED_QUERY_DATA, <<"mocked_query_data">>).
+-define(MOCKED_QUERY_DATA_MAP, #{<<"key">> => <<"mocked_query_data">>}).
 
 -define(BAD_VALUES_NAME(Error),
     [{<<"name">>, <<"">>, Error},

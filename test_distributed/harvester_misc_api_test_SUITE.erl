@@ -37,12 +37,15 @@
     update_test/1,
     update_config_test/1,
     delete_test/1,
+    delete_with_data_test/1,
     
     create_index_test/1,
     list_indices_test/1,
     get_index_test/1,
+    get_index_progress_test/1,
     update_index_test/1,
     delete_index_test/1,
+    delete_index_with_data_test/1,
     query_index_test/1,
     
     submit_entry_test/1,
@@ -58,12 +61,15 @@ all() ->
         update_test,
         update_config_test,
         delete_test,
+        delete_with_data_test,
 
         create_index_test,
         list_indices_test,
         get_index_test,
+        get_index_progress_test,
         update_index_test,
         delete_index_test,
+        delete_index_with_data_test,
         query_index_test,
 
         submit_entry_test,
@@ -441,7 +447,7 @@ update_test(Config) ->
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"endpoint">> => [Endpoint],
-                <<"plugin">> => [?HARVESTER_PLUGIN_BINARY],
+                <<"plugin">> => [?HARVESTER_MOCK_PLUGIN2_BINARY],
                 <<"public">> => [true, false]
             },
             bad_values =
@@ -538,6 +544,7 @@ delete_test(Config) ->
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    OzNodes = ?config(oz_worker_nodes, Config),
 
     EnvSetUpFun = fun() ->
         {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
@@ -548,13 +555,15 @@ delete_test(Config) ->
         oz_test_utils:harvester_set_user_privileges(
             Config, H1, U2, [?HARVESTER_DELETE], []
         ),
+        oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
         #{harvesterId => H1}
     end,
     DeleteEntityFun = fun(#{harvesterId := HarvesterId} = _Env) ->
         oz_test_utils:delete_harvester(Config, HarvesterId)
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{harvesterId := HarvesterId} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{harvesterId := HarvesterId} = _Env, _Data) ->
         {ok, Harvesters} = oz_test_utils:list_harvesters(Config),
+        test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 3, 0),
         ?assertEqual(lists:member(HarvesterId, Harvesters), not ShouldSucceed)
     end,
 
@@ -585,6 +594,81 @@ delete_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = instance},
+            expected_result = ?OK
+        }
+    },
+    ?assert(api_test_scenarios:run_scenario(delete_entity,
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
+    )).
+
+
+delete_with_data_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    OzNodes = ?config(oz_worker_nodes, Config),
+
+    EnvSetUpFun = fun() ->
+        {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
+        oz_test_utils:harvester_set_user_privileges(
+            Config, H1, U1, [], [?HARVESTER_DELETE]
+        ),
+        oz_test_utils:harvester_add_user(Config, H1, U2),
+        oz_test_utils:harvester_set_user_privileges(
+            Config, H1, U2, [?HARVESTER_DELETE], []
+        ),
+        oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
+        #{harvesterId => H1}
+    end,
+    DeleteEntityFun = fun(#{harvesterId := HarvesterId} = _Env) ->
+        oz_test_utils:delete_harvester(Config, HarvesterId)
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{harvesterId := HarvesterId} = _Env, _Data) ->
+        {ok, Harvesters} = oz_test_utils:list_harvesters(Config),
+        case ShouldSucceed of
+            true ->
+                Sum = lists:foldl(fun(Node, Acc) ->
+                    Num = rpc:call(Node, meck, num_calls, [?HARVESTER_MOCK_PLUGIN, delete_index, 3]),
+                    Acc+Num
+                end, 0, OzNodes),
+                ?assertEqual(1, Sum);
+            _ ->
+                test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 3, 0)
+        end,
+        lists:foreach(fun(Node) ->
+            rpc:call(Node, meck, reset, [?HARVESTER_MOCK_PLUGIN])
+        end, OzNodes),
+        ?assertEqual(lists:member(HarvesterId, Harvesters), not ShouldSucceed)
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_HARVESTERS_DELETE]},
+                {user, U2}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = delete,
+            path = [<<"/harvesters/">>, harvesterId, <<"/data">>],
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
+        logic_spec = #logic_spec{
+            module = harvester_logic,
+            function = delete_with_data,
+            args = [client, harvesterId],
+            expected_result = ?OK
+        },
+        gs_spec = #gs_spec{
+            operation = delete,
+            gri = #gri{type = od_harvester, id = harvesterId, aspect = instance_with_data},
             expected_result = ?OK
         }
     },
@@ -721,6 +805,55 @@ get_index_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
+get_index_progress_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    AllPrivs = privileges:harvester_privileges(),
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
+    oz_test_utils:harvester_set_user_privileges(Config, H1, U1,
+        AllPrivs -- [?HARVESTER_VIEW], [?HARVESTER_VIEW]
+    ),
+    oz_test_utils:harvester_add_user(Config, H1, U2),
+    oz_test_utils:harvester_set_user_privileges(Config, H1, U2,
+        [?HARVESTER_VIEW], AllPrivs -- [?HARVESTER_VIEW]
+    ),
+
+    {ok, IndexId} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_HARVESTERS_VIEW]},
+                {user, U2}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {user, U1}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/harvesters/">>, H1, <<"/indices/">>, IndexId, <<"/progress">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = ?HARVESTER_INDEX_PROGRESS
+        },
+        logic_spec = #logic_spec{
+            module = harvester_logic,
+            function = get_index_progress,
+            args = [client, H1, IndexId],
+            expected_result = ?OK_MAP(?HARVESTER_INDEX_PROGRESS)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
 update_index_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
@@ -812,6 +945,7 @@ delete_index_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
+    OzNodes = ?config(oz_worker_nodes, Config),
     
     EnvSetUpFun = fun() ->
         {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA(?CORRECT_NAME)),
@@ -828,6 +962,7 @@ delete_index_test(Config) ->
             false -> [IndexId];
             _ -> []
         end,
+        test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 3, 0),
         ?assertEqual(ExpIndices, maps:keys(Harvester#od_harvester.indices))
     end,
 
@@ -864,6 +999,78 @@ delete_index_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
 
 
+delete_index_with_data_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    OzNodes = ?config(oz_worker_nodes, Config),
+    
+    EnvSetUpFun = fun() ->
+        {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA(?CORRECT_NAME)),
+        {ok, IndexId} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
+        oz_test_utils:harvester_set_user_privileges(Config, H1, U1, [], [?HARVESTER_UPDATE]),
+        oz_test_utils:harvester_add_user(Config, H1, U2),
+        oz_test_utils:harvester_set_user_privileges(Config, H1, U2, [?HARVESTER_UPDATE], []),
+        #{harvesterId => H1, indexId => IndexId}
+    end,
+
+    VerifyEndFun = fun(ShouldSucceed, #{harvesterId := HarvesterId, indexId := IndexId} = _Env, _Data) ->
+        {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
+        ExpIndices = case ShouldSucceed of
+            false -> [IndexId];
+            _ -> []
+        end,
+        case ShouldSucceed of
+            true ->
+                Sum = lists:foldl(fun(Node, Acc) ->
+                    Num = rpc:call(Node, meck, num_calls, [?HARVESTER_MOCK_PLUGIN, delete_index, 3]),
+                    Acc+Num
+                end, 0, OzNodes),
+                ?assertEqual(1, Sum);
+            _ ->
+                test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 3, 0)
+        end,
+        lists:foreach(fun(Node) ->
+            rpc:call(Node, meck, reset, [?HARVESTER_MOCK_PLUGIN])
+        end, OzNodes),
+        ?assertEqual(ExpIndices, maps:keys(Harvester#od_harvester.indices))
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {user, U2},
+                {admin, [?OZ_HARVESTERS_UPDATE]}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = delete,
+            path = [<<"/harvesters/">>, harvesterId, <<"/indices/">>, indexId, <<"/data">>],
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
+        logic_spec = #logic_spec{
+            module = harvester_logic,
+            function = delete_index_with_data,
+            args = [client, harvesterId, indexId],
+            expected_result = ?OK
+        },
+        gs_spec = #gs_spec{
+            operation = delete,
+            gri = #gri{type = od_harvester, id = harvesterId, aspect = {index_with_data, indexId}},
+            expected_result = ?OK
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
+
+
 query_index_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
@@ -891,15 +1098,13 @@ query_index_test(Config) ->
             module = harvester_logic,
             function = query_index,
             args = [client, H1, indexId, data],
-            expected_result = ?OK_BINARY(?MOCKED_QUERY_DATA)
+            expected_result = ?OK_MAP(?MOCKED_QUERY_DATA_MAP)
         },
         rest_spec = #rest_spec{
             method = post,
-            path = [<<"/harvesters/">>, H1, <<"/indices/">>, IndexId],
+            path = [<<"/harvesters/">>, H1, <<"/indices/">>, IndexId, <<"/query">>],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{
-                <<"response">> => ?MOCKED_QUERY_DATA
-            }
+            expected_body = ?MOCKED_QUERY_DATA_MAP
         },
         data_spec = #data_spec{
             required = [ <<"indexId">>, <<"path">>, <<"method">>],
@@ -977,7 +1182,7 @@ list_indices_test(Config) ->
         },
         logic_spec = #logic_spec{
             module = harvester_logic,
-            function = get_indices,
+            function = list_indices,
             args = [client, H1],
             expected_result = ?OK_LIST(ExpectedIndices)
         }
@@ -1107,7 +1312,7 @@ init_per_suite(Config) ->
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 init_per_testcase(_, Config) ->
-    oz_test_utils:mock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN).
+    oz_test_utils:mock_harvester_plugins(Config, [?HARVESTER_MOCK_PLUGIN, ?HARVESTER_MOCK_PLUGIN2]).
 
 end_per_testcase(_, Config) ->
     oz_test_utils:unmock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN).
@@ -1115,4 +1320,3 @@ end_per_testcase(_, Config) ->
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
-

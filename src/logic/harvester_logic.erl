@@ -31,14 +31,17 @@
     update_gui_plugin_config/3
 ]).
 -export([
-    delete/2
+    delete/2, delete_with_data/2
 ]).
 -export([
     create_index/3, create_index/5, 
-    get_index/3, update_index/4,
-    delete_index/3, query_index/4,
-    get_indices/2,
-    
+    get_index/3, get_index_progress/3, 
+    update_index/4,
+    delete_index/3, delete_index_with_data/3,
+    query_index/4,
+    list_indices/2
+]).
+-export([
     submit_entry/4, delete_entry/4
 ]).
 -export([
@@ -243,11 +246,26 @@ delete(Client, HarvesterId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Deletes given harvester from database and all indices data.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_with_data(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+    ok | {error, term()}.
+delete_with_data(Client, HarvesterId) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance_with_data}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates index in given harvester.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
-    Name :: binary(), Schema :: binary(), GuiPluginName :: binary()) -> ok | {error, term()}.
+    Name :: binary(), Schema :: od_harvester:schema(), GuiPluginName :: binary()) -> ok | {error, term()}.
 create_index(Client, HarvesterId, Name, Schema, GuiPluginName) ->
     create_index(Client, HarvesterId, #{
         <<"name">> => Name,
@@ -288,12 +306,27 @@ delete_index(Client, HarvesterId, IndexId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Deletes given index with all data in given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_index_with_data(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+    IndexId :: od_harvester:index_id()) -> ok | {error, term()}.
+delete_index_with_data(Client, HarvesterId, IndexId) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index_with_data, IndexId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Lists all indices in given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_indices(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) -> 
+-spec list_indices(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) -> 
     ok | {error, term()}.
-get_indices(Client, HarvesterId) ->
+list_indices(Client, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
@@ -313,6 +346,21 @@ get_index(Client, HarvesterId, IndexId) ->
         operation = get,
         client = Client,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a harvester index progress from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_index_progress(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+    IndexId :: od_harvester:index_id()) -> {ok, #od_harvester{}} | {error, term()}.
+get_index_progress(Client, HarvesterId, IndexId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index_progress, IndexId}}
     }).
 
 
@@ -1007,5 +1055,3 @@ has_space(HarvesterId, SpaceId) when is_binary(HarvesterId) ->
     entity_graph:has_relation(direct, top_down, od_space, SpaceId, od_harvester, HarvesterId);
 has_space(Harvester, SpaceId) ->
     entity_graph:has_relation(direct, top_down, od_space, SpaceId, Harvester).
-
-

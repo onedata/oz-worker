@@ -2463,7 +2463,7 @@ init_per_testcase(check_my_ports_test, Config) ->
         end),
     init_per_testcase(default, Config);
 init_per_testcase(list_eff_harvesters_test, Config) ->
-    oz_test_utils:mock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN),
+    oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
     init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
     Config.

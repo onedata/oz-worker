@@ -657,7 +657,7 @@ translate_harvester(#gri{aspect = {index, _}}, IndexData) ->
     } = IndexData,
     #{
         <<"name">> => Name,
-        <<"schema">> => Schema,
+        <<"schema">> => gs_protocol:undefined_to_null(Schema),
         <<"guiPluginName">> => GuiPluginName
     };
 

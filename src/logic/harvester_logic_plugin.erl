@@ -25,15 +25,6 @@
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
-% Internal record used for calling harvester plugin.
--record(state, {
-    harvester_id :: od_harvester:id() | undefined,
-    index_id :: binary() | undefined,
-    endpoint :: binary() | undefined,
-    plugin :: atom() | undefined,
-    file_id :: binary() | undefined,
-    data = #{} :: maps:map()
-}).
 
 %%%===================================================================
 %%% API
@@ -106,6 +97,7 @@ operation_supported(get, {eff_group_membership, _}, private) -> true;
 
 operation_supported(get, spaces, private) -> true;
 operation_supported(get, indices, private) -> true;
+operation_supported(get, {index_progress, _}, private) -> true;
 
 operation_supported(update, instance, private) -> true;
 operation_supported(update, gui_plugin_config, private) -> true;
@@ -114,10 +106,12 @@ operation_supported(update, {user_privileges, _}, private) -> true;
 operation_supported(update, {group_privileges, _}, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
+operation_supported(delete, instance_with_data, private) -> true;
 operation_supported(delete, {user, _}, private) -> true;
 operation_supported(delete, {group, _}, private) -> true;
 operation_supported(delete, {space, _}, private) -> true;
 operation_supported(delete, {index, _}, private) -> true;
+operation_supported(delete, {index_with_data, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -166,7 +160,7 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, client = Client,
     } = Data,
     Config = maps:get(<<"guiPluginConfig">>, Data, #{}),
     
-    case call_plugin(ping, #state{plugin = Plugin, endpoint = Endpoint}) of
+    case Plugin:ping(Endpoint) of
         ok -> ok;
         Error -> throw(Error)
     end,
@@ -314,49 +308,52 @@ create(Req = #el_req{gri = GRI = #gri{id = HarvesterId, aspect = group}}) ->
 
 create(#el_req{gri = #gri{aspect = index, id = HarvesterId}, data = Data}) ->
     IndexId = datastore_utils:gen_key(),
-    State = #state{
-        harvester_id = HarvesterId,
-        index_id = IndexId,
-        data = Data
-    },
-    case perform_index_operation(create_index, State) of
+
+    Name = maps:get(<<"name">>, Data),
+    Schema = maps:get(<<"schema">>, Data, undefined),
+    GuiPluginName = maps:get(<<"guiPluginName">>, Data),
+    
+    UpdateFun = fun(#od_harvester{indices = Indices, plugin = Plugin, endpoint = Endpoint} = Harvester) ->
+        case Plugin:create_index(Endpoint, HarvesterId, IndexId, Schema) of
+            ok ->
+                Index = #harvester_index{
+                    name = Name,
+                    schema = Schema,
+                    guiPluginName = GuiPluginName,
+                    seqs = #{}
+                },
+                {ok, Harvester#od_harvester{indices = Indices#{IndexId => Index}}};
+            {error, _} = Error ->
+                Error
+        end
+    end,
+    case od_harvester:update(HarvesterId, UpdateFun) of
         {ok, _} -> {ok, value, IndexId};
         {error, _} = Error -> Error
     end;
     
 create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_entry, FileId}, id = HarvesterId}, data = Data}) ->
     fun(#od_harvester{plugin = Plugin, endpoint = Endpoint, indices = Indices}) ->
-        State = #state{
-            plugin = Plugin, endpoint = Endpoint,
-            harvester_id = HarvesterId, file_id = FileId, 
-            data = Data
-        },
-        {ok, FailedIndices} = perform_entry_operation(submit_entry, Indices, ProviderId, State),
+        {ok, FailedIndices} = perform_entry_operation(submit_entry, Indices, ProviderId, 
+            Plugin, Endpoint, HarvesterId, FileId, Data),
         {ok, value, #{<<"failedIndices">> => FailedIndices}}
     end;
     
 create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {delete_entry, FileId}, id = HarvesterId}, data = Data}) ->
     fun(#od_harvester{plugin = Plugin, endpoint = Endpoint, indices = Indices}) ->
-        State = #state{
-            plugin = Plugin, endpoint = Endpoint,
-            harvester_id = HarvesterId, file_id = FileId,
-            data = Data
-        },
-        {ok, FailedIndices} = perform_entry_operation(delete_entry, Indices, ProviderId, State),
+        {ok, FailedIndices} = perform_entry_operation(submit_entry, Indices, ProviderId, 
+            Plugin, Endpoint, HarvesterId, FileId, Data),
         {ok, value, #{<<"failedIndices">> => FailedIndices}}
     end;
 
 create(#el_req{gri = #gri{aspect = {query, IndexId}, id = HarvesterId}, data = Data}) ->
     fun(#od_harvester{plugin = Plugin, endpoint = Endpoint}) ->
-        State = #state{
-            harvester_id = HarvesterId, index_id = IndexId, 
-            plugin = Plugin, endpoint = Endpoint, data = Data
-        },
-        case call_plugin(query, State) of
+        case Plugin:query_index(Endpoint, HarvesterId, IndexId, Data) of
             {ok, Value} -> {ok, value, Value};
             {error, _} = Error -> Error
         end
     end.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -419,6 +416,12 @@ get(#el_req{gri = #gri{aspect = spaces}}, Harvester) ->
 get(#el_req{gri = #gri{aspect = indices}}, Harvester) ->
     {ok, maps:keys(Harvester#od_harvester.indices)};
 
+get(#el_req{gri = #gri{aspect = {index_progress, IndexId}}}, Harvester) ->
+    #harvester_index{
+        seqs = IndexProgress
+    } = maps:get(IndexId, Harvester#od_harvester.indices),
+    {ok, IndexProgress};
+
 get(#el_req{gri = #gri{aspect = {index, IndexId}}}, Harvester) ->
     #harvester_index{
         name = Name,
@@ -430,6 +433,7 @@ get(#el_req{gri = #gri{aspect = {index, IndexId}}}, Harvester) ->
         <<"schema">> => Schema,
         <<"guiPluginName">> => GuiPluginName
     }}.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -460,7 +464,7 @@ update(#el_req{gri = #gri{id = HarvesterId, aspect = instance}, data = Data}) ->
             Endpoint -> 
                 {ok, NewHarvester};
             _ ->
-                case call_plugin(ping, state_from_harvester(Harvester)) of
+                case NewPlugin:ping(NewEndpoint) of
                     ok -> {ok, NewHarvester#od_harvester{endpoint = NewEndpoint}}; 
                     {error, _} = Error -> Error
                 end
@@ -521,6 +525,15 @@ update(Req = #el_req{gri = #gri{id = HarvesterId, aspect = {group_privileges, Gr
 delete(#el_req{gri = #gri{id = HarvesterId, aspect = instance}}) ->
     entity_graph:delete_with_relations(od_harvester, HarvesterId);
 
+delete(#el_req{gri = #gri{id = HarvesterId, aspect = instance_with_data}}) ->
+    fun(#od_harvester{indices = ExistingIndices, plugin = Plugin, endpoint = Endpoint} = Harvester) ->
+        IndicesIds = maps:keys(ExistingIndices),
+        case delete_indices_data(IndicesIds, Plugin, Endpoint, HarvesterId) of
+            ok -> entity_graph:delete_with_relations(od_harvester, HarvesterId, Harvester);
+            Error -> Error
+        end
+    end;
+
 delete(#el_req{gri = #gri{id = HarvesterId, aspect = {user, UserId}}}) ->
     entity_graph:remove_relation(
         od_user, UserId,
@@ -539,14 +552,15 @@ delete(#el_req{gri = #gri{id = HarvesterId, aspect = {space, SpaceId}}}) ->
         od_space, SpaceId
     );
 
-delete(#el_req{gri = #gri{aspect = {index, IndexId}, id = HarvesterId}}) ->
-    State = #state{
-        harvester_id = HarvesterId,
-        index_id = IndexId
-    },
-    case perform_index_operation(delete_index, State) of
-        {ok, _} -> ok;
-        {error, _} = Error -> Error
+delete(#el_req{gri = #gri{id = HarvesterId, aspect = {index, IndexId}}}) ->
+    {ok, _} = od_harvester:update(HarvesterId, fun(#od_harvester{indices = Indices} = Harvester) ->
+        {ok, Harvester#od_harvester{indices = maps:remove(IndexId, Indices)}}
+    end),
+    ok;
+
+delete(#el_req{gri = #gri{id = HarvesterId, aspect = {index_with_data, IndexId}}}) ->
+    fun(#od_harvester{plugin = Plugin, endpoint = Endpoint}) ->
+        delete_indices_data([IndexId], Plugin, Endpoint, HarvesterId)
     end.
 
 
@@ -557,7 +571,9 @@ delete(#el_req{gri = #gri{aspect = {index, IndexId}, id = HarvesterId}}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
-exists(Req = #el_req{gri = #gri{aspect = instance}}, Harvester) ->
+exists(Req = #el_req{gri = #gri{aspect = Aspect}}, Harvester) when
+    Aspect =:= instance;
+    Aspect =:= instance_with_data ->
     case Req#el_req.auth_hint of
         ?THROUGH_USER(UserId) ->
             harvester_logic:has_eff_user(Harvester, UserId);
@@ -597,6 +613,9 @@ exists(#el_req{gri = #gri{aspect = {space, SpaceId}}}, Harvester) ->
     entity_graph:has_relation(direct, top_down, od_space, SpaceId, Harvester);
 
 exists(#el_req{gri = #gri{aspect = {index, IndexId}}}, Harvester) ->
+    maps:is_key(IndexId, Harvester#od_harvester.indices);
+
+exists(#el_req{gri = #gri{aspect = {index_progress, IndexId}}}, Harvester) ->
     maps:is_key(IndexId, Harvester#od_harvester.indices);
 
 % All other aspects exist if harvester record exists.
@@ -774,6 +793,9 @@ authorize(Req = #el_req{operation = update, gri = #gri{aspect = {group_privilege
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_DELETE);
 
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance_with_data}}, Harvester) ->
+    auth_by_privilege(Req, Harvester, ?HARVESTER_DELETE);
+
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {user, _}}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_REMOVE_USER);
 
@@ -786,8 +808,12 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, Ha
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {index, _}}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_UPDATE);
 
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {index_with_data, _}}}, Harvester) ->
+    auth_by_privilege(Req, Harvester, ?HARVESTER_UPDATE);
+
 authorize(_, _) ->
     false.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -847,9 +873,6 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance,
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = gui_plugin_config}}) ->
     [?OZ_HARVESTERS_VIEW];
 
-required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {index, _}}}) ->
-    [?OZ_HARVESTERS_VIEW];
-
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}) ->
     [?OZ_HARVESTERS_VIEW_PRIVILEGES];
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {eff_user_privileges, _}}}) ->
@@ -879,6 +902,12 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = spaces}})
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = indices}}) ->
     [?OZ_HARVESTERS_VIEW];
 
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {index, _}}}) ->
+    [?OZ_HARVESTERS_VIEW];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {index_progress, _}}}) ->
+    [?OZ_HARVESTERS_VIEW];
+
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
     [?OZ_HARVESTERS_UPDATE];
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = gui_plugin_config}}) ->
@@ -894,6 +923,9 @@ required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = {group
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instance}}) ->
     [?OZ_HARVESTERS_DELETE];
 
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instance_with_data}}) ->
+    [?OZ_HARVESTERS_DELETE];
+
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {user, _}}}) ->
     [?OZ_HARVESTERS_REMOVE_RELATIONSHIPS, ?OZ_USERS_REMOVE_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {group, _}}}) ->
@@ -904,8 +936,12 @@ required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {space
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {index, _}}}) ->
     [?OZ_HARVESTERS_UPDATE];
 
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {index_with_data, _}}}) ->
+    [?OZ_HARVESTERS_UPDATE];
+
 required_admin_privileges(_) ->
     forbidden.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -956,8 +992,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = index}}) -> #{
 };
 
 validate(#el_req{operation = create, gri = #gri{aspect = {query, _}}}) ->
-    fun(Harvester) ->
-        call_plugin(query_validator, state_from_harvester(Harvester))
+    fun(#od_harvester{plugin = Plugin}) ->
+        Plugin:query_validator()
     end;
 
 validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
@@ -1078,47 +1114,27 @@ auth_by_privilege(UserId, HarvesterOrId, Privilege) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Performs given operation regarding harvester index by calling harvester plugin. 
-%% Updates harvester record appropriately.
+%% Deletes indices data by calling harvester plugin.
+%% Removes successfully deleted indices from harvester record.
 %% @end
 %%--------------------------------------------------------------------
--spec perform_index_operation(Operation :: atom(), State :: #state{}) -> {ok, #document{}} | {error, term()}.
-perform_index_operation(Operation, #state{harvester_id = HarvesterId, index_id = IndexId} = State) ->
-    od_harvester:update(HarvesterId,
-        fun(#od_harvester{indices = Indices} = Harvester) ->
-
-            case call_plugin(Operation, state_from_harvester(State, Harvester)) of
-                ok ->
-                    NewIndices = update_indices(Operation, Indices, IndexId, State#state.data),
-                    {ok, Harvester#od_harvester{indices = NewIndices}};
-                {error, _} = Error ->
-                    Error
-            end
-        end).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Updates given Indices appropriately for given Operation.
-%% @end
-%%--------------------------------------------------------------------
--spec update_indices(Operation :: atom(), od_harvester:indices(), 
-    od_harvester:index_id(), Data :: maps:map()) -> od_harvester:indices().
-update_indices(create_index, Indices, IndexId, Data) ->
-    Name = maps:get(<<"name">>, Data),
-    Schema = maps:get(<<"schema">>, Data, undefined),
-    GuiPluginName = maps:get(<<"guiPluginName">>, Data),
-    Index = #harvester_index{
-        name = Name,
-        schema = Schema,
-        guiPluginName = GuiPluginName,
-        seqs = #{}
-    },
-    Indices#{IndexId => Index};
-update_indices(delete_index, Indices, IndexId, _) ->
-    maps:remove(IndexId, Indices).
-
+-spec delete_indices_data([od_harvester:index_id()], od_harvester:plugin(), 
+    od_harvester:endpoint(), od_harvester:id()) -> ok.
+delete_indices_data(IndicesToRemove, Plugin, Endpoint, HarvesterId) ->
+    {SuccessfulIndices, Errors} = lists:foldl(fun(IndexId, {S, E}) ->
+        case Plugin:delete_index(Endpoint, HarvesterId, IndexId) of
+            ok -> {[IndexId | S], E};
+            Error -> {S, [Error| E]}
+        end
+    end, {[],[]}, IndicesToRemove),
+    {ok, _} = od_harvester:update(HarvesterId, fun(#od_harvester{indices = Indices} = Harvester) ->
+        {ok, Harvester#od_harvester{indices = maps:without(SuccessfulIndices, Indices)}}
+    end),
+    case Errors of
+        [Error | _] -> Error;
+        _ -> ok
+    end.
+    
 
 %%--------------------------------------------------------------------
 %% @private
@@ -1129,22 +1145,23 @@ update_indices(delete_index, Indices, IndexId, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec perform_entry_operation(Operation :: atom(), od_harvester:indices(), 
-    od_provider:id(), State :: #state{}) -> {ok, [od_harvester:index_id()]}.
-perform_entry_operation(Operation, Indices, ProviderId, State) ->
-    #state{file_id = FileId, harvester_id = HarvesterId, data = Data} = State,
+    od_provider:id(), od_harvester:plugin(), od_harvester:endpoint(), od_harvester:id(), FileId :: binary(), Data :: map()) -> {ok, [od_harvester:index_id()]}.
+perform_entry_operation(Operation, Indices, ProviderId, Plugin, Endpoint, HarvesterId, FileId, Data) ->
     #{
         <<"seq">> := Seq,
         <<"maxSeq">> := MaxSeq,
         <<"indices">> := SubmitIndices
     } = Data,
     
+    Json = maps:get(<<"json">>, Data, undefined),
+    
     IndicesToUpdate = lists:filtermap(
-        fun(Index) ->
-            case maps:find(Index, Indices) of
+        fun(IndexId) ->
+            case maps:find(IndexId, Indices) of
                 {ok, _} ->
-                    case call_plugin(Operation, State#state{index_id = Index}) of
-                        ok -> {true, {Index, true}};
-                        _ -> {true, {Index, false}}
+                    case call_plugin(Operation, Plugin, Endpoint, HarvesterId, IndexId, FileId, Json) of
+                        ok -> {true, {IndexId, true}};
+                        _ -> {true, {IndexId, false}}
                     end;
                 _ ->
                     % Ignore not found index.
@@ -1183,7 +1200,7 @@ perform_entry_operation(Operation, Indices, ProviderId, State) ->
 set_seqs(IndexRecord, SpaceId, ProviderId, UpdateCurrentSeq, NewSeq, NewMaxSeq) -> 
     SeqsPerSpace = IndexRecord#harvester_index.seqs,
     SeqsPerProvider = maps:get(SpaceId, SeqsPerSpace, #{}),
-    {CurrentSeq, CurrentMaxSeq} = maps:get(ProviderId, SeqsPerProvider, {0,0}),
+    [CurrentSeq, CurrentMaxSeq] = maps:get(ProviderId, SeqsPerProvider, [0,0]),
     
     NewCurrentSeq = case UpdateCurrentSeq of
         true-> max(NewSeq, CurrentSeq);
@@ -1193,7 +1210,7 @@ set_seqs(IndexRecord, SpaceId, ProviderId, UpdateCurrentSeq, NewSeq, NewMaxSeq) 
     IndexRecord#harvester_index{
         seqs = SeqsPerSpace#{
             SpaceId => SeqsPerProvider#{
-                ProviderId => {NewCurrentSeq, max(CurrentMaxSeq, NewMaxSeq)}
+                ProviderId => [NewCurrentSeq, max(CurrentMaxSeq, NewMaxSeq)]
             }
         }
     }.
@@ -1202,67 +1219,12 @@ set_seqs(IndexRecord, SpaceId, ProviderId, UpdateCurrentSeq, NewSeq, NewMaxSeq) 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Performs given operation on proper harvester plugin.
+%% Performs given operation by calling harvester plugin.
 %% @end
 %%--------------------------------------------------------------------
--spec call_plugin(Operation :: atom(), State :: #state{}) -> term().
-call_plugin(ping, State) ->
-    #state{
-        plugin = Plugin, endpoint = Endpoint
-    } = State,
-    Plugin:ping(Endpoint);
-call_plugin(submit_entry, State) ->
-    #state{
-        plugin = Plugin, endpoint = Endpoint, harvester_id = HarvesterId, 
-        index_id = IndexId, file_id = FileId, data = #{<<"json">> := Json}
-    } = State,
+-spec call_plugin(Operation :: atom(), od_harvester:plugin(), od_harvester:endpoint(), od_harvester:id(), 
+    od_harvester:index_id(), FileId :: binary(), Json :: binary()) -> ok | {error, term()}.
+call_plugin(submit_entry, Plugin, Endpoint, HarvesterId, IndexId, FileId, Json) ->
     Plugin:submit_entry(Endpoint, HarvesterId, IndexId, FileId, Json);
-call_plugin(delete_entry, State) ->
-    #state{
-        plugin = Plugin, endpoint = Endpoint, harvester_id = HarvesterId,
-        index_id = IndexId, file_id = FileId
-    } = State,
-    Plugin:delete_entry(Endpoint, HarvesterId, IndexId, FileId);
-call_plugin(create_index, State) ->
-    #state{
-        plugin = Plugin, endpoint = Endpoint, harvester_id = HarvesterId,
-        index_id = IndexId, data = Data
-    } = State,
-    Schema = maps:get(<<"schema">>, Data, undefined),
-    Plugin:create_index(Endpoint, HarvesterId, IndexId, Schema);
-call_plugin(delete_index, State) ->
-    #state{
-        plugin = Plugin, endpoint = Endpoint, harvester_id = HarvesterId,
-        index_id = IndexId
-    } = State,
-    Plugin:delete_index(Endpoint, HarvesterId, IndexId);
-call_plugin(query, State) ->
-    #state{
-        plugin = Plugin, endpoint = Endpoint, harvester_id = HarvesterId,
-        index_id = IndexId, data = Data
-    } = State,
-    Plugin:query(Endpoint, HarvesterId, IndexId, Data);
-call_plugin(query_validator, #state{plugin = Plugin}) -> 
-    Plugin:query_validator().
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Retrieves values from harvester record and returns them in state record.
-%% @end
-%%--------------------------------------------------------------------
--spec state_from_harvester(#od_harvester{}) -> #state{}.
-state_from_harvester(Harvester) ->
-    state_from_harvester(#state{}, Harvester).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Updates given state record with values retrieved from harvester record.
-%% @end
-%%--------------------------------------------------------------------
--spec state_from_harvester(#state{}, #od_harvester{}) -> #state{}.
-state_from_harvester(State, #od_harvester{plugin = Plugin, endpoint = Endpoint}) ->
-    State#state{plugin = Plugin, endpoint = Endpoint}.
+call_plugin(delete_entry, Plugin, Endpoint, HarvesterId, IndexId, FileId, _) ->
+    Plugin:delete_entry(Endpoint, HarvesterId, IndexId, FileId).

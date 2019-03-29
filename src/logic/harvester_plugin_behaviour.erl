@@ -62,7 +62,7 @@
 %% Data must conform to specification in query_validator/0.
 %% @end
 %%--------------------------------------------------------------------
--callback query(od_harvester:endpoint(), od_harvester:id(), 
+-callback query_index(od_harvester:endpoint(), od_harvester:id(), 
     od_harvester:index_id(), Data :: map()) -> {ok, map()} | {error, term()}.
 
 

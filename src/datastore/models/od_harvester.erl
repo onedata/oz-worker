@@ -30,14 +30,15 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
+-type plugin() :: module().
 -type endpoint() :: binary().
 % Schema is stored as binary and it can contain e.g. encoded json.
--type schema() :: binary().
+-type schema() :: binary() | undefined.
 -type index_id() :: binary().
 -type index() :: #harvester_index{}.
 -type indices() :: #{index_id() => #harvester_index{}}.
 
--export_type([name/0, endpoint/0, schema/0, 
+-export_type([name/0, plugin/0, endpoint/0, schema/0, 
     index_id/0, index/0, indices/0]).
 
 -define(CTX, #{
@@ -168,7 +169,7 @@ get_record_struct(1) ->
                 {name, string},
                 {schema, string},
                 {guiPluginName, string},
-                {seqs, #{string => #{string => {integer, integer}}}}
+                {seqs, #{string => #{string => [integer, integer]}}}
             ]}
         }},
 

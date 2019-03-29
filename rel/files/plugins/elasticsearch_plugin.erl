@@ -18,7 +18,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([type/0]).
--export([ping/1, create_index/4, delete_index/3, submit_entry/5, delete_entry/4, query/4, query_validator/0]).
+-export([ping/1, create_index/4, delete_index/3, submit_entry/5, delete_entry/4, query_index/4, query_validator/0]).
 
 -behaviour(onezone_plugin_behaviour).
 -behaviour(harvester_plugin_behaviour).
@@ -133,9 +133,9 @@ delete_entry(Endpoint, HarvesterId, IndexId, Id) ->
 %% {@link harvester_plugin_behaviour} callback query/3.
 %% @end
 %%--------------------------------------------------------------------
--spec query(od_harvester:endpoint(), od_harvester:id(), od_harvester:index_id(), Data :: #{}) ->
+-spec query_index(od_harvester:endpoint(), od_harvester:id(), od_harvester:index_id(), Data :: #{}) ->
     {ok, map()} | {error, term()}.
-query(Endpoint, HarvesterId, IndexId, Data) ->
+query_index(Endpoint, HarvesterId, IndexId, Data) ->
     #{
         <<"method">> := Method,
         <<"path">> := Path
