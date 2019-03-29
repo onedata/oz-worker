@@ -37,8 +37,9 @@
     op_worker_and_panel_gui_is_linked_upon_version_info_update/1,
     gui_upload_requires_provider_auth/1,
     gui_upload_is_not_possible_for_onezone_services/1,
-    gui_upload_for_inexistent_service_returns_bad_request/1,
-    gui_upload_for_inexistent_cluster_returns_bad_request/1,
+    gui_upload_for_inexistent_service_returns_not_found/1,
+    gui_upload_for_inexistent_cluster_returns_not_found/1,
+    gui_upload_with_invalid_package_returns_bad_request/1,
     gui_upload_page_deploys_op_worker_gui_on_all_nodes/1,
     gui_upload_page_deploys_op_panel_gui_on_all_nodes/1,
     empty_gui_is_linked_after_failed_op_worker_version_update/1,
@@ -53,8 +54,9 @@ all() ->
         op_worker_and_panel_gui_is_linked_upon_version_info_update,
         gui_upload_requires_provider_auth,
         gui_upload_is_not_possible_for_onezone_services,
-        gui_upload_for_inexistent_service_returns_bad_request,
-        gui_upload_for_inexistent_cluster_returns_bad_request,
+        gui_upload_for_inexistent_service_returns_not_found,
+        gui_upload_for_inexistent_cluster_returns_not_found,
+        gui_upload_with_invalid_package_returns_bad_request,
         gui_upload_page_deploys_op_worker_gui_on_all_nodes,
         gui_upload_page_deploys_op_panel_gui_on_all_nodes,
         empty_gui_is_linked_after_failed_op_worker_version_update,
@@ -244,18 +246,18 @@ gui_upload_is_not_possible_for_onezone_services(Config) ->
     )).
 
 
-gui_upload_for_inexistent_service_returns_bad_request(Config) ->
+gui_upload_for_inexistent_service_returns_not_found(Config) ->
     {ok, {Provider, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     ClusterId = oz_test_utils:get_provider_cluster(Config, Provider),
     {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
 
-    ?assertMatch({ok, 400, _, _}, http_client:post(
+    ?assertMatch({ok, 404, _, _}, http_client:post(
         oz_test_utils:oz_url(Config, [<<"/abc/">>, ClusterId, <<"/gui-upload">>]),
         #{<<"macaroon">> => ProviderMacaroon},
         {multipart, [{file, list_to_binary(GuiPackage)}]},
         [?SSL_OPTS(Config)]
     )),
-    ?assertMatch({ok, 400, _, _}, http_client:post(
+    ?assertMatch({ok, 404, _, _}, http_client:post(
         oz_test_utils:oz_url(Config, [<<"/xyz/">>, ClusterId, <<"/gui-upload">>]),
         #{<<"macaroon">> => ProviderMacaroon},
         {multipart, [{file, list_to_binary(GuiPackage)}]},
@@ -263,18 +265,40 @@ gui_upload_for_inexistent_service_returns_bad_request(Config) ->
     )).
 
 
-gui_upload_for_inexistent_cluster_returns_bad_request(Config) ->
+gui_upload_for_inexistent_cluster_returns_not_found(Config) ->
     {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
 
-    ?assertMatch({ok, 400, _, _}, http_client:post(
+    ?assertMatch({ok, 404, _, _}, http_client:post(
         oz_test_utils:oz_url(Config, [<<"/opw/bad-cluster-id/gui-upload">>]),
         #{},
         {multipart, [{file, list_to_binary(GuiPackage)}]},
         [?SSL_OPTS(Config)]
     )),
-    ?assertMatch({ok, 400, _, _}, http_client:post(
+    ?assertMatch({ok, 404, _, _}, http_client:post(
         oz_test_utils:oz_url(Config, [<<"/opp/bad-cluster-id/gui-upload">>]),
         #{},
+        {multipart, [{file, list_to_binary(GuiPackage)}]},
+        [?SSL_OPTS(Config)]
+    )).
+
+
+gui_upload_with_invalid_package_returns_bad_request(Config) ->
+    {ok, {Provider, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    ClusterId = oz_test_utils:get_provider_cluster(Config, Provider),
+    {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
+    % Break the package a little bit
+    {ok, Contents} = file:read_file(GuiPackage),
+    ok = file:write_file(GuiPackage, <<"lalalalala-bad-bytes", Contents/binary>>),
+
+    ?assertMatch({ok, 400, _, _}, http_client:post(
+        oz_test_utils:oz_url(Config, [<<"/opw/">>, ClusterId, <<"/gui-upload">>]),
+        #{<<"macaroon">> => ProviderMacaroon},
+        {multipart, [{file, list_to_binary(GuiPackage)}]},
+        [?SSL_OPTS(Config)]
+    )),
+    ?assertMatch({ok, 400, _, _}, http_client:post(
+        oz_test_utils:oz_url(Config, [<<"/opp/">>, ClusterId, <<"/gui-upload">>]),
+        #{<<"macaroon">> => ProviderMacaroon},
         {multipart, [{file, list_to_binary(GuiPackage)}]},
         [?SSL_OPTS(Config)]
     )).

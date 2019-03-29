@@ -105,7 +105,6 @@ create(Issuer, TokenType, {ResourceType, ResourceId}) ->
 
     {ok, #document{key = Identifier}} = token:save(#document{value = TokenData}),
 
-    % @todo expiration time
     M1 = macaroon:create(oz_worker:get_domain(), Secret, Identifier),
     M2 = macaroon:add_first_party_caveat(M1,
         ["tokenType = ", atom_to_list(TokenType)]),

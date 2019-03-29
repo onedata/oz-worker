@@ -81,16 +81,17 @@ add_user_test(Config) ->
     C1 = oz_test_utils:get_provider_cluster(Config, ProviderId),
 
     % EffectiveUser belongs to cluster C1 effectively via SubGroup1, with the
-    % effective privilege to INVITE_USER, so he should be able to join the cluster as a user
+    % effective privilege to ADD_USER, so he should be able to join the cluster as a user
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
     {ok, SubGroup1} = oz_test_utils:cluster_add_group(Config, C1, SubGroup1),
     oz_test_utils:cluster_set_group_privileges(Config, C1, SubGroup1, [?CLUSTER_ADD_USER], []),
 
     % EffectiveUserWithoutInvitePriv belongs to group C1 effectively via SubGroup2,
-    % but without the effective privilege to INVITE_USER, so he should NOT be able
+    % but without the effective privilege to ADD_USER, so he should NOT be able
     % to join the parent group as a user
     {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutInvitePriv), ?GROUP_NAME2),
     {ok, SubGroup2} = oz_test_utils:cluster_add_group(Config, C1, SubGroup2),
+    oz_test_utils:cluster_set_group_privileges(Config, C1, SubGroup2, [], [?CLUSTER_ADD_USER]),
 
     VerifyEndFun = fun
         (true = _ShouldSucceed, _, _) ->
@@ -154,13 +155,13 @@ add_user_with_privileges_test(Config) ->
     AllPrivs = privileges:cluster_privileges(),
 
     % EffectiveUser belongs to cluster C1 effectively via SubGroup1, with the
-    % effective privilege to INVITE_USER, so he should be able to join the cluster as a user
+    % effective privilege to ADD_USER, so he should be able to join the cluster as a user
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
     {ok, SubGroup1} = oz_test_utils:cluster_add_group(Config, C1, SubGroup1),
     oz_test_utils:cluster_set_group_privileges(Config, C1, SubGroup1, [?CLUSTER_ADD_USER, ?CLUSTER_SET_PRIVILEGES], []),
 
     % EffectiveUserWithoutInvitePriv belongs to group C1 effectively via SubGroup2,
-    % but without the effective privilege to INVITE_USER, so he should NOT be able
+    % but without the effective privilege to ADD_USER, so he should NOT be able
     % to join the parent group as a user
     {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutInvitePriv), ?GROUP_NAME2),
     {ok, SubGroup2} = oz_test_utils:cluster_add_group(Config, C1, SubGroup2),
@@ -173,9 +174,9 @@ add_user_with_privileges_test(Config) ->
             ),
             ?assertEqual(Privs, lists:sort(ActualPrivs)),
             oz_test_utils:cluster_remove_user(Config, C1, EffectiveUser);
-        (false = ShouldSucceed, _, _) ->
+        (false = _ShouldSucceed, _, _) ->
             {ok, Users} = oz_test_utils:cluster_get_users(Config, C1),
-            ?assertEqual(lists:member(EffectiveUser, Users), ShouldSucceed)
+            ?assertNot(lists:member(EffectiveUser, Users))
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -230,7 +231,7 @@ add_user_with_privileges_test(Config) ->
 
 create_user_invite_token_test(Config) ->
     % create cluster with 2 users:
-    %   U2 gets the CLUSTER_INVITE_USER privilege
+    %   U2 gets the CLUSTER_ADD_USER privilege
     %   U1 gets all remaining privileges
     {C1, U1, U2, {P1, P1Macaroon}} = api_test_scenarios:create_basic_cluster_env(
         Config, ?CLUSTER_ADD_USER
@@ -375,7 +376,6 @@ get_user_test(Config) ->
     {ok, MemberWithoutViewPrivs} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Member} = oz_test_utils:create_user(Config, #od_user{name = <<"member">>, alias = <<"member">>}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
 
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(Config, Creator, ?PROVIDER_NAME1),
     Cluster = oz_test_utils:get_provider_cluster(Config, P1),

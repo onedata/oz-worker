@@ -117,6 +117,7 @@ all() ->
 create_test(Config) ->
     ExpName = ?CORRECT_NAME,
     {ok, CreatorUserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, ClientToken} = oz_test_utils:create_client_token(Config, CreatorUserId),
 
     OZDomain = oz_test_utils:oz_domain(Config),
 
@@ -181,9 +182,7 @@ create_test(Config) ->
 
     %% Create provider with subdomain delegation turned off
     Nodes = ?config(oz_worker_nodes, Config),
-    rpc:multicall(Nodes, application, set_env, [
-        ?APP_NAME, subdomain_delegation_supported, false
-    ]),
+    rpc:multicall(Nodes, oz_worker, set_env, [subdomain_delegation_supported, false]),
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [root, nobody]
@@ -211,7 +210,7 @@ create_test(Config) ->
             end)
         },
         % TODO gs
-        data_spec = #data_spec{
+        data_spec = DataSpec = #data_spec{
             required = [
                 <<"name">>, <<"adminEmail">>, <<"domain">>, <<"subdomainDelegation">>
             ],
@@ -248,18 +247,32 @@ create_test(Config) ->
                 {<<"longitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
                 {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
                 {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)}
+                {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"token">>, <<"zxvcsadfgasdfasdf">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
+                {<<"token">>, ClientToken, ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(<<"token">>)}
                 | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-    %% Create provider with subdomain delegation turned on
-    rpc:multicall(Nodes, application, set_env, [
-        ?APP_NAME, subdomain_delegation_supported, true
-    ]),
+    %% Check if registration token requirement can be forced
+    rpc:multicall(Nodes, oz_worker, set_env, [require_token_for_provider_registration, true]),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        data_spec = DataSpec#data_spec{
+            required = [
+                <<"name">>, <<"adminEmail">>, <<"domain">>, <<"subdomainDelegation">>, <<"token">>
+            ],
+            optional = [<<"latitude">>, <<"longitude">>]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+
+    %% Create provider with subdomain delegation turned on
+    rpc:multicall(Nodes, oz_worker, set_env, [subdomain_delegation_supported, true]),
+    ApiTestSpec3 = ApiTestSpec#api_test_spec{
         data_spec = #data_spec{
             required = [
                 <<"name">>, <<"subdomain">>, <<"ipList">>, <<"adminEmail">>,
@@ -295,7 +308,7 @@ create_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
 
 
 get_test(Config) ->

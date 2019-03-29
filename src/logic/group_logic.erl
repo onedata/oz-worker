@@ -559,7 +559,7 @@ join_space(Client, GroupId, Token) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Joins a cluster on behalf of given user based on cluster_invite_user token.
+%% Joins a cluster on behalf of given group based on cluster_invite_group token.
 %% Has two variants:
 %% 1) Token is given explicitly (as binary() or macaroon())
 %% 2) Token is provided in a proper Data object.
@@ -1381,6 +1381,7 @@ leave_cluster(Client, GroupId, ClusterId) ->
         gri = #gri{type = od_group, id = GroupId, aspect = {cluster, ClusterId}}
     }).
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Removes specified user from given group.
@@ -1630,8 +1631,11 @@ create_predefined_group(GroupId, Name, Privileges) ->
                     error
             end
     end,
-    Result == ok andalso begin
-        ok = update(?ROOT, GroupId, #{<<"name">> => NormalizedName}),
-        ok = update_oz_privileges(?ROOT, GroupId, Privileges, privileges:oz_admin() -- Privileges)
-    end,
-    Result.
+    case Result of
+        ok ->
+            ok = update(?ROOT, GroupId, #{<<"name">> => NormalizedName}),
+            ToRevoke = privileges:oz_admin() -- Privileges,
+            ok = update_oz_privileges(?ROOT, GroupId, Privileges, ToRevoke);
+        _ ->
+            ok
+    end.

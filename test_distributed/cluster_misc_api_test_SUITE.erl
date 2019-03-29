@@ -121,6 +121,7 @@ list_test(Config) ->
 
 
 get_onezone_cluster_test(Config) ->
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     GuiPackagePath = oz_test_utils:get_env(Config, gui_package_path),
     {ok, GuiHash} = oz_test_utils:call_oz(Config, gui, package_hash, [GuiPackagePath]),
     Release = oz_test_utils:call_oz(Config, oz_worker, get_version, []),
@@ -130,16 +131,17 @@ get_onezone_cluster_test(Config) ->
     get_private_data_test_base(
         Config, ?ONEZONE_CLUSTER_ID, ?ONEZONE, ?ONEZONE_SERVICE_ID, VersionInfo,
         [],
-        []
+        [{user, NonAdmin}]
     ),
     get_protected_data_test_base(
         Config, ?ONEZONE_CLUSTER_ID, ?ONEZONE, ?ONEZONE_SERVICE_ID, VersionInfo,
-        [],
+        [{user, NonAdmin}], % Every user of onezone is allowed to view protected data
         []
     ).
 
 
 get_oneprovider_cluster_test(Config) ->
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, ProviderAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
         Config, ProviderAdmin, ?PROVIDER_NAME1
@@ -155,12 +157,12 @@ get_oneprovider_cluster_test(Config) ->
     get_private_data_test_base(
         Config, ClusterId, ?ONEPROVIDER, ProviderId, VersionInfo,
         [{provider, ProviderId, Macaroon}],
-        [{user, EffUserOfProvider}]
+        [{user, NonAdmin}, {user, EffUserOfProvider}]
     ),
     get_protected_data_test_base(
         Config, ClusterId, ?ONEPROVIDER, ProviderId, VersionInfo,
         [{provider, ProviderId, Macaroon}, {user, EffUserOfProvider}],
-        []
+        [{user, NonAdmin}] % Only provider/cluster effective users are allowed to view protected data
     ).
 
 
@@ -168,7 +170,6 @@ get_private_data_test_base(Config, ClusterId, ClusterType, ServiceId, VersionInf
     AllPrivsWithoutView = privileges:cluster_privileges() -- [?CLUSTER_VIEW],
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U1} = oz_test_utils:cluster_add_user(Config, ClusterId, U1),
     oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U1, AllPrivsWithoutView, [?CLUSTER_VIEW]),
     {ok, U2} = oz_test_utils:cluster_add_user(Config, ClusterId, U2),
@@ -187,7 +188,6 @@ get_private_data_test_base(Config, ClusterId, ClusterType, ServiceId, VersionInf
             unauthorized = [nobody],
             forbidden = [
                 {admin, [?OZ_CLUSTERS_VIEW]},
-                {user, NonAdmin},
                 {user, U1}
             ] ++ ForbiddenClients
         },
@@ -232,7 +232,6 @@ get_private_data_test_base(Config, ClusterId, ClusterType, ServiceId, VersionInf
 get_protected_data_test_base(Config, ClusterId, ClusterType, ServiceId, VersionInfo, CorrectClients, ForbiddenClients) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U1} = oz_test_utils:cluster_add_user(Config, ClusterId, U1),
     oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U1, [], [?CLUSTER_VIEW]),
     {ok, U2} = oz_test_utils:cluster_add_user(Config, ClusterId, U2),
@@ -270,9 +269,7 @@ get_protected_data_test_base(Config, ClusterId, ClusterType, ServiceId, VersionI
                 {user, U2}
             ] ++ CorrectClients,
             unauthorized = [nobody],
-            forbidden = [
-                {user, NonAdmin}
-            ] ++ ForbiddenClients
+            forbidden = ForbiddenClients
         },
         rest_spec = #rest_spec{
             method = get,

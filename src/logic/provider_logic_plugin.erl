@@ -399,7 +399,7 @@ authorize(#el_req{operation = create, gri = #gri{id = undefined, aspect = instan
     true =:= oz_worker:get_env(dev_mode, true);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, Provider) ->
-    auth_by_self(Req) orelse auth_by_admin(Req, Provider, ?CLUSTER_UPDATE);
+    auth_by_self(Req) orelse auth_by_cluster_membership(Req, Provider, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}, Provider) ->
     auth_by_self(Req) orelse auth_by_admin(Req, Provider);
@@ -411,7 +411,7 @@ authorize(#el_req{operation = get, gri = #gri{aspect = current_time}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Provider) ->
-    auth_by_self(Req) orelse auth_by_admin(Req, Provider, ?CLUSTER_VIEW);
+    auth_by_self(Req) orelse auth_by_cluster_membership(Req, Provider, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}, Provider) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
@@ -447,25 +447,25 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
     end;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_users}}, Provider) ->
-    auth_by_self(Req) orelse auth_by_admin(Req, Provider, ?CLUSTER_VIEW);
+    auth_by_self(Req) orelse auth_by_cluster_membership(Req, Provider, ?CLUSTER_VIEW);
 
 authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_membership, UserId}}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_membership, _}}}, Provider) ->
-    auth_by_self(Req) orelse auth_by_admin(Req, Provider, ?CLUSTER_VIEW);
+    auth_by_self(Req) orelse auth_by_cluster_membership(Req, Provider, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_groups}}, Provider) ->
-    auth_by_self(Req) orelse auth_by_admin(Req, Provider, ?CLUSTER_VIEW);
+    auth_by_self(Req) orelse auth_by_cluster_membership(Req, Provider, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, Provider) ->
-    group_logic:has_eff_user(GroupId, UserId) orelse auth_by_admin(Req, Provider, ?CLUSTER_VIEW);
+    group_logic:has_eff_user(GroupId, UserId) orelse auth_by_cluster_membership(Req, Provider, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_group_membership, _}}}, _) ->
     auth_by_self(Req);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = spaces}}, Provider) ->
-    auth_by_self(Req) orelse auth_by_admin(Req, Provider, ?CLUSTER_VIEW);
+    auth_by_self(Req) orelse auth_by_cluster_membership(Req, Provider, ?CLUSTER_VIEW);
 
 authorize(#el_req{client = ?USER(UserId), operation = get, gri = #gri{aspect = {user_spaces, UserId}}}, _) ->
     true;
@@ -474,25 +474,25 @@ authorize(#el_req{client = ?USER(UserId), operation = get, gri = #gri{aspect = {
     group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = domain_config}}, Provider) ->
-    auth_by_self(Req) orelse auth_by_admin(Req, Provider, ?CLUSTER_VIEW);
+    auth_by_self(Req) orelse auth_by_cluster_membership(Req, Provider, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, Provider) ->
-    auth_by_self(Req) orelse auth_by_admin(Req, Provider, ?CLUSTER_UPDATE);
+    auth_by_self(Req) orelse auth_by_cluster_membership(Req, Provider, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = domain_config}}, Provider) ->
-    auth_by_self(Req) orelse auth_by_admin(Req, Provider, ?CLUSTER_UPDATE);
+    auth_by_self(Req) orelse auth_by_cluster_membership(Req, Provider, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {space, _}}}, Provider) ->
-    auth_by_self(Req) orelse auth_by_admin(Req, Provider, ?CLUSTER_UPDATE);
+    auth_by_self(Req) orelse auth_by_cluster_membership(Req, Provider, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, Provider) ->
-    auth_by_self(Req) orelse auth_by_admin(Req, Provider, ?CLUSTER_DELETE);
+    auth_by_self(Req) orelse auth_by_cluster_membership(Req, Provider, ?CLUSTER_DELETE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {dns_txt_record, _}}}, Provider) ->
-    auth_by_self(Req) orelse auth_by_admin(Req, Provider, ?CLUSTER_UPDATE);
+    auth_by_self(Req) orelse auth_by_cluster_membership(Req, Provider, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, Provider) ->
-    auth_by_self(Req) orelse auth_by_admin(Req, Provider, ?CLUSTER_UPDATE);
+    auth_by_self(Req) orelse auth_by_cluster_membership(Req, Provider, ?CLUSTER_UPDATE);
 
 authorize(_, _) ->
     false.
@@ -563,19 +563,30 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}
             % BAD_DATA error. No need to generate domain related fields.
             #{}
     end,
-    #{
-        required => DomainRelatedFields#{
-            <<"name">> => {binary, name},
-            <<"subdomainDelegation">> => {boolean, any},
-            <<"adminEmail">> => {binary, email}
-        },
-        optional => #{
-            % Registration token is not required for compatibility with older providers
-            <<"token">> => {token, ?PROVIDER_REGISTRATION_TOKEN},
-            <<"latitude">> => {float, {between, -90, 90}},
-            <<"longitude">> => {float, {between, -180, 180}}
-        }
-    };
+    Required = DomainRelatedFields#{
+        <<"name">> => {binary, name},
+        <<"subdomainDelegation">> => {boolean, any},
+        <<"adminEmail">> => {binary, email}
+    },
+    Optional = #{
+        <<"latitude">> => {float, {between, -90, 90}},
+        <<"longitude">> => {float, {between, -180, 180}}
+    },
+
+    % @TODO VFS-5207 Registration token is not required for compatibility with
+    % legacy providers, but can be forced by the env variable
+    case oz_worker:get_env(require_token_for_provider_registration, false) of
+        false ->
+            #{
+                required => Required,
+                optional => Optional#{<<"token">> => {token, ?PROVIDER_REGISTRATION_TOKEN}}
+            };
+        true ->
+            #{
+                required => Required#{<<"token">> => {token, ?PROVIDER_REGISTRATION_TOKEN}},
+                optional => Optional
+            }
+    end;
 
 validate(Req = #el_req{operation = create, gri = GRI = #gri{aspect = instance_dev}}) ->
     ValidationRules = #{required := Required} = validate(Req#el_req{gri = GRI#gri{aspect = instance}}),
@@ -709,11 +720,11 @@ auth_by_admin(_, _) ->
 %% (a member of the cluster) and has given privilege.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_admin(entity_logic:req(), od_provider:record(), privileges:cluster_privilege()) ->
+-spec auth_by_cluster_membership(entity_logic:req(), od_provider:record(), privileges:cluster_privilege()) ->
     boolean().
-auth_by_admin(#el_req{client = ?USER(UserId)}, Provider, Privilege) ->
+auth_by_cluster_membership(#el_req{client = ?USER(UserId)}, Provider, Privilege) ->
     provider_logic:has_eff_privilege_in_cluster(Provider, UserId, Privilege);
-auth_by_admin(_, _, _) ->
+auth_by_cluster_membership(_, _, _) ->
     false.
 
 
@@ -829,7 +840,6 @@ update_provider_subomain(ProviderId, Data) ->
 -spec create_provider(Data :: maps:map(), ProviderId :: od_provider:id(),
     GRI :: entity_logic:gri()) -> entity_logic:create_result().
 create_provider(Data, ProviderId, GRI) ->
-    % Registration token is not required for compatibility with older providers
     Token = maps:get(<<"token">>, Data, undefined),
     Name = maps:get(<<"name">>, Data),
     Latitude = maps:get(<<"latitude">>, Data, 0.0),
@@ -874,6 +884,7 @@ create_provider(Data, ProviderId, GRI) ->
             ?ERROR_INTERNAL_SERVER_ERROR
         end
     end,
+    % @TODO VFS-5207 Registration token is not required for compatibility with legacy providers
     case Token of
         undefined -> CreateProviderFun(od_user, undefined);
         _ -> token_logic:consume(Token, CreateProviderFun)

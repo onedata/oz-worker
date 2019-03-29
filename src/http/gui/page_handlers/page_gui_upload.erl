@@ -66,15 +66,15 @@ handle_gui_upload(Req) ->
     Service = try
         onedata:service_from_shortname(ServiceShortname)
     catch error:badarg ->
-        throw(?HTTP_400_BAD_REQUEST)
+        throw(?HTTP_404_NOT_FOUND)
     end,
     lists:member(Service, [?OP_WORKER, ?OP_PANEL]) orelse throw(?HTTP_400_BAD_REQUEST),
 
     ProviderId = try cluster_logic:get(?ROOT, ClusterId) of
         {ok, #od_cluster{type = ?ONEPROVIDER, service_id = ServiceId}} -> ServiceId;
-        _ -> throw(?HTTP_400_BAD_REQUEST)
+        _ -> throw(?HTTP_404_NOT_FOUND)
     catch _:_ ->
-        throw(?HTTP_400_BAD_REQUEST)
+        throw(?HTTP_404_NOT_FOUND)
     end,
 
     case auth_logic:authorize_by_macaroons(Req) of

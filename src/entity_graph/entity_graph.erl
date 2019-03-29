@@ -1330,8 +1330,7 @@ remove_child(#od_cluster{users = Users} = Cluster, od_user, UserId) ->
 remove_child(#od_cluster{groups = Groups} = Cluster, od_group, GroupId) ->
     Cluster#od_cluster{groups = maps:remove(GroupId, Groups)};
 remove_child(#od_cluster{} = Cluster, od_provider, _ProviderId) ->
-    % Do not remove the provider reference, as cluster cannot exist without its provider
-    Cluster.
+    Cluster#od_cluster{service_id = undefined}.
 
 
 %%--------------------------------------------------------------------
@@ -1472,19 +1471,16 @@ remove_parent(#od_space{providers = Providers} = Space, od_provider, ProviderId)
     Space#od_space{providers = maps:remove(ProviderId, Providers)};
 
 remove_parent(#od_share{} = Share, od_space, _SpaceId) ->
-    % Do not remove the cluster reference, as share cannot exist without its space
-    Share;
+    Share#od_share{space = undefined};
 
 remove_parent(#od_provider{} = Provider, od_cluster, _ClusterId) ->
-    % Do not remove the cluster reference, as provider cannot exist without its cluster
-    Provider;
+    Provider#od_provider{cluster = undefined};
 
 remove_parent(#od_handle{} = Handle, od_share, _ShareId) ->
     Handle#od_handle{resource_type = undefined, resource_id = undefined};
 
 remove_parent(#od_handle{} = Handle, od_handle_service, _HServiceId) ->
-    % Do not remove the cluster reference, as handle cannot exist without its handle_service
-    Handle.
+    Handle#od_handle{handle_service = undefined}.
 
 
 %%--------------------------------------------------------------------

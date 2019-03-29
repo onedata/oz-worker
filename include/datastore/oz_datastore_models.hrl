@@ -296,7 +296,7 @@
 %% This record defines a Onezone/Oneprovider cluster.
 -record(od_cluster, {
     type = ?ONEZONE :: onedata:cluster_type(),
-    service_id = ?ONEZONE_SERVICE_ID :: od_cluster:service_id(),
+    service_id = ?ONEZONE_SERVICE_ID :: undefined | od_cluster:service_id(),
 
     % Version 18.02.* is default for legacy providers
     worker_version = {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH} :: od_cluster:version_info(),

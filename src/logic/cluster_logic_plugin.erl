@@ -426,11 +426,15 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             group_logic:has_eff_privilege(GroupId, ClientUserId, ?GROUP_VIEW);
 
         {?USER(ClientUserId), _} ->
-            cluster_logic:has_eff_user(Cluster, ClientUserId) orelse begin
-                case Cluster#od_cluster.type of
-                    ?ONEPROVIDER -> provider_logic:has_eff_user(Cluster#od_cluster.service_id, ClientUserId);
-                    ?ONEZONE -> false
-                end
+            % Protected scope does not carry any sensitive information.
+            %   * Onezone - available to all users
+            %   * Oneprovider - available to provider/cluster effective users
+            case Cluster#od_cluster.type of
+                ?ONEZONE ->
+                    true;
+                ?ONEPROVIDER ->
+                    provider_logic:has_eff_user(Cluster#od_cluster.service_id, ClientUserId) orelse
+                        cluster_logic:has_eff_user(Cluster, ClientUserId)
             end;
 
         _ ->
@@ -682,7 +686,7 @@ update_cluster(ClusterId, Data) ->
         {ok, #document{value = Cluster}} -> Cluster
     end,
 
-    % If update of a version info was requested and the GUI has was reset to empty,
+    % If update of a version info was requested and the GUI was reset to empty,
     % it indicates that the version was invalid. Release and build versions are still
     % updated and error is returned to the client. Applies to Oneprovider cluster only.
     case {Data, UpgradedCluster} of

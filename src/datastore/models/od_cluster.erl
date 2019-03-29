@@ -180,8 +180,8 @@ get_record_struct(1) ->
         {type, atom},
         {service_id, string},
 
-        {service_version, {string, string, string}},
-        {service_version, {string, string, string}},
+        {worker_version, {string, string, string}},
+        {onepanel_version, {string, string, string}},
         {onepanel_proxy, boolean},
 
         {creation_time, integer},
