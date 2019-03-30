@@ -120,7 +120,8 @@ create_test(Config) ->
     % Create invalid tokens to verify error codes
     {ok, ClientToken} = oz_test_utils:create_client_token(Config, CreatorUserId),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(CreatorUserId), ?UNIQUE_STRING),
-    {ok, SpaceInviteToken} = oz_test_utils:space_invite_user_token(Config, ?USER(CreatorUserId), Space),
+    {ok, SpaceInviteMacaroon} = oz_test_utils:space_invite_user_token(Config, ?USER(CreatorUserId), Space),
+    {ok, SpaceInviteToken} = onedata_macaroons:serialize(SpaceInviteMacaroon),
 
     OZDomain = oz_test_utils:oz_domain(Config),
 
@@ -261,22 +262,9 @@ create_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-    %% Check if registration token requirement can be forced
-    rpc:multicall(Nodes, oz_worker, set_env, [require_token_for_provider_registration, true]),
-    ApiTestSpec2 = ApiTestSpec#api_test_spec{
-        data_spec = DataSpec#data_spec{
-            required = [
-                <<"name">>, <<"adminEmail">>, <<"domain">>, <<"subdomainDelegation">>, <<"token">>
-            ],
-            optional = [<<"latitude">>, <<"longitude">>]
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
-
-
     %% Create provider with subdomain delegation turned on
     rpc:multicall(Nodes, oz_worker, set_env, [subdomain_delegation_supported, true]),
-    ApiTestSpec3 = ApiTestSpec#api_test_spec{
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
         data_spec = #data_spec{
             required = [
                 <<"name">>, <<"subdomain">>, <<"ipList">>, <<"adminEmail">>,
@@ -310,6 +298,18 @@ create_test(Config) ->
                 {<<"ipList">>, atom, ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)},
                 {<<"ipList">>, [<<"256.256.256.256">>], ?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(<<"ipList">>)}
             ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+    %% Check if registration token requirement can be forced
+    rpc:multicall(Nodes, oz_worker, set_env, [require_token_for_provider_registration, true]),
+    ApiTestSpec3 = ApiTestSpec#api_test_spec{
+        data_spec = DataSpec#data_spec{
+            required = [
+                <<"name">>, <<"adminEmail">>, <<"domain">>, <<"subdomainDelegation">>, <<"token">>
+            ],
+            optional = [<<"latitude">>, <<"longitude">>]
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
@@ -2519,7 +2519,8 @@ end_per_testcase(check_my_ports_test, Config) ->
     end_per_testcase(default, Config);
 end_per_testcase(_, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:set_env(Nodes, ?APP_NAME, subdomain_delegation_supported, true),
+    rpc:multicall(Nodes, oz_worker, set_env, [require_token_for_provider_registration, false]),
+    rpc:multicall(Nodes, oz_worker, set_env, [subdomain_delegation_supported, true]),
     ok.
 
 
