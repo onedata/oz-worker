@@ -128,6 +128,7 @@ translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, U
         default_provider = DefaultProvider
     } = User,
     #{
+        <<"scope">> => <<"private">>,
         <<"name">> => Name,
         <<"alias">> => gs_protocol:undefined_to_null(Alias),
         <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
@@ -143,12 +144,24 @@ translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, U
         }
     };
 
+translate_user(#gri{aspect = instance, scope = protected}, User) ->
+    #{
+        <<"name">> := Name,
+        <<"alias">> := Alias
+    } = User,
+    #{
+        <<"scope">> => <<"protected">>,
+        <<"name">> => Name,
+        <<"alias">> => gs_protocol:undefined_to_null(Alias)
+    };
+
 translate_user(#gri{aspect = instance, scope = shared}, User) ->
     #{
         <<"name">> := Name,
         <<"alias">> := Alias
     } = User,
     #{
+        <<"scope">> => <<"shared">>,
         <<"name">> => Name,
         <<"alias">> => gs_protocol:undefined_to_null(Alias)
     };
@@ -476,6 +489,7 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Prov
     } = Provider,
 
     fun(?USER(UserId)) -> #{
+        <<"scope">> => <<"private">>,
         <<"name">> => Name,
         <<"domain">> => Domain,
         <<"latitude">> => Latitude,
@@ -499,6 +513,7 @@ translate_provider(GRI = #gri{aspect = instance, scope = protected}, Provider) -
     } = Provider,
 
     fun(?USER(UserId)) -> #{
+        <<"scope">> => <<"protected">>,
         <<"name">> => Name,
         <<"domain">> => Domain,
         <<"latitude">> => Latitude,

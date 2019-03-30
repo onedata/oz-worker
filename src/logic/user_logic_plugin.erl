@@ -528,7 +528,7 @@ authorize(Req = #el_req{client = ?USER(UserId), operation = delete, gri = #gri{a
 authorize(#el_req{client = ?USER(UserId), gri = #gri{id = UserId}}, _) ->
     true;
 
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}, User) ->
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, User) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?PROVIDER(ProviderId), ?THROUGH_PROVIDER(ProviderId)} ->
             % User's membership in provider is checked in 'exists'
@@ -540,7 +540,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
 
         _ ->
             % Access to private data also allows access to protected data
-            authorize(Req#el_req{gri = #gri{scope = private}}, User)
+            authorize(Req#el_req{gri = GRI#gri{scope = private}}, User)
     end;
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = instance, scope = shared}}, User) ->
