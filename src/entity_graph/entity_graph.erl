@@ -16,6 +16,7 @@
 %%%     - od_handle_service
 %%%     - od_handle
 %%%     - od_harvester
+%%%     - od_cluster
 %%% There are two main jobs of the entity graph:
 %%%     - encapsulate all logic concerning relations between entities
 %%%     - ensure that effective relations are always up to date
@@ -39,7 +40,7 @@
 %%% The refreshing of effective relations goes as follows:
 %%% 1) bottom-up traversing:
 %%%     1.1) groups with least children to most children
-%%%     1.2) spaces, handles, handle_services, harvesters
+%%%     1.2) spaces, handles, handle_services, harvesters, clusters
 %%%     1.3) providers
 %%% 2) top-down traversing:
 %%%     2.1) spaces
@@ -54,6 +55,7 @@
 
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
@@ -192,7 +194,8 @@ init_state() ->
 -spec verify_state_of_all_entities() -> ok.
 verify_state_of_all_entities() ->
     EntityTypes = [
-        od_user, od_group, od_space, od_provider, od_handle_service, od_handle, od_harvester
+        od_user, od_group, od_space, od_provider, 
+        od_handle_service, od_handle, od_harvester, od_cluster
     ],
     lists:foreach(
         fun(EntityType) ->
@@ -203,7 +206,7 @@ verify_state_of_all_entities() ->
                         fun(Direction) ->
                             case is_dirty(Direction, Entity) of
                                 true ->
-                                    ?info("Scheduling ~p refresh of dirty entity: ~p", [
+                                    ?info("Scheduling ~p refresh of dirty entity: ~s", [
                                         Direction, EntityType:to_string(EntityId)
                                     ]),
                                     update_dirty_queue(
@@ -269,7 +272,9 @@ add_relation(od_handle, HandleId, od_share, ShareId) ->
 add_relation(od_handle, HandleId, od_handle_service, HServiceId) ->
     add_relation(od_handle, HandleId, undefined, od_handle_service, HServiceId, undefined);
 add_relation(od_harvester, HarvesterId, od_space, SpaceId) ->
-    add_relation(od_harvester, HarvesterId, undefined, od_space, SpaceId, undefined).
+    add_relation(od_harvester, HarvesterId, undefined, od_space, SpaceId, undefined);
+add_relation(od_provider, ProviderId, od_cluster, ClusterId) ->
+    add_relation(od_provider, ProviderId, undefined, od_cluster, ClusterId, undefined).
 
 
 %%--------------------------------------------------------------------
@@ -289,6 +294,8 @@ add_relation(od_user, UserId, od_handle, HandleId, Privileges) ->
     add_relation(od_user, UserId, Privileges, od_handle, HandleId, undefined);
 add_relation(od_user, UserId, od_handle_service, HServiceId, Privileges) ->
     add_relation(od_user, UserId, Privileges, od_handle_service, HServiceId, undefined);
+add_relation(od_user, UserId, od_cluster, ClusterId, Privileges) ->
+    add_relation(od_user, UserId, Privileges, od_cluster, ClusterId, undefined);
 
 add_relation(od_group, ChildId, od_group, ParentId, Privs) ->
     add_relation(od_group, ChildId, Privs, od_group, ParentId, undefined);
@@ -298,6 +305,8 @@ add_relation(od_group, GroupId, od_handle, HandleId, Privileges) ->
     add_relation(od_group, GroupId, Privileges, od_handle, HandleId, undefined);
 add_relation(od_group, GroupId, od_handle_service, HServiceId, Privileges) ->
     add_relation(od_group, GroupId, Privileges, od_handle_service, HServiceId, undefined);
+add_relation(od_group, GroupId, od_cluster, ClusterId, Privileges) ->
+    add_relation(od_group, GroupId, Privileges, od_cluster, ClusterId, undefined);
 
 add_relation(od_space, GroupId, od_provider, ProviderId, SupportSize) ->
     % Support size is kept in both records
@@ -406,10 +415,15 @@ update_relation(od_user, UserId, od_handle_service, HServiceId, NewPrivs) ->
 update_relation(od_group, GroupId, od_handle_service, HServiceId, NewPrivs) ->
     update_relation(od_group, GroupId, NewPrivs, od_handle_service, HServiceId, undefined);
 
-update_relation(od_user, UserId, od_handle, HServiceId, NewPrivs) ->
-    update_relation(od_user, UserId, NewPrivs, od_handle, HServiceId, undefined);
+update_relation(od_user, UserId, od_handle, HandleId, NewPrivs) ->
+    update_relation(od_user, UserId, NewPrivs, od_handle, HandleId, undefined);
 update_relation(od_group, GroupId, od_handle, HandleId, NewPrivs) ->
     update_relation(od_group, GroupId, NewPrivs, od_handle, HandleId, undefined);
+
+update_relation(od_user, UserId, od_cluster, ClusterId, NewPrivs) ->
+    update_relation(od_user, UserId, NewPrivs, od_cluster, ClusterId, undefined);
+update_relation(od_group, GroupId, od_cluster, ClusterId, NewPrivs) ->
+    update_relation(od_group, GroupId, NewPrivs, od_cluster, ClusterId, undefined);
 
 update_relation(od_space, SpaceId, od_provider, ProviderId, NewSupportSize) ->
     update_relation(od_space, SpaceId, NewSupportSize, od_provider, ProviderId, NewSupportSize);
@@ -883,6 +897,10 @@ set_refresh_in_progress(Flag) ->
 update_dirty_queue(_, _, od_share, _) ->
     % Shares do not take part in eff graph recomputation
     ok;
+update_dirty_queue(top_down, _, od_provider, _) ->
+    % Providers are children towards cluster only, modifying this relation should
+    % not cause graph recalculation.
+    ok;
 update_dirty_queue(top_down, _, od_handle, _) ->
     % Handles are children towards shares only, modifying this relation should
     % not cause graph recalculation.
@@ -1092,6 +1110,7 @@ get_priority(bottom_up, od_handle_service) -> 1;
 get_priority(bottom_up, od_handle) -> 1;
 get_priority(bottom_up, od_harvester) -> 1;
 get_priority(bottom_up, od_provider) -> 2;
+get_priority(bottom_up, od_cluster) -> 1;
 get_priority(top_down, od_space) -> 0;
 get_priority(top_down, od_group) -> 1;
 get_priority(top_down, od_harvester) -> 1;
@@ -1114,22 +1133,28 @@ mark_record_dirty(bottom_up, Flag, #od_space{} = Space) ->
     Space#od_space{bottom_up_dirty = Flag};
 mark_record_dirty(bottom_up, Flag, #od_provider{} = Provider) ->
     Provider#od_provider{bottom_up_dirty = Flag};
+mark_record_dirty(bottom_up, Flag, #od_cluster{} = Cluster) ->
+    Cluster#od_cluster{bottom_up_dirty = Flag};
 mark_record_dirty(bottom_up, Flag, #od_handle_service{} = HandleService) ->
     HandleService#od_handle_service{bottom_up_dirty = Flag};
 mark_record_dirty(bottom_up, Flag, #od_handle{} = Handle) ->
     Handle#od_handle{bottom_up_dirty = Flag};
 mark_record_dirty(bottom_up, Flag, #od_harvester{} = Harvester) ->
     Harvester#od_harvester{bottom_up_dirty = Flag};
-mark_record_dirty(top_down, _, #od_handle{} = Entity) ->
-    % Handles are children towards shares only, modifying this relation should
-    % not cause graph recalculation.
-    Entity;
 mark_record_dirty(top_down, Flag, #od_user{} = User) ->
     User#od_user{top_down_dirty = Flag};
 mark_record_dirty(top_down, Flag, #od_group{} = Group) ->
     Group#od_group{top_down_dirty = Flag};
 mark_record_dirty(top_down, Flag, #od_space{} = Space) ->
     Space#od_space{top_down_dirty = Flag};
+mark_record_dirty(top_down, _, #od_handle{} = Entity) ->
+    % Handles are children towards shares only, modifying this relation should
+    % not cause graph recalculation.
+    Entity;
+mark_record_dirty(top_down, _, #od_provider{} = Entity) ->
+    % Providers are children towards cluster only, modifying this relation should
+    % not cause graph recalculation.
+    Entity;
 mark_record_dirty(top_down, Flag, #od_harvester{} = Harvester) ->
     Harvester#od_harvester{top_down_dirty = Flag}.
 
@@ -1150,6 +1175,7 @@ is_dirty(bottom_up, #od_handle_service{bottom_up_dirty = Flag}) -> Flag;
 is_dirty(bottom_up, #od_handle{bottom_up_dirty = Flag}) -> Flag;
 is_dirty(top_down, #od_harvester{top_down_dirty = Flag}) -> Flag;
 is_dirty(bottom_up, #od_harvester{bottom_up_dirty = Flag}) -> Flag;
+is_dirty(bottom_up, #od_cluster{bottom_up_dirty = Flag}) -> Flag;
 is_dirty(_, _) -> false.
 
 
@@ -1195,7 +1221,14 @@ has_child(#od_handle{groups = Groups}, od_group, GroupId) ->
 has_child(#od_harvester{users = Users}, od_user, UserId) ->
     maps:is_key(UserId, Users);
 has_child(#od_harvester{groups = Groups}, od_group, GroupId) ->
-    maps:is_key(GroupId, Groups).
+    maps:is_key(GroupId, Groups);
+
+has_child(#od_cluster{users = Users}, od_user, UserId) ->
+    maps:is_key(UserId, Users);
+has_child(#od_cluster{groups = Groups}, od_group, GroupId) ->
+    maps:is_key(GroupId, Groups);
+has_child(#od_cluster{service_id = ServiceId}, od_provider, ProviderId) ->
+    ServiceId =:= ProviderId.
 
 
 %%--------------------------------------------------------------------
@@ -1240,7 +1273,14 @@ add_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, Privs) ->
 add_child(#od_harvester{users = Users} = Harvester, od_user, UserId, Privs) ->
     Harvester#od_harvester{users = maps:put(UserId, Privs, Users)};
 add_child(#od_harvester{groups = Groups} = Harvester, od_group, GroupId, Privs) ->
-    Harvester#od_harvester{groups = maps:put(GroupId, Privs, Groups)}.
+    Harvester#od_harvester{groups = maps:put(GroupId, Privs, Groups)};
+
+add_child(#od_cluster{users = Users} = Cluster, od_user, UserId, Privs) ->
+    Cluster#od_cluster{users = maps:put(UserId, Privs, Users)};
+add_child(#od_cluster{groups = Groups} = Cluster, od_group, GroupId, Privs) ->
+    Cluster#od_cluster{groups = maps:put(GroupId, Privs, Groups)};
+add_child(#od_cluster{} = Cluster, od_provider, ProviderId, _) ->
+    Cluster#od_cluster{type = ?ONEPROVIDER, service_id = ProviderId}.
 
 
 %%--------------------------------------------------------------------
@@ -1278,6 +1318,11 @@ update_child(#od_harvester{users = Users} = Harvester, od_user, UserId, {PrivsTo
     Harvester#od_harvester{users = update_privileges(UserId, Users, PrivsToGrant, PrivsToRevoke)};
 update_child(#od_harvester{groups = Groups} = Harvester, od_group, GroupId, {PrivsToGrant, PrivsToRevoke}) ->
     Harvester#od_harvester{groups = update_privileges(GroupId, Groups, PrivsToGrant, PrivsToRevoke)};
+
+update_child(#od_cluster{users = Users} = Cluster, od_user, UserId, {PrivsToGrant, PrivsToRevoke}) ->
+    Cluster#od_cluster{users = update_privileges(UserId, Users, PrivsToGrant, PrivsToRevoke)};
+update_child(#od_cluster{groups = Groups} = Cluster, od_group, GroupId, {PrivsToGrant, PrivsToRevoke}) ->
+    Cluster#od_cluster{groups = update_privileges(GroupId, Groups, PrivsToGrant, PrivsToRevoke)};
 
 update_child(Entity, _, _, undefined) ->
     % Other entities do not have updatable children relations.
@@ -1326,7 +1371,14 @@ remove_child(#od_handle{groups = Groups} = Handle, od_group, GroupId) ->
 remove_child(#od_harvester{users = Users} = Harvester, od_user, UserId) ->
     Harvester#od_harvester{users = maps:remove(UserId, Users)};
 remove_child(#od_harvester{groups = Groups} = Harvester, od_group, GroupId) ->
-    Harvester#od_harvester{groups = maps:remove(GroupId, Groups)}.
+    Harvester#od_harvester{groups = maps:remove(GroupId, Groups)};
+
+remove_child(#od_cluster{users = Users} = Cluster, od_user, UserId) ->
+    Cluster#od_cluster{users = maps:remove(UserId, Users)};
+remove_child(#od_cluster{groups = Groups} = Cluster, od_group, GroupId) ->
+    Cluster#od_cluster{groups = maps:remove(GroupId, Groups)};
+remove_child(#od_cluster{} = Cluster, od_provider, _ProviderId) ->
+    Cluster#od_cluster{service_id = undefined}.
 
 
 %%--------------------------------------------------------------------
@@ -1346,6 +1398,8 @@ has_parent(#od_user{handles = Handles}, od_handle, HandleId) ->
     lists:member(HandleId, Handles);
 has_parent(#od_user{harvesters = Harvesters}, od_harvester, HarvesterId) ->
     lists:member(HarvesterId, Harvesters);
+has_parent(#od_user{clusters = Clusters}, od_cluster, ClusterId) ->
+    lists:member(ClusterId, Clusters);
 
 has_parent(#od_group{parents = Parents}, od_group, GroupId) ->
     lists:member(GroupId, Parents);
@@ -1357,12 +1411,17 @@ has_parent(#od_group{handles = Handles}, od_handle, HandleId) ->
     lists:member(HandleId, Handles);
 has_parent(#od_group{harvesters = Harvesters}, od_harvester, HarvesterId) ->
     lists:member(HarvesterId, Harvesters);
+has_parent(#od_group{clusters = Clusters}, od_cluster, ClusterId) ->
+    lists:member(ClusterId, Clusters);
 
 has_parent(#od_space{providers = Providers}, od_provider, ProviderId) ->
     maps:is_key(ProviderId, Providers);
 
 has_parent(#od_share{space = Space}, od_space, SpaceId) ->
     SpaceId =:= Space;
+
+has_parent(#od_provider{cluster = ClusterId}, od_cluster, SubjectClusterId) ->
+    ClusterId =:= SubjectClusterId;
 
 has_parent(#od_handle{resource_type = ResType, resource_id = ResId}, od_share, ShareId) ->
     ResType =:= <<"Share">> andalso ResId =:= ShareId;
@@ -1391,6 +1450,8 @@ add_parent(#od_user{handles = Handles} = User, od_handle, HandleId, _) ->
     User#od_user{handles = [HandleId | Handles]};
 add_parent(#od_user{harvesters = Harvesters} = User, od_harvester, HarvesterId, _) ->
     User#od_user{harvesters = [HarvesterId | Harvesters]};
+add_parent(#od_user{clusters = Clusters} = User, od_cluster, ClusterId, _) ->
+    User#od_user{clusters = [ClusterId | Clusters]};
 
 add_parent(#od_group{parents = Parents} = Group, od_group, GroupId, _) ->
     Group#od_group{parents = [GroupId | Parents]};
@@ -1402,12 +1463,17 @@ add_parent(#od_group{handles = Handles} = Group, od_handle, HandleId, _) ->
     Group#od_group{handles = [HandleId | Handles]};
 add_parent(#od_group{harvesters = Harvesters} = Group, od_harvester, HarvesterId, _) ->
     Group#od_group{harvesters = [HarvesterId | Harvesters]};
+add_parent(#od_group{clusters = Clusters} = Group, od_cluster, ClusterId, _) ->
+    Group#od_group{clusters = [ClusterId | Clusters]};
 
 add_parent(#od_space{providers = Providers} = Space, od_provider, ProviderId, SupportSize) ->
     Space#od_space{providers = maps:put(ProviderId, SupportSize, Providers)};
 
 add_parent(#od_share{} = Share, od_space, SpaceId, _) ->
     Share#od_share{space = SpaceId};
+
+add_parent(#od_provider{} = Provider, od_cluster, ClusterId, _) ->
+    Provider#od_provider{cluster = ClusterId};
 
 add_parent(#od_handle{} = Handle, od_share, ShareId, _) ->
     Handle#od_handle{resource_type = <<"Share">>, resource_id = ShareId};
@@ -1451,6 +1517,8 @@ remove_parent(#od_user{handles = Handles} = User, od_handle, HandleId) ->
     User#od_user{handles = lists:delete(HandleId, Handles)};
 remove_parent(#od_user{harvesters = Harvesters} = User, od_harvester, HarvesterId) ->
     User#od_user{harvesters = lists:delete(HarvesterId, Harvesters)};
+remove_parent(#od_user{clusters = Clusters} = User, od_cluster, ClusterId) ->
+    User#od_user{clusters = lists:delete(ClusterId, Clusters)};
 
 remove_parent(#od_group{parents = Parents} = Group, od_group, GroupId) ->
     Group#od_group{parents = lists:delete(GroupId, Parents)};
@@ -1462,12 +1530,17 @@ remove_parent(#od_group{handles = Handles} = Group, od_handle, HandleId) ->
     Group#od_group{handles = lists:delete(HandleId, Handles)};
 remove_parent(#od_group{harvesters = Harvesters} = Group, od_harvester, HarvesterId) ->
     Group#od_group{harvesters = lists:delete(HarvesterId, Harvesters)};
+remove_parent(#od_group{clusters = Clusters} = Group, od_cluster, ClusterId) ->
+    Group#od_group{clusters = lists:delete(ClusterId, Clusters)};
 
 remove_parent(#od_space{providers = Providers} = Space, od_provider, ProviderId) ->
     Space#od_space{providers = maps:remove(ProviderId, Providers)};
 
 remove_parent(#od_share{} = Share, od_space, _SpaceId) ->
     Share#od_share{space = undefined};
+
+remove_parent(#od_provider{} = Provider, od_cluster, _ClusterId) ->
+    Provider#od_provider{cluster = undefined};
 
 remove_parent(#od_handle{} = Handle, od_share, _ShareId) ->
     Handle#od_handle{resource_type = undefined, resource_id = undefined};
@@ -1523,10 +1596,17 @@ gather_eff_from_itself(bottom_up, #od_harvester{} = Harvester) ->
 gather_eff_from_itself(top_down, #od_harvester{}) ->
     #{
     };
+gather_eff_from_itself(bottom_up, #od_cluster{} = Cluster) ->
+    #od_cluster{users = Users, groups = Groups} = Cluster,
+    #{
+        od_user => relations_to_eff_relations(Users, [{od_cluster, ?SELF_INTERMEDIARY}]),
+        od_group => relations_to_eff_relations(Groups, [{od_cluster, ?SELF_INTERMEDIARY}])
+    };
 gather_eff_from_itself(top_down, #od_user{} = User) ->
     #od_user{
-        groups = Groups, spaces = Spaces, handle_services = HServices,
-        handles = Handles, harvesters = Harvesters,
+        groups = Groups, spaces = Spaces, 
+        handle_services = HServices, handles = Handles, 
+        harvesters = Harvesters, clusters = Clusters,
         oz_privileges = OzPrivileges
     } = User,
     #{
@@ -1535,12 +1615,14 @@ gather_eff_from_itself(top_down, #od_user{} = User) ->
         od_handle_service => relations_to_eff_relations(HServices, [{od_user, ?SELF_INTERMEDIARY}]),
         od_handle => relations_to_eff_relations(Handles, [{od_user, ?SELF_INTERMEDIARY}]),
         od_harvester => relations_to_eff_relations(Harvesters, [{od_user, ?SELF_INTERMEDIARY}]),
+        od_cluster => relations_to_eff_relations(Clusters, [{od_user, ?SELF_INTERMEDIARY}]),
         oz_privileges => OzPrivileges
     };
 gather_eff_from_itself(top_down, #od_group{} = Group) ->
     #od_group{
-        parents = Groups, spaces = Spaces, handle_services = HServices,
-        handles = Handles, harvesters = Harvesters,
+        parents = Groups, spaces = Spaces,
+        handle_services = HServices, handles = Handles,
+        harvesters = Harvesters, clusters = Clusters,
         oz_privileges = OzPrivileges
     } = Group,
     #{
@@ -1549,6 +1631,7 @@ gather_eff_from_itself(top_down, #od_group{} = Group) ->
         od_handle_service => relations_to_eff_relations(HServices, [{od_group, ?SELF_INTERMEDIARY}]),
         od_handle => relations_to_eff_relations(Handles, [{od_group, ?SELF_INTERMEDIARY}]),
         od_harvester => relations_to_eff_relations(Harvesters, [{od_user, ?SELF_INTERMEDIARY}]),
+        od_cluster => relations_to_eff_relations(Clusters, [{od_group, ?SELF_INTERMEDIARY}]),
         oz_privileges => OzPrivileges
     };
 gather_eff_from_itself(top_down, #od_space{} = Space) ->
@@ -1599,6 +1682,13 @@ gather_eff_from_neighbours(bottom_up, #od_handle{} = Handle) ->
             EffRelations = get_all_eff_relations(bottom_up, od_group, GroupId),
             override_eff_relations(EffRelations, [od_user, od_group], {Privileges, [{od_group, GroupId}]})
         end, maps:to_list(Groups));
+gather_eff_from_neighbours(bottom_up, #od_cluster{} = Cluster) ->
+    #od_cluster{groups = Groups} = Cluster,
+    lists:map(
+        fun({GroupId, Privileges}) ->
+            EffRelations = get_all_eff_relations(bottom_up, od_group, GroupId),
+            override_eff_relations(EffRelations, [od_user, od_group], {Privileges, [{od_group, GroupId}]})
+        end, maps:to_list(Groups));
 gather_eff_from_neighbours(bottom_up, #od_harvester{} = Harvester) ->
     #od_harvester{groups = Groups} = Harvester,
     lists:map(
@@ -1614,7 +1704,7 @@ gather_eff_from_neighbours(top_down, #od_user{} = User) ->
         fun(GroupId) ->
             EffRelations = get_all_eff_relations(top_down, od_group, GroupId),
             override_eff_relations(EffRelations, [
-                od_group, od_space, od_provider, od_handle_service, od_handle, od_harvester
+                od_group, od_space, od_provider, od_handle_service, od_handle, od_harvester, od_cluster
             ], [{od_group, GroupId}])
         end, Groups),
     FromSpaces = lists:map(
@@ -1634,7 +1724,7 @@ gather_eff_from_neighbours(top_down, #od_group{} = Group) ->
         fun(GroupId) ->
             EffRelations = get_all_eff_relations(top_down, od_group, GroupId),
             override_eff_relations(EffRelations, [
-                od_group, od_space, od_provider, od_handle_service, od_handle, od_harvester
+                od_group, od_space, od_provider, od_handle_service, od_handle, od_harvester, od_cluster
             ], [{od_group, GroupId}])
         end, Groups),
     FromSpaces = lists:map(
@@ -1692,6 +1782,11 @@ update_eff_relations(bottom_up, #od_harvester{} = Harvester, EffNeighbours) ->
         eff_users = maps:get(od_user, EffNeighbours, #{}),
         eff_groups = maps:get(od_group, EffNeighbours, #{})
     };
+update_eff_relations(bottom_up, #od_cluster{} = Cluster, EffNeighbours) ->
+    Cluster#od_cluster{
+        eff_users = maps:get(od_user, EffNeighbours, #{}),
+        eff_groups = maps:get(od_group, EffNeighbours, #{})
+    };
 
 update_eff_relations(top_down, #od_user{} = User, EffNeighbours) ->
     User#od_user{
@@ -1701,6 +1796,7 @@ update_eff_relations(top_down, #od_user{} = User, EffNeighbours) ->
         eff_handle_services = maps:get(od_handle_service, EffNeighbours, #{}),
         eff_handles = maps:get(od_handle, EffNeighbours, #{}),
         eff_harvesters = maps:get(od_harvester, EffNeighbours, #{}),
+        eff_clusters = maps:get(od_cluster, EffNeighbours, #{}),
         eff_oz_privileges = maps:get(oz_privileges, EffNeighbours, #{})
     };
 update_eff_relations(top_down, #od_group{} = Group, EffNeighbours) ->
@@ -1711,6 +1807,7 @@ update_eff_relations(top_down, #od_group{} = Group, EffNeighbours) ->
         eff_handle_services = maps:get(od_handle_service, EffNeighbours, #{}),
         eff_handles = maps:get(od_handle, EffNeighbours, #{}),
         eff_harvesters = maps:get(od_harvester, EffNeighbours, #{}),
+        eff_clusters = maps:get(od_cluster, EffNeighbours, #{}),
         eff_oz_privileges = maps:get(oz_privileges, EffNeighbours, #{})
     };
 update_eff_relations(top_down, #od_space{} = Space, EffNeighbours) ->
@@ -1739,9 +1836,15 @@ get_children(#od_share{handle = undefined}) -> #{
 get_children(#od_share{handle = Handle}) -> #{
     dependent => #{od_handle => [Handle]}
 };
-get_children(#od_handle_service{handles = Handles}) -> #{
-    dependent => #{od_handle => Handles}
+get_children(#od_handle_service{handles = Handles} = HService) -> #{
+    dependent => #{od_handle => Handles},
+    independent => get_successors(top_down, HService)
 };
+% od_cluster is a specific case:
+%   * it cannot be deleted
+%   * it cannot exist without a provider - will be deleted automatically
+% because of this, there is no need to list the provider as a child, just take
+% all the successors (users and groups)
 get_children(Entity) -> #{
     independent => get_successors(top_down, Entity)
 }.
@@ -1756,6 +1859,16 @@ get_children(Entity) -> #{
 %%--------------------------------------------------------------------
 -spec get_parents(entity()) ->
     #{dependent => #{entity_type() => relations()}, independent => #{entity_type() => relations()}}.
+get_parents(#od_share{space = Space}) -> #{
+    independent => #{od_space => [Space]}
+};
+get_parents(#od_provider{cluster = Cluster} = Provider) -> #{
+    dependent => case Cluster of
+        undefined -> #{};
+        _ -> #{od_cluster => [Cluster]}
+    end,
+    independent => get_successors(bottom_up, Provider)
+};
 get_parents(#od_handle{} = Handle) ->
     #od_handle{
         resource_type = ResourceType, resource_id = ResourceId,
@@ -1768,9 +1881,6 @@ get_parents(#od_handle{} = Handle) ->
     #{
         independent => Independent#{od_handle_service => [HService]}
     };
-get_parents(#od_share{space = Space}) -> #{
-    independent => #{od_space => [Space]}
-};
 get_parents(Entity) -> #{
     independent => get_successors(bottom_up, Entity)
 }.
@@ -1816,28 +1926,34 @@ get_all_direct_relations(bottom_up, #od_handle{} = Handle) ->
 get_all_direct_relations(bottom_up, #od_harvester{} = Harvester) ->
     #od_harvester{users = Users, groups = Groups} = Harvester,
     #{od_user => Users, od_group => Groups};
+get_all_direct_relations(bottom_up, #od_cluster{type = Type, service_id = ServiceId} = Cluster) ->
+    #od_cluster{users = Users, groups = Groups} = Cluster,
+    #{od_user => Users, od_group => Groups, od_provider => case Type of
+        ?ONEZONE -> [];
+        ?ONEPROVIDER -> [ServiceId]
+    end};
 
 get_all_direct_relations(top_down, #od_user{} = User) ->
     #od_user{
         groups = Groups, spaces = Spaces,
         handle_services = HServices, handles = Handles,
-        harvesters = Harvesters
+        harvesters = Harvesters, clusters = Clusters
     } = User,
     #{
         od_group => Groups, od_space => Spaces,
         od_handle_service => HServices, od_handle => Handles,
-        od_harvester => Harvesters
+        od_harvester => Harvesters, od_cluster => Clusters
     };
 get_all_direct_relations(top_down, #od_group{} = Group) ->
     #od_group{
         parents = Groups, spaces = Spaces,
         handle_services = HServices, handles = Handles,
-        harvesters = Harvesters
+        harvesters = Harvesters, clusters = Clusters
     } = Group,
     #{
         od_group => Groups, od_space => Spaces,
         od_handle_service => HServices, od_handle => Handles,
-        od_harvester => Harvesters
+        od_harvester => Harvesters, od_cluster => Clusters
     };
 get_all_direct_relations(top_down, #od_space{} = Space) ->
     #od_space{providers = Providers} = Space,
@@ -1847,7 +1963,9 @@ get_all_direct_relations(top_down, #od_space{} = Space) ->
 get_all_direct_relations(top_down, #od_handle{handle_service = HServiceId}) ->
     #{od_handle_service => [HServiceId]};
 get_all_direct_relations(top_down, #od_harvester{spaces = Spaces}) ->
-    #{od_space => Spaces}.
+    #{od_space => Spaces};
+get_all_direct_relations(top_down, #od_provider{cluster = ClusterId}) ->
+    #{od_cluster => [ClusterId]}.
 
 
 %%--------------------------------------------------------------------
@@ -1901,6 +2019,9 @@ get_all_eff_relations(bottom_up, #od_handle{} = Handle) ->
 get_all_eff_relations(bottom_up, #od_harvester{} = Harvester) ->
     #od_harvester{eff_users = EffUsers, eff_groups = EffGroups} = Harvester,
     #{od_user => EffUsers, od_group => EffGroups};
+get_all_eff_relations(bottom_up, #od_cluster{} = Cluster) ->
+    #od_cluster{eff_users = EffUsers, eff_groups = EffGroups} = Cluster,
+    #{od_user => EffUsers, od_group => EffGroups};
 
 get_all_eff_relations(top_down, #od_user{} = User) ->
     #od_user{
@@ -1908,6 +2029,7 @@ get_all_eff_relations(top_down, #od_user{} = User) ->
         eff_providers = EffProviders,
         eff_handle_services = EffHServices, eff_handles = EffHandles,
         eff_harvesters = EffHarvesters,
+        eff_clusters = EffClusters,
         eff_oz_privileges = EffOzPrivileges
     } = User,
     #{
@@ -1915,6 +2037,7 @@ get_all_eff_relations(top_down, #od_user{} = User) ->
         od_provider => EffProviders,
         od_handle_service => EffHServices, od_handle => EffHandles,
         od_harvester => EffHarvesters,
+        od_cluster => EffClusters,
         oz_privileges => EffOzPrivileges
     };
 get_all_eff_relations(top_down, #od_group{} = Group) ->
@@ -1923,6 +2046,7 @@ get_all_eff_relations(top_down, #od_group{} = Group) ->
         eff_providers = EffProviders,
         eff_handle_services = EffHServices, eff_handles = EffHandles,
         eff_harvesters = EffHarvesters,
+        eff_clusters = EffClusters,
         eff_oz_privileges = EffOzPrivileges
     } = Group,
     #{
@@ -1930,6 +2054,7 @@ get_all_eff_relations(top_down, #od_group{} = Group) ->
         od_provider => EffProviders,
         od_handle_service => EffHServices, od_handle => EffHandles,
         od_harvester => EffHarvesters,
+        od_cluster => EffClusters,
         oz_privileges => EffOzPrivileges
     };
 get_all_eff_relations(top_down, #od_space{} = Space) ->
@@ -2004,6 +2129,14 @@ get_successors(top_down, #od_harvester{} = Harvester) ->
     #{
         od_user := Users, od_group := Groups
     } = get_all_direct_relations(bottom_up, Harvester),
+    #{
+        od_user => get_ids(Users),
+        od_group => get_ids(Groups)
+    };
+get_successors(top_down, #od_cluster{} = Cluster) ->
+    #{
+        od_user := Users, od_group := Groups
+    } = get_all_direct_relations(bottom_up, Cluster),
     #{
         od_user => get_ids(Users),
         od_group => get_ids(Groups)

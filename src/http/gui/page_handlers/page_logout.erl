@@ -12,8 +12,9 @@
 %%%-------------------------------------------------------------------
 -module(page_logout).
 -author("Lukasz Opiola").
-
 -behaviour(dynamic_page_behaviour).
+
+-include("http/codes.hrl").
 
 %% API
 -export([handle/2]).
@@ -27,6 +28,6 @@
 %% {@link dynamic_page_behaviour} callback handle/2.
 %% @end
 %%--------------------------------------------------------------------
--spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
-handle(<<"GET">>, Req) ->
-    cowboy_req:reply(307, #{<<"location">> => <<"/">>}, new_gui_session:log_out(Req)).
+-spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
+handle(<<"POST">>, Req) ->
+    cowboy_req:reply(?HTTP_204_NO_CONTENT, gui_session:log_out(Req)).

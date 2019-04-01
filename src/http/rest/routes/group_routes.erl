@@ -12,7 +12,7 @@
 %%%--------------------------------------------------------------------
 -module(group_routes).
 
--include("rest.hrl").
+-include("http/rest.hrl").
 
 -export([routes/0]).
 
@@ -460,7 +460,7 @@ routes() -> [
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(hsid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
-    %% Remove group handle service
+    %% Group leave handle service
     %% This operation requires one of the following privileges:
     %% - group_leave_handle_service
     %% - oz_groups_remove_relationships
@@ -514,7 +514,7 @@ routes() -> [
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
-    %% Remove group handle
+    %% Group leave handle
     %% This operation requires one of the following privileges:
     %% - group_leave_handle
     %% - oz_groups_remove_relationships
@@ -601,6 +601,45 @@ routes() -> [
     {<<"/groups/:id/effective_harvesters/:hid">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(hid), aspect = instance, scope = protected},
+        b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
+    }},
+    %% List group's clusters
+    %% This operation does not require any specific privileges.
+    {<<"/groups/:id/clusters">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = clusters}
+    }},
+    %% Join group to a cluster
+    %% This operation does not require any specific privileges.
+    {<<"/groups/:id/clusters/join">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_cluster, id = undefined, aspect = join},
+        b_auth_hint = ?AS_GROUP(?BINDING(id))
+    }},
+    %% Get group's cluster details
+    %% This operation does not require any specific privileges.
+    {<<"/groups/:id/clusters/:cid">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_cluster, id = ?BINDING(cid), aspect = instance, scope = protected},
+        b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
+    }},
+    %% Leave cluster
+    %% This operation does not require any specific privileges.
+    {<<"/groups/:id/clusters/:cid">>, #rest_req{
+        method = 'DELETE',
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {cluster, ?BINDING(cid)}}
+    }},
+    %% List group's effective clusters
+    %% This operation does not require any specific privileges.
+    {<<"/groups/:id/effective_clusters">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_clusters}
+    }},
+    %% Get group's effective cluster details
+    %% This operation does not require any specific privileges.
+    {<<"/groups/:id/effective_clusters/:cid">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_cluster, id = ?BINDING(cid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }}
 ].

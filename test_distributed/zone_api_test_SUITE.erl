@@ -13,7 +13,7 @@
 -module(zone_api_test_SUITE).
 -author("Wojciech Geisler").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
@@ -60,8 +60,7 @@ get_configuration_test(Config) ->
 
 %% Legacy endpoint should be available on path without the API prefix
 get_old_configuration_endpoint_test(Config) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
-    {ok, Domain} = test_utils:get_env(Node, ?APP_NAME, http_domain),
+    Domain = oz_test_utils:get_env(Config, http_domain),
 
     RestSpec = #{
         request => #{
@@ -108,16 +107,24 @@ end_per_testcase(_, _Config) ->
 expected_configuration(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
 
-    SubdomainDelegation = false,
-    {ok, OZDomainString} = oz_test_utils:get_oz_domain(Config),
-    {ok, OZNameString} = oz_test_utils:get_env(Config, oz_worker, oz_name),
-    OZVersion = oz_test_utils:call_oz(Config, oz_worker, get_version, []),
-    {ok, OZBuildString} = oz_test_utils:get_env(Config, oz_worker, build_version),
-    {ok, OZCompatibleOneproviders} = oz_test_utils:get_env(Config, oz_worker,
-        compatible_op_versions),
+    SubdomainDelegationSupported = false,
+    OZDomainString = oz_test_utils:oz_domain(Config),
+    OZName = case oz_test_utils:get_env(Config, oz_name) of
+        undefined -> null;
+        OZNameString -> list_to_binary(OZNameString)
+    end,
+
+    OZVersionString = oz_test_utils:call_oz(Config, oz_worker, get_version, []),
+
+    OZBuild = case oz_test_utils:get_env(Config, build_version) of
+        "" -> <<"unknown">>;
+        Build -> list_to_binary(Build)
+    end,
+
+    OZCompatibleOneproviders = oz_test_utils:get_env(Config, compatible_op_versions),
 
     {_, []} = rpc:multicall(Nodes, application, set_env, [
-        ?APP_NAME, subdomain_delegation_enabled, SubdomainDelegation
+        ?APP_NAME, subdomain_delegation_supported, SubdomainDelegationSupported
     ]),
 
     oz_test_utils:overwrite_auth_config(Config, #{
@@ -147,12 +154,12 @@ expected_configuration(Config) ->
     ],
 
     #{
-        <<"name">> => str_utils:to_binary(OZNameString),
+        <<"name">> => OZName,
         <<"domain">> => str_utils:to_binary(OZDomainString),
-        <<"version">> => str_utils:to_binary(OZVersion),
-        <<"build">> => str_utils:to_binary(OZBuildString),
+        <<"version">> => str_utils:to_binary(OZVersionString),
+        <<"build">> => OZBuild,
         <<"compatibleOneproviderVersions">> =>
         [str_utils:to_binary(V) || V <- OZCompatibleOneproviders],
-        <<"subdomainDelegationSupported">> => SubdomainDelegation,
+        <<"subdomainDelegationSupported">> => SubdomainDelegationSupported,
         <<"supportedIdPs">> => SupportedIdPs
     }.

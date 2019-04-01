@@ -376,12 +376,16 @@ concurrent_active_clients_spawning_performance_base(Config) ->
 %%%===================================================================
 
 spawn_clients(Config, Type, Clients, RetryFlag, CallbackFunction, OnSuccessFun) ->
-    URL = oz_test_utils:get_gs_ws_url(Config),
+    URL = oz_test_utils:graph_sync_url(Config, Type),
     AuthsAndIdentities = lists:map(fun(Client) ->
         case Type of
             gui ->
-                {ok, SessionId} = oz_test_utils:log_in(Config, Client),
-                Auth = {cookie, {?SESSION_COOKIE_KEY, SessionId}},
+                {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, Client),
+                {ok, {Macaroon, _}} = oz_test_utils:call_oz(Config, session, acquire_gui_macaroon, [
+                    SessionId, ?ONEZONE, ?ONEZONE_SERVICE_ID
+                ]),
+                {ok, Token} = onedata_macaroons:serialize(Macaroon),
+                Auth = {urlToken, Token},
                 Identity = {user, Client},
                 {Auth, Identity};
             provider ->

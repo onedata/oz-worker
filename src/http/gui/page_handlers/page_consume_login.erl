@@ -16,7 +16,7 @@
 -behaviour(dynamic_page_behaviour).
 
 -include("http/gui_paths.hrl").
--include("registered_names.hrl").
+-include("http/codes.hrl").
 -include("auth/auth_errors.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -32,18 +32,18 @@
 %% {@link dynamic_page_behaviour} callback handle/2.
 %% @end
 %%--------------------------------------------------------------------
--spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
+-spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(Method, Req) ->
     ValidateResult = auth_logic:validate_login(Method, Req),
     case auth_test_mode:process_is_test_mode_enabled() of
         true ->
-            cowboy_req:reply(200, #{
+            cowboy_req:reply(?HTTP_200_OK, #{
                 <<"content-type">> => <<"text/html">>
             }, render_test_login_results(ValidateResult), Req);
         false ->
             {NewReq, RedirectURL} = case ValidateResult of
                 {ok, UserId, RedirectAfterLogin} ->
-                    Req2 = new_gui_session:log_in(UserId, Req),
+                    Req2 = gui_session:log_in(UserId, Req),
                     {Req2, RedirectAfterLogin};
                 {auth_error, Error, State, RedirectAfterLogin} ->
                     Req2 = cowboy_req:set_resp_cookie(
@@ -58,7 +58,7 @@ handle(Method, Req) ->
             end,
             % This page is visited with a POST request, so use a 303 redirect in
             % response so that web browser switches to GET.
-            cowboy_req:reply(303, #{
+            cowboy_req:reply(?HTTP_303_SEE_OTHER, #{
                 <<"location">> => RedirectURL,
                 % Connection close is required, otherwise chrome/safari can get stuck
                 % stalled waiting for data.

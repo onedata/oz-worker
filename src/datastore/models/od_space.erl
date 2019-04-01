@@ -17,7 +17,7 @@
 
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
--export([to_string/1]).
+-export([to_string/1, print_summary/0, print_summary/1]).
 -export([entity_logic_plugin/0]).
 
 %% datastore_model callbacks
@@ -116,6 +116,57 @@ list() ->
 -spec to_string(SpaceId :: id()) -> binary().
 to_string(SpaceId) ->
     <<"space:", SpaceId/binary>>.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Prints all space records to the console in a nicely-formatted manner.
+%% Sorts the records in a default manner.
+%% @end
+%%--------------------------------------------------------------------
+-spec print_summary() -> ok.
+print_summary() ->
+    print_summary(name).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Prints all space records to the console in a nicely-formatted manner.
+%% Sorts the records by given attribute (specified by name or position).
+%% @end
+%%--------------------------------------------------------------------
+-spec print_summary(id | name | users | groups | shares | providers | support | pos_integer()) -> ok.
+print_summary(id) -> print_summary(1);
+print_summary(name) -> print_summary(2);
+print_summary(users) -> print_summary(3);
+print_summary(groups) -> print_summary(4);
+print_summary(shares) -> print_summary(5);
+print_summary(providers) -> print_summary(6);
+print_summary(support) -> print_summary(7);
+print_summary(SortPos) when is_integer(SortPos) ->
+    {ok, Spaces} = list(),
+    SpaceAttrs = lists:map(fun(#document{key = Id, value = S}) ->
+        {
+            Id,
+            S#od_space.name,
+            {maps:size(S#od_space.users), maps:size(S#od_space.eff_users)},
+            {maps:size(S#od_space.groups), maps:size(S#od_space.eff_groups)},
+            length(S#od_space.shares),
+            maps:size(S#od_space.providers),
+            lists:sum(maps:values(S#od_space.providers))
+        }
+    end, Spaces),
+    Sorted = lists:keysort(SortPos, SpaceAttrs),
+    io:format("---------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("Id                                Name                      Users (eff)    Groups (eff)   Shares   Providers   Tot. support~n"),
+    io:format("---------------------------------------------------------------------------------------------------------------------------~n"),
+    lists:foreach(fun({Id, Name, {Users, EffUsers}, {Groups, EffGroups}, Shares, Providers, Support}) ->
+        UsersStr = str_utils:format("~B (~B)", [Users, EffUsers]),
+        GroupsStr = str_utils:format("~B (~B)", [Groups, EffGroups]),
+        io:format("~-33s ~-25ts ~-14s ~-14s ~-8B ~-11B ~-14s~n", [
+            Id, Name, UsersStr, GroupsStr, Shares, Providers, str_utils:format_byte_size(Support)
+        ])
+    end, Sorted),
+    io:format("---------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("~B spaces in total~n", [length(Sorted)]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -304,7 +355,9 @@ upgrade_record(3, Space) ->
     TranslatePrivileges = fun(Privileges) ->
         privileges:union(NewPrivileges, lists:flatten(lists:map(fun
             (space_view) -> [?SPACE_VIEW, ?SPACE_VIEW_PRIVILEGES];
+            (space_invite_user) -> [?SPACE_ADD_USER];
             (space_invite_group) -> [?SPACE_ADD_GROUP];
+            (space_invite_provider) -> [?SPACE_ADD_PROVIDER];
             (Other) -> Other
         end, Privileges)))
     end,

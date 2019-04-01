@@ -11,7 +11,7 @@
 -module(error_rest_translator).
 -author("Lukasz Opiola").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -30,16 +30,22 @@
 %%--------------------------------------------------------------------
 -spec response({error, term()}) -> #rest_resp{}.
 response({error, Type}) ->
+    IdAndDetails = gs_protocol_errors:error_to_json(?BASIC_PROTOCOL, {error, Type}),
+
     case translate({error, Type}) of
         Code when is_integer(Code) ->
-            #rest_resp{code = Code};
+            #rest_resp{code = Code, body = #{<<"error">> => IdAndDetails}};
         {Code, {MessageFormat, FormatArgs}} ->
             MessageBinary = str_utils:format_bin(
                 str_utils:to_list(MessageFormat), FormatArgs
             ),
-            #rest_resp{code = Code, body = #{<<"error">> => MessageBinary}};
+            #rest_resp{code = Code, body = #{<<"error">> => IdAndDetails#{
+                <<"description">> => MessageBinary
+            }}};
         {Code, MessageBinary} ->
-            #rest_resp{code = Code, body = #{<<"error">> =>  MessageBinary}}
+            #rest_resp{code = Code, body = #{<<"error">> =>  IdAndDetails#{
+                <<"description">> => MessageBinary
+            }}}
     end.
 
 
@@ -101,7 +107,8 @@ translate(?ERROR_BAD_BASIC_CREDENTIALS) ->
     {?HTTP_401_UNAUTHORIZED,
         <<"Provided basic authorization credentials are not valid">>
     };
-translate(?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(OAuthProviderId)) ->
+
+translate(?ERROR_BAD_IDP_ACCESS_TOKEN(OAuthProviderId)) ->
     {?HTTP_401_UNAUTHORIZED,
         {<<"Provided access token for \"~p\" is not valid">>, [OAuthProviderId]}
     };
@@ -268,8 +275,10 @@ translate(?ERROR_CANNOT_DELETE_ENTITY(EntityType, EntityId)) ->
     }};
 translate(?ERROR_CANNOT_ADD_RELATION_TO_SELF) ->
     {?HTTP_400_BAD_REQUEST, <<"Cannot add relation to self.">>};
+translate(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED) ->
+    {?HTTP_400_BAD_REQUEST, <<"Subdomain delegation is not supported by this Onezone.">>};
 translate(?ERROR_SUBDOMAIN_DELEGATION_DISABLED) ->
-    {?HTTP_400_BAD_REQUEST, <<"Subdomain delegation is currently disabled.">>};
+    {?HTTP_400_BAD_REQUEST, <<"Subdomain delegation is disabled for this Oneprovider.">>};
 translate(?ERROR_BAD_VALUE_EMAIL) ->
     {?HTTP_400_BAD_REQUEST, <<"Bad value: provided e-mail is not a valid e-mail.">>};
 translate(?ERROR_TEMPORARY_FAILURE) ->

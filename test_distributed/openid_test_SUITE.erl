@@ -127,7 +127,7 @@ end_per_suite(_Config) ->
 
 % This code is evaluated on a Onezone node when the mocked refresh function is called
 call_mocked_refresh_endpoint(IdP, RefreshToken) ->
-    {ok, Fun} = application:get_env(oz_worker, mocked_refresh_endpoint),
+    Fun = oz_worker:get_env(mocked_refresh_endpoint),
     Fun(IdP, RefreshToken).
 
 
@@ -381,8 +381,8 @@ authority_delegation(Config) ->
             method => get,
             path => <<"/user">>,
             headers => case AuthType of
-                bearer -> #{<<"Authorization">> => <<"Bearer dummy/", AccessToken/binary>>};
-                xAuthToken -> #{<<"X-Auth-Token">> => <<"dummy/", AccessToken/binary>>}
+                bearer -> #{<<"authorization">> => <<"Bearer dummy/", AccessToken/binary>>};
+                xAuthToken -> #{<<"x-auth-token">> => <<"dummy/", AccessToken/binary>>}
             end
         },
         expect => case Success of
@@ -418,7 +418,6 @@ authority_delegation(Config) ->
     Config, user_logic, acquire_idp_access_token, [?USER(UserId), UserId, IdP]
 )).
 offline_access(Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
     SubjectId = <<"1233456734534">>,
     OidcSpec = ?CORRECT_OIDC_SPEC,
     oidc_server_mock:mock(Config, OidcSpec),
@@ -454,7 +453,7 @@ offline_access(Config) ->
     ]}} = oz_test_utils:get_user(Config, UserId),
 
     % The same access token should be reused if possible (unless it reaches refresh threshold)
-    {ok, RefreshThreshold} = test_utils:get_env(hd(Nodes), oz_worker, idp_access_token_refresh_threshold),
+    RefreshThreshold = oz_test_utils:get_env(Config, idp_access_token_refresh_threshold),
     oz_test_utils:simulate_time_passing(Config, ?MOCK_ACCESS_TOKEN_TTL - RefreshThreshold - 1),
     NewTtl = RefreshThreshold + 1,
     ?assertMatch({ok, {AccessToken, NewTtl}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
@@ -473,7 +472,7 @@ offline_access(Config) ->
 offline_access_internals(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     SubjectId = <<"offline_access_internals-abcdewq">>,
-    {ok, RefreshThreshold} = test_utils:get_env(hd(Nodes), oz_worker, idp_access_token_refresh_threshold),
+    RefreshThreshold = oz_test_utils:get_env(Config, idp_access_token_refresh_threshold),
     overwrite_auth_config(Config, false, [{?DUMMY_IDP, ?CORRECT_OIDC_SPEC, #{
         attributeMapping => #{
             subjectId => {required, "sub"},
@@ -779,7 +778,7 @@ bad_userinfo_endpoint_in_authority_delegation(Config, TestMode) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"Authorization">> => <<"Bearer dummy/", AccessToken/binary>>}
+            headers => #{<<"authorization">> => <<"Bearer dummy/", AccessToken/binary>>}
         },
         expect => #{
             code => 500
@@ -889,7 +888,7 @@ bad_access_token_pass_method_in_authority_delegation(Config, TestMode) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"Authorization">> => <<"Bearer dummy/", AccessToken/binary>>}
+            headers => #{<<"authorization">> => <<"Bearer dummy/", AccessToken/binary>>}
         },
         expect => #{
             code => 500

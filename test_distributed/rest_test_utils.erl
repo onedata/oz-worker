@@ -19,23 +19,15 @@
 % Use "Macaroon", "X-Auth-Token" and "Authorization: Bearer" headers variably,
 % as they all should be accepted.
 -define(ACCESS_TOKEN_HEADER(AccessToken), case rand:uniform(3) of
-    1 -> #{<<"Macaroon">> => AccessToken};
-    2 -> #{<<"X-Auth-Token">> => AccessToken};
-    3 -> #{<<"Authorization">> => <<"Bearer ", AccessToken/binary>>}
+    1 -> #{<<"macaroon">> => AccessToken};
+    2 -> #{<<"x-auth-token">> => AccessToken};
+    3 -> #{<<"authorization">> => <<"Bearer ", AccessToken/binary>>}
 end).
 
 
 %% API
--export([get_rest_api_prefix/1, check_rest_call/2]).
--export([get_oz_url/1]).
+-export([check_rest_call/2]).
 -export([compare_maps/2, contains_map/2]).
-
-
-get_rest_api_prefix(Config) ->
-    {ok, RestApiPrefix} = oz_test_utils:call_oz(
-        Config, application, get_env, [oz_worker, rest_api_prefix]
-    ),
-    list_to_binary(RestApiPrefix).
 
 
 %%--------------------------------------------------------------------
@@ -53,7 +45,7 @@ get_rest_api_prefix(Config) ->
 %%          delete
 %%      path => % Mandatory
 %%          [<<"/parts">>, <<"/to/be">>, <<"/concatenated">>],
-%%      url => % Optional, default: {@link get_oz_url/1}
+%%      url => % Optional, default: {@link oz_test_utils:get_rest_url/2}
 %%          <<"oz-domain-with:port/and/api/prefix">>
 %%      headers => % Optional, default: content-type=app/json
 %%          [{<<"key">>, <<"value">>}]
@@ -115,13 +107,13 @@ check_rest_call(Config, ArgsMap) ->
                 json_utils:encode(Map3)
         end,
         ReqOpts = maps:get(opts, RequestMap, []),
-        ReqURL = maps:get(url, RequestMap, get_oz_url(Config)),
+        ReqURL = maps:get(url, RequestMap, oz_test_utils:oz_rest_url(Config, <<"">>)),
 
         ExpCode = maps:get(code, ExpectMap, undefined),
         ExpHeaders = maps:get(headers, ExpectMap, undefined),
         ExpBody = maps:get(body, ExpectMap, undefined),
 
-        URL = str_utils:join_binary([ReqURL | ReqPath], <<"">>),
+        URL = str_utils:join_binary([ReqURL | ReqPath]),
         ReqAuth = maps:get(auth, RequestMap, undefined),
         HeadersPlusAuth = case ReqAuth of
             undefined ->
@@ -332,19 +324,6 @@ check_rest_call(Config, ArgsMap) ->
                 ]),
             false
     end.
-
-
-get_oz_url(Config) ->
-    % Resolve REST URLs of oz-worker nodes
-    [Node | _] = ?config(oz_worker_nodes, Config),
-    {ok, Domain} = test_utils:get_env(Node, ?APP_NAME, http_domain),
-    {ok, RestPort} = oz_test_utils:get_rest_port(Config),
-    {ok, RestAPIPrefix} = rpc:call(
-        Node, oz_worker, get_env, [rest_api_prefix]
-    ),
-    str_utils:format_bin(
-        "https://~s:~B~s", [Domain, RestPort, RestAPIPrefix]
-    ).
 
 
 compare_headers(ActualHeadersInput, ExpectedHeadersInput) ->

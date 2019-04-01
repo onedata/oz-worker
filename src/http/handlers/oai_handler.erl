@@ -13,6 +13,7 @@
 
 -behaviour(cowboy_rest).
 
+-include("http/codes.hrl").
 -include("http/handlers/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -141,7 +142,7 @@ handle_request(QueryParams, Req) ->
             oai_errors:handle(Error);
         ErrorType:Error ->
             ?error_stacktrace("Unhandled exception in OAI-PMH request ~p:~p", [ErrorType, Error]),
-            ReqE = cowboy_req:reply(500, Req),
+            ReqE = cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req),
             throw({stop, ReqE})
     end,
 

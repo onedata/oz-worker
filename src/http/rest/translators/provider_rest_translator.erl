@@ -13,7 +13,7 @@
 -behaviour(rest_translator_behaviour).
 -author("Lukasz Opiola").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([create_response/4, get_response/2]).
@@ -32,6 +32,7 @@
     {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
 create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id = ProvId}, {_, Macaroon}}) ->
     {ok, MacaroonBin} = onedata_macaroons:serialize(Macaroon),
+
     rest_translator:ok_body_reply(#{
         <<"providerId">> => ProvId,
         <<"macaroon">> => MacaroonBin
@@ -73,14 +74,18 @@ get_response(#gri{id = ProviderId, aspect = instance, scope = protected}, Provid
     #{
         <<"name">> := Name, <<"domain">> := Domain,
         <<"latitude">> := Latitude, <<"longitude">> := Longitude,
-        <<"online">> := Online
+        <<"cluster">> := Cluster, <<"online">> := Online
     } = ProviderData,
     rest_translator:ok_body_reply(#{
         <<"providerId">> => ProviderId,
         <<"name">> => Name, <<"domain">> => Domain,
         <<"latitude">> => Latitude, <<"longitude">> => Longitude,
-        <<"online">> => Online
+        <<"cluster">> => Cluster, <<"online">> => Online
     });
+
+get_response(#gri{aspect = domain_config}, #{<<"ipList">> := IPList} = DomainConfig) ->
+    IPBinaries = [list_to_binary(inet:ntoa(IP)) || IP <- IPList],
+    rest_translator:ok_body_reply(DomainConfig#{<<"ipList">> := IPBinaries});
 
 get_response(#gri{aspect = {user_spaces, _}}, SpaceIds) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => SpaceIds});

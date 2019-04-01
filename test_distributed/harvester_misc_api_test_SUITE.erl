@@ -12,7 +12,7 @@
 -module(harvester_misc_api_test_SUITE).
 -author("Michal Stanisz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").

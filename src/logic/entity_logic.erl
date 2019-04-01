@@ -32,11 +32,11 @@
 -type el_plugin() :: module().
 -type operation() :: gs_protocol:operation().
 -type entity_id() :: undefined | od_user:id() | od_group:id() | od_space:id() |
-od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id().
+od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id() | od_cluster:id().
 -type entity_type() :: od_user | od_group | od_space | od_share | od_provider |
-od_handle_service | od_handle | od_harvester | oz_privileges.
+od_handle_service | od_handle | od_harvester | od_cluster | oz_privileges.
 -type entity() :: undefined | #od_user{} | #od_group{} | #od_space{} |
-#od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{} | #od_harvester{}.
+#od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{} | #od_harvester{} | #od_cluster{}.
 -type aspect() :: gs_protocol:aspect().
 -type scope() :: gs_protocol:scope().
 -type data_format() :: gs_protocol:data_format().
@@ -116,6 +116,7 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
 -export([handle/1, handle/2]).
 -export([is_authorized/2]).
 -export([client_to_string/1]).
+-export([root_client/0, user_client/1, provider_client/1]).
 -export([validate_name/1, validate_name/5, normalize_name/1, normalize_name/9]).
 
 
@@ -190,6 +191,36 @@ client_to_string(?NOBODY) -> "nobody (unauthenticated client)";
 client_to_string(?ROOT) -> "root";
 client_to_string(?USER(UId)) -> str_utils:format("user:~s", [UId]);
 client_to_string(?PROVIDER(PId)) -> str_utils:format("provider:~s", [PId]).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns root client record.
+%% @end
+%%--------------------------------------------------------------------
+-spec root_client() -> client().
+root_client() ->
+    ?ROOT.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns user client record for given UserId.
+%% @end
+%%--------------------------------------------------------------------
+-spec user_client(od_user:id()) -> client().
+user_client(UserId) ->
+    ?USER(UserId).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns provider client record for given ProviderId.
+%% @end
+%%--------------------------------------------------------------------
+-spec provider_client(od_provider:id()) -> client().
+provider_client(ProviderId) ->
+    ?PROVIDER(ProviderId).
 
 
 %%--------------------------------------------------------------------
@@ -618,7 +649,7 @@ ensure_valid(State) ->
         fun(Key, {DataAcc, HasAtLeastOneAcc}) ->
             case transform_and_check_value(Key, DataAcc, AtLeastOne) of
                 false ->
-                    {DataAcc, HasAtLeastOneAcc orelse false};
+                    {DataAcc, HasAtLeastOneAcc};
                 {true, NewData} ->
                     {NewData, true}
             end
@@ -656,10 +687,10 @@ transform_and_check_value({aspect, Key}, Data, Validator) ->
     transform_and_check_value(TypeRule, ValueRule, Key, Value),
     {true, Data};
 transform_and_check_value(Key, Data, Validator) ->
-    case maps:get(Key, Data, undefined) of
-        undefined ->
+    case maps:find(Key, Data) of
+        error ->
             false;
-        Value ->
+        {ok, Value} ->
             {TypeRule, ValueRule} = maps:get(Key, Validator),
             NewValue = transform_and_check_value(TypeRule, ValueRule, Key, Value),
             {true, Data#{Key => NewValue}}
@@ -678,9 +709,8 @@ transform_and_check_value(Key, Data, Validator) ->
     {true, NewData :: data()} | false.
 transform_and_check_value(TypeRule, ValueRule, Key, Value) ->
     try
-        NewValue = check_type(TypeRule, Key, Value),
-        check_value(TypeRule, ValueRule, Key, NewValue),
-        NewValue
+        TransformedType = check_type(TypeRule, Key, Value),
+        check_value(TypeRule, ValueRule, Key, TransformedType)
     catch
         throw:Error ->
             throw(Error);
@@ -826,9 +856,9 @@ check_type(Rule, Key, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec check_value(type_validator(), value_validator(), Key :: binary(),
-    Value :: term()) -> ok.
-check_value(_, any, _Key, _) ->
-    ok;
+    Value :: term()) -> TransformedValue :: term().
+check_value(_, any, _Key, Value) ->
+    Value;
 check_value(atom, non_empty, Key, '') ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(list_of_atoms, non_empty, Key, []) ->
@@ -839,26 +869,26 @@ check_value(list_of_binaries, non_empty, Key, []) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(json, non_empty, Key, Map) when map_size(Map) == 0 ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
-check_value(_, non_empty, _Key, _) ->
-    ok;
+check_value(_, non_empty, _Key, Value) ->
+    Value;
 check_value(_, {not_lower_than, Threshold}, Key, Value) ->
     case Value >= Threshold of
         true ->
-            ok;
+            Value;
         false ->
             throw(?ERROR_BAD_VALUE_TOO_LOW(Key, Threshold))
     end;
 check_value(_, {not_greater_than, Threshold}, Key, Value) ->
     case Value =< Threshold of
         true ->
-            ok;
+            Value;
         false ->
             throw(?ERROR_BAD_VALUE_TOO_HIGH(Key, Threshold))
     end;
 check_value(_, {between, Low, High}, Key, Value) ->
     case Value >= Low andalso Value =< High of
         true ->
-            ok;
+            Value;
         false ->
             throw(?ERROR_BAD_VALUE_NOT_IN_RANGE(Key, Low, High))
     end;
@@ -868,7 +898,7 @@ check_value(binary, domain, Key, Value) ->
     case size(Value) =< ?MAX_DOMAIN_LENGTH of
         true ->
             case re:run(Value, ?DOMAIN_VALIDATION_REGEXP, [{capture, none}]) of
-                match -> ok;
+                match -> Value;
                 _ -> throw(?ERROR_BAD_VALUE_DOMAIN(Key))
             end;
         _ -> throw(?ERROR_BAD_VALUE_DOMAIN(Key))
@@ -882,7 +912,7 @@ check_value(binary, subdomain, _Key, Value) ->
             % + 1 for the dot between subdomain and domain
             DomainLength = size(Value) + byte_size(oz_worker:get_domain()) + 1,
             case DomainLength =< ?MAX_DOMAIN_LENGTH of
-                true -> ok;
+                true -> Value;
                 _ -> throw(?ERROR_BAD_VALUE_SUBDOMAIN)
             end;
         _ -> throw(?ERROR_BAD_VALUE_SUBDOMAIN)
@@ -892,35 +922,46 @@ check_value(binary, email, Key, <<"">>) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(binary, email, _Key, Value) ->
     case http_utils:validate_email(Value) of
-        true -> ok;
+        true -> Value;
         false -> throw(?ERROR_BAD_VALUE_EMAIL)
     end;
+
+check_value(json, JsonValidator, Key, Map) ->
+    maps:map(fun(NestedKey, {NestedTypeRule, NestedValueRule}) ->
+        FullKey = <<Key/binary, ".", NestedKey/binary>>,
+        case maps:find(NestedKey, Map) of
+            error ->
+                throw(?ERROR_BAD_VALUE_EMPTY(FullKey));
+            {ok, Value} ->
+                transform_and_check_value(NestedTypeRule, NestedValueRule, FullKey, Value)
+        end
+    end, JsonValidator);
 
 check_value(_, AllowedVals, Key, Vals) when is_list(AllowedVals) andalso is_list(Vals) ->
     case ordsets:subtract(ordsets:from_list(Vals), ordsets:from_list(AllowedVals)) of
         [] ->
-            ok;
+            Vals;
         _ ->
             throw(?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(Key, AllowedVals))
     end;
 check_value(_, AllowedVals, Key, Val) when is_list(AllowedVals) ->
     case lists:member(Val, AllowedVals) of
         true ->
-            ok;
+            Val;
         _ ->
             throw(?ERROR_BAD_VALUE_NOT_ALLOWED(Key, AllowedVals))
     end;
 check_value(_, VerifyFun, Key, Vals) when is_function(VerifyFun, 1) andalso is_list(Vals) ->
     case lists:all(VerifyFun, Vals) of
         true ->
-            ok;
+            Vals;
         false ->
             throw(?ERROR_BAD_DATA(Key))
     end;
 check_value(_, VerifyFun, Key, Val) when is_function(VerifyFun, 1) ->
     case VerifyFun(Val) of
         true ->
-            ok;
+            Val;
         false ->
             throw(?ERROR_BAD_DATA(Key))
     end;
@@ -928,7 +969,7 @@ check_value(Type, {exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) 
     check_value(Type, non_empty, Key, Val),
     case VerifyFun(Val) of
         true ->
-            ok;
+            Val;
         false ->
             throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(Key))
     end;
@@ -936,14 +977,14 @@ check_value(Type, {not_exists, VerifyFun}, Key, Val) when is_function(VerifyFun,
     check_value(Type, non_empty, Key, Val),
     case VerifyFun(Val) of
         true ->
-            ok;
+            Val;
         false ->
             throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(Key))
     end;
 check_value(_, {relation_exists, ChType, ChId, ParType, ParId, VerifyFun}, _Key, Val) when is_function(VerifyFun, 1) ->
     case VerifyFun(Val) of
         true ->
-            ok;
+            Val;
         false ->
             throw(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId))
     end;
@@ -952,7 +993,7 @@ check_value(token, any, _Key, _Macaroon) ->
 check_value(token, TokenType, Key, Macaroon) ->
     case token_logic:validate(Macaroon, TokenType) of
         ok ->
-            ok;
+            Macaroon;
         inexistent ->
             throw(?ERROR_BAD_VALUE_TOKEN(Key));
         bad_macaroon ->
@@ -961,20 +1002,20 @@ check_value(token, TokenType, Key, Macaroon) ->
             throw(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key))
     end;
 check_value(alias, alias, _Key, undefined) ->
-    ok;
+    undefined;
 check_value(alias, alias, _Key, Value) ->
     case user_logic:validate_alias(Value) of
-        true -> ok;
+        true -> Value;
         false -> throw(?ERROR_BAD_VALUE_ALIAS)
     end;
 check_value(binary, user_name, _Key, Value) ->
     case user_logic:validate_name(Value) of
-        true -> ok;
+        true -> Value;
         false -> throw(?ERROR_BAD_VALUE_USER_NAME)
     end;
 check_value(binary, name, _Key, Value) ->
     case validate_name(Value) of
-        true -> ok;
+        true -> Value;
         false -> throw(?ERROR_BAD_VALUE_NAME)
     end;
 check_value(TypeRule, ValueRule, Key, _) ->
@@ -991,8 +1032,10 @@ check_value(TypeRule, ValueRule, Key, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_plugin(Operation :: atom(), #state{}) -> term().
-call_plugin(fetch_entity, #state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}) ->
+call_plugin(fetch_entity, #state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}) when is_binary(Id)->
     Plugin:fetch_entity(Id);
+call_plugin(fetch_entity, _) ->
+    ?ERROR_NOT_FOUND;
 call_plugin(operation_supported,  #state{plugin = Plugin, req = #el_req{operation = Operation,
     gri =#gri{aspect = Aspect, scope = Scope}}}) ->
     Plugin:operation_supported(Operation, Aspect, Scope);

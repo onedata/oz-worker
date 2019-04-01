@@ -13,7 +13,7 @@
 -behaviour(rest_translator_behaviour).
 -author("Michal Stanisz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 
 -export([create_response/4, get_response/2]).
 

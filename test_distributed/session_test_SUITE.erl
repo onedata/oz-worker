@@ -13,6 +13,8 @@
 
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include("graph_sync/oz_graph_sync.hrl").
+-include("api_test_utils.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -22,8 +24,6 @@
 -include_lib("gui/include/gui_session.hrl").
 
 -type config() :: [{atom(), term()}].
-
--define(STARTING_TIMESTAMP, 1500000000).
 
 %% API
 -export([all/0, init_per_suite/1, end_per_suite/1]).
@@ -35,7 +35,12 @@
     cleanup_on_session_delete/1,
     cleanup_on_user_delete/1,
     cleanup_of_expired_sessions_upon_other_session_expiry/1,
-    cleanup_of_expired_sessions_upon_other_session_delete/1
+    cleanup_of_expired_sessions_upon_other_session_delete/1,
+    create_gui_macaroons/1,
+    create_gui_macaroons_via_endpoint/1,
+    expiration_of_gui_macaroons/1,
+    reuse_or_refresh_gui_macaroons/1,
+    cleanup_of_gui_macaroons/1
 ]).
 
 
@@ -47,7 +52,12 @@ all() -> ?ALL([
     cleanup_on_session_delete,
     cleanup_on_user_delete,
     cleanup_of_expired_sessions_upon_other_session_expiry,
-    cleanup_of_expired_sessions_upon_other_session_delete
+    cleanup_of_expired_sessions_upon_other_session_delete,
+    create_gui_macaroons,
+    create_gui_macaroons_via_endpoint,
+    expiration_of_gui_macaroons,
+    reuse_or_refresh_gui_macaroons,
+    cleanup_of_gui_macaroons
 ]).
 
 
@@ -57,7 +67,7 @@ all() -> ?ALL([
 
 multiple_connections_per_session(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
-    {SessionId, Cookie} = log_in(Config, UserId),
+    {ok, {SessionId, Cookie}} = oz_test_utils:log_in(Config, UserId),
 
     ?assert(compare_user_sessions(Config, UserId, [SessionId])),
 
@@ -78,14 +88,14 @@ multiple_connections_per_session(Config) ->
 
 multiple_sessions_per_user(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
-    {Session1, Cookie1} = log_in(Config, UserId),
+    {ok, {Session1, Cookie1}} = oz_test_utils:log_in(Config, UserId),
 
     {_ClientPid1, ServerPid1, {user, UserId}} = start_gs_connection(Config, Cookie1),
     {ClientPid2, ServerPid2, {user, UserId}} = start_gs_connection(Config, Cookie1),
     {_ClientPid3, ServerPid3, {user, UserId}} = start_gs_connection(Config, Cookie1),
     ?assert(compare_user_sessions(Config, UserId, [Session1])),
 
-    {Session2, Cookie2} = log_in(Config, UserId),
+    {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, UserId),
     {_ClientPid4, ServerPid4, {user, UserId}} = start_gs_connection(Config, Cookie2),
     {_ClientPid5, ServerPid5, {user, UserId}} = start_gs_connection(Config, Cookie2),
     ?assert(compare_user_sessions(Config, UserId, [Session1, Session2])),
@@ -105,47 +115,47 @@ multiple_sessions_per_user(Config) ->
 
 session_cookie_refresh_and_grace_period(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
-    {SessionId, Cookie} = log_in(Config, UserId),
+    {ok, {SessionId, Cookie}} = oz_test_utils:log_in(Config, UserId),
     {_ClientPid1, _ServerPid1, {user, UserId}} = start_gs_connection(Config, Cookie),
     {_ClientPid2, _ServerPid2, {user, UserId}} = start_gs_connection(Config, Cookie),
     {_ClientPid3, _ServerPid3, {user, UserId}} = start_gs_connection(Config, Cookie),
 
     {ok, #gui_session{
         nonce = OldNonce
-    }} = rpc:call(random_node(Config), new_gui_session_plugin, get, [SessionId]),
+    }} = rpc:call(random_node(Config), gui_session_plugin, get, [SessionId]),
 
-    simulate_time_passing(Config, get_gui_config(Config, session_cookie_refresh_interval) + 1),
-    {ok, _, NewCookie, _} = ?assertMatch({ok, _, NewCookie, _}, validate_session(Config, Cookie)),
+    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_refresh_interval) + 1),
+    {ok, _, NewCookie, _} = ?assertMatch({ok, _, _, _}, validate_session(Config, Cookie)),
     % Cookie should have been refreshed
     ?assertNotEqual(Cookie, NewCookie),
 
     {ok, #gui_session{
         nonce = NewNonce,
         previous_nonce = PrevNonce
-    }} = rpc:call(random_node(Config), new_gui_session_plugin, get, [SessionId]),
+    }} = rpc:call(random_node(Config), gui_session_plugin, get, [SessionId]),
 
     ?assertNotEqual(OldNonce, NewNonce),
     ?assertMatch(OldNonce, PrevNonce),
 
     % After the grace period, the old cookie should stop working
-    simulate_time_passing(Config, get_gui_config(Config, session_cookie_grace_period) + 1),
+    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_grace_period) + 1),
 
     ?assertMatch({error, invalid}, validate_session(Config, Cookie)),
-    {_ClientPid4, _ServerPid4, nobody} = start_gs_connection(Config, Cookie),
+    ?assertMatch(?ERROR_UNAUTHORIZED, start_gs_connection(Config, Cookie)),
 
     ok.
 
 
 cleanup_on_session_expiry(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
-    {SessionId, Cookie} = log_in(Config, UserId),
+    {ok, {SessionId, Cookie}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid1, _ServerPid1, {user, UserId}} = start_gs_connection(Config, Cookie),
     {ClientPid2, _ServerPid2, {user, UserId}} = start_gs_connection(Config, Cookie),
     {ClientPid3, _ServerPid3, {user, UserId}} = start_gs_connection(Config, Cookie),
 
-    simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
+    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
 
-    {_ClientPid4, _ServerPid4, nobody} = start_gs_connection(Config, Cookie),
+    ?assertMatch(?ERROR_UNAUTHORIZED, start_gs_connection(Config, Cookie)),
 
     ?assert(compare_user_sessions(Config, UserId, [])),
     ?assert(compare_connections_per_user(Config, UserId, [])),
@@ -159,7 +169,7 @@ cleanup_on_session_expiry(Config) ->
 
 cleanup_on_session_delete(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
-    {SessionId, Cookie} = log_in(Config, UserId),
+    {ok, {SessionId, Cookie}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid1, ServerPid1, {user, UserId}} = start_gs_connection(Config, Cookie),
     {ClientPid2, ServerPid2, {user, UserId}} = start_gs_connection(Config, Cookie),
     {ClientPid3, ServerPid3, {user, UserId}} = start_gs_connection(Config, Cookie),
@@ -181,9 +191,9 @@ cleanup_on_session_delete(Config) ->
 
 cleanup_on_user_delete(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
-    {Session1, Cookie1} = log_in(Config, UserId),
-    {Session2, Cookie2} = log_in(Config, UserId),
-    {Session3, Cookie3} = log_in(Config, UserId),
+    {ok, {Session1, Cookie1}} = oz_test_utils:log_in(Config, UserId),
+    {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, UserId),
+    {ok, {Session3, Cookie3}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid1, _ServerPid1, {user, UserId}} = start_gs_connection(Config, Cookie1),
     {ClientPid2, _ServerPid2, {user, UserId}} = start_gs_connection(Config, Cookie2),
     {ClientPid3, _ServerPid3, {user, UserId}} = start_gs_connection(Config, Cookie3),
@@ -203,14 +213,14 @@ cleanup_on_user_delete(Config) ->
 
 cleanup_of_expired_sessions_upon_other_session_expiry(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
-    {Session1, Cookie1} = log_in(Config, UserId),
-    {Session2, Cookie2} = log_in(Config, UserId),
+    {ok, {Session1, Cookie1}} = oz_test_utils:log_in(Config, UserId),
+    {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid1, ServerPid1, {user, UserId}} = start_gs_connection(Config, Cookie1),
     {ClientPid2, ServerPid2, {user, UserId}} = start_gs_connection(Config, Cookie2),
 
-    simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
+    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
 
-    {Session3, Cookie3} = log_in(Config, UserId),
+    {ok, {Session3, Cookie3}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid3, ServerPid3, {user, UserId}} = start_gs_connection(Config, Cookie3),
 
     ?assert(compare_user_sessions(Config, UserId, [Session1, Session2, Session3])),
@@ -222,13 +232,13 @@ cleanup_of_expired_sessions_upon_other_session_expiry(Config) ->
     ?assert(is_process_alive(ClientPid2)),
     ?assert(is_process_alive(ClientPid3)),
 
-    simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
+    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
 
     % The only session that is still valid, it should not be cleared
-    {Session4, Cookie4} = log_in(Config, UserId),
+    {ok, {Session4, Cookie4}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid4, ServerPid4, {user, UserId}} = start_gs_connection(Config, Cookie4),
 
-    {_ClientPid5, _ServerPid5, nobody} = start_gs_connection(Config, Cookie3),
+    ?assertMatch(?ERROR_UNAUTHORIZED, start_gs_connection(Config, Cookie3)),
 
     ?assert(compare_user_sessions(Config, UserId, [Session4])),
     ?assert(compare_connections_per_user(Config, UserId, [ServerPid4])),
@@ -246,14 +256,14 @@ cleanup_of_expired_sessions_upon_other_session_expiry(Config) ->
 
 cleanup_of_expired_sessions_upon_other_session_delete(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
-    {Session1, Cookie1} = log_in(Config, UserId),
-    {Session2, Cookie2} = log_in(Config, UserId),
+    {ok, {Session1, Cookie1}} = oz_test_utils:log_in(Config, UserId),
+    {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid1, ServerPid1, {user, UserId}} = start_gs_connection(Config, Cookie1),
     {ClientPid2, ServerPid2, {user, UserId}} = start_gs_connection(Config, Cookie2),
 
-    simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
+    oz_test_utils:simulate_time_passing(Config, get_gui_config(Config, session_cookie_ttl) + 1),
 
-    {Session3, Cookie3} = log_in(Config, UserId),
+    {ok, {Session3, Cookie3}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid3, ServerPid3, {user, UserId}} = start_gs_connection(Config, Cookie3),
 
     ?assert(compare_user_sessions(Config, UserId, [Session1, Session2, Session3])),
@@ -266,7 +276,7 @@ cleanup_of_expired_sessions_upon_other_session_delete(Config) ->
     ?assert(is_process_alive(ClientPid3)),
 
     % The only session that is still valid, it should not be cleared
-    {Session4, Cookie4} = log_in(Config, UserId),
+    {ok, {Session4, Cookie4}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid4, ServerPid4, {user, UserId}} = start_gs_connection(Config, Cookie4),
 
     oz_test_utils:log_out(Config, Cookie3),
@@ -285,6 +295,261 @@ cleanup_of_expired_sessions_upon_other_session_delete(Config) ->
     ok.
 
 
+create_gui_macaroons(Config) ->
+    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, {Session1, Cookie1}} = oz_test_utils:log_in(Config, UserId),
+    {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, UserId),
+
+    ?assertMatch({error, not_found}, oz_test_utils:call_oz(
+        Config, session, acquire_gui_macaroon, [<<"bad-session">>, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    )),
+    {ok, {Macaroon1, _}} = ?assertMatch({ok, {_, _}}, oz_test_utils:call_oz(
+        Config, session, acquire_gui_macaroon, [Session1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    )),
+    {ok, {Macaroon2, _}} = ?assertMatch({ok, {_, _}}, oz_test_utils:call_oz(
+        Config, session, acquire_gui_macaroon, [Session2, ?ONEPROVIDER, <<"1123123">>]
+    )),
+
+    ?assertMatch({ok, UserId, Session1}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    )),
+    ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    )),
+    ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEPROVIDER, ?ONEZONE_SERVICE_ID]
+    )),
+    ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEPROVIDER, <<"1123123">>]
+    )),
+
+    ?assertMatch({ok, UserId, Session2}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEPROVIDER, <<"1123123">>]
+    )),
+    ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEPROVIDER, <<"zxvcsdgadg">>]
+    )),
+
+    oz_test_utils:log_out(Config, Cookie1),
+    ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    )),
+    ?assertMatch({error, not_found}, oz_test_utils:call_oz(
+        Config, session, acquire_gui_macaroon, [Session1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    )),
+    ?assertMatch({ok, UserId, Session2}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEPROVIDER, <<"1123123">>]
+    )),
+
+    oz_test_utils:log_out(Config, Cookie2),
+    ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    )),
+    ?assertMatch({error, not_found}, oz_test_utils:call_oz(
+        Config, session, acquire_gui_macaroon, [Session2, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    )),
+    ok.
+
+
+create_gui_macaroons_via_endpoint(Config) ->
+    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, {Session, Cookie}} = oz_test_utils:log_in(Config, UserId),
+
+    {ok, Token1} = ?assertMatch(
+        {ok, _},
+        oz_test_utils:request_gui_token_endpoint(Config, Cookie, ?ONEZONE, ?ONEZONE_CLUSTER_ID)
+    ),
+    {ok, Macaroon1} = onedata_macaroons:deserialize(Token1),
+    ?assertMatch({ok, UserId, Session}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEZONE, ?ONEZONE_CLUSTER_ID]
+    )),
+    % GuiSessionId can be undefined in case the request comes via other interface (REST, GS)
+    ?assertMatch({ok, UserId, Session}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEZONE, ?ONEZONE_CLUSTER_ID]
+    )),
+
+    % The user will belong to the cluster as the provider admin
+    {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, UserId, <<"provider">>),
+    ClusterId = oz_test_utils:get_provider_cluster(Config, ProviderId),
+    % acquire_gui_token takes ClusterId
+    % verify_gui_macaroon takes ProviderId
+
+    {ok, Token2} = ?assertMatch(
+        {ok, _},
+        oz_test_utils:request_gui_token_endpoint(Config, Cookie, ?ONEPROVIDER, ClusterId)
+    ),
+    {ok, Macaroon2} = onedata_macaroons:deserialize(Token2),
+    % GuiSessionId can be undefined in case the request comes via other interface (REST, GS)
+    ?assertMatch({ok, UserId, Session}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEPROVIDER, ProviderId]
+    )),
+
+    ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    )),
+    ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    )),
+    ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEPROVIDER, ProviderId]
+    )),
+
+    % A user not belonging to the provider/cluster cannot generate GUI tokens for it
+    {ok, User2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, User2),
+    ?assertMatch(
+        ?ERROR_FORBIDDEN, oz_test_utils:request_gui_token_endpoint(Config, Cookie2, ?ONEPROVIDER, ClusterId)
+    ),
+
+    % But after becoming an effective member, he can
+    {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(User2), <<"space">>),
+    oz_test_utils:support_space(Config, ProviderId, SpaceId),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    {ok, Token3} = ?assertMatch(
+        {ok, _},
+        oz_test_utils:request_gui_token_endpoint(Config, Cookie2, ?ONEPROVIDER, ClusterId)
+    ),
+    {ok, Macaroon3} = onedata_macaroons:deserialize(Token3),
+    ?assertMatch({ok, User2, Session2}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon3, ?ONEPROVIDER, ProviderId]
+    )),
+
+    % Tokens can be generated only for existing clusters
+    ?assertMatch(
+        ?ERROR_MALFORMED_DATA, oz_test_utils:request_gui_token_endpoint(Config, Cookie2, ?ONEPROVIDER, <<"bad-cluster">>)
+    ),
+
+    % Make sure provider gui tokens are properly accepted in REST
+    {ok, _, _, UserData} = ?assertMatch({ok, 200, _, _}, http_client:get(
+        ?URL(Config, [<<"/user">>]),
+        #{
+            <<"Subject-Token">> => Token3,
+            <<"Audience-Token">> => ProviderMacaroon
+        },
+        <<"">>,
+        [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
+    )),
+    ?assertMatch(#{<<"userId">> := User2}, json_utils:decode(UserData)),
+    ok.
+
+
+expiration_of_gui_macaroons(Config) ->
+    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, {Session1, _Cookie1}} = oz_test_utils:log_in(Config, UserId),
+    {ok, {Session2, _Cookie2}} = oz_test_utils:log_in(Config, UserId),
+
+    {ok, {Macaroon1, Expires1}} = ?assertMatch({ok, {_, _}}, oz_test_utils:call_oz(
+        Config, session, acquire_gui_macaroon, [Session1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    )),
+    oz_test_utils:simulate_time_passing(Config, 10),
+    {ok, {Macaroon2, _}} = ?assertMatch({ok, {_, _}}, oz_test_utils:call_oz(
+        Config, session, acquire_gui_macaroon, [Session2, ?ONEPROVIDER, <<"1123123">>]
+    )),
+
+    ?assertMatch({ok, UserId, Session1}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    )),
+    ?assertMatch({ok, UserId, Session2}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEPROVIDER, <<"1123123">>]
+    )),
+
+    wait_for_expiration(Config, Expires1),
+    ?assertMatch(?ERROR_MACAROON_EXPIRED, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    )),
+    ?assertMatch({ok, UserId, Session2}, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEPROVIDER, <<"1123123">>]
+    )),
+
+    oz_test_utils:simulate_time_passing(Config, 10),
+    ?assertMatch(?ERROR_MACAROON_EXPIRED, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    )),
+    ?assertMatch(?ERROR_MACAROON_EXPIRED, oz_test_utils:call_oz(
+        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEPROVIDER, <<"1123123">>]
+    )).
+
+
+reuse_or_refresh_gui_macaroons(Config) ->
+    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, {Session1, _Cookie1}} = oz_test_utils:log_in(Config, UserId),
+    {ok, {Macaroon, Expires}} = oz_test_utils:call_oz(
+        Config, session, acquire_gui_macaroon, [Session1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    ),
+    % The macaroon for the same service should be reused if possible
+    ?assertMatch({ok, {Macaroon, Expires}}, oz_test_utils:call_oz(
+        Config, session, acquire_gui_macaroon, [Session1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    )),
+    % But after a certain point in time, it should be refreshed
+    wait_for_refresh_threshold(Config, Expires),
+    {ok, {NewMacaroon, _}} = oz_test_utils:call_oz(
+        Config, session, acquire_gui_macaroon, [Session1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    ),
+    ?assertNotMatch(NewMacaroon, Macaroon),
+
+    % Make sure that expiration threshold is not longer than the origin macaroon TTL
+    {ok, {Macaroon2, Expires2}} = oz_test_utils:call_oz(
+        Config, session, acquire_gui_macaroon, [Session1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    ),
+
+    wait_for_expiration(Config, Expires2),
+    {ok, {NewMacaroon2, _}} = oz_test_utils:call_oz(
+        Config, session, acquire_gui_macaroon, [Session1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    ),
+    ?assertNotMatch(NewMacaroon2, Macaroon2),
+
+    ok.
+
+
+cleanup_of_gui_macaroons(Config) ->
+    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, {Session1, Cookie1}} = oz_test_utils:log_in(Config, UserId),
+    {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, UserId),
+
+    {ok, {Macaroon1, _}} = oz_test_utils:call_oz(
+        Config, session, acquire_gui_macaroon, [Session1, ?ONEZONE, ?ONEZONE_SERVICE_ID]
+    ),
+    {ok, {Macaroon2, _}} = oz_test_utils:call_oz(
+        Config, session, acquire_gui_macaroon, [Session1, ?ONEPROVIDER, <<"1123123">>]
+    ),
+    {ok, {Macaroon3, _}} = oz_test_utils:call_oz(
+        Config, session, acquire_gui_macaroon, [Session2, ?ONEPROVIDER, <<"sdafadsf">>]
+    ),
+
+    ?assertMatch({ok, _, _}, oz_test_utils:call_oz(
+        Config, volatile_macaroon, get, [macaroon:identifier(Macaroon1)])
+    ),
+    ?assertMatch({ok, _, _}, oz_test_utils:call_oz(
+        Config, volatile_macaroon, get, [macaroon:identifier(Macaroon2)])
+    ),
+    ?assertMatch({ok, _, _}, oz_test_utils:call_oz(
+        Config, volatile_macaroon, get, [macaroon:identifier(Macaroon3)])
+    ),
+
+    oz_test_utils:log_out(Config, Cookie1),
+    ?assertMatch({error, not_found}, oz_test_utils:call_oz(
+        Config, volatile_macaroon, get, [macaroon:identifier(Macaroon1)])
+    ),
+    ?assertMatch({error, not_found}, oz_test_utils:call_oz(
+        Config, volatile_macaroon, get, [macaroon:identifier(Macaroon2)])
+    ),
+    ?assertMatch({ok, _, _}, oz_test_utils:call_oz(
+        Config, volatile_macaroon, get, [macaroon:identifier(Macaroon3)])
+    ),
+
+    oz_test_utils:log_out(Config, Cookie2),
+    ?assertMatch({error, not_found}, oz_test_utils:call_oz(
+        Config, volatile_macaroon, get, [macaroon:identifier(Macaroon1)])
+    ),
+    ?assertMatch({error, not_found}, oz_test_utils:call_oz(
+        Config, volatile_macaroon, get, [macaroon:identifier(Macaroon2)])
+    ),
+    ?assertMatch({error, not_found}, oz_test_utils:call_oz(
+        Config, volatile_macaroon, get, [macaroon:identifier(Macaroon3)])
+    ),
+    ok.
+
+
 %%%===================================================================
 %%% Setup/Teardown functions
 %%%===================================================================
@@ -292,8 +557,9 @@ cleanup_of_expired_sessions_upon_other_session_delete(Config) ->
 -spec init_per_suite(config()) -> config().
 init_per_suite(Config) ->
     ssl:start(),
+    hackney:start(),
     Posthook = fun(NewConfig) ->
-        mock_time(NewConfig),
+        oz_test_utils:mock_time(NewConfig),
         mock_user_connected_callback(NewConfig),
         NewConfig
     end,
@@ -301,30 +567,11 @@ init_per_suite(Config) ->
 
 
 end_per_suite(Config) ->
+    hackney:stop(),
     ssl:stop(),
-    unmock_time(Config),
+    oz_test_utils:unmock_time(Config),
     unmock_user_connected_callback(Config),
     ok.
-
-
-simulate_time_passing(Config, Seconds) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    CurrentTime = rpc:call(hd(Nodes), application, get_env, [?APP_NAME, mocked_time, ?STARTING_TIMESTAMP]),
-    rpc:multicall(Nodes, application, set_env, [?APP_NAME, mocked_time, CurrentTime + Seconds]).
-
-
-mock_time(Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    simulate_time_passing(Config, 0),
-    ok = test_utils:mock_new(Nodes, time_utils, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, time_utils, cluster_time_seconds, fun() ->
-        application:get_env(?APP_NAME, mocked_time, ?STARTING_TIMESTAMP)
-    end).
-
-
-unmock_time(Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, time_utils).
 
 
 mock_user_connected_callback(Config) ->
@@ -332,7 +579,7 @@ mock_user_connected_callback(Config) ->
     ok = test_utils:mock_new(Nodes, gs_logic_plugin, [passthrough]),
     ok = test_utils:mock_expect(Nodes, gs_logic_plugin, client_connected,
         fun(Client, SessionId, ConnectionRef) ->
-            {ok, Pid} = application:get_env(?APP_NAME, mocked_pid),
+            Pid = oz_worker:get_env(mocked_pid),
             Pid ! {client_connected, ConnectionRef},
             meck:passthrough([Client, SessionId, ConnectionRef])
         end).
@@ -343,39 +590,38 @@ unmock_user_connected_callback(Config) ->
     test_utils:mock_unload(Nodes, gs_logic_plugin).
 
 
-start_gs_connection(Config, SessionId) ->
-    % Prevent exiting GS connections from killing the test master
-    process_flag(trap_exit, true),
-    Nodes = ?config(oz_worker_nodes, Config),
-    rpc:multicall(Nodes, application, set_env, [?APP_NAME, mocked_pid, self()]),
-    {ok, ClientPid, #gs_resp_handshake{identity = Identity}} = gs_client:start_link(
-        oz_test_utils:get_gs_ws_url(Config),
-        {cookie, {?SESSION_COOKIE_KEY, SessionId}},
-        oz_test_utils:get_gs_supported_proto_versions(Config),
-        fun(_) -> ok end,
-        [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
-    ),
-    ServerPid = receive
-        {client_connected, ConnectionRef} ->
-            ConnectionRef
-    after 5000 ->
-            exit(timeout)
-    end,
-    {ClientPid, ServerPid, Identity}.
-
-
-log_in(Config, UserId) ->
-    {ok, Cookie} = oz_test_utils:log_in(Config, UserId),
-    SessionId = rpc:call(random_node(Config), new_gui_session, get_session_id, [Cookie]),
-    {SessionId, Cookie}.
+start_gs_connection(Config, Cookie) ->
+    case oz_test_utils:request_gui_token_endpoint(Config, Cookie) of
+        {error, _} = Error ->
+            Error;
+        {ok, GuiToken} ->
+            % Prevent exiting GS connections from killing the test master
+            process_flag(trap_exit, true),
+            Nodes = ?config(oz_worker_nodes, Config),
+            rpc:multicall(Nodes, oz_worker, set_env, [mocked_pid, self()]),
+            {ok, ClientPid, #gs_resp_handshake{identity = Identity}} = gs_client:start_link(
+                oz_test_utils:graph_sync_url(Config, gui),
+                {urlToken, GuiToken},
+                oz_test_utils:get_gs_supported_proto_versions(Config),
+                fun(_) -> ok end,
+                [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
+            ),
+            ServerPid = receive
+                {client_connected, ConnectionRef} ->
+                    ConnectionRef
+            after 5000 ->
+                    exit(timeout)
+            end,
+            {ClientPid, ServerPid, Identity}
+    end.
 
 
 validate_session(Config, Cookie) ->
     MockedReq = #{
         resp_headers => #{},
-        headers => #{<<"cookie">> => <<?SESSION_COOKIE_KEY/binary, "=", Cookie/binary>>}
+        headers => #{<<"cookie">> => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>}
     },
-    rpc:call(random_node(Config), new_gui_session, validate, [MockedReq]).
+    rpc:call(random_node(Config), gui_session, validate, [MockedReq]).
 
 
 compare_user_sessions(Config, UserId, Expected) ->
@@ -431,5 +677,21 @@ random_node(Config) ->
 
 
 get_gui_config(Config, EnvName) ->
-    {ok, Val} = rpc:call(random_node(Config), application, get_env, [gui, EnvName]),
+    {ok, Val} = oz_test_utils:call_oz(Config, application, get_env, [gui, EnvName]),
     Val.
+
+
+wait_for_refresh_threshold(Config, Expires) ->
+    oz_test_utils:simulate_time_passing(Config, 1),
+    case oz_test_utils:call_oz(Config, macaroon_logic, should_refresh_gui_macaroon, [Expires]) of
+        true -> ok;
+        false -> wait_for_refresh_threshold(Config, Expires)
+    end.
+
+
+wait_for_expiration(Config, Expires) ->
+    CurrentTime = oz_test_utils:get_mocked_time(Config),
+    case CurrentTime > Expires of
+        true -> ok;
+        false -> oz_test_utils:simulate_time_passing(Config, Expires - CurrentTime + 1)
+    end.

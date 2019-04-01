@@ -15,7 +15,7 @@
 
 -behaviour(dynamic_page_behaviour).
 
--include("registered_names.hrl").
+-include("http/codes.hrl").
 -include("entity_logic.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -30,11 +30,11 @@
 %% {@link dynamic_page_behaviour} callback handle/2.
 %% @end
 %%--------------------------------------------------------------------
--spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
+-spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"GET">>, Req) ->
     case oz_worker:get_env(dev_mode, false) of
         false ->
-            cowboy_req:reply(404, Req);
+            cowboy_req:reply(?HTTP_404_NOT_FOUND, Req);
         true ->
             {ok, UserIds} = user_logic:list(?ROOT),
             Buttons = lists:map(
@@ -56,5 +56,5 @@ handle(<<"GET">>, Req) ->
 </body>
 </html>
     ", [ButtonsBin]),
-            cowboy_req:reply(200, #{}, Body, Req)
+            cowboy_req:reply(?HTTP_200_OK, #{}, Body, Req)
     end.

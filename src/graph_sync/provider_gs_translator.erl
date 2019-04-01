@@ -223,15 +223,13 @@ translate_resource(_, #gri{type = od_share, aspect = instance, scope = private},
         <<"rootFileId">> => RootFileId
     };
 
-translate_resource(_, #gri{type = od_share, id = ShareId, aspect = instance, scope = public}, ShareData) ->
+translate_resource(_, #gri{type = od_share, aspect = instance, scope = public}, ShareData) ->
     #{
-        <<"name">> := Name,
-        <<"publicUrl">> := PublicUrl, <<"spaceId">> := SpaceId,
+        <<"name">> := Name, <<"publicUrl">> := PublicUrl,
         <<"rootFileId">> := RootFileId, <<"handleId">> := HandleId
     } = ShareData,
     #{
-        <<"shareId">> => ShareId, <<"name">> => Name,
-        <<"publicUrl">> => PublicUrl, <<"spaceId">> => SpaceId,
+        <<"name">> => Name, <<"publicUrl">> => PublicUrl,
         <<"rootFileId">> => RootFileId, <<"handleId">> => HandleId
     };
 
@@ -244,6 +242,7 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         admin_email = AdminEmail,
         latitude = Latitude,
         longitude = Longitude,
+        cluster = Cluster,
 
         spaces = Spaces
     } = Provider,
@@ -259,6 +258,7 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         <<"longitude">> => Longitude,
 
         <<"online">> => provider_connection:is_online(Id),
+        <<"cluster">> => Cluster,
 
         <<"spaces">> => Spaces,
         <<"effectiveUsers">> => entity_graph:get_relations(effective, bottom_up, od_user, Provider),
@@ -268,16 +268,16 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
     };
 
 
-translate_resource(_, #gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected}, ProviderData) ->
+translate_resource(_, #gri{type = od_provider, aspect = instance, scope = protected}, ProviderData) ->
     #{
         <<"name">> := Name, <<"domain">> := Domain,
         <<"latitude">> := Latitude, <<"longitude">> := Longitude,
-        <<"online">> := Online
+        <<"online">> := Online, <<"cluster">> := Cluster
     } = ProviderData,
     #{
         <<"name">> => Name, <<"domain">> => Domain,
         <<"latitude">> => Latitude, <<"longitude">> => Longitude,
-        <<"online">> => Online
+        <<"online">> => Online, <<"cluster">> => Cluster
     };
 
 translate_resource(_, #gri{type = od_provider, aspect = domain_config}, Data) ->

@@ -12,7 +12,7 @@
 %%%--------------------------------------------------------------------
 -module(provider_routes).
 
--include("rest.hrl").
+-include("http/rest.hrl").
 
 -export([routes/0]).
 
@@ -39,17 +39,6 @@ routes() -> [
     {<<"/providers">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_provider, id = undefined, aspect = instance}
-    }},
-    {<<"/providers/dev">>, #rest_req{
-        method = 'POST',
-        b_gri = #b_gri{type = od_provider, aspect = instance_dev}
-    }},
-    %% Create provider registration token
-    %% This operation requires one of the following privileges:
-    %% - oz_providers_invite
-    {<<"/providers/token">>, #rest_req{
-        method = 'POST',
-        b_gri = #b_gri{type = od_provider, id = undefined, aspect = provider_registration_token}
     }},
     %% Get provider details
     %% This operation requires one of the following privileges:
@@ -111,7 +100,7 @@ routes() -> [
         method = 'GET',
         b_gri = #b_gri{type = od_provider, id = ?BINDING(id), aspect = {eff_group_membership, ?BINDING(gid)}}
     }},
-    %% List spaces supported by provider
+    %% List provider's supported spaces
     %% This operation requires one of the following privileges:
     %% - oz_providers_list_relationships
     {<<"/providers/:id/spaces">>, #rest_req{
@@ -126,7 +115,14 @@ routes() -> [
         b_gri = #b_gri{type = od_space, id = ?BINDING(sid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_PROVIDER(?BINDING(id))
     }},
-    %% Get provider details
+    %% Get provider's domain config
+    %% This operation requires one of the following privileges:
+    %% - oz_providers_view
+    {<<"/providers/:id/domain_config">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_provider, id = ?BINDING(id), aspect = domain_config}
+    }},
+    %% Get current provider details
     %% This operation does not require any specific privileges.
     {<<"/provider">>, #rest_req{
         method = 'GET',
@@ -144,7 +140,7 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_provider, id = ?CLIENT_ID, aspect = instance}
     }},
-    %% List spaces at provider
+    %% List current provider's supported spaces
     %% This operation does not require any specific privileges.
     {<<"/provider/spaces">>, #rest_req{
         method = 'GET',
@@ -204,5 +200,12 @@ routes() -> [
     {<<"/provider/public/verify_provider_identity">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_provider, id = undefined, aspect = verify_provider_identity}
+    }},
+    %% Get current provider's domain config
+    %% This operation requires one of the following privileges:
+    %% - oz_providers_view
+    {<<"/provider/domain_config">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_provider, id = ?CLIENT_ID, aspect = domain_config}
     }}
 ].

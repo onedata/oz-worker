@@ -37,7 +37,7 @@
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(PLUGINS_DIR, begin {ok, __Path} = oz_worker:get_env(plugins_directory), __Path end).
+-define(PLUGINS_DIR, oz_worker:get_env(plugins_directory)).
 -define(INCLUDES_DIR, filename:join(code:lib_dir(?APP_NAME), "include")).
 -define(COMPILE_OPTS, [return_errors, {i, ?INCLUDES_DIR}]).
 -define(PLUGINS_KEY, onezone_plugins).
@@ -65,7 +65,7 @@ get_plugins(Type) ->
 %% validation, if possible.
 %% @end
 %%--------------------------------------------------------------------
--spec init() -> ok.
+-spec init() -> boolean().
 init() ->
     PluginsDir = ?PLUGINS_DIR,
     PluginFiles = case file:list_dir(PluginsDir) of
@@ -82,20 +82,23 @@ init() ->
             end,
             ErlFiles
     end,
-    Plugins = lists:filtermap(fun(Plugin) ->
+
+    ValidationResults = lists:map(fun(Plugin) ->
         try
             {ok, Module} = compile:file(filename:join(PluginsDir, Plugin), ?COMPILE_OPTS),
             code:purge(Module),
             {module, Module} = code:load_file(Module),
             validate_plugin(Module),
             ?info("  -> ~p: successfully loaded", [Module]),
-            {true, Module}  
+            {ok, Module}
         catch Type:Reason ->
             ?error_stacktrace("Cannot load ~s plugin due to ~p:~p", [Plugin, Type, Reason]),
-            false
+            error
         end
     end, PluginFiles),
-    simple_cache:put(?PLUGINS_KEY, Plugins).
+
+    simple_cache:put(?PLUGINS_KEY, [Plugin || {ok, Plugin} <- ValidationResults]),
+    lists:all(fun(Res) -> Res =/= error end, ValidationResults).
 
 %%%===================================================================
 %%% Internal functions

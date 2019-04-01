@@ -12,7 +12,7 @@
 
 -include("registered_names.hrl").
 -include("api_test_utils.hrl").
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
@@ -35,7 +35,8 @@
     create_basic_space_env/2,
     create_basic_doi_hservice_env/2,
     create_basic_handle_env/2,
-    create_basic_harvester_env/2
+    create_basic_harvester_env/2,
+    create_basic_cluster_env/2
 ]).
 -export([
     create_eff_parent_groups_env/1,
@@ -44,11 +45,12 @@
     create_provider_eff_users_env/1,
     create_hservice_eff_users_env/1,
     create_handle_eff_users_env/1,
+    create_harvester_eff_users_env/1,
+    create_cluster_eff_users_env/1,
     create_eff_spaces_env/1,
     create_eff_providers_env/1,
     create_eff_handle_services_env/1,
     create_eff_handles_env/1,
-    create_harvester_eff_users_env/1,
     create_eff_harvesters_env/1
 ]).
 
@@ -702,6 +704,39 @@ create_basic_harvester_env(Config, Privs) ->
     {Harvester, U1, U2}.
 
 
+create_basic_cluster_env(Config, Privs) when not is_list(Privs) ->
+    create_basic_cluster_env(Config, [Privs]);
+create_basic_cluster_env(Config, Privs) ->
+    %% Create environment with the following relations:
+    %%
+    %%                  Cluster
+    %%                 /     \
+    %%                /       \
+    %%       [~privileges]  [privileges]
+    %%              /           \
+    %%           User1         User2
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+
+    AllClusterPrivs = privileges:cluster_privileges(),
+
+    {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
+        Config, U1, ?PROVIDER_NAME1
+    ),
+    Cluster = oz_test_utils:get_provider_cluster(Config, ProviderId),
+
+    oz_test_utils:cluster_set_user_privileges(
+        Config, Cluster, U1, [], Privs
+    ),
+    {ok, U2} = oz_test_utils:cluster_add_user(Config, Cluster, U2),
+    oz_test_utils:cluster_set_user_privileges(Config, Cluster, U2, Privs, AllClusterPrivs -- Privs),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {Cluster, U1, U2, {ProviderId, Macaroon}}.
+
+
 create_eff_parent_groups_env(Config) ->
     %% Create environment with the following relations:
     %%
@@ -1068,6 +1103,60 @@ create_harvester_eff_users_env(Config) ->
     {H1, Groups, Users, {U1, U2, NonAdmin}}.
 
 
+create_cluster_eff_users_env(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%                  Cluster
+    %%                 /  |  \
+    %%                /   |   \
+    %%     [~cluster_view]  |  [cluster_view]
+    %%           /        |        \
+    %%        User1     Group1    User2
+    %%                 /      \
+    %%                /        \
+    %%             Group6     Group2
+    %%              /         /    \
+    %%           User6       /     User3
+    %%                    Group3
+    %%                    /    \
+    %%                   /      \
+    %%                Group4  Group5
+    %%                 /          \
+    %%               User4      User5
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {
+        [{G1, _} | _] = Groups, Users
+    } = create_eff_child_groups_env(Config),
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    AllClusterPrivs = privileges:cluster_privileges(),
+
+
+    {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
+        Config, U1, ?PROVIDER_NAME1
+    ),
+    C1 = oz_test_utils:get_provider_cluster(Config, ProviderId),
+
+    oz_test_utils:cluster_set_user_privileges(Config, C1, U1, [],
+        [?CLUSTER_VIEW]
+    ),
+    {ok, U2} = oz_test_utils:cluster_add_user(Config, C1, U2),
+    oz_test_utils:cluster_set_user_privileges(Config, C1, U2,
+        [?CLUSTER_VIEW], AllClusterPrivs -- [?CLUSTER_VIEW]
+    ),
+    {ok, G1} = oz_test_utils:cluster_add_group(Config, C1, G1),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {C1, Groups, Users, {U1, U2, NonAdmin}, {ProviderId, Macaroon}}.
+
+
 create_eff_spaces_env(Config) ->
     %% Create environment with the following relations:
     %%
@@ -1120,7 +1209,7 @@ create_eff_providers_env(Config) ->
     %%  Space4   Space5
     %%      \     /
     %%       \   /
-    %%      Group5    Space3 ----- Prov2
+    %%      Group5    Space3 ----- Provider2
     %%          \      /             |
     %%           \    /              |
     %%           Group4           Space2
@@ -1150,7 +1239,7 @@ create_eff_providers_env(Config) ->
                 Config, ProvDetails#{<<"subdomainDelegation">> => false}
             ),
             {ProvId, maps:remove(<<"adminEmail">>, ProvDetails#{
-                <<"name">> => ProviderName,
+                <<"cluster">> => oz_test_utils:get_provider_cluster(Config, ProvId),
                 <<"online">> => false
             })}
         end, lists:seq(1, 4)

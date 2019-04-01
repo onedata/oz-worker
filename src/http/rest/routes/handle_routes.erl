@@ -12,7 +12,7 @@
 %%%--------------------------------------------------------------------
 -module(handle_routes).
 
--include("rest.hrl").
+-include("http/rest.hrl").
 
 -export([routes/0]).
 

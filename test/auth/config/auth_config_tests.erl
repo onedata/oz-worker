@@ -174,7 +174,7 @@ get_saml_sp_config() ->
         sign_requests = true,
         want_assertions_signed = true
     },
-    ?assertEqual(ExpectedSPConfig, auth_config:get_saml_sp_config()),
+    ?assertEqual({ok, ExpectedSPConfig}, auth_config:get_saml_sp_config()),
 
     % Check behavior when SAML is disabled
     modify_config_mock(fun(MockConfig = #{samlConfig := SamlConfig}) ->
@@ -201,7 +201,7 @@ idp_exists() ->
 
 get_saml_cert_pem() ->
     % If rollover cert is given, it should be returned
-    ?assertEqual(?DUMMY_SAML_ROLLOVER_CERT, auth_config:get_saml_cert_pem()),
+    ?assertEqual({ok, ?DUMMY_SAML_ROLLOVER_CERT}, auth_config:get_saml_cert_pem()),
 
     % Check behavior when rollover cert is not given
     modify_config_mock(fun(MockConfig = #{samlConfig := SamlConfig = #{spConfig := SpConfig}}) ->
@@ -211,7 +211,7 @@ get_saml_cert_pem() ->
             }
         }, MockConfig)
     end),
-    ?assertMatch(?DUMMY_SAML_CERT, auth_config:get_saml_cert_pem()),
+    ?assertMatch({ok, ?DUMMY_SAML_CERT}, auth_config:get_saml_cert_pem()),
 
     % Check behavior when no valid cert is given
     modify_config_mock(fun(MockConfig = #{samlConfig := SamlConfig = #{spConfig := SpConfig}}) ->
@@ -255,7 +255,8 @@ get_supported_idps_in_gui_format() ->
     Entry = fun(IdP, DisplayName, IconPath, IconBgColor) -> #{
         <<"id">> => IdP,
         <<"displayName">> => DisplayName,
-        <<"iconPath">> => IconPath,
+        % Every icon path is prefixed with /ozw/onezone - the Onezone GUI root.
+        <<"iconPath">> => <<"/ozw/onezone", IconPath/binary>>,
         <<"iconBackgroundColor">> => IconBgColor
     } end,
     OnepanelEntry = Entry(onepanel, <<"Onepanel account">>, <<"/assets/images/auth-providers/key.svg">>, <<"#4BD187">>),

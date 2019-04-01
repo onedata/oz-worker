@@ -175,7 +175,7 @@ get_user_info(IdP, AccessToken) ->
 
     Headers1 = case Parameters2 of
         Map when map_size(Map) == 0 -> #{};
-        _ -> #{<<"Content-Type">> => <<"application/x-www-form-urlencoded">>}
+        _ -> #{<<"content-type">> => <<"application/x-www-form-urlencoded">>}
     end,
     Headers2 = headers_append_access_token(Headers1, IdP, AccessToken),
     Headers3 = headers_append_custom(Headers2, IdP, userInfo),
@@ -209,7 +209,7 @@ acquire_access_token(IdP, Parameters) ->
     Parameters3 = parameters_append_custom(Parameters2, IdP, accessToken),
 
     Headers1 = #{
-        <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
+        <<"content-type">> => <<"application/x-www-form-urlencoded">>
     },
     Headers2 = headers_append_auth(Headers1, IdP),
     Headers3 = headers_append_custom(Headers2, IdP, accessToken),
@@ -220,7 +220,7 @@ acquire_access_token(IdP, Parameters) ->
         Method, 200, AccessTokenEndpoint, Headers3, Parameters3
     ),
 
-    case maps:get(<<"Content-Type">>, ResponseHeaders, undefined) of
+    case maps:get(<<"content-type">>, ResponseHeaders, undefined) of
         <<"application/x-www-form-urlencoded", _/binary>> ->
             Response = cow_qs:parse_qs(ResponseBinary),
             AccessToken = proplists:get_value(<<"access_token">>, Response, undefined),
@@ -331,7 +331,7 @@ headers_append_auth(Headers, IdP) ->
             ClientId = ?CFG_CLIENT_ID(IdP),
             ClientSecret = ?CFG_CLIENT_SECRET(IdP),
             B64 = base64:encode(<<ClientId/binary, ":", ClientSecret/binary>>),
-            Headers#{<<"Authorization">> => <<"Basic ", B64/binary>>};
+            Headers#{<<"authorization">> => <<"Basic ", B64/binary>>};
         urlencoded ->
             Headers
     end.
@@ -343,7 +343,7 @@ headers_append_auth(Headers, IdP) ->
 headers_append_access_token(Headers, IdP, AccessToken) ->
     case ?CFG_ACCESS_TOKEN_PASS_METHOD(IdP) of
         inAuthHeader ->
-            Headers#{<<"Authorization">> => <<"Bearer ", AccessToken/binary>>};
+            Headers#{<<"authorization">> => <<"Bearer ", AccessToken/binary>>};
         urlencoded ->
             Headers
     end.

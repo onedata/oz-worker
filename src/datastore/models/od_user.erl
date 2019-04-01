@@ -19,7 +19,7 @@
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([get_by_criterion/1]).
--export([to_string/1]).
+-export([to_string/1, print_summary/0, print_summary/1]).
 -export([entity_logic_plugin/0]).
 -export([add_session/2, remove_session/2, get_all_sessions/1]).
 
@@ -184,6 +184,57 @@ get_by_criterion({linked_account, {ProviderID, UserID}}) ->
 -spec to_string(UserId :: id()) -> binary().
 to_string(UserId) ->
     <<"user:", UserId/binary>>.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Prints all user records to the console in a nicely-formatted manner.
+%% Sorts the records in a default manner.
+%% @end
+%%--------------------------------------------------------------------
+-spec print_summary() -> ok.
+print_summary() ->
+    print_summary(name).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Prints all user records to the console in a nicely-formatted manner.
+%% Sorts the records by given attribute (specified by name or position).
+%% @end
+%%--------------------------------------------------------------------
+-spec print_summary(id | name | alias | groups | spaces | providers | pos_integer()) -> ok.
+print_summary(id) -> print_summary(1);
+print_summary(name) -> print_summary(2);
+print_summary(alias) -> print_summary(3);
+print_summary(email) -> print_summary(4);
+print_summary(groups) -> print_summary(5);
+print_summary(spaces) -> print_summary(6);
+print_summary(providers) -> print_summary(7);
+print_summary(SortPos) when is_integer(SortPos) ->
+    {ok, Users} = list(),
+    UserAttrs = lists:map(fun(#document{key = Id, value = U}) ->
+        {
+            Id,
+            U#od_user.name,
+            case U#od_user.alias of undefined -> "-"; Alias -> Alias end,
+            case U#od_user.emails of [] -> "-"; Emails -> hd(Emails) end,
+            {length(U#od_user.groups), maps:size(U#od_user.eff_groups)},
+            {length(U#od_user.spaces), maps:size(U#od_user.eff_spaces)},
+            maps:size(U#od_user.eff_providers)
+        }
+    end, Users),
+    Sorted = lists:keysort(SortPos, UserAttrs),
+    io:format("-------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("Id                                Name                 Alias           Email                          Groups (eff)   Spaces (eff)   Eff providers~n"),
+    io:format("-------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    lists:foreach(fun({Id, Name, Alias, Email, {Groups, EffGroups}, {Spaces, EffSpaces}, Providers}) ->
+        GroupsStr = str_utils:format("~B (~B)", [Groups, EffGroups]),
+        SpacesStr = str_utils:format("~B (~B)", [Spaces, EffSpaces]),
+        io:format("~-33s ~-20ts ~-15ts ~-30ts ~-14s ~-14s ~-14B~n", [
+            Id, Name, Alias, Email, GroupsStr, SpacesStr, Providers
+        ])
+    end, Sorted),
+    io:format("-------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("~B users in total~n", [length(Sorted)]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -460,6 +511,8 @@ get_record_struct(10) ->
     %   * new field - creation_time
     %   * new field - harvesters
     %   * new field - eff_harvesters
+    %   * new field - clusters
+    %   * new field - eff_clusters
     %   * the privileges are translated
     {record, [
         {name, string},
@@ -496,6 +549,7 @@ get_record_struct(10) ->
         {handle_services, [string]},
         {handles, [string]},
         {harvesters, [string]},
+        {clusters, [string]},
 
         {eff_groups, #{string => [{atom, string}]}},
         {eff_spaces, #{string => [{atom, string}]}},
@@ -503,6 +557,7 @@ get_record_struct(10) ->
         {eff_handle_services, #{string => [{atom, string}]}},
         {eff_handles, #{string => [{atom, string}]}},
         {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
 
         {creation_time, integer}, % New field
 
@@ -1155,6 +1210,7 @@ upgrade_record(9, User) ->
         handle_services = HandleServices,
         handles = Handles,
         harvesters = [],
+        clusters = [],
 
         eff_groups = EffGroups,
         eff_spaces = EffSpaces,
@@ -1162,6 +1218,7 @@ upgrade_record(9, User) ->
         eff_handle_services = EffHandleServices,
         eff_handles = EffHandles,
         eff_harvesters = #{},
+        eff_clusters = #{},
 
         creation_time = time_utils:system_time_seconds(),
 

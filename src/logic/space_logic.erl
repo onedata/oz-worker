@@ -839,7 +839,7 @@ has_eff_privilege(Space, UserId, Privilege) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec has_direct_user(SpaceOrId :: od_space:id() | #od_space{},
-    UserId :: od_space:id()) -> boolean().
+    UserId :: od_user:id()) -> boolean().
 has_direct_user(SpaceId, UserId) when is_binary(SpaceId) ->
     entity_graph:has_relation(direct, bottom_up, od_user, UserId, od_space, SpaceId);
 has_direct_user(Space, UserId) ->
@@ -852,7 +852,7 @@ has_direct_user(Space, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_user(SpaceOrId :: od_space:id() | #od_space{},
-    UserId :: od_space:id()) -> boolean().
+    UserId :: od_user:id()) -> boolean().
 has_eff_user(SpaceId, UserId) when is_binary(SpaceId) ->
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, od_space, SpaceId);
 has_eff_user(Space, UserId) ->
@@ -865,7 +865,7 @@ has_eff_user(Space, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_group(SpaceOrId :: od_space:id() | #od_space{},
-    GroupId :: od_space:id()) -> boolean().
+    GroupId :: od_group:id()) -> boolean().
 has_eff_group(SpaceId, GroupId) when is_binary(SpaceId) ->
     entity_graph:has_relation(effective, bottom_up, od_group, GroupId, od_space, SpaceId);
 has_eff_group(Space, GroupId) ->

@@ -12,7 +12,7 @@
 -module(space_misc_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -517,14 +517,14 @@ get_share_test(Config) ->
         Config, ?ROOT, ShareId, ShareName, ?ROOT_FILE_ID, S1
     ),
 
-    {ok, ZoneDomain} = oz_test_utils:get_oz_domain(Config),
-    SharePublicUrl = ?SHARE_PUBLIC_URL(ZoneDomain, ShareId),
+    OzDomain = oz_test_utils:oz_domain(Config),
+    SharePublicUrl = ?SHARE_PUBLIC_URL(OzDomain, ShareId),
 
     ExpShareDetails = #{
         <<"name">> => ShareName,
         <<"spaceId">> => S1,
         <<"rootFileId">> => ?ROOT_FILE_ID,
-        <<"handleId">> => <<"undefined">>,
+        <<"handleId">> => null,
         <<"publicUrl">> => SharePublicUrl
     },
     ApiTestSpec = #api_test_spec{
@@ -653,7 +653,7 @@ create_provider_support_token(Config) ->
     %   U2 gets the SPACE_INVITE_PROVIDER privilege
     %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
-        Config, ?SPACE_INVITE_PROVIDER
+        Config, ?SPACE_ADD_PROVIDER
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
@@ -715,6 +715,7 @@ get_provider_test(Config) ->
     ),
 
     ExpDetails = maps:remove(<<"adminEmail">>, ProviderDetails#{
+        <<"cluster">> => oz_test_utils:get_provider_cluster(Config, P1),
         <<"online">> => false
     }),
     ApiTestSpec = #api_test_spec{

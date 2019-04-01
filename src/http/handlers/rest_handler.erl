@@ -14,7 +14,7 @@
 
 -behaviour(cowboy_rest).
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -26,7 +26,8 @@
 -type bound_gri() :: #b_gri{}.
 -type bound_auth_hint() :: undefined | {
     throughUser | throughGroup | throughSpace | throughProvider |
-    throughHandleService | throughHandle | throughHarvester | asUser | asGroup | asSpace,
+    throughHandleService | throughHandle | throughHarvester | throughCluster | 
+    asUser | asGroup | asSpace,
     binding()
 }.
 
@@ -142,6 +143,7 @@ is_authorized(Req, State) ->
         authorize(Req, [
             fun auth_logic:authorize_by_basic_auth/1,
             fun auth_logic:authorize_by_macaroons/1,
+            fun auth_logic:authorize_by_oneprovider_gui_macaroon/1,
             fun auth_logic:authorize_by_access_token/1
         ])
     catch
@@ -155,8 +157,8 @@ is_authorized(Req, State) ->
     end,
 
     case Result of
+        % Always return true - authorization is checked by entity_logic later.
         {true, Client} ->
-            % Always return true - authorization is checked by entity_logic later.
             {true, Req, State#state{client = Client}};
         {error, _} = Error ->
             RestResp = error_rest_translator:response(Error),
@@ -205,6 +207,7 @@ delete_resource(Req, State) ->
 -spec rest_routes() -> [{binary(), module(), maps:map()}].
 rest_routes() ->
     AllRoutes = lists:flatten([
+        dev_utils:dev_provider_registration_route(),
         user_routes:routes(),
         group_routes:routes(),
         space_routes:routes(),
@@ -213,6 +216,7 @@ rest_routes() ->
         handle_service_routes:routes(),
         handle_routes:routes(),
         harvester_routes:routes(),
+        cluster_routes:routes(),
         zone_routes:routes()
     ]),
     % Aggregate routes that share the same path
@@ -228,8 +232,7 @@ rest_routes() ->
     % - prepend REST prefix to every route
     % - rest handler module must be added as second element to the tuples
     % - RoutesForPath will serve as Opts to rest handler init.
-    {ok, PrefixStr} = oz_worker:get_env(rest_api_prefix),
-    Prefix = str_utils:to_binary(PrefixStr),
+    Prefix = str_utils:to_binary(oz_worker:get_env(rest_api_prefix)),
     lists:map(fun({Path, RoutesForPath}) ->
         {<<Prefix/binary, Path/binary>>, ?REST_HANDLER_MODULE, RoutesForPath}
     end, AggregatedRoutes).
@@ -400,6 +403,9 @@ authorize(Req, [AuthMethod | Rest]) ->
     case AuthMethod(Req) of
         false ->
             authorize(Req, Rest);
+        {true, Client, _SessionId} ->
+            % Can be returned from auth_logic:authorize_by_oneprovider_gui_macaroon/1
+            {true, Client};
         {true, Client} ->
             {true, Client};
         {error, Error} ->

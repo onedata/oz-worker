@@ -24,13 +24,15 @@
 -export([predefined_groups_test/1, global_groups_test/1]).
 -export([automatic_space_membership_via_global_group_test/1]).
 -export([automatic_first_space_test/1]).
+-export([default_onezone_plugins_pass_validation/1]).
 
 all() ->
     ?ALL([
         predefined_groups_test,
         global_groups_test,
         automatic_space_membership_via_global_group_test,
-        automatic_first_space_test
+        automatic_first_space_test,
+        default_onezone_plugins_pass_validation
     ]).
 
 %%%===================================================================
@@ -64,13 +66,13 @@ predefined_groups_test(Config) ->
         }
     ],
     % Set the corresponding env variable on every node
-    [test_utils:set_env(N, oz_worker, predefined_groups, PredefinedGroups) || N <- Nodes],
+    test_utils:set_env(Nodes, oz_worker, predefined_groups, PredefinedGroups),
     % Call the group creation procedure. The function reads from env and
     % creates the predefined groups
     ?assertEqual(ok, oz_test_utils:call_oz(
         Config, group_logic, create_predefined_groups, []
     )),
-    % Now, lets check if the groups are present in the system and have desired
+    % Now, check if the groups are present in the system and have desired
     % privileges.
     CheckGroup = fun(ExpId, ExpName, ExpPrivileges) ->
         GroupResult = oz_test_utils:call_oz(Config, od_group, get, [ExpId]),
@@ -87,10 +89,38 @@ predefined_groups_test(Config) ->
         {ok, #document{value = #od_group{protected = Protected}}} = GroupResult,
         ?assertEqual(true, Protected)
     end,
-    AllPrivs = oz_test_utils:call_oz(Config, privileges, oz_privileges, []),
-    CheckGroup(<<"group1">>, <<"Group 1">>, AllPrivs),
+    CheckGroup(<<"group1">>, <<"Group 1">>, privileges:oz_privileges()),
     CheckGroup(<<"group2">>, <<"Group 2">>, [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES]),
     CheckGroup(<<"group3">>, <<"Group 3">>, []),
+
+    % If a predefined group already exists, but name or privileges in config changes,
+    % it should be updated
+    NewPredefinedGroups = [
+        #{
+            id => <<"group1">>,
+            name => <<"New group">>,
+            oz_privileges => [?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_SET_PRIVILEGES]
+        },
+        #{
+            id => <<"group2">>,
+            name => <<"My Unit">>,
+            oz_privileges => {privileges, oz_viewer}
+        },
+        #{
+            id => <<"group3">>,
+            name => <<"My Organization">>,
+            oz_privileges => {privileges, oz_admin}
+        }
+    ],
+    test_utils:set_env(Nodes, oz_worker, predefined_groups, NewPredefinedGroups),
+    ?assertEqual(ok, oz_test_utils:call_oz(
+        Config, group_logic, create_predefined_groups, []
+    )),
+
+    CheckGroup(<<"group1">>, <<"New group">>, [?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_SET_PRIVILEGES]),
+    CheckGroup(<<"group2">>, <<"My Unit">>, privileges:oz_viewer()),
+    CheckGroup(<<"group3">>, <<"My Organization">>, privileges:oz_admin()),
+
     ok.
 
 
@@ -272,6 +302,9 @@ automatic_first_space_test(Config) ->
     {ok, #od_space{users = Users}} = oz_test_utils:get_space(Config, SpaceId2),
     ?assert(maps:is_key(UserId2, Users)).
 
+
+default_onezone_plugins_pass_validation(Config) ->
+    ?assert(oz_test_utils:call_oz(Config, onezone_plugins, init, [])).
 
 %%%===================================================================
 %%% Setup/teardown functions
