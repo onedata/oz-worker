@@ -341,7 +341,7 @@ create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_entry
     
 create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {delete_entry, FileId}, id = HarvesterId}, data = Data}) ->
     fun(#od_harvester{plugin = Plugin, endpoint = Endpoint, indices = Indices}) ->
-        {ok, FailedIndices} = perform_entry_operation(submit_entry, Indices, ProviderId, 
+        {ok, FailedIndices} = perform_entry_operation(delete_entry, Indices, ProviderId, 
             Plugin, Endpoint, HarvesterId, FileId, Data),
         {ok, value, #{<<"failedIndices">> => FailedIndices}}
     end;
@@ -1119,7 +1119,7 @@ auth_by_privilege(UserId, HarvesterOrId, Privilege) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_indices_data([od_harvester:index_id()], od_harvester:plugin(), 
-    od_harvester:endpoint(), od_harvester:id()) -> ok.
+    od_harvester:endpoint(), od_harvester:id()) -> ok | {error, term()}.
 delete_indices_data(IndicesToRemove, Plugin, Endpoint, HarvesterId) ->
     {SuccessfulIndices, Errors} = lists:foldl(fun(IndexId, {S, E}) ->
         case Plugin:delete_index(Endpoint, HarvesterId, IndexId) of
@@ -1145,7 +1145,8 @@ delete_indices_data(IndicesToRemove, Plugin, Endpoint, HarvesterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec perform_entry_operation(Operation :: atom(), od_harvester:indices(), 
-    od_provider:id(), od_harvester:plugin(), od_harvester:endpoint(), od_harvester:id(), FileId :: binary(), Data :: map()) -> {ok, [od_harvester:index_id()]}.
+    od_provider:id(), od_harvester:plugin(), od_harvester:endpoint(), od_harvester:id(), FileId :: binary(), Data :: map()) -> 
+    {ok, [od_harvester:index_id()]}.
 perform_entry_operation(Operation, Indices, ProviderId, Plugin, Endpoint, HarvesterId, FileId, Data) ->
     #{
         <<"seq">> := Seq,

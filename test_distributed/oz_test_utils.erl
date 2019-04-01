@@ -2546,7 +2546,7 @@ mock_harvester_plugins(Config, Plugins) when is_list(Plugins) ->
         fun(Type) -> Plugins ++  meck:passthrough([Type]) end),
     Config;
 mock_harvester_plugins(Config, Plugin) ->
-    mock_harvester_plugin(Config, [Plugin]).
+    mock_harvester_plugins(Config, [Plugin]).
 
 %%--------------------------------------------------------------------
 %% @doc
