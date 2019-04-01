@@ -302,7 +302,8 @@ create_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
-    %% Check if registration token requirement can be forced
+    %% Check if registration token requirement is enforced by env variable
+    rpc:multicall(Nodes, oz_worker, set_env, [subdomain_delegation_supported, false]),
     rpc:multicall(Nodes, oz_worker, set_env, [require_token_for_provider_registration, true]),
     ApiTestSpec3 = ApiTestSpec#api_test_spec{
         data_spec = DataSpec#data_spec{

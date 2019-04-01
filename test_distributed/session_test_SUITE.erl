@@ -357,7 +357,7 @@ create_gui_macaroons_via_endpoint(Config) ->
 
     {ok, Token1} = ?assertMatch(
         {ok, _},
-        oz_test_utils:request_gui_token_endpoint(Config, Cookie, ?ONEZONE, ?ONEZONE_CLUSTER_ID)
+        oz_test_utils:call_gui_token_endpoint(Config, Cookie, ?ONEZONE, ?ONEZONE_CLUSTER_ID)
     ),
     {ok, Macaroon1} = onedata_macaroons:deserialize(Token1),
     ?assertMatch({ok, UserId, Session}, oz_test_utils:call_oz(
@@ -376,7 +376,7 @@ create_gui_macaroons_via_endpoint(Config) ->
 
     {ok, Token2} = ?assertMatch(
         {ok, _},
-        oz_test_utils:request_gui_token_endpoint(Config, Cookie, ?ONEPROVIDER, ClusterId)
+        oz_test_utils:call_gui_token_endpoint(Config, Cookie, ?ONEPROVIDER, ClusterId)
     ),
     {ok, Macaroon2} = onedata_macaroons:deserialize(Token2),
     % GuiSessionId can be undefined in case the request comes via other interface (REST, GS)
@@ -398,7 +398,7 @@ create_gui_macaroons_via_endpoint(Config) ->
     {ok, User2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, User2),
     ?assertMatch(
-        ?ERROR_FORBIDDEN, oz_test_utils:request_gui_token_endpoint(Config, Cookie2, ?ONEPROVIDER, ClusterId)
+        ?ERROR_FORBIDDEN, oz_test_utils:call_gui_token_endpoint(Config, Cookie2, ?ONEPROVIDER, ClusterId)
     ),
 
     % But after becoming an effective member, he can
@@ -407,7 +407,7 @@ create_gui_macaroons_via_endpoint(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     {ok, Token3} = ?assertMatch(
         {ok, _},
-        oz_test_utils:request_gui_token_endpoint(Config, Cookie2, ?ONEPROVIDER, ClusterId)
+        oz_test_utils:call_gui_token_endpoint(Config, Cookie2, ?ONEPROVIDER, ClusterId)
     ),
     {ok, Macaroon3} = onedata_macaroons:deserialize(Token3),
     ?assertMatch({ok, User2, Session2}, oz_test_utils:call_oz(
@@ -416,7 +416,7 @@ create_gui_macaroons_via_endpoint(Config) ->
 
     % Tokens can be generated only for existing clusters
     ?assertMatch(
-        ?ERROR_MALFORMED_DATA, oz_test_utils:request_gui_token_endpoint(Config, Cookie2, ?ONEPROVIDER, <<"bad-cluster">>)
+        ?ERROR_MALFORMED_DATA, oz_test_utils:call_gui_token_endpoint(Config, Cookie2, ?ONEPROVIDER, <<"bad-cluster">>)
     ),
 
     % Make sure provider gui tokens are properly accepted in REST
@@ -591,7 +591,7 @@ unmock_user_connected_callback(Config) ->
 
 
 start_gs_connection(Config, Cookie) ->
-    case oz_test_utils:request_gui_token_endpoint(Config, Cookie) of
+    case oz_test_utils:call_gui_token_endpoint(Config, Cookie) of
         {error, _} = Error ->
             Error;
         {ok, GuiToken} ->
