@@ -38,7 +38,7 @@
     handle_upgrade_test/1,
     dns_state_upgrade_test/1,
     token_upgrade_test/1,
-    generate_cluster_for_a_legacy_provider/1
+    generate_cluster_for_a_legacy_provider_test/1
 ]).
 
 %%%===================================================================
@@ -55,7 +55,7 @@ all() -> ?ALL([
     handle_upgrade_test,
     dns_state_upgrade_test,
     token_upgrade_test,
-    generate_cluster_for_a_legacy_provider
+    generate_cluster_for_a_legacy_provider_test
 ]).
 
 
@@ -120,7 +120,7 @@ token_upgrade_test(Config) ->
     test_record_upgrade(Config, token).
 
 
-generate_cluster_for_a_legacy_provider(Config) ->
+generate_cluster_for_a_legacy_provider_test(Config) ->
     ProviderId = datastore_utils:gen_key(),
     LegacyProviderDoc = #document{key = ProviderId, value = #od_provider{
         name = <<"dummy">>,

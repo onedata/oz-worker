@@ -87,24 +87,29 @@ oz_worker_gui_is_set_up_after_startup(Config) ->
     ?assert(static_directory_exists(Config, [<<"./ozw/">>, GuiHash])),
     ?assert(link_exists(Config, <<"./ozw/onezone">>, GuiHash)),
     ?assert(index_page_is_served(Config, OzIndexContent, <<"/">>)),
-    ?assert(index_page_is_served(Config, OzIndexContent, [<<"/ozw/">>, ?ONEZONE_SERVICE_ID, <<"/i">>])),
-    ?assert(index_page_is_served(Config, OzIndexContent, [<<"/ozw/">>, ?ONEZONE_SERVICE_ID, <<"/index.html">>])),
+    ?assert(index_page_is_served(Config, OzIndexContent, [<<"/ozw/">>, ?ONEZONE_CLUSTER_ID, <<"/i">>])),
+    ?assert(index_page_is_served(Config, OzIndexContent, [<<"/ozw/">>, ?ONEZONE_CLUSTER_ID, <<"/index.html">>])),
     ?assert(version_info_is_set(Config, ?ONEZONE_CLUSTER_ID, ?WORKER, {Release, Build, GuiHash})).
 
 oz_panel_gui_setup_works(Config) ->
-    GuiPackagePath = oz_test_utils:get_env(Config, gui_package_path),
-    {ok, GuiHash} = oz_test_utils:call_oz(Config, gui, package_hash, [GuiPackagePath]),
-    Release = oz_test_utils:call_oz(Config, oz_worker, get_version, []),
-    Build = oz_test_utils:call_oz(Config, oz_worker, get_build_version, []),
+    % Simulate cluster setup procedure performed by oz_panel
+    Release = <<"mock-release">>,
+    Build = <<"mock-build">>,
+    %{GuiHash, OzpIndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OZ_PANEL),
+    {GuiPackage, IndexContent} = oz_test_utils:create_dummy_gui_package(),
+    {ok, GuiHash} = gui:package_hash(GuiPackage),
+    oz_test_utils:copy_file_to_onezone_nodes(Config, GuiPackage),
 
-    OzIndexContent = read_content(Config, [<<"./ozw/">>, GuiHash, <<"/index.html">>]),
+    ok = oz_test_utils:call_oz(Config, gui_static, deploy_package, [?OZ_PANEL, GuiPackage]),
+    ok = oz_test_utils:call_oz(Config, cluster_logic, update_version_info, [
+        ?ROOT, ?ONEZONE_CLUSTER_ID, ?ONEPANEL, {Release, Build, GuiHash}
+    ]),
 
-    ?assert(static_directory_exists(Config, [<<"./ozw/">>, GuiHash])),
-    ?assert(link_exists(Config, <<"./ozw/onezone">>, GuiHash)),
-    ?assert(index_page_is_served(Config, OzIndexContent, <<"/">>)),
-    ?assert(index_page_is_served(Config, OzIndexContent, [<<"/ozw/">>, ?ONEZONE_SERVICE_ID, <<"/i">>])),
-    ?assert(index_page_is_served(Config, OzIndexContent, [<<"/ozw/">>, ?ONEZONE_SERVICE_ID, <<"/index.html">>])),
-    ?assert(version_info_is_set(Config, ?ONEZONE_CLUSTER_ID, ?WORKER, {Release, Build, GuiHash})).
+    ?assert(static_directory_exists(Config, [<<"./ozp/">>, GuiHash])),
+    ?assert(link_exists(Config, <<"./ozp/onezone">>, GuiHash)),
+    ?assert(index_page_is_served(Config, IndexContent, [<<"/ozp/">>, ?ONEZONE_CLUSTER_ID, <<"/i">>])),
+    ?assert(index_page_is_served(Config, IndexContent, [<<"/ozp/">>, ?ONEZONE_CLUSTER_ID, <<"/index.html">>])),
+    ?assert(version_info_is_set(Config, ?ONEZONE_CLUSTER_ID, ?ONEPANEL, {Release, Build, GuiHash})).
 
 
 empty_gui_is_linked_after_provider_registration(Config) ->
