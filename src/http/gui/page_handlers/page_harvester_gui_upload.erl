@@ -1,16 +1,16 @@
 %%%-------------------------------------------------------------------
-%%% @author Lukasz Opiola
-%%% @copyright (C) 2018 ACK CYFRONET AGH
+%%% @author Michal Stanisz
+%%% @copyright (C) 2019 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This module implements dynamic_page_behaviour and is called to handle
-%%% GUI package uploads from op_worker or op_panel services.
+%%% GUI package uploads of harvester plugin.
 %%% @end
 %%%-------------------------------------------------------------------
--module(page_gui_upload).
+-module(page_harvester_gui_upload).
 -author("Lukasz Opiola").
 
 -behaviour(dynamic_page_behaviour).
@@ -33,7 +33,7 @@
 -spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"POST">>, Req) ->
     try
-        gui_upload:handle_service_gui_upload(Req)
+        gui_upload:handle_harvester_gui_upload(Req)
     catch
         throw:Code when is_integer(Code) ->
             cowboy_req:reply(Code, Req);

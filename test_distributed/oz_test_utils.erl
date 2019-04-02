@@ -46,6 +46,7 @@
     user_get_eff_oz_privileges/2,
     user_get_groups/2,
     user_get_spaces/2,
+    user_get_eff_groups/2,
     user_get_harvesters/2,
     user_get_clusters/2,
     user_set_oz_privileges/4,
@@ -3096,9 +3097,8 @@ create_dummy_gui_package() ->
 -spec deploy_dummy_gui(Config :: term(), onedata:service()) -> {ok, GuiHash :: binary()}.
 deploy_dummy_gui(Config, Service) ->
     {GuiPackage, IndexContent} = create_dummy_gui_package(),
-    {ok, GuiHash} = gui:package_hash(GuiPackage),
     copy_file_to_onezone_nodes(Config, GuiPackage),
-    ok = call_oz(Config, gui_static, deploy_package, [
+    {ok, GuiHash} = call_oz(Config, gui_static, deploy_package, [
         Service, GuiPackage
     ]),
     {GuiHash, IndexContent}.

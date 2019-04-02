@@ -67,6 +67,7 @@ start() ->
 
     DynamicPageRoutes = [
         {"/", [<<"GET">>], page_redirect_to_oz_worker},
+        {?HARVESTER_GUI_UPLOAD_PATH, [<<"POST">>], page_harvester_gui_upload},
         {?GUI_UPLOAD_PATH, [<<"POST">>], page_gui_upload},
         {?GUI_TOKEN_PATH, [<<"POST">>], page_gui_token},
         {?GUI_ORIGIN_PATH, [<<"POST">>], page_gui_origin},

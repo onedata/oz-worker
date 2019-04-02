@@ -762,8 +762,7 @@ is_linked_to_provider(Cluster, ProviderId) ->
 set_up_oz_worker_service() ->
     ?info("Setting up Onezone worker service"),
     ok = od_cluster:ensure_onezone_cluster(),
-    {ok, GuiHash} = gui:package_hash(?GUI_PACKAGE_PATH),
-    ok = gui_static:deploy_package(?OZ_WORKER, ?GUI_PACKAGE_PATH),
+    {ok, GuiHash} = gui_static:deploy_package(?OZ_WORKER, ?GUI_PACKAGE_PATH),
     ok = update_version_info(?ROOT, ?ONEZONE_CLUSTER_ID, ?WORKER, {
         oz_worker:get_version(),
         oz_worker:get_build_version(),

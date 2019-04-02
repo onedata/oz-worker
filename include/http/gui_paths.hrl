@@ -33,6 +33,9 @@
 % Endpoint serving custom, user defined static files
 -define(CUSTOM_STATIC_GUI_PATH, "/custom/[...]").
 
+% Endpoint for harvester GUI upload 
+-define(HARVESTER_GUI_UPLOAD_PATH, "/hrv/:harvester_id/gui-upload").
+
 % Endpoint for GUI upload (used by OP_WORKER and OP_PANEL services)
 -define(GUI_UPLOAD_PATH, "/:service/:cluster_id/gui-upload").
 

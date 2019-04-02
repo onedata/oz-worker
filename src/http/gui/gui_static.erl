@@ -86,7 +86,7 @@ deploy_package(Service, PackagePath) ->
 deploy_package(Service, PackageBin, GuiHash) ->
     ?CRITICAL_SECTION(GuiHash, fun() ->
         case gui_exists_unsafe(Service, GuiHash) of
-            true -> ok;
+            true -> {ok, GuiHash};
             false -> deploy_package(on_cluster, Service, PackageBin, GuiHash)
         end
     end).
@@ -107,18 +107,19 @@ deploy_package(Service, PackageBin, GuiHash) ->
     gui:package_hash()) -> ok.
 deploy_package(on_cluster, Service, PackageBin, GuiHash) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, deploy_package, [on_node, Service, PackageBin, GuiHash])
-    end, ?CLUSTER_NODES);
+        {ok, _} = rpc:call(Node, ?MODULE, deploy_package, [on_node, Service, PackageBin, GuiHash])
+    end, ?CLUSTER_NODES),
+    {ok, GuiHash};
 
 deploy_package(on_node, Service, PackageBin, GuiHash) ->
-    ?info("Deploying GUI package for ~s: ~s", [onedata:service_shortname(Service), GuiHash]),
+    ?info("Deploying GUI package for ~s: ~s", [name_to_shortname(Service), GuiHash]),
     TempDir = mochitemp:mkdtemp(),
     {ok, ExtractedPackagePath} = gui:extract_package({binary, PackageBin}, TempDir),
     PackageStaticRoot = service_static_root(Service, GuiHash),
     ok = file_utils:recursive_del(PackageStaticRoot),
     ok = file_utils:move(ExtractedPackagePath, PackageStaticRoot),
     mochitemp:rmtempdir(TempDir),
-    ok.
+    {ok, GuiHash}.
 
 
 %%--------------------------------------------------------------------
@@ -274,7 +275,7 @@ service_static_root(Service, Identifier) ->
 %%--------------------------------------------------------------------
 -spec service_gui_path(onedata:service(), od_cluster:id() | gui:package_hash()) -> binary().
 service_gui_path(Service, Identifier) ->
-    <<"/", (onedata:service_shortname(Service))/binary, "/", Identifier/binary>>.
+    <<"/", (name_to_shortname(Service))/binary, "/", Identifier/binary>>.
 
 
 %%--------------------------------------------------------------------
@@ -321,3 +322,8 @@ mimetype_by_ext(<<"svg">>) -> {<<"image">>, <<"svg+xml">>, []};
 mimetype_by_ext(<<"wav">>) -> {<<"audio">>, <<"x-wav">>, []};
 mimetype_by_ext(<<"webm">>) -> {<<"video">>, <<"webm">>, []};
 mimetype_by_ext(_) -> {<<"application">>, <<"octet-stream">>, []}.
+
+
+%% @private
+name_to_shortname(harvester) -> <<"hrv">>;
+name_to_shortname(Service) -> onedata:service_shortname(Service).

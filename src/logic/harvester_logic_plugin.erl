@@ -141,6 +141,7 @@ is_subscribable(spaces, private) -> true;
 is_subscribable({space, _}, private) -> true;
 is_subscribable(gui_plugin_config, private) -> true;
 is_subscribable(indices, private) -> true;
+is_subscribable(index, private) -> true;
 is_subscribable({index, _}, private) -> true;
 is_subscribable(_, _) -> false.
 

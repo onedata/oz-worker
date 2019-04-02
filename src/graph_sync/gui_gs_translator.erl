@@ -765,7 +765,7 @@ translate_harvester(#gri{aspect = instance, scope = protected}, HarvesterData) -
         })
     };
 
-translate_harvester(#gri{aspect = config}, Config) ->
+translate_harvester(#gri{aspect = gui_plugin_config}, Config) ->
     #{
         <<"guiPluginConfig">> => Config
     };
