@@ -35,6 +35,7 @@
     oz_panel_gui_setup_works/1,
     empty_gui_is_linked_after_provider_registration/1,
     op_worker_and_panel_gui_is_linked_upon_version_info_update/1,
+    gui_is_unlinked_after_provider_deletion/1,
     gui_upload_requires_provider_auth/1,
     gui_upload_is_not_possible_for_onezone_services/1,
     gui_upload_for_inexistent_service_returns_not_found/1,
@@ -52,6 +53,7 @@ all() ->
         oz_panel_gui_setup_works,
         empty_gui_is_linked_after_provider_registration,
         op_worker_and_panel_gui_is_linked_upon_version_info_update,
+        gui_is_unlinked_after_provider_deletion,
         gui_upload_requires_provider_auth,
         gui_upload_is_not_possible_for_onezone_services,
         gui_upload_for_inexistent_service_returns_not_found,
@@ -113,8 +115,8 @@ oz_panel_gui_setup_works(Config) ->
 
 
 empty_gui_is_linked_after_provider_registration(Config) ->
-    {ok, {Provider, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    ClusterId = oz_test_utils:get_provider_cluster(Config, Provider),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    ClusterId = ProviderId,
 
     ?assert(static_directory_exists(Config, [<<"./opw/">>, <<"empty">>])),
     ?assert(link_exists(Config, [<<"./opw/">>, ClusterId], <<"empty">>)),
@@ -130,12 +132,13 @@ empty_gui_is_linked_after_provider_registration(Config) ->
 
 
 op_worker_and_panel_gui_is_linked_upon_version_info_update(Config) ->
-    {ok, {Provider, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    ClusterId = oz_test_utils:get_provider_cluster(Config, Provider),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    ClusterId = ProviderId,
 
     {OpGuiHash, OpIndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_WORKER),
+
     oz_test_utils:call_oz(Config, cluster_logic, update_version_info, [
-        ?PROVIDER(Provider), ClusterId, ?WORKER, {<<"18.07.1-WORKER">>, <<"build-WORKER">>, OpGuiHash}
+        ?PROVIDER(ProviderId), ClusterId, ?WORKER, {<<"18.07.1-WORKER">>, <<"build-WORKER">>, OpGuiHash}
     ]),
 
     ?assert(static_directory_exists(Config, [<<"./opw/">>, OpGuiHash])),
@@ -151,9 +154,8 @@ op_worker_and_panel_gui_is_linked_upon_version_info_update(Config) ->
     ?assert(version_info_is_set(Config, ClusterId, ?ONEPANEL, {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH})),
 
     {OppGuiHash, OppIndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_PANEL),
-
     oz_test_utils:call_oz(Config, cluster_logic, update_version_info, [
-        ?PROVIDER(Provider), ClusterId, ?ONEPANEL, {<<"18.07.1-PANEL">>, <<"build-PANEL">>, OppGuiHash}
+        ?PROVIDER(ProviderId), ClusterId, ?ONEPANEL, {<<"18.07.1-PANEL">>, <<"build-PANEL">>, OppGuiHash}
     ]),
 
     ?assert(static_directory_exists(Config, [<<"./opw/">>, OpGuiHash])),
@@ -169,9 +171,37 @@ op_worker_and_panel_gui_is_linked_upon_version_info_update(Config) ->
     ?assert(version_info_is_set(Config, ClusterId, ?ONEPANEL, {<<"18.07.1-PANEL">>, <<"build-PANEL">>, OppGuiHash})).
 
 
+gui_is_unlinked_after_provider_deletion(Config) ->
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    ClusterId = ProviderId,
+
+    {OpGuiHash, OpIndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_WORKER),
+    oz_test_utils:call_oz(Config, cluster_logic, update_version_info, [
+        ?PROVIDER(ProviderId), ClusterId, ?WORKER, {<<"18.07.1-WORKER">>, <<"build-WORKER">>, OpGuiHash}
+    ]),
+    {OppGuiHash, OppIndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_PANEL),
+    oz_test_utils:call_oz(Config, cluster_logic, update_version_info, [
+        ?PROVIDER(ProviderId), ClusterId, ?ONEPANEL, {<<"18.07.1-PANEL">>, <<"build-PANEL">>, OppGuiHash}
+    ]),
+
+    oz_test_utils:delete_provider(Config, ProviderId),
+    ?assertMatch({ok, false}, oz_test_utils:call_oz(Config, od_cluster, exists, [ClusterId])),
+
+    % Gui package should be left on the disk, but the link to it for given cluster removed
+    ?assert(static_directory_exists(true, Config, [<<"./opw/">>, OpGuiHash])),
+    ?assert(link_exists(false, Config, [<<"./opw/">>, ClusterId], OpGuiHash)),
+    ?assert(index_page_is_served(false, Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/i">>])),
+    ?assert(index_page_is_served(false, Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/index.html">>])),
+
+    ?assert(static_directory_exists(true, Config, [<<"./opp/">>, OppGuiHash])),
+    ?assert(link_exists(false, Config, [<<"./opp/">>, ClusterId], OppGuiHash)),
+    ?assert(index_page_is_served(false, Config, OppIndexContent, [<<"/opp/">>, ClusterId, <<"/i">>])),
+    ?assert(index_page_is_served(false, Config, OppIndexContent, [<<"/opp/">>, ClusterId, <<"/index.html">>])).
+
+
 gui_upload_requires_provider_auth(Config) ->
-    {ok, {Provider, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    ClusterId = oz_test_utils:get_provider_cluster(Config, Provider),
+    {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    ClusterId = ProviderId,
     {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
 
     % No auth
@@ -252,8 +282,8 @@ gui_upload_is_not_possible_for_onezone_services(Config) ->
 
 
 gui_upload_for_inexistent_service_returns_not_found(Config) ->
-    {ok, {Provider, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    ClusterId = oz_test_utils:get_provider_cluster(Config, Provider),
+    {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    ClusterId = ProviderId,
     {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
 
     ?assertMatch({ok, 404, _, _}, http_client:post(
@@ -288,8 +318,8 @@ gui_upload_for_inexistent_cluster_returns_not_found(Config) ->
 
 
 gui_upload_with_invalid_package_returns_bad_request(Config) ->
-    {ok, {Provider, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    ClusterId = oz_test_utils:get_provider_cluster(Config, Provider),
+    {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    ClusterId = ProviderId,
     {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
     % Break the package a little bit
     {ok, Contents} = file:read_file(GuiPackage),
@@ -310,8 +340,8 @@ gui_upload_with_invalid_package_returns_bad_request(Config) ->
 
 
 gui_upload_page_deploys_op_worker_gui_on_all_nodes(Config) ->
-    {ok, {Provider, ProviderMacaroon}} = oz_test_utils:create_provider(Config, <<"pr">>),
-    ClusterId = oz_test_utils:get_provider_cluster(Config, Provider),
+    {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, <<"pr">>),
+    ClusterId = ProviderId,
 
     {OpGuiPackage, OpIndexContent} = oz_test_utils:create_dummy_gui_package(),
     {ok, OpGuiHash} = gui:package_hash(OpGuiPackage),
@@ -319,7 +349,7 @@ gui_upload_page_deploys_op_worker_gui_on_all_nodes(Config) ->
     ?assertNot(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?OP_WORKER, OpGuiHash])),
     ?assertMatch(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"workerVersion.gui">>), oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
-            ?PROVIDER(Provider), ClusterId, ?WORKER, {<<"18.07.1">>, <<"build">>, OpGuiHash}
+            ?PROVIDER(ProviderId), ClusterId, ?WORKER, {<<"18.07.1">>, <<"build">>, OpGuiHash}
         ]
     )),
     % Failed version update still sets the release/build version
@@ -335,7 +365,7 @@ gui_upload_page_deploys_op_worker_gui_on_all_nodes(Config) ->
     ?assert(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?OP_WORKER, OpGuiHash])),
     ?assertMatch(ok, oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
-            ?PROVIDER(Provider), ClusterId, ?WORKER, {<<"18.07.1">>, <<"build">>, OpGuiHash}
+            ?PROVIDER(ProviderId), ClusterId, ?WORKER, {<<"18.07.1">>, <<"build">>, OpGuiHash}
         ]
     )),
 
@@ -347,8 +377,8 @@ gui_upload_page_deploys_op_worker_gui_on_all_nodes(Config) ->
 
 
 gui_upload_page_deploys_op_panel_gui_on_all_nodes(Config) ->
-    {ok, {Provider, ProviderMacaroon}} = oz_test_utils:create_provider(Config, <<"pr">>),
-    ClusterId = oz_test_utils:get_provider_cluster(Config, Provider),
+    {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, <<"pr">>),
+    ClusterId = ProviderId,
 
     {OppGuiPackage, OppIndexContent} = oz_test_utils:create_dummy_gui_package(),
     {ok, OppGuiHash} = gui:package_hash(OppGuiPackage),
@@ -356,7 +386,7 @@ gui_upload_page_deploys_op_panel_gui_on_all_nodes(Config) ->
     ?assertNot(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?OP_PANEL, OppGuiHash])),
     ?assertMatch(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"onepanelVersion.gui">>), oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
-            ?PROVIDER(Provider), ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build">>, OppGuiHash}
+            ?PROVIDER(ProviderId), ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build">>, OppGuiHash}
         ]
     )),
     % Failed version update still sets the release/build version
@@ -372,7 +402,7 @@ gui_upload_page_deploys_op_panel_gui_on_all_nodes(Config) ->
     ?assert(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?OP_PANEL, OppGuiHash])),
     ?assertMatch(ok, oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
-            ?PROVIDER(Provider), ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build">>, OppGuiHash}
+            ?PROVIDER(ProviderId), ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build">>, OppGuiHash}
         ]
     )),
 
@@ -384,14 +414,14 @@ gui_upload_page_deploys_op_panel_gui_on_all_nodes(Config) ->
 
 
 empty_gui_is_linked_after_failed_op_worker_version_update(Config) ->
-    {ok, {Provider, _ProviderMacaroon}} = oz_test_utils:create_provider(Config, <<"pr">>),
-    ClusterId = oz_test_utils:get_provider_cluster(Config, Provider),
+    {ok, {ProviderId, _ProviderMacaroon}} = oz_test_utils:create_provider(Config, <<"pr">>),
+    ClusterId = ProviderId,
 
     % First link correct GUI to provider
     {OpGuiHash, _OpIndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_WORKER),
     ?assertMatch(ok, oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
-            ?PROVIDER(Provider), ClusterId, ?WORKER, {<<"18.07.1">>, <<"build-1">>, OpGuiHash}
+            ?PROVIDER(ProviderId), ClusterId, ?WORKER, {<<"18.07.1">>, <<"build-1">>, OpGuiHash}
         ]
     )),
     ?assert(version_info_is_set(Config, ClusterId, ?WORKER, {<<"18.07.1">>, <<"build-1">>, OpGuiHash})),
@@ -399,7 +429,7 @@ empty_gui_is_linked_after_failed_op_worker_version_update(Config) ->
     % Trying to update to an inexistent gui version should link service's GUI to the empty page
     ?assertMatch(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"workerVersion.gui">>), oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
-            ?PROVIDER(Provider), ClusterId, ?WORKER, {<<"18.07.2">>, <<"build-2">>, <<"bad-gui-hash">>}
+            ?PROVIDER(ProviderId), ClusterId, ?WORKER, {<<"18.07.2">>, <<"build-2">>, <<"bad-gui-hash">>}
         ]
     )),
 
@@ -412,14 +442,14 @@ empty_gui_is_linked_after_failed_op_worker_version_update(Config) ->
 
 
 empty_gui_is_linked_after_failed_op_panel_version_update(Config) ->
-    {ok, {Provider, _ProviderMacaroon}} = oz_test_utils:create_provider(Config, <<"pr">>),
-    ClusterId = oz_test_utils:get_provider_cluster(Config, Provider),
+    {ok, {ProviderId, _ProviderMacaroon}} = oz_test_utils:create_provider(Config, <<"pr">>),
+    ClusterId = ProviderId,
 
     % First link correct GUI to onepanel
     {OppGuiHash, _OpIndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_PANEL),
     ?assertMatch(ok, oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
-            ?PROVIDER(Provider), ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build-1">>, OppGuiHash}
+            ?PROVIDER(ProviderId), ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build-1">>, OppGuiHash}
         ]
     )),
     ?assert(version_info_is_set(Config, ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build-1">>, OppGuiHash})),
@@ -427,7 +457,7 @@ empty_gui_is_linked_after_failed_op_panel_version_update(Config) ->
     % Trying to update to an inexistent gui version should link service's GUI to the empty page
     ?assertMatch(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"onepanelVersion.gui">>), oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
-            ?PROVIDER(Provider), ClusterId, ?ONEPANEL, {<<"18.07.2">>, <<"build-2">>, <<"bad-gui-hash">>}
+            ?PROVIDER(ProviderId), ClusterId, ?ONEPANEL, {<<"18.07.2">>, <<"build-2">>, <<"bad-gui-hash">>}
         ]
     )),
 
@@ -467,38 +497,56 @@ end_per_testcase(_, _Config) ->
 %%%===================================================================
 
 static_directory_exists(Config, PathTokens) ->
+    static_directory_exists(true, Config, PathTokens).
+
+static_directory_exists(ExpState, Config, PathTokens) ->
     Path = to_path_in_onezone_gui_static(Config, PathTokens),
     check_on_all_nodes(Config, fun(Node) ->
         case rpc:call(Node, filelib, is_dir, [Path]) of
-            true ->
+            ExpState ->
                 true;
-            false ->
-                ct:print("Static directory \"~s\" does not exist on node ~p", [Path, Node]),
-                false
-        end
-    end).
-
-
-link_exists(Config, PathTokens, LinkValue) when is_binary(LinkValue) ->
-    link_exists(Config, PathTokens, binary_to_list(LinkValue));
-link_exists(Config, PathTokens, LinkValue) when is_list(LinkValue) ->
-    Path = to_path_in_onezone_gui_static(Config, PathTokens),
-    check_on_all_nodes(Config, fun(Node) ->
-        case rpc:call(Node, file, read_link, [Path]) of
-            {ok, LinkValue} ->
-                true;
-            Other ->
-                ct:print("read_link \"~s\" did not return expected value on node ~p:~nGot: ~p~nExpected: ~p", [
-                    Path, Node, Other, {ok, LinkValue}
+            Got ->
+                ct:pal("static_directory_exists(~p, Config, ~p) failed on node ~p~ngot: ~p", [
+                    ExpState, Path, Node, Got
                 ]),
                 false
         end
     end).
 
 
-index_page_is_served(Config, ExpectedContent, PathTokens) when is_list(PathTokens) ->
-    index_page_is_served(Config, ExpectedContent, str_utils:join_binary(PathTokens));
-index_page_is_served(Config, ExpectedContent, Path) ->
+link_exists(Config, PathTokens, LinkValue) ->
+    link_exists(true, Config, PathTokens, LinkValue).
+
+link_exists(ExpState, Config, PathTokens, LinkValue) when is_binary(LinkValue) ->
+    link_exists(ExpState, Config, PathTokens, binary_to_list(LinkValue));
+link_exists(ExpState, Config, PathTokens, LinkValue) when is_list(LinkValue) ->
+    Path = to_path_in_onezone_gui_static(Config, PathTokens),
+    check_on_all_nodes(Config, fun(Node) ->
+        case {ExpState, rpc:call(Node, file, read_link, [Path])} of
+            {true, {ok, LinkValue}} ->
+                true;
+            {false, {ok, LinkValue} = Got} ->
+                ct:pal("link_exists(~p, Config, ~p, ~p) failed on node ~p~ngot: ~p", [
+                    ExpState, Path, LinkValue, Node, Got
+                ]),
+                false;
+            {true, Got} ->
+                ct:pal("link_exists(~p, Config, ~p, ~p) failed on node ~p~ngot: ~p", [
+                    ExpState, Path, LinkValue, Node, Got
+                ]),
+                false;
+            {false, _} ->
+                true
+        end
+    end).
+
+
+index_page_is_served(Config, ExpectedContent, PathTokens) ->
+    index_page_is_served(true, Config, ExpectedContent, PathTokens).
+
+index_page_is_served(ExpState, Config, ExpectedContent, PathTokens) when is_list(PathTokens) ->
+    index_page_is_served(ExpState, Config, ExpectedContent, str_utils:join_binary(PathTokens));
+index_page_is_served(ExpState, Config, ExpectedContent, Path) ->
     Opts = [
         {follow_redirect, true},
         ?SSL_OPTS(Config)
@@ -511,11 +559,11 @@ index_page_is_served(Config, ExpectedContent, Path) ->
             maps:get(<<"content-type">>, Headers) =:= <<"text/html">> andalso
             Body =:= ExpectedContent,
         case Result of
-            true ->
+            ExpState ->
                 true;
-            false ->
-                ct:print("index page \"~s\" is not served on node ~p~nGot: ~p", [
-                    Path, Node, {Code, Headers, Body}
+            _ ->
+                ct:pal("index_page_is_served(~p, Config, <~p bytes>, ~p) failed on node ~p~ngot: ~p", [
+                    ExpState, byte_size(ExpectedContent), Path, Node, {Code, Headers, Body}
                 ]),
                 false
         end
@@ -527,7 +575,7 @@ version_info_is_set(Config, ClusterId, ServiceType, {Release, Build, GuiHash}) -
         {Release, Build, GuiHash} ->
             true;
         Other ->
-            ct:print("Version info for service ~s:~p is different than expected:~nGot: ~p~nExpected: ~p", [
+            ct:pal("Version info for service ~s:~p is different than expected:~nGot: ~p~nExpected: ~p", [
                 ClusterId, ServiceType, Other, {Release, Build, GuiHash}
             ]),
             false

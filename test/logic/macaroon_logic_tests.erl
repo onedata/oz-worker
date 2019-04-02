@@ -15,6 +15,7 @@
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("ctool/include/auth/onedata_macaroons.hrl").
 -include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
 -define(MOCK_MAX_PROVIDER_MACAROON_TTL, 3600).
@@ -171,37 +172,37 @@ verify_provider_identity() ->
 
 create_gui_macaroon() ->
     create_gui_macaroon(?ONEPROVIDER, <<"12345">>),
-    create_gui_macaroon(?ONEZONE, ?ONEZONE_SERVICE_ID).
+    create_gui_macaroon(?ONEZONE, ?ONEZONE_CLUSTER_ID).
 
-create_gui_macaroon(ClusterType, ServiceId) ->
-    SessionId = <<ServiceId/binary, "-session">>,
+create_gui_macaroon(ClusterType, ClusterId) ->
+    SessionId = <<ClusterId/binary, "-session">>,
     {ok, {Identifier, _Macaroon, _Expires}} = macaroon_logic:create_gui_macaroon(
-        <<"user">>, SessionId, ClusterType, ServiceId
+        <<"user">>, SessionId, ClusterType, ClusterId
     ),
     ?assertMatch({ok, _, _}, volatile_macaroon:get(Identifier)).
 
 
 verify_gui_macaroon() ->
     verify_gui_macaroon(?ONEPROVIDER, <<"abcds">>),
-    verify_gui_macaroon(?ONEZONE, ?ONEZONE_SERVICE_ID).
+    verify_gui_macaroon(?ONEZONE, ?ONEZONE_CLUSTER_ID).
 
-verify_gui_macaroon(ClusterType, ServiceId) ->
+verify_gui_macaroon(ClusterType, ClusterId) ->
     [OtherClusterType] = [?ONEPROVIDER, ?ONEZONE] -- [ClusterType],
-    SessionId = <<ServiceId/binary, "-session">>,
+    SessionId = <<ClusterId/binary, "-session">>,
     UserId = <<"mockuserid789992">>,
     {ok, {Identifier, Macaroon, Expires}} = macaroon_logic:create_gui_macaroon(
-        UserId, SessionId, ClusterType, ServiceId
+        UserId, SessionId, ClusterType, ClusterId
     ),
     SessionVerifyFun = fun(_VerifySessionId, VerifyId) ->
         VerifyId == Identifier
     end,
     ?assertEqual(
         {ok, UserId, SessionId},
-        macaroon_logic:verify_gui_macaroon(Macaroon, ClusterType, ServiceId, SessionVerifyFun)
+        macaroon_logic:verify_gui_macaroon(Macaroon, ClusterType, ClusterId, SessionVerifyFun)
     ),
     ?assertEqual(
         ?ERROR_MACAROON_INVALID,
-        macaroon_logic:verify_gui_macaroon(Macaroon, OtherClusterType, ServiceId, SessionVerifyFun)
+        macaroon_logic:verify_gui_macaroon(Macaroon, OtherClusterType, ClusterId, SessionVerifyFun)
     ),
     ?assertEqual(
         ?ERROR_MACAROON_INVALID,
@@ -217,11 +218,11 @@ verify_gui_macaroon(ClusterType, ServiceId) ->
 
 should_refresh_gui_macaroon() ->
     should_refresh_gui_macaroon(?ONEPROVIDER, <<"dfvaerwfasdf">>),
-    should_refresh_gui_macaroon(?ONEZONE, ?ONEZONE_SERVICE_ID).
+    should_refresh_gui_macaroon(?ONEZONE, ?ONEZONE_CLUSTER_ID).
 
-should_refresh_gui_macaroon(ClusterType, ServiceId) ->
+should_refresh_gui_macaroon(ClusterType, ClusterId) ->
     {ok, {_Identifier, _Macaroon, Expires}} = macaroon_logic:create_gui_macaroon(
-        <<"user">>, <<"session">>, ClusterType, ServiceId
+        <<"user">>, <<"session">>, ClusterType, ClusterId
     ),
     ?assertEqual(false, macaroon_logic:should_refresh_gui_macaroon(Expires)),
     simulate_time_passing(Expires - get_mocked_time() + 1),
@@ -230,23 +231,23 @@ should_refresh_gui_macaroon(ClusterType, ServiceId) ->
 
 delete_gui_macaroon() ->
     delete_gui_macaroon(?ONEPROVIDER, <<"12345abcd">>),
-    delete_gui_macaroon(?ONEZONE, ?ONEZONE_SERVICE_ID).
+    delete_gui_macaroon(?ONEZONE, ?ONEZONE_CLUSTER_ID).
 
-delete_gui_macaroon(ClusterType, ServiceId) ->
+delete_gui_macaroon(ClusterType, ClusterId) ->
     UserId = <<"kosdhfsdf">>,
     SessionId = <<UserId/binary, "-session">>,
     SessionVerifyFun = fun(_, _) -> true end,
     {ok, {Identifier, Macaroon, _Expires}} = macaroon_logic:create_gui_macaroon(
-        UserId, SessionId, ClusterType, ServiceId
+        UserId, SessionId, ClusterType, ClusterId
     ),
 
     ?assertEqual(
         {ok, UserId, SessionId},
-        macaroon_logic:verify_gui_macaroon(Macaroon, ClusterType, ServiceId, SessionVerifyFun)
+        macaroon_logic:verify_gui_macaroon(Macaroon, ClusterType, ClusterId, SessionVerifyFun)
     ),
     ?assertEqual(ok, macaroon_logic:delete_gui_macaroon(Macaroon)),
     ?assertEqual({error, not_found}, volatile_macaroon:get(Identifier)),
     ?assertEqual(
         ?ERROR_MACAROON_INVALID,
-        macaroon_logic:verify_gui_macaroon(Macaroon, ClusterType, ServiceId, SessionVerifyFun)
+        macaroon_logic:verify_gui_macaroon(Macaroon, ClusterType, ClusterId, SessionVerifyFun)
     ).

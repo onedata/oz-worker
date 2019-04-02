@@ -238,7 +238,6 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         admin_email = AdminEmail,
         latitude = Latitude,
         longitude = Longitude,
-        cluster = Cluster,
 
         spaces = Spaces
     } = Provider,
@@ -254,7 +253,6 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         <<"longitude">> => Longitude,
 
         <<"online">> => provider_connection:is_online(Id),
-        <<"cluster">> => Cluster,
 
         <<"spaces">> => Spaces,
         <<"effectiveUsers">> => entity_graph:get_relations(effective, bottom_up, od_user, Provider),
@@ -267,12 +265,12 @@ translate_resource(_, #gri{type = od_provider, aspect = instance, scope = protec
     #{
         <<"name">> := Name, <<"domain">> := Domain,
         <<"latitude">> := Latitude, <<"longitude">> := Longitude,
-        <<"online">> := Online, <<"cluster">> := Cluster
+        <<"online">> := Online
     } = ProviderData,
     #{
         <<"name">> => Name, <<"domain">> => Domain,
         <<"latitude">> => Latitude, <<"longitude">> => Longitude,
-        <<"online">> => Online, <<"cluster">> => Cluster
+        <<"online">> => Online
     };
 
 translate_resource(_, #gri{type = od_provider, aspect = domain_config}, Data) ->

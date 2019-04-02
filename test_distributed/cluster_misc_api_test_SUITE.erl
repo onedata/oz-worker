@@ -22,6 +22,7 @@
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 -include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/onedata.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -72,10 +73,7 @@ list_test(Config) ->
             {ok, {ProviderId, _MacaroonBin}} = oz_test_utils:create_provider(
                 Config, U1, ?PROVIDER_NAME1
             ),
-            {ok, #od_provider{
-                cluster = ClusterId
-            }} = oz_test_utils:get_provider(Config, ProviderId),
-            ClusterId
+            _ClusterId = ProviderId
         end, lists:seq(1, 5)
     ),
 
@@ -129,12 +127,12 @@ get_onezone_cluster_test(Config) ->
     VersionInfo = {Release, Build, GuiHash},
 
     get_private_data_test_base(
-        Config, ?ONEZONE_CLUSTER_ID, ?ONEZONE, ?ONEZONE_SERVICE_ID, VersionInfo,
+        Config, ?ONEZONE_CLUSTER_ID, ?ONEZONE, VersionInfo,
         [],
         [{user, NonAdmin}]
     ),
     get_protected_data_test_base(
-        Config, ?ONEZONE_CLUSTER_ID, ?ONEZONE, ?ONEZONE_SERVICE_ID, VersionInfo,
+        Config, ?ONEZONE_CLUSTER_ID, ?ONEZONE, VersionInfo,
         [{user, NonAdmin}], % Every user of onezone is allowed to view protected data
         []
     ).
@@ -146,27 +144,25 @@ get_oneprovider_cluster_test(Config) ->
     {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
         Config, ProviderAdmin, ?PROVIDER_NAME1
     ),
-    {ok, #od_provider{
-        cluster = ClusterId
-    }} = oz_test_utils:get_provider(Config, ProviderId),
+    ClusterId = ProviderId,
     {ok, EffUserOfProvider} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(EffUserOfProvider), ?UNIQUE_STRING),
     oz_test_utils:support_space(Config, ProviderId, Space),
     VersionInfo = {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH},
 
     get_private_data_test_base(
-        Config, ClusterId, ?ONEPROVIDER, ProviderId, VersionInfo,
+        Config, ClusterId, ?ONEPROVIDER, VersionInfo,
         [{provider, ProviderId, Macaroon}],
         [{user, NonAdmin}, {user, EffUserOfProvider}]
     ),
     get_protected_data_test_base(
-        Config, ClusterId, ?ONEPROVIDER, ProviderId, VersionInfo,
+        Config, ClusterId, ?ONEPROVIDER, VersionInfo,
         [{provider, ProviderId, Macaroon}, {user, EffUserOfProvider}],
         [{user, NonAdmin}] % Only provider/cluster effective users are allowed to view protected data
     ).
 
 
-get_private_data_test_base(Config, ClusterId, ClusterType, ServiceId, VersionInfo, CorrectClients, ForbiddenClients) ->
+get_private_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectClients, ForbiddenClients) ->
     AllPrivsWithoutView = privileges:cluster_privileges() -- [?CLUSTER_VIEW],
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
@@ -205,7 +201,6 @@ get_private_data_test_base(Config, ClusterId, ClusterType, ServiceId, VersionInf
                             onepanel_version = {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH},
                             onepanel_proxy = ExpectedOnepanelProxy,
 
-                            service_id = ServiceId,
                             users = #{
                                 U1 := AllPrivsWithoutView, U2 := [?CLUSTER_VIEW]
                             },
@@ -215,9 +210,7 @@ get_private_data_test_base(Config, ClusterId, ClusterType, ServiceId, VersionInf
                                 U1 := {AllPrivsWithoutView, [{od_cluster, <<"self">>}]},
                                 U2 := {[?CLUSTER_VIEW], [{od_cluster, <<"self">>}]}
                             },
-                            eff_groups = #{},
-
-                            bottom_up_dirty = false
+                            eff_groups = #{}
                         },
                         Cluster
                     )
@@ -229,7 +222,7 @@ get_private_data_test_base(Config, ClusterId, ClusterType, ServiceId, VersionInf
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)).
 
 
-get_protected_data_test_base(Config, ClusterId, ClusterType, ServiceId, VersionInfo, CorrectClients, ForbiddenClients) ->
+get_protected_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectClients, ForbiddenClients) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, U1} = oz_test_utils:cluster_add_user(Config, ClusterId, U1),
@@ -253,7 +246,6 @@ get_protected_data_test_base(Config, ClusterId, ClusterType, ServiceId, VersionI
 
     ClusterDetails = #{
         <<"type">> => ClusterType,
-        <<"serviceId">> => ServiceId,
         <<"workerVersion">> => ExpectedWorkerVersionInfoJson,
         <<"onepanelVersion">> => ExpectedOnepanelVersionInfoJson,
         <<"onepanelProxy">> => ExpectedOnepanelProxy
@@ -302,7 +294,7 @@ update_onepanel_proxy_test(Config) ->
         {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
             Config, U1, ?PROVIDER_NAME1
         ),
-        ClusterId = oz_test_utils:get_provider_cluster(Config, ProviderId),
+        ClusterId = ProviderId,
 
         oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U1,
             AllPrivs -- [?CLUSTER_UPDATE], [?CLUSTER_UPDATE]
@@ -404,7 +396,7 @@ update_version_info_test_base(Config, ClusterType, ServiceType) ->
             Config, ?PROVIDER_NAME1
         ),
         ClusterId = case ClusterType of
-            ?ONEPROVIDER -> oz_test_utils:get_provider_cluster(Config, ProviderId);
+            ?ONEPROVIDER -> ProviderId;
             ?ONEZONE -> ?ONEZONE_CLUSTER_ID
         end,
 

@@ -268,9 +268,7 @@ add_relation(od_share, ShareId, od_space, SpaceId) ->
 add_relation(od_handle, HandleId, od_share, ShareId) ->
     add_relation(od_handle, HandleId, undefined, od_share, ShareId, undefined);
 add_relation(od_handle, HandleId, od_handle_service, HServiceId) ->
-    add_relation(od_handle, HandleId, undefined, od_handle_service, HServiceId, undefined);
-add_relation(od_provider, ProviderId, od_cluster, ClusterId) ->
-    add_relation(od_provider, ProviderId, undefined, od_cluster, ClusterId, undefined).
+    add_relation(od_handle, HandleId, undefined, od_handle_service, HServiceId, undefined).
 
 
 %%--------------------------------------------------------------------
@@ -883,10 +881,6 @@ set_refresh_in_progress(Flag) ->
 update_dirty_queue(_, _, od_share, _) ->
     % Shares do not take part in eff graph recomputation
     ok;
-update_dirty_queue(top_down, _, od_provider, _) ->
-    % Providers are children towards cluster only, modifying this relation should
-    % not cause graph recalculation.
-    ok;
 update_dirty_queue(top_down, _, od_handle, _) ->
     % Handles are children towards shares only, modifying this relation should
     % not cause graph recalculation.
@@ -1132,10 +1126,6 @@ mark_record_dirty(top_down, Flag, #od_space{} = Space) ->
 mark_record_dirty(top_down, _, #od_handle{} = Entity) ->
     % Handles are children towards shares only, modifying this relation should
     % not cause graph recalculation.
-    Entity;
-mark_record_dirty(top_down, _, #od_provider{} = Entity) ->
-    % Providers are children towards cluster only, modifying this relation should
-    % not cause graph recalculation.
     Entity.
 
 
@@ -1197,9 +1187,7 @@ has_child(#od_handle{groups = Groups}, od_group, GroupId) ->
 has_child(#od_cluster{users = Users}, od_user, UserId) ->
     maps:is_key(UserId, Users);
 has_child(#od_cluster{groups = Groups}, od_group, GroupId) ->
-    maps:is_key(GroupId, Groups);
-has_child(#od_cluster{service_id = ServiceId}, od_provider, ProviderId) ->
-    ServiceId =:= ProviderId.
+    maps:is_key(GroupId, Groups).
 
 
 %%--------------------------------------------------------------------
@@ -1242,9 +1230,7 @@ add_child(#od_handle{groups = Groups} = Handle, od_group, GroupId, Privs) ->
 add_child(#od_cluster{users = Users} = Cluster, od_user, UserId, Privs) ->
     Cluster#od_cluster{users = maps:put(UserId, Privs, Users)};
 add_child(#od_cluster{groups = Groups} = Cluster, od_group, GroupId, Privs) ->
-    Cluster#od_cluster{groups = maps:put(GroupId, Privs, Groups)};
-add_child(#od_cluster{} = Cluster, od_provider, ProviderId, _) ->
-    Cluster#od_cluster{type = ?ONEPROVIDER, service_id = ProviderId}.
+    Cluster#od_cluster{groups = maps:put(GroupId, Privs, Groups)}.
 
 
 %%--------------------------------------------------------------------
@@ -1328,9 +1314,7 @@ remove_child(#od_handle{groups = Groups} = Handle, od_group, GroupId) ->
 remove_child(#od_cluster{users = Users} = Cluster, od_user, UserId) ->
     Cluster#od_cluster{users = maps:remove(UserId, Users)};
 remove_child(#od_cluster{groups = Groups} = Cluster, od_group, GroupId) ->
-    Cluster#od_cluster{groups = maps:remove(GroupId, Groups)};
-remove_child(#od_cluster{} = Cluster, od_provider, _ProviderId) ->
-    Cluster#od_cluster{service_id = undefined}.
+    Cluster#od_cluster{groups = maps:remove(GroupId, Groups)}.
 
 
 %%--------------------------------------------------------------------
@@ -1367,9 +1351,6 @@ has_parent(#od_space{providers = Providers}, od_provider, ProviderId) ->
 
 has_parent(#od_share{space = Space}, od_space, SpaceId) ->
     SpaceId =:= Space;
-
-has_parent(#od_provider{cluster = ClusterId}, od_cluster, SubjectClusterId) ->
-    ClusterId =:= SubjectClusterId;
 
 has_parent(#od_handle{resource_type = ResType, resource_id = ResId}, od_share, ShareId) ->
     ResType =:= <<"Share">> andalso ResId =:= ShareId;
@@ -1412,9 +1393,6 @@ add_parent(#od_space{providers = Providers} = Space, od_provider, ProviderId, Su
 
 add_parent(#od_share{} = Share, od_space, SpaceId, _) ->
     Share#od_share{space = SpaceId};
-
-add_parent(#od_provider{} = Provider, od_cluster, ClusterId, _) ->
-    Provider#od_provider{cluster = ClusterId};
 
 add_parent(#od_handle{} = Handle, od_share, ShareId, _) ->
     Handle#od_handle{resource_type = <<"Share">>, resource_id = ShareId};
@@ -1472,9 +1450,6 @@ remove_parent(#od_space{providers = Providers} = Space, od_provider, ProviderId)
 
 remove_parent(#od_share{} = Share, od_space, _SpaceId) ->
     Share#od_share{space = undefined};
-
-remove_parent(#od_provider{} = Provider, od_cluster, _ClusterId) ->
-    Provider#od_provider{cluster = undefined};
 
 remove_parent(#od_handle{} = Handle, od_share, _ShareId) ->
     Handle#od_handle{resource_type = undefined, resource_id = undefined};
@@ -1739,11 +1714,6 @@ get_children(#od_handle_service{handles = Handles} = HService) -> #{
     dependent => #{od_handle => Handles},
     independent => get_successors(top_down, HService)
 };
-% od_cluster is a specific case:
-%   * it cannot be deleted
-%   * it cannot exist without a provider - will be deleted automatically
-% because of this, there is no need to list the provider as a child, just take
-% all the successors (users and groups)
 get_children(Entity) -> #{
     independent => get_successors(top_down, Entity)
 }.
@@ -1760,13 +1730,6 @@ get_children(Entity) -> #{
     #{dependent => #{entity_type() => relations()}, independent => #{entity_type() => relations()}}.
 get_parents(#od_share{space = Space}) -> #{
     independent => #{od_space => [Space]}
-};
-get_parents(#od_provider{cluster = Cluster} = Provider) -> #{
-    dependent => case Cluster of
-        undefined -> #{};
-        _ -> #{od_cluster => [Cluster]}
-    end,
-    independent => get_successors(bottom_up, Provider)
 };
 get_parents(#od_handle{} = Handle) ->
     #od_handle{
@@ -1822,12 +1785,9 @@ get_all_direct_relations(bottom_up, #od_handle_service{} = HService) ->
 get_all_direct_relations(bottom_up, #od_handle{} = Handle) ->
     #od_handle{users = Users, groups = Groups} = Handle,
     #{od_user => Users, od_group => Groups};
-get_all_direct_relations(bottom_up, #od_cluster{type = Type, service_id = ServiceId} = Cluster) ->
+get_all_direct_relations(bottom_up, #od_cluster{} = Cluster) ->
     #od_cluster{users = Users, groups = Groups} = Cluster,
-    #{od_user => Users, od_group => Groups, od_provider => case Type of
-        ?ONEZONE -> [];
-        ?ONEPROVIDER -> [ServiceId]
-    end};
+    #{od_user => Users, od_group => Groups};
 
 get_all_direct_relations(top_down, #od_user{} = User) ->
     #od_user{
@@ -1855,9 +1815,7 @@ get_all_direct_relations(top_down, #od_space{} = Space) ->
     #od_space{providers = Providers} = Space,
     #{od_provider => Providers};
 get_all_direct_relations(top_down, #od_handle{handle_service = HServiceId}) ->
-    #{od_handle_service => [HServiceId]};
-get_all_direct_relations(top_down, #od_provider{cluster = ClusterId}) ->
-    #{od_cluster => [ClusterId]}.
+    #{od_handle_service => [HServiceId]}.
 
 
 %%--------------------------------------------------------------------

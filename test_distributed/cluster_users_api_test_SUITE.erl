@@ -77,29 +77,29 @@ add_user_test(Config) ->
     {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, {ProviderId, _Macaroon}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
-    C1 = oz_test_utils:get_provider_cluster(Config, ProviderId),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
+    ClusterId = ProviderId,
 
     % EffectiveUser belongs to cluster C1 effectively via SubGroup1, with the
     % effective privilege to ADD_USER, so he should be able to join the cluster as a user
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
-    {ok, SubGroup1} = oz_test_utils:cluster_add_group(Config, C1, SubGroup1),
-    oz_test_utils:cluster_set_group_privileges(Config, C1, SubGroup1, [?CLUSTER_ADD_USER], []),
+    {ok, SubGroup1} = oz_test_utils:cluster_add_group(Config, ClusterId, SubGroup1),
+    oz_test_utils:cluster_set_group_privileges(Config, ClusterId, SubGroup1, [?CLUSTER_ADD_USER], []),
 
     % EffectiveUserWithoutInvitePriv belongs to group C1 effectively via SubGroup2,
     % but without the effective privilege to ADD_USER, so he should NOT be able
     % to join the parent group as a user
     {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutInvitePriv), ?GROUP_NAME2),
-    {ok, SubGroup2} = oz_test_utils:cluster_add_group(Config, C1, SubGroup2),
-    oz_test_utils:cluster_set_group_privileges(Config, C1, SubGroup2, [], [?CLUSTER_ADD_USER]),
+    {ok, SubGroup2} = oz_test_utils:cluster_add_group(Config, ClusterId, SubGroup2),
+    oz_test_utils:cluster_set_group_privileges(Config, ClusterId, SubGroup2, [], [?CLUSTER_ADD_USER]),
 
     VerifyEndFun = fun
         (true = _ShouldSucceed, _, _) ->
-            {ok, Users} = oz_test_utils:cluster_get_users(Config, C1),
+            {ok, Users} = oz_test_utils:cluster_get_users(Config, ClusterId),
             ?assert(lists:member(EffectiveUser, Users)),
-            oz_test_utils:cluster_remove_user(Config, C1, EffectiveUser);
+            oz_test_utils:cluster_remove_user(Config, ClusterId, EffectiveUser);
         (false = _ShouldSucceed, _, _) ->
-            {ok, Users} = oz_test_utils:cluster_get_users(Config, C1),
+            {ok, Users} = oz_test_utils:cluster_get_users(Config, ClusterId),
             ?assertNot(lists:member(EffectiveUser, Users))
     end,
 
@@ -117,10 +117,10 @@ add_user_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = put,
-            path = [<<"/clusters/">>, C1, <<"/users/">>, EffectiveUser],
+            path = [<<"/clusters/">>, ClusterId, <<"/users/">>, EffectiveUser],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/clusters/">>, C1, <<"/users/">>, EffectiveUser]),
+                ExpLocation = ?URL(Config, [<<"/clusters/">>, ClusterId, <<"/users/">>, EffectiveUser]),
                 ?assertEqual(ExpLocation, Location),
                 true
             end
@@ -128,7 +128,7 @@ add_user_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = add_user,
-            args = [client, C1, EffectiveUser, data],
+            args = [client, ClusterId, EffectiveUser, data],
             expected_result = ?OK_BINARY(EffectiveUser)
         },
         % TODO gs
@@ -149,33 +149,33 @@ add_user_with_privileges_test(Config) ->
     {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, {ProviderId, _Macaroon}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
-    C1 = oz_test_utils:get_provider_cluster(Config, ProviderId),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
+    ClusterId = ProviderId,
 
     AllPrivs = privileges:cluster_privileges(),
 
     % EffectiveUser belongs to cluster C1 effectively via SubGroup1, with the
     % effective privilege to ADD_USER, so he should be able to join the cluster as a user
     {ok, SubGroup1} = oz_test_utils:create_group(Config, ?USER(EffectiveUser), ?GROUP_NAME2),
-    {ok, SubGroup1} = oz_test_utils:cluster_add_group(Config, C1, SubGroup1),
-    oz_test_utils:cluster_set_group_privileges(Config, C1, SubGroup1, [?CLUSTER_ADD_USER, ?CLUSTER_SET_PRIVILEGES], []),
+    {ok, SubGroup1} = oz_test_utils:cluster_add_group(Config, ClusterId, SubGroup1),
+    oz_test_utils:cluster_set_group_privileges(Config, ClusterId, SubGroup1, [?CLUSTER_ADD_USER, ?CLUSTER_SET_PRIVILEGES], []),
 
     % EffectiveUserWithoutInvitePriv belongs to group C1 effectively via SubGroup2,
     % but without the effective privilege to ADD_USER, so he should NOT be able
     % to join the parent group as a user
     {ok, SubGroup2} = oz_test_utils:create_group(Config, ?USER(EffectiveUserWithoutInvitePriv), ?GROUP_NAME2),
-    {ok, SubGroup2} = oz_test_utils:cluster_add_group(Config, C1, SubGroup2),
+    {ok, SubGroup2} = oz_test_utils:cluster_add_group(Config, ClusterId, SubGroup2),
 
     VerifyEndFun = fun
         (true = _ShouldSucceed, _, Data) ->
             Privs = lists:sort(maps:get(<<"privileges">>, Data)),
             {ok, ActualPrivs} = oz_test_utils:cluster_get_user_privileges(
-                Config, C1, EffectiveUser
+                Config, ClusterId, EffectiveUser
             ),
             ?assertEqual(Privs, lists:sort(ActualPrivs)),
-            oz_test_utils:cluster_remove_user(Config, C1, EffectiveUser);
+            oz_test_utils:cluster_remove_user(Config, ClusterId, EffectiveUser);
         (false = _ShouldSucceed, _, _) ->
-            {ok, Users} = oz_test_utils:cluster_get_users(Config, C1),
+            {ok, Users} = oz_test_utils:cluster_get_users(Config, ClusterId),
             ?assertNot(lists:member(EffectiveUser, Users))
     end,
 
@@ -193,10 +193,10 @@ add_user_with_privileges_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = put,
-            path = [<<"/clusters/">>, C1, <<"/users/">>, EffectiveUser],
+            path = [<<"/clusters/">>, ClusterId, <<"/users/">>, EffectiveUser],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/clusters/">>, C1, <<"/users/">>, EffectiveUser]),
+                ExpLocation = ?URL(Config, [<<"/clusters/">>, ClusterId, <<"/users/">>, EffectiveUser]),
                 ?assertEqual(ExpLocation, Location),
                 true
             end
@@ -204,7 +204,7 @@ add_user_with_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = add_user,
-            args = [client, C1, EffectiveUser, data],
+            args = [client, ClusterId, EffectiveUser, data],
             expected_result = ?OK_BINARY(EffectiveUser)
         },
         % TODO gs
@@ -377,18 +377,18 @@ get_user_test(Config) ->
     {ok, Member} = oz_test_utils:create_user(Config, #od_user{name = <<"member">>, alias = <<"member">>}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(Config, Creator, ?PROVIDER_NAME1),
-    Cluster = oz_test_utils:get_provider_cluster(Config, P1),
+    {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, Creator, ?PROVIDER_NAME1),
+    ClusterId = ProviderId,
 
-    {ok, _} = oz_test_utils:cluster_add_user(Config, Cluster, MemberWithViewPrivs),
-    {ok, _} = oz_test_utils:cluster_add_user(Config, Cluster, MemberWithoutViewPrivs),
-    {ok, _} = oz_test_utils:cluster_add_user(Config, Cluster, Member),
+    {ok, _} = oz_test_utils:cluster_add_user(Config, ClusterId, MemberWithViewPrivs),
+    {ok, _} = oz_test_utils:cluster_add_user(Config, ClusterId, MemberWithoutViewPrivs),
+    {ok, _} = oz_test_utils:cluster_add_user(Config, ClusterId, Member),
 
-    oz_test_utils:cluster_set_user_privileges(Config, Cluster, MemberWithViewPrivs, [?CLUSTER_VIEW], []),
-    oz_test_utils:cluster_set_user_privileges(Config, Cluster, MemberWithoutViewPrivs, [], [?CLUSTER_VIEW]),
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, MemberWithViewPrivs, [?CLUSTER_VIEW], []),
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, MemberWithoutViewPrivs, [], [?CLUSTER_VIEW]),
 
     % Shared data about creator should be available even if he is not longer in the cluster
-    oz_test_utils:cluster_remove_user(Config, Cluster, Creator),
+    oz_test_utils:cluster_remove_user(Config, ClusterId, Creator),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -404,7 +404,7 @@ get_user_test(Config) ->
                     {admin, [?OZ_USERS_VIEW]},
                     {user, SubjectUser},
                     {user, MemberWithViewPrivs},
-                    {provider, P1, P1Macaroon}
+                    {provider, ProviderId, ProviderMacaroon}
                 ] ++ case SubjectUser of
                     % Every member of the cluster should be able to see the creator details
                     Creator -> [{user, MemberWithoutViewPrivs}];
@@ -420,7 +420,7 @@ get_user_test(Config) ->
             },
             rest_spec = #rest_spec{
                 method = get,
-                path = [<<"/clusters/">>, Cluster, <<"/users/">>, SubjectUser],
+                path = [<<"/clusters/">>, ClusterId, <<"/users/">>, SubjectUser],
                 expected_code = ?HTTP_200_OK,
                 expected_body = ExpUserDetails#{
                     <<"userId">> => SubjectUser,
@@ -431,7 +431,7 @@ get_user_test(Config) ->
             logic_spec = #logic_spec{
                 module = cluster_logic,
                 function = get_user,
-                args = [client, Cluster, SubjectUser],
+                args = [client, ClusterId, SubjectUser],
                 expected_result = ?OK_MAP_CONTAINS(ExpUserDetails)
             },
             gs_spec = #gs_spec{
@@ -439,7 +439,7 @@ get_user_test(Config) ->
                 gri = #gri{
                     type = od_user, id = SubjectUser, aspect = instance, scope = shared
                 },
-                auth_hint = ?THROUGH_CLUSTER(Cluster),
+                auth_hint = ?THROUGH_CLUSTER(ClusterId),
                 expected_result = ?OK_MAP(ExpUserDetails#{
                     <<"gri">> => fun(EncodedGri) ->
                         ?assertMatch(
@@ -822,11 +822,11 @@ get_eff_user_membership_intermediaries(Config) ->
     {ok, G3} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
 
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
-    C1 = oz_test_utils:get_provider_cluster(Config, P1),
+    C1 = P1,
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
-    C2 = oz_test_utils:get_provider_cluster(Config, P2),
+    C2 = P2,
     {ok, {P3, P3Macaroon}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
-    C3 = oz_test_utils:get_provider_cluster(Config, P3),
+    C3 = P3,
 
     oz_test_utils:cluster_add_user(Config, C1, U1),
     oz_test_utils:cluster_add_user(Config, C3, U2),

@@ -74,13 +74,13 @@ generate_gui_token(SessionId, RequestBody) ->
     ClusterType = binary_to_existing_atom(ClusterTypeBin, utf8),
     % Ensure request correctness or crash with a badmatch
     {ok, Cluster = #od_cluster{type = ClusterType}} = cluster_logic:get(?ROOT, ClusterId),
-    can_generate_gui_token(UserId, Cluster) orelse throw(?HTTP_403_FORBIDDEN),
+    can_generate_gui_token(UserId, ClusterId, Cluster) orelse throw(?HTTP_403_FORBIDDEN),
 
     {ok, {Macaroon, Expires}} = session:acquire_gui_macaroon(
-        SessionId, ClusterType, Cluster#od_cluster.service_id
+        SessionId, ClusterType, ClusterId
     ),
     {ok, Token} = onedata_macaroons:serialize(Macaroon),
-    {ok, Domain} = cluster_logic:get_domain(Cluster),
+    {ok, Domain} = cluster_logic:get_domain(ClusterId),
     json_utils:encode(#{
         <<"token">> => Token,
         <<"ttl">> => Expires - time_utils:cluster_time_seconds(),
@@ -89,11 +89,11 @@ generate_gui_token(SessionId, RequestBody) ->
 
 
 %% @private
--spec can_generate_gui_token(od_user:id(), od_cluster:record()) -> boolean().
-can_generate_gui_token(_UserId, #od_cluster{type = ?ONEZONE}) ->
+-spec can_generate_gui_token(od_user:id(), od_cluster:id(), od_cluster:record()) -> boolean().
+can_generate_gui_token(_UserId, ?ONEZONE_CLUSTER_ID, _) ->
     % All users can generate a token for Onezone
     true;
-can_generate_gui_token(UserId, Cluster = #od_cluster{type = ?ONEPROVIDER, service_id = ProviderId}) ->
+can_generate_gui_token(UserId, ProviderId, Cluster) ->
     % Only members of provider/cluster can generate a token for Oneprovider
     provider_logic:has_eff_user(ProviderId, UserId) orelse
         cluster_logic:has_eff_user(Cluster, UserId).

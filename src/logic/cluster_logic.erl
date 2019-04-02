@@ -18,7 +18,8 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([
-    create_provider_cluster/2
+    create_oneprovider_cluster/2,
+    delete_oneprovider_cluster/1
 ]).
 -export([
     get/2,
@@ -60,7 +61,7 @@
     has_eff_user/2,
     has_direct_user/2,
     has_eff_group/2,
-    is_linked_to_provider/2
+    is_provider_cluster/2
 ]).
 -export([
     set_up_oz_worker_service/0,
@@ -82,32 +83,48 @@
 %% @doc
 %% Not available in REST/GS API - reserved for internal Onezone logic.
 %% Creates a new cluster document in database and links it with given provider
-%% and provider admin, if specified.
+%% and provider creator (first member of the cluster), if specified.
+%% Cluster has the same Id as the provider.
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider_cluster(CreatorUserId :: undefined | od_user:id(), od_provider:id()) ->
+-spec create_oneprovider_cluster(CreatorUserId :: undefined | od_user:id(), od_provider:id()) ->
     ok | no_return().
-create_provider_cluster(CreatorUserId, ProviderId) ->
-    {ok, #document{key = ClusterId}} = od_cluster:create(#document{value = #od_cluster{
+create_oneprovider_cluster(CreatorUserId, ProviderId) ->
+    ClusterId = ProviderId,
+
+    {ok, _} = od_cluster:create(#document{key = ClusterId, value = #od_cluster{
+        type = ?ONEPROVIDER,
         creator = case CreatorUserId of
             undefined -> ?ROOT;
             _ -> ?USER(CreatorUserId)
         end
     }}),
 
-    entity_graph:add_relation(
-        od_provider, ProviderId,
-        od_cluster, ClusterId
-    ),
-
-    CreatorUserId /= undefined andalso entity_graph:add_relation(
-        od_user, CreatorUserId,
-        od_cluster, ClusterId,
-        privileges:cluster_admin()
-    ),
+    CreatorUserId /= undefined andalso
+        add_user(?ROOT, ClusterId, CreatorUserId, privileges:cluster_admin()),
 
     gui_static:link_service_gui(?OP_WORKER, ClusterId, ?EMPTY_GUI_HASH),
     gui_static:link_service_gui(?OP_PANEL, ClusterId, ?EMPTY_GUI_HASH),
+
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Not available in REST/GS API - reserved for internal Onezone logic.
+%% Deletes a cluster document linked with given provider from database, safely
+%% deleting all relations to member users/groups and cleaning static GUI links.
+%% Cluster has the same Id as the provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_oneprovider_cluster(od_provider:id()) -> ok | no_return().
+delete_oneprovider_cluster(ProviderId) ->
+    ClusterId = ProviderId,
+
+    entity_graph:delete_with_relations(od_cluster, ClusterId),
+
+    gui_static:unlink_service_gui(?OP_WORKER, ClusterId),
+    gui_static:unlink_service_gui(?OP_PANEL, ClusterId),
 
     ok.
 
@@ -741,15 +758,12 @@ has_eff_group(Cluster, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying whether given cluster has specified user.
+%% Predicate saying whether given cluster is a cluster of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec is_linked_to_provider(ClusterIdOrCluster :: od_cluster:id() | #od_cluster{},
-    ProviderId :: od_provider:id()) -> boolean().
-is_linked_to_provider(ClusterId, ProviderId) when is_binary(ClusterId) ->
-    entity_graph:has_relation(direct, bottom_up, od_provider, ProviderId, od_cluster, ClusterId);
-is_linked_to_provider(Cluster, ProviderId) ->
-    entity_graph:has_relation(direct, bottom_up, od_provider, ProviderId, Cluster).
+-spec is_provider_cluster(od_cluster:id(), od_provider:id()) -> boolean().
+is_provider_cluster(ClusterId, ProviderId) ->
+    ClusterId =:= ProviderId.
 
 
 %%--------------------------------------------------------------------
@@ -784,21 +798,13 @@ get_onezone_cluster_id() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Return the domain of the service represented by given cluster.
+%% Return the domain of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec get_domain(od_cluster:id() | od_cluster:record()) ->
-    {ok, binary()} | {error, term()}.
+-spec get_domain(od_cluster:id()) -> {ok, binary()} | {error, term()}.
 get_domain(?ONEZONE_CLUSTER_ID) ->
     {ok, oz_worker:get_domain()};
-get_domain(#od_cluster{type = ?ONEZONE}) ->
-    {ok, oz_worker:get_domain()};
-get_domain(ClusterId) when is_binary(ClusterId) ->
-    case od_cluster:get(ClusterId) of
-        {ok, #document{value = Cluster}} -> get_domain(Cluster);
-        {error, _} = Error -> Error
-    end;
-get_domain(#od_cluster{type = ?ONEPROVIDER, service_id = ProviderId}) ->
+get_domain(ProviderId) ->
     case od_provider:get(ProviderId) of
         {ok, #document{value = #od_provider{domain = Domain}}} -> {ok, Domain};
         {error, _} = Error -> Error

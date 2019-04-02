@@ -39,7 +39,7 @@
 %% @formatter:off
 -type gui_macaroons_cache() :: #{
     onedata:cluster_type() => #{
-        od_cluster:service_id() => macaroon_logic:gui_macaroon()
+        od_cluster:id() => macaroon_logic:gui_macaroon()
     }
 }.
 %% @formatter:on
@@ -161,27 +161,27 @@ list() ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates or reuses an existing GUI macaroon. The macaroon is valid only for
-%% given SessionId, ClusterType (?ONEPROVIDER or ?ONEZONE) and ServiceId
-%% (?ONEZONE_SERVICE_ID or ProviderId).
+%% given SessionId, ClusterType (?ONEPROVIDER or ?ONEZONE) and ClusterId
+%% (?ONEZONE_CLUSTER_ID or ProviderId).
 %% @end
 %%--------------------------------------------------------------------
--spec acquire_gui_macaroon(session:id(), onedata:cluster_type(), od_cluster:service_id()) ->
+-spec acquire_gui_macaroon(session:id(), onedata:cluster_type(), od_cluster:id()) ->
     {ok, {macaroon:macaroon(), macaroon_logic:expires()}} | {error, term()}.
-acquire_gui_macaroon(SessionId, ClusterType, ServiceId) ->
+acquire_gui_macaroon(SessionId, ClusterType, ClusterId) ->
     case ?MODULE:get(SessionId) of
         {error, _} = Error ->
             Error;
         {ok, #document{value = #session{gui_macaroons = GuiMacaroons, user_id = UserId}}} ->
-            case reuse_gui_macaroon(GuiMacaroons, ClusterType, ServiceId) of
+            case reuse_gui_macaroon(GuiMacaroons, ClusterType, ClusterId) of
                 {true, {_Identifier, Macaroon, Expires}} ->
                     {ok, {Macaroon, Expires}};
                 false ->
                     {ok, {Identifier, Macaroon, Expires}} = macaroon_logic:create_gui_macaroon(
-                        UserId, SessionId, ClusterType, ServiceId
+                        UserId, SessionId, ClusterType, ClusterId
                     ),
                     update(SessionId, fun(Session = #session{gui_macaroons = OldGuiMacaroons}) ->
                         {ok, Session#session{gui_macaroons = add_gui_macaroon(
-                            OldGuiMacaroons, ClusterType, ServiceId, Identifier, Macaroon, Expires
+                            OldGuiMacaroons, ClusterType, ClusterId, Identifier, Macaroon, Expires
                         )}}
                     end),
                     {ok, {Macaroon, Expires}}
@@ -191,18 +191,18 @@ acquire_gui_macaroon(SessionId, ClusterType, ServiceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Verifies given GUI macaroon against ClusterType and ServiceId.
+%% Verifies given GUI macaroon against ClusterType and ClusterId.
 %% The session id is one of the caveats in the macaroon. During verification, it
 %% is checked if given macaroon was actually created within the session.
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_gui_macaroon(macaroon:macaroon(), onedata:cluster_type(),
-    od_cluster:service_id()) -> {ok, od_user:id(), session:id()} | {error, term()}.
-verify_gui_macaroon(SubjectMacaroon, ClusterType, ServiceId) ->
+    od_cluster:id()) -> {ok, od_user:id(), session:id()} | {error, term()}.
+verify_gui_macaroon(SubjectMacaroon, ClusterType, ClusterId) ->
     SessionVerifyFun = fun(CaveatSessionId, Identifier) ->
-        has_gui_macaroon(CaveatSessionId, ClusterType, ServiceId, Identifier)
+        has_gui_macaroon(CaveatSessionId, ClusterType, ClusterId, Identifier)
     end,
-    macaroon_logic:verify_gui_macaroon(SubjectMacaroon, ClusterType, ServiceId, SessionVerifyFun).
+    macaroon_logic:verify_gui_macaroon(SubjectMacaroon, ClusterType, ClusterId, SessionVerifyFun).
 
 %%%===================================================================
 %%% datastore_model callbacks
@@ -272,49 +272,49 @@ clear_expired_sessions(UserId, GracePeriod) ->
 %%--------------------------------------------------------------------
 -spec delete_gui_macaroons(gui_macaroons_cache()) -> ok.
 delete_gui_macaroons(GuiMacaroons) ->
-    maps:fold(fun(_ClusterType, Services, _) ->
-        maps:fold(fun(_ServiceId, {_, Macaroon, _}, _) ->
+    maps:fold(fun(_ClusterType, Clusters, _) ->
+        maps:fold(fun(_ClusterId, {_, Macaroon, _}, _) ->
             macaroon_logic:delete_gui_macaroon(Macaroon)
-        end, ok, Services)
+        end, ok, Clusters)
     end, ok, GuiMacaroons).
 
 
--spec add_gui_macaroon(gui_macaroons_cache(), onedata:cluster_type(), od_cluster:service_id(),
+-spec add_gui_macaroon(gui_macaroons_cache(), onedata:cluster_type(), od_cluster:id(),
     macaroon_logic:id(), macaroon:macaroon(), macaroon_logic:expires()) -> gui_macaroons_cache().
-add_gui_macaroon(GuiMacaroons, ClusterType, ServiceId, Identifier, Macaroon, Expires) ->
+add_gui_macaroon(GuiMacaroons, ClusterType, ClusterId, Identifier, Macaroon, Expires) ->
     MacaroonPerClusterType = maps:get(ClusterType, GuiMacaroons, #{}),
     GuiMacaroons#{ClusterType => MacaroonPerClusterType#{
-        ServiceId => {Identifier, Macaroon, Expires}
+        ClusterId => {Identifier, Macaroon, Expires}
     }}.
 
 
--spec get_gui_macaroon(gui_macaroons_cache(), onedata:cluster_type(), od_cluster:service_id()) ->
+-spec get_gui_macaroon(gui_macaroons_cache(), onedata:cluster_type(), od_cluster:id()) ->
     undefined | macaroon_logic:gui_macaroon().
-get_gui_macaroon(GuiMacaroons, ClusterType, ServiceId) ->
+get_gui_macaroon(GuiMacaroons, ClusterType, ClusterId) ->
     MacaroonPerClusterType = maps:get(ClusterType, GuiMacaroons, #{}),
-    maps:get(ServiceId, MacaroonPerClusterType, undefined).
+    maps:get(ClusterId, MacaroonPerClusterType, undefined).
 
 
 -spec has_gui_macaroon(session:id() | gui_macaroons_cache(), onedata:cluster_type(),
-    od_cluster:service_id(), macaroon_logic:id()) -> boolean().
-has_gui_macaroon(SessionId, ClusterType, ServiceId, Identifier) when is_binary(SessionId) ->
+    od_cluster:id(), macaroon_logic:id()) -> boolean().
+has_gui_macaroon(SessionId, ClusterType, ClusterId, Identifier) when is_binary(SessionId) ->
     case ?MODULE:get(SessionId) of
         {error, _} ->
             false;
         {ok, #document{value = #session{gui_macaroons = GuiMacaroons}}} ->
-            has_gui_macaroon(GuiMacaroons, ClusterType, ServiceId, Identifier)
+            has_gui_macaroon(GuiMacaroons, ClusterType, ClusterId, Identifier)
     end;
-has_gui_macaroon(GuiMacaroons, ClusterType, ServiceId, Identifier) ->
-    case get_gui_macaroon(GuiMacaroons, ClusterType, ServiceId) of
+has_gui_macaroon(GuiMacaroons, ClusterType, ClusterId, Identifier) ->
+    case get_gui_macaroon(GuiMacaroons, ClusterType, ClusterId) of
         {Identifier, _, _} -> true;
         _ -> false
     end.
 
 
--spec reuse_gui_macaroon(gui_macaroons_cache(), onedata:cluster_type(), od_cluster:service_id()) ->
+-spec reuse_gui_macaroon(gui_macaroons_cache(), onedata:cluster_type(), od_cluster:id()) ->
     false | {true, macaroon_logic:gui_macaroon()}.
-reuse_gui_macaroon(GuiMacaroons, ClusterType, ServiceId) ->
-    case get_gui_macaroon(GuiMacaroons, ClusterType, ServiceId) of
+reuse_gui_macaroon(GuiMacaroons, ClusterType, ClusterId) ->
+    case get_gui_macaroon(GuiMacaroons, ClusterType, ClusterId) of
         undefined ->
             false;
         {Identifier, Macaroon, Expires} ->

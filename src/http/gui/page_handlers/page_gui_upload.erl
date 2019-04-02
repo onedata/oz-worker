@@ -71,7 +71,7 @@ handle_gui_upload(Req) ->
     lists:member(Service, [?OP_WORKER, ?OP_PANEL]) orelse throw(?HTTP_400_BAD_REQUEST),
 
     ProviderId = try cluster_logic:get(?ROOT, ClusterId) of
-        {ok, #od_cluster{type = ?ONEPROVIDER, service_id = ServiceId}} -> ServiceId;
+        {ok, #od_cluster{type = ?ONEPROVIDER}} -> ClusterId;
         _ -> throw(?HTTP_404_NOT_FOUND)
     catch _:_ ->
         throw(?HTTP_404_NOT_FOUND)

@@ -17,6 +17,7 @@
 -include("registered_names.hrl").
 -include("api_test_utils.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
 -define(OZ_NODES(Config), ?config(oz_worker_nodes, Config)).
@@ -186,7 +187,6 @@
 -export([
     list_clusters/1,
     get_cluster/2,
-    get_provider_cluster/2,
     update_cluster/3,
     delete_cluster/2,
 
@@ -1500,7 +1500,7 @@ create_handle_service(Config, Client, Name, ProxyEndpoint, ServiceProperties) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a handle service.npr
+%% Creates a handle service.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_handle_service(Config :: term(), Client :: entity_logic:client(),
@@ -1962,20 +1962,6 @@ get_cluster(Config, ClusterId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, cluster_logic, get, [?ROOT, ClusterId]
     )).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves the cluster Id of given provider.
-%% @end
-%%--------------------------------------------------------------------
--spec get_provider_cluster(Config :: term(), ProviderId :: od_provider:id()) ->
-    od_cluster:id().
-get_provider_cluster(Config, ProviderId) ->
-    {ok, #od_provider{
-        cluster = ClusterId
-    }} = oz_test_utils:get_provider(Config, ProviderId),
-    ClusterId.
 
 
 %%--------------------------------------------------------------------

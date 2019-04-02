@@ -536,7 +536,8 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
 
         {?USER(ClientUserId), ?THROUGH_PROVIDER(ProviderId)} ->
             % Group's membership in provider is checked in 'exists'
-            provider_logic:has_eff_privilege_in_cluster(ProviderId, ClientUserId, ?CLUSTER_VIEW);
+            ClusterId = ProviderId,
+            cluster_logic:has_eff_privilege(ClusterId, ClientUserId, ?CLUSTER_VIEW);
 
         _ ->
             % Access to private data also allows access to protected data
@@ -591,7 +592,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
             end;
 
         {?PROVIDER(ProviderId), ?THROUGH_CLUSTER(ClusterId)} ->
-            cluster_logic:is_linked_to_provider(ClusterId, ProviderId);
+            cluster_logic:is_provider_cluster(ClusterId, ProviderId);
 
         _ ->
             % Access to protected data also allows access to shared data

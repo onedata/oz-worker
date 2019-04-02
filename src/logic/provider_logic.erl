@@ -57,7 +57,6 @@
 -export([
     exists/1,
     has_eff_user/2,
-    has_eff_privilege_in_cluster/3,
     has_eff_group/2,
     supports_space/2
 ]).
@@ -593,24 +592,6 @@ has_eff_user(ProviderId, UserId) when is_binary(ProviderId) ->
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, od_provider, ProviderId);
 has_eff_user(Provider, UserId) ->
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, Provider).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Predicate saying whether specified user is an effective user of given provider.
-%% @end
-%%--------------------------------------------------------------------
--spec has_eff_privilege_in_cluster(ProviderOrId :: od_provider:id() | #od_provider{},
-    UserId :: od_provider:id(), privileges:cluster_privilege()) -> boolean().
-has_eff_privilege_in_cluster(ProviderId, UserId, Privilege) when is_binary(ProviderId) ->
-    case od_provider:get(ProviderId) of
-        {ok, #document{value = Provider}} ->
-            has_eff_privilege_in_cluster(Provider, UserId, Privilege);
-        _ ->
-            false
-    end;
-has_eff_privilege_in_cluster(Provider, UserId, Privilege) ->
-    cluster_logic:has_eff_privilege(Provider#od_provider.cluster, UserId, Privilege).
 
 
 %%--------------------------------------------------------------------

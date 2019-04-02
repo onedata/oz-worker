@@ -137,7 +137,7 @@ create_test(Config) ->
             false ->
                 {undefined, maps:get(<<"domain">>, Data)}
         end,
-        ExpClusterId = oz_test_utils:get_provider_cluster(Config, ProviderId),
+        ExpClusterId = ProviderId,
 
         % Logic returns the macaroon in deserialized format, and REST in serialized
         MacaroonBin = case is_binary(Macaroon) of
@@ -156,12 +156,12 @@ create_test(Config) ->
         ?assertEqual(ExpSubdomainDelegation, Provider#od_provider.subdomain_delegation),
         ?assertEqual(ExpSubdomain, Provider#od_provider.subdomain),
         ?assertEqual(ExpAdminEmail, Provider#od_provider.admin_email),
-        ?assertEqual(ExpClusterId, Provider#od_provider.cluster),
+        ?assertEqual(ExpClusterId, ProviderId),
         ?assertEqual(ExpLatitude, Provider#od_provider.latitude),
         ?assertEqual(ExpLongitude, Provider#od_provider.longitude),
 
         {ok, Cluster} = oz_test_utils:get_cluster(Config, ExpClusterId),
-        ?assertEqual(ProviderId, Cluster#od_cluster.service_id),
+        ?assertEqual(ProviderId, ExpClusterId),
         ?assertEqual(?ONEPROVIDER, Cluster#od_cluster.type),
 
         % check also provider_logic:get_url function
@@ -337,13 +337,9 @@ get_test(Config) ->
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, P2Creator, ?PROVIDER_NAME2
     ),
-    Cluster1 = oz_test_utils:get_provider_cluster(Config, P1),
+    Cluster1 = P1,
 
     Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
-
-    ExpProviderDetails = PrivateProviderDetails#{
-        <<"cluster">> => Cluster1
-    },
 
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
@@ -401,7 +397,6 @@ get_test(Config) ->
                 <<"name">> => ExpName, <<"domain">> => ExpDomain,
                 <<"effectiveGroups">> => [], <<"effectiveUsers">> => [U1],
                 <<"latitude">> => ExpLatitude, <<"longitude">> => ExpLongitude,
-                <<"cluster">> => Cluster1,
                 <<"spaces">> => #{S1 => SupportSize},
                 <<"subdomain">> => <<"undefined">>,
                 <<"subdomainDelegation">> => false,
@@ -417,7 +412,7 @@ get_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
 
-    ExpProtectedDetails = maps:remove(<<"adminEmail">>, ExpProviderDetails#{
+    ExpProtectedDetails = maps:remove(<<"adminEmail">>, PrivateProviderDetails#{
         <<"online">> => true
     }),
 
@@ -477,7 +472,6 @@ get_self_test(Config) ->
     ),
 
     ExpDetails = maps:remove(<<"adminEmail">>, ProviderDetails#{
-        <<"cluster">> => oz_test_utils:get_provider_cluster(Config, P1),
         <<"name">> => ?PROVIDER_NAME1,
         <<"online">> => false
     }),
@@ -710,7 +704,7 @@ delete_test(Config) ->
         Cluster1MemberNoDeletePrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_DELETE]),
         #{
             providerId => P1, providerClient => {provider, P1, P1Macaroon},
-            clusterId => oz_test_utils:get_provider_cluster(Config, P1),
+            clusterId => P1,
             clusterMember => {user, Cluster1Member}, clusterMemberNoDeletePrivs => {user, Cluster1MemberNoDeletePrivs}
         }
     end,
@@ -2561,7 +2555,7 @@ create_2_providers_and_5_supported_spaces(Config) ->
 
 
 new_cluster_member_with_privs(Config, ProviderId, ToGrant, ToRevoke) ->
-    ClusterId = oz_test_utils:get_provider_cluster(Config, ProviderId),
+    ClusterId = ProviderId,
     {ok, NewMember} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:cluster_add_user(Config, ClusterId, NewMember),
     oz_test_utils:cluster_set_user_privileges(

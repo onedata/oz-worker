@@ -253,10 +253,10 @@ gui_macaroon_test(Config) ->
     {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, UserId),
 
     ClusterType = ?ONEPROVIDER,
-    ServiceId = Provider1,
+    ClusterId = Provider1,
 
     {ok, {Macaroon, Expires}} = oz_test_utils:call_oz(Config, session, acquire_gui_macaroon, [
-        SessionId, ClusterType, ServiceId
+        SessionId, ClusterType, ClusterId
     ]),
     {ok, MacaroonBin} = onedata_macaroons:serialize(Macaroon),
 

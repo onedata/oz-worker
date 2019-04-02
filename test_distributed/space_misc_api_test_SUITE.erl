@@ -715,7 +715,6 @@ get_provider_test(Config) ->
     ),
 
     ExpDetails = maps:remove(<<"adminEmail">>, ProviderDetails#{
-        <<"cluster">> => oz_test_utils:get_provider_cluster(Config, P1),
         <<"online">> => false
     }),
     ApiTestSpec = #api_test_spec{
