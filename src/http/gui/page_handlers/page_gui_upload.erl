@@ -41,3 +41,4 @@ handle(<<"POST">>, Req) ->
             ?error_stacktrace("Error while processing GUI upload - ~p:~p", [Type, Reason]),
             cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req)
     end.
+

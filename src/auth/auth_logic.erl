@@ -281,22 +281,22 @@ authorize_by_oneprovider_gui_macaroon(SubjectToken, AudienceToken) ->
 -spec authorize_by_onezone_gui_macaroon(macaroon:macaroon() | binary()) ->
     {true, entity_logic:client(), session:id()} | {error, term()}.
 authorize_by_onezone_gui_macaroon(Macaroon) ->
-    authorize_by_gui_macaroon(Macaroon, ?ONEZONE, ?ONEZONE_SERVICE_ID).
+    authorize_by_gui_macaroon(Macaroon, ?ONEZONE, ?ONEZONE_CLUSTER_ID).
 
 
 %% @private
 -spec authorize_by_gui_macaroon(macaroon:macaroon() | binary(),
-    onedata:cluster_type(), od_cluster:service_id()) ->
+    onedata:cluster_type(), od_cluster:id()) ->
     {true, entity_logic:client(), session:id()} | {error, term()}.
-authorize_by_gui_macaroon(Token, ClusterType, ServiceId) when is_binary(Token) ->
+authorize_by_gui_macaroon(Token, ClusterType, ClusterId) when is_binary(Token) ->
     case onedata_macaroons:deserialize(Token) of
         {ok, Macaroon} ->
-            authorize_by_gui_macaroon(Macaroon, ClusterType, ServiceId);
+            authorize_by_gui_macaroon(Macaroon, ClusterType, ClusterId);
         {error, _} = Error ->
             Error
     end;
-authorize_by_gui_macaroon(Macaroon, ClusterType, ServiceId) ->
-    case session:verify_gui_macaroon(Macaroon, ClusterType, ServiceId) of
+authorize_by_gui_macaroon(Macaroon, ClusterType, ClusterId) ->
+    case session:verify_gui_macaroon(Macaroon, ClusterType, ClusterId) of
         {ok, UserId, SessionId} -> {true, ?USER(UserId), SessionId};
         {error, _} = Error -> Error
     end.

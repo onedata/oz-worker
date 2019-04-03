@@ -135,7 +135,6 @@ create_handle_service_test(Config) ->
     ExpProperties = ?DOI_SERVICE_PROPERTIES,
 
     AllPrivs = privileges:handle_service_privileges(),
-    AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(HServiceId) ->
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config),

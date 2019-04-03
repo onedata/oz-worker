@@ -17,8 +17,6 @@
 -include_lib("cluster_worker/include/modules/datastore/datastore_models.hrl").
 
 -define(DEFAULT_GROUP_TYPE, team).
--define(ONEZONE_CLUSTER_ID, <<"onezone">>).
--define(ONEZONE_SERVICE_ID, <<"onezone">>).
 -define(DEFAULT_RELEASE_VERSION, <<"18.02.*">>).
 -define(DEFAULT_BUILD_VERSION, <<"unknown">>).
 -define(EMPTY_GUI_HASH, <<"empty">>).
@@ -258,7 +256,6 @@
 
     % Direct relations to other entities
     spaces = #{} :: entity_graph:relations_with_attrs(od_space:id(), Size :: pos_integer()),
-    cluster = undefined :: undefined | od_cluster:id(),
 
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations(od_user:id()),
@@ -345,7 +342,6 @@
 %% This record defines a Onezone/Oneprovider cluster.
 -record(od_cluster, {
     type = ?ONEZONE :: onedata:cluster_type(),
-    service_id = ?ONEZONE_SERVICE_ID :: undefined | od_cluster:service_id(),
 
     % Version 18.02.* is default for legacy providers
     worker_version = {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH} :: od_cluster:version_info(),

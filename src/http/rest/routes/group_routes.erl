@@ -102,7 +102,7 @@ routes() -> [
     }},
     %% Create user invite token for group
     %% This operation requires one of the following privileges:
-    %% - group_invite_user
+    %% - group_add_user
     %% - oz_groups_add_relationships
     {<<"/groups/:id/users/token">>, #rest_req{
         method = 'POST',
@@ -110,7 +110,7 @@ routes() -> [
     }},
     %% Add user to group
     %% This operation requires one of the following privileges:
-    %% - group_invite_user
+    %% - group_add_user
     %% - group_set_privileges
     %% - oz_groups_add_relationships
     %% - oz_users_add_relationships

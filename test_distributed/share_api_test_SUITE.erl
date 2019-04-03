@@ -475,7 +475,7 @@ public_share_page_test(Config) ->
     {ok, {NewProvider, _}} = oz_test_utils:create_provider(
         Config, ProviderData
     ),
-    NewClusterId = oz_test_utils:get_provider_cluster(Config, NewProvider),
+    NewClusterId = NewProvider,
     {DummyGuiHash, _IndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_WORKER),
     ok = oz_test_utils:call_oz(Config, cluster_logic, update_version_info, [
         ?PROVIDER(NewProvider), NewClusterId, ?WORKER, {<<"19.02.1">>, <<"build-123">>, DummyGuiHash}

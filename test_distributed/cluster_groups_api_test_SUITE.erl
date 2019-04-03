@@ -81,34 +81,34 @@ add_group_test(Config) ->
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(User), ?GROUP_NAME1),
 
-    {ok, {ProviderId, _Macaroon}} = oz_test_utils:create_provider(Config, User, ?PROVIDER_NAME1),
-    C1 = oz_test_utils:get_provider_cluster(Config, ProviderId),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, User, ?PROVIDER_NAME1),
+    ClusterId = ProviderId,
 
-    oz_test_utils:cluster_add_user(Config, C1, UserNoAddGroupPriv),
+    oz_test_utils:cluster_add_user(Config, ClusterId, UserNoAddGroupPriv),
     oz_test_utils:group_add_user(Config, G1, UserNoAddGroupPriv),
-    oz_test_utils:cluster_set_user_privileges(Config, C1, UserNoAddGroupPriv,
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, UserNoAddGroupPriv,
         privileges:cluster_privileges() -- [?CLUSTER_ADD_GROUP], [?CLUSTER_ADD_GROUP]
     ),
     oz_test_utils:group_set_user_privileges(Config, G1, UserNoAddGroupPriv,
         privileges:group_privileges(), []
     ),
 
-    oz_test_utils:cluster_add_user(Config, C1, UserNoAddClusterPriv),
+    oz_test_utils:cluster_add_user(Config, ClusterId, UserNoAddClusterPriv),
     oz_test_utils:group_add_user(Config, G1, UserNoAddClusterPriv),
     oz_test_utils:group_set_user_privileges(Config, G1, UserNoAddClusterPriv,
         privileges:group_privileges() -- [?GROUP_ADD_CLUSTER], [?GROUP_ADD_CLUSTER]
     ),
-    oz_test_utils:cluster_set_user_privileges(Config, C1, UserNoAddClusterPriv,
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, UserNoAddClusterPriv,
         privileges:cluster_privileges(), []
     ),
 
     VerifyEndFun = fun
         (true = _ShouldSucceed, _, _) ->
-            {ok, Groups} = oz_test_utils:cluster_get_groups(Config, C1),
+            {ok, Groups} = oz_test_utils:cluster_get_groups(Config, ClusterId),
             ?assert(lists:member(G1, Groups)),
-            oz_test_utils:cluster_remove_group(Config, C1, G1);
+            oz_test_utils:cluster_remove_group(Config, ClusterId, G1);
         (false = _ShouldSucceed, _, _) ->
-            {ok, Groups} = oz_test_utils:cluster_get_groups(Config, C1),
+            {ok, Groups} = oz_test_utils:cluster_get_groups(Config, ClusterId),
             ?assertNot(lists:member(G1, Groups))
     end,
 
@@ -128,10 +128,10 @@ add_group_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = put,
-            path = [<<"/clusters/">>, C1, <<"/groups/">>, G1],
+            path = [<<"/clusters/">>, ClusterId, <<"/groups/">>, G1],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/clusters/">>, C1, <<"/groups/">>, G1]),
+                ExpLocation = ?URL(Config, [<<"/clusters/">>, ClusterId, <<"/groups/">>, G1]),
                 ?assertEqual(ExpLocation, Location),
                 true
             end
@@ -139,7 +139,7 @@ add_group_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = add_group,
-            args = [client, C1, G1, data],
+            args = [client, ClusterId, G1, data],
             expected_result = ?OK_BINARY(G1)
         },
         % TODO gs
@@ -162,15 +162,15 @@ add_group_with_privileges_test(Config) ->
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(User), ?GROUP_NAME1),
 
-    {ok, {ProviderId, _Macaroon}} = oz_test_utils:create_provider(Config, User, ?PROVIDER_NAME1),
-    C1 = oz_test_utils:get_provider_cluster(Config, ProviderId),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, User, ?PROVIDER_NAME1),
+    ClusterId = ProviderId,
 
-    oz_test_utils:cluster_add_user(Config, C1, UserNoSetPrivsPriv),
+    oz_test_utils:cluster_add_user(Config, ClusterId, UserNoSetPrivsPriv),
     oz_test_utils:group_add_user(Config, G1, UserNoSetPrivsPriv),
     oz_test_utils:group_set_user_privileges(Config, G1, UserNoSetPrivsPriv,
         privileges:group_privileges(), []
     ),
-    oz_test_utils:cluster_set_user_privileges(Config, C1, UserNoSetPrivsPriv,
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, UserNoSetPrivsPriv,
         privileges:cluster_privileges() -- [?CLUSTER_SET_PRIVILEGES], [?CLUSTER_SET_PRIVILEGES]
     ),
 
@@ -179,12 +179,12 @@ add_group_with_privileges_test(Config) ->
         (true = _ShouldSucceed, _, Data) ->
             ExpPrivs = lists:sort(maps:get(<<"privileges">>, Data)),
             {ok, Privs} = oz_test_utils:cluster_get_group_privileges(
-                Config, C1, G1
+                Config, ClusterId, G1
             ),
             ?assertEqual(ExpPrivs, lists:sort(Privs)),
-            oz_test_utils:cluster_remove_group(Config, C1, G1);
+            oz_test_utils:cluster_remove_group(Config, ClusterId, G1);
         (false = ShouldSucceed, _, _) ->
-            {ok, Groups} = oz_test_utils:cluster_get_groups(Config, C1),
+            {ok, Groups} = oz_test_utils:cluster_get_groups(Config, ClusterId),
             ?assertEqual(lists:member(G1, Groups), ShouldSucceed)
     end,
 
@@ -203,10 +203,10 @@ add_group_with_privileges_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = put,
-            path = [<<"/clusters/">>, C1, <<"/groups/">>, G1],
+            path = [<<"/clusters/">>, ClusterId, <<"/groups/">>, G1],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                ExpLocation = ?URL(Config, [<<"/clusters/">>, C1, <<"/groups/">>, G1]),
+                ExpLocation = ?URL(Config, [<<"/clusters/">>, ClusterId, <<"/groups/">>, G1]),
                 ?assertEqual(ExpLocation, Location),
                 true
             end
@@ -214,7 +214,7 @@ add_group_with_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = add_group,
-            args = [client, C1, G1, data],
+            args = [client, ClusterId, G1, data],
             expected_result = ?OK_BINARY(G1)
         },
         % TODO gs
@@ -907,11 +907,11 @@ get_eff_group_membership_intermediaries(Config) ->
 
 
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
-    C1 = oz_test_utils:get_provider_cluster(Config, P1),
+    C1 = P1,
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
-    C2 = oz_test_utils:get_provider_cluster(Config, P2),
+    C2 = P2,
     {ok, {P3, P3Macaroon}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
-    C3 = oz_test_utils:get_provider_cluster(Config, P3),
+    C3 = P3,
 
     oz_test_utils:group_add_user(Config, G4, U2),
 

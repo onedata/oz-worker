@@ -76,7 +76,6 @@ get_response(#gri{id = undefined, aspect = list}, Clusters) ->
 get_response(#gri{id = ClusterId, aspect = instance, scope = protected}, ClusterData) ->
     #{
         <<"type">> := Type,
-        <<"serviceId">> := ServiceId,
         <<"workerVersion">> := WorkerVersion,
         <<"onepanelVersion">> := OnepanelVersion,
         <<"onepanelProxy">> := OnepanelProxy
@@ -84,7 +83,6 @@ get_response(#gri{id = ClusterId, aspect = instance, scope = protected}, Cluster
     rest_translator:ok_body_reply(#{
         <<"clusterId">> => ClusterId,
         <<"type">> => Type,
-        <<"serviceId">> => ServiceId,
         <<"workerVersion">> => WorkerVersion,
         <<"onepanelVersion">> => OnepanelVersion,
         <<"onepanelProxy">> => OnepanelProxy

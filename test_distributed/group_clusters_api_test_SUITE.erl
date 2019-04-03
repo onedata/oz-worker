@@ -68,8 +68,8 @@ list_clusters_test(Config) ->
 
     ExpClusters = lists:map(
         fun(_) ->
-            {ok, {P1, _Macaroon1}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
-            ClusterId = oz_test_utils:get_provider_cluster(Config, P1),
+            {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
+            ClusterId = ProviderId,
             {ok, G1} = oz_test_utils:cluster_add_group(Config, ClusterId, G1),
             ClusterId
         end, lists:seq(1, 5)
@@ -116,7 +116,7 @@ join_cluster_test(Config) ->
 
     EnvSetUpFun = fun() ->
         {ok, {P1, _Macaroon1}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
-        ClusterId = oz_test_utils:get_provider_cluster(Config, P1),
+        ClusterId = P1,
         {ok, Macaroon} = oz_test_utils:cluster_invite_group_token(
             Config, ?ROOT, ClusterId
         ),
@@ -194,7 +194,7 @@ join_cluster_test(Config) ->
 
     % Check that token is not consumed upon failed operation
     {ok, {P2, _Macaroon2}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
-    NewCluster = oz_test_utils:get_provider_cluster(Config, P2),
+    NewCluster = P2,
     oz_test_utils:cluster_add_group(Config, NewCluster, G1),
 
     {ok, Macaroon1} = oz_test_utils:cluster_invite_group_token(
@@ -242,9 +242,9 @@ get_cluster_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
-    {ok, {P1, _Macaroon1}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
-    C1 = oz_test_utils:get_provider_cluster(Config, P1),
-    {ok, G1} = oz_test_utils:cluster_add_group(Config, C1, G1),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
+    ClusterId = ProviderId,
+    {ok, G1} = oz_test_utils:cluster_add_group(Config, ClusterId, G1),
 
     DefaultVersionInfo = #{
         <<"release">> => ?DEFAULT_RELEASE_VERSION,
@@ -254,7 +254,6 @@ get_cluster_test(Config) ->
 
     ExpDetails = #{
         <<"type">> => ?ONEPROVIDER,
-        <<"serviceId">> => P1,
         <<"workerVersion">> => DefaultVersionInfo,
         <<"onepanelVersion">> => DefaultVersionInfo,
         <<"onepanelProxy">> => false
@@ -275,17 +274,17 @@ get_cluster_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = get,
-            path = [<<"/groups/">>, G1, <<"/clusters/">>, C1],
+            path = [<<"/groups/">>, G1, <<"/clusters/">>, ClusterId],
             expected_code = ?HTTP_200_OK,
             expected_body = ExpDetails#{
-                <<"clusterId">> => C1,
+                <<"clusterId">> => ClusterId,
                 <<"type">> => <<"oneprovider">>
             }
         },
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_cluster,
-            args = [client, G1, C1],
+            args = [client, G1, ClusterId],
             expected_result = ?OK_MAP_CONTAINS(ExpDetails)
         }
         % @todo gs
@@ -303,10 +302,10 @@ leave_cluster_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
 
     EnvSetUpFun = fun() ->
-        {ok, {P1, _Macaroon1}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
-        C1 = oz_test_utils:get_provider_cluster(Config, P1),
-        {ok, G1} = oz_test_utils:cluster_add_group(Config, C1, G1),
-        #{clusterId => C1}
+        {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
+        ClusterId = ProviderId,
+        {ok, G1} = oz_test_utils:cluster_add_group(Config, ClusterId, G1),
+        #{clusterId => ClusterId}
     end,
     DeleteEntityFun = fun(#{clusterId := ClusterId} = _Env) ->
         oz_test_utils:cluster_remove_group(Config, ClusterId, G1)
@@ -355,14 +354,13 @@ list_eff_clusters_test(Config) ->
         [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _} | _] = _Groups,
         {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_providers_env(Config),
-
-    C1 = oz_test_utils:get_provider_cluster(Config, P1),
-    C2 = oz_test_utils:get_provider_cluster(Config, P2),
-    C3 = oz_test_utils:get_provider_cluster(Config, P3),
-    C4 = oz_test_utils:get_provider_cluster(Config, P4),
-
     {ok, {P5, _Macaroon5}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
-    C5 = oz_test_utils:get_provider_cluster(Config, P5),
+
+    C1 = P1,
+    C2 = P2,
+    C3 = P3,
+    C4 = P4,
+    C5 = P5,
 
     % G1 is a child of all groups, so it inherits effective memberships from them
     oz_test_utils:cluster_add_group(Config, C1, G1),
@@ -425,13 +423,12 @@ get_eff_cluster_details_test(Config) ->
     } = api_test_scenarios:create_eff_providers_env(Config),
 
     EffClustersList = lists:map(fun({ProviderId, _}) ->
-        ClusterId = oz_test_utils:get_provider_cluster(Config, ProviderId),
+        ClusterId = ProviderId,
         % G1 is a child of all groups, so it inherits effective memberships from them
         oz_test_utils:cluster_add_group(Config, ClusterId, utils:random_element([G1, G2, G3, G4, G5])),
 
         {ok, #od_cluster{
             type = Type,
-            service_id = ServiceId,
             worker_version = {WRelease, WBuild, WGui},
             onepanel_version = {ORelease, OBuild, OGui},
             onepanel_proxy = OnepanelProxy
@@ -439,7 +436,6 @@ get_eff_cluster_details_test(Config) ->
 
         {ClusterId, #{
             <<"type">> => Type,
-            <<"serviceId">> => ServiceId,
             <<"workerVersion">> => #{
                 <<"release">> => WRelease,
                 <<"build">> => WBuild,

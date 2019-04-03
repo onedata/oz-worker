@@ -17,6 +17,7 @@
 -include("registered_names.hrl").
 -include("api_test_utils.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
 -define(OZ_NODES(Config), ?config(oz_worker_nodes, Config)).
@@ -221,7 +222,6 @@
 -export([
     list_clusters/1,
     get_cluster/2,
-    get_provider_cluster/2,
     update_cluster/3,
     delete_cluster/2,
 
@@ -280,8 +280,8 @@
     graph_sync_url/2,
     get_gs_supported_proto_versions/1,
     decode_gri/2,
-    request_gui_token_endpoint/2,
-    request_gui_token_endpoint/4
+    call_gui_token_endpoint/2,
+    call_gui_token_endpoint/4
 ]).
 
 %%%===================================================================
@@ -1600,7 +1600,7 @@ create_handle_service(Config, Client, Name, ProxyEndpoint, ServiceProperties) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a handle service.npr
+%% Creates a handle service.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_handle_service(Config :: term(), Client :: entity_logic:client(),
@@ -2368,20 +2368,6 @@ get_cluster(Config, ClusterId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, cluster_logic, get, [?ROOT, ClusterId]
     )).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves the cluster Id of given provider.
-%% @end
-%%--------------------------------------------------------------------
--spec get_provider_cluster(Config :: term(), ProviderId :: od_provider:id()) ->
-    od_cluster:id().
-get_provider_cluster(Config, ProviderId) ->
-    {ok, #od_provider{
-        cluster = ClusterId
-    }} = oz_test_utils:get_provider(Config, ProviderId),
-    ClusterId.
 
 
 %%--------------------------------------------------------------------
@@ -3303,10 +3289,10 @@ decode_gri(Config, EncodedGri) ->
 %% Acquires a Onezone gui token issued for the session denoted by given cookie.
 %% @end
 %%--------------------------------------------------------------------
--spec request_gui_token_endpoint(Config :: term(), Cookie :: binary()) ->
+-spec call_gui_token_endpoint(Config :: term(), Cookie :: binary()) ->
     {ok, Token :: binary()} | {error, term()}.
-request_gui_token_endpoint(Config, Cookie) ->
-    request_gui_token_endpoint(Config, Cookie, ?ONEZONE, ?ONEZONE_CLUSTER_ID).
+call_gui_token_endpoint(Config, Cookie) ->
+    call_gui_token_endpoint(Config, Cookie, ?ONEZONE, ?ONEZONE_CLUSTER_ID).
 
 
 %%--------------------------------------------------------------------
@@ -3315,10 +3301,10 @@ request_gui_token_endpoint(Config, Cookie) ->
 %% for use by given service (defined via cluster type and id).
 %% @end
 %%--------------------------------------------------------------------
--spec request_gui_token_endpoint(Config :: term(), Cookie :: binary(),
+-spec call_gui_token_endpoint(Config :: term(), Cookie :: binary(),
     od_cluster:id(), od_cluster:type()) ->
     {ok, Token :: binary()} | {error, term()}.
-request_gui_token_endpoint(Config, Cookie, ClusterType, ClusterId) ->
+call_gui_token_endpoint(Config, Cookie, ClusterType, ClusterId) ->
     Result = http_client:post(
         str_utils:format("https://~s/gui-token", [oz_domain(Config)]),
         #{

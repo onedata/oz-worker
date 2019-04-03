@@ -61,8 +61,8 @@ get_origin(RequestBody) ->
     } = json_utils:decode(RequestBody),
     ClusterType = binary_to_existing_atom(ClusterTypeBin, utf8),
     % Ensure request correctness or crash with a badmatch
-    {ok, Cluster = #od_cluster{type = ClusterType}} = cluster_logic:get(?ROOT, ClusterId),
-    {ok, Domain} = cluster_logic:get_domain(Cluster),
+    {ok, #od_cluster{type = ClusterType}} = cluster_logic:get(?ROOT, ClusterId),
+    {ok, Domain} = cluster_logic:get_domain(ClusterId),
     json_utils:encode(#{
         <<"domain">> => Domain
     }).

@@ -1743,7 +1743,7 @@ create_predefined_groups() ->
                 {Module, Function} ->
                     Module:Function()
             end,
-            create_predefined_group(Id, Name, Privs)
+            ok = create_predefined_group(Id, Name, Privs)
         end, PredefinedGroups).
 
 %%%===================================================================
@@ -1791,6 +1791,6 @@ create_predefined_group(GroupId, Name, Privileges) ->
             ok = update(?ROOT, GroupId, #{<<"name">> => NormalizedName}),
             ToRevoke = privileges:oz_admin() -- Privileges,
             ok = update_oz_privileges(?ROOT, GroupId, Privileges, ToRevoke);
-        _ ->
-            ok
+        error ->
+            error
     end.

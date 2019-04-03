@@ -724,17 +724,17 @@ create_basic_cluster_env(Config, Privs) ->
     {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
         Config, U1, ?PROVIDER_NAME1
     ),
-    Cluster = oz_test_utils:get_provider_cluster(Config, ProviderId),
+    ClusterId = ProviderId,
 
     oz_test_utils:cluster_set_user_privileges(
-        Config, Cluster, U1, [], Privs
+        Config, ClusterId, U1, [], Privs
     ),
-    {ok, U2} = oz_test_utils:cluster_add_user(Config, Cluster, U2),
-    oz_test_utils:cluster_set_user_privileges(Config, Cluster, U2, Privs, AllClusterPrivs -- Privs),
+    {ok, U2} = oz_test_utils:cluster_add_user(Config, ClusterId, U2),
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U2, Privs, AllClusterPrivs -- Privs),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {Cluster, U1, U2, {ProviderId, Macaroon}}.
+    {ClusterId, U1, U2, {ProviderId, Macaroon}}.
 
 
 create_eff_parent_groups_env(Config) ->
@@ -1141,20 +1141,20 @@ create_cluster_eff_users_env(Config) ->
     {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
         Config, U1, ?PROVIDER_NAME1
     ),
-    C1 = oz_test_utils:get_provider_cluster(Config, ProviderId),
+    ClusterId = ProviderId,
 
-    oz_test_utils:cluster_set_user_privileges(Config, C1, U1, [],
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U1, [],
         [?CLUSTER_VIEW]
     ),
-    {ok, U2} = oz_test_utils:cluster_add_user(Config, C1, U2),
-    oz_test_utils:cluster_set_user_privileges(Config, C1, U2,
+    {ok, U2} = oz_test_utils:cluster_add_user(Config, ClusterId, U2),
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U2,
         [?CLUSTER_VIEW], AllClusterPrivs -- [?CLUSTER_VIEW]
     ),
-    {ok, G1} = oz_test_utils:cluster_add_group(Config, C1, G1),
+    {ok, G1} = oz_test_utils:cluster_add_group(Config, ClusterId, G1),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {C1, Groups, Users, {U1, U2, NonAdmin}, {ProviderId, Macaroon}}.
+    {ClusterId, Groups, Users, {U1, U2, NonAdmin}, {ProviderId, Macaroon}}.
 
 
 create_eff_spaces_env(Config) ->
@@ -1239,7 +1239,6 @@ create_eff_providers_env(Config) ->
                 Config, ProvDetails#{<<"subdomainDelegation">> => false}
             ),
             {ProvId, maps:remove(<<"adminEmail">>, ProvDetails#{
-                <<"cluster">> => oz_test_utils:get_provider_cluster(Config, ProvId),
                 <<"online">> => false
             })}
         end, lists:seq(1, 4)

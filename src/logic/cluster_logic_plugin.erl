@@ -227,7 +227,6 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Cluster) ->
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Cluster) ->
     #od_cluster{
         type = Type,
-        service_id = ServiceId,
         worker_version = WorkerVersion,
         onepanel_version = OnepanelVersion,
         onepanel_proxy = OnepanelProxy,
@@ -237,7 +236,6 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Cluster) ->
 
     {ok, #{
         <<"type">> => Type,
-        <<"serviceId">> => ServiceId,
         <<"workerVersion">> => cluster_logic:version_info_to_json(WorkerVersion),
         <<"onepanelVersion">> => cluster_logic:version_info_to_json(OnepanelVersion),
         <<"onepanelProxy">> => OnepanelProxy,
@@ -400,8 +398,8 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Cluster
     end;
 
 % A provider can perform all operations within its cluster
-authorize(#el_req{client = ?PROVIDER(ProviderId)}, Cluster) ->
-    cluster_logic:is_linked_to_provider(Cluster, ProviderId);
+authorize(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{id = ClusterId}}, _Cluster) ->
+    cluster_logic:is_provider_cluster(ClusterId, ProviderId);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Cluster) ->
     auth_by_privilege(Req, Cluster, ?CLUSTER_ADD_USER);
@@ -412,7 +410,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_tok
 authorize(#el_req{client = ?USER(UserId), operation = get, gri = #gri{aspect = instance, scope = private}}, Cluster) ->
     auth_by_privilege(UserId, Cluster, ?CLUSTER_VIEW);
 
-authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Cluster) ->
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = ClusterId, aspect = instance, scope = protected}}, Cluster) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this cluster is checked in 'exists'
@@ -433,7 +431,8 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
                 ?ONEZONE ->
                     true;
                 ?ONEPROVIDER ->
-                    provider_logic:has_eff_user(Cluster#od_cluster.service_id, ClientUserId) orelse
+                    ProviderId = ClusterId,
+                    provider_logic:has_eff_user(ProviderId, ClientUserId) orelse
                         cluster_logic:has_eff_user(Cluster, ClientUserId)
             end;
 
@@ -467,12 +466,12 @@ authorize(Req = #el_req{operation = get, client = ?USER}, Cluster) ->
     % All other resources can be accessed with view privileges
     auth_by_privilege(Req, Cluster, ?CLUSTER_VIEW);
 
-authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, Cluster) ->
+authorize(Req = #el_req{operation = update, gri = #gri{id = ClusterId, aspect = instance}}, Cluster) ->
     case Req#el_req.client of
         ?USER(UserId) ->
             auth_by_privilege(UserId, Cluster, ?CLUSTER_UPDATE);
         ?PROVIDER(ProviderId) ->
-            cluster_logic:is_linked_to_provider(Cluster, ProviderId)
+            cluster_logic:is_provider_cluster(ClusterId, ProviderId)
     end;
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}, Cluster) ->

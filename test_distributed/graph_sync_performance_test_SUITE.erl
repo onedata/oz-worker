@@ -13,6 +13,7 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("gui/include/gui_session.hrl").
 -include_lib("cluster_worker/include/global_definitions.hrl").
@@ -382,7 +383,7 @@ spawn_clients(Config, Type, Clients, RetryFlag, CallbackFunction, OnSuccessFun) 
             gui ->
                 {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, Client),
                 {ok, {Macaroon, _}} = oz_test_utils:call_oz(Config, session, acquire_gui_macaroon, [
-                    SessionId, ?ONEZONE, ?ONEZONE_SERVICE_ID
+                    SessionId, ?ONEZONE, ?ONEZONE_CLUSTER_ID
                 ]),
                 {ok, Token} = onedata_macaroons:serialize(Macaroon),
                 Auth = {urlToken, Token},

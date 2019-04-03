@@ -41,6 +41,7 @@
 %% API
 -export([deploy_package/2, deploy_package/4]).
 -export([link_service_gui/3, link_service_gui/4]).
+-export([unlink_service_gui/2, unlink_service_gui/3]).
 -export([gui_exists/2]).
 -export([routes/0]).
 -export([oz_worker_gui_path/1]).
@@ -64,12 +65,13 @@
 %% given service on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec deploy_package(onedata:service(), file:name_all()) -> ok | {error, term()}.
+-spec deploy_package(onedata:service(), file:name_all()) -> {ok, gui:package_hash()} | {error, term()}.
 deploy_package(Service, PackagePath) ->
     case gui:read_package(PackagePath) of
         {ok, _, PackageBin} ->
             {ok, GuiHash} = gui:package_hash({binary, PackageBin}),
-            deploy_package(Service, PackageBin, GuiHash);
+            deploy_package(Service, PackageBin, GuiHash),
+            {ok, GuiHash};
         {error, _} = Error ->
             Error
     end.
@@ -86,7 +88,7 @@ deploy_package(Service, PackagePath) ->
 deploy_package(Service, PackageBin, GuiHash) ->
     ?CRITICAL_SECTION(GuiHash, fun() ->
         case gui_exists_unsafe(Service, GuiHash) of
-            true -> {ok, GuiHash};
+            true -> ok;
             false -> deploy_package(on_cluster, Service, PackageBin, GuiHash)
         end
     end).
@@ -107,9 +109,9 @@ deploy_package(Service, PackageBin, GuiHash) ->
     gui:package_hash()) -> ok.
 deploy_package(on_cluster, Service, PackageBin, GuiHash) ->
     lists:foreach(fun(Node) ->
-        {ok, _} = rpc:call(Node, ?MODULE, deploy_package, [on_node, Service, PackageBin, GuiHash])
+        ok = rpc:call(Node, ?MODULE, deploy_package, [on_node, Service, PackageBin, GuiHash])
     end, ?CLUSTER_NODES),
-    {ok, GuiHash};
+    ok;
 
 deploy_package(on_node, Service, PackageBin, GuiHash) ->
     ?info("Deploying GUI package for ~s: ~s", [name_to_shortname(Service), GuiHash]),
@@ -118,8 +120,7 @@ deploy_package(on_node, Service, PackageBin, GuiHash) ->
     PackageStaticRoot = service_static_root(Service, GuiHash),
     ok = file_utils:recursive_del(PackageStaticRoot),
     ok = file_utils:move(ExtractedPackagePath, PackageStaticRoot),
-    mochitemp:rmtempdir(TempDir),
-    {ok, GuiHash}.
+    mochitemp:rmtempdir(TempDir).
 
 
 %%--------------------------------------------------------------------
@@ -163,6 +164,38 @@ link_service_gui(on_node, Service, ClusterId, GuiHash) ->
     link_exists(ServiceStaticRoot) andalso (ok = file:delete(ServiceStaticRoot)),
     file:make_symlink(GuiHash, ServiceStaticRoot),
     ensure_link_to_index_html(ServiceStaticRoot).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @equiv unlink_service_gui(on_cluster, Service, ClusterId).
+%% @end
+%%--------------------------------------------------------------------
+-spec unlink_service_gui(onedata:service(), od_cluster:id()) -> ok.
+unlink_service_gui(Service, ClusterId) ->
+    unlink_service_gui(on_cluster, Service, ClusterId).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Unlinks a service from its GUI. Under the hood, removes the symbolic link
+%% from the filesystem.
+%%
+%% Has two modes:
+%%  on_cluster - performs the operation on all cluster nodes
+%%  on_node - performs the operation only on the local node
+%% @end
+%%--------------------------------------------------------------------
+-spec unlink_service_gui(on_cluster | on_node, onedata:service(), od_cluster:id()) -> ok.
+unlink_service_gui(on_cluster, Service, ClusterId) ->
+    lists:foreach(fun(Node) ->
+        ok = rpc:call(Node, ?MODULE, unlink_service_gui, [on_node, Service, ClusterId])
+    end, ?CLUSTER_NODES);
+
+unlink_service_gui(on_node, Service, ClusterId) ->
+    ?info("Unlinking gui for ~s", [service_gui_path(Service, ClusterId)]),
+    ServiceStaticRoot = service_static_root(Service, ClusterId),
+    link_exists(ServiceStaticRoot) andalso (ok = file:delete(ServiceStaticRoot)).
 
 
 %%--------------------------------------------------------------------

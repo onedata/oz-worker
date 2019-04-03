@@ -59,7 +59,7 @@ routes() -> [
     }},
     %% Create cluster user invite token
     %% This operation requires one of the following privileges:
-    %% - cluster_invite_user
+    %% - cluster_add_user
     %% - oz_clusters_add_relationships
     {<<"/clusters/:id/users/token">>, #rest_req{
         method = 'POST',
@@ -67,7 +67,7 @@ routes() -> [
     }},
     %% Add user to cluster
     %% This operation requires one of the following privileges:
-    %% - cluster_invite_user
+    %% - cluster_add_user
     %% - cluster_set_privileges
     %% - oz_clusters_add_relationships
     %% - oz_users_add_relationships
@@ -105,7 +105,7 @@ routes() -> [
     %% Update user's cluster privileges
     %% This operation requires one of the following privileges:
     %% - cluster_set_privileges
-    %% - oz_set_privileges
+    %% - oz_clusters_set_privileges
     {<<"/clusters/:id/users/:uid/privileges">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}
@@ -175,12 +175,12 @@ routes() -> [
     %% - cluster_set_privileges
     %% - oz_clusters_add_relationships
     %% - oz_groups_add_relationships
-    %% - oz_cluster_set_privileges
+    %% - oz_clusters_set_privileges
     {<<"/clusters/:id/groups/:gid">>, #rest_req{
         method = 'PUT',
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = {group, ?BINDING(gid)}}
     }},
-    %% Get group details
+    %% Get cluster group details
     %% This operation requires one of the following privileges:
     %% - cluster_view
     %% - oz_groups_view

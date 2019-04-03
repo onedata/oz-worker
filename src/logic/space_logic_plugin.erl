@@ -526,7 +526,8 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
 
         {?USER(ClientUserId), ?THROUGH_PROVIDER(ProviderId)} ->
             % Provider's support in this space is checked in 'exists'
-            provider_logic:has_eff_privilege_in_cluster(ProviderId, ClientUserId, ?CLUSTER_VIEW);
+            ClusterId = ProviderId,
+            cluster_logic:has_eff_privilege(ClusterId, ClientUserId, ?CLUSTER_VIEW);
 
         {?USER(ClientUserId), _} ->
             space_logic:has_eff_user(Space, ClientUserId);

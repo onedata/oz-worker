@@ -38,7 +38,7 @@
     handle_upgrade_test/1,
     dns_state_upgrade_test/1,
     token_upgrade_test/1,
-    generate_cluster_for_a_legacy_provider/1
+    generate_cluster_for_a_legacy_provider_test/1
 ]).
 
 %%%===================================================================
@@ -55,7 +55,7 @@ all() -> ?ALL([
     handle_upgrade_test,
     dns_state_upgrade_test,
     token_upgrade_test,
-    generate_cluster_for_a_legacy_provider
+    generate_cluster_for_a_legacy_provider_test
 ]).
 
 
@@ -120,22 +120,26 @@ token_upgrade_test(Config) ->
     test_record_upgrade(Config, token).
 
 
-generate_cluster_for_a_legacy_provider(Config) ->
-    ProviderId = datastore_utils:gen_key(),
-    LegacyProviderDoc = #document{key = ProviderId, value = #od_provider{
-        name = <<"dummy">>,
-        cluster = undefined
+generate_cluster_for_a_legacy_provider_test(Config) ->
+    Provider1 = datastore_utils:gen_key(),
+    Cluster1 = Provider1,
+    ?assertMatch({ok, false}, oz_test_utils:call_oz(Config, od_cluster, exists, [Cluster1])),
+    LegacyProviderDoc1 = #document{key = Provider1, value = #od_provider{
+        name = <<"dummy1">>
     }},
-    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, save, [LegacyProviderDoc])),
+    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, save, [LegacyProviderDoc1])),
+    ?assertMatch({ok, true}, oz_test_utils:call_oz(Config, od_cluster, exists, [Cluster1])),
 
-    {ok, #document{value = #od_provider{
-        cluster = ClusterId
-    }}} = ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, get, [ProviderId])),
-    ?assertNotMatch(undefined, ClusterId),
-    ?assertMatch(
-        {ok, #document{value = #od_cluster{service_id = ProviderId}}},
-        oz_test_utils:call_oz(Config, od_cluster, get, [ClusterId])
-    ).
+    Provider2 = datastore_utils:gen_key(),
+    Cluster2 = Provider2,
+    ?assertMatch({error, not_found}, oz_test_utils:call_oz(Config, od_cluster, get, [Cluster2])),
+    LegacyProviderDoc2 = #document{key = Provider2, value = #od_provider{
+        name = <<"dummy2">>
+    }},
+    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, save, [LegacyProviderDoc2])),
+    ?assertMatch({ok, #document{
+        key = Provider2, value = #od_cluster{}}
+    }, oz_test_utils:call_oz(Config, od_cluster, get, [Cluster2])).
 
 
 %%%===================================================================
@@ -173,7 +177,7 @@ test_record_upgrade(Config, RecordType, Versions) ->
             Config, datastore_model, get, [MockCtx, Key]
         )),
         {ok, #document{value = NewRecord,
-            version = NewVersion }} = Result,
+            version = NewVersion}} = Result,
 
         ?assertEqual({NewVersion, NewRecord},
             {Version, get_record(RecordType, Version)})

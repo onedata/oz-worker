@@ -518,10 +518,10 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Prov
     #od_provider{
         name = Name, domain = Domain,
         latitude = Latitude, longitude = Longitude,
-        cluster = Cluster,
         creation_time = CreationTime
     } = Provider,
 
+    ClusterId = Id,
     fun(?USER(UserId)) -> #{
         <<"scope">> => <<"private">>,
         <<"name">> => Name,
@@ -529,7 +529,7 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Prov
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
         <<"cluster">> => gs_protocol:gri_to_string(#gri{
-            type = od_cluster, id = Cluster, aspect = instance, scope = auto
+            type = od_cluster, id = ClusterId, aspect = instance, scope = auto
         }),
         <<"online">> => provider_connection:is_online(Id),
         <<"spaceList">> => gs_protocol:gri_to_string(GRI#gri{aspect = {user_spaces, UserId}, scope = private}),
@@ -538,14 +538,15 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Prov
         }
     } end;
 
-translate_provider(GRI = #gri{aspect = instance, scope = protected}, Provider) ->
+translate_provider(GRI = #gri{id = Id, aspect = instance, scope = protected}, Provider) ->
     #{
         <<"name">> := Name, <<"domain">> := Domain,
         <<"latitude">> := Latitude, <<"longitude">> := Longitude,
-        <<"cluster">> := Cluster, <<"online">> := Online,
+        <<"online">> := Online,
         <<"creationTime">> := CreationTime
     } = Provider,
 
+    ClusterId = Id,
     fun(?USER(UserId)) -> #{
         <<"scope">> => <<"protected">>,
         <<"name">> => Name,
@@ -553,7 +554,7 @@ translate_provider(GRI = #gri{aspect = instance, scope = protected}, Provider) -
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
         <<"cluster">> => gs_protocol:gri_to_string(#gri{
-            type = od_cluster, id = Cluster, aspect = instance, scope = auto
+            type = od_cluster, id = ClusterId, aspect = instance, scope = auto
         }),
         <<"online">> => Online,
         <<"spaceList">> => gs_protocol:gri_to_string(GRI#gri{aspect = {user_spaces, UserId}, scope = private}),
@@ -597,7 +598,6 @@ translate_provider(#gri{aspect = spaces}, Spaces) ->
 translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Cluster) ->
     #od_cluster{
         type = Type,
-        service_id = ServiceId,
         worker_version = WorkerVersion,
         onepanel_version = OnepanelVersion,
         onepanel_proxy = OnepanelProxy,
@@ -605,6 +605,7 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Clus
         creator = Creator
     } = Cluster,
 
+    ProviderId = ClusterId,
     fun(?USER(UserId)) -> #{
         <<"type">> => Type,
         <<"provider">> => case Type of
@@ -612,7 +613,7 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Clus
                 null;
             ?ONEPROVIDER ->
                 gs_protocol:gri_to_string(#gri{
-                    type = od_provider, id = ServiceId, aspect = instance, scope = auto
+                    type = od_provider, id = ProviderId, aspect = instance, scope = auto
                 })
         end,
         <<"scope">> => <<"private">>,
@@ -631,16 +632,17 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Clus
         <<"canViewPrivateData">> => cluster_logic:has_eff_privilege(Cluster, UserId, ?CLUSTER_VIEW)
     } end;
 
-translate_cluster(#gri{aspect = instance, scope = protected}, Cluster) ->
+translate_cluster(#gri{id = ClusterId, aspect = instance, scope = protected}, Cluster) ->
     #{
         <<"type">> := Type,
-        <<"serviceId">> := ServiceId,
         <<"workerVersion">> := WorkerVersion,
         <<"onepanelVersion">> := OnepanelVersion,
         <<"onepanelProxy">> := OnepanelProxy,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator
     } = Cluster,
+
+    ProviderId = ClusterId,
     #{
         <<"scope">> => <<"protected">>,
         <<"type">> => Type,
@@ -649,7 +651,7 @@ translate_cluster(#gri{aspect = instance, scope = protected}, Cluster) ->
                 null;
             ?ONEPROVIDER ->
                 gs_protocol:gri_to_string(#gri{
-                    type = od_provider, id = ServiceId, aspect = instance, scope = auto
+                    type = od_provider, id = ProviderId, aspect = instance, scope = auto
                 })
         end,
         <<"workerVersion">> => WorkerVersion,

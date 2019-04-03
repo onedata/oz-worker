@@ -101,13 +101,13 @@ verify_provider_identity(Macaroon) ->
 %%  * UserId of the client
 %%  * Id of the user's session for which the macaroon is issued
 %%  * Type of the cluster for which the macaroon will be valid
-%%  * Id of the service corresponding to the cluster
+%%  * Id of the cluster
 %% GUI macaroons are volatile - kept in Onezone's in-memory database.
 %% @end
 %%--------------------------------------------------------------------
--spec create_gui_macaroon(od_user:id(), session:id(), onedata:cluster_type(), od_cluster:service_id()) ->
+-spec create_gui_macaroon(od_user:id(), session:id(), onedata:cluster_type(), od_cluster:id()) ->
     {ok, gui_macaroon()}.
-create_gui_macaroon(UserId, SessionId, ClusterType, ServiceId) ->
+create_gui_macaroon(UserId, SessionId, ClusterType, ClusterId) ->
     Secret = generate_secret(),
     {ok, Identifier} = volatile_macaroon:create(
         Secret, {?USER(UserId), SessionId}
@@ -118,7 +118,7 @@ create_gui_macaroon(UserId, SessionId, ClusterType, ServiceId) ->
     Macaroon = create(Identifier, Secret, [
         ?SESSION_ID_CAVEAT(SessionId),
         ?CLUSTER_TYPE_CAVEAT(ClusterType),
-        ?SERVICE_ID_CAVEAT(ServiceId),
+        ?CLUSTER_ID_CAVEAT(ClusterId),
         ?TIME_CAVEAT(Now, TTL)
     ]),
     {ok, {Identifier, Macaroon, Expires}}.
@@ -127,13 +127,13 @@ create_gui_macaroon(UserId, SessionId, ClusterType, ServiceId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Verifies if given macaroon carries valid user authorization in the context
-%% of given cluster type and service id. SessionVerifyFun is used to verify if
+%% of given cluster type and cluster id. SessionVerifyFun is used to verify if
 %% the session id embedded in the macaroon is valid.
 %% @end
 %%--------------------------------------------------------------------
--spec verify_gui_macaroon(macaroon:macaroon(), onedata:cluster_type(), od_cluster:service_id(), session_verify_fun()) ->
+-spec verify_gui_macaroon(macaroon:macaroon(), onedata:cluster_type(), od_cluster:id(), session_verify_fun()) ->
     {ok, od_user:id(), session:id()} | {error, term()}.
-verify_gui_macaroon(SubjectMacaroon, ClusterType, ServiceId, SessionVerifyFun) ->
+verify_gui_macaroon(SubjectMacaroon, ClusterType, ClusterId, SessionVerifyFun) ->
     Identifier = macaroon:identifier(SubjectMacaroon),
     case volatile_macaroon:get(Identifier) of
         {ok, Secret, {?USER(UserId), IssuerSessionId}} ->
@@ -144,7 +144,7 @@ verify_gui_macaroon(SubjectMacaroon, ClusterType, ServiceId, SessionVerifyFun) -
             CaveatVerifiers = [
                 ?SESSION_ID_VERIFIER(SessionCaveatVerifyFun),
                 ?CLUSTER_TYPE_CAVEAT(ClusterType),
-                ?SERVICE_ID_CAVEAT(ServiceId),
+                ?CLUSTER_ID_CAVEAT(ClusterId),
                 ?TIME_CAVEAT(?NOW(), ?GUI_MACAROON_TTL)
             ],
             case onedata_macaroons:verify(SubjectMacaroon, Secret, [], CaveatVerifiers) of
