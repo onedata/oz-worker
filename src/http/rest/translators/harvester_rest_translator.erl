@@ -77,7 +77,7 @@ create_response(#gri{id = HarvesterId, aspect = {space, SpaceId}}, _, resource, 
         [<<"harvesters">>, HarvesterId, <<"spaces">>, SpaceId]
     );
 
-create_response(#gri{id = HarvesterId, aspect = index}, _, value, IndexId) ->
+create_response(#gri{id = HarvesterId, aspect = index}, _, resource, {#gri{aspect = {index, IndexId}}, _}) ->
     rest_translator:created_reply(
         [<<"harvesters">>, HarvesterId, <<"indices">>, IndexId]
     );

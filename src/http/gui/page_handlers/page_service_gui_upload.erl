@@ -10,7 +10,7 @@
 %%% GUI package uploads from op_worker or op_panel services.
 %%% @end
 %%%-------------------------------------------------------------------
--module(page_gui_upload).
+-module(page_service_gui_upload).
 -author("Lukasz Opiola").
 
 -behaviour(dynamic_page_behaviour).

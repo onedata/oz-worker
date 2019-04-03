@@ -34,7 +34,7 @@
     delete/2, delete_with_data/2
 ]).
 -export([
-    create_index/3, create_index/5, 
+    create_index/3, create_index/4, create_index/5, 
     get_index/3, get_index_progress/3, 
     update_index/4,
     delete_index/3, delete_index_with_data/3,
@@ -264,6 +264,19 @@ delete_with_data(Client, HarvesterId) ->
 %% Creates index in given harvester.
 %% @end
 %%--------------------------------------------------------------------
+-spec create_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+    Name :: binary(), GuiPluginName :: binary()) -> ok | {error, term()}.
+create_index(Client, HarvesterId, Name, GuiPluginName) ->
+    create_index(Client, HarvesterId, #{
+        <<"name">> => Name,
+        <<"guiPluginName">> => GuiPluginName
+    }).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates index in given harvester.
+%% @end
+%%--------------------------------------------------------------------
 -spec create_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
     Name :: binary(), Schema :: od_harvester:schema(), GuiPluginName :: binary()) -> ok | {error, term()}.
 create_index(Client, HarvesterId, Name, Schema, GuiPluginName) ->
@@ -279,14 +292,20 @@ create_index(Client, HarvesterId, Name, Schema, GuiPluginName) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
-    Data :: maps:map()) -> ok | {error, term()}.
+    Data :: maps:map()) -> {ok, od_harvester:index_id()} | {error, term()}.
 create_index(Client, HarvesterId, Data) ->
-    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+    Res = entity_logic:handle(#el_req{
         operation = create,
         client = Client,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = index},
         data = Data
-    })).
+    }),
+    case Res of
+        {ok, resource, {#gri{aspect = {index, IndexId}}, _}}  ->
+            {ok, IndexId};
+        {error, _} = Error -> 
+            Error
+    end.
 
 
 %%--------------------------------------------------------------------

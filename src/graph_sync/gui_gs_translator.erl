@@ -69,10 +69,8 @@ translate_value(_, #gri{aspect = TokenType}, Macaroon) when
 
     {ok, Token} = onedata_macaroons:serialize(Macaroon),
     Token;
-translate_value(_, #gri{type = od_harvester, aspect = query}, Response) ->
+translate_value(_, #gri{type = od_harvester, aspect = {query, _}}, Response) ->
     Response;
-translate_value(_, #gri{type = od_harvester, aspect = index}, IndexId) ->
-    #{<<"indexId">> => IndexId};
 
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n
@@ -590,138 +588,11 @@ translate_provider(#gri{aspect = spaces}, Spaces) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Translates GET result for cluster related aspects.
+%% Translates GET result for harvester related aspects.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_cluster(gs_protocol:gri(), Data :: term()) ->
+-spec translate_harvester(gs_protocol:gri(), Data :: term()) ->
     gs_protocol:data() | fun((gs_protocol:client()) -> gs_protocol:data()).
-translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Cluster) ->
-    #od_cluster{
-        type = Type,
-        worker_version = WorkerVersion,
-        onepanel_version = OnepanelVersion,
-        onepanel_proxy = OnepanelProxy,
-        creation_time = CreationTime,
-        creator = Creator
-    } = Cluster,
-
-    ProviderId = ClusterId,
-    fun(?USER(UserId)) -> #{
-        <<"type">> => Type,
-        <<"provider">> => case Type of
-            ?ONEZONE ->
-                null;
-            ?ONEPROVIDER ->
-                gs_protocol:gri_to_string(#gri{
-                    type = od_provider, id = ProviderId, aspect = instance, scope = auto
-                })
-        end,
-        <<"scope">> => <<"private">>,
-        <<"canViewPrivileges">> => cluster_logic:has_eff_privilege(Cluster, UserId, ?CLUSTER_VIEW_PRIVILEGES),
-        <<"directMembership">> => cluster_logic:has_direct_user(Cluster, UserId),
-        <<"workerVersion">> => cluster_logic:version_info_to_json(WorkerVersion),
-        <<"onepanelVersion">> => cluster_logic:version_info_to_json(OnepanelVersion),
-        <<"onepanelProxy">> => OnepanelProxy,
-        <<"info">> => maps:merge(translate_creator(Creator), #{
-            <<"creationTime">> => CreationTime
-        }),
-        <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = users}),
-        <<"effUserList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = eff_users}),
-        <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = groups}),
-        <<"effGroupList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = eff_groups}),
-        <<"canViewPrivateData">> => cluster_logic:has_eff_privilege(Cluster, UserId, ?CLUSTER_VIEW)
-    } end;
-
-translate_cluster(#gri{id = ClusterId, aspect = instance, scope = protected}, Cluster) ->
-    #{
-        <<"type">> := Type,
-        <<"workerVersion">> := WorkerVersion,
-        <<"onepanelVersion">> := OnepanelVersion,
-        <<"onepanelProxy">> := OnepanelProxy,
-        <<"creationTime">> := CreationTime,
-        <<"creator">> := Creator
-    } = Cluster,
-
-    ProviderId = ClusterId,
-    #{
-        <<"scope">> => <<"protected">>,
-        <<"type">> => Type,
-        <<"provider">> => case Type of
-            ?ONEZONE ->
-                null;
-            ?ONEPROVIDER ->
-                gs_protocol:gri_to_string(#gri{
-                    type = od_provider, id = ProviderId, aspect = instance, scope = auto
-                })
-        end,
-        <<"workerVersion">> => WorkerVersion,
-        <<"onepanelVersion">> => OnepanelVersion,
-        <<"onepanelProxy">> => OnepanelProxy,
-        <<"info">> => maps:merge(translate_creator(Creator), #{
-            <<"creationTime">> => CreationTime
-        }),
-        <<"canViewPrivateData">> => false
-    };
-
-translate_cluster(#gri{aspect = users}, Users) ->
-    #{
-        <<"list">> => lists:map(
-            fun(UserId) ->
-                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
-            end, Users)
-    };
-
-translate_cluster(#gri{aspect = eff_users}, Users) ->
-    #{
-        <<"list">> => lists:map(
-            fun(UserId) ->
-                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
-            end, Users)
-    };
-
-translate_cluster(#gri{aspect = groups}, Groups) ->
-    #{
-        <<"list">> => lists:map(
-            fun(GroupId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
-            end, Groups)
-    };
-
-translate_cluster(#gri{aspect = eff_groups}, Groups) ->
-    #{
-        <<"list">> => lists:map(
-            fun(GroupId) ->
-                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
-            end, Groups)
-    };
-
-translate_cluster(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
-    #{
-        <<"privileges">> => Privileges
-    };
-
-translate_cluster(#gri{aspect = {eff_user_privileges, _UserId}}, Privileges) ->
-    #{
-        <<"privileges">> => Privileges
-    };
-
-translate_cluster(#gri{aspect = {eff_user_membership, _UserId}}, Intermediaries) ->
-    format_intermediaries(Intermediaries);
-
-translate_cluster(#gri{aspect = {eff_group_membership, _UserId}}, Intermediaries) ->
-    format_intermediaries(Intermediaries);
-
-translate_cluster(#gri{aspect = {group_privileges, _GroupId}}, Privileges) ->
-    #{
-        <<"privileges">> => Privileges
-    };
-
-translate_cluster(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
-    #{
-        <<"privileges">> => Privileges
-    }.
-
-
 translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, Harvester) ->
     #od_harvester{
         name = Name, endpoint = Endpoint, 
@@ -861,6 +732,146 @@ translate_harvester(#gri{aspect = indices, id = HarvesterId}, Indices) ->
             fun(IndexId) ->
                 gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}, scope = private})
             end, Indices)
+    };
+
+translate_harvester(#gri{aspect = {index_progress, _}}, IndexProgress) ->
+    #{
+        <<"indexProgress">> => IndexProgress
+    }.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Translates GET result for cluster related aspects.
+%% @end
+%%--------------------------------------------------------------------
+-spec translate_cluster(gs_protocol:gri(), Data :: term()) ->
+    gs_protocol:data() | fun((gs_protocol:client()) -> gs_protocol:data()).
+translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Cluster) ->
+    #od_cluster{
+        type = Type,
+        worker_version = WorkerVersion,
+        onepanel_version = OnepanelVersion,
+        onepanel_proxy = OnepanelProxy,
+        creation_time = CreationTime,
+        creator = Creator
+    } = Cluster,
+
+    ProviderId = ClusterId,
+    fun(?USER(UserId)) -> #{
+        <<"type">> => Type,
+        <<"provider">> => case Type of
+            ?ONEZONE ->
+                null;
+            ?ONEPROVIDER ->
+                gs_protocol:gri_to_string(#gri{
+                    type = od_provider, id = ProviderId, aspect = instance, scope = auto
+                })
+        end,
+        <<"scope">> => <<"private">>,
+        <<"canViewPrivileges">> => cluster_logic:has_eff_privilege(Cluster, UserId, ?CLUSTER_VIEW_PRIVILEGES),
+        <<"directMembership">> => cluster_logic:has_direct_user(Cluster, UserId),
+        <<"workerVersion">> => cluster_logic:version_info_to_json(WorkerVersion),
+        <<"onepanelVersion">> => cluster_logic:version_info_to_json(OnepanelVersion),
+        <<"onepanelProxy">> => OnepanelProxy,
+        <<"info">> => maps:merge(translate_creator(Creator), #{
+            <<"creationTime">> => CreationTime
+        }),
+        <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = users}),
+        <<"effUserList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = eff_users}),
+        <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = groups}),
+        <<"effGroupList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = eff_groups}),
+        <<"canViewPrivateData">> => cluster_logic:has_eff_privilege(Cluster, UserId, ?CLUSTER_VIEW)
+    } end;
+
+translate_cluster(#gri{id = ClusterId, aspect = instance, scope = protected}, Cluster) ->
+    #{
+        <<"type">> := Type,
+        <<"workerVersion">> := WorkerVersion,
+        <<"onepanelVersion">> := OnepanelVersion,
+        <<"onepanelProxy">> := OnepanelProxy,
+        <<"creationTime">> := CreationTime,
+        <<"creator">> := Creator
+    } = Cluster,
+
+    ProviderId = ClusterId,
+    #{
+        <<"scope">> => <<"protected">>,
+        <<"type">> => Type,
+        <<"provider">> => case Type of
+            ?ONEZONE ->
+                null;
+            ?ONEPROVIDER ->
+                gs_protocol:gri_to_string(#gri{
+                    type = od_provider, id = ProviderId, aspect = instance, scope = auto
+                })
+        end,
+        <<"workerVersion">> => WorkerVersion,
+        <<"onepanelVersion">> => OnepanelVersion,
+        <<"onepanelProxy">> => OnepanelProxy,
+        <<"info">> => maps:merge(translate_creator(Creator), #{
+            <<"creationTime">> => CreationTime
+        }),
+        <<"canViewPrivateData">> => false
+    };
+
+translate_cluster(#gri{aspect = users}, Users) ->
+    #{
+        <<"list">> => lists:map(
+            fun(UserId) ->
+                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+            end, Users)
+    };
+
+translate_cluster(#gri{aspect = eff_users}, Users) ->
+    #{
+        <<"list">> => lists:map(
+            fun(UserId) ->
+                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+            end, Users)
+    };
+
+translate_cluster(#gri{aspect = groups}, Groups) ->
+    #{
+        <<"list">> => lists:map(
+            fun(GroupId) ->
+                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
+            end, Groups)
+    };
+
+translate_cluster(#gri{aspect = eff_groups}, Groups) ->
+    #{
+        <<"list">> => lists:map(
+            fun(GroupId) ->
+                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
+            end, Groups)
+    };
+
+translate_cluster(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
+    };
+
+translate_cluster(#gri{aspect = {eff_user_privileges, _UserId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
+    };
+
+translate_cluster(#gri{aspect = {eff_user_membership, _UserId}}, Intermediaries) ->
+    format_intermediaries(Intermediaries);
+
+translate_cluster(#gri{aspect = {eff_group_membership, _UserId}}, Intermediaries) ->
+    format_intermediaries(Intermediaries);
+
+translate_cluster(#gri{aspect = {group_privileges, _GroupId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
+    };
+
+translate_cluster(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
     }.
 
 

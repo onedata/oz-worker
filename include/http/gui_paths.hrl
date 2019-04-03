@@ -37,7 +37,7 @@
 -define(HARVESTER_GUI_UPLOAD_PATH, "/hrv/:harvester_id/gui-upload").
 
 % Endpoint for GUI upload (used by OP_WORKER and OP_PANEL services)
--define(GUI_UPLOAD_PATH, "/:service/:cluster_id/gui-upload").
+-define(SERVICE_GUI_UPLOAD_PATH, "/:service/:cluster_id/gui-upload").
 
 % Endpoints for GUI scripts to discover and preauthorize GUIs of different services
 -define(GUI_TOKEN_PATH, "/gui-token").

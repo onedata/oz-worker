@@ -58,13 +58,12 @@ ping(Endpoint) ->
 -spec create_index(od_harvester:endpoint(), od_harvester:id(), od_harvester:index_id(), od_harvester:schema()) -> 
     {ok | {error, term()}}.
 create_index(Endpoint, HarvesterId, IndexId, Schema) ->
-    NewSchema = case Schema of
-        undefined -> <<"{}">>;
-        _ -> Schema
-    end,
-    case do_request(put, Endpoint, ?ES_INDEX_ID(HarvesterId, IndexId), <<>>, NewSchema, [{200,300}]) of
-        {ok,_,_,_} -> ok;
-        {error, _} = Error -> Error
+    case Schema of
+        undefined -> ok;
+        _ -> case do_request(put, Endpoint, ?ES_INDEX_ID(HarvesterId, IndexId), <<>>, Schema, [{200,300}]) of
+            {ok,_,_,_} -> ok;
+            {error, _} = Error -> Error
+        end
     end.
 
 

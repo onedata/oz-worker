@@ -140,9 +140,10 @@ is_subscribable({eff_group_membership, _}, private) -> true;
 is_subscribable(spaces, private) -> true;
 is_subscribable({space, _}, private) -> true;
 is_subscribable(gui_plugin_config, private) -> true;
-is_subscribable(indices, private) -> true;
 is_subscribable(index, private) -> true;
+is_subscribable(indices, private) -> true;
 is_subscribable({index, _}, private) -> true;
+is_subscribable({index_progress, _}, private) -> true;
 is_subscribable(_, _) -> false.
 
 
@@ -307,29 +308,31 @@ create(Req = #el_req{gri = GRI = #gri{id = HarvesterId, aspect = group}}) ->
     {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
     {ok, resource, {NewGRI, Group}};
 
-create(#el_req{gri = #gri{aspect = index, id = HarvesterId}, data = Data}) ->
+create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data}) ->
     IndexId = datastore_utils:gen_key(),
 
     Name = maps:get(<<"name">>, Data),
     Schema = maps:get(<<"schema">>, Data, undefined),
     GuiPluginName = maps:get(<<"guiPluginName">>, Data),
+    Index = #harvester_index{
+        name = Name,
+        schema = Schema,
+        guiPluginName = GuiPluginName,
+        seqs = #{}
+    },
     
     UpdateFun = fun(#od_harvester{indices = Indices, plugin = Plugin, endpoint = Endpoint} = Harvester) ->
         case Plugin:create_index(Endpoint, HarvesterId, IndexId, Schema) of
             ok ->
-                Index = #harvester_index{
-                    name = Name,
-                    schema = Schema,
-                    guiPluginName = GuiPluginName,
-                    seqs = #{}
-                },
                 {ok, Harvester#od_harvester{indices = Indices#{IndexId => Index}}};
             {error, _} = Error ->
                 Error
         end
     end,
+    NewGri = Gri#gri{aspect = {index, IndexId}, scope = protected},
+    IndexData = Data#{<<"schema">> => Schema},
     case od_harvester:update(HarvesterId, UpdateFun) of
-        {ok, _} -> {ok, value, IndexId};
+        {ok, _} -> {ok, resource, {NewGri, IndexData}};
         {error, _} = Error -> Error
     end;
     

@@ -3084,7 +3084,8 @@ create_dummy_gui_package() ->
 deploy_dummy_gui(Config, Service) ->
     {GuiPackage, IndexContent} = create_dummy_gui_package(),
     copy_file_to_onezone_nodes(Config, GuiPackage),
-    {ok, GuiHash} = call_oz(Config, gui_static, deploy_package, [
+    {ok, GuiHash} = gui:package_hash(GuiPackage),
+    ok = call_oz(Config, gui_static, deploy_package, [
         Service, GuiPackage
     ]),
     {GuiHash, IndexContent}.

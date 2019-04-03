@@ -38,10 +38,13 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
 
+-type location_key() :: binary().
+-type package_id() :: od_cluster:id() | od_harvester:id() | gui:package_hash().
+
 %% API
 -export([deploy_package/2, deploy_package/4]).
--export([link_service_gui/3, link_service_gui/4]).
--export([unlink_service_gui/2, unlink_service_gui/3]).
+-export([link_gui/3, link_gui/4]).
+-export([unlink_gui/2, unlink_gui/3]).
 -export([gui_exists/2]).
 -export([routes/0]).
 -export([oz_worker_gui_path/1]).
@@ -61,17 +64,19 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Reads given GUI package, and upon success, deploys the GUI package for
-%% given service on all cluster nodes.
+%% Reads given GUI package, and upon success, deploys the GUI package under given 
+%% location key on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec deploy_package(onedata:service(), file:name_all()) -> {ok, gui:package_hash()} | {error, term()}.
-deploy_package(Service, PackagePath) ->
+-spec deploy_package(location_key() | onedata:service(), file:name_all()) -> 
+    {ok, gui:package_hash()} | {error, term()}.
+deploy_package(Service, PackagePath) when is_atom(Service) ->
+    deploy_package(onedata:service_shortname(Service), PackagePath);
+deploy_package(LocationKey, PackagePath) ->
     case gui:read_package(PackagePath) of
         {ok, _, PackageBin} ->
             {ok, GuiHash} = gui:package_hash({binary, PackageBin}),
-            deploy_package(Service, PackageBin, GuiHash),
-            {ok, GuiHash};
+            deploy_package(LocationKey, PackageBin, GuiHash);
         {error, _} = Error ->
             Error
     end.
@@ -79,24 +84,24 @@ deploy_package(Service, PackagePath) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deploys a GUI package for given service on all cluster nodes. GuiHash must be
-%% provided manually. The operation is skipped if the GUI package already exists
-%% on all cluster nodes.
+%% Deploys a GUI package under given location key on all cluster nodes. GuiHash must be
+%% provided manually. The operation is skipped if the GUI package already exists on all 
+%% cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec deploy_package(onedata:service(), PackageBin :: binary(), gui:package_hash()) -> ok.
-deploy_package(Service, PackageBin, GuiHash) ->
+-spec deploy_package(location_key(), PackageBin :: binary(), gui:package_hash()) -> ok.
+deploy_package(LocationKey, PackageBin, GuiHash) ->
     ?CRITICAL_SECTION(GuiHash, fun() ->
-        case gui_exists_unsafe(Service, GuiHash) of
+        case gui_exists_unsafe(LocationKey, GuiHash) of
             true -> ok;
-            false -> deploy_package(on_cluster, Service, PackageBin, GuiHash)
+            false -> deploy_package(on_cluster, LocationKey, PackageBin, GuiHash)
         end
     end).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deploys a GUI package for given service.
+%% Deploys a GUI package under given location key.
 %%
 %% NOTE: This function must be run in a critical section to avoid race conditions.
 %%
@@ -105,37 +110,38 @@ deploy_package(Service, PackageBin, GuiHash) ->
 %%  on_node - performs the operation only on the local node
 %% @end
 %%--------------------------------------------------------------------
--spec deploy_package(on_cluster | on_node, onedata:service(), PackageBin :: binary(),
+-spec deploy_package(on_cluster | on_node, location_key(), PackageBin :: binary(),
     gui:package_hash()) -> ok.
-deploy_package(on_cluster, Service, PackageBin, GuiHash) ->
+deploy_package(on_cluster, LocationKey, PackageBin, GuiHash) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, deploy_package, [on_node, Service, PackageBin, GuiHash])
-    end, ?CLUSTER_NODES),
-    ok;
+        ok = rpc:call(Node, ?MODULE, deploy_package, [on_node, LocationKey, PackageBin, GuiHash])
+    end, ?CLUSTER_NODES);
 
-deploy_package(on_node, Service, PackageBin, GuiHash) ->
-    ?info("Deploying GUI package for ~s: ~s", [name_to_shortname(Service), GuiHash]),
+deploy_package(on_node, LocationKey, PackageBin, GuiHash) ->
+    ?info("Deploying GUI package for ~s: ~s", [LocationKey, GuiHash]),
     TempDir = mochitemp:mkdtemp(),
-    {ok, ExtractedPackagePath} = gui:extract_package({binary, PackageBin}, TempDir),
-    PackageStaticRoot = service_static_root(Service, GuiHash),
+    {ok, ExtractedPackageLocationKey} = gui:extract_package({binary, PackageBin}, TempDir),
+    PackageStaticRoot = static_root(LocationKey, GuiHash),
     ok = file_utils:recursive_del(PackageStaticRoot),
-    ok = file_utils:move(ExtractedPackagePath, PackageStaticRoot),
+    ok = file_utils:move(ExtractedPackageLocationKey, PackageStaticRoot),
     mochitemp:rmtempdir(TempDir).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @equiv link_service_gui(on_cluster, Service, ClusterId, GuiHash).
+%% @equiv link_gui(on_cluster, LocationKey, ClusterId, GuiHash).
 %% @end
 %%--------------------------------------------------------------------
--spec link_service_gui(onedata:service(), od_cluster:id(), gui:package_hash()) -> ok.
-link_service_gui(Service, ClusterId, GuiHash) ->
-    link_service_gui(on_cluster, Service, ClusterId, GuiHash).
+-spec link_gui(location_key() | onedata:service(), od_cluster:id(), gui:package_hash()) -> ok.
+link_gui(Service, ClusterId, GuiHash) when is_atom(Service)->
+    link_gui(onedata:service_shortname(Service), ClusterId, GuiHash);
+link_gui(LocationKey, ClusterId, GuiHash) ->
+    link_gui(on_cluster, LocationKey, ClusterId, GuiHash).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Links a service to given GUI, defined by its hash. Under the hood, creates
+%% Links a location to given GUI, defined by its hash. Under the hood, creates
 %% a symbolic link on the filesystem to reuse the same GUI packages for multiple
 %% services.
 %%
@@ -146,21 +152,21 @@ link_service_gui(Service, ClusterId, GuiHash) ->
 %%  on_node - performs the operation only on the local node
 %% @end
 %%--------------------------------------------------------------------
--spec link_service_gui(on_cluster | on_node, onedata:service(), od_cluster:id(),
+-spec link_gui(on_cluster | on_node, location_key(), od_cluster:id(),
     gui:package_hash()) -> ok.
-link_service_gui(on_cluster, Service, ClusterId, GuiHash) ->
+link_gui(on_cluster, LocationKey, ClusterId, GuiHash) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, link_service_gui, [on_node, Service, ClusterId, GuiHash])
+        ok = rpc:call(Node, ?MODULE, link_gui, [on_node, LocationKey, ClusterId, GuiHash])
     end, ?CLUSTER_NODES);
 
-link_service_gui(on_node, Service, ClusterId, GuiHash) ->
+link_gui(on_node, LocationKey, ClusterId, GuiHash) ->
     case GuiHash of
         ?EMPTY_GUI_HASH ->
-            ?debug("Linking empty GUI for ~s", [service_gui_path(Service, ClusterId)]);
+            ?debug("Linking empty GUI for ~s", [gui_path(LocationKey, ClusterId)]);
         _ ->
-            ?info("Linking gui for ~s -> ~s", [service_gui_path(Service, ClusterId), GuiHash])
+            ?info("Linking gui for ~s -> ~s", [gui_path(LocationKey, ClusterId), GuiHash])
     end,
-    ServiceStaticRoot = service_static_root(Service, ClusterId),
+    ServiceStaticRoot = static_root(LocationKey, ClusterId),
     link_exists(ServiceStaticRoot) andalso (ok = file:delete(ServiceStaticRoot)),
     file:make_symlink(GuiHash, ServiceStaticRoot),
     ensure_link_to_index_html(ServiceStaticRoot).
@@ -168,17 +174,19 @@ link_service_gui(on_node, Service, ClusterId, GuiHash) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @equiv unlink_service_gui(on_cluster, Service, ClusterId).
+%% @equiv unlink_gui(on_cluster, LocationKey, ClusterId).
 %% @end
 %%--------------------------------------------------------------------
--spec unlink_service_gui(onedata:service(), od_cluster:id()) -> ok.
-unlink_service_gui(Service, ClusterId) ->
-    unlink_service_gui(on_cluster, Service, ClusterId).
+-spec unlink_gui(onedata:service() | location_key(), od_cluster:id()) -> ok.
+unlink_gui(Service, ClusterId) when is_atom(Service) ->
+    unlink_gui(onedata:service_shortname(Service), ClusterId);
+unlink_gui(LocationKey, ClusterId) ->
+    unlink_gui(on_cluster, LocationKey, ClusterId).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Unlinks a service from its GUI. Under the hood, removes the symbolic link
+%% Unlinks a location key from its GUI. Under the hood, removes the symbolic link
 %% from the filesystem.
 %%
 %% Has two modes:
@@ -186,15 +194,15 @@ unlink_service_gui(Service, ClusterId) ->
 %%  on_node - performs the operation only on the local node
 %% @end
 %%--------------------------------------------------------------------
--spec unlink_service_gui(on_cluster | on_node, onedata:service(), od_cluster:id()) -> ok.
-unlink_service_gui(on_cluster, Service, ClusterId) ->
+-spec unlink_gui(on_cluster | on_node, location_key(), od_cluster:id()) -> ok.
+unlink_gui(on_cluster, LocationKey, ClusterId) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, unlink_service_gui, [on_node, Service, ClusterId])
+        ok = rpc:call(Node, ?MODULE, unlink_gui, [on_node, LocationKey, ClusterId])
     end, ?CLUSTER_NODES);
 
-unlink_service_gui(on_node, Service, ClusterId) ->
-    ?info("Unlinking gui for ~s", [service_gui_path(Service, ClusterId)]),
-    ServiceStaticRoot = service_static_root(Service, ClusterId),
+unlink_gui(on_node, LocationKey, ClusterId) ->
+    ?info("Unlinking gui for ~s", [gui_path(LocationKey, ClusterId)]),
+    ServiceStaticRoot = static_root(LocationKey, ClusterId),
     link_exists(ServiceStaticRoot) andalso (ok = file:delete(ServiceStaticRoot)).
 
 
@@ -203,10 +211,12 @@ unlink_service_gui(on_node, Service, ClusterId) ->
 %% Checks on all cluster nodes if given GUI hash exists.
 %% @end
 %%--------------------------------------------------------------------
--spec gui_exists(onedata:service(), gui:package_hash()) -> boolean().
-gui_exists(Service, GuiHash) ->
+-spec gui_exists(location_key() | onedata:service(), gui:package_hash()) -> boolean().
+gui_exists(Service, GuiHash) when is_atom(Service)-> 
+    gui_exists(onedata:service_shortname(Service), GuiHash);
+gui_exists(LocationKey, GuiHash) ->
     ?CRITICAL_SECTION(GuiHash, fun() ->
-        gui_exists_unsafe(Service, GuiHash)
+        gui_exists_unsafe(LocationKey, GuiHash)
     end).
 
 
@@ -233,7 +243,7 @@ routes() ->
 %%--------------------------------------------------------------------
 -spec oz_worker_gui_path(binary()) -> binary().
 oz_worker_gui_path(<<"/", _/binary>> = AbsPath) ->
-    <<(service_gui_path(?OZ_WORKER, ?ONEZONE_CLUSTER_ID))/binary, AbsPath/binary>>;
+    <<(gui_path(onedata:service_shortname(?OZ_WORKER), ?ONEZONE_CLUSTER_ID))/binary, AbsPath/binary>>;
 oz_worker_gui_path(RelPath) ->
     oz_worker_gui_path(<<"/", RelPath/binary>>).
 
@@ -271,9 +281,9 @@ mimetype(Path) ->
 %% NOTE: This function must be run in a critical section to avoid race conditions.
 %% @end
 %%--------------------------------------------------------------------
--spec gui_exists_unsafe(onedata:service(), gui:package_hash()) -> boolean().
-gui_exists_unsafe(Service, GuiHash) ->
-    PackageStaticRoot = service_static_root(Service, GuiHash),
+-spec gui_exists_unsafe(location_key(), gui:package_hash()) -> boolean().
+gui_exists_unsafe(LocationKey, GuiHash) ->
+    PackageStaticRoot = static_root(LocationKey, GuiHash),
     lists:all(fun(Node) ->
         rpc:call(Node, filelib, is_file, [PackageStaticRoot])
     end, ?CLUSTER_NODES).
@@ -290,11 +300,10 @@ gui_exists_unsafe(Service, GuiHash) ->
 %% Identifier can be a ClusterId or a GuiHash.
 %% @end
 %%--------------------------------------------------------------------
--spec service_static_root(onedata:service(), od_cluster:id() | gui:package_hash()) ->
-    binary().
-service_static_root(Service, Identifier) ->
+-spec static_root(location_key(), package_id()) -> binary().
+static_root(LocationKey, Identifier) ->
     GuiStaticRoot = list_to_binary(?GUI_STATIC_ROOT),
-    <<GuiStaticRoot/binary, (service_gui_path(Service, Identifier))/binary>>.
+    <<GuiStaticRoot/binary, (gui_path(LocationKey, Identifier))/binary>>.
 
 
 %%--------------------------------------------------------------------
@@ -306,9 +315,9 @@ service_static_root(Service, Identifier) ->
 %%      /opp/4fc98577cee89c3dfb7817b11c0027ec3084f8ba455a162c9038ed568b9d3b7d
 %% @end
 %%--------------------------------------------------------------------
--spec service_gui_path(onedata:service(), od_cluster:id() | gui:package_hash()) -> binary().
-service_gui_path(Service, Identifier) ->
-    <<"/", (name_to_shortname(Service))/binary, "/", Identifier/binary>>.
+-spec gui_path(location_key(), package_id()) -> binary().
+gui_path(LocationKey, Identifier) ->
+    <<"/", LocationKey/binary, "/", Identifier/binary>>.
 
 
 %%--------------------------------------------------------------------
@@ -355,8 +364,3 @@ mimetype_by_ext(<<"svg">>) -> {<<"image">>, <<"svg+xml">>, []};
 mimetype_by_ext(<<"wav">>) -> {<<"audio">>, <<"x-wav">>, []};
 mimetype_by_ext(<<"webm">>) -> {<<"video">>, <<"webm">>, []};
 mimetype_by_ext(_) -> {<<"application">>, <<"octet-stream">>, []}.
-
-
-%% @private
-name_to_shortname(harvester) -> <<"hrv">>;
-name_to_shortname(Service) -> onedata:service_shortname(Service).

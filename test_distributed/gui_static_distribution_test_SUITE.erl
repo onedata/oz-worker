@@ -101,7 +101,8 @@ oz_panel_gui_setup_works(Config) ->
     {GuiPackage, IndexContent} = oz_test_utils:create_dummy_gui_package(),
     oz_test_utils:copy_file_to_onezone_nodes(Config, GuiPackage),
 
-    {ok, GuiHash} = oz_test_utils:call_oz(Config, gui_static, deploy_package, [?OZ_PANEL, GuiPackage]),
+    {ok, GuiHash} = gui:package_hash(GuiPackage),
+    ok = oz_test_utils:call_oz(Config, gui_static, deploy_package, [?OZ_PANEL, GuiPackage]),
     ok = oz_test_utils:call_oz(Config, cluster_logic, update_version_info, [
         ?ROOT, ?ONEZONE_CLUSTER_ID, ?ONEPANEL, {Release, Build, GuiHash}
     ]),

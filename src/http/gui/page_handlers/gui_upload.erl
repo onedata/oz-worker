@@ -6,8 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module implements dynamic_page_behaviour and is called to handle
-%%% GUI package uploads from op_worker or op_panel services.
+%%% This module is responsible for uploading GUI packages.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(gui_upload).
@@ -18,6 +17,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 %% Cowboy API
 -export([handle_service_gui_upload/1, handle_harvester_gui_upload/1]).
@@ -65,8 +65,8 @@ handle_service_gui_upload(Req) ->
                 ]),
                 throw(?HTTP_500_INTERNAL_SERVER_ERROR)
             end,
-            Req3 = case gui_static:deploy_package(Service, UploadPath) of
-                {ok, _} ->
+            Req3 = case gui_static:deploy_package(ServiceShortname, UploadPath) of
+                ok ->
                     cowboy_req:reply(?HTTP_200_OK, Req2);
                 {error, _} = Error ->
                     ?debug("Discarding GUI upload from ~p:~s due to ~p", [
@@ -99,7 +99,8 @@ handle_harvester_gui_upload(Req) ->
 
     case auth_logic:authorize_by_onezone_gui_macaroon(Token) of
         {true, ?USER(UserId), _} ->
-            case harvester_logic:has_eff_user(HarvesterId, UserId) of
+            case harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_UPDATE) 
+                orelse user_logic:has_eff_oz_privilege(UserId, ?OZ_HARVESTERS_UPDATE) of
                 true -> ok;
                 _ -> throw(?HTTP_403_FORBIDDEN)
             end,
@@ -114,9 +115,10 @@ handle_harvester_gui_upload(Req) ->
                 ]),
                 throw(?HTTP_500_INTERNAL_SERVER_ERROR)
             end,
-            Req3 = case gui_static:deploy_package(harvester, UploadPath) of
-                {ok, GuiHash} ->
-                    ok = gui_static:link_service_gui(harvester, HarvesterId, GuiHash),
+            Req3 = case gui_static:deploy_package(<<"hrv">>, UploadPath) of
+                ok ->
+                    {ok, GuiHash} = gui:package_hash(UploadPath),
+                    ok = gui_static:link_gui(<<"hrv">>, HarvesterId, GuiHash),
                     cowboy_req:reply(?HTTP_200_OK, Req2);
                 {error, _} = Error ->
                     ?debug("Discarding GUI upload from ~p:~s due to ~p", [
