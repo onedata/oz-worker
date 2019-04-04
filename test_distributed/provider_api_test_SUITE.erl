@@ -337,7 +337,6 @@ get_test(Config) ->
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, P2Creator, ?PROVIDER_NAME2
     ),
-    Cluster1 = P1,
 
     Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
 
@@ -714,8 +713,8 @@ delete_test(Config) ->
     VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId, clusterId := ClusterId} = _Env, _) ->
         {ok, Providers} = oz_test_utils:list_providers(Config),
         {ok, Clusters} = oz_test_utils:list_clusters(Config),
-        ?assertEqual(lists:member(ProviderId, Providers), not ShouldSucceed),
-        ?assertEqual(lists:member(ClusterId, Clusters), not ShouldSucceed)
+        ?assertEqual(not ShouldSucceed, lists:member(ProviderId, Providers)),
+        ?assertEqual(not ShouldSucceed, lists:member(ClusterId, Clusters))
     end,
 
     ApiTestSpec = #api_test_spec{
