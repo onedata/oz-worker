@@ -457,7 +457,7 @@ identify_test_base(Config, Method) ->
         ?DC_METADATA_XML, Timestamp),
 
     ExpResponseContent = [
-        #xmlElement{name = repositoryName, content = [#xmlText{value = "unnamed"}]},
+        #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
         #xmlElement{name = earliestDatestamp, content = [#xmlText{value = convert(Timestamp)}]},
@@ -487,7 +487,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
         ?DC_METADATA_XML, Timestamp2),
 
     ExpResponseContent = [
-        #xmlElement{name = repositoryName, content = [#xmlText{value = "unnamed"}]},
+        #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
         #xmlElement{name = earliestDatestamp, content = [#xmlText{value = convert(Timestamp1)}]},
@@ -501,7 +501,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     modify_handle_with_mocked_timestamp(Config, Identifier1, ?DC_METADATA_XML, Timestamp3),
 
     ExpResponseContent2 = [
-        #xmlElement{name = repositoryName, content = [#xmlText{value = "unnamed"}]},
+        #xmlElement{name = repositoryName, content = [#xmlText{value = "undefined"}]},
         #xmlElement{name = baseURL, content = [#xmlText{value = ExpectedBaseURL}]},
         #xmlElement{name = protocolVersion, content = [#xmlText{value = "2.0"}]},
         #xmlElement{name = earliestDatestamp, content = [#xmlText{value = convert(Timestamp2)}]},
@@ -1033,7 +1033,7 @@ init_per_suite(Config) ->
         [Node1 | _] = ?config(oz_worker_nodes, NewConfig),
         [
             {oai_pmh_url, get_oai_pmh_URL(Node1)},
-            {oai_pmh_path, get_oai_pmh_api_path(Node1)} | NewConfig
+            {oai_pmh_path, get_oai_pmh_api_path(NewConfig)} | NewConfig
         ]
     end,
     [
@@ -1180,9 +1180,8 @@ get_oai_pmh_URL(Node) ->
     OZ_IP_1 = test_utils:get_docker_ip(Node),
     str_utils:format_bin("http://~s", [OZ_IP_1]).
 
-get_oai_pmh_api_path(Node) ->
-    {ok, OAIPrefix} = rpc:call(Node, oz_worker, get_env, [oai_pmh_api_prefix]),
-    list_to_binary(OAIPrefix).
+get_oai_pmh_api_path(Config) ->
+    list_to_binary(oz_test_utils:get_env(Config, oai_pmh_api_prefix)).
 
 prepare_querystring(Proplist) ->
     QS = lists:foldl(fun({K, V}, Acc) ->
@@ -1408,8 +1407,8 @@ offset_in_range(From, Until, Offset) ->
 
 
 oai_identifier(Config, HandleId) ->
-    {ok, OnezoneDomain} = oz_test_utils:get_oz_domain(Config),
-    <<"oai:", (list_to_binary(OnezoneDomain))/binary, ":", HandleId/binary>>.
+    OnezoneDomain = oz_test_utils:oz_domain(Config),
+    <<"oai:", OnezoneDomain/binary, ":", HandleId/binary>>.
 
 exclude_offset_from_range(Offset, undefined, undefined) -> Offset;
 exclude_offset_from_range(_Offset, From, undefined) -> From - rand:uniform(100);
@@ -1448,7 +1447,6 @@ expected_dc_identifiers(Config, HandleId) ->
 
 
 expected_admin_emails(Config) ->
-    {ok, AdminEmails} = oz_test_utils:call_oz(Config, oz_worker, get_env, [admin_emails]),
-    AdminEmails.
+    oz_test_utils:get_env(Config, admin_emails).
 
 

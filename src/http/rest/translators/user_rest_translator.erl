@@ -13,7 +13,7 @@
 -behaviour(rest_translator_behaviour).
 -author("Lukasz Opiola").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
 -export([create_response/4, get_response/2]).
@@ -40,7 +40,11 @@ create_response(#gri{aspect = {idp_access_token, _}}, _, value, {AccessToken, Ex
     rest_translator:ok_body_reply(#{
         <<"token">> => AccessToken,
         <<"ttl">> => Expires
-    }).
+    });
+
+create_response(#gri{aspect = provider_registration_token}, _, value, Macaroon) ->
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    rest_translator:ok_body_reply(#{<<"token">> => Token}).
 
 
 %%--------------------------------------------------------------------
@@ -129,4 +133,10 @@ get_response(#gri{aspect = handles}, Handles) ->
     rest_translator:ok_body_reply(#{<<"handles">> => Handles});
 
 get_response(#gri{aspect = eff_handles}, Handles) ->
-    rest_translator:ok_body_reply(#{<<"handles">> => Handles}).
+    rest_translator:ok_body_reply(#{<<"handles">> => Handles});
+
+get_response(#gri{aspect = clusters}, Clusters) ->
+    rest_translator:ok_body_reply(#{<<"clusters">> => Clusters});
+
+get_response(#gri{aspect = eff_clusters}, Clusters) ->
+    rest_translator:ok_body_reply(#{<<"clusters">> => Clusters}).

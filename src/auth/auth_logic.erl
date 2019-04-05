@@ -16,6 +16,7 @@
 -include("auth/auth_errors.hrl").
 -include("http/gui_paths.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
@@ -48,6 +49,8 @@
 -export([get_login_endpoint/4, validate_login/2]).
 -export([authorize_by_access_token/1]).
 -export([authorize_by_macaroons/1, authorize_by_macaroons/2]).
+-export([authorize_by_oneprovider_gui_macaroon/1, authorize_by_onezone_gui_macaroon/1]).
+-export([authorize_by_gui_macaroon/3]).
 -export([authorize_by_basic_auth/1]).
 -export([acquire_idp_access_token/2, refresh_idp_access_token/2]).
 
@@ -99,7 +102,7 @@ get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
 %% Validates an incoming login request based on received data payload.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login(new_gui:method(), cowboy_req:req()) ->
+-spec validate_login(gui:method(), cowboy_req:req()) ->
     {ok, od_user:id(), RedirectPage :: binary()} |
     {auth_error, {error, term()}, state_token:id(), RedirectPage :: binary()}.
 validate_login(Method, Req) ->
@@ -154,9 +157,9 @@ authorize_by_access_token(AccessToken) when is_binary(AccessToken) ->
             end
     end;
 authorize_by_access_token(Req) ->
-    case cowboy_req:header(<<"x-auth-token">>, Req) of
+    case cowboy_req:header(<<"x-auth-token">>, Req, undefined) of
         undefined ->
-            case cowboy_req:header(<<"authorization">>, Req) of
+            case cowboy_req:header(<<"authorization">>, Req, undefined) of
                 <<"Bearer ", AccessToken/binary>> ->
                     authorize_by_access_token(AccessToken);
                 _ ->
@@ -190,7 +193,7 @@ authorize_by_macaroons(Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize_by_macaroons(Macaroon :: binary() | macaroon:macaroon(),
-    DischargeMacaroons :: binary() | [macaroon:macaroon()]) ->
+    DischargeMacaroons :: binary() | [binary()] | [macaroon:macaroon()]) ->
     {true, entity_logic:client()} | {error, term()}.
 authorize_by_macaroons(Macaroon, DischargeMacaroons) when is_binary(Macaroon) ->
     case onedata_macaroons:deserialize(Macaroon) of
@@ -217,14 +220,85 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
     %% (this is an authorization code for client).
     case auth_tokens:validate_token(<<>>, Macaroon, DischargeMacaroons, <<"">>, undefined) of
         {ok, UserId} ->
-            {true, #client{type = user, id = UserId}};
+            {true, ?USER(UserId)};
         _ ->
             case macaroon_logic:verify_provider_auth(Macaroon) of
-                {ok, IdP} ->
-                    {true, #client{type = provider, id = IdP}};
+                {ok, ProviderId} ->
+                    {true, ?PROVIDER(ProviderId)};
                 {error, _} ->
                     ?ERROR_BAD_MACAROON
             end
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Tries to a authorize a client by a GUI macaroon issued for a
+%% op_worker or op_panel service.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_oneprovider_gui_macaroon(cowboy_req:req()) ->
+    false | {true, entity_logic:client(), session:id()} | {error, term()}.
+authorize_by_oneprovider_gui_macaroon(Req) ->
+    SubjectToken = cowboy_req:header(<<"subject-token">>, Req, undefined),
+    AudienceToken = cowboy_req:header(<<"audience-token">>, Req, undefined),
+    case {SubjectToken, AudienceToken} of
+        {undefined, undefined} ->
+            false;
+        {_, undefined} ->
+            ?ERROR_UNAUTHORIZED;
+        {undefined, _} ->
+            ?ERROR_UNAUTHORIZED;
+        {_, _} ->
+            authorize_by_oneprovider_gui_macaroon(SubjectToken, AudienceToken)
+    end.
+
+%% @private
+-spec authorize_by_oneprovider_gui_macaroon(binary(), binary()) ->
+    {true, entity_logic:client(), session:id()} | {error, term()}.
+authorize_by_oneprovider_gui_macaroon(SubjectToken, AudienceToken) ->
+    try
+        {ok, SubjectMacaroon} = onedata_macaroons:deserialize(SubjectToken),
+        {ok, AudienceMacaroon} = onedata_macaroons:deserialize(AudienceToken),
+        case macaroon_logic:verify_provider_auth(AudienceMacaroon) of
+            {ok, ProviderId} ->
+                authorize_by_gui_macaroon(SubjectMacaroon, ?ONEPROVIDER, ProviderId);
+            {error, _} ->
+                ?ERROR_MACAROON_INVALID
+        end
+    catch
+        _:_ ->
+            ?ERROR_BAD_MACAROON
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Tries to a authorize a client by a GUI macaroon issued for the
+%% oz_worker or oz_panel service.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_onezone_gui_macaroon(macaroon:macaroon() | binary()) ->
+    {true, entity_logic:client(), session:id()} | {error, term()}.
+authorize_by_onezone_gui_macaroon(Macaroon) ->
+    authorize_by_gui_macaroon(Macaroon, ?ONEZONE, ?ONEZONE_CLUSTER_ID).
+
+
+%% @private
+-spec authorize_by_gui_macaroon(macaroon:macaroon() | binary(),
+    onedata:cluster_type(), od_cluster:id()) ->
+    {true, entity_logic:client(), session:id()} | {error, term()}.
+authorize_by_gui_macaroon(Token, ClusterType, ClusterId) when is_binary(Token) ->
+    case onedata_macaroons:deserialize(Token) of
+        {ok, Macaroon} ->
+            authorize_by_gui_macaroon(Macaroon, ClusterType, ClusterId);
+        {error, _} = Error ->
+            Error
+    end;
+authorize_by_gui_macaroon(Macaroon, ClusterType, ClusterId) ->
+    case session:verify_gui_macaroon(Macaroon, ClusterType, ClusterId) of
+        {ok, UserId, SessionId} -> {true, ?USER(UserId), SessionId};
+        {error, _} = Error -> Error
     end.
 
 
@@ -239,7 +313,7 @@ authorize_by_basic_auth(UserPasswdB64) when is_binary(UserPasswdB64) ->
     UserPasswd = base64:decode(UserPasswdB64),
     [User, Passwd] = binary:split(UserPasswd, <<":">>),
     case user_logic:authenticate_by_basic_credentials(User, Passwd) of
-        {ok, #document{key = UserId}} ->
+        {ok, UserId} ->
             {true, ?USER(UserId)};
         {error, onepanel_auth_disabled} ->
             ?ERROR_NOT_SUPPORTED;
@@ -247,7 +321,7 @@ authorize_by_basic_auth(UserPasswdB64) when is_binary(UserPasswdB64) ->
             ?ERROR_BAD_BASIC_CREDENTIALS
     end;
 authorize_by_basic_auth(Req) ->
-    case cowboy_req:header(<<"authorization">>, Req) of
+    case cowboy_req:header(<<"authorization">>, Req, undefined) of
         <<"Basic ", UserPasswdB64/binary>> ->
             authorize_by_basic_auth(UserPasswdB64);
         _ ->
@@ -368,7 +442,7 @@ validate_login_by_linked_account(LinkedAccount) ->
     {ok, #document{key = UserId, value = #od_user{
         name = UserName
     }}} = acquire_user_by_linked_account(LinkedAccount),
-    ?info("User ~ts (~s) has logged in", [UserName, UserId]),
+    ?info("User '~ts' has logged in (~s)", [UserName, UserId]),
     {ok, UserId}.
 
 
@@ -426,7 +500,7 @@ get_protocol_handler(IdP) ->
 %% Parses OIDC / SAML payload and returns it as a map, along with resolved state token.
 %% @end
 %%--------------------------------------------------------------------
--spec parse_payload(new_gui:method(), cowboy_req:req()) ->
+-spec parse_payload(gui:method(), cowboy_req:req()) ->
     {state_token:id(), Payload :: #{}}.
 parse_payload(<<"POST">>, Req) ->
     {ok, PostBody, _} = cowboy_req:read_urlencoded_body(Req, #{length => 128000}),

@@ -203,7 +203,13 @@ share_id_to_redirect_url(ShareId) ->
         _ -> Online
     end,
     ChosenProvider = lists:nth(rand:uniform(length(Choice)), Choice),
+
+    ClusterId = ChosenProvider,
+    Path = case cluster_logic:get(?ROOT, ClusterId) of
+        {ok, #od_cluster{worker_version = {?DEFAULT_RELEASE_VERSION, _, _}}} ->
+            ?LEGACY_PROVIDER_PUBLIC_SHARE_PATH(ShareId);
+        {ok, _} ->
+            ?PROVIDER_PUBLIC_SHARE_PATH(ShareId)
+    end,
     {ok, ProviderURL} = provider_logic:get_url(ChosenProvider),
-    str_utils:format_bin("~s~s", [
-        ProviderURL, ?PROVIDER_PUBLIC_SHARE_PATH(ShareId)
-    ]).
+    str_utils:format_bin("~s~s", [ProviderURL, Path]).

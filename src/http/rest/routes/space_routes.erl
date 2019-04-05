@@ -12,7 +12,7 @@
 %%%--------------------------------------------------------------------
 -module(space_routes).
 
--include("rest.hrl").
+-include("http/rest.hrl").
 
 -export([routes/0]).
 
@@ -74,7 +74,7 @@ routes() -> [
     }},
     %% Create space user invite token
     %% This operation requires one of the following privileges:
-    %% - space_invite_user
+    %% - space_add_user
     %% - oz_spaces_add_relationships
     {<<"/spaces/:id/users/token">>, #rest_req{
         method = 'POST',
@@ -82,7 +82,7 @@ routes() -> [
     }},
     %% Add user to space
     %% This operation requires one of the following privileges:
-    %% - space_invite_user
+    %% - space_add_user
     %% - space_set_privileges
     %% - oz_spaces_add_relationships
     %% - oz_users_add_relationships
@@ -120,7 +120,7 @@ routes() -> [
     %% Update user's space privileges
     %% This operation requires one of the following privileges:
     %% - space_set_privileges
-    %% - oz_set_privileges
+    %% - oz_spaces_set_privileges
     {<<"/spaces/:id/users/:uid/privileges">>, #rest_req{
         method = 'PATCH',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}

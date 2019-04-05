@@ -37,7 +37,8 @@
     handle_service_upgrade_test/1,
     handle_upgrade_test/1,
     dns_state_upgrade_test/1,
-    token_upgrade_test/1
+    token_upgrade_test/1,
+    generate_cluster_for_a_legacy_provider_test/1
 ]).
 
 %%%===================================================================
@@ -53,48 +54,101 @@ all() -> ?ALL([
     handle_service_upgrade_test,
     handle_upgrade_test,
     dns_state_upgrade_test,
-    token_upgrade_test
+    token_upgrade_test,
+    generate_cluster_for_a_legacy_provider_test
 ]).
+
+
+%%%===================================================================
+%%% Setup/teardown functions
+%%%===================================================================
+
+init_per_suite(Config) ->
+    Posthook = fun(NewConfig) ->
+        Nodes = ?config(oz_worker_nodes, NewConfig),
+        ok = test_utils:mock_new(Nodes, time_utils, [passthrough]),
+        ok = test_utils:mock_expect(Nodes, time_utils, system_time_seconds, fun() ->
+            ?DUMMY_TIMESTAMP
+        end),
+        NewConfig
+    end,
+    [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]} | Config].
+
+end_per_suite(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_unload(Nodes, [time_utils]),
+    ok.
+
 
 %%%===================================================================
 %%% Tests
 %%%===================================================================
 
 user_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_user, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]).
+    test_record_upgrade(Config, od_user).
 
 
 group_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_group, [1, 2, 3, 4, 5, 6]).
+    test_record_upgrade(Config, od_group).
 
 
 space_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_space, [1, 2, 3, 4]).
+    test_record_upgrade(Config, od_space).
 
 
 share_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_share, [1, 2, 3]).
+    test_record_upgrade(Config, od_share).
 
 
 provider_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_provider, [1, 2, 3, 4, 5]).
+    test_record_upgrade(Config, od_provider).
 
 
 handle_service_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_handle_service, [1, 2, 3, 4]).
+    test_record_upgrade(Config, od_handle_service).
 
 
 handle_upgrade_test(Config) ->
-    test_record_upgrade(Config, od_handle, [1, 2, 3, 4]).
+    test_record_upgrade(Config, od_handle).
 
 
 dns_state_upgrade_test(Config) ->
-    test_record_upgrade(Config, dns_state, [1, 2]).
+    test_record_upgrade(Config, dns_state).
 
 
 token_upgrade_test(Config) ->
-    test_record_upgrade(Config, token, [1, 2]).
+    test_record_upgrade(Config, token).
 
+
+generate_cluster_for_a_legacy_provider_test(Config) ->
+    Provider1 = datastore_utils:gen_key(),
+    Cluster1 = Provider1,
+    ?assertMatch({ok, false}, oz_test_utils:call_oz(Config, od_cluster, exists, [Cluster1])),
+    LegacyProviderDoc1 = #document{key = Provider1, value = #od_provider{
+        name = <<"dummy1">>
+    }},
+    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, save, [LegacyProviderDoc1])),
+    ?assertMatch({ok, true}, oz_test_utils:call_oz(Config, od_cluster, exists, [Cluster1])),
+
+    Provider2 = datastore_utils:gen_key(),
+    Cluster2 = Provider2,
+    ?assertMatch({error, not_found}, oz_test_utils:call_oz(Config, od_cluster, get, [Cluster2])),
+    LegacyProviderDoc2 = #document{key = Provider2, value = #od_provider{
+        name = <<"dummy2">>
+    }},
+    ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, save, [LegacyProviderDoc2])),
+    ?assertMatch({ok, #document{
+        key = Provider2, value = #od_cluster{}}
+    }, oz_test_utils:call_oz(Config, od_cluster, get, [Cluster2])).
+
+
+%%%===================================================================
+%%% Helper functions
+%%%===================================================================
+
+test_record_upgrade(Config, Model) ->
+    CurrentVersion = oz_test_utils:call_oz(Config, Model, get_record_version, []),
+    test_record_upgrade(Config, Model, lists:seq(1, CurrentVersion)).
 
 test_record_upgrade(Config, RecordType, Versions) ->
     Nodes = ?OZ_NODES(Config),
@@ -123,7 +177,7 @@ test_record_upgrade(Config, RecordType, Versions) ->
             Config, datastore_model, get, [MockCtx, Key]
         )),
         {ok, #document{value = NewRecord,
-                       version = NewVersion }} = Result,
+            version = NewVersion}} = Result,
 
         ?assertEqual({NewVersion, NewRecord},
             {Version, get_record(RecordType, Version)})
@@ -131,31 +185,6 @@ test_record_upgrade(Config, RecordType, Versions) ->
 
     test_utils:mock_unload(Nodes, RecordType).
 
-
-%%%===================================================================
-%%% Setup/teardown functions
-%%%===================================================================
-
-init_per_suite(Config) ->
-    Posthook = fun(NewConfig) ->
-        Nodes = ?config(oz_worker_nodes, NewConfig),
-        ok = test_utils:mock_new(Nodes, time_utils, [passthrough]),
-        ok = test_utils:mock_expect(Nodes, time_utils, system_time_seconds, fun() ->
-            ?DUMMY_TIMESTAMP
-        end),
-        NewConfig
-    end,
-    [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]} | Config].
-
-end_per_suite(Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_unload(Nodes, [time_utils]),
-    ok.
-
-
-%%%===================================================================
-%%% Internal definitions
-%%%===================================================================
 
 mock_record_version(Config, RecordType, Version) ->
     Nodes = ?OZ_NODES(Config),
@@ -682,12 +711,14 @@ get_record(od_user, 10) -> #od_user{
     spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
     handle_services = [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
     handles = [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+    clusters = [],
 
     eff_groups = #{},
     eff_spaces = #{},
     eff_providers = #{},
     eff_handle_services = #{},
     eff_handles = #{},
+    eff_clusters = #{},
 
     creation_time = ?DUMMY_TIMESTAMP,
 
@@ -714,7 +745,7 @@ get_record(od_group, 1) -> {od_group,
     [], % eff_children
     [
         {<<"user1">>, [group_create_space, ?GROUP_SET_PRIVILEGES, group_join_group]},
-        {<<"user2">>, [?GROUP_UPDATE, ?GROUP_VIEW, group_leave_group]}
+        {<<"user2">>, [?GROUP_UPDATE, ?GROUP_VIEW, group_leave_group, group_invite_user]}
     ],
     [<<"space1">>, <<"space2">>, <<"space3">>],
     [<<"handle_service1">>],
@@ -749,7 +780,7 @@ get_record(od_group, 2) -> {od_group,
 
     #{
         <<"user1">> => [group_create_space, ?GROUP_SET_PRIVILEGES, group_join_group],
-        <<"user2">> => [?GROUP_UPDATE, ?GROUP_VIEW, group_leave_group]
+        <<"user2">> => [?GROUP_UPDATE, ?GROUP_VIEW, group_leave_group, group_invite_user]
     },
     [<<"space1">>, <<"space2">>, <<"space3">>],
     [<<"handle_service1">>],
@@ -785,7 +816,7 @@ get_record(od_group, 3) -> {od_group,
 
     #{
         <<"user1">> => [group_create_space, ?GROUP_SET_PRIVILEGES, group_join_group],
-        <<"user2">> => [?GROUP_UPDATE, ?GROUP_VIEW, group_leave_group]
+        <<"user2">> => [?GROUP_UPDATE, ?GROUP_VIEW, group_leave_group, group_invite_user]
     },
     [<<"space1">>, <<"space2">>, <<"space3">>],
     [<<"handle_service1">>],
@@ -829,17 +860,19 @@ get_record(od_group, 6) -> #od_group{
 
     users = #{
         <<"user1">> => [?GROUP_ADD_PARENT, ?GROUP_ADD_SPACE, ?GROUP_SET_PRIVILEGES],
-        <<"user2">> => [?GROUP_LEAVE_PARENT, ?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES]
+        <<"user2">> => [?GROUP_ADD_USER, ?GROUP_LEAVE_PARENT, ?GROUP_UPDATE, ?GROUP_VIEW, ?GROUP_VIEW_PRIVILEGES]
     },
     spaces = [<<"space1">>, <<"space2">>, <<"space3">>],
     handle_services = [<<"handle_service1">>],
     handles = [<<"handle1">>, <<"handle2">>],
+    clusters = [],
 
     eff_users = #{},
     eff_spaces = #{},
     eff_providers = #{},
     eff_handle_services = #{},
     eff_handles = #{},
+    eff_clusters = #{},
 
     creation_time = ?DUMMY_TIMESTAMP,
     creator = undefined,
@@ -858,10 +891,10 @@ get_record(od_space, 1) -> {od_space,
     ],
     [
         {<<"user1">>, [?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_REMOVE_GROUP]},
-        {<<"user2">>, [?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER]}
+        {<<"user2">>, [?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, space_invite_provider, space_invite_user]}
     ],
     [
-        {<<"group1">>, [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER]},
+        {<<"group1">>, [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_invite_provider]},
         {<<"group2">>, [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]}
     ],
     [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
@@ -874,10 +907,10 @@ get_record(od_space, 2) -> {od_space,
     <<"name">>,
     #{
         <<"user1">> => [?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_REMOVE_GROUP],
-        <<"user2">> => [?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER]
+        <<"user2">> => [?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, space_invite_provider, space_invite_user]
     },
     #{
-        <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER],
+        <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_invite_provider],
         <<"group2">> => [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
     },
     #{
@@ -898,10 +931,10 @@ get_record(od_space, 3) -> {od_space,
     <<"name">>,
     #{
         <<"user1">> => [?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_REMOVE_GROUP],
-        <<"user2">> => [?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER]
+        <<"user2">> => [?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, space_invite_provider, space_invite_user]
     },
     #{
-        <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER],
+        <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_invite_provider],
         <<"group2">> => [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
     },
     #{
@@ -926,13 +959,14 @@ get_record(od_space, 4) -> #od_space{
             ?SPACE_READ_DATA, ?SPACE_MANAGE_INDEXES, ?SPACE_QUERY_INDEXES, ?SPACE_VIEW_STATISTICS
         ]),
         <<"user2">> => privileges:from_list([
-            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER,
-            ?SPACE_READ_DATA, ?SPACE_MANAGE_INDEXES, ?SPACE_QUERY_INDEXES, ?SPACE_VIEW_STATISTICS
+            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+            ?SPACE_READ_DATA, ?SPACE_MANAGE_INDEXES, ?SPACE_QUERY_INDEXES, ?SPACE_VIEW_STATISTICS,
+            ?SPACE_ADD_USER
         ])
     },
     groups = #{
         <<"group1">> => privileges:from_list([
-            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_INVITE_PROVIDER,
+            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
             ?SPACE_READ_DATA, ?SPACE_MANAGE_INDEXES, ?SPACE_QUERY_INDEXES, ?SPACE_VIEW_STATISTICS
         ]),
         <<"group2">> => privileges:from_list([

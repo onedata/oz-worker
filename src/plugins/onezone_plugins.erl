@@ -37,7 +37,7 @@
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--define(PLUGINS_DIR, begin {ok, __Path} = oz_worker:get_env(plugins_directory), __Path end).
+-define(PLUGINS_DIR, oz_worker:get_env(plugins_directory)).
 -define(INCLUDES_DIR, filename:join(code:lib_dir(?APP_NAME), "include")).
 -define(COMPILE_OPTS, [return_errors, {i, ?INCLUDES_DIR}]).
 

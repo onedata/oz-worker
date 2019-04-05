@@ -22,10 +22,23 @@
 % Endpoint for viewing public shares
 -define(SHARE_ID_BINDING, share_id).
 -define(PUBLIC_SHARE_COWBOY_ROUTE, "/share/:share_id").
--define(PUBLIC_SHARE_PATH(__ShareId), <<"/share/", __ShareId/binary>>).
+-define(PUBLIC_SHARE_PATH(ShareId), <<"/share/", ShareId/binary>>).
+
+% Endpoint in Oneprovider consuming login requests
+-define(PROVIDER_PUBLIC_SHARE_PATH(ShareId), <<"/share/", ShareId/binary>>).
+
+% Endpoint in Oneprovider consuming login requests
+-define(LEGACY_PROVIDER_PUBLIC_SHARE_PATH(ShareId), <<"/#/public/shares/", ShareId/binary>>).
 
 % Endpoint serving custom, user defined static files
--define(CUSTOM_STATIC_FILES_PATH, "/custom/[...]").
+-define(CUSTOM_STATIC_GUI_PATH, "/custom/[...]").
+
+% Endpoint for GUI upload (used by OP_WORKER and OP_PANEL services)
+-define(GUI_UPLOAD_PATH, "/:service/:cluster_id/gui-upload").
+
+% Endpoints for GUI scripts to discover and preauthorize GUIs of different services
+-define(GUI_TOKEN_PATH, "/gui-token").
+-define(GUI_ORIGIN_PATH, "/gui-origin").
 
 % Endpoint to perform basic auth login
 -define(LOGIN_PATH, "/login").
@@ -55,9 +68,6 @@
 % Endpoint in Oneprovider consuming login requests
 -define(PROVIDER_LOGIN_CONSUME_PATH, "/onezone-login/consume").
 -define(PROVIDER_LOGIN_CONSUME_PATH_DEPRECATED, "/validate_login.html").
-
-% Endpoint in Oneprovider consuming login requests
--define(PROVIDER_PUBLIC_SHARE_PATH(__ShareId), "/#/public/shares/" ++ __ShareId).
 
 % URL (relative) pointing to login page.
 -define(LOGIN_PAGE_PATH, "/#/home/login").

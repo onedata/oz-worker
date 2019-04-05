@@ -13,10 +13,11 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
--export([to_string/1]).
+-export([to_string/1, print_summary/0, print_summary/1]).
 -export([entity_logic_plugin/0]).
 
 %% datastore_model callbacks
@@ -115,6 +116,55 @@ list() ->
 -spec to_string(ProviderId :: id()) -> binary().
 to_string(ProviderId) ->
     <<"provider:", ProviderId/binary>>.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Prints all provider records to the console in a nicely-formatted manner.
+%% Sorts the records in a default manner.
+%% @end
+%%--------------------------------------------------------------------
+-spec print_summary() -> ok.
+print_summary() ->
+    print_summary(name).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Prints all provider records to the console in a nicely-formatted manner.
+%% Sorts the records by given attribute (specified by name or position).
+%% @end
+%%--------------------------------------------------------------------
+-spec print_summary(id | name | domain | spaces | support | users | groups | pos_integer()) -> ok.
+print_summary(id) -> print_summary(1);
+print_summary(name) -> print_summary(2);
+print_summary(domain) -> print_summary(3);
+print_summary(spaces) -> print_summary(4);
+print_summary(support) -> print_summary(5);
+print_summary(users) -> print_summary(6);
+print_summary(groups) -> print_summary(7);
+print_summary(SortPos) when is_integer(SortPos) ->
+    {ok, Providers} = list(),
+    ProviderAttrs = lists:map(fun(#document{key = Id, value = P}) ->
+        {
+            Id,
+            P#od_provider.name,
+            P#od_provider.domain,
+            maps:size(P#od_provider.spaces),
+            lists:sum(maps:values(P#od_provider.spaces)),
+            maps:size(P#od_provider.eff_users),
+            maps:size(P#od_provider.eff_groups)
+        }
+    end, Providers),
+    Sorted = lists:keysort(SortPos, ProviderAttrs),
+    io:format("-----------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("Id                                Name                      Domain                         Spaces   Tot. support   Eff users   Eff groups~n"),
+    io:format("-----------------------------------------------------------------------------------------------------------------------------------------~n"),
+    lists:foreach(fun({Id, Name, Domain, Spaces, Support, EffUsers, EffGroups}) ->
+        io:format("~-33s ~-25ts ~-30ts ~-8B ~-14s ~-11B ~-12B~n", [
+            Id, Name, Domain, Spaces, str_utils:format_byte_size(Support), EffUsers, EffGroups
+        ])
+    end, Sorted),
+    io:format("-----------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("~B providers in total~n", [length(Sorted)]).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -369,4 +419,3 @@ upgrade_record(4, Provider) ->
 
         bottom_up_dirty = BottomUpDirty
     }}.
-

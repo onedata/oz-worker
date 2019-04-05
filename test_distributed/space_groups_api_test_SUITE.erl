@@ -12,7 +12,7 @@
 -module(space_groups_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -219,7 +219,7 @@ add_group_with_privileges_test(Config) ->
             correct_values = #{
                 <<"privileges">> => [
                     [?SPACE_UPDATE, ?SPACE_REMOVE_GROUP],
-                    [?SPACE_INVITE_USER, ?SPACE_VIEW]
+                    [?SPACE_ADD_USER, ?SPACE_VIEW]
                 ]
             },
             bad_values = [

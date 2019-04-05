@@ -15,7 +15,7 @@
 
 -behaviour(dynamic_page_behaviour).
 
--include("registered_names.hrl").
+-include("http/codes.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
@@ -31,29 +31,28 @@
 %% {@link dynamic_page_behaviour} callback handle/2.
 %% @end
 %%--------------------------------------------------------------------
--spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
+-spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"POST">>, Req) ->
     try
         <<"Basic ", UserAndPassword/binary>> =
             cowboy_req:header(<<"authorization">>, Req),
         [User, Passwd] = binary:split(base64:decode(UserAndPassword), <<":">>),
         case user_logic:authenticate_by_basic_credentials(User, Passwd) of
-            {ok, #document{key = UserId}} ->
-                ?info("User ~s logged in", [UserId]),
-                Req2 = new_gui_session:log_in(UserId, Req),
+            {ok, UserId} ->
+                {ok, #{<<"name">> := UserName}} = user_logic:get_shared_data(?ROOT, UserId),
+                ?info("User '~ts' has logged in (~s)", [UserName, UserId]),
+                Req2 = gui_session:log_in(UserId, Req),
                 JSONHeader = #{<<"content-type">> => <<"application/json">>},
                 Body = json_utils:encode(#{<<"url">> => <<"/">>}),
-                cowboy_req:reply(200, JSONHeader, Body, Req2);
+                cowboy_req:reply(?HTTP_200_OK, JSONHeader, Body, Req2);
             {error, Binary} when is_binary(Binary) ->
-                cowboy_req:reply(401, #{}, Binary, Req);
+                cowboy_req:reply(?HTTP_401_UNAUTHORIZED, #{}, Binary, Req);
             {error, onepanel_auth_disabled} ->
-                cowboy_req:reply(400, #{}, <<"Onepanel login disabled">>, Req);
+                cowboy_req:reply(?HTTP_400_BAD_REQUEST, #{}, <<"Onepanel login disabled">>, Req);
             _ ->
-                cowboy_req:reply(401, Req)
+                cowboy_req:reply(?HTTP_401_UNAUTHORIZED, Req)
         end
     catch T:M ->
         ?error_stacktrace("Login by credentials failed - ~p:~p", [T, M]),
-        cowboy_req:reply(401, Req)
+        cowboy_req:reply(?HTTP_401_UNAUTHORIZED, Req)
     end.
-
-

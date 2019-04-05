@@ -12,6 +12,8 @@
 -ifndef(API_TEST_UTILS_HRL).
 -define(API_TEST_UTILS_HRL, 1).
 
+-include_lib("gui/include/gui_session.hrl").
+
 %% @formatter:off
 -type client() :: nobody | root | {user, UserId :: binary()} |
     {provider, ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}.
@@ -105,16 +107,7 @@
     >>
 ).
 
--define(URL(__Config, __PathTokens),
-    begin
-        {ok, __Domain} = oz_test_utils:get_oz_domain(__Config),
-        {ok, __RestAPIPrefix} = oz_test_utils:get_rest_api_prefix(__Config),
-        __OzURL = str_utils:format_bin(
-            "https://~s~s", [__Domain, __RestAPIPrefix]
-        ),
-        str_utils:join_binary([__OzURL | __PathTokens], <<"">>)
-    end
-).
+-define(URL(Config, PathTokens), oz_test_utils:oz_rest_url(Config, PathTokens)).
 
 %% Example test data for users
 -define(USER_NAME1, <<"user1">>).
@@ -265,16 +258,16 @@
 
 -define(BAD_VALUES_NAME(Error),
     [{<<"name">>, <<"">>, Error},
-    {<<"name">>, <<"a">>, Error},
-    {<<"name">>, <<"-asd">>, Error},
-    {<<"name">>, <<"/asd">>, Error},
-    {<<"name">>, <<":asd">>, Error},
-    {<<"name">>, <<"asd★">>, Error},
-    {<<"name">>, <<"asd-">>, Error},
-    {<<"name">>, <<"very_very_very_long_name_with_at_lest_50_characters">>, Error},
-    {<<"name">>, <<".asd">>, Error},
-    {<<"name">>, <<"asd ">>, Error},
-    {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)}]).
+        {<<"name">>, <<"a">>, Error},
+        {<<"name">>, <<"-asd">>, Error},
+        {<<"name">>, <<"/asd">>, Error},
+        {<<"name">>, <<":asd">>, Error},
+        {<<"name">>, <<"asd★">>, Error},
+        {<<"name">>, <<"asd-">>, Error},
+        {<<"name">>, <<"very_very_very_long_name_with_at_lest_50_characters">>, Error},
+        {<<"name">>, <<".asd">>, Error},
+        {<<"name">>, <<"asd ">>, Error},
+        {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)}]).
 
 -define(CORRECT_NAME, <<"_πœę ßþą_śðæŋ-əłżź.ćńµジ(ャパル)パスで 日本を- 旅す.る()"/utf8>>).
 

@@ -40,25 +40,25 @@
 %%--------------------------------------------------------------------
 -spec app_name() -> {ok, Name :: atom()}.
 app_name() ->
-    {ok, oz_worker}.
+    {ok, ?APP_NAME}.
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Overrides {@link node_manager_plugin_default:cm_nodes/0}.
 %% @end
 %%--------------------------------------------------------------------
--spec cm_nodes() -> {ok, Nodes :: [atom()]} | undefined.
+-spec cm_nodes() -> {ok, Nodes :: [atom()]}.
 cm_nodes() ->
-    oz_worker:get_env(cm_nodes).
+    {ok, oz_worker:get_env(cm_nodes)}.
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Overrides {@link node_manager_plugin_default:db_nodes/0}.
 %% @end
 %%--------------------------------------------------------------------
--spec db_nodes() -> {ok, Nodes :: [atom()]} | undefined.
+-spec db_nodes() -> {ok, Nodes :: [atom()]}.
 db_nodes() ->
-    oz_worker:get_env(db_nodes).
+    {ok, oz_worker:get_env(db_nodes)}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -117,21 +117,16 @@ on_cluster_initialized(_Nodes) ->
 -spec after_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
 after_init([]) ->
     try
+        % Logic run on every node of the cluster
         onezone_plugins:init(),
 
-        entity_graph:init_state(),
+        % Logic that should be run on a single node
+        is_dedicated_node(set_up_service) andalso cluster_logic:set_up_oz_worker_service(),
+        is_dedicated_node(init_entity_graph) andalso entity_graph:init_state(),
+        is_dedicated_node(dns) andalso broadcast_dns_config(),
+        is_dedicated_node(predefined_groups) andalso group_logic:create_predefined_groups(),
 
-        % build dns zone on one node and broadcast to others
-        case get_dns_dedicated_node() =:= node() of
-            true -> ok = broadcast_dns_config();
-            _ -> ok
-        end,
-
-        %% This code will be run on every node_manager, so we need a
-        %% transaction here that will prevent duplicates.
-        critical_section:run(create_predefined_groups, fun() ->
-            group_logic:create_predefined_groups()
-        end)
+        ok
     catch
         _:Error ->
             ?error_stacktrace("Error in node_manager_plugin:after_init: ~p",
@@ -187,19 +182,36 @@ handle_cast(Request, State) ->
 %%--------------------------------------------------------------------
 -spec reconcile_dns_config() -> ok.
 reconcile_dns_config() ->
-    DedicatedNode = get_dns_dedicated_node(),
-    gen_server2:cast({?NODE_MANAGER_NAME, DedicatedNode}, broadcast_dns_config).
+    gen_server2:cast({?NODE_MANAGER_NAME, dedicated_node(dns)}, broadcast_dns_config).
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns if the current node is dedicated to perform the operation symbolized
+%% by given (arbitrary) identifier. Used to prevent race conditions by choosing
+%% one cluster node for the operation.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_dedicated_node(Identifier :: atom()) -> boolean().
+is_dedicated_node(Identifier) ->
+    node() =:= dedicated_node(Identifier).
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Get node responsible for building dns zone to prevent race conditions.
+%% Returns the dedicated node to perform the operation symbolized by given
+%% (arbitrary) identifier.
 %% @end
 %%--------------------------------------------------------------------
--spec get_dns_dedicated_node() -> node().
-get_dns_dedicated_node() ->
-    consistent_hashing:get_node(build_dns_zone).
+-spec dedicated_node(Identifier :: atom()) -> node().
+dedicated_node(Identifier) ->
+    consistent_hashing:get_node(Identifier).
 
 
 %%--------------------------------------------------------------------
@@ -220,8 +232,8 @@ broadcast_dns_config() ->
             case Node == node() of
                 true -> ok = dns_config:insert_config(DnsConfig);
                 false -> ok = gen_server2:call({?NODE_MANAGER_NAME, Node},
-                                               {update_dns_config, DnsConfig},
-                                               timer:seconds(30))
+                    {update_dns_config, DnsConfig},
+                    timer:seconds(30))
             end
         end, Nodes),
         ok

@@ -24,6 +24,8 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
+-define(MINIMUM_SUPPORT_SIZE, oz_worker:get_env(minimum_space_support_size, 1000000)).
+
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
@@ -57,7 +59,6 @@ fetch_entity(ProviderId) ->
 %%--------------------------------------------------------------------
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
-operation_supported(create, provider_registration_token, private) -> true;
 operation_supported(create, instance, private) -> true;
 operation_supported(create, instance_dev, private) -> true;
 operation_supported(create, support, private) -> true;
@@ -121,14 +122,6 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) ->
     Data = Req#el_req.data,
     create_provider(Data, maps:get(<<"uuid">>, Data, undefined), GRI);
-
-create(Req = #el_req{gri = #gri{id = undefined, aspect = provider_registration_token}}) ->
-    {ok, Macaroon} = token_logic:create(
-        Req#el_req.client,
-        ?PROVIDER_REGISTRATION_TOKEN,
-        {od_provider, undefined}
-    ),
-    {ok, value, Macaroon};
 
 create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     SupportSize = maps:get(<<"size">>, Data),
@@ -223,7 +216,9 @@ get(#el_req{gri = #gri{aspect = domain_config, id = ProviderId}}, Provider) ->
     } = Provider,
     Response = #{
         <<"domain">> => Domain,
-        <<"subdomainDelegation">> => SubdomainDelegation
+        <<"subdomainDelegation">> => SubdomainDelegation,
+        <<"subdomain">> => null,
+        <<"ipList">> => []
     },
     case SubdomainDelegation of
         true ->
@@ -318,7 +313,12 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     ok = dns_state:remove_delegation_config(ProviderId),
     {ok, #od_provider{root_macaroon = RootMacaroon}} = fetch_entity(ProviderId),
     ok = macaroon_auth:delete(RootMacaroon),
+
+    ClusterId = ProviderId,
+    entity_graph:remove_all_relations(od_cluster, ClusterId),
     entity_graph:delete_with_relations(od_provider, ProviderId),
+    cluster_logic:delete_oneprovider_cluster(ClusterId),
+
     % Force disconnect the provider (if connected)
     case provider_connection:get_connection_ref(ProviderId) of
         {ok, ConnRef} ->
@@ -402,10 +402,10 @@ authorize(#el_req{operation = create, gri = #gri{id = undefined, aspect = instan
     true =:= oz_worker:get_env(dev_mode, true);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, _) ->
-    auth_by_self(Req);
+    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
-    auth_by_self(Req);
+    auth_by_self(Req) orelse auth_by_cluster_membership(Req);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = {check_my_ip, _}}}, _) ->
     true;
@@ -414,7 +414,7 @@ authorize(#el_req{operation = get, gri = #gri{aspect = current_time}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, _) ->
-    auth_by_self(Req);
+    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}, Provider) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
@@ -442,7 +442,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
             true;
 
         {?USER(UserId), _} ->
-            auth_by_membership(UserId, Provider);
+            auth_by_membership(UserId, Provider) orelse auth_by_cluster_membership(Req);
 
         _ ->
             % Access to private data also allows access to protected data
@@ -450,25 +450,25 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
     end;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_users}}, _) ->
-    auth_by_self(Req);
+    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_membership, UserId}}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_membership, _}}}, _) ->
-    auth_by_self(Req);
+    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_groups}}, _) ->
-    auth_by_self(Req);
+    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, _) ->
-    group_logic:has_eff_user(GroupId, UserId);
+authorize(Req = #el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, _) ->
+    group_logic:has_eff_user(GroupId, UserId) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_group_membership, _}}}, _) ->
     auth_by_self(Req);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = spaces}}, _) ->
-    auth_by_self(Req);
+    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(#el_req{client = ?USER(UserId), operation = get, gri = #gri{aspect = {user_spaces, UserId}}}, _) ->
     true;
@@ -477,25 +477,25 @@ authorize(#el_req{client = ?USER(UserId), operation = get, gri = #gri{aspect = {
     group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = domain_config}}, _) ->
-    auth_by_self(Req);
+    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, _) ->
-    auth_by_self(Req);
+    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = domain_config}}, _) ->
-    auth_by_self(Req);
+    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {space, _}}}, _) ->
-    auth_by_self(Req);
+    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, _) ->
-    auth_by_self(Req);
+    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_DELETE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
-    auth_by_self(Req);
+    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, _) ->
-    auth_by_self(Req);
+    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(_, _) ->
     false.
@@ -507,13 +507,13 @@ authorize(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
-required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = provider_registration_token}}) ->
-    [?OZ_PROVIDERS_INVITE];
-
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) ->
     [?OZ_PROVIDERS_LIST];
 
-required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}) ->
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance}}) ->
+    [?OZ_PROVIDERS_VIEW];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = domain_config}}) ->
     [?OZ_PROVIDERS_VIEW];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_users}}) ->
@@ -548,110 +548,61 @@ required_admin_privileges(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
-validate(#el_req{operation = create, gri = #gri{aspect = instance},
-    data = Data}
-) ->
-    SubdomainDelegationEnabled = application:get_env(
-        ?APP_NAME, subdomain_delegation_enabled, true
-    ),
-    ProviderRegistrationPolicy = application:get_env(
-        ?APP_NAME, provider_registration_policy, open
-    ),
-
-    AlwaysRequired = #{
+validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}) ->
+    SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
+    SubdomainDelegationParam = maps:get(<<"subdomainDelegation">>, Data, undefined),
+    DomainRelatedFields = case {SubdomainDelegationParam, SubdomainDelegationSupported} of
+        {true, false} ->
+            throw(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED);
+        {true, true} ->
+            #{
+                <<"subdomain">> => {binary, subdomain},
+                <<"ipList">> => {list_of_ipv4_addresses, any}
+            };
+        {false, _} ->
+            #{<<"domain">> => {binary, domain}};
+        {_, _} ->
+            % valid subdomainDelegation field was not sent, which will cause
+            % BAD_DATA error. No need to generate domain related fields.
+            #{}
+    end,
+    Required = DomainRelatedFields#{
         <<"name">> => {binary, name},
         <<"subdomainDelegation">> => {boolean, any},
         <<"adminEmail">> => {binary, email}
     },
-    Required = case ProviderRegistrationPolicy of
-        open ->
-            AlwaysRequired;
-        restricted ->
-            AlwaysRequired#{<<"token">> => {token, ?PROVIDER_REGISTRATION_TOKEN}}
-    end,
-    Common = #{
-        optional => #{
-            <<"latitude">> => {float, {between, -90, 90}},
-            <<"longitude">> => {float, {between, -180, 180}}
-        }
+    Optional = #{
+        <<"latitude">> => {float, {between, -90, 90}},
+        <<"longitude">> => {float, {between, -180, 180}}
     },
-    case maps:get(<<"subdomainDelegation">>, Data, undefined) of
-        true ->
-            case SubdomainDelegationEnabled of
-                false ->
-                    throw(?ERROR_SUBDOMAIN_DELEGATION_DISABLED);
-                true ->
-                    Common#{
-                        required => Required#{
-                            <<"subdomain">> => {binary, subdomain},
-                            <<"ipList">> => {list_of_ipv4_addresses, any}
-                        }
-                    }
-            end;
+
+    % @TODO VFS-5207 Registration token is not required for compatibility with
+    % legacy providers, but can be forced by the env variable
+    case oz_worker:get_env(require_token_for_provider_registration, false) of
         false ->
-            Common#{
-                required => Required#{<<"domain">> => {binary, domain}}
+            #{
+                required => Required,
+                optional => Optional#{<<"token">> => {token, ?PROVIDER_REGISTRATION_TOKEN}}
             };
-        _ ->
-            Common#{required => Required}
+        true ->
+            #{
+                required => Required#{<<"token">> => {token, ?PROVIDER_REGISTRATION_TOKEN}},
+                optional => Optional
+            }
     end;
 
-validate(#el_req{operation = create, gri = #gri{aspect = instance_dev},
-    data = Data}
-) ->
-    SubdomainDelegationEnabled = application:get_env(
-        ?APP_NAME, subdomain_delegation_enabled, true
-    ),
-    ProviderRegistrationPolicy = application:get_env(
-        ?APP_NAME, provider_registration_policy, open
-    ),
-
-    AlwaysRequired = #{
-        <<"name">> => {binary, non_empty},
-        <<"uuid">> => {binary, non_empty},
-        <<"subdomainDelegation">> => {boolean, any},
-        <<"adminEmail">> => {binary, email}
-    },
-    Required = case ProviderRegistrationPolicy of
-        open ->
-            AlwaysRequired;
-        restricted ->
-            AlwaysRequired#{<<"token">> => {token, ?PROVIDER_REGISTRATION_TOKEN}}
-    end,
-    Common = #{
-        optional => #{
-            <<"latitude">> => {float, {between, -90, 90}},
-            <<"longitude">> => {float, {between, -180, 180}}
+validate(Req = #el_req{operation = create, gri = GRI = #gri{aspect = instance_dev}}) ->
+    ValidationRules = #{required := Required} = validate(Req#el_req{gri = GRI#gri{aspect = instance}}),
+    ValidationRules#{
+        required => Required#{
+            <<"uuid">> => {binary, non_empty}
         }
-    },
-    case maps:get(<<"subdomainDelegation">>, Data, undefined) of
-        true ->
-            case SubdomainDelegationEnabled of
-                false ->
-                    throw(?ERROR_SUBDOMAIN_DELEGATION_DISABLED);
-                true ->
-                    Common#{
-                        required => Required#{
-                            <<"subdomain">> => {binary, subdomain},
-                            <<"ipList">> => {list_of_ipv4_addresses, any}
-                        }
-                    }
-            end;
-        false ->
-            Common#{
-                required => Required#{<<"domain">> => {binary, domain}}
-            };
-        _ ->
-            Common#{required => Required}
-    end;
-
-validate(#el_req{operation = create, gri = #gri{aspect = provider_registration_token}}) -> #{
-};
+    };
 
 validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     required => #{
         <<"token">> => {token, ?SPACE_SUPPORT_TOKEN},
-        <<"size">> => {integer, {not_lower_than, get_min_support_size()}}
+        <<"size">> => {integer, {not_lower_than, ?MINIMUM_SUPPORT_SIZE}}
     }
 };
 
@@ -679,9 +630,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = map_idp_group}}) -> #{
 validate(#el_req{operation = create, gri = #gri{aspect = verify_provider_identity}}) ->
     #{
         required => #{
-            <<"providerId">> => {binary, {exists, fun(ProviderId) ->
-                provider_logic:exists(ProviderId) end}
-            },
+            <<"providerId">> => {binary, {exists, fun provider_logic:exists/1}},
             <<"macaroon">> => {token, any}
         }
     };
@@ -697,35 +646,29 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
 
 validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
     required => #{
-        <<"size">> => {integer, {not_lower_than, get_min_support_size()}}
+        <<"size">> => {integer, {not_lower_than, ?MINIMUM_SUPPORT_SIZE}}
     }
 };
 
-validate(#el_req{operation = update, gri = #gri{aspect = domain_config},
-    data = Data}) ->
-    SubdomainDelegationEnabled = application:get_env(
-        ?APP_NAME, subdomain_delegation_enabled, true
-    ),
+validate(#el_req{operation = update, gri = #gri{aspect = domain_config}, data = Data}) ->
     case maps:get(<<"subdomainDelegation">>, Data, undefined) of
         true ->
-            case SubdomainDelegationEnabled of
-                false ->
-                    throw(?ERROR_SUBDOMAIN_DELEGATION_DISABLED);
-                true ->
-                    #{
-                        required => #{
-                            <<"subdomainDelegation">> => {boolean, any},
-                            <<"subdomain">> => {binary, subdomain},
-                            <<"ipList">> => {list_of_ipv4_addresses, any}
-                        }
-                    }
-            end;
-        false -> #{required => #{
-            <<"subdomainDelegation">> => {boolean, any},
-            <<"domain">> => {binary, domain}
-        }};
+            true == oz_worker:get_env(subdomain_delegation_supported, true) orelse
+                throw(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED),
+            #{required => #{
+                <<"subdomainDelegation">> => {boolean, any},
+                <<"subdomain">> => {binary, subdomain},
+                <<"ipList">> => {list_of_ipv4_addresses, any}
+            }};
+        false ->
+            #{required => #{
+                <<"subdomainDelegation">> => {boolean, any},
+                <<"domain">> => {binary, domain}
+            }};
         _ ->
-            #{required => #{<<"subdomainDelegation">> => {boolean, any}}}
+            #{required => #{
+                <<"subdomainDelegation">> => {boolean, any}
+            }}
     end.
 
 
@@ -756,6 +699,36 @@ auth_by_membership(UserId, Provider) ->
 auth_by_self(#el_req{client = ?PROVIDER(ProvId), gri = #gri{id = ProvId}}) ->
     true;
 auth_by_self(_) ->
+    false.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns true if request client is a member of the provider's cluster.
+%% @end
+%%--------------------------------------------------------------------
+-spec auth_by_cluster_membership(entity_logic:req()) -> boolean().
+auth_by_cluster_membership(#el_req{client = ?USER(UserId), gri = #gri{id = ProviderId}}) ->
+    ClusterId = ProviderId,
+    cluster_logic:has_eff_user(ClusterId, UserId);
+auth_by_cluster_membership(_) ->
+    false.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Returns true if request client is a member of the provider's cluster and
+%% has given privilege.
+%% @end
+%%--------------------------------------------------------------------
+-spec auth_by_cluster_privilege(entity_logic:req(), oprivileges:cluster_privilege()) ->
+    boolean().
+auth_by_cluster_privilege(#el_req{client = ?USER(UserId), gri = #gri{id = ProviderId}}, Privilege) ->
+    ClusterId = ProviderId,
+    cluster_logic:has_eff_privilege(ClusterId, UserId, Privilege);
+auth_by_cluster_privilege(_, _) ->
     false.
 
 
@@ -804,20 +777,6 @@ test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
     test_connection(Rest, Acc#{Url => ConnStatus});
 test_connection([{Key, _} | _], _) ->
     throw(?ERROR_BAD_DATA(Key)).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Reads minimum space support size from app.config env variable.
-%% @end
-%%--------------------------------------------------------------------
--spec get_min_support_size() -> integer().
-get_min_support_size() ->
-    {ok, MinSupportSize} = application:get_env(
-        oz_worker, minimum_space_support_size
-    ),
-    MinSupportSize.
 
 
 %%--------------------------------------------------------------------
@@ -885,17 +844,14 @@ update_provider_subomain(ProviderId, Data) ->
 -spec create_provider(Data :: maps:map(), ProviderId :: od_provider:id(),
     GRI :: entity_logic:gri()) -> entity_logic:create_result().
 create_provider(Data, ProviderId, GRI) ->
+    Token = maps:get(<<"token">>, Data, undefined),
     Name = maps:get(<<"name">>, Data),
     Latitude = maps:get(<<"latitude">>, Data, 0.0),
     Longitude = maps:get(<<"longitude">>, Data, 0.0),
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
     AdminEmail = maps:get(<<"adminEmail">>, Data),
 
-    ProviderRegistrationPolicy = application:get_env(
-        ?APP_NAME, provider_registration_policy, open
-    ),
-
-    CreateProviderFun = fun(od_provider, undefined) ->
+    CreateProviderFun = fun(od_user, CreatorUserId) ->
         {ok, {Macaroon, Identity}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
 
         {Domain, Subdomain} = case SubdomainDelegation of
@@ -912,7 +868,7 @@ create_provider(Data, ProviderId, GRI) ->
                 end
         end,
 
-        Provider = #od_provider{
+        ProviderRecord = #od_provider{
             name = Name, root_macaroon = Identity,
             subdomain_delegation = SubdomainDelegation,
             domain = Domain, subdomain = Subdomain,
@@ -920,19 +876,20 @@ create_provider(Data, ProviderId, GRI) ->
             admin_email = AdminEmail
         },
 
-        case od_provider:create(#document{key = ProviderId, value = Provider}) of
-            {ok, _} ->
-                {ok, resource, {GRI#gri{id = ProviderId}, {Provider, Macaroon}}};
-            _Error ->
-                dns_state:remove_delegation_config(ProviderId),
-                ?ERROR_INTERNAL_SERVER_ERROR
+        try
+            {ok, _} = od_provider:create(#document{key = ProviderId, value = ProviderRecord}),
+            cluster_logic:create_oneprovider_cluster(CreatorUserId, ProviderId),
+            {ok, Provider} = fetch_entity(ProviderId),
+            ?info("Provider '~ts' has registered (~s)", [Name, ProviderId]),
+            {ok, resource, {GRI#gri{id = ProviderId}, {Provider, Macaroon}}}
+        catch Type:Reason ->
+            ?error_stacktrace("Cannot create a new provider due to ~p:~p", [Type, Reason]),
+            dns_state:remove_delegation_config(ProviderId),
+            ?ERROR_INTERNAL_SERVER_ERROR
         end
     end,
-
-    case ProviderRegistrationPolicy of
-        open ->
-            CreateProviderFun(od_provider, undefined);
-        restricted ->
-            Token = maps:get(<<"token">>, Data),
-            token_logic:consume(Token, CreateProviderFun)
+    % @TODO VFS-5207 Registration token is not required for compatibility with legacy providers
+    case Token of
+        undefined -> CreateProviderFun(od_user, undefined);
+        _ -> token_logic:consume(Token, CreateProviderFun)
     end.

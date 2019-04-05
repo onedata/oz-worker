@@ -12,7 +12,7 @@
 -module(group_children_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -446,7 +446,7 @@ add_child_with_privileges_test(Config) ->
             correct_values = #{
                 <<"privileges">> => [
                     [?GROUP_ADD_PARENT, ?GROUP_REMOVE_CHILD],
-                    [?GROUP_INVITE_USER, ?GROUP_VIEW]
+                    [?GROUP_ADD_USER, ?GROUP_VIEW]
                 ]
             },
             bad_values = [

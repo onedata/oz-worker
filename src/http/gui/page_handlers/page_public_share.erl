@@ -7,7 +7,7 @@
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This module implements dynamic_page_behaviour and is called
-%%% when zone version page is visited.
+%%% when public share path is visited.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(page_public_share).
@@ -15,6 +15,7 @@
 
 -behaviour(dynamic_page_behaviour).
 
+-include("http/codes.hrl").
 -include("http/gui_paths.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -30,14 +31,14 @@
 %% {@link dynamic_page_behaviour} callback handle/2.
 %% @end
 %%--------------------------------------------------------------------
--spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
+-spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"GET">>, Req) ->
     ShareId = cowboy_req:binding(?SHARE_ID_BINDING, Req),
     try
         URL = share_logic:share_id_to_redirect_url(ShareId),
-        cowboy_req:reply(307, #{<<"location">> => URL}, Req)
+        cowboy_req:reply(?HTTP_303_SEE_OTHER, #{<<"location">> => URL}, Req)
     catch Type:Reason ->
         ?error_stacktrace("Error while redirecting to public share - ~p:~p",
             [Type, Reason]),
-        cowboy_req:reply(404, Req)
+        cowboy_req:reply(?HTTP_404_NOT_FOUND, Req)
     end.

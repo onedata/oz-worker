@@ -133,7 +133,8 @@ get(#el_req{gri = #gri{aspect = instance, scope = public}}, Share) ->
     } = Share,
     {ok, #{
         <<"name">> => Name, <<"publicUrl">> => PublicUrl,
-        <<"rootFileId">> => RootFileId, <<"handleId">> => HandleId,
+        <<"rootFileId">> => RootFileId,
+        <<"handleId">> => gs_protocol:undefined_to_null(HandleId),
         <<"creationTime">> => CreationTime, <<"creator">> => Creator
     }}.
 

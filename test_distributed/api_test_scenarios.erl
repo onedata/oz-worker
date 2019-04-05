@@ -12,7 +12,7 @@
 
 -include("registered_names.hrl").
 -include("api_test_utils.hrl").
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
@@ -34,7 +34,8 @@
     create_basic_group_env/2,
     create_basic_space_env/2,
     create_basic_doi_hservice_env/2,
-    create_basic_handle_env/2
+    create_basic_handle_env/2,
+    create_basic_cluster_env/2
 ]).
 -export([
     create_eff_parent_groups_env/1,
@@ -43,6 +44,7 @@
     create_provider_eff_users_env/1,
     create_hservice_eff_users_env/1,
     create_handle_eff_users_env/1,
+    create_cluster_eff_users_env/1,
     create_eff_spaces_env/1,
     create_eff_providers_env/1,
     create_eff_handle_services_env/1,
@@ -669,6 +671,39 @@ create_basic_handle_env(Config, Privs) ->
     {HandleId, U1, U2}.
 
 
+create_basic_cluster_env(Config, Privs) when not is_list(Privs) ->
+    create_basic_cluster_env(Config, [Privs]);
+create_basic_cluster_env(Config, Privs) ->
+    %% Create environment with the following relations:
+    %%
+    %%                  Cluster
+    %%                 /     \
+    %%                /       \
+    %%       [~privileges]  [privileges]
+    %%              /           \
+    %%           User1         User2
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+
+    AllClusterPrivs = privileges:cluster_privileges(),
+
+    {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
+        Config, U1, ?PROVIDER_NAME1
+    ),
+    ClusterId = ProviderId,
+
+    oz_test_utils:cluster_set_user_privileges(
+        Config, ClusterId, U1, [], Privs
+    ),
+    {ok, U2} = oz_test_utils:cluster_add_user(Config, ClusterId, U2),
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U2, Privs, AllClusterPrivs -- Privs),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {ClusterId, U1, U2, {ProviderId, Macaroon}}.
+
+
 create_eff_parent_groups_env(Config) ->
     %% Create environment with the following relations:
     %%
@@ -986,6 +1021,60 @@ create_handle_eff_users_env(Config) ->
     {HandleId, Groups, Users, {U1, U2, NonAdmin}}.
 
 
+create_cluster_eff_users_env(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%                  Cluster
+    %%                 /  |  \
+    %%                /   |   \
+    %%     [~cluster_view]  |  [cluster_view]
+    %%           /        |        \
+    %%        User1     Group1    User2
+    %%                 /      \
+    %%                /        \
+    %%             Group6     Group2
+    %%              /         /    \
+    %%           User6       /     User3
+    %%                    Group3
+    %%                    /    \
+    %%                   /      \
+    %%                Group4  Group5
+    %%                 /          \
+    %%               User4      User5
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {
+        [{G1, _} | _] = Groups, Users
+    } = create_eff_child_groups_env(Config),
+
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    AllClusterPrivs = privileges:cluster_privileges(),
+
+
+    {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
+        Config, U1, ?PROVIDER_NAME1
+    ),
+    ClusterId = ProviderId,
+
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U1, [],
+        [?CLUSTER_VIEW]
+    ),
+    {ok, U2} = oz_test_utils:cluster_add_user(Config, ClusterId, U2),
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U2,
+        [?CLUSTER_VIEW], AllClusterPrivs -- [?CLUSTER_VIEW]
+    ),
+    {ok, G1} = oz_test_utils:cluster_add_group(Config, ClusterId, G1),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {ClusterId, Groups, Users, {U1, U2, NonAdmin}, {ProviderId, Macaroon}}.
+
+
 create_eff_spaces_env(Config) ->
     %% Create environment with the following relations:
     %%
@@ -1038,7 +1127,7 @@ create_eff_providers_env(Config) ->
     %%  Space4   Space5
     %%      \     /
     %%       \   /
-    %%      Group5    Space3 ----- Prov2
+    %%      Group5    Space3 ----- Provider2
     %%          \      /             |
     %%           \    /              |
     %%           Group4           Space2
@@ -1068,7 +1157,6 @@ create_eff_providers_env(Config) ->
                 Config, ProvDetails#{<<"subdomainDelegation">> => false}
             ),
             {ProvId, maps:remove(<<"adminEmail">>, ProvDetails#{
-                <<"name">> => ProviderName,
                 <<"online">> => false
             })}
         end, lists:seq(1, 4)

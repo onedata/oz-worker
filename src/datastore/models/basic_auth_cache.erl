@@ -28,8 +28,8 @@
     disc_driver => undefined
 }).
 
--define(EXPIRATION_TIMEOUT, application:get_env(
-    ?APP_NAME, basic_auth_cache_expiration_timeout, timer:seconds(5))
+-define(EXPIRATION_TIMEOUT, oz_worker:get_env(
+    basic_auth_cache_expiration_timeout, timer:seconds(5))
 ).
 
 

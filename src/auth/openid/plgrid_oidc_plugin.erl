@@ -103,7 +103,7 @@ validate_login(IdP, QueryParams, _RedirectUri) ->
 
     % Send validation request, check if server responded positively
     {_, <<"is_valid:true\n">>} = openid_protocol:request_idp(post, 200, ReceivedEndpoint, #{
-        <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
+        <<"content-type">> => <<"application/x-www-form-urlencoded">>
     }, Params),
 
     % Return signed attributes

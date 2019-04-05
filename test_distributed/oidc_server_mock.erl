@@ -77,9 +77,8 @@ simulate_user_login(Config, OidcSpec, Url, UserAttributesByEndpoint) ->
             <<"code">> => AuthCode,
             <<"state">> => State
         }),
-        {ok, OzDomain} = oz_test_utils:get_oz_domain(Config),
         ExpPath = str_utils:format_bin("https://~s~s", [
-            OzDomain, ?OIDC_CONSUME_PATH_DEPRECATED
+            oz_test_utils:oz_domain(Config), ?OIDC_CONSUME_PATH_DEPRECATED
         ]),
         Len = erlang:byte_size(ExpPath),
         ?assertMatch(<<ExpPath:Len/binary, _/binary>>, RedirectUrl),
@@ -132,7 +131,7 @@ mock_request_idp(Method, ExpCode, Endpoint, Headers, Parameters, _Opts) ->
 
 
 mock_xrds_endpoint(OidcSpec) ->
-    {200, #{<<"Content-Type">> => <<"application/json">>}, json_utils:encode(build_xrds(OidcSpec))}.
+    {200, #{<<"content-type">> => <<"application/json">>}, json_utils:encode(build_xrds(OidcSpec))}.
 
 
 mock_access_token_endpoint(OidcSpec, Headers, #{<<"grant_type">> := <<"authorization_code">>} = Parameters) ->
@@ -161,7 +160,7 @@ mock_access_token_endpoint(OidcSpec, Headers, Parameters, Token, RefreshToken) -
     ExpClientSecret = list_to_binary(OidcSpec#oidc_spec.clientSecret),
     AuthValid = case ClientSecretPassMethod of
         inAuthHeader ->
-            AuthHeader = maps:get(<<"Authorization">>, Headers, <<"">>),
+            AuthHeader = maps:get(<<"authorization">>, Headers, <<"">>),
             ExpectedAuth = base64:encode(<<ExpClientId/binary, ":", ExpClientSecret/binary>>),
             <<"Basic ", ExpectedAuth/binary>> =:= AuthHeader;
         urlencoded ->
@@ -190,11 +189,11 @@ mock_access_token_endpoint(OidcSpec, Headers, Parameters, Token, RefreshToken) -
             case rand:uniform(2) of
                 1 ->
                     {200, #{
-                        <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
+                        <<"content-type">> => <<"application/x-www-form-urlencoded">>
                     }, http_utils:encode_http_parameters(Response2)};
                 2 ->
                     {200, #{
-                        <<"Content-Type">> => <<"application/json">>
+                        <<"content-type">> => <<"application/json">>
                     }, json_utils:encode(Response2)}
             end
     end.
@@ -204,7 +203,7 @@ mock_userinfo_endpoint(OidcSpec, Headers, Parameters) ->
     AccessTokenPassMethod = OidcSpec#oidc_spec.accessTokenPassMethod,
     Token = case AccessTokenPassMethod of
         inAuthHeader ->
-            <<"Bearer ", AccessToken/binary>> = maps:get(<<"Authorization">>, Headers, <<"Bearer ">>),
+            <<"Bearer ", AccessToken/binary>> = maps:get(<<"authorization">>, Headers, <<"Bearer ">>),
             AccessToken;
         urlencoded ->
             maps:get(<<"access_token">>, Parameters, <<"">>)

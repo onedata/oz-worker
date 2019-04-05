@@ -11,7 +11,7 @@
 -module(error_rest_translator).
 -author("Lukasz Opiola").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -275,8 +275,10 @@ translate(?ERROR_CANNOT_DELETE_ENTITY(EntityType, EntityId)) ->
     }};
 translate(?ERROR_CANNOT_ADD_RELATION_TO_SELF) ->
     {?HTTP_400_BAD_REQUEST, <<"Cannot add relation to self.">>};
+translate(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED) ->
+    {?HTTP_400_BAD_REQUEST, <<"Subdomain delegation is not supported by this Onezone.">>};
 translate(?ERROR_SUBDOMAIN_DELEGATION_DISABLED) ->
-    {?HTTP_400_BAD_REQUEST, <<"Subdomain delegation is currently disabled.">>};
+    {?HTTP_400_BAD_REQUEST, <<"Subdomain delegation is disabled for this Oneprovider.">>};
 translate(?ERROR_BAD_VALUE_EMAIL) ->
     {?HTTP_400_BAD_REQUEST, <<"Bad value: provided e-mail is not a valid e-mail.">>};
 % Wildcard match

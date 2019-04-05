@@ -19,6 +19,8 @@
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 
+-include("api_test_utils.hrl").
+
 
 -define(CORRECT_LOGIN, <<"user-login">>).
 -define(CORRECT_PASSWORD, <<"user-passwd">>).
@@ -34,14 +36,16 @@
 -export([
     macaroon_test/1,
     basic_auth_test/1,
-    external_access_token_test/1
+    external_access_token_test/1,
+    gui_macaroon_test/1
 ]).
 
 all() ->
     ?ALL([
         macaroon_test,
         basic_auth_test,
-        external_access_token_test
+        external_access_token_test,
+        gui_macaroon_test
     ]).
 
 %%%===================================================================
@@ -60,7 +64,7 @@ macaroon_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"Macaroon">> => Macaroon}
+            headers => #{<<"macaroon">> => Macaroon}
         },
         expect => #{
             code => 200,
@@ -72,7 +76,7 @@ macaroon_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => Macaroon}
+            headers => #{<<"x-auth-token">> => Macaroon}
         },
         expect => #{
             code => 200,
@@ -172,7 +176,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => XAuthTokenFun(DummyIdP)}
+            headers => #{<<"x-auth-token">> => XAuthTokenFun(DummyIdP)}
         },
         expect => #{
             code => 200,
@@ -187,7 +191,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => XAuthTokenFun(AnotherIdP)}
+            headers => #{<<"x-auth-token">> => XAuthTokenFun(AnotherIdP)}
         },
         expect => #{
             code => 200,
@@ -203,7 +207,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => XAuthTokenFun(DisabledIdP)}
+            headers => #{<<"x-auth-token">> => XAuthTokenFun(DisabledIdP)}
         },
         expect => #{
             code => 401
@@ -215,7 +219,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => <<
+            headers => #{<<"x-auth-token">> => <<
                 (PrefixFun(DummyIdP))/binary, (CorrectAccessTokenFun(AnotherIdP))/binary
             >>}
         },
@@ -228,7 +232,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => <<"completely-bad-token">>}
+            headers => #{<<"x-auth-token">> => <<"completely-bad-token">>}
         },
         expect => #{
             code => 401
@@ -238,10 +242,92 @@ external_access_token_test(Config) ->
     ok.
 
 
+gui_macaroon_test(Config) ->
+    {ok, {Provider1, Provider1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?UNIQUE_STRING
+    ),
+    {ok, {_Provider2, Provider2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?UNIQUE_STRING
+    ),
+    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{name = <<"U1">>}),
+    {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, UserId),
+
+    ClusterType = ?ONEPROVIDER,
+    ClusterId = Provider1,
+
+    {ok, {Macaroon, Expires}} = oz_test_utils:call_oz(Config, session, acquire_gui_macaroon, [
+        SessionId, ClusterType, ClusterId
+    ]),
+    {ok, MacaroonBin} = onedata_macaroons:serialize(Macaroon),
+
+    ?assert(rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            path => <<"/user">>,
+            headers => #{
+                <<"Subject-Token">> => MacaroonBin,
+                <<"Audience-Token">> => Provider1Macaroon
+            }
+        },
+        expect => #{
+            code => 200, % correct audience
+            body => {contains, #{<<"name">> => <<"U1">>}}
+        }
+    })),
+
+    ?assert(rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            path => <<"/user">>,
+            headers => #{
+                <<"Subject-Token">> => MacaroonBin,
+                <<"Audience-Token">> => Provider2Macaroon
+            }
+        },
+        expect => #{
+            code => 401 % invalid audience
+        }
+    })),
+
+    ?assert(rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            path => <<"/user">>,
+            headers => #{
+                <<"Subject-Token">> => MacaroonBin
+            }
+        },
+        expect => #{
+            code => 401 % missing audience token
+        }
+    })),
+
+    CurrentTime = oz_test_utils:get_mocked_time(Config),
+    oz_test_utils:simulate_time_passing(Config, Expires - CurrentTime + 1),
+
+    ?assert(rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            path => <<"/user">>,
+            headers => #{
+                <<"Subject-Token">> => MacaroonBin,
+                <<"Audience-Token">> => Provider1Macaroon
+            }
+        },
+        expect => #{
+            code => 401 % expired token
+        }
+    })),
+
+    ok.
+
+%%%===================================================================
+%%% Helper functions
+%%%===================================================================
+
 basic_auth_header(Login, Password) ->
     UserAndPassword = base64:encode(<<Login/binary, ":", Password/binary>>),
-    #{<<"Authorization">> => <<"Basic ", UserAndPassword/binary>>}.
-
+    #{<<"authorization">> => <<"Basic ", UserAndPassword/binary>>}.
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -277,7 +363,7 @@ init_per_testcase(basic_auth_test, Config) ->
                 meck:passthrough([Url, Headers, Body, Options]);
             _ ->
                 <<"Basic ", UserAndPassword/binary>> =
-                    maps:get(<<"Authorization">>, Headers),
+                    maps:get(<<"authorization">>, Headers),
                 [User, Passwd] =
                     binary:split(base64:decode(UserAndPassword), <<":">>),
                 case {User, Passwd} of
@@ -393,6 +479,10 @@ init_per_testcase(external_access_token_test, Config) ->
         Config
     ];
 
+init_per_testcase(gui_macaroon_test, Config) ->
+    oz_test_utils:mock_time(Config),
+    Config;
+
 init_per_testcase(_, Config) ->
     Config.
 
@@ -404,6 +494,9 @@ end_per_testcase(basic_auth_test, Config) ->
 end_per_testcase(external_access_token_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_unload(Nodes, default_oidc_plugin);
+
+end_per_testcase(gui_macaroon_test, Config) ->
+    oz_test_utils:unmock_time(Config);
 
 end_per_testcase(_, _) ->
     ok.

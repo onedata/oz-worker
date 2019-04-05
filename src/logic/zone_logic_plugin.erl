@@ -85,14 +85,14 @@ create(_Req) ->
 get(#el_req{gri = #gri{aspect = configuration}}, _) ->
     CompatibleOpVersions = oz_worker:get_env(compatible_op_versions, []),
     CompatibleOpVersionsBin = [list_to_binary(V) || V <- CompatibleOpVersions],
-    SubdomainDelegationEnabled = oz_worker:get_env(subdomain_delegation_enabled, true),
+    SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
     {ok, #{
-        name => oz_worker:get_name(),
+        name => gs_protocol:undefined_to_null(oz_worker:get_name()),
         version => oz_worker:get_version(),
         build => oz_worker:get_build_version(),
         domain => oz_worker:get_domain(),
         compatibleOneproviderVersions => CompatibleOpVersionsBin,
-        subdomainDelegationSupported => SubdomainDelegationEnabled,
+        subdomainDelegationSupported => SubdomainDelegationSupported,
         supportedIdPs => auth_config:get_supported_idps_in_configuration_format()
     }}.
 
