@@ -763,7 +763,8 @@ remove_all_relations(EntityType, EntityId, Entity) ->
                     EntityType:to_string(EntityId)
                 ])
             end, ChIds)
-        end, DependentChildren)
+        end, DependentChildren),
+        ok
     catch
         Type:Message ->
             ?error_stacktrace(
