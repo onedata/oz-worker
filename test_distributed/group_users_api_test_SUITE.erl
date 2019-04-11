@@ -451,7 +451,7 @@ remove_user_test(Config) ->
 
 list_user_privileges_test(Config) ->
     % create group with 2 users:
-    %   U2 gets the GROUP_VIEW privilege
+    %   U2 gets the GROUP_VIEW_PRIVILEGES privilege
     %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW_PRIVILEGES
@@ -479,7 +479,9 @@ list_user_privileges_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_GROUPS_VIEW_PRIVILEGES]},
-                {user, U2}
+                {user, U2},
+                % user always can see own privileges
+                {user, U3}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -504,7 +506,7 @@ list_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?GROUP_VIEW_PRIVILEGES
+        {user, U3}, ?GROUP_VIEW_PRIVILEGES, U3
     ])).
 
 
@@ -792,7 +794,9 @@ list_eff_user_privileges_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_GROUPS_VIEW_PRIVILEGES]},
-                {user, U2}
+                {user, U2},
+                % user always can see own privileges
+                {user, U1}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -820,7 +824,7 @@ list_eff_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U1}, ?GROUP_VIEW_PRIVILEGES
+        {user, U1}, ?GROUP_VIEW_PRIVILEGES, U1
     ])).
 
 

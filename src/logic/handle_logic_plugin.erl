@@ -343,6 +343,11 @@ exists(#el_req{gri = #gri{id = Id}}, #od_handle{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
+    true;
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
+    true;
+
 authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = instance}}, _) ->
     HServiceId = maps:get(<<"handleServiceId">>, Req#el_req.data, <<"">>),
     ShareId = maps:get(<<"resourceId">>, Req#el_req.data, <<"">>),
