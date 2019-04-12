@@ -329,7 +329,7 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
                 Error
         end
     end,
-    NewGri = Gri#gri{aspect = {index, IndexId}, scope = protected},
+    NewGri = Gri#gri{aspect = {index, IndexId}, scope = private},
     IndexData = Data#{<<"schema">> => Schema},
     case od_harvester:update(HarvesterId, UpdateFun) of
         {ok, _} -> {ok, resource, {NewGri, IndexData}};
@@ -1159,10 +1159,16 @@ perform_entry_operation(Operation, Indices, ProviderId, Plugin, Endpoint, Harves
     } = Data,
     
     Json = maps:get(<<"json">>, Data, undefined),
+
+    {ok, Guid} = file_id:objectid_to_guid(FileId),
+    SpaceId = file_id:guid_to_space_id(Guid),
     
     IndicesToUpdate = lists:filtermap(
         fun(IndexId) ->
             case maps:find(IndexId, Indices) of
+                {ok, #harvester_index{seqs = #{SpaceId := #{ProviderId := {S, _}}}}} when S >= Seq ->
+                    % Ignore already harvested seqs
+                    false;
                 {ok, _} ->
                     case call_plugin(Operation, Plugin, Endpoint, HarvesterId, IndexId, FileId, Json) of
                         ok -> {true, {IndexId, true}};
@@ -1174,18 +1180,20 @@ perform_entry_operation(Operation, Indices, ProviderId, Plugin, Endpoint, Harves
             end
         end, SubmitIndices),
 
-    {ok, Guid} = file_id:objectid_to_guid(FileId),
-    SpaceId = file_id:guid_to_space_id(Guid),
-
     {ok, _} = od_harvester:update(HarvesterId,
-        fun(#od_harvester{indices = Indices} = Harvester) ->
+        fun(#od_harvester{indices = Indices1} = Harvester) ->
             FinalIndices = lists:foldl(
                 fun({IndexId, UpdateCurrentSeq}, ExistingIndices) ->
-                    #{IndexId := IndexRecord} = ExistingIndices,
-                    ExistingIndices#{
-                        IndexId => set_seqs(IndexRecord, SpaceId, ProviderId, UpdateCurrentSeq, Seq, MaxSeq)
-                    }
-                end, Indices, IndicesToUpdate),
+                    % index could have been deleted in meantime
+                    case maps:find(IndexId, ExistingIndices) of
+                        {ok, IndexRecord} ->
+                            ExistingIndices#{
+                                IndexId => set_seqs(IndexRecord, SpaceId, ProviderId, UpdateCurrentSeq, Seq, MaxSeq)
+                            };
+                        _ ->
+                            ExistingIndices
+                    end
+                end, Indices1, IndicesToUpdate),
             {ok, Harvester#od_harvester{indices = FinalIndices}}
         end),
     
