@@ -7,6 +7,14 @@
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This module is responsible for uploading GUI packages.
+%%%
+%%% Onezone holds GUI packages for all Onedata services (oz_worker, oz_panel,
+%%% op_worker, op_panel), consistency is ensured by the services themselves, by
+%%% uploading their GUI package upon startup.
+%%% Service GUI root path is build using its shortname and cluster id, e.g.:
+%%%
+%%%     /ozw/74afc09f584276186894b82caf466886
+%%%     /opp/4fc0679a9fa6ca685dbe1a89dc65c552
 %%% @end
 %%%-------------------------------------------------------------------
 -module(gui_upload).

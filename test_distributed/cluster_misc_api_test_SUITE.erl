@@ -416,7 +416,7 @@ update_version_info_test_base(Config, ClusterType, ServiceType) ->
         }
     end,
 
-    {ExistingGuiHash, _IndexContent} = oz_test_utils:deploy_dummy_gui(Config, Service),
+    {ExistingGuiHash, _IndexContent} = oz_test_utils:deploy_dummy_gui(Config, onedata:service_shortname(Service)),
     BadGuiHash = <<"abcdefg">>,
 
     ExpRelease = <<"20.07.3">>,

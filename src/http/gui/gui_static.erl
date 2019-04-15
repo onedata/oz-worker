@@ -7,15 +7,8 @@
 %%%--------------------------------------------------------------------
 %%% @doc
 %%% This module is responsible for storing and distribution of static GUI files.
-%%% Onezone holds GUI packages for all Onedata services (oz_worker, oz_panel,
-%%% op_worker, op_panel), consistency is ensured by the services themselves, by
-%%% uploading their GUI package upon startup.
-%%% Service GUI root path is build using its shortname and cluster id, e.g.:
 %%%
-%%%     /ozw/74afc09f584276186894b82caf466886
-%%%     /opp/4fc0679a9fa6ca685dbe1a89dc65c552
-%%%
-%%% In order to reuse the existing GUI packages, each service is linked to the
+%%% In order to reuse the existing GUI packages, each location is linked to the
 %%% proper GUI version, denoted by package hash (SHA256), using symbolic links e.g.
 %%%
 %%%     /opw/9ba150771ad7b01366d17d89f19b56af  ->
@@ -24,7 +17,7 @@
 %%%     /opw/84b7331f7c230541d4177c23dd901fd1  ->
 %%%         /opw/4fc98577cee89c3dfb7817b11c0027ec3084f8ba455a162c9038ed568b9d3b7d
 %%%
-%%% Special ./i file in every service is an alias (symbolic link) for index.html:
+%%% Special ./i file in every location is an alias (symbolic link) for index.html:
 %%%
 %%%     /ozw/74afc09f584276186894b82caf466886/i  ->
 %%%         /ozw/74afc09f584276186894b82caf466886/index.html
@@ -68,10 +61,8 @@
 %% location key on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec deploy_package(location_key() | onedata:service(), file:name_all()) -> 
+-spec deploy_package(location_key(), file:name_all()) -> 
     {ok, gui:package_hash()} | {error, term()}.
-deploy_package(Service, PackagePath) when is_atom(Service) ->
-    deploy_package(onedata:service_shortname(Service), PackagePath);
 deploy_package(LocationKey, PackagePath) ->
     case gui:read_package(PackagePath) of
         {ok, _, PackageBin} ->
@@ -132,9 +123,7 @@ deploy_package(on_node, LocationKey, PackageBin, GuiHash) ->
 %% @equiv link_gui(on_cluster, LocationKey, ClusterId, GuiHash).
 %% @end
 %%--------------------------------------------------------------------
--spec link_gui(location_key() | onedata:service(), od_cluster:id(), gui:package_hash()) -> ok.
-link_gui(Service, ClusterId, GuiHash) when is_atom(Service)->
-    link_gui(onedata:service_shortname(Service), ClusterId, GuiHash);
+-spec link_gui(location_key(), od_cluster:id(), gui:package_hash()) -> ok.
 link_gui(LocationKey, ClusterId, GuiHash) ->
     link_gui(on_cluster, LocationKey, ClusterId, GuiHash).
 
@@ -143,7 +132,7 @@ link_gui(LocationKey, ClusterId, GuiHash) ->
 %% @doc
 %% Links a location to given GUI, defined by its hash. Under the hood, creates
 %% a symbolic link on the filesystem to reuse the same GUI packages for multiple
-%% services.
+%% locations.
 %%
 %% NOTE: This operation assumes that the GUI package exists.
 %%
@@ -166,10 +155,10 @@ link_gui(on_node, LocationKey, ClusterId, GuiHash) ->
         _ ->
             ?info("Linking gui for ~s -> ~s", [gui_path(LocationKey, ClusterId), GuiHash])
     end,
-    ServiceStaticRoot = static_root(LocationKey, ClusterId),
-    link_exists(ServiceStaticRoot) andalso (ok = file:delete(ServiceStaticRoot)),
-    file:make_symlink(GuiHash, ServiceStaticRoot),
-    ensure_link_to_index_html(ServiceStaticRoot).
+    StaticRoot = static_root(LocationKey, ClusterId),
+    link_exists(StaticRoot) andalso (ok = file:delete(StaticRoot)),
+    file:make_symlink(GuiHash, StaticRoot),
+    ensure_link_to_index_html(StaticRoot).
 
 
 %%--------------------------------------------------------------------
@@ -177,9 +166,7 @@ link_gui(on_node, LocationKey, ClusterId, GuiHash) ->
 %% @equiv unlink_gui(on_cluster, LocationKey, ClusterId).
 %% @end
 %%--------------------------------------------------------------------
--spec unlink_gui(onedata:service() | location_key(), od_cluster:id()) -> ok.
-unlink_gui(Service, ClusterId) when is_atom(Service) ->
-    unlink_gui(onedata:service_shortname(Service), ClusterId);
+-spec unlink_gui(location_key(), od_cluster:id()) -> ok.
 unlink_gui(LocationKey, ClusterId) ->
     unlink_gui(on_cluster, LocationKey, ClusterId).
 
@@ -202,8 +189,8 @@ unlink_gui(on_cluster, LocationKey, ClusterId) ->
 
 unlink_gui(on_node, LocationKey, ClusterId) ->
     ?info("Unlinking gui for ~s", [gui_path(LocationKey, ClusterId)]),
-    ServiceStaticRoot = static_root(LocationKey, ClusterId),
-    link_exists(ServiceStaticRoot) andalso (ok = file:delete(ServiceStaticRoot)).
+    StaticRoot = static_root(LocationKey, ClusterId),
+    link_exists(StaticRoot) andalso (ok = file:delete(StaticRoot)).
 
 
 %%--------------------------------------------------------------------
@@ -211,9 +198,7 @@ unlink_gui(on_node, LocationKey, ClusterId) ->
 %% Checks on all cluster nodes if given GUI hash exists.
 %% @end
 %%--------------------------------------------------------------------
--spec gui_exists(location_key() | onedata:service(), gui:package_hash()) -> boolean().
-gui_exists(Service, GuiHash) when is_atom(Service)-> 
-    gui_exists(onedata:service_shortname(Service), GuiHash);
+-spec gui_exists(location_key(), gui:package_hash()) -> boolean().
 gui_exists(LocationKey, GuiHash) ->
     ?CRITICAL_SECTION(GuiHash, fun() ->
         gui_exists_unsafe(LocationKey, GuiHash)
@@ -260,7 +245,7 @@ oz_worker_gui_path(RelPath) ->
 mimetype(Path) ->
     case filename:extension(Path) of
         <<>> ->
-            % Special ./i file in every service is an alias
+            % Special ./i file in every location is an alias
             % (symbolic link) for index.html
             case filename:basename(Path) of
                 <<"i">> -> {<<"text">>, <<"html">>, []};
@@ -292,7 +277,7 @@ gui_exists_unsafe(LocationKey, GuiHash) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns the path (on the filesystem) to the static GUI root of given service
+%% Returns the path (on the filesystem) to the static GUI root of given location key
 %% or gui package.
 %% Examples:
 %%      /etc/oz_worker/gui_static/ozw/74afc09f584276186894b82caf466886
@@ -309,7 +294,7 @@ static_root(LocationKey, Identifier) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns the path (URN) to the web GUI root of given service or gui package.
+%% Returns the path (URN) to the web GUI root of given location key or gui package.
 %% Examples:
 %%      /ozw/74afc09f584276186894b82caf466886
 %%      /opp/4fc98577cee89c3dfb7817b11c0027ec3084f8ba455a162c9038ed568b9d3b7d
@@ -328,9 +313,9 @@ gui_path(LocationKey, Identifier) ->
 %%         /etc/oz_worker/gui_static/ozw/74afc09f584276186894b82caf466886/index.html
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_link_to_index_html(ServiceStaticRoot :: binary()) -> ok.
-ensure_link_to_index_html(ServiceStaticRoot) ->
-    IndexLink = filename:join([ServiceStaticRoot, "i"]),
+-spec ensure_link_to_index_html(StaticRoot :: binary()) -> ok.
+ensure_link_to_index_html(StaticRoot) ->
+    IndexLink = filename:join([StaticRoot, "i"]),
     link_exists(IndexLink) orelse file:make_symlink("index.html", IndexLink),
     ok.
 

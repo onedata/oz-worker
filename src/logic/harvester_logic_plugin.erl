@@ -1184,13 +1184,13 @@ perform_entry_operation(Operation, Indices, ProviderId, Plugin, Endpoint, Harves
         fun(#od_harvester{indices = Indices1} = Harvester) ->
             FinalIndices = lists:foldl(
                 fun({IndexId, UpdateCurrentSeq}, ExistingIndices) ->
-                    % index could have been deleted in meantime
                     case maps:find(IndexId, ExistingIndices) of
                         {ok, IndexRecord} ->
                             ExistingIndices#{
                                 IndexId => set_seqs(IndexRecord, SpaceId, ProviderId, UpdateCurrentSeq, Seq, MaxSeq)
                             };
                         _ ->
+                            % Index could have been deleted in meantime
                             ExistingIndices
                     end
                 end, Indices1, IndicesToUpdate),

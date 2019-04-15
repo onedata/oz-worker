@@ -722,7 +722,7 @@ update_version_info(Cluster, ClusterId, ServiceType, VersionKey, Data) ->
                     throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<VersionKey/binary, ".gui">>))
             end,
             {_, _, OldGuiHash} = get_version_info(Cluster, ServiceType),
-            GuiHash /= OldGuiHash andalso gui_static:link_gui(Service, ClusterId, GuiHash),
+            GuiHash /= OldGuiHash andalso gui_static:link_gui(onedata:service_shortname(Service), ClusterId, GuiHash),
             set_version_info(Cluster, ServiceType, {Release, Build, GuiHash})
     end.
 
