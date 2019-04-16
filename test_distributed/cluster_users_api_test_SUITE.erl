@@ -487,7 +487,7 @@ get_user_privileges_test(Config) ->
                 {admin, [?OZ_CLUSTERS_VIEW_PRIVILEGES]},
                 {user, U2},
                 {provider, P1, P1Macaroon},
-                % user always can see own privileges
+                % user can always see his own privileges
                 {user, U3}
             ],
             unauthorized = [nobody],
@@ -513,7 +513,7 @@ get_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?CLUSTER_VIEW_PRIVILEGES, U3
+        {user, U3}, ?CLUSTER_VIEW_PRIVILEGES, false, U3
     ])).
 
 
@@ -766,7 +766,7 @@ get_eff_user_privileges_test(Config) ->
                 {admin, [?OZ_CLUSTERS_VIEW_PRIVILEGES]},
                 {user, U2},
                 {provider, P1, P1Macaroon},
-                % user always can see own privileges
+                % user can always see his own privileges
                 {user, U3}
             ],
             unauthorized = [nobody],
@@ -795,7 +795,7 @@ get_eff_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?CLUSTER_VIEW_PRIVILEGES, U3
+        {user, U3}, ?CLUSTER_VIEW_PRIVILEGES, false, U3
     ])).
 
 

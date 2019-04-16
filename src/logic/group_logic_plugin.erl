@@ -543,11 +543,6 @@ exists(#el_req{gri = #gri{id = Id}}, #od_group{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
-    true;
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
-    true;
-
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = oz_privileges}}, _) ->
     user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_VIEW_PRIVILEGES);
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_oz_privileges}}, _) ->
@@ -692,9 +687,13 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = users}}, Group) ->
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_users}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_VIEW);
 
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
+    true;
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_VIEW_PRIVILEGES);
 
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
+    true;
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_privileges, _}}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_VIEW_PRIVILEGES);
 
@@ -742,7 +741,6 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {child, _}}}, Gr
     auth_by_privilege(Req, Group, ?GROUP_REMOVE_CHILD);
 
 authorize(_, _) ->
-    io:format("lol"),
     false.
 
 %%--------------------------------------------------------------------

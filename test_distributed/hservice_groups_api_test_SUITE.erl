@@ -383,7 +383,7 @@ get_group_privileges_test(Config) ->
     },
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?HANDLE_SERVICE_VIEW
+        {user, U3}, ?HANDLE_SERVICE_VIEW, false
     ])).
 
 
@@ -679,7 +679,7 @@ get_eff_group_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?HANDLE_SERVICE_VIEW
+        {user, U3}, ?HANDLE_SERVICE_VIEW, false
     ])).
 
 

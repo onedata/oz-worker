@@ -154,15 +154,10 @@ prepare_entity_not_found_gs_spec(GsSpec) ->
 % Exception to this is when entity directly tries to get it's privileges,
 % then it should be listed as only correct client and provided as argument
 % SubjectUser is the one for whom privileges are being checked.
-get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv) ->
-    get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, undefined, false).
+get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SkipEntity) ->
+    get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SkipEntity, undefined).
 
-get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SkipEntity) when is_boolean(SkipEntity) ->
-    get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, undefined, SkipEntity);
-get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SubjectUser) ->
-    get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SubjectUser, false).
-
-get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SubjectUser, SkipEntity) ->
+get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SkipEntity, SubjectUser) ->
     % Run original spec
     assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -190,11 +185,13 @@ get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, V
         AllPrivs, lists:usort(ConstPrivs ++ [ViewPriv])
     ),
 
-    % Replace clients with entity and check if it can not get privileges
-    % when all privileges but view one is set
+    % Replace clients with entity and set all privileges but view one.
     SetPrivsFun(AllPrivs -- [ViewPriv], [ViewPriv]),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
+    % If entity is the same as subject user then it should be possible to
+    % get privileges even without view privilege. Otherwise entity should not
+    % be able to get privileges.
     case Entity of
         {user, SubjectUser} ->
             run_get_privs_tests(

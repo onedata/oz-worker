@@ -480,7 +480,7 @@ list_user_privileges_test(Config) ->
                 root,
                 {admin, [?OZ_GROUPS_VIEW_PRIVILEGES]},
                 {user, U2},
-                % user always can see own privileges
+                % user can always see his own privileges
                 {user, U3}
             ],
             unauthorized = [nobody],
@@ -506,7 +506,7 @@ list_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?GROUP_VIEW_PRIVILEGES, U3
+        {user, U3}, ?GROUP_VIEW_PRIVILEGES, false, U3
     ])).
 
 
@@ -795,7 +795,7 @@ list_eff_user_privileges_test(Config) ->
                 root,
                 {admin, [?OZ_GROUPS_VIEW_PRIVILEGES]},
                 {user, U2},
-                % user always can see own privileges
+                % user can always see his own privileges
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -824,7 +824,7 @@ list_eff_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U1}, ?GROUP_VIEW_PRIVILEGES, U1
+        {user, U1}, ?GROUP_VIEW_PRIVILEGES, false, U1
     ])).
 
 
