@@ -22,7 +22,6 @@
 -export([run_scenario/2]).
 -export([delete_entity/5]).
 -export([get_relations/4]).
--export([get_privileges/7]).
 -export([get_privileges/8]).
 -export([get_privileges/9]).
 -export([update_privileges/7]).
