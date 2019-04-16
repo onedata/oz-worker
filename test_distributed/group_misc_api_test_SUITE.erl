@@ -576,7 +576,7 @@ get_oz_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U1}, ?OZ_VIEW_PRIVILEGES, false
+        {user, U1}, ?OZ_VIEW_PRIVILEGES
     ])).
 
 
@@ -740,7 +740,7 @@ get_eff_oz_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U1}, ?OZ_VIEW_PRIVILEGES, false
+        {user, U1}, ?OZ_VIEW_PRIVILEGES
     ])).
 
 

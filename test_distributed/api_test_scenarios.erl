@@ -22,6 +22,7 @@
 -export([run_scenario/2]).
 -export([delete_entity/5]).
 -export([get_relations/4]).
+-export([get_privileges/7]).
 -export([get_privileges/8]).
 -export([get_privileges/9]).
 -export([update_privileges/7]).
@@ -153,6 +154,9 @@ prepare_entity_not_found_gs_spec(GsSpec) ->
 % Exception to this is when entity directly tries to get it's privileges,
 % then it should be listed as only correct client and provided as argument
 % SubjectUser is the one for whom privileges are being checked.
+get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv) ->
+    get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, false, undefined).
+
 get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SkipEntity) ->
     get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SkipEntity, undefined).
 
