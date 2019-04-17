@@ -58,14 +58,13 @@ ping(Endpoint) ->
 -spec create_index(od_harvester:endpoint(), od_harvester:id(), od_harvester:index_id(), od_harvester:schema()) -> 
     {ok | {error, term()}}.
 create_index(Endpoint, HarvesterId, IndexId, Schema) ->
-    case Schema of
-        undefined -> 
-            ok;
-        _ -> 
-            case do_request(put, Endpoint, ?ES_INDEX_ID(HarvesterId, IndexId), <<>>, Schema, [{200,300}]) of
-                {ok,_,_,_} -> ok;
-                {error, _} = Error -> Error
-            end
+    NewSchema = case Schema of
+        undefined -> <<"{}">>;
+        Schema -> Schema
+    end,
+    case do_request(put, Endpoint, HarvesterId, IndexId, <<>>, NewSchema, [{200,300}]) of
+        {ok,_,_,_} -> ok;
+        {error, _} = Error -> Error
     end.
 
 
@@ -77,7 +76,7 @@ create_index(Endpoint, HarvesterId, IndexId, Schema) ->
 -spec delete_index(od_harvester:endpoint(), od_harvester:id(), od_harvester:index_id()) -> 
     {ok | {error, term()}}.
 delete_index(Endpoint, HarvesterId, IndexId) ->
-    case do_request(delete, Endpoint, ?ES_INDEX_ID(HarvesterId, IndexId), <<>>, <<>>, [{200,300}, 404]) of
+    case do_request(delete, Endpoint, HarvesterId, IndexId, <<>>, <<>>, [{200,300}, 404]) of
         {ok,_,_,_} -> ok;
         {error, _} = Error -> Error
     end.
@@ -88,9 +87,9 @@ delete_index(Endpoint, HarvesterId, IndexId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec submit_entry(od_harvester:endpoint(), od_harvester:id(),  od_harvester:index_id(),
-    Id :: binary(), Data :: binary()) -> ok | {error, term()}.
+    od_harvester:entry_id(), Data :: binary()) -> ok | {error, term()}.
 submit_entry(Endpoint, HarvesterId, IndexId, Id, Data) ->
-    case do_request(put, Endpoint, ?ES_INDEX_ID(HarvesterId, IndexId), ?ENTRY_PATH(Id), Data, [{200,300}, 400]) of
+    case do_request(put, Endpoint, HarvesterId, IndexId, ?ENTRY_PATH(Id), Data, [{200,300}, 400]) of
         {ok, 400,_, Body} ->
             try
                 #{<<"error">> := #{<<"type">> := ErrorType}} = json_utils:decode(Body),
@@ -121,9 +120,9 @@ submit_entry(Endpoint, HarvesterId, IndexId, Id, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_entry(od_harvester:endpoint(), od_harvester:id(),  od_harvester:index_id(),
-    Id :: binary()) -> ok | {error, term()}.
+    od_harvester:entry_id()) -> ok | {error, term()}.
 delete_entry(Endpoint, HarvesterId, IndexId, Id) ->
-    case do_request(delete, Endpoint, ?ES_INDEX_ID(HarvesterId, IndexId), ?ENTRY_PATH(Id), <<>>, [{200,300}, 404]) of
+    case do_request(delete, Endpoint, HarvesterId, IndexId, ?ENTRY_PATH(Id), <<>>, [{200,300}, 404]) of
         {ok,_,_,_} -> ok;
         {error, _} = Error -> Error
     end.
@@ -142,7 +141,7 @@ query_index(Endpoint, HarvesterId, IndexId, Data) ->
         <<"path">> := Path
     } = Data,
     Body = maps:get(<<"body">>, Data, <<>>),
-    case do_request(Method, Endpoint, ?ES_INDEX_ID(HarvesterId, IndexId), ?ENTRY_PATH(Path), Body) of
+    case do_request(Method, Endpoint, HarvesterId, IndexId, ?ENTRY_PATH(Path), Body) of
         {ok, Code, Headers, ResponseBody} ->
             {ok, #{
                 <<"code">> => Code,
@@ -181,10 +180,10 @@ query_validator() -> #{
 %% Received status code will NOT be checked.
 %% @end
 %%--------------------------------------------------------------------
--spec do_request(Method :: http_client:method(), Endpoint :: binary(), 
-    IndexId :: binary(), Path :: binary(), Data :: binary()) -> ok.
-do_request(Method, Endpoint, IndexId, Path, Data) ->
-    do_request(Method, Endpoint, IndexId, Path, Data, undefined).
+-spec do_request(http_client:method(), od_harvester:endpoint(), od_harvester:id(), 
+    od_harvester:index_id(), Path :: binary(), Data :: binary()) -> ok.
+do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data) ->
+    do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, undefined).
 
 
 %%--------------------------------------------------------------------
@@ -195,25 +194,26 @@ do_request(Method, Endpoint, IndexId, Path, Data) ->
 %% ExpectedCodes list must conform to specification in is_code_expected/2.
 %% @end
 %%--------------------------------------------------------------------
--spec do_request(http_client:method(), od_harvester:endpoint(), 
-    IndexId :: binary(), Path :: binary(), Data :: binary(), 
+-spec do_request(http_client:method(), od_harvester:endpoint(), od_harvester:id(), 
+    od_harvester:index_id(), Path :: binary(), Data :: binary(), 
     ExpectedCodes :: [integer() | {integer(), integer()}] | undefined) -> ok.
-do_request(Method, Endpoint, IndexId, Path, Data, ExpectedCodes) ->
-    Url = <<Endpoint/binary, "/", IndexId/binary, Path/binary>>,
+do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, ExpectedCodes) ->
+    Url = <<Endpoint/binary, "/", (?ES_INDEX_ID(HarvesterId, IndexId))/binary, Path/binary>>,
     case http_client:request(Method, Url, #{<<"content-type">> => <<"application/json">>}, Data) of
         {ok, Code, Headers, Body} = Response when is_list(ExpectedCodes) ->
             case is_code_expected(Code, ExpectedCodes) of
                 true -> 
                     Response;
                 _ ->
-                    ?debug("~p ~p in harvester ~p returned unexpected response ~p:~n ~p~n~p",
-                        [Method, Url, IndexId, Code, Headers, json_utils:decode(Body)]),
+                    ?debug("~p ~p in harvester ~p, index: ~p returned unexpected response ~p:~n ~p~n~p",
+                        [Method, Url, HarvesterId, IndexId, Code, Headers, json_utils:decode(Body)]),
                     ?ERROR_BAD_DATA(<<"payload">>)
             end;
         {ok,_,_,_} = Response ->
             Response;
         {error, _} = Error ->
-            ?error("~p in harvester ~p was unsuccessful due to ~p", [Method, IndexId, Error]),
+            ?error("~p in harvester ~p, index ~p was unsuccessful due to ~p", 
+                [Method, HarvesterId, IndexId, Error]),
             ?ERROR_TEMPORARY_FAILURE
     end.
 

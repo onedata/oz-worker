@@ -35,7 +35,7 @@
     get_test/1,
     get_config_test/1,
     update_test/1,
-    update_config_test/1,
+    update_gui_plugin_config_test/1,
     delete_test/1,
     delete_with_data_test/1,
     
@@ -59,7 +59,7 @@ all() ->
         get_test,
         get_config_test,
         update_test,
-        update_config_test,
+        update_gui_plugin_config_test,
         delete_test,
         delete_with_data_test,
 
@@ -463,7 +463,7 @@ update_test(Config) ->
     )).
 
 
-update_config_test(Config) ->
+update_gui_plugin_config_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),

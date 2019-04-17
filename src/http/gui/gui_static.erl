@@ -8,7 +8,16 @@
 %%% @doc
 %%% This module is responsible for storing and distribution of static GUI files.
 %%%
-%%% In order to reuse the existing GUI packages, each location is linked to the
+%%% GUI path under which files are stored consists of GUI prefix and GUI id.
+%%% GUI prefix is shortname of service or harvester:
+%%%     * ozw
+%%%     * ozp
+%%%     * opw
+%%%     * opp
+%%%     * hrv
+%%% GUI id is equal to id of corresponding service or harvester.
+%%%
+%%% In order to reuse the existing GUI packages, each GUI path is linked to the
 %%% proper GUI version, denoted by package hash (SHA256), using symbolic links e.g.
 %%%
 %%%     /opw/9ba150771ad7b01366d17d89f19b56af  ->
@@ -17,7 +26,7 @@
 %%%     /opw/84b7331f7c230541d4177c23dd901fd1  ->
 %%%         /opw/4fc98577cee89c3dfb7817b11c0027ec3084f8ba455a162c9038ed568b9d3b7d
 %%%
-%%% Special ./i file in every location is an alias (symbolic link) for index.html:
+%%% Special ./i file in every GUI path is an alias (symbolic link) for index.html:
 %%%
 %%%     /ozw/74afc09f584276186894b82caf466886/i  ->
 %%%         /ozw/74afc09f584276186894b82caf466886/index.html
@@ -31,8 +40,8 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
 
--type location_key() :: binary().
--type package_id() :: od_cluster:id() | od_harvester:id() | gui:package_hash().
+-type gui_prefix() :: binary().
+-type gui_id() :: od_cluster:id() | od_harvester:id().
 
 %% API
 -export([deploy_package/2, deploy_package/4]).
@@ -58,16 +67,16 @@
 %%--------------------------------------------------------------------
 %% @doc
 %% Reads given GUI package, and upon success, deploys the GUI package under given 
-%% location key on all cluster nodes.
+%% GUI prefix on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec deploy_package(location_key(), file:name_all()) -> 
-    {ok, gui:package_hash()} | {error, term()}.
-deploy_package(LocationKey, PackagePath) ->
+-spec deploy_package(gui_prefix(), file:name_all()) -> 
+    ok | {error, term()}.
+deploy_package(GuiPrefix, PackagePath) ->
     case gui:read_package(PackagePath) of
         {ok, _, PackageBin} ->
             {ok, GuiHash} = gui:package_hash({binary, PackageBin}),
-            deploy_package(LocationKey, PackageBin, GuiHash);
+            deploy_package(GuiPrefix, PackageBin, GuiHash);
         {error, _} = Error ->
             Error
     end.
@@ -75,24 +84,24 @@ deploy_package(LocationKey, PackagePath) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deploys a GUI package under given location key on all cluster nodes. GuiHash must be
+%% Deploys a GUI package under given  GUI prefix on all cluster nodes. GuiHash must be
 %% provided manually. The operation is skipped if the GUI package already exists on all 
 %% cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec deploy_package(location_key(), PackageBin :: binary(), gui:package_hash()) -> ok.
-deploy_package(LocationKey, PackageBin, GuiHash) ->
+-spec deploy_package(gui_prefix(), PackageBin :: binary(), gui:package_hash()) -> ok.
+deploy_package(GuiPrefix, PackageBin, GuiHash) ->
     ?CRITICAL_SECTION(GuiHash, fun() ->
-        case gui_exists_unsafe(LocationKey, GuiHash) of
+        case gui_exists_unsafe(GuiPrefix, GuiHash) of
             true -> ok;
-            false -> deploy_package(on_cluster, LocationKey, PackageBin, GuiHash)
+            false -> deploy_package(on_cluster, GuiPrefix, PackageBin, GuiHash)
         end
     end).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deploys a GUI package under given location key.
+%% Deploys a GUI package under given  GUI prefix.
 %%
 %% NOTE: This function must be run in a critical section to avoid race conditions.
 %%
@@ -101,31 +110,31 @@ deploy_package(LocationKey, PackageBin, GuiHash) ->
 %%  on_node - performs the operation only on the local node
 %% @end
 %%--------------------------------------------------------------------
--spec deploy_package(on_cluster | on_node, location_key(), PackageBin :: binary(),
+-spec deploy_package(on_cluster | on_node, gui_prefix(), PackageBin :: binary(),
     gui:package_hash()) -> ok.
-deploy_package(on_cluster, LocationKey, PackageBin, GuiHash) ->
+deploy_package(on_cluster, GuiPrefix, PackageBin, GuiHash) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, deploy_package, [on_node, LocationKey, PackageBin, GuiHash])
+        ok = rpc:call(Node, ?MODULE, deploy_package, [on_node, GuiPrefix, PackageBin, GuiHash])
     end, ?CLUSTER_NODES);
 
-deploy_package(on_node, LocationKey, PackageBin, GuiHash) ->
-    ?info("Deploying GUI package for ~s: ~s", [LocationKey, GuiHash]),
+deploy_package(on_node, GuiPrefix, PackageBin, GuiHash) ->
+    ?info("Deploying GUI package for ~s: ~s", [GuiPrefix, GuiHash]),
     TempDir = mochitemp:mkdtemp(),
-    {ok, ExtractedPackageLocationKey} = gui:extract_package({binary, PackageBin}, TempDir),
-    PackageStaticRoot = static_root(LocationKey, GuiHash),
+    {ok, ExtractedPackagePath} = gui:extract_package({binary, PackageBin}, TempDir),
+    PackageStaticRoot = static_root(GuiPrefix, GuiHash),
     ok = file_utils:recursive_del(PackageStaticRoot),
-    ok = file_utils:move(ExtractedPackageLocationKey, PackageStaticRoot),
+    ok = file_utils:move(ExtractedPackagePath, PackageStaticRoot),
     mochitemp:rmtempdir(TempDir).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @equiv link_gui(on_cluster, LocationKey, ClusterId, GuiHash).
+%% @equiv link_gui(on_cluster, GuiPrefix, GuiId, GuiHash).
 %% @end
 %%--------------------------------------------------------------------
--spec link_gui(location_key(), od_cluster:id(), gui:package_hash()) -> ok.
-link_gui(LocationKey, ClusterId, GuiHash) ->
-    link_gui(on_cluster, LocationKey, ClusterId, GuiHash).
+-spec link_gui(gui_prefix(), gui_id(), gui:package_hash()) -> ok.
+link_gui(GuiPrefix, GuiId, GuiHash) ->
+    link_gui(on_cluster, GuiPrefix, GuiId, GuiHash).
 
 
 %%--------------------------------------------------------------------
@@ -141,21 +150,21 @@ link_gui(LocationKey, ClusterId, GuiHash) ->
 %%  on_node - performs the operation only on the local node
 %% @end
 %%--------------------------------------------------------------------
--spec link_gui(on_cluster | on_node, location_key(), od_cluster:id(),
+-spec link_gui(on_cluster | on_node, gui_prefix(), gui_id(),
     gui:package_hash()) -> ok.
-link_gui(on_cluster, LocationKey, ClusterId, GuiHash) ->
+link_gui(on_cluster, GuiPrefix, GuiId, GuiHash) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, link_gui, [on_node, LocationKey, ClusterId, GuiHash])
+        ok = rpc:call(Node, ?MODULE, link_gui, [on_node, GuiPrefix, GuiId, GuiHash])
     end, ?CLUSTER_NODES);
 
-link_gui(on_node, LocationKey, ClusterId, GuiHash) ->
+link_gui(on_node, GuiPrefix, GuiId, GuiHash) ->
     case GuiHash of
         ?EMPTY_GUI_HASH ->
-            ?debug("Linking empty GUI for ~s", [gui_path(LocationKey, ClusterId)]);
+            ?debug("Linking empty GUI for ~s", [gui_path(GuiPrefix, GuiId)]);
         _ ->
-            ?info("Linking gui for ~s -> ~s", [gui_path(LocationKey, ClusterId), GuiHash])
+            ?info("Linking gui for ~s -> ~s", [gui_path(GuiPrefix, GuiId), GuiHash])
     end,
-    StaticRoot = static_root(LocationKey, ClusterId),
+    StaticRoot = static_root(GuiPrefix, GuiId),
     link_exists(StaticRoot) andalso (ok = file:delete(StaticRoot)),
     file:make_symlink(GuiHash, StaticRoot),
     ensure_link_to_index_html(StaticRoot).
@@ -163,17 +172,17 @@ link_gui(on_node, LocationKey, ClusterId, GuiHash) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @equiv unlink_gui(on_cluster, LocationKey, ClusterId).
+%% @equiv unlink_gui(on_cluster, GuiPrefix, GuiId).
 %% @end
 %%--------------------------------------------------------------------
--spec unlink_gui(location_key(), od_cluster:id()) -> ok.
-unlink_gui(LocationKey, ClusterId) ->
-    unlink_gui(on_cluster, LocationKey, ClusterId).
+-spec unlink_gui(gui_prefix(), gui_id()) -> ok.
+unlink_gui(GuiPrefix, GuiId) ->
+    unlink_gui(on_cluster, GuiPrefix, GuiId).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Unlinks a location key from its GUI. Under the hood, removes the symbolic link
+%% Unlinks a  GUI prefix from its GUI. Under the hood, removes the symbolic link
 %% from the filesystem.
 %%
 %% Has two modes:
@@ -181,15 +190,15 @@ unlink_gui(LocationKey, ClusterId) ->
 %%  on_node - performs the operation only on the local node
 %% @end
 %%--------------------------------------------------------------------
--spec unlink_gui(on_cluster | on_node, location_key(), od_cluster:id()) -> ok.
-unlink_gui(on_cluster, LocationKey, ClusterId) ->
+-spec unlink_gui(on_cluster | on_node, gui_prefix(), gui_id()) -> ok.
+unlink_gui(on_cluster, GuiPrefix, GuiId) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, unlink_gui, [on_node, LocationKey, ClusterId])
+        ok = rpc:call(Node, ?MODULE, unlink_gui, [on_node, GuiPrefix, GuiId])
     end, ?CLUSTER_NODES);
 
-unlink_gui(on_node, LocationKey, ClusterId) ->
-    ?info("Unlinking gui for ~s", [gui_path(LocationKey, ClusterId)]),
-    StaticRoot = static_root(LocationKey, ClusterId),
+unlink_gui(on_node, GuiPrefix, GuiId) ->
+    ?info("Unlinking gui for ~s", [gui_path(GuiPrefix, GuiId)]),
+    StaticRoot = static_root(GuiPrefix, GuiId),
     link_exists(StaticRoot) andalso (ok = file:delete(StaticRoot)).
 
 
@@ -198,10 +207,10 @@ unlink_gui(on_node, LocationKey, ClusterId) ->
 %% Checks on all cluster nodes if given GUI hash exists.
 %% @end
 %%--------------------------------------------------------------------
--spec gui_exists(location_key(), gui:package_hash()) -> boolean().
-gui_exists(LocationKey, GuiHash) ->
+-spec gui_exists(gui_prefix(), gui:package_hash()) -> boolean().
+gui_exists(GuiPrefix, GuiHash) ->
     ?CRITICAL_SECTION(GuiHash, fun() ->
-        gui_exists_unsafe(LocationKey, GuiHash)
+        gui_exists_unsafe(GuiPrefix, GuiHash)
     end).
 
 
@@ -266,9 +275,9 @@ mimetype(Path) ->
 %% NOTE: This function must be run in a critical section to avoid race conditions.
 %% @end
 %%--------------------------------------------------------------------
--spec gui_exists_unsafe(location_key(), gui:package_hash()) -> boolean().
-gui_exists_unsafe(LocationKey, GuiHash) ->
-    PackageStaticRoot = static_root(LocationKey, GuiHash),
+-spec gui_exists_unsafe(gui_prefix(), gui:package_hash()) -> boolean().
+gui_exists_unsafe(GuiPrefix, GuiHash) ->
+    PackageStaticRoot = static_root(GuiPrefix, GuiHash),
     lists:all(fun(Node) ->
         rpc:call(Node, filelib, is_file, [PackageStaticRoot])
     end, ?CLUSTER_NODES).
@@ -277,32 +286,32 @@ gui_exists_unsafe(LocationKey, GuiHash) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns the path (on the filesystem) to the static GUI root of given location key
+%% Returns the path (on the filesystem) to the static GUI root of given  GUI prefix
 %% or gui package.
 %% Examples:
 %%      /etc/oz_worker/gui_static/ozw/74afc09f584276186894b82caf466886
 %%      /etc/oz_worker/gui_static/opp/4fc98577cee89c3dfb7817b11c0027ec3084f8ba455a162c9038ed568b9d3b7d
-%% Identifier can be a ClusterId or a GuiHash.
+%% Identifier can be a GuiId or a GuiHash.
 %% @end
 %%--------------------------------------------------------------------
--spec static_root(location_key(), package_id()) -> binary().
-static_root(LocationKey, Identifier) ->
+-spec static_root(gui_prefix(), gui_id() | gui:package_hash()) -> binary().
+static_root(GuiPrefix, Identifier) ->
     GuiStaticRoot = list_to_binary(?GUI_STATIC_ROOT),
-    <<GuiStaticRoot/binary, (gui_path(LocationKey, Identifier))/binary>>.
+    <<GuiStaticRoot/binary, (gui_path(GuiPrefix, Identifier))/binary>>.
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns the path (URN) to the web GUI root of given location key or gui package.
+%% Returns the path (URN) to the web GUI root of given  GUI prefix or gui package.
 %% Examples:
 %%      /ozw/74afc09f584276186894b82caf466886
 %%      /opp/4fc98577cee89c3dfb7817b11c0027ec3084f8ba455a162c9038ed568b9d3b7d
 %% @end
 %%--------------------------------------------------------------------
--spec gui_path(location_key(), package_id()) -> binary().
-gui_path(LocationKey, Identifier) ->
-    <<"/", LocationKey/binary, "/", Identifier/binary>>.
+-spec gui_path(gui_prefix(), gui_id() | gui:package_hash()) -> binary().
+gui_path(GuiPrefix, Identifier) ->
+    <<"/", GuiPrefix/binary, "/", Identifier/binary>>.
 
 
 %%--------------------------------------------------------------------

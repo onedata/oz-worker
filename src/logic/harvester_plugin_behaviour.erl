@@ -44,7 +44,8 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback submit_entry(od_harvester:endpoint(), od_harvester:id(), 
-    od_harvester:index_id(), Id :: binary(), Data :: binary()) -> ok | {error, term()}.
+    od_harvester:index_id(), od_harvester:entry_id(), Data :: binary()) -> 
+    ok | {error, term()}.
 
 
 %%--------------------------------------------------------------------
@@ -53,7 +54,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback delete_entry(od_harvester:endpoint(), od_harvester:id(), 
-    od_harvester:index_id(), Id :: binary()) -> ok | {error, term()}.
+    od_harvester:index_id(), od_harvester:entry_id()) -> ok | {error, term()}.
 
 
 %%--------------------------------------------------------------------

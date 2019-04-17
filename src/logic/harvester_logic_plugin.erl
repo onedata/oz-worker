@@ -322,7 +322,7 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
         name = Name,
         schema = Schema,
         guiPluginName = GuiPluginName,
-        seqs = #{}
+        progress = #{}
     },
     
     UpdateFun = fun(#od_harvester{indices = Indices, plugin = Plugin, endpoint = Endpoint} = Harvester) ->
@@ -426,7 +426,7 @@ get(#el_req{gri = #gri{aspect = indices}}, Harvester) ->
 
 get(#el_req{gri = #gri{aspect = {index_progress, IndexId}}}, Harvester) ->
     #harvester_index{
-        seqs = IndexProgress
+        progress = IndexProgress
     } = maps:get(IndexId, Harvester#od_harvester.indices),
     {ok, IndexProgress};
 
@@ -465,6 +465,7 @@ update(#el_req{gri = #gri{id = HarvesterId, aspect = instance}, data = Data}) ->
     
         NewHarvester = Harvester#od_harvester{
             name = NewName,
+            endpoint = NewEndpoint,
             plugin = NewPlugin,
             public = NewPublic
         },
@@ -473,7 +474,7 @@ update(#el_req{gri = #gri{id = HarvesterId, aspect = instance}, data = Data}) ->
                 {ok, NewHarvester};
             _ ->
                 case NewPlugin:ping(NewEndpoint) of
-                    ok -> {ok, NewHarvester#od_harvester{endpoint = NewEndpoint}}; 
+                    ok -> {ok, NewHarvester}; 
                     {error, _} = Error -> Error
                 end
         end
@@ -1167,7 +1168,7 @@ perform_entry_operation(Operation, Indices, ProviderId, Plugin, Endpoint, Harves
     IndicesToUpdate = lists:filtermap(
         fun(IndexId) ->
             case maps:find(IndexId, Indices) of
-                {ok, #harvester_index{seqs = #{SpaceId := #{ProviderId := {S, _}}}}} when S >= Seq ->
+                {ok, #harvester_index{progress = #{SpaceId := #{ProviderId := {S, _}}}}} when S >= Seq ->
                     % Ignore already harvested seqs
                     false;
                 {ok, _} ->
@@ -1198,9 +1199,9 @@ perform_entry_operation(Operation, Indices, ProviderId, Plugin, Endpoint, Harves
 %%--------------------------------------------------------------------
 -spec update_indices_progress
     (od_harvester:id(), [od_harvester:index_id()], UpdateFun) -> ok
-    when UpdateFun :: fun((od_harvester:index_seqs()) -> od_harvester:index_seqs());
+    when UpdateFun :: fun((od_harvester:index_progress()) -> od_harvester:index_progress());
     (od_harvester:id(), [{od_harvester:index_id(), Mod}], UpdateFun) -> ok
-    when UpdateFun :: fun((od_harvester:index_seqs(), Mod) -> od_harvester:index_seqs()),
+    when UpdateFun :: fun((od_harvester:index_progress(), Mod) -> od_harvester:index_progress()),
     Mod :: term().
 update_indices_progress(HarvesterId, IndicesToUpdate, UpdateFun) ->
     {ok, _} = od_harvester:update(HarvesterId, fun(#od_harvester{indices = Indices} = Harvester) ->
@@ -1226,8 +1227,8 @@ update_indices_progress(HarvesterId, IndicesToUpdate, UpdateFun) ->
     od_harvester:indices() when UpdateFun :: fun((PreviousSeqs :: map()) -> NewSeqs :: map()).
 update_index_progress(Indices, IndexId, UpdateFun) ->
     case maps:find(IndexId, Indices) of
-        {ok, #harvester_index{seqs = Seqs} = IndexData} ->
-            Indices#{IndexId => IndexData#harvester_index{seqs = UpdateFun(Seqs)}};
+        {ok, #harvester_index{progress = Seqs} = IndexData} ->
+            Indices#{IndexId => IndexData#harvester_index{progress = UpdateFun(Seqs)}};
         _ ->
             % Index could have been deleted in meantime
             Indices
@@ -1237,15 +1238,15 @@ update_index_progress(Indices, IndexId, UpdateFun) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Updates max sequence number for given sequences map.
+%% Updates max sequence number for given index progress.
 %% When UpdateCurrentSeq flag is set to true value of current sequence number will also be updated.
 %% Sequence numbers are stored per space per provider.
 %% @end
 %%--------------------------------------------------------------------
--spec update_seqs(od_harvester:index_seqs(), od_space:id(), od_provider:id(), UpdateCurrentSeq :: boolean(), 
-    NewSeq :: non_neg_integer(), NewMaxSeq :: non_neg_integer()) -> od_harvester:index_seqs().
-update_seqs(Seqs, SpaceId, ProviderId, UpdateCurrentSeq, NewSeq, NewMaxSeq) -> 
-    SeqsPerProvider = maps:get(SpaceId, Seqs, #{}),
+-spec update_seqs(od_harvester:index_progress(), od_space:id(), od_provider:id(), UpdateCurrentSeq :: boolean(), 
+    NewSeq :: non_neg_integer(), NewMaxSeq :: non_neg_integer()) -> od_harvester:index_progress().
+update_seqs(Progress, SpaceId, ProviderId, UpdateCurrentSeq, NewSeq, NewMaxSeq) -> 
+    SeqsPerProvider = maps:get(SpaceId, Progress, #{}),
     [CurrentSeq, CurrentMaxSeq] = maps:get(ProviderId, SeqsPerProvider, [0,0]),
     
     NewCurrentSeq = case UpdateCurrentSeq of
@@ -1253,7 +1254,7 @@ update_seqs(Seqs, SpaceId, ProviderId, UpdateCurrentSeq, NewSeq, NewMaxSeq) ->
         false -> CurrentSeq
     end, 
     
-    Seqs#{
+    Progress#{
         SpaceId => SeqsPerProvider#{
             ProviderId => [NewCurrentSeq, max(CurrentMaxSeq, NewMaxSeq)]
         }

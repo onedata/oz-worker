@@ -34,13 +34,19 @@
 -type endpoint() :: binary().
 % Schema is stored as binary and it can contain e.g. encoded json.
 -type schema() :: binary() | undefined.
+-type entry_id() :: binary().
+
 -type index_id() :: binary().
 -type index() :: #harvester_index{}.
 -type indices() :: #{index_id() => #harvester_index{}}.
--type index_seqs() :: #{od_space:id() => #{od_provider:id() => [non_neg_integer()]}}.
+% Index harvesting progress is stored per space per provider and is a list containing two values: 
+%   current seq - sequence harvested in this index
+%   max_seq - highest sequence known in given space in given provider
+-type index_progress() :: #{od_space:id() => #{od_provider:id() => [non_neg_integer()]}}.
 
--export_type([name/0, plugin/0, endpoint/0, schema/0, 
-    index_id/0, index/0, indices/0, index_seqs/0]).
+
+-export_type([name/0, plugin/0, endpoint/0, schema/0, entry_id/0,
+    index_id/0, index/0, indices/0, index_progress/0]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -170,7 +176,7 @@ get_record_struct(1) ->
                 {name, string},
                 {schema, string},
                 {guiPluginName, string},
-                {seqs, #{string => #{string => [integer, integer]}}}
+                {progress, #{string => #{string => [integer, integer]}}}
             ]}
         }},
 

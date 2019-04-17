@@ -9,12 +9,13 @@
 %%% This module is responsible for uploading GUI packages.
 %%%
 %%% Onezone holds GUI packages for all Onedata services (oz_worker, oz_panel,
-%%% op_worker, op_panel), consistency is ensured by the services themselves, by
-%%% uploading their GUI package upon startup.
-%%% Service GUI root path is build using its shortname and cluster id, e.g.:
+%%% op_worker, op_panel) and harvesters. Consistency is ensured by the services 
+%%% themselves, by uploading their GUI package.
+%%% GUI root path is build using proper gui prefix and id, e.g.:
 %%%
 %%%     /ozw/74afc09f584276186894b82caf466886
 %%%     /opp/4fc0679a9fa6ca685dbe1a89dc65c552
+%%%     /hrv/685dbe1a89dc65c5524fc0679a9fa6ca
 %%% @end
 %%%-------------------------------------------------------------------
 -module(gui_upload).
@@ -22,6 +23,7 @@
 
 
 -include("http/rest.hrl").
+-include("http/gui_paths.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -40,6 +42,10 @@
 
 -define(UPLOADED_PACKAGE_NAME, "gui_static.tar.gz").
 
+
+%%%===================================================================
+%%% API
+%%%===================================================================
 
 -spec handle_service_gui_upload(cowboy_req:req()) -> cowboy_req:req() | no_return().
 handle_service_gui_upload(Req) ->
@@ -123,14 +129,14 @@ handle_harvester_gui_upload(Req) ->
                 ]),
                 throw(?HTTP_500_INTERNAL_SERVER_ERROR)
             end,
-            Req3 = case gui_static:deploy_package(<<"hrv">>, UploadPath) of
+            Req3 = case gui_static:deploy_package(?HARVESTER_GUI_PATH_PREFIX, UploadPath) of
                 ok ->
                     {ok, GuiHash} = gui:package_hash(UploadPath),
-                    ok = gui_static:link_gui(<<"hrv">>, HarvesterId, GuiHash),
+                    ok = gui_static:link_gui(?HARVESTER_GUI_PATH_PREFIX, HarvesterId, GuiHash),
                     cowboy_req:reply(?HTTP_200_OK, Req2);
                 {error, _} = Error ->
-                    ?debug("Discarding GUI upload from ~p:~s due to ~p", [
-                        harvester, HarvesterId, Error
+                    ?debug("Discarding GUI upload from harvester:~s due to ~p", [
+                        HarvesterId, Error
                     ]),
                     cowboy_req:reply(?HTTP_400_BAD_REQUEST, Req2)
             end,
