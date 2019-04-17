@@ -49,7 +49,7 @@
     schema = undefined :: od_harvester:schema() | undefined,
     % mapping of index name to one recognized by gui plugin.
     guiPluginName = <<>> :: binary(),
-    seqs = #{} :: maps:map()
+    seqs = #{} :: od_harvester:index_seqs()
 }).
 
 

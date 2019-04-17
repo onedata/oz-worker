@@ -151,9 +151,6 @@ get_response(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
 get_response(#gri{aspect = {eff_group_membership, _GroupId}}, Intermediaries) ->
     rest_translator:ok_encoded_intermediaries_reply(Intermediaries);
 
-get_response(#gri{aspect = shares}, Shares) ->
-    rest_translator:ok_body_reply(#{<<"shares">> => Shares});
-
 get_response(#gri{aspect = spaces}, Spaces) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => Spaces}).
 

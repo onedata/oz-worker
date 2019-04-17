@@ -64,6 +64,14 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = instance}
     }},
+    %% Remove harvested data
+    %% This operation requires one of the following privileges:
+    %% - harvester_delete
+    %% - oz_harvesters_delete
+    {<<"/harvesters/:id/data">>, #rest_req{
+        method = 'DELETE',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = data}
+    }},
     %% List harvester users
     %% This operation requires one of the following privileges:
     %% - harvester_view
@@ -318,14 +326,6 @@ routes() -> [
         method = 'PATCH',
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = gui_plugin_config}
     }},
-    %% Remove harvester with data
-    %% This operation requires one of the following privileges:
-    %% - harvester_delete
-    %% - oz_harvesters_delete
-    {<<"/harvesters/:id/data">>, #rest_req{
-        method = 'DELETE',
-        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = instance_with_data}
-    }},
     %% Create new index in harvester
     %% This operation requires one of the following privileges:
     %% - oz_harvesters_update
@@ -340,6 +340,21 @@ routes() -> [
     {<<"/harvesters/:id/indices">>, #rest_req{
         method = 'GET',
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = indices}
+    }},
+    %% Query harvester index.
+    %% This operation requires one of the following privileges:
+    %% - oz_harvesters_view
+    {<<"/harvesters/:id/indices/:idx/query">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {query, ?BINDING(idx)}}
+    }},
+    %% Get harvester index progress
+    %% This operation requires one of the following privileges:
+    %% - harvester_view
+    %% - oz_harvesters_view
+    {<<"/harvesters/:id/indices/:idx/progress">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {index_progress, ?BINDING(idx)}, scope = private}
     }},
     %% Get harvester index details
     %% This operation requires one of the following privileges:
@@ -365,27 +380,12 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {index, ?BINDING(idx)}}
     }},
-    %% Query harvester index.
-    %% This operation requires one of the following privileges:
-    %% - oz_harvesters_view
-    {<<"/harvesters/:id/indices/:idx/query">>, #rest_req{
-        method = 'POST',
-        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {query, ?BINDING(idx)}}
-    }},
-    %% Remove harvester index with data
+    %% Remove harvested index data
     %% This operation requires one of the following privileges:
     %% - harvester_update
     %% - oz_harvesters_update
     {<<"/harvesters/:id/indices/:idx/data">>, #rest_req{
         method = 'DELETE',
-        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {index_with_data, ?BINDING(idx)}}
-    }},
-    %% Get harvester index details
-    %% This operation requires one of the following privileges:
-    %% - harvester_view
-    %% - oz_harvesters_view
-    {<<"/harvesters/:id/indices/:idx/progress">>, #rest_req{
-        method = 'GET',
-        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {index_progress, ?BINDING(idx)}, scope = private}
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {index_data, ?BINDING(idx)}}
     }}
 ].

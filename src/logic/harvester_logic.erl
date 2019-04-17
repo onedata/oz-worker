@@ -31,13 +31,13 @@
     update_gui_plugin_config/3
 ]).
 -export([
-    delete/2, delete_with_data/2
+    delete/2, delete_harvested_data/2
 ]).
 -export([
     create_index/3, create_index/4, create_index/5, 
     get_index/3, get_index_progress/3, 
     update_index/4,
-    delete_index/3, delete_index_with_data/3,
+    delete_index/3, delete_index_data/3,
     query_index/4,
     list_indices/2
 ]).
@@ -88,7 +88,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new group document in database. 
+%% Creates a new harvester document in database. 
 %% Harvester name, endpoint plugin and config are given explicitly.
 %% @end
 %%--------------------------------------------------------------------
@@ -105,7 +105,7 @@ create(Client, Name, Endpoint, Plugin, Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new group document in database. 
+%% Creates a new harvester document in database. 
 %% Harvester name, endpoint plugin and config are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
@@ -249,13 +249,13 @@ delete(Client, HarvesterId) ->
 %% Deletes given harvester from database and all indices data.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_with_data(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec delete_harvested_data(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
     ok | {error, term()}.
-delete_with_data(Client, HarvesterId) ->
+delete_harvested_data(Client, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = delete,
         client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance_with_data}
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = data}
     }).
 
 
@@ -328,13 +328,13 @@ delete_index(Client, HarvesterId, IndexId) ->
 %% Deletes given index with all data in given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_index_with_data(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec delete_index_data(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
     IndexId :: od_harvester:index_id()) -> ok | {error, term()}.
-delete_index_with_data(Client, HarvesterId, IndexId) ->
+delete_index_data(Client, HarvesterId, IndexId) ->
     entity_logic:handle(#el_req{
         operation = delete,
         client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index_with_data, IndexId}}
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index_data, IndexId}}
     }).
 
 

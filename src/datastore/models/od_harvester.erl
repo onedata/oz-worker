@@ -37,9 +37,10 @@
 -type index_id() :: binary().
 -type index() :: #harvester_index{}.
 -type indices() :: #{index_id() => #harvester_index{}}.
+-type index_seqs() :: #{od_space:id() => #{od_provider:id() => [non_neg_integer()]}}.
 
 -export_type([name/0, plugin/0, endpoint/0, schema/0, 
-    index_id/0, index/0, indices/0]).
+    index_id/0, index/0, indices/0, index_seqs/0]).
 
 -define(CTX, #{
     model => ?MODULE,

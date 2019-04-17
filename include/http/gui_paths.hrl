@@ -78,4 +78,7 @@
 % URL (relative) to redirect to after login.
 -define(AFTER_LOGIN_PAGE_PATH, "/#/onezone").
 
+% Path prefix to where harvester gui is stored.
+-define(HARVESTER_GUI_PATH_PREFIX, <<"hrv">>).
+
 -endif.
