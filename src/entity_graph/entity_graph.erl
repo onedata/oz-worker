@@ -165,6 +165,7 @@ entity_type() | oz_privileges => eff_relations() | eff_relations_with_attrs() | 
 -export([get_privileges/5, has_privilege/6, has_privilege/7]).
 -export([get_intermediaries/4]).
 -export([delete_with_relations/2, delete_with_relations/3]).
+-export([remove_all_relations/2, remove_all_relations/3, delete_entity/2]).
 -export([update_oz_privileges/4]).
 -export([get_oz_privileges/2, has_oz_privilege/3, has_oz_privilege/4]).
 
@@ -720,6 +721,22 @@ delete_with_relations(EntityType, EntityId) ->
 
 -spec delete_with_relations(entity_type(), entity_id(), entity()) -> ok | no_return().
 delete_with_relations(EntityType, EntityId, Entity) ->
+    remove_all_relations(EntityType, EntityId, Entity),
+    delete_entity(EntityType, EntityId).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes all relations and dependent entities of an entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_all_relations(entity_type(), entity_id()) -> ok.
+remove_all_relations(EntityType, EntityId) ->
+    {ok, #document{value = Entity}} = EntityType:get(EntityId),
+    remove_all_relations(EntityType, EntityId, Entity).
+
+-spec remove_all_relations(entity_type(), entity_id(), entity()) -> ok | no_return().
+remove_all_relations(EntityType, EntityId, Entity) ->
     Parents = get_parents(Entity),
     DependentParents = maps:get(dependent, Parents, #{}),
     IndependentParents = maps:get(independent, Parents, #{}),
@@ -761,19 +778,27 @@ delete_with_relations(EntityType, EntityId, Entity) ->
                 ])
             end, ChIds)
         end, DependentChildren),
-        % Remove the entity itself (synchronize with other process which might
-        % be updating the entity)
-        ok = sync_on_entity(EntityType, EntityId, fun() ->
-            EntityType:force_delete(EntityId)
-        end)
+        ok
     catch
         Type:Message ->
             ?error_stacktrace(
-                "Unexpected error while deleting ~p#~s with relations - ~p:~p",
+                "Unexpected error while removing relations of ~p#~s - ~p:~p",
                 [EntityType, EntityId, Type, Message]
             ),
             throw(?ERROR_CANNOT_DELETE_ENTITY(EntityType, EntityId))
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes an entity - its relations should be removed beforehand.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_entity(entity_type(), entity_id()) -> ok | no_return().
+delete_entity(EntityType, EntityId) ->
+    ok = sync_on_entity(EntityType, EntityId, fun() ->
+        EntityType:force_delete(EntityId)
+    end).
 
 
 %%--------------------------------------------------------------------
@@ -946,36 +971,31 @@ refresh_if_needed() ->
     State = entity_graph_state:get(),
     case {is_up_to_date(State), is_refresh_in_progress(State)} of
         {false, false} ->
-            try
-                critical_section:run(?ENTITY_GRAPH_LOCK, fun() ->
-                    refresh_entity_graph()
-                end)
-            catch Type:Message ->
-                ?error_stacktrace("Cannot refresh entity graph - ~p:~p", [
-                    Type, Message
-                ]),
-                % Sleep for a while to avoid an aggressive loop
-                % (in general, the refresh process should not fail at all).
-                timer:sleep(5000),
-                schedule_refresh()
+            Result = critical_section:run(?ENTITY_GRAPH_LOCK, fun() ->
+                try
+                    set_refresh_in_progress(true),
+                    refresh_entity_graph(entity_graph_state:get())
+                catch Type:Message ->
+                    ?error_stacktrace("Cannot refresh entity graph - ~p:~p", [
+                        Type, Message
+                    ]),
+                    error
+                after
+                    set_refresh_in_progress(false)
+                end
+            end),
+            case Result of
+                ok ->
+                    ok;
+                error ->
+                    % Sleep for a while to avoid an aggressive loop
+                    % (in general, the refresh process should not fail at all).
+                    timer:sleep(5000),
+                    schedule_refresh()
             end;
         {_, _} ->
             ok
     end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Marks that entity graph refresh is in progress, performs the refresh and
-%% marks refresh complete.
-%% @end
-%%--------------------------------------------------------------------
--spec refresh_entity_graph() -> ok.
-refresh_entity_graph() ->
-    set_refresh_in_progress(true),
-    refresh_entity_graph(entity_graph_state:get()),
-    set_refresh_in_progress(false).
 
 
 %%--------------------------------------------------------------------

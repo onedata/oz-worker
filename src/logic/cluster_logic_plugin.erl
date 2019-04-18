@@ -122,9 +122,14 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     Macaroon = maps:get(<<"token">>, Req#el_req.data),
-    Privileges = privileges:cluster_user(),
+    AuthHint = Req#el_req.auth_hint,
+    Privileges = case AuthHint of
+        ?AS_USER(_) -> privileges:cluster_admin();
+        ?AS_GROUP(_) -> privileges:cluster_user();
+        _ -> []
+    end,
     JoinClusterFun = fun(od_cluster, ClusterId) ->
-        case Req#el_req.auth_hint of
+        case AuthHint of
             ?AS_USER(UserId) ->
                 entity_graph:add_relation(
                     od_user, UserId,
@@ -441,9 +446,13 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = ClusterId, aspect
             authorize(Req#el_req{gri = GRI#gri{scope = private}}, Cluster)
     end;
 
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
+    true;
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}, Cluster) ->
     auth_by_privilege(Req, Cluster, ?CLUSTER_VIEW_PRIVILEGES);
 
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
+    true;
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_privileges, _}}}, Cluster) ->
     auth_by_privilege(Req, Cluster, ?CLUSTER_VIEW_PRIVILEGES);
 

@@ -317,8 +317,12 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     ok = dns_state:remove_delegation_config(ProviderId),
     {ok, #od_provider{root_macaroon = RootMacaroon}} = fetch_entity(ProviderId),
     ok = macaroon_auth:delete(RootMacaroon),
-    cluster_logic:delete_oneprovider_cluster(ProviderId),
+
+    ClusterId = ProviderId,
+    entity_graph:remove_all_relations(od_cluster, ClusterId),
     entity_graph:delete_with_relations(od_provider, ProviderId),
+    cluster_logic:delete_oneprovider_cluster(ClusterId),
+
     % Force disconnect the provider (if connected)
     case provider_connection:get_connection_ref(ProviderId) of
         {ok, ConnRef} ->

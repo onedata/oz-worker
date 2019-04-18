@@ -712,9 +712,13 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = users}}, Group) ->
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_users}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_VIEW);
 
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
+    true;
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_VIEW_PRIVILEGES);
 
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
+    true;
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_privileges, _}}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_VIEW_PRIVILEGES);
 

@@ -367,7 +367,9 @@ get_user_privileges_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_HANDLE_SERVICES_VIEW_PRIVILEGES]},
-                {user, U2}
+                {user, U2},
+                % user can always see his own privileges
+                {user, U3}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -395,7 +397,7 @@ get_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?HANDLE_SERVICE_VIEW
+        {user, U3}, ?HANDLE_SERVICE_VIEW, false, U3
     ])).
 
 
@@ -655,7 +657,9 @@ get_eff_user_privileges_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_HANDLE_SERVICES_VIEW_PRIVILEGES]},
-                {user, U2}
+                {user, U2},
+                % user can always see his own privileges
+                {user, U3}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -683,7 +687,7 @@ get_eff_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?HANDLE_SERVICE_VIEW
+        {user, U3}, ?HANDLE_SERVICE_VIEW, false, U3
     ])).
 
 

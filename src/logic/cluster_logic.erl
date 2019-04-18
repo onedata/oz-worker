@@ -112,16 +112,17 @@ create_oneprovider_cluster(CreatorUserId, ProviderId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Not available in REST/GS API - reserved for internal Onezone logic.
-%% Deletes a cluster document linked with given provider from database, safely
-%% deleting all relations to member users/groups and cleaning static GUI links.
+%% Deletes a cluster document linked with given provider from database and
+%% cleans static GUI links.
 %% Cluster has the same Id as the provider.
+%% NOTE: all relations to member users/groups should be removed beforehand.
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_oneprovider_cluster(od_provider:id()) -> ok | no_return().
 delete_oneprovider_cluster(ProviderId) ->
     ClusterId = ProviderId,
 
-    entity_graph:delete_with_relations(od_cluster, ClusterId),
+    entity_graph:delete_entity(od_cluster, ClusterId),
 
     gui_static:unlink_gui(onedata:service_shortname(?OP_WORKER), ClusterId),
     gui_static:unlink_gui(onedata:service_shortname(?OP_PANEL), ClusterId),
