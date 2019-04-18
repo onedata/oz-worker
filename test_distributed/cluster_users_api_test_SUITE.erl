@@ -458,7 +458,7 @@ get_user_test(Config) ->
 
 get_user_privileges_test(Config) ->
     % create cluster with 2 users:
-    %   U2 gets the CLUSTER_VIEW privilege
+    %   U2 gets the CLUSTER_VIEW_PRIVILEGES privilege
     %   U1 gets all remaining privileges
     {C1, U1, U2, {P1, P1Macaroon}} = api_test_scenarios:create_basic_cluster_env(
         Config, ?CLUSTER_VIEW_PRIVILEGES
@@ -486,7 +486,9 @@ get_user_privileges_test(Config) ->
                 root,
                 {admin, [?OZ_CLUSTERS_VIEW_PRIVILEGES]},
                 {user, U2},
-                {provider, P1, P1Macaroon}
+                {provider, P1, P1Macaroon},
+                % user can always see his own privileges
+                {user, U3}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -511,7 +513,7 @@ get_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?CLUSTER_VIEW_PRIVILEGES
+        {user, U3}, ?CLUSTER_VIEW_PRIVILEGES, false, U3
     ])).
 
 
@@ -712,7 +714,7 @@ get_eff_user_privileges_test(Config) ->
     %%      NonAdmin
 
     % create cluster with 2 users:
-    %   U2 gets the CLUSTER_VIEW privilege
+    %   U2 gets the CLUSTER_VIEW_PRIVILEGES privilege
     %   U1 gets all remaining privileges
     {C1, U1, U2, {P1, P1Macaroon}} = api_test_scenarios:create_basic_cluster_env(
         Config, ?CLUSTER_VIEW_PRIVILEGES
@@ -763,7 +765,9 @@ get_eff_user_privileges_test(Config) ->
                 root,
                 {admin, [?OZ_CLUSTERS_VIEW_PRIVILEGES]},
                 {user, U2},
-                {provider, P1, P1Macaroon}
+                {provider, P1, P1Macaroon},
+                % user can always see his own privileges
+                {user, U3}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -791,7 +795,7 @@ get_eff_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?CLUSTER_VIEW_PRIVILEGES
+        {user, U3}, ?CLUSTER_VIEW_PRIVILEGES, false, U3
     ])).
 
 

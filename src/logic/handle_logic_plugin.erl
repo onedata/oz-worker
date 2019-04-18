@@ -403,6 +403,12 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
             authorize(Req#el_req{gri = #gri{scope = private}}, Handle)
     end;
 
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
+    true;
+
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
+    true;
+
 authorize(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}}, _) ->
     true;
 

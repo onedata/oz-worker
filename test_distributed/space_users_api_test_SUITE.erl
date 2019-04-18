@@ -449,7 +449,7 @@ get_user_test(Config) ->
 
 get_user_privileges_test(Config) ->
     % create space with 2 users:
-    %   U2 gets the SPACE_VIEW privilege
+    %   U2 gets the SPACE_VIEW_PRIVILEGES privilege
     %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW_PRIVILEGES
@@ -476,7 +476,9 @@ get_user_privileges_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SPACES_VIEW_PRIVILEGES]},
-                {user, U2}
+                {user, U2},
+                % user can always see his own privileges
+                {user, U3}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -501,7 +503,7 @@ get_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?SPACE_VIEW_PRIVILEGES
+        {user, U3}, ?SPACE_VIEW_PRIVILEGES, false, U3
     ])).
 
 
@@ -699,7 +701,7 @@ get_eff_user_privileges_test(Config) ->
     %%      NonAdmin
 
     % create space with 2 users:
-    %   U2 gets the SPACE_VIEW privilege
+    %   U2 gets the SPACE_VIEW_PRIVILEGES privilege
     %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW_PRIVILEGES
@@ -749,7 +751,9 @@ get_eff_user_privileges_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SPACES_VIEW_PRIVILEGES]},
-                {user, U2}
+                {user, U2},
+                % user can always see his own privileges
+                {user, U3}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -777,7 +781,7 @@ get_eff_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?SPACE_VIEW_PRIVILEGES
+        {user, U3}, ?SPACE_VIEW_PRIVILEGES, false, U3
     ])).
 
 

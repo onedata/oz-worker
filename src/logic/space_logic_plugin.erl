@@ -516,9 +516,13 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
             authorize(Req#el_req{gri = #gri{scope = private}}, Space)
     end;
 
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
+    true;
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_VIEW_PRIVILEGES);
 
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
+    true;
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_privileges, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_VIEW_PRIVILEGES);
 

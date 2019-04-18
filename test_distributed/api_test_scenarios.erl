@@ -24,6 +24,7 @@
 -export([get_relations/4]).
 -export([get_privileges/7]).
 -export([get_privileges/8]).
+-export([get_privileges/9]).
 -export([update_privileges/7]).
 -export([delete_privileges/7]).
 
@@ -152,10 +153,14 @@ prepare_entity_not_found_gs_spec(GsSpec) ->
 % should not be listed in client spec but provided additionally.
 % Exception to this is when entity directly tries to get it's privileges,
 % then it should be listed as only correct client and provided as argument
+% SubjectUser is the one for whom privileges are being checked.
 get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv) ->
-    get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, false).
+    get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, false, undefined).
 
 get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SkipEntity) ->
+    get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SkipEntity, undefined).
+
+get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, ViewPriv, SkipEntity, SubjectUser) ->
     % Run original spec
     assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -183,12 +188,23 @@ get_privileges(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs, Entity, V
         AllPrivs, lists:usort(ConstPrivs ++ [ViewPriv])
     ),
 
-    % Replace clients with entity and check if it can not get privileges
-    % when all privileges but view one is set
+    % Replace clients with entity and set all privileges but view one.
     SetPrivsFun(AllPrivs -- [ViewPriv], [ViewPriv]),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    ForbiddenApiTestSpec = create_forbidden_test_spec(ApiTestSpec, Entity),
-    assert(api_test_utils:run_tests(Config, ForbiddenApiTestSpec)).
+
+    % If entity is the same as subject user then it should be possible to
+    % get privileges even without view privilege. Otherwise entity should not
+    % be able to get privileges.
+    case Entity of
+        {user, SubjectUser} ->
+            run_get_privs_tests(
+                Config, EntityTestSpec, SetPrivsFun, AllPrivs,
+                lists:usort(ConstPrivs ++ [ViewPriv])
+            );
+        _ ->
+            ForbiddenApiTestSpec = create_forbidden_test_spec(ApiTestSpec, Entity),
+            assert(api_test_utils:run_tests(Config, ForbiddenApiTestSpec))
+    end.
 
 
 run_get_privs_tests(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs) ->

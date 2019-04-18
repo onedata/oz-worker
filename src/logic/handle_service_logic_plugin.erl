@@ -364,6 +364,12 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
             authorize(Req#el_req{gri = #gri{scope = private}}, HService)
     end;
 
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
+    true;
+
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
+    true;
+
 authorize(Req = #el_req{operation = get, client = ?USER}, HService) ->
     % All other resources can be accessed with view privileges
     auth_by_privilege(Req, HService, ?HANDLE_SERVICE_VIEW);
