@@ -259,7 +259,8 @@
 %% Example test data for harvesters
 -define(HARVESTER_NAME1, <<"harvester1">>).
 -define(HARVESTER_NAME2, <<"harvester2">>).
--define(HARVESTER_ENDPOINT, <<"test.endpoint:9200">>).
+-define(HARVESTER_ENDPOINT1, <<"test.endpoint1:9200">>).
+-define(HARVESTER_ENDPOINT2, <<"test.endpoint2">>).
 -define(HARVESTER_MOCK_PLUGIN_BINARY, <<"harvester_mock_plugin">>).
 -define(HARVESTER_MOCK_PLUGIN, binary_to_atom(?HARVESTER_MOCK_PLUGIN_BINARY, utf8)).
 -define(HARVESTER_MOCK_PLUGIN2_BINARY, <<"harvester_mock_plugin2">>).
@@ -280,7 +281,7 @@
 -define(HARVESTER_PROTECTED_DATA(HarvesterName),
     #{
         <<"name">> => HarvesterName,
-        <<"endpoint">> => ?HARVESTER_ENDPOINT,
+        <<"endpoint">> => ?HARVESTER_ENDPOINT1,
         <<"plugin">> => ?HARVESTER_MOCK_PLUGIN_BINARY,
         <<"public">> => false
     }).
@@ -288,14 +289,24 @@
 -define(HARVESTER_CREATE_DATA(HarvesterName, HarvesterPlugin),
     #{
     <<"name">> => HarvesterName,
-    <<"endpoint">> => ?HARVESTER_ENDPOINT,
+    <<"endpoint">> => ?HARVESTER_ENDPOINT1,
     <<"plugin">> => HarvesterPlugin,
     <<"guiPluginConfig">> => ?HARVESTER_GUI_PLUGIN_CONFIG
     }).
 -define(HARVESTER_CREATE_DATA(HarvesterName), ?HARVESTER_CREATE_DATA(HarvesterName, ?HARVESTER_MOCK_PLUGIN_BINARY)). 
 -define(HARVESTER_CREATE_DATA, ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)).
 
--define(MOCKED_QUERY_DATA_MAP, #{<<"key">> => <<"mocked_query_data">>}).
+-define(HARVESTER_MOCKED_QUERY_DATA_MAP, #{<<"key">> => <<"mocked_query_data">>}).
+
+-define(HARVESTER_ENTRY_DATA(Seq, MaxSeq, Indices), #{
+    <<"json">> => <<"{\"valid\":\"json\"}">>,
+    <<"seq">> => Seq,
+    <<"maxSeq">> => MaxSeq,
+    <<"indices">> => Indices
+}).
+-define(FAILED_INDICES(Indices), #{<<"failedIndices">> := Indices}).
+-define(NO_FAILED_INDICES, ?FAILED_INDICES([])).
+
 
 -define(BAD_VALUES_NAME(Error),
     [{<<"name">>, <<"">>, Error},

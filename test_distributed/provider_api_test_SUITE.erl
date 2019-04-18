@@ -2598,7 +2598,7 @@ end_per_testcase(check_my_ports_test, Config) ->
     test_utils:mock_unload(Nodes, http_client),
     end_per_testcase(default, Config);
 end_per_testcase(list_eff_harvesters_test, Config) ->
-    oz_test_utils:unmock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN),
+    oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
     end_per_testcase(default, Config);
 end_per_testcase(_, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),

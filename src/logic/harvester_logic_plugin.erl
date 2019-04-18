@@ -163,7 +163,9 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, client = Client,
     } = Data,
     Config = maps:get(<<"guiPluginConfig">>, Data, #{}),
     
-    case Plugin:ping(Endpoint) of
+    NormalizedEndpoint = normalize_endpoint(Endpoint),
+    
+    case Plugin:ping(NormalizedEndpoint) of
         ok -> ok;
         Error -> throw(Error)
     end,
@@ -171,7 +173,7 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, client = Client,
     {ok, #document{key = HarvesterId}} = od_harvester:create(#document{
         value = #od_harvester{
             name = Name, 
-            endpoint = Endpoint, 
+            endpoint = NormalizedEndpoint, 
             plugin = Plugin, 
             gui_plugin_config = Config,
             creator = Client
@@ -458,7 +460,7 @@ update(#el_req{gri = #gri{id = HarvesterId, aspect = instance}, data = Data}) ->
         } = Harvester,
         
         NewName = maps:get(<<"name">>, Data, Name),
-        NewEndpoint = maps:get(<<"endpoint">>, Data, Endpoint),
+        NewEndpoint = normalize_endpoint(maps:get(<<"endpoint">>, Data, Endpoint)),
         NewPlugin = maps:get(<<"plugin">>, Data, Plugin),
         NewPublic = maps:get(<<"public">>, Data, Public),
         
@@ -475,7 +477,7 @@ update(#el_req{gri = #gri{id = HarvesterId, aspect = instance}, data = Data}) ->
             _ ->
                 case NewPlugin:ping(NewEndpoint) of
                     ok -> {ok, NewHarvester}; 
-                    {error, _} = Error -> Error
+                    {error, Error} -> Error
                 end
         end
     end,
@@ -755,8 +757,14 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
             authorize(Req#el_req{gri = #gri{scope = private}}, Harvester)
     end;
 
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
+    true;
+
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_VIEW_PRIVILEGES);
+
+authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
+    true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_privileges, _}}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_VIEW_PRIVILEGES);
@@ -815,7 +823,7 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {index, _}}}, Ha
     auth_by_privilege(Req, Harvester, ?HARVESTER_UPDATE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {index_data, _}}}, Harvester) ->
-    auth_by_privilege(Req, Harvester, ?HARVESTER_UPDATE);
+    auth_by_privilege(Req, Harvester, ?HARVESTER_DELETE);
 
 authorize(_, _) ->
     false.
@@ -943,7 +951,7 @@ required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {index
     [?OZ_HARVESTERS_UPDATE];
 
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {index_data, _}}}) ->
-    [?OZ_HARVESTERS_UPDATE];
+    [?OZ_HARVESTERS_DELETE];
 
 required_admin_privileges(_) ->
     forbidden.
@@ -975,6 +983,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = {submit_entry, _}}}) ->
         <<"json">> => {binary, non_empty},
         <<"seq">> => {integer, {not_lower_than, 0}},
         <<"maxSeq">> => {integer, {not_lower_than, 0}},
+        % index membership in given harvester is checked in perform_entry_operation/8
         <<"indices">> => {list_of_binaries, non_empty}
     }
 };
@@ -983,6 +992,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = {delete_entry, _}}}) ->
     required => #{
         <<"seq">> => {integer, {not_lower_than, 0}},
         <<"maxSeq">> => {integer, {not_lower_than, 0}},
+        % index membership in given harvester is checked in perform_entry_operation/8
         <<"indices">> => {list_of_binaries, non_empty}
     }
 };
@@ -1121,7 +1131,7 @@ auth_by_privilege(UserId, HarvesterOrId, Privilege) ->
 %% @private
 %% @doc
 %% Deletes indices data by calling harvester plugin.
-%% Updates harvesting progress of successfully deleted indices.
+%% Clears harvesting progress of successfully deleted indices.
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_indices_data([od_harvester:index_id()], od_harvester:plugin(), 
@@ -1168,8 +1178,8 @@ perform_entry_operation(Operation, Indices, ProviderId, Plugin, Endpoint, Harves
     IndicesToUpdate = lists:filtermap(
         fun(IndexId) ->
             case maps:find(IndexId, Indices) of
-                {ok, #harvester_index{progress = #{SpaceId := #{ProviderId := {S, _}}}}} when S >= Seq ->
-                    % Ignore already harvested seqs
+                {ok, #harvester_index{progress = #{SpaceId := #{ProviderId := [S, _]}}}} when S >= Seq ->
+                    % Ignore already harvested sequences
                     false;
                 {ok, _} ->
                     case call_plugin(Operation, Plugin, Endpoint, HarvesterId, IndexId, FileId, Json) of
@@ -1273,3 +1283,14 @@ call_plugin(submit_entry, Plugin, Endpoint, HarvesterId, IndexId, FileId, Json) 
     Plugin:submit_entry(Endpoint, HarvesterId, IndexId, FileId, Json);
 call_plugin(delete_entry, Plugin, Endpoint, HarvesterId, IndexId, FileId, _) ->
     Plugin:delete_entry(Endpoint, HarvesterId, IndexId, FileId).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Normalizes endpoint by removing trailing slash.
+%% @end
+%%--------------------------------------------------------------------
+-spec normalize_endpoint(od_harvester:endpoint()) -> od_harvester:endpoint().
+normalize_endpoint(Endpoint) ->
+    re:replace(Endpoint, <<"/$">>, <<"">>, [{return, binary}]).

@@ -454,7 +454,7 @@ get_user_test(Config) ->
 
 get_user_privileges_test(Config) ->
     % create harvester with 2 users:
-    %   U2 gets the HARVESTER_VIEW privilege
+    %   U2 gets the HARVESTER_VIEW_PRIVILEGES privilege
     %   U1 gets all remaining privileges
     {H1, U1, U2} = api_test_scenarios:create_basic_harvester_env(
         Config, ?HARVESTER_VIEW_PRIVILEGES
@@ -481,7 +481,9 @@ get_user_privileges_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_HARVESTERS_VIEW_PRIVILEGES]},
-                {user, U2}
+                {user, U2},
+                % user can always see his own privileges
+                {user, U3}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -506,7 +508,7 @@ get_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?HARVESTER_VIEW_PRIVILEGES
+        {user, U3}, ?HARVESTER_VIEW_PRIVILEGES, false, U3
     ])).
 
 
@@ -686,11 +688,11 @@ get_eff_user_privileges_test(Config) ->
     %% Create environment with the following relations:
     %%
     %%                  Harvester
-    %%                 /  ||  \
-    %%                /   ||   \
-    %%     [~harvester_view]  ||  [harvester_view]
-    %%           /        ||        \
-    %%        User1      /  \      User2
+    %%                 /  ||    \
+    %%                /   ||     \
+    %% [~harvester_view]  ||  [harvester_view]
+    %%             /      ||       \
+    %%         User1     /  \      User2
     %%                  /    \
     %%                 /      \
     %%             Group1    Group2
@@ -704,7 +706,7 @@ get_eff_user_privileges_test(Config) ->
     %%      NonAdmin
 
     % create harvester with 2 users:
-    %   U2 gets the HARVESTER_VIEW privilege
+    %   U2 gets the HARVESTER_VIEW_PRIVILEGES privilege
     %   U1 gets all remaining privileges
     {H1, U1, U2} = api_test_scenarios:create_basic_harvester_env(
         Config, ?HARVESTER_VIEW_PRIVILEGES
@@ -754,7 +756,9 @@ get_eff_user_privileges_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_HARVESTERS_VIEW_PRIVILEGES]},
-                {user, U2}
+                {user, U2},
+                % user can always see his own privileges
+                {user, U3}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -782,7 +786,7 @@ get_eff_user_privileges_test(Config) ->
 
     ?assert(api_test_scenarios:run_scenario(get_privileges, [
         Config, ApiTestSpec, SetPrivsFun, AllPrivs, [],
-        {user, U3}, ?HARVESTER_VIEW_PRIVILEGES
+        {user, U3}, ?HARVESTER_VIEW_PRIVILEGES, false, U3
     ])).
 
 
@@ -899,7 +903,7 @@ init_per_testcase(_, Config) ->
     oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN).
 
 end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN).
+    oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN).
 
 end_per_suite(_Config) ->
     hackney:stop(),

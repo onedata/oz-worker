@@ -141,7 +141,7 @@ get(Client, HarvesterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_protected_data(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
-    {ok, maps:map()} | {error, term()}.
+    {ok, map()} | {error, term()}.
 get_protected_data(Client, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -292,7 +292,7 @@ create_index(Client, HarvesterId, Name, Schema, GuiPluginName) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
-    Data :: maps:map()) -> {ok, od_harvester:index_id()} | {error, term()}.
+    Data :: map()) -> {ok, od_harvester:index_id()} | {error, term()}.
 create_index(Client, HarvesterId, Data) ->
     Res = entity_logic:handle(#el_req{
         operation = create,
@@ -374,7 +374,7 @@ get_index(Client, HarvesterId, IndexId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_index_progress(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
-    IndexId :: od_harvester:index_id()) -> {ok, #od_harvester{}} | {error, term()}.
+    IndexId :: od_harvester:index_id()) -> {ok, od_harvester:index_progress()} | {error, term()}.
 get_index_progress(Client, HarvesterId, IndexId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -390,7 +390,7 @@ get_index_progress(Client, HarvesterId, IndexId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
-    IndexId :: od_harvester:index_id(), Data :: maps:map()) -> ok | {error, term()}.
+    IndexId :: od_harvester:index_id(), Data :: map()) -> ok | {error, term()}.
 update_index(Client, HarvesterId, IndexId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
@@ -406,7 +406,7 @@ update_index(Client, HarvesterId, IndexId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec submit_entry(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
-    FileId :: binary(), Data :: binary()) -> {ok, maps:map()} | {error, term()}.
+    FileId :: binary(), Data :: binary()) -> {ok, map()} | {error, term()}.
 submit_entry(Client, HarvesterId, FileId, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
@@ -422,7 +422,7 @@ submit_entry(Client, HarvesterId, FileId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_entry(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
-    FileId :: binary(), Data :: maps:map()) -> {ok, maps:map()} | {error, term()}.
+    FileId :: binary(), Data :: map()) -> {ok, map()} | {error, term()}.
 delete_entry(Client, HarvesterId, FileId, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
@@ -438,7 +438,7 @@ delete_entry(Client, HarvesterId, FileId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec query_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
-    IndexId :: od_harvester:index_id(), Data :: maps:map()) -> ok | {error, term()}.
+    IndexId :: od_harvester:index_id(), Data :: map()) -> ok | {error, term()}.
 query_index(Client, HarvesterId, IndexId, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,

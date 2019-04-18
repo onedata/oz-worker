@@ -165,7 +165,7 @@ create_harvester_test(Config) ->
             optional = [<<"guiPluginConfig">>],
             correct_values = #{
                 <<"name">> => [ExpName],
-                <<"endpoint">> => [?HARVESTER_ENDPOINT],
+                <<"endpoint">> => [?HARVESTER_ENDPOINT1],
                 <<"plugin">> => [?HARVESTER_MOCK_PLUGIN_BINARY],
                 <<"guiPluginConfig">> => [?HARVESTER_GUI_PLUGIN_CONFIG]
             },
@@ -567,7 +567,7 @@ init_per_testcase(_, Config) ->
     oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN).
 
 end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_harvester_plugin(Config, ?HARVESTER_MOCK_PLUGIN).
+    oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN).
 
 end_per_suite(_Config) ->
     hackney:stop(),

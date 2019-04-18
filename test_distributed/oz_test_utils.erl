@@ -217,7 +217,11 @@
     harvester_remove_group/3,
     harvester_remove_space/3,
     
-    harvester_create_index/3
+    harvester_create_index/3,
+    harvester_get_index_progress/3,
+    
+    harvester_submit_entry/5,
+    harvester_delete_entry/5
 ]).
 -export([
     list_clusters/1,
@@ -254,7 +258,7 @@
     create_and_support_3_spaces/2,
     minimum_support_size/1,
     mock_harvester_plugins/2,
-    unmock_harvester_plugin/2,
+    unmock_harvester_plugins/2,
     mock_handle_proxy/1,
     unmock_handle_proxy/1,
     mock_time/1,
@@ -2334,7 +2338,7 @@ harvester_remove_group(Config, HarvesterId, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates index in harvester.
+%% Creates index in given harvester.
 %% @end
 %%--------------------------------------------------------------------
 -spec harvester_create_index(Config :: term(), HarvesterId :: od_harvester:id(), 
@@ -2342,6 +2346,45 @@ harvester_remove_group(Config, HarvesterId, GroupId) ->
 harvester_create_index(Config, HarvesterId, Data) ->
     ?assertMatch({ok, _}, call_oz(
         Config, harvester_logic, create_index, [?ROOT, HarvesterId, Data]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves index progress from given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_get_index_progress(Config :: term(), HarvesterId :: od_harvester:id(), 
+    IndexId :: od_harvester:index_id()) -> ok.
+harvester_get_index_progress(Config, HarvesterId, IndexId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, get_index_progress, [?ROOT, HarvesterId, IndexId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Submits entry in given harvester as provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_submit_entry(Config :: term(), ProviderId :: od_provider:id(), 
+    HarvesterId :: od_harvester:id(), FileId :: file_id:objectid(), Data :: map()) -> ok.
+harvester_submit_entry(Config, ProviderId, HarvesterId, FileId, Data) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, submit_entry, [?PROVIDER(ProviderId), HarvesterId, FileId, Data]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes entry in given harvester as provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_delete_entry(Config :: term(), ProviderId :: od_provider:id(),
+    HarvesterId :: od_harvester:id(), FileId :: file_id:objectid(), Data :: map()) -> ok.
+harvester_delete_entry(Config, ProviderId, HarvesterId, FileId, Data) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, delete_entry, [?PROVIDER(ProviderId), HarvesterId, FileId, Data]
     )).
 
 
@@ -2853,24 +2896,31 @@ mock_harvester_plugins(Config, Plugin) ->
 mock_harvester_plugin(Nodes, PluginName) ->
     test_utils:mock_new(Nodes, PluginName, [non_strict]),
     test_utils:mock_expect(Nodes, PluginName, type, fun() -> harvester_plugin end),
-    test_utils:mock_expect(Nodes, PluginName, ping, fun(_) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, ping, 
+        fun(?HARVESTER_ENDPOINT1) -> ok;
+           (?HARVESTER_ENDPOINT2) -> ok;
+           (_) -> {error, ?ERROR_TEMPORARY_FAILURE}
+        end),
     test_utils:mock_expect(Nodes, PluginName, submit_entry, fun(_,_,_,_,_) -> ok end),
     test_utils:mock_expect(Nodes, PluginName, delete_entry, fun(_,_,_,_) -> ok end),
     test_utils:mock_expect(Nodes, PluginName, create_index, fun(_,_,_,_) -> ok end),
     test_utils:mock_expect(Nodes, PluginName, delete_index, fun(_,_,_) -> ok end),
-    test_utils:mock_expect(Nodes, PluginName, query_index, fun(_,_,_,_) -> {ok, ?MOCKED_QUERY_DATA_MAP} end),
+    test_utils:mock_expect(Nodes, PluginName, query_index, fun(_,_,_,_) -> {ok, ?HARVESTER_MOCKED_QUERY_DATA_MAP} end),
     test_utils:mock_expect(Nodes, PluginName, query_validator, fun() -> ?HARVESTER_PLUGIN:query_validator() end).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Unmocks harvester plugin on all nodes of onezone.
+%% Unmocks harvester plugins on all nodes of onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec unmock_harvester_plugin(Config :: term(), PluginName :: atom()) -> ok.
-unmock_harvester_plugin(Config, PluginName) ->
+-spec unmock_harvester_plugins(Config :: term(), Plugins :: atom() | list()) -> ok.
+unmock_harvester_plugins(Config, PluginName) when is_atom(PluginName)->
+    unmock_harvester_plugins(Config, [PluginName]);
+
+unmock_harvester_plugins(Config, Plugins) ->
     test_utils:mock_unload(?OZ_NODES(Config), onezone_plugins),
-    test_utils:mock_unload(?OZ_NODES(Config), PluginName).
+    lists:foreach(fun(PluginName) -> test_utils:mock_unload(?OZ_NODES(Config), PluginName) end, Plugins).
 
 
 %%--------------------------------------------------------------------
