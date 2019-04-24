@@ -692,9 +692,12 @@ create_index_test(Config) ->
     oz_test_utils:harvester_add_user(Config, H1, U2),
     oz_test_utils:harvester_set_user_privileges(Config, H1, U2, [?HARVESTER_UPDATE], []),
 
-    VerifyFun = fun(IndexId, ExpSchema, ExpGuiPluginName) ->
+    VerifyFun = fun(IndexId, Data) ->
         {ok, Harvester} = oz_test_utils:get_harvester(Config, H1),
         Indices = Harvester#od_harvester.indices,
+        ExpSchema = maps:get(<<"schema">>, Data, undefined),
+        ExpGuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data, undefined)),
+        
         ?assertEqual(true, lists:member(IndexId, maps:keys(Indices))),
         Index = maps:get(IndexId, Indices),
         ?assertEqual(?CORRECT_NAME, Index#harvester_index.name),
@@ -721,12 +724,10 @@ create_index_test(Config) ->
             path = [<<"/harvesters/">>, H1, <<"/indices">>],
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, Data) ->
-                ExpSchema = maps:get(<<"schema">>, Data, undefined),
-                ExpGuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data)),
                 fun(#{<<"Location">> := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/harvesters/">>, H1, <<"/indices/">>]),
                     [IndexId] = binary:split(Location, [BaseURL], [global, trim_all]),
-                    VerifyFun(IndexId, ExpSchema, ExpGuiPluginName)
+                    VerifyFun(IndexId, Data)
                 end
             end)
         },
@@ -735,14 +736,12 @@ create_index_test(Config) ->
             function = create_index,
             args = [client, H1, data],
             expected_result = ?OK_ENV(fun(_, Data) ->
-                ExpSchema = maps:get(<<"schema">>, Data, undefined),
-                ExpGuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data)),
-                ?OK_TERM(fun(IndexId) -> VerifyFun(IndexId, ExpSchema, ExpGuiPluginName) end)
+                ?OK_TERM(fun(IndexId) -> VerifyFun(IndexId, Data) end)
             end)
         },
         data_spec = #data_spec{
-            required = [<<"name">>, <<"guiPluginName">>],
-            optional = [<<"schema">>],
+            required = [<<"name">>],
+            optional = [<<"schema">>, <<"guiPluginName">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"schema">> => [?HARVESTER_INDEX_SCHEMA],
@@ -794,7 +793,7 @@ get_index_test(Config) ->
                 <<"indexId">> => IndexId,
                 <<"name">> => ?HARVESTER_INDEX_NAME,
                 <<"schema">> => ?HARVESTER_INDEX_SCHEMA,
-                <<"guiPluginName">> => ?HARVESTER_INDEX_NAME
+                <<"guiPluginName">> => null
             }
         },
         logic_spec = #logic_spec{
@@ -804,7 +803,7 @@ get_index_test(Config) ->
             expected_result = ?OK_MAP(#{
                 <<"name">> => ?HARVESTER_INDEX_NAME,
                 <<"schema">> => ?HARVESTER_INDEX_SCHEMA,
-                <<"guiPluginName">> => ?HARVESTER_INDEX_NAME
+                <<"guiPluginName">> => undefined
             })
         }
     },
@@ -896,7 +895,7 @@ update_index_test(Config) ->
         } = maps:get(IndexId, Indices),
 
         ExpName = ExpValueFun(ShouldSucceed, <<"name">>, Data, ?HARVESTER_INDEX_NAME),
-        ExpGuiPluginName = gs_protocol:null_to_undefined(ExpValueFun(ShouldSucceed, <<"guiPluginName">>, Data, ?HARVESTER_INDEX_NAME)),
+        ExpGuiPluginName = gs_protocol:null_to_undefined(ExpValueFun(ShouldSucceed, <<"guiPluginName">>, Data, undefined)),
         
         ?assertEqual(ExpName, ActualName),
         ?assertEqual(ExpGuiPluginName, ActualGuiPluginName)

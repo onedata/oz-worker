@@ -319,7 +319,7 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
 
     Name = maps:get(<<"name">>, Data),
     Schema = maps:get(<<"schema">>, Data, undefined),
-    GuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data)),
+    GuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data, undefined)),
     Index = #harvester_index{
         name = Name,
         schema = Schema,
@@ -999,10 +999,10 @@ validate(#el_req{operation = create, gri = #gri{aspect = {delete_entry, _}}}) ->
 
 validate(#el_req{operation = create, gri = #gri{aspect = index}}) -> #{
     required => #{
-        <<"name">> => {binary, name},
-        <<"guiPluginName">> => {binary, non_empty}
+        <<"name">> => {binary, name}
     },
     optional => #{
+        <<"guiPluginName">> => {binary, any},
         <<"schema">> => {binary, non_empty}
     }
 };
@@ -1089,7 +1089,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = gui_plugin_config}}) ->
 validate(#el_req{operation = update, gri = #gri{aspect = {index, _}}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"guiPluginName">> => {binary, non_empty}
+        <<"guiPluginName">> => {binary, any}
     }
 };
 

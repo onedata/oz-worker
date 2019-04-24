@@ -273,8 +273,7 @@
 -define(HARVESTER_INDEX_SCHEMA, <<"{ \"mappings\": { \"properties\": { \"foo\": { \"type\": \"keyword\" } } } }">>).
 -define(HARVESTER_INDEX_CREATE_DATA, #{
     <<"name">> => ?HARVESTER_INDEX_NAME,
-    <<"schema">> => ?HARVESTER_INDEX_SCHEMA,
-    <<"guiPluginName">> => ?HARVESTER_INDEX_NAME
+    <<"schema">> => ?HARVESTER_INDEX_SCHEMA
 }).
 -define(HARVESTER_INDEX_PROGRESS, #{}).
 

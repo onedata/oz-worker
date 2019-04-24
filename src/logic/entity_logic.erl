@@ -867,6 +867,8 @@ check_value(list_of_atoms, non_empty, Key, []) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(binary, non_empty, Key, <<"">>) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
+check_value(binary, non_empty, Key, undefined) ->
+    throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(list_of_binaries, non_empty, Key, []) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(json, non_empty, Key, Map) when map_size(Map) == 0 ->
