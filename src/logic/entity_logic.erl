@@ -759,6 +759,8 @@ check_type(list_of_atoms, Key, Values) ->
         _:_ ->
             throw(?ERROR_BAD_VALUE_LIST_OF_ATOMS(Key))
     end;
+check_type(binary, _Key, null) ->
+    undefined;
 check_type(binary, _Key, Binary) when is_binary(Binary) ->
     Binary;
 check_type(binary, _Key, Atom) when is_atom(Atom) ->

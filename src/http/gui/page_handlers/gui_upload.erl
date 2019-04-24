@@ -68,28 +68,7 @@ handle_service_gui_upload(Req) ->
 
     case auth_logic:authorize_by_macaroons(Req) of
         {true, ?PROVIDER(ProviderId)} ->
-            ?info("Received GUI upload for ~p:~s", [Service, ClusterId]),
-            TempDir = mochitemp:mkdtemp(),
-            UploadPath = filename:join([TempDir, ?UPLOADED_PACKAGE_NAME]),
-            Req2 = try
-                process_multipart(Req, UploadPath)
-            catch Type:Message ->
-                ?error_stacktrace("Error while streaming file upload from ~p:~s - ~p:~p", [
-                    Service, ClusterId, Type, Message
-                ]),
-                throw(?HTTP_500_INTERNAL_SERVER_ERROR)
-            end,
-            Req3 = case gui_static:deploy_package(ServiceShortname, UploadPath) of
-                ok ->
-                    cowboy_req:reply(?HTTP_200_OK, Req2);
-                {error, _} = Error ->
-                    ?debug("Discarding GUI upload from ~p:~s due to ~p", [
-                        Service, ClusterId, Error
-                    ]),
-                    cowboy_req:reply(?HTTP_400_BAD_REQUEST, Req2)
-            end,
-            mochitemp:rmtempdir(TempDir),
-            Req3;
+            upload_and_deploy_package(Req, Service, ServiceShortname, ClusterId, false);
         {true, _} ->
             throw(?HTTP_403_FORBIDDEN);
         _ ->
@@ -118,33 +97,51 @@ handle_harvester_gui_upload(Req) ->
                 true -> ok;
                 _ -> throw(?HTTP_403_FORBIDDEN)
             end,
-            ?info("Received GUI upload for ~p:~s", [harvester, HarvesterId]),
-            TempDir = mochitemp:mkdtemp(),
-            UploadPath = filename:join([TempDir, ?UPLOADED_PACKAGE_NAME]),
-            Req2 = try
-                process_multipart(Req, UploadPath)
-            catch Type:Message ->
-                ?error_stacktrace("Error while streaming file upload from ~p:~s - ~p:~p", [
-                    harvester, HarvesterId, Type, Message
-                ]),
-                throw(?HTTP_500_INTERNAL_SERVER_ERROR)
-            end,
-            Req3 = case gui_static:deploy_package(?HARVESTER_GUI_PATH_PREFIX, UploadPath) of
-                ok ->
-                    {ok, GuiHash} = gui:package_hash(UploadPath),
-                    ok = gui_static:link_gui(?HARVESTER_GUI_PATH_PREFIX, HarvesterId, GuiHash),
-                    cowboy_req:reply(?HTTP_200_OK, Req2);
-                {error, _} = Error ->
-                    ?debug("Discarding GUI upload from harvester:~s due to ~p", [
-                        HarvesterId, Error
-                    ]),
-                    cowboy_req:reply(?HTTP_400_BAD_REQUEST, Req2)
-            end,
-            mochitemp:rmtempdir(TempDir),
-            Req3;
+            upload_and_deploy_package(Req, harvester, ?HARVESTER_GUI_PATH_PREFIX, HarvesterId, true);
         _ ->
             throw(?HTTP_401_UNAUTHORIZED)
     end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Reads package from Req and deploys it on cluster nodes.
+%% When LinkGui is true also links this package to given GUI path(GUI prefix + GUI id).
+%% @end
+%%--------------------------------------------------------------------
+-spec upload_and_deploy_package(cowboy_req:req(), onedata:service() | harvester, 
+    gui_static:gui_prefix(), gui_static:gui_id(), LinkGui :: boolean()) -> cowboy_req:req().
+upload_and_deploy_package(Req, ServiceOrHarvester, GuiPrefix, GuiId, LinkGui) ->
+    ?info("Received GUI upload for ~p:~s", [ServiceOrHarvester, GuiId]),
+    TempDir = mochitemp:mkdtemp(),
+    UploadPath = filename:join([TempDir, ?UPLOADED_PACKAGE_NAME]),
+    Req2 = try
+        process_multipart(Req, UploadPath)
+    catch Type:Message ->
+        ?error_stacktrace("Error while streaming file upload from ~p:~s - ~p:~p", [
+            ServiceOrHarvester, GuiId, Type, Message
+        ]),
+        throw(?HTTP_500_INTERNAL_SERVER_ERROR)
+    end,
+    Req3 = case gui_static:deploy_package(GuiPrefix, UploadPath) of
+        ok ->
+            case LinkGui of
+                true ->
+                    {ok, GuiHash} = gui:package_hash(UploadPath),
+                    ok = gui_static:link_gui(GuiPrefix, GuiId, GuiHash);
+                _ ->
+                    ok
+            end,
+            cowboy_req:reply(?HTTP_200_OK, Req2);
+        {error, _} = Error ->
+            ?debug("Discarding GUI upload from ~p:~s due to ~p", [
+                ServiceOrHarvester, GuiId, Error
+            ]),
+            cowboy_req:reply(?HTTP_400_BAD_REQUEST, Req2)
+    end,
+    mochitemp:rmtempdir(TempDir),
+    Req3.
 
 
 %%--------------------------------------------------------------------

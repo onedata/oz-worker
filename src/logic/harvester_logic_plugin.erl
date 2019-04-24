@@ -111,8 +111,8 @@ operation_supported(delete, {user, _}, private) -> true;
 operation_supported(delete, {group, _}, private) -> true;
 operation_supported(delete, {space, _}, private) -> true;
 operation_supported(delete, {index, _}, private) -> true;
-operation_supported(delete, data, private) -> true;
-operation_supported(delete, {index_data, _}, private) -> true;
+operation_supported(delete, metadata, private) -> true;
+operation_supported(delete, {index_metadata, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -319,7 +319,7 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
 
     Name = maps:get(<<"name">>, Data),
     Schema = maps:get(<<"schema">>, Data, undefined),
-    GuiPluginName = maps:get(<<"guiPluginName">>, Data),
+    GuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data)),
     Index = #harvester_index{
         name = Name,
         schema = Schema,
@@ -500,7 +500,7 @@ update(#el_req{gri = #gri{id = HarvesterId, aspect = {index, IndexId}}, data = D
             guiPluginName = GuiPluginName
         } = maps:get(IndexId, Indices),
         NewName = maps:get(<<"name">>, Data, Name),
-        NewGuiPluginName = maps:get(<<"guiPluginName">>, Data, GuiPluginName),
+        NewGuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data, GuiPluginName)),
         {ok, Harvester#od_harvester{indices = Indices#{IndexId => Index#harvester_index{
             name = NewName,
             guiPluginName = NewGuiPluginName
@@ -536,12 +536,6 @@ update(Req = #el_req{gri = #gri{id = HarvesterId, aspect = {group_privileges, Gr
 delete(#el_req{gri = #gri{id = HarvesterId, aspect = instance}}) ->
     entity_graph:delete_with_relations(od_harvester, HarvesterId);
 
-delete(#el_req{gri = #gri{id = HarvesterId, aspect = data}}) ->
-    fun(#od_harvester{indices = ExistingIndices, plugin = Plugin, endpoint = Endpoint}) ->
-        IndicesIds = maps:keys(ExistingIndices),
-        delete_indices_data(IndicesIds, Plugin, Endpoint, HarvesterId) 
-    end;
-
 delete(#el_req{gri = #gri{id = HarvesterId, aspect = {user, UserId}}}) ->
     entity_graph:remove_relation(
         od_user, UserId,
@@ -566,7 +560,13 @@ delete(#el_req{gri = #gri{id = HarvesterId, aspect = {index, IndexId}}}) ->
     end),
     ok;
 
-delete(#el_req{gri = #gri{id = HarvesterId, aspect = {index_data, IndexId}}}) ->
+delete(#el_req{gri = #gri{id = HarvesterId, aspect = metadata}}) ->
+    fun(#od_harvester{indices = ExistingIndices, plugin = Plugin, endpoint = Endpoint}) ->
+        IndicesIds = maps:keys(ExistingIndices),
+        delete_indices_data(IndicesIds, Plugin, Endpoint, HarvesterId)
+    end;
+
+delete(#el_req{gri = #gri{id = HarvesterId, aspect = {index_metadata, IndexId}}}) ->
     fun(#od_harvester{plugin = Plugin, endpoint = Endpoint}) ->
         delete_indices_data([IndexId], Plugin, Endpoint, HarvesterId)
     end.
@@ -807,9 +807,6 @@ authorize(Req = #el_req{operation = update, gri = #gri{aspect = {group_privilege
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_DELETE);
 
-authorize(Req = #el_req{operation = delete, gri = #gri{aspect = data}}, Harvester) ->
-    auth_by_privilege(Req, Harvester, ?HARVESTER_DELETE);
-
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {user, _}}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_REMOVE_USER);
 
@@ -822,7 +819,10 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, Ha
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {index, _}}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_UPDATE);
 
-authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {index_data, _}}}, Harvester) ->
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = metadata}}, Harvester) ->
+    auth_by_privilege(Req, Harvester, ?HARVESTER_DELETE);
+
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {index_metadata, _}}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_DELETE);
 
 authorize(_, _) ->
@@ -937,9 +937,6 @@ required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = {group
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instance}}) ->
     [?OZ_HARVESTERS_DELETE];
 
-required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = data}}) ->
-    [?OZ_HARVESTERS_DELETE];
-
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {user, _}}}) ->
     [?OZ_HARVESTERS_REMOVE_RELATIONSHIPS, ?OZ_USERS_REMOVE_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {group, _}}}) ->
@@ -950,7 +947,10 @@ required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {space
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {index, _}}}) ->
     [?OZ_HARVESTERS_UPDATE];
 
-required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {index_data, _}}}) ->
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = metadata}}) ->
+    [?OZ_HARVESTERS_DELETE];
+
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {index_metadata, _}}}) ->
     [?OZ_HARVESTERS_DELETE];
 
 required_admin_privileges(_) ->
@@ -1000,7 +1000,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = {delete_entry, _}}}) ->
 validate(#el_req{operation = create, gri = #gri{aspect = index}}) -> #{
     required => #{
         <<"name">> => {binary, name},
-        <<"guiPluginName">> => {binary, any}
+        <<"guiPluginName">> => {binary, non_empty}
     },
     optional => #{
         <<"schema">> => {binary, non_empty}
@@ -1089,7 +1089,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = gui_plugin_config}}) ->
 validate(#el_req{operation = update, gri = #gri{aspect = {index, _}}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"guiPluginName">> => {binary, any}
+        <<"guiPluginName">> => {binary, non_empty}
     }
 };
 

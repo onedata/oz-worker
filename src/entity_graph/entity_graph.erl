@@ -293,6 +293,8 @@ add_relation(od_user, UserId, od_handle, HandleId, Privileges) ->
     add_relation(od_user, UserId, Privileges, od_handle, HandleId, undefined);
 add_relation(od_user, UserId, od_handle_service, HServiceId, Privileges) ->
     add_relation(od_user, UserId, Privileges, od_handle_service, HServiceId, undefined);
+add_relation(od_user, UserId, od_harvester, HarvesterId, Privileges) ->
+    add_relation(od_user, UserId, Privileges, od_harvester, HarvesterId, undefined);
 add_relation(od_user, UserId, od_cluster, ClusterId, Privileges) ->
     add_relation(od_user, UserId, Privileges, od_cluster, ClusterId, undefined);
 
@@ -304,17 +306,15 @@ add_relation(od_group, GroupId, od_handle, HandleId, Privileges) ->
     add_relation(od_group, GroupId, Privileges, od_handle, HandleId, undefined);
 add_relation(od_group, GroupId, od_handle_service, HServiceId, Privileges) ->
     add_relation(od_group, GroupId, Privileges, od_handle_service, HServiceId, undefined);
+add_relation(od_group, GroupId, od_harvester, HarvesterId, Privileges) ->
+    add_relation(od_group, GroupId, Privileges, od_harvester, HarvesterId, undefined);
 add_relation(od_group, GroupId, od_cluster, ClusterId, Privileges) ->
     add_relation(od_group, GroupId, Privileges, od_cluster, ClusterId, undefined);
 
 add_relation(od_space, GroupId, od_provider, ProviderId, SupportSize) ->
     % Support size is kept in both records
-    add_relation(od_space, GroupId, SupportSize, od_provider, ProviderId, SupportSize);
+    add_relation(od_space, GroupId, SupportSize, od_provider, ProviderId, SupportSize).
 
-add_relation(od_user, UserId, od_harvester, HarvesterId, Privileges) ->
-    add_relation(od_user, UserId, Privileges, od_harvester, HarvesterId, undefined);
-add_relation(od_group, GroupId, od_harvester, HarvesterId, Privileges) ->
-    add_relation(od_group, GroupId, Privileges, od_harvester, HarvesterId, undefined).
 
 
 %%--------------------------------------------------------------------

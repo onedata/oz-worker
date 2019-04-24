@@ -37,7 +37,7 @@
     update_test/1,
     update_gui_plugin_config_test/1,
     delete_test/1,
-    delete_harvested_data_test/1,
+    delete_harvested_metadata_test/1,
     
     create_index_test/1,
     list_indices_test/1,
@@ -45,7 +45,7 @@
     get_index_progress_test/1,
     update_index_test/1,
     delete_index_test/1,
-    delete_index_data_test/1,
+    delete_index_metadata_test/1,
     query_index_test/1,
     
     submit_entry_test/1,
@@ -64,7 +64,7 @@ all() ->
         update_test,
         update_gui_plugin_config_test,
         delete_test,
-        delete_harvested_data_test,
+        delete_harvested_metadata_test,
 
         create_index_test,
         list_indices_test,
@@ -72,7 +72,7 @@ all() ->
         get_index_progress_test,
         update_index_test,
         delete_index_test,
-        delete_index_data_test,
+        delete_index_metadata_test,
         query_index_test,
 
         submit_entry_test,
@@ -609,7 +609,7 @@ delete_test(Config) ->
     )).
 
 
-delete_harvested_data_test(Config) ->
+delete_harvested_metadata_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
@@ -661,18 +661,18 @@ delete_harvested_data_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = delete,
-            path = [<<"/harvesters/">>, harvesterId, <<"/data">>],
+            path = [<<"/harvesters/">>, harvesterId, <<"/metadata">>],
             expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = harvester_logic,
-            function = delete_harvested_data,
+            function = delete_harvested_metadata,
             args = [client, harvesterId],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
             operation = delete,
-            gri = #gri{type = od_harvester, id = harvesterId, aspect = data},
+            gri = #gri{type = od_harvester, id = harvesterId, aspect = metadata},
             expected_result = ?OK
         }
     },
@@ -692,14 +692,14 @@ create_index_test(Config) ->
     oz_test_utils:harvester_add_user(Config, H1, U2),
     oz_test_utils:harvester_set_user_privileges(Config, H1, U2, [?HARVESTER_UPDATE], []),
 
-    VerifyFun = fun(IndexId, ExpSchema) ->
+    VerifyFun = fun(IndexId, ExpSchema, ExpGuiPluginName) ->
         {ok, Harvester} = oz_test_utils:get_harvester(Config, H1),
         Indices = Harvester#od_harvester.indices,
         ?assertEqual(true, lists:member(IndexId, maps:keys(Indices))),
         Index = maps:get(IndexId, Indices),
         ?assertEqual(?CORRECT_NAME, Index#harvester_index.name),
         ?assertEqual(ExpSchema, Index#harvester_index.schema),
-        ?assertEqual(?CORRECT_NAME, Index#harvester_index.guiPluginName),
+        ?assertEqual(ExpGuiPluginName, Index#harvester_index.guiPluginName),
         true
     end,
         
@@ -722,10 +722,11 @@ create_index_test(Config) ->
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, Data) ->
                 ExpSchema = maps:get(<<"schema">>, Data, undefined),
+                ExpGuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data)),
                 fun(#{<<"Location">> := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/harvesters/">>, H1, <<"/indices/">>]),
                     [IndexId] = binary:split(Location, [BaseURL], [global, trim_all]),
-                    VerifyFun(IndexId, ExpSchema)
+                    VerifyFun(IndexId, ExpSchema, ExpGuiPluginName)
                 end
             end)
         },
@@ -735,7 +736,8 @@ create_index_test(Config) ->
             args = [client, H1, data],
             expected_result = ?OK_ENV(fun(_, Data) ->
                 ExpSchema = maps:get(<<"schema">>, Data, undefined),
-                ?OK_TERM(fun(IndexId) -> VerifyFun(IndexId, ExpSchema) end)
+                ExpGuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data)),
+                ?OK_TERM(fun(IndexId) -> VerifyFun(IndexId, ExpSchema, ExpGuiPluginName) end)
             end)
         },
         data_spec = #data_spec{
@@ -744,7 +746,7 @@ create_index_test(Config) ->
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
                 <<"schema">> => [?HARVESTER_INDEX_SCHEMA],
-                <<"guiPluginName">> => [?CORRECT_NAME]
+                <<"guiPluginName">> => [?CORRECT_NAME, null]
             }
         }
     },
@@ -894,7 +896,7 @@ update_index_test(Config) ->
         } = maps:get(IndexId, Indices),
 
         ExpName = ExpValueFun(ShouldSucceed, <<"name">>, Data, ?HARVESTER_INDEX_NAME),
-        ExpGuiPluginName = ExpValueFun(ShouldSucceed, <<"guiPluginName">>, Data, ?HARVESTER_INDEX_NAME),
+        ExpGuiPluginName = gs_protocol:null_to_undefined(ExpValueFun(ShouldSucceed, <<"guiPluginName">>, Data, ?HARVESTER_INDEX_NAME)),
         
         ?assertEqual(ExpName, ActualName),
         ?assertEqual(ExpGuiPluginName, ActualGuiPluginName)
@@ -933,7 +935,7 @@ update_index_test(Config) ->
             at_least_one = [<<"name">>, <<"guiPluginName">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
-                <<"guiPluginName">> => [?CORRECT_NAME]
+                <<"guiPluginName">> => [?CORRECT_NAME, null]
             },
             bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
         }
@@ -1003,7 +1005,7 @@ delete_index_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
 
 
-delete_index_data_test(Config) ->
+delete_index_metadata_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
     {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
@@ -1050,18 +1052,18 @@ delete_index_data_test(Config) ->
         },
         rest_spec = #rest_spec{
             method = delete,
-            path = [<<"/harvesters/">>, harvesterId, <<"/indices/">>, indexId, <<"/data">>],
+            path = [<<"/harvesters/">>, harvesterId, <<"/indices/">>, indexId, <<"/metadata">>],
             expected_code = ?HTTP_204_NO_CONTENT
         },
         logic_spec = #logic_spec{
             module = harvester_logic,
-            function = delete_index_data,
+            function = delete_index_metadata,
             args = [client, harvesterId, indexId],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
             operation = delete,
-            gri = #gri{type = od_harvester, id = harvesterId, aspect = {index_data, indexId}},
+            gri = #gri{type = od_harvester, id = harvesterId, aspect = {index_metadata, indexId}},
             expected_result = ?OK
         }
     },

@@ -31,13 +31,13 @@
     update_gui_plugin_config/3
 ]).
 -export([
-    delete/2, delete_harvested_data/2
+    delete/2, delete_harvested_metadata/2
 ]).
 -export([
     create_index/3, create_index/4, create_index/5, 
     get_index/3, get_index_progress/3, 
     update_index/4,
-    delete_index/3, delete_index_data/3,
+    delete_index/3, delete_index_metadata/3,
     query_index/4,
     list_indices/2
 ]).
@@ -246,16 +246,16 @@ delete(Client, HarvesterId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes given harvester from database and all indices data.
+%% Deletes harvested metadata in all indices in given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_harvested_data(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec delete_harvested_metadata(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
     ok | {error, term()}.
-delete_harvested_data(Client, HarvesterId) ->
+delete_harvested_metadata(Client, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = delete,
         client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = data}
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = metadata}
     }).
 
 
@@ -325,16 +325,16 @@ delete_index(Client, HarvesterId, IndexId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes given index with all data in given harvester.
+%% Deletes harvested metadata in given index.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_index_data(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec delete_index_metadata(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
     IndexId :: od_harvester:index_id()) -> ok | {error, term()}.
-delete_index_data(Client, HarvesterId, IndexId) ->
+delete_index_metadata(Client, HarvesterId, IndexId) ->
     entity_logic:handle(#el_req{
         operation = delete,
         client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index_data, IndexId}}
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index_metadata, IndexId}}
     }).
 
 

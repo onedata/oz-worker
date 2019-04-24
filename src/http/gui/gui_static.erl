@@ -139,9 +139,9 @@ link_gui(GuiPrefix, GuiId, GuiHash) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Links a location to given GUI, defined by its hash. Under the hood, creates
+%% Links a GUI path to given GUI, defined by its hash. Under the hood, creates
 %% a symbolic link on the filesystem to reuse the same GUI packages for multiple
-%% locations.
+%% GUI paths.
 %%
 %% NOTE: This operation assumes that the GUI package exists.
 %%

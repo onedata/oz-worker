@@ -95,12 +95,14 @@ submit_entry(Endpoint, HarvesterId, IndexId, Id, Data) ->
                 #{<<"error">> := #{<<"type">> := ErrorType}} = json_utils:decode(Body),
                 case ErrorType of
                     <<"mapper_parsing_exception">> -> 
-                        ok;
-                    <<"strict_dynamic_mapping_exception">> -> 
-                        ok;
-                    Error ->
+                        ?debug("Entry submit in harvester ~p in index ~p dropped because of bad schema: ~p", 
+                            [HarvesterId, IndexId, Body]);
+                    <<"strict_dynamic_mapping_exception">> ->
+                        ?debug("Entry submit in harvester ~p in index ~p dropped because of bad schema: ~p",
+                            [HarvesterId, IndexId, Body]);
+                    _ ->
                         ?debug("Unexpected error in harvester ~p when submiting entry for index ~p: ~p", 
-                            [HarvesterId, IndexId, Error]),
+                            [HarvesterId, IndexId, Body]),
                         ?ERROR_BAD_DATA(<<"payload">>)
                 end
             catch

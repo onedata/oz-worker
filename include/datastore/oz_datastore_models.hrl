@@ -48,7 +48,7 @@
     name :: binary(),
     schema = undefined :: od_harvester:schema() | undefined,
     % mapping of index name to one recognized by gui plugin.
-    guiPluginName = <<>> :: binary(),
+    guiPluginName = undefined :: binary() | undefined,
     progress = #{} :: od_harvester:index_progress()
 }).
 

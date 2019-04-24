@@ -64,13 +64,13 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = instance}
     }},
-    %% Remove harvested data
+    %% Remove harvested metadata
     %% This operation requires one of the following privileges:
     %% - harvester_delete
     %% - oz_harvesters_delete
-    {<<"/harvesters/:id/data">>, #rest_req{
+    {<<"/harvesters/:id/metadata">>, #rest_req{
         method = 'DELETE',
-        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = data}
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = metadata}
     }},
     %% List harvester users
     %% This operation requires one of the following privileges:
@@ -380,12 +380,12 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {index, ?BINDING(idx)}}
     }},
-    %% Remove harvested index data
+    %% Remove harvested index metadata
     %% This operation requires one of the following privileges:
     %% - harvester_update
     %% - oz_harvesters_update
-    {<<"/harvesters/:id/indices/:idx/data">>, #rest_req{
+    {<<"/harvesters/:id/indices/:idx/metadata">>, #rest_req{
         method = 'DELETE',
-        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {index_data, ?BINDING(idx)}}
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {index_metadata, ?BINDING(idx)}}
     }}
 ].
