@@ -238,7 +238,7 @@ routes() ->
     ]),
 
     [
-        {CustomPath, cowboy_static, {dir, CustomRootDir}},
+        {CustomPath, cowboy_static, {dir, CustomRootDir, [{mimetypes, ?MODULE, mimetype}]}},
         {"/[...]", cowboy_static, {dir, ?GUI_STATIC_ROOT, [{mimetypes, ?MODULE, mimetype}]}}
     ].
 
@@ -370,6 +370,7 @@ mimetype_by_ext(<<"ogg">>) -> {<<"audio">>, <<"ogg">>, []};
 mimetype_by_ext(<<"ogv">>) -> {<<"video">>, <<"ogg">>, []};
 mimetype_by_ext(<<"png">>) -> {<<"image">>, <<"png">>, []};
 mimetype_by_ext(<<"svg">>) -> {<<"image">>, <<"svg+xml">>, []};
+mimetype_by_ext(<<"txt">>) -> {<<"text">>, <<"plain">>, []};
 mimetype_by_ext(<<"wav">>) -> {<<"audio">>, <<"x-wav">>, []};
 mimetype_by_ext(<<"webm">>) -> {<<"video">>, <<"webm">>, []};
 mimetype_by_ext(_) -> {<<"application">>, <<"octet-stream">>, []}.

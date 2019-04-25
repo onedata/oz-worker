@@ -483,7 +483,7 @@ custom_static_files_are_served(Config) ->
         rpc:call(Node, file, write_file, [filename:join(CustomStaticRoot, Filename), Data]),
         true
     end),
-    ?assert(file_is_served(Config, Data, [<<"/ozw/onezone/custom/">>, Filename])),
+    ?assert(file_is_served(true, Config, Data, <<"text/plain">>, [<<"/ozw/onezone/custom/">>, Filename])),
     ok.
 
 
@@ -502,7 +502,7 @@ custom_static_files_are_served_from_legacy_location(Config) ->
         rpc:call(Node, https_listener, start, []),
         true
     end),
-    ?assert(file_is_served(Config, Data, [<<"/ozw/onezone/custom/">>, Filename])),
+    ?assert(file_is_served(true, Config, Data, <<"text/plain">>, [<<"/ozw/onezone/custom/">>, Filename])),
     ok.
 
 
@@ -581,9 +581,12 @@ link_exists(ExpState, Config, PathTokens, LinkValue) when is_list(LinkValue) ->
 file_is_served(Config, ExpectedContent, PathTokens) ->
     file_is_served(true, Config, ExpectedContent, PathTokens).
 
-file_is_served(ExpState, Config, ExpectedContent, PathTokens) when is_list(PathTokens) ->
-    file_is_served(ExpState, Config, ExpectedContent, str_utils:join_binary(PathTokens));
-file_is_served(ExpState, Config, ExpectedContent, Path) ->
+file_is_served(ExpState, Config, ExpectedContent, PathTokens) ->
+    file_is_served(ExpState, Config, ExpectedContent, <<"text/html">>, PathTokens).
+
+file_is_served(ExpState, Config, ExpectedContent, ExpectedContentType, PathTokens) when is_list(PathTokens) ->
+    file_is_served(ExpState, Config, ExpectedContent, ExpectedContentType, str_utils:join_binary(PathTokens));
+file_is_served(ExpState, Config, ExpectedContent, ExpectedContentType, Path) ->
     Opts = [
         {follow_redirect, true},
         ?SSL_OPTS(Config)
@@ -593,7 +596,7 @@ file_is_served(ExpState, Config, ExpectedContent, Path) ->
         Url = str_utils:format("https://~s~s", [Ip, Path]),
         {ok, Code, Headers, Body} = http_client:get(Url, #{}, <<>>, Opts),
         Result = Code =:= 200 andalso
-            maps:get(<<"content-type">>, Headers) =:= <<"text/html">> andalso
+            maps:get(<<"content-type">>, Headers) =:= ExpectedContentType andalso
             Body =:= ExpectedContent,
         case Result of
             ExpState ->
