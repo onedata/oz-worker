@@ -79,10 +79,12 @@ operation_supported(get, all_plugins, private) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
+operation_supported(get, instance, public) -> true;
 
 operation_supported(get, gui_plugin_config, private) -> true;
 
 operation_supported(get, {index, _}, private) -> true;
+operation_supported(get, {index, _}, public) -> true;
 
 operation_supported(get, users, private) -> true;
 operation_supported(get, eff_users, private) -> true;
@@ -141,9 +143,9 @@ is_subscribable({eff_group_membership, _}, private) -> true;
 is_subscribable(spaces, private) -> true;
 is_subscribable({space, _}, private) -> true;
 is_subscribable(gui_plugin_config, private) -> true;
-is_subscribable(index, private) -> true;
+is_subscribable(index, _) -> true;
 is_subscribable(indices, private) -> true;
-is_subscribable({index, _}, private) -> true;
+is_subscribable({index, _}, _) -> true;
 is_subscribable({index_progress, _}, private) -> true;
 is_subscribable(_, _) -> false.
 
@@ -158,17 +160,17 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, client = Client,
     auth_hint = AuthHint, data = Data}) ->
     #{
         <<"name">> := Name,
-        <<"endpoint">> := Endpoint,
         <<"plugin">> := Plugin
     } = Data,
     Config = maps:get(<<"guiPluginConfig">>, Data, #{}),
+    Endpoint = maps:get(<<"endpoint">>, Data, undefined),
     
-    NormalizedEndpoint = normalize_endpoint(Endpoint),
     
-    case Plugin:ping(NormalizedEndpoint) of
-        ok -> ok;
-        Error -> throw(Error)
+    NormalizedEndpoint = case normalize_and_check_endpoint(Endpoint, Plugin) of
+        {ok, NewEndpoint} -> NewEndpoint;
+        {error, Error} -> throw(Error)
     end,
+    
 
     {ok, #document{key = HarvesterId}} = od_harvester:create(#document{
         value = #od_harvester{
@@ -328,11 +330,16 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
     },
     
     UpdateFun = fun(#od_harvester{indices = Indices, plugin = Plugin, endpoint = Endpoint} = Harvester) ->
-        case Plugin:create_index(Endpoint, HarvesterId, IndexId, Schema) of
-            ok ->
-                {ok, Harvester#od_harvester{indices = Indices#{IndexId => Index}}};
-            {error, _} = Error ->
-                Error
+        case Endpoint of
+            undefined -> 
+                ?ERROR_BAD_VALUE_EMPTY(<<"endpoint">>);
+            _-> 
+                case Plugin:create_index(Endpoint, HarvesterId, IndexId, Schema) of
+                    ok ->
+                        {ok, Harvester#od_harvester{indices = Indices#{IndexId => Index}}};
+                    {error, _} = Error ->
+                        Error
+                end
         end
     end,
     NewGri = Gri#gri{aspect = {index, IndexId}, scope = private},
@@ -392,9 +399,24 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Harvester) ->
         <<"creator">> => Creator,
         <<"creationTime">> => CreationTime
     }};
+get(#el_req{gri = #gri{aspect = instance, scope = public}}, Harvester) ->
+    #od_harvester{
+        name = Name, creator = Creator, creation_time = CreationTime
+    } = Harvester,
+    {ok, #{
+        <<"name">> => Name,
+        <<"creator">> => Creator,
+        <<"creationTime">> => CreationTime
+    }};
 
 get(#el_req{gri = #gri{aspect = all_plugins}}, _) ->
-    {ok, onezone_plugins:get_plugins(harvester_plugin)};
+    AllPlugins = onezone_plugins:get_plugins(harvester_plugin),
+    {ok, lists:map(fun(Plugin) ->
+        #{
+            <<"id">> => Plugin,
+            <<"name">> => Plugin:get_name()
+        }
+    end, AllPlugins)};
 get(#el_req{gri = #gri{aspect = gui_plugin_config}}, #od_harvester{gui_plugin_config = Config}) ->
     {ok, Config};    
 
@@ -432,7 +454,7 @@ get(#el_req{gri = #gri{aspect = {index_progress, IndexId}}}, Harvester) ->
     } = maps:get(IndexId, Harvester#od_harvester.indices),
     {ok, IndexProgress};
 
-get(#el_req{gri = #gri{aspect = {index, IndexId}}}, Harvester) ->
+get(#el_req{gri = #gri{aspect = {index, IndexId}, scope = private}}, Harvester) ->
     #harvester_index{
         name = Name,
         schema = Schema,
@@ -441,6 +463,14 @@ get(#el_req{gri = #gri{aspect = {index, IndexId}}}, Harvester) ->
     {ok, #{
         <<"name">> => Name,
         <<"schema">> => Schema,
+        <<"guiPluginName">> => GuiPluginName
+    }};
+
+get(#el_req{gri = #gri{aspect = {index, IndexId}, scope = public}}, Harvester) ->
+    #harvester_index{
+        guiPluginName = GuiPluginName
+    } = maps:get(IndexId, Harvester#od_harvester.indices),
+    {ok, #{
         <<"guiPluginName">> => GuiPluginName
     }}.
 
@@ -460,25 +490,21 @@ update(#el_req{gri = #gri{id = HarvesterId, aspect = instance}, data = Data}) ->
         } = Harvester,
         
         NewName = maps:get(<<"name">>, Data, Name),
-        NewEndpoint = normalize_endpoint(maps:get(<<"endpoint">>, Data, Endpoint)),
+        NewEndpoint = maps:get(<<"endpoint">>, Data, Endpoint),
         NewPlugin = maps:get(<<"plugin">>, Data, Plugin),
         NewPublic = maps:get(<<"public">>, Data, Public),
         
-    
         NewHarvester = Harvester#od_harvester{
             name = NewName,
-            endpoint = NewEndpoint,
             plugin = NewPlugin,
             public = NewPublic
         },
-        case NewEndpoint of
-            Endpoint -> 
-                {ok, NewHarvester};
-            _ ->
-                case NewPlugin:ping(NewEndpoint) of
-                    ok -> {ok, NewHarvester}; 
-                    {error, Error} -> Error
-                end
+        
+        case normalize_and_check_endpoint(NewEndpoint, NewPlugin) of
+            {ok, NormalizedEndpoint} -> 
+                {ok, NewHarvester#od_harvester{endpoint = NormalizedEndpoint}};
+            {error, Error} -> 
+                Error
         end
     end,
     case od_harvester:update(HarvesterId, UpdateFun) of
@@ -638,7 +664,7 @@ exists(#el_req{gri = #gri{id = Id}}, #od_harvester{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
-authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = instance}}, _) ->
+authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = instance, scope = private}}, _) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             user_logic_plugin:auth_by_oz_privilege(UserId, ?OZ_HARVESTERS_CREATE);
@@ -757,6 +783,9 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
             authorize(Req#el_req{gri = #gri{scope = private}}, Harvester)
     end;
 
+authorize(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}}, Harvester) ->
+    Harvester#od_harvester.public;
+
 authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
     true;
 
@@ -783,6 +812,12 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_group_privileg
 
 authorize(Req = #el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, Harvester) ->
     group_logic:has_eff_user(GroupId, UserId) orelse auth_by_privilege(Req, Harvester, ?HARVESTER_VIEW);
+
+authorize(#el_req{operation = get, gri = #gri{aspect = {index, _}, scope = public}}, Harvester) ->
+    Harvester#od_harvester.public;
+
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = indices}}, Harvester) ->
+    Harvester#od_harvester.public orelse auth_by_privilege(Req, Harvester, ?HARVESTER_VIEW);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = all_plugins}}, _) ->
     true;
@@ -916,7 +951,7 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = spaces}})
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = indices}}) ->
     [?OZ_HARVESTERS_VIEW];
 
-required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {index, _}}}) ->
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {index, _}, scope = private}}) ->
     [?OZ_HARVESTERS_VIEW];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {index_progress, _}}}) ->
@@ -970,10 +1005,10 @@ required_admin_privileges(_) ->
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"name">> => {binary, name},
-        <<"endpoint">> => {binary, non_empty},
         <<"plugin">> => {atom, onezone_plugins:get_plugins(harvester_plugin)}
     },
     optional => #{
+        <<"endpoint">> => {binary, any},
         <<"guiPluginConfig">> => {json, any}
     }
 };
@@ -1074,7 +1109,7 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = group}}) ->
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"endpoint">> => {binary, non_empty},
+        <<"endpoint">> => {binary, any},
         <<"plugin">> => {atom, onezone_plugins:get_plugins(harvester_plugin)},
         <<"public">> => {boolean, any}
     }
@@ -1289,8 +1324,17 @@ call_plugin(delete_entry, Plugin, Endpoint, HarvesterId, IndexId, FileId, _) ->
 %% @private
 %% @doc
 %% Normalizes endpoint by removing trailing slash.
+%% Check whether endpoint responds to ping.
 %% @end
 %%--------------------------------------------------------------------
--spec normalize_endpoint(od_harvester:endpoint()) -> od_harvester:endpoint().
-normalize_endpoint(Endpoint) ->
-    re:replace(Endpoint, <<"/$">>, <<"">>, [{return, binary}]).
+-spec normalize_and_check_endpoint(od_harvester:endpoint() | undefined, od_harvester:plugin()) -> 
+    {ok, od_harvester:endpoint() | undefined} | {error, term()}.
+normalize_and_check_endpoint(undefined, _) ->
+    {ok, undefined};
+normalize_and_check_endpoint(Endpoint, Plugin) ->
+    NormalizedEndpoint = re:replace(Endpoint, <<"/$">>, <<"">>, [{return, binary}]),
+    case Plugin:ping(NormalizedEndpoint) of
+        ok -> {ok, NormalizedEndpoint};
+        {error, _} = Error -> Error
+    end.
+    

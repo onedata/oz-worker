@@ -18,7 +18,14 @@
 -include_lib("ctool/include/logging.hrl").
 
 -export([type/0]).
--export([ping/1, create_index/4, delete_index/3, submit_entry/5, delete_entry/4, query_index/4, query_validator/0]).
+-export([
+    get_name/0, 
+    ping/1, 
+    create_index/4, delete_index/3, 
+    submit_entry/5, delete_entry/4, 
+    query_index/4, 
+    query_validator/0
+]).
 
 -behaviour(onezone_plugin_behaviour).
 -behaviour(harvester_plugin_behaviour).
@@ -37,6 +44,16 @@ type() ->
     harvester_plugin.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link harvester_plugin_behaviour} callback get_name/0
+%% @end
+%%--------------------------------------------------------------------
+-spec get_name() -> binary().
+get_name() ->
+    <<"Elasticsearch plugin">>.
+    
+    
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link harvester_plugin_behaviour} callback ping/1

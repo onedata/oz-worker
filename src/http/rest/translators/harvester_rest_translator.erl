@@ -106,7 +106,7 @@ get_response(#gri{id = HarvesterId, aspect = instance, scope = protected}, Harve
         <<"name">> => Name,
         <<"public">> => Public,
         <<"plugin">> => Plugin,
-        <<"endpoint">> => Endpoint
+        <<"endpoint">> => gs_protocol:undefined_to_null(Endpoint)
     });
 
 get_response(#gri{aspect = indices}, Indices) ->

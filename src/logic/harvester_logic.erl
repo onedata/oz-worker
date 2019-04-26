@@ -22,6 +22,7 @@
 -export([
     get/2,
     get_protected_data/2,
+    get_public_data/2,
     list/1,
     get_all_plugins/0,
     get_gui_plugin_config/2
@@ -35,7 +36,8 @@
 ]).
 -export([
     create_index/3, create_index/4, create_index/5, 
-    get_index/3, get_index_progress/3, 
+    get_index/3, get_public_index/3, 
+    get_index_progress/3, 
     update_index/4,
     delete_index/3, delete_index_metadata/3,
     query_index/4,
@@ -147,6 +149,20 @@ get_protected_data(Client, HarvesterId) ->
         operation = get,
         client = Client,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = protected}
+    }).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves public harvester data from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_public_data(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+    {ok, map()} | {error, term()}.
+get_public_data(Client, HarvesterId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = public}
     }).
 
 %%--------------------------------------------------------------------
@@ -364,7 +380,22 @@ get_index(Client, HarvesterId, IndexId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}}
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}, scope = private}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a public harvester index data from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_public_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+    IndexId :: od_harvester:index_id()) -> {ok, #od_harvester{}} | {error, term()}.
+get_public_index(Client, HarvesterId, IndexId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}, scope = public}
     }).
 
 

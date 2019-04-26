@@ -93,10 +93,12 @@ all() ->
 create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     [Node | _] = ?config(oz_worker_nodes, Config),
-    VerifyFun = fun(HarvesterId, ExpConfig) ->
+    VerifyFun = fun(HarvesterId, Data) ->
+        ExpConfig = maps:get(<<"guiPluginConfig">>, Data, #{}),
+        ExpEndpoint = gs_protocol:null_to_undefined(maps:get(<<"endpoint">>, Data, undefined)),
         {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
         ?assertEqual(?CORRECT_NAME, Harvester#od_harvester.name),
-        ?assertEqual(?HARVESTER_ENDPOINT1, Harvester#od_harvester.endpoint),
+        ?assertEqual(ExpEndpoint, Harvester#od_harvester.endpoint),
         ?assertEqual(?HARVESTER_MOCK_PLUGIN, Harvester#od_harvester.plugin),
         ?assertEqual(ExpConfig, Harvester#od_harvester.gui_plugin_config),
         true
@@ -118,11 +120,10 @@ create_test(Config) ->
             path = <<"/harvesters">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = ?OK_ENV(fun(_, Data) ->
-                ExpConfig = maps:get(<<"guiPluginConfig">>, Data, #{}),
                 fun(#{<<"Location">> := Location} = _Headers) ->
                     BaseURL = ?URL(Config, [<<"/harvesters/">>]),
                     [HarvesterId] = binary:split(Location, [BaseURL], [global, trim_all]),
-                    VerifyFun(HarvesterId, ExpConfig)
+                    VerifyFun(HarvesterId, Data)
                 end
             end)
         },
@@ -131,23 +132,23 @@ create_test(Config) ->
             function = create,
             args = [client, data],
             expected_result = ?OK_ENV(fun(_, Data) ->
-                ExpConfig = maps:get(<<"guiPluginConfig">>, Data, #{}),
-                ?OK_TERM(fun(HarvesterId) -> VerifyFun(HarvesterId, ExpConfig) end)
+                ?OK_TERM(fun(HarvesterId) -> VerifyFun(HarvesterId, Data) end)
             end)
         },
         data_spec = #data_spec{
-            required = [<<"name">>, <<"endpoint">>, <<"plugin">>],
-            optional = [<<"guiPluginConfig">>],
+            required = [<<"name">>, <<"plugin">>],
+            optional = [<<"guiPluginConfig">>, <<"endpoint">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
-                <<"endpoint">> => [?HARVESTER_ENDPOINT1],
+                <<"endpoint">> => [?HARVESTER_ENDPOINT1, null],
                 <<"plugin">> => [?HARVESTER_MOCK_PLUGIN_BINARY],
                 <<"guiPluginConfig">> => [?HARVESTER_GUI_PLUGIN_CONFIG]
             },
             bad_values = 
                 [{<<"plugin">>, <<"not_existing_plugin">>, 
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>, 
-                        rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))} 
+                        rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))},
+                {<<"endpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE}
                     | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)]
         }
     },
@@ -324,7 +325,44 @@ get_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"plugin">> => ?HARVESTER_MOCK_PLUGIN})
         }
     },
-    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)),
+
+    % No one can get public data when harvester is private
+    GetPublicDataApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            forbidden = [
+                {admin, [?OZ_HARVESTERS_VIEW]},
+                {user, U1},
+                {user, U2},
+                {user, NonAdmin}
+            ],
+            unauthorized = [nobody]
+        },
+        logic_spec = #logic_spec{
+            module = harvester_logic,
+            function = get_public_data,
+            args = [client, H1],
+            expected_result = ?OK_MAP_CONTAINS(#{<<"name">> => ?HARVESTER_NAME1})
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec)),
+    
+    % Test that anyone can get public data from public harvester
+    oz_test_utils:update_harvester(Config, H1, #{<<"public">> => true}),
+
+    GetPublicDataApiTestSpec1 = GetPublicDataApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                nobody,
+                {admin, [?OZ_HARVESTERS_VIEW]},
+                {user, U1},
+                {user, U2},
+                {user, NonAdmin}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec1)).
 
 
 get_gui_plugin_config_test(Config) ->
@@ -414,7 +452,7 @@ update_test(Config) ->
         ExpPublic = ExpValueFun(ShouldSucceed, <<"public">>, Data, false),
         
         ?assertEqual(ExpName, Harvester#od_harvester.name),
-        ?assertEqual(ExpEndpoint, Harvester#od_harvester.endpoint),
+        ?assertEqual(gs_protocol:null_to_undefined(ExpEndpoint), Harvester#od_harvester.endpoint),
         ?assertEqual(ExpPlugin, atom_to_binary(Harvester#od_harvester.plugin, utf8)),
         ?assertEqual(ExpPublic, Harvester#od_harvester.public)
     end,
@@ -452,7 +490,7 @@ update_test(Config) ->
             at_least_one = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"public">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
-                <<"endpoint">> => [Endpoint],
+                <<"endpoint">> => [Endpoint, null],
                 <<"plugin">> => [?HARVESTER_MOCK_PLUGIN2_BINARY],
                 <<"public">> => [true, false]
             },
@@ -807,7 +845,44 @@ get_index_test(Config) ->
             })
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % No one can get public index data when harvester is private
+    GetPublicDataApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            forbidden = [
+                {admin, [?OZ_HARVESTERS_VIEW]},
+                {user, U1},
+                {user, U2},
+                {user, NonAdmin}
+            ],
+            unauthorized = [nobody]
+        },
+        logic_spec = #logic_spec{
+            module = harvester_logic,
+            function = get_public_index,
+            args = [client, H1, IndexId],
+            expected_result = ?OK_MAP_CONTAINS(#{<<"guiPluginName">> => undefined})
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec)),
+    
+    % Test that anyone can get public index data from public harvester
+    oz_test_utils:update_harvester(Config, H1, #{<<"public">> => true}),
+
+    GetPublicDataApiTestSpec1 = GetPublicDataApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                nobody,
+                {admin, [?OZ_HARVESTERS_VIEW]},
+                {user, U1},
+                {user, U2},
+                {user, NonAdmin}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec1)).
 
 
 get_index_progress_test(Config) ->
@@ -1185,7 +1260,24 @@ list_indices_test(Config) ->
             expected_result = ?OK_LIST(ExpectedIndices)
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+    
+    % Test that anyone can list indices from public harvester
+    oz_test_utils:update_harvester(Config, H1, #{<<"public">> => true}),
+
+    GetPublicDataApiTestSpec1 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                nobody,
+                {admin, [?OZ_HARVESTERS_VIEW]},
+                {user, U1},
+                {user, U2},
+                {user, NonAdmin}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec1)).
 
 
 submit_entry_test(Config) ->

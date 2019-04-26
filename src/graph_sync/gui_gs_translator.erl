@@ -602,16 +602,18 @@ translate_provider(#gri{aspect = spaces}, Spaces) ->
 translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, Harvester) ->
     #od_harvester{
         name = Name, endpoint = Endpoint,
-        plugin = Plugin
+        plugin = Plugin, public = Public
     } = Harvester,
     fun(?USER(UserId)) -> #{
-        <<"name">> => Name,
         <<"scope">> => <<"private">>,
-        <<"endpoint">> => Endpoint,
+        <<"name">> => Name,
+        <<"public">> => Public,
+        <<"endpoint">> => gs_protocol:undefined_to_null(Endpoint),
         <<"plugin">> => atom_to_binary(Plugin, utf8),
-        <<"indexList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = indices}),
         <<"canViewPrivileges">> => harvester_logic:has_eff_privilege(Harvester, UserId, ?HARVESTER_VIEW_PRIVILEGES),
         <<"directMembership">> => harvester_logic:has_direct_user(Harvester, UserId),
+        <<"guiPluginConfig">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
+        <<"indexList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = indices}),
         <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = users}),
         <<"effUserList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = eff_users}),
         <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = groups}),
@@ -632,16 +634,32 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
         <<"creator">> := Creator
     } = HarvesterData,
     fun(?USER(UserId)) -> #{
+        <<"scope">> => <<"protected">>,
         <<"name">> => Name,
         <<"public">> => Public,
         <<"plugin">> => Plugin,
-        <<"endpoint">> => Endpoint,
-        <<"scope">> => <<"protected">>,
+        <<"endpoint">> => gs_protocol:undefined_to_null(Endpoint),
         <<"directMembership">> => harvester_logic:has_direct_user(HarvesterId, UserId),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
         })
     } end;
+
+translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = public}, HarvesterData) ->
+    #{
+        <<"name">> := Name,
+        <<"creationTime">> := CreationTime,
+        <<"creator">> := Creator
+    } = HarvesterData,
+    #{
+        <<"scope">> => <<"public">>,
+        <<"name">> => Name,
+        <<"guiPluginConfig">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
+        <<"indexList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = indices}),
+        <<"info">> => maps:merge(translate_creator(Creator), #{
+            <<"creationTime">> => CreationTime
+        })
+    };
 
 translate_harvester(#gri{aspect = gui_plugin_config}, Config) ->
     #{
@@ -719,7 +737,7 @@ translate_harvester(#gri{aspect = all_plugins}, Plugins) ->
         <<"allPlugins">> => Plugins
     };
 
-translate_harvester(#gri{aspect = {index, _}}, IndexData) ->
+translate_harvester(#gri{aspect = {index, _}, scope = private}, IndexData) ->
     #{
         <<"name">> := Name,
         <<"schema">> := Schema,
@@ -731,11 +749,19 @@ translate_harvester(#gri{aspect = {index, _}}, IndexData) ->
         <<"guiPluginName">> => gs_protocol:undefined_to_null(GuiPluginName)
     };
 
+translate_harvester(#gri{aspect = {index, _}, scope = public}, IndexData) ->
+    #{
+        <<"guiPluginName">> := GuiPluginName
+    } = IndexData,
+    #{
+        <<"guiPluginName">> => gs_protocol:undefined_to_null(GuiPluginName)
+    };
+
 translate_harvester(#gri{aspect = indices, id = HarvesterId}, Indices) ->
     #{
         <<"list">> => lists:map(
             fun(IndexId) ->
-                gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}, scope = private})
+                gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}, scope = auto})
             end, Indices)
     };
 
