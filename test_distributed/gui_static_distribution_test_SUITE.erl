@@ -44,7 +44,9 @@
     gui_upload_page_deploys_op_worker_gui_on_all_nodes/1,
     gui_upload_page_deploys_op_panel_gui_on_all_nodes/1,
     empty_gui_is_linked_after_failed_op_worker_version_update/1,
-    empty_gui_is_linked_after_failed_op_panel_version_update/1
+    empty_gui_is_linked_after_failed_op_panel_version_update/1,
+    custom_static_files_are_served/1,
+    custom_static_files_are_served_from_legacy_location/1
 ]).
 
 all() ->
@@ -62,7 +64,9 @@ all() ->
         gui_upload_page_deploys_op_worker_gui_on_all_nodes,
         gui_upload_page_deploys_op_panel_gui_on_all_nodes,
         empty_gui_is_linked_after_failed_op_worker_version_update,
-        empty_gui_is_linked_after_failed_op_panel_version_update
+        empty_gui_is_linked_after_failed_op_panel_version_update,
+        custom_static_files_are_served,
+        custom_static_files_are_served_from_legacy_location
     ]).
 
 -define(SSL_OPTS(Config), {ssl_options, [
@@ -88,9 +92,9 @@ oz_worker_gui_is_set_up_after_startup(Config) ->
 
     ?assert(static_directory_exists(Config, [<<"./ozw/">>, GuiHash])),
     ?assert(link_exists(Config, <<"./ozw/onezone">>, GuiHash)),
-    ?assert(index_page_is_served(Config, OzIndexContent, <<"/">>)),
-    ?assert(index_page_is_served(Config, OzIndexContent, [<<"/ozw/">>, ?ONEZONE_CLUSTER_ID, <<"/i">>])),
-    ?assert(index_page_is_served(Config, OzIndexContent, [<<"/ozw/">>, ?ONEZONE_CLUSTER_ID, <<"/index.html">>])),
+    ?assert(file_is_served(Config, OzIndexContent, <<"/">>)),
+    ?assert(file_is_served(Config, OzIndexContent, [<<"/ozw/">>, ?ONEZONE_CLUSTER_ID, <<"/i">>])),
+    ?assert(file_is_served(Config, OzIndexContent, [<<"/ozw/">>, ?ONEZONE_CLUSTER_ID, <<"/index.html">>])),
     ?assert(version_info_is_set(Config, ?ONEZONE_CLUSTER_ID, ?WORKER, {Release, Build, GuiHash})).
 
 oz_panel_gui_setup_works(Config) ->
@@ -109,8 +113,8 @@ oz_panel_gui_setup_works(Config) ->
 
     ?assert(static_directory_exists(Config, [<<"./ozp/">>, GuiHash])),
     ?assert(link_exists(Config, <<"./ozp/onezone">>, GuiHash)),
-    ?assert(index_page_is_served(Config, IndexContent, [<<"/ozp/">>, ?ONEZONE_CLUSTER_ID, <<"/i">>])),
-    ?assert(index_page_is_served(Config, IndexContent, [<<"/ozp/">>, ?ONEZONE_CLUSTER_ID, <<"/index.html">>])),
+    ?assert(file_is_served(Config, IndexContent, [<<"/ozp/">>, ?ONEZONE_CLUSTER_ID, <<"/i">>])),
+    ?assert(file_is_served(Config, IndexContent, [<<"/ozp/">>, ?ONEZONE_CLUSTER_ID, <<"/index.html">>])),
     ?assert(version_info_is_set(Config, ?ONEZONE_CLUSTER_ID, ?ONEPANEL, {Release, Build, GuiHash})).
 
 
@@ -120,14 +124,14 @@ empty_gui_is_linked_after_provider_registration(Config) ->
 
     ?assert(static_directory_exists(Config, [<<"./opw/">>, <<"empty">>])),
     ?assert(link_exists(Config, [<<"./opw/">>, ClusterId], <<"empty">>)),
-    ?assert(index_page_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_WORKER), [<<"/opw/">>, ClusterId, <<"/i">>])),
-    ?assert(index_page_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_WORKER), [<<"/opw/">>, ClusterId, <<"/index.html">>])),
+    ?assert(file_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_WORKER), [<<"/opw/">>, ClusterId, <<"/i">>])),
+    ?assert(file_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_WORKER), [<<"/opw/">>, ClusterId, <<"/index.html">>])),
     ?assert(version_info_is_set(Config, ClusterId, ?WORKER, {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH})),
 
     ?assert(static_directory_exists(Config, [<<"./opp/">>, <<"empty">>])),
     ?assert(link_exists(Config, [<<"./opp/">>, ClusterId], <<"empty">>)),
-    ?assert(index_page_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_PANEL), [<<"/opp/">>, ClusterId, <<"/i">>])),
-    ?assert(index_page_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_PANEL), [<<"/opp/">>, ClusterId, <<"/index.html">>])),
+    ?assert(file_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_PANEL), [<<"/opp/">>, ClusterId, <<"/i">>])),
+    ?assert(file_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_PANEL), [<<"/opp/">>, ClusterId, <<"/index.html">>])),
     ?assert(version_info_is_set(Config, ClusterId, ?ONEPANEL, {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH})).
 
 
@@ -143,14 +147,14 @@ op_worker_and_panel_gui_is_linked_upon_version_info_update(Config) ->
 
     ?assert(static_directory_exists(Config, [<<"./opw/">>, OpGuiHash])),
     ?assert(link_exists(Config, [<<"./opw/">>, ClusterId], OpGuiHash)),
-    ?assert(index_page_is_served(Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/i">>])),
-    ?assert(index_page_is_served(Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/index.html">>])),
+    ?assert(file_is_served(Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/i">>])),
+    ?assert(file_is_served(Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/index.html">>])),
     ?assert(version_info_is_set(Config, ClusterId, ?WORKER, {<<"18.07.1-WORKER">>, <<"build-WORKER">>, OpGuiHash})),
 
     ?assert(static_directory_exists(Config, [<<"./opp/">>, <<"empty">>])),
     ?assert(link_exists(Config, [<<"./opp/">>, ClusterId], <<"empty">>)),
-    ?assert(index_page_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_PANEL), [<<"/opp/">>, ClusterId, <<"/i">>])),
-    ?assert(index_page_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_PANEL), [<<"/opp/">>, ClusterId, <<"/index.html">>])),
+    ?assert(file_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_PANEL), [<<"/opp/">>, ClusterId, <<"/i">>])),
+    ?assert(file_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_PANEL), [<<"/opp/">>, ClusterId, <<"/index.html">>])),
     ?assert(version_info_is_set(Config, ClusterId, ?ONEPANEL, {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH})),
 
     {OppGuiHash, OppIndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_PANEL),
@@ -160,14 +164,14 @@ op_worker_and_panel_gui_is_linked_upon_version_info_update(Config) ->
 
     ?assert(static_directory_exists(Config, [<<"./opw/">>, OpGuiHash])),
     ?assert(link_exists(Config, [<<"./opw/">>, ClusterId], OpGuiHash)),
-    ?assert(index_page_is_served(Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/i">>])),
-    ?assert(index_page_is_served(Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/index.html">>])),
+    ?assert(file_is_served(Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/i">>])),
+    ?assert(file_is_served(Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/index.html">>])),
     ?assert(version_info_is_set(Config, ClusterId, ?WORKER, {<<"18.07.1-WORKER">>, <<"build-WORKER">>, OpGuiHash})),
 
     ?assert(static_directory_exists(Config, [<<"./opp/">>, OppGuiHash])),
     ?assert(link_exists(Config, [<<"./opp/">>, ClusterId], OppGuiHash)),
-    ?assert(index_page_is_served(Config, OppIndexContent, [<<"/opp/">>, ClusterId, <<"/i">>])),
-    ?assert(index_page_is_served(Config, OppIndexContent, [<<"/opp/">>, ClusterId, <<"/index.html">>])),
+    ?assert(file_is_served(Config, OppIndexContent, [<<"/opp/">>, ClusterId, <<"/i">>])),
+    ?assert(file_is_served(Config, OppIndexContent, [<<"/opp/">>, ClusterId, <<"/index.html">>])),
     ?assert(version_info_is_set(Config, ClusterId, ?ONEPANEL, {<<"18.07.1-PANEL">>, <<"build-PANEL">>, OppGuiHash})).
 
 
@@ -190,13 +194,13 @@ gui_is_unlinked_after_provider_deletion(Config) ->
     % Gui package should be left on the disk, but the link to it for given cluster removed
     ?assert(static_directory_exists(true, Config, [<<"./opw/">>, OpGuiHash])),
     ?assert(link_exists(false, Config, [<<"./opw/">>, ClusterId], OpGuiHash)),
-    ?assert(index_page_is_served(false, Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/i">>])),
-    ?assert(index_page_is_served(false, Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/index.html">>])),
+    ?assert(file_is_served(false, Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/i">>])),
+    ?assert(file_is_served(false, Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/index.html">>])),
 
     ?assert(static_directory_exists(true, Config, [<<"./opp/">>, OppGuiHash])),
     ?assert(link_exists(false, Config, [<<"./opp/">>, ClusterId], OppGuiHash)),
-    ?assert(index_page_is_served(false, Config, OppIndexContent, [<<"/opp/">>, ClusterId, <<"/i">>])),
-    ?assert(index_page_is_served(false, Config, OppIndexContent, [<<"/opp/">>, ClusterId, <<"/index.html">>])).
+    ?assert(file_is_served(false, Config, OppIndexContent, [<<"/opp/">>, ClusterId, <<"/i">>])),
+    ?assert(file_is_served(false, Config, OppIndexContent, [<<"/opp/">>, ClusterId, <<"/index.html">>])).
 
 
 gui_upload_requires_provider_auth(Config) ->
@@ -371,8 +375,8 @@ gui_upload_page_deploys_op_worker_gui_on_all_nodes(Config) ->
 
     ?assert(static_directory_exists(Config, [<<"./opw/">>, OpGuiHash])),
     ?assert(link_exists(Config, [<<"./opw/">>, ClusterId], OpGuiHash)),
-    ?assert(index_page_is_served(Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/i">>])),
-    ?assert(index_page_is_served(Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/index.html">>])),
+    ?assert(file_is_served(Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/i">>])),
+    ?assert(file_is_served(Config, OpIndexContent, [<<"/opw/">>, ClusterId, <<"/index.html">>])),
     ?assert(version_info_is_set(Config, ClusterId, ?WORKER, {<<"18.07.1">>, <<"build">>, OpGuiHash})).
 
 
@@ -408,8 +412,8 @@ gui_upload_page_deploys_op_panel_gui_on_all_nodes(Config) ->
 
     ?assert(static_directory_exists(Config, [<<"./opp/">>, OppGuiHash])),
     ?assert(link_exists(Config, [<<"./opp/">>, ClusterId], OppGuiHash)),
-    ?assert(index_page_is_served(Config, OppIndexContent, [<<"/opp/">>, ClusterId, <<"/i">>])),
-    ?assert(index_page_is_served(Config, OppIndexContent, [<<"/opp/">>, ClusterId, <<"/index.html">>])),
+    ?assert(file_is_served(Config, OppIndexContent, [<<"/opp/">>, ClusterId, <<"/i">>])),
+    ?assert(file_is_served(Config, OppIndexContent, [<<"/opp/">>, ClusterId, <<"/index.html">>])),
     ?assert(version_info_is_set(Config, ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build">>, OppGuiHash})).
 
 
@@ -435,8 +439,8 @@ empty_gui_is_linked_after_failed_op_worker_version_update(Config) ->
 
     ?assert(static_directory_exists(Config, [<<"./opw/">>, <<"empty">>])),
     ?assert(link_exists(Config, [<<"./opw/">>, ClusterId], <<"empty">>)),
-    ?assert(index_page_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_WORKER), [<<"/opw/">>, ClusterId, <<"/i">>])),
-    ?assert(index_page_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_WORKER), [<<"/opw/">>, ClusterId, <<"/index.html">>])),
+    ?assert(file_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_WORKER), [<<"/opw/">>, ClusterId, <<"/i">>])),
+    ?assert(file_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_WORKER), [<<"/opw/">>, ClusterId, <<"/index.html">>])),
     % Failed version update still sets the release/build version, but sets GUI hash to empty
     ?assert(version_info_is_set(Config, ClusterId, ?WORKER, {<<"18.07.2">>, <<"build-2">>, ?EMPTY_GUI_HASH})).
 
@@ -463,10 +467,43 @@ empty_gui_is_linked_after_failed_op_panel_version_update(Config) ->
 
     ?assert(static_directory_exists(Config, [<<"./opp/">>, <<"empty">>])),
     ?assert(link_exists(Config, [<<"./opp/">>, ClusterId], <<"empty">>)),
-    ?assert(index_page_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_PANEL), [<<"/opp/">>, ClusterId, <<"/i">>])),
-    ?assert(index_page_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_PANEL), [<<"/opp/">>, ClusterId, <<"/index.html">>])),
+    ?assert(file_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_PANEL), [<<"/opp/">>, ClusterId, <<"/i">>])),
+    ?assert(file_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_PANEL), [<<"/opp/">>, ClusterId, <<"/index.html">>])),
     % Failed version update still sets the release/build version, but sets GUI hash to empty
     ?assert(version_info_is_set(Config, ClusterId, ?ONEPANEL, {<<"18.07.2">>, <<"build-2">>, ?EMPTY_GUI_HASH})).
+
+
+custom_static_files_are_served(Config) ->
+    Data = <<"123123123">>,
+    Filename = <<"file.txt">>,
+    CustomStaticRoot = oz_test_utils:get_env(Config, gui_custom_static_root),
+    check_on_all_nodes(Config, fun(Node) ->
+        rpc:call(Node, filelib, ensure_dir, [CustomStaticRoot]),
+        rpc:call(Node, file, make_dir, [CustomStaticRoot]),
+        rpc:call(Node, file, write_file, [filename:join(CustomStaticRoot, Filename), Data]),
+        true
+    end),
+    ?assert(file_is_served(true, Config, Data, <<"text/plain">>, [<<"/ozw/onezone/custom/">>, Filename])),
+    ok.
+
+
+custom_static_files_are_served_from_legacy_location(Config) ->
+    Data = <<"abcabcabc">>,
+    Filename = <<"data.txt">>,
+    CustomStaticRoot = oz_test_utils:get_env(Config, gui_custom_static_root),
+    LegacyCustomStaticRoot = oz_test_utils:get_env(Config, legacy_gui_custom_static_root),
+    check_on_all_nodes(Config, fun(Node) ->
+        % Fallback to legacy is performed if the correct path is empty
+        rpc:call(Node, file_utils, recursive_del, [CustomStaticRoot]),
+        rpc:call(Node, filelib, ensure_dir, [LegacyCustomStaticRoot]),
+        rpc:call(Node, file, make_dir, [LegacyCustomStaticRoot]),
+        rpc:call(Node, file, write_file, [filename:join(LegacyCustomStaticRoot, Filename), Data]),
+        rpc:call(Node, https_listener, stop, []),
+        rpc:call(Node, https_listener, start, []),
+        true
+    end),
+    ?assert(file_is_served(true, Config, Data, <<"text/plain">>, [<<"/ozw/onezone/custom/">>, Filename])),
+    ok.
 
 
 %%%===================================================================
@@ -541,12 +578,15 @@ link_exists(ExpState, Config, PathTokens, LinkValue) when is_list(LinkValue) ->
     end).
 
 
-index_page_is_served(Config, ExpectedContent, PathTokens) ->
-    index_page_is_served(true, Config, ExpectedContent, PathTokens).
+file_is_served(Config, ExpectedContent, PathTokens) ->
+    file_is_served(true, Config, ExpectedContent, PathTokens).
 
-index_page_is_served(ExpState, Config, ExpectedContent, PathTokens) when is_list(PathTokens) ->
-    index_page_is_served(ExpState, Config, ExpectedContent, str_utils:join_binary(PathTokens));
-index_page_is_served(ExpState, Config, ExpectedContent, Path) ->
+file_is_served(ExpState, Config, ExpectedContent, PathTokens) ->
+    file_is_served(ExpState, Config, ExpectedContent, <<"text/html">>, PathTokens).
+
+file_is_served(ExpState, Config, ExpectedContent, ExpectedContentType, PathTokens) when is_list(PathTokens) ->
+    file_is_served(ExpState, Config, ExpectedContent, ExpectedContentType, str_utils:join_binary(PathTokens));
+file_is_served(ExpState, Config, ExpectedContent, ExpectedContentType, Path) ->
     Opts = [
         {follow_redirect, true},
         ?SSL_OPTS(Config)
@@ -556,13 +596,13 @@ index_page_is_served(ExpState, Config, ExpectedContent, Path) ->
         Url = str_utils:format("https://~s~s", [Ip, Path]),
         {ok, Code, Headers, Body} = http_client:get(Url, #{}, <<>>, Opts),
         Result = Code =:= 200 andalso
-            maps:get(<<"content-type">>, Headers) =:= <<"text/html">> andalso
+            maps:get(<<"content-type">>, Headers) =:= ExpectedContentType andalso
             Body =:= ExpectedContent,
         case Result of
             ExpState ->
                 true;
             _ ->
-                ct:pal("index_page_is_served(~p, Config, <~p bytes>, ~p) failed on node ~p~ngot: ~p", [
+                ct:pal("file_is_served(~p, Config, <~p bytes>, ~p) failed on node ~p~ngot: ~p", [
                     ExpState, byte_size(ExpectedContent), Path, Node, {Code, Headers, Body}
                 ]),
                 false

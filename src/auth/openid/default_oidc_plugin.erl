@@ -216,25 +216,25 @@ acquire_access_token(IdP, Parameters) ->
 
     AccessTokenEndpoint = idp_endpoint(IdP, accessToken),
     Method = ?CFG_ACCESS_TOKEN_ACQUIRE_METHOD(IdP),
-    {ResponseHeaders, ResponseBinary} = openid_protocol:request_idp(
+    {RespHeaders, RespBinary} = openid_protocol:request_idp(
         Method, 200, AccessTokenEndpoint, Headers3, Parameters3
     ),
 
-    case maps:get(<<"content-type">>, ResponseHeaders, undefined) of
-        <<"application/x-www-form-urlencoded", _/binary>> ->
-            Response = cow_qs:parse_qs(ResponseBinary),
+    case maps:get(<<"content-type">>, RespHeaders, maps:get(<<"Content-Type">>, RespHeaders, undefined)) of
+        <<"application/json", _/binary>> ->
+            Response = json_utils:decode(RespBinary),
+            AccessToken = maps:get(<<"access_token">>, Response, undefined),
+            ExpiresIn = maps:get(<<"expires_in">>, Response, ?ASSUMED_TOKEN_LIFESPAN),
+            RefreshToken = maps:get(<<"refresh_token">>, Response, undefined),
+            {AccessToken, time_utils:cluster_time_seconds() + ExpiresIn, RefreshToken};
+        _ ->
+            Response = cow_qs:parse_qs(RespBinary),
             AccessToken = proplists:get_value(<<"access_token">>, Response, undefined),
             ExpiresIn = case proplists:get_value(<<"expires_in">>, Response, undefined) of
                 undefined -> ?ASSUMED_TOKEN_LIFESPAN;
                 ValueBin -> binary_to_integer(ValueBin)
             end,
             RefreshToken = proplists:get_value(<<"refresh_token">>, Response, undefined),
-            {AccessToken, time_utils:cluster_time_seconds() + ExpiresIn, RefreshToken};
-        _ ->
-            Response = json_utils:decode(ResponseBinary),
-            AccessToken = maps:get(<<"access_token">>, Response, undefined),
-            ExpiresIn = maps:get(<<"expires_in">>, Response, ?ASSUMED_TOKEN_LIFESPAN),
-            RefreshToken = maps:get(<<"refresh_token">>, Response, undefined),
             {AccessToken, time_utils:cluster_time_seconds() + ExpiresIn, RefreshToken}
     end.
 
