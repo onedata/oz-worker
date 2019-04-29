@@ -64,6 +64,7 @@ operation_supported(create, join, private) -> true;
 operation_supported(create, {user, _}, private) -> true;
 operation_supported(create, {group, _}, private) -> true;
 operation_supported(create, group, private) -> true;
+operation_supported(create, harvest_metadata, private) -> true;
 
 operation_supported(get, list, private) -> true;
 
@@ -251,8 +252,33 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}, data = Data}
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
     {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
     {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
-    {ok, resource, {NewGRI, ?THROUGH_GROUP(SpaceId), GroupData}}.
+    {ok, resource, {NewGRI, ?THROUGH_GROUP(SpaceId), GroupData}};
 
+create(#el_req{client = Client, gri = #gri{id = SpaceId, aspect = harvest_metadata}, data = Data}) ->
+    #{
+        <<"destination">> := Destination,
+        <<"maxSeq">> := MaxSeq,
+        <<"batch">> := Batch
+    } = Data,
+    
+    Res = utils:pmap(fun(HarvesterId) ->
+        Indices = maps:get(HarvesterId, Destination),
+        case harvester_logic:submit_batch(Client, HarvesterId, Indices, SpaceId, Batch, MaxSeq) of
+            {ok, FailedIndices} -> {HarvesterId, FailedIndices};
+            Error -> {HarvesterId, Error}
+        end
+    end, maps:keys(Destination)),
+    
+    {ok, value, lists:foldl(
+        fun({HarvesterId, {error, _} = Error}, Acc) -> 
+            Acc#{HarvesterId => Error};
+           ({HarvesterId, FailedIndices}, Acc) ->
+                case maps:size(FailedIndices) of
+                    0 -> Acc;
+                    _ -> Acc#{HarvesterId => FailedIndices}
+                end 
+        end, #{}, Res)}.
+    
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -482,6 +508,9 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Space) 
         _ ->
             false
     end;
+authorize(#el_req{operation = create, gri = #gri{aspect = harvest_metadata}}, _Space) ->
+    % authorization of this operation is later checked for each harvester
+    true;
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_USER);
@@ -752,6 +781,13 @@ validate(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) -> #{
     optional => #{
         <<"privileges">> => {list_of_atoms, privileges:space_privileges()}
     }
+};
+
+validate(#el_req{operation = create, gri = #gri{aspect = harvest_metadata}}) -> #{
+    required => #{
+        % fixme validate
+        <<"destination">> => {any, any}
+    }   
 };
 
 validate(Req = #el_req{operation = create, gri = #gri{aspect = group}}) ->

@@ -40,6 +40,7 @@
     create_group/3, create_group/4,
     
     join_harvester/3,
+    harvest_metadata/3,
 
     get_users/2, get_eff_users/2,
     get_user/3, get_eff_user/3,
@@ -362,6 +363,22 @@ join_harvester(Client, SpaceId, Data) when is_map(Data) ->
     }));
 join_harvester(Client, SpaceId, Token) ->
     join_harvester(Client, SpaceId, #{<<"token">> => Token}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Submits given batch to given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvest_metadata(Client :: entity_logic:client(), SpaceId :: od_space:id(), 
+    Data :: binary()) -> {ok, map()} | {error, term()}.
+harvest_metadata(Client, SpaceId, Data) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_space, id = SpaceId, aspect = harvest_metadata},
+        data = Data
+    })).
 
 
 %%--------------------------------------------------------------------

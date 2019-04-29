@@ -50,6 +50,7 @@
     
     submit_entry_test/1,
     delete_entry_test/1,
+    submit_batch_test/1,
     
     submit_entry_index_progress_update_test/1,
     delete_entry_index_progress_update_test/1
@@ -77,6 +78,7 @@ all() ->
 
         submit_entry_test,
         delete_entry_test,
+        submit_batch_test,
 
         submit_entry_index_progress_update_test,
         delete_entry_index_progress_update_test
@@ -1330,6 +1332,61 @@ submit_entry_test(Config) ->
                 <<"indices">> => [[IndexId]],
                 <<"maxSeq">> => [1000],
                 <<"seq">> => [10]
+            }
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+submit_batch_test(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT,
+        ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)),
+    oz_test_utils:harvester_add_user(Config, H1, U1),
+
+    {ok, {P1, M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S1} = oz_test_utils:support_space(
+        Config, P1, S1, oz_test_utils:minimum_support_size(Config)
+    ),
+    {ok, {P2, M2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+
+    oz_test_utils:harvester_add_space(Config, H1, S1),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {ok, IndexId} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {provider, P1,M1}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
+                {provider, P2,M2}
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = harvester_logic,
+            function = submit_batch,
+            args = [client, H1, S1, data],
+            % fixme proper result
+            expected_result = ?OK_MAP_CONTAINS(#{})
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_harvester, id = H1, aspect = {submit_batch, S1}},
+            expected_result = ?OK_MAP_CONTAINS(#{})
+        },
+        data_spec = #data_spec{
+            required = [<<"indices">>, <<"maxSeq">>, <<"batch">>],
+            correct_values = #{
+                <<"batch">> => [?HARVESTER_ENTRY_BATCH],
+                <<"indices">> => [[IndexId]],
+                <<"maxSeq">> => [1000]
             }
         }
     },

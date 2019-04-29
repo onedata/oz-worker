@@ -72,6 +72,7 @@ operation_supported(create, group, private) -> true;
 operation_supported(create, index, private) -> true;
 operation_supported(create, {submit_entry, _}, private) -> true;
 operation_supported(create, {delete_entry, _}, private) -> true;
+operation_supported(create, {submit_batch, _}, private) -> true;
 operation_supported(create, {query, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
@@ -369,6 +370,33 @@ create(#el_req{gri = #gri{aspect = {query, IndexId}, id = HarvesterId}, data = D
             {ok, Value} -> {ok, value, Value};
             {error, _} = Error -> Error
         end
+    end;
+
+create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch, SpaceId}, id = HarvesterId}, data = Data}) ->
+    #{
+        <<"indices">> := Indices,
+        <<"maxSeq">> := MaxSeq,
+        <<"batch">> := Batch
+    } = Data,
+    fun(#od_harvester{endpoint = Endpoint, plugin = Plugin, indices = ExistingIndices}) ->
+        % ignore indices that do not belong to this harvester
+        IndicesToUpdate = [X || X <- Indices, Y <- maps:keys(ExistingIndices), X == Y],
+        {ok, Res} = Plugin:submit_batch(Endpoint, HarvesterId, IndicesToUpdate, Batch),
+        update_indices_progress(HarvesterId, Res, 
+            fun(Seqs, {NewCurrentSeq, _}) -> 
+                update_seqs(Seqs, SpaceId, ProviderId, NewCurrentSeq, MaxSeq)
+            end
+        ),
+        FailedIndices = lists:filtermap(
+            fun({_Index, {_, undefined}}) -> false;
+               ({Index, {_, FailedSeq}}) -> {true, {Index, FailedSeq}} 
+            end, Res
+        ),
+        {ok, value, lists:foldl(
+            fun({Index, NewCurrentSeq}, NewRes) ->
+                NewRes#{Index => NewCurrentSeq}
+            end, #{}, FailedIndices
+        )}
     end.
 
 
@@ -730,7 +758,7 @@ authorize(#el_req{operation = create, gri = #gri{aspect = {submit_entry, FileId}
         ?PROVIDER(ProviderId) ->
             {ok, Guid} = file_id:objectid_to_guid(FileId),
             SpaceId = file_id:guid_to_space_id(Guid),
-            provider_logic:supports_space(ProviderId, SpaceId) and harvester_logic:has_space(Harvester, SpaceId);
+            provider_logic:supports_space(ProviderId, SpaceId) andalso harvester_logic:has_space(Harvester, SpaceId);
         _Other ->
             false
     end;
@@ -740,7 +768,15 @@ authorize(#el_req{operation = create, gri = #gri{aspect = {delete_entry, FileId}
         ?PROVIDER(ProviderId) ->
             {ok, Guid} = file_id:objectid_to_guid(FileId),
             SpaceId = file_id:guid_to_space_id(Guid),
-            provider_logic:supports_space(ProviderId, SpaceId) and harvester_logic:has_space(Harvester, SpaceId);
+            provider_logic:supports_space(ProviderId, SpaceId) andalso harvester_logic:has_space(Harvester, SpaceId);
+        _Other ->
+            false
+    end;
+
+authorize(#el_req{operation = create, gri = #gri{aspect = {submit_batch, SpaceId}}, client = Client}, Harvester) ->
+    case Client of
+        ?PROVIDER(ProviderId) ->
+            provider_logic:supports_space(ProviderId, SpaceId) andalso harvester_logic:has_space(Harvester, SpaceId);
         _Other ->
             false
     end;
@@ -1032,6 +1068,16 @@ validate(#el_req{operation = create, gri = #gri{aspect = {delete_entry, _}}}) ->
     }
 };
 
+validate(#el_req{operation = create, gri = #gri{aspect = {submit_batch, _}}}) -> #{
+    required => #{
+        <<"maxSeq">> => {integer, {not_lower_than, 0}},
+        % no need to check index membership - bad indices are later ignored
+        <<"indices">> => {list_of_binaries, non_empty},
+        % fixme validate
+        <<"batch">> => {any, any}
+    }
+};
+
 validate(#el_req{operation = create, gri = #gri{aspect = index}}) -> #{
     required => #{
         <<"name">> => {binary, name}
@@ -1218,8 +1264,8 @@ perform_entry_operation(Operation, Indices, ProviderId, Plugin, Endpoint, Harves
                     false;
                 {ok, _} ->
                     case call_plugin(Operation, Plugin, Endpoint, HarvesterId, IndexId, FileId, Json) of
-                        ok -> {true, {IndexId, true}};
-                        _ -> {true, {IndexId, false}}
+                        ok -> {true, {IndexId, Seq}};
+                        _ -> {true, {IndexId, undefined}}
                     end;
                 _ ->
                     % Ignore not found index.
@@ -1227,11 +1273,11 @@ perform_entry_operation(Operation, Indices, ProviderId, Plugin, Endpoint, Harves
             end
         end, SubmitIndices),
 
-    update_indices_progress(HarvesterId, IndicesToUpdate, fun(Seqs, UpdateCurrentSeq) ->
-        update_seqs(Seqs, SpaceId, ProviderId, UpdateCurrentSeq, Seq, MaxSeq)
+    update_indices_progress(HarvesterId, IndicesToUpdate, fun(Seqs, NewSeq) ->
+        update_seqs(Seqs, SpaceId, ProviderId, NewSeq, MaxSeq)
     end),
     
-    {ok, [I || {I, false} <- IndicesToUpdate]}.
+    {ok, [I || {I, undefined} <- IndicesToUpdate]}.
 
 
 %%--------------------------------------------------------------------
@@ -1269,7 +1315,7 @@ update_indices_progress(HarvesterId, IndicesToUpdate, UpdateFun) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_index_progress(od_harvester:indices(), od_harvester:index_id(), UpdateFun) ->
-    od_harvester:indices() when UpdateFun :: fun((PreviousSeqs :: map()) -> NewSeqs :: map()).
+    od_harvester:indices() when UpdateFun :: fun((od_harvester:index_progress()) -> od_harvester:index_progress()).
 update_index_progress(Indices, IndexId, UpdateFun) ->
     case maps:find(IndexId, Indices) of
         {ok, #harvester_index{progress = Seqs} = IndexData} ->
@@ -1283,20 +1329,20 @@ update_index_progress(Indices, IndexId, UpdateFun) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Updates max sequence number for given index progress.
-%% When UpdateCurrentSeq flag is set to true value of current sequence number will also be updated.
+%% Updates current sequence number and max sequence number for given index progress.
+%% When NewSeq is undefined current sequence number will not be updated.
 %% Sequence numbers are stored per space per provider.
 %% @end
 %%--------------------------------------------------------------------
--spec update_seqs(od_harvester:index_progress(), od_space:id(), od_provider:id(), UpdateCurrentSeq :: boolean(), 
-    NewSeq :: non_neg_integer(), NewMaxSeq :: non_neg_integer()) -> od_harvester:index_progress().
-update_seqs(Progress, SpaceId, ProviderId, UpdateCurrentSeq, NewSeq, NewMaxSeq) -> 
+-spec update_seqs(od_harvester:index_progress(), od_space:id(), od_provider:id(),
+    NewSeq :: non_neg_integer() | undefined, NewMaxSeq :: non_neg_integer()) -> od_harvester:index_progress().
+update_seqs(Progress, SpaceId, ProviderId, NewSeq, NewMaxSeq) -> 
     SeqsPerProvider = maps:get(SpaceId, Progress, #{}),
     [CurrentSeq, CurrentMaxSeq] = maps:get(ProviderId, SeqsPerProvider, [0,0]),
     
-    NewCurrentSeq = case UpdateCurrentSeq of
-        true-> max(NewSeq, CurrentSeq);
-        false -> CurrentSeq
+    NewCurrentSeq = case NewSeq of
+        undefined -> CurrentSeq;
+        _-> max(NewSeq, CurrentSeq)
     end, 
     
     Progress#{

@@ -306,6 +306,15 @@
 -define(FAILED_INDICES(Indices), #{<<"failedIndices">> := Indices}).
 -define(NO_FAILED_INDICES, ?FAILED_INDICES([])).
 
+-define(HARVESTER_ENTRY_BATCH, [
+    #{<<"seq">> => 1, <<"operation">> => submit, <<"fileId">> => <<"fileid1">>, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 2, <<"operation">> => delete, <<"fileId">> => <<"fileid2">>, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 3, <<"operation">> => submit, <<"fileId">> => <<"fileid3">>, <<"payload">> => <<"invalid_json">>},
+    #{<<"seq">> => 4, <<"operation">> => delete, <<"fileId">> => <<"fileid4">>, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 5, <<"operation">> => submit, <<"fileId">> => <<"fileid5">>, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 6, <<"operation">> => submit, <<"fileId">> => <<"fileid6">>, <<"payload">> => #{}}
+]).
+
 -define(BAD_VALUES_NAME(Error), [
     {<<"name">>, <<"">>, Error},
     {<<"name">>, <<"a">>, Error},

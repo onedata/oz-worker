@@ -44,9 +44,13 @@
 %   max_seq - highest sequence known in given space in given provider
 -type index_progress() :: #{od_space:id() => #{od_provider:id() => [non_neg_integer()]}}.
 
+% fixme batch_entry_spec
+-type batch_entry() :: map().
+-type batch() :: [batch_entry()].
+
 
 -export_type([name/0, plugin/0, endpoint/0, schema/0, entry_id/0,
-    index_id/0, index/0, indices/0, index_progress/0]).
+    index_id/0, index/0, indices/0, index_progress/0, batch/0, batch_entry/0]).
 
 -define(CTX, #{
     model => ?MODULE,

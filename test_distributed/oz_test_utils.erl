@@ -20,6 +20,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 -define(OZ_NODES(Config), ?config(oz_worker_nodes, Config)).
 -define(TIME_MOCK_STARTING_TIMESTAMP, 1500000000).
@@ -2917,6 +2918,12 @@ mock_harvester_plugin(Nodes, PluginName) ->
         end),
     test_utils:mock_expect(Nodes, PluginName, submit_entry, fun(_,_,_,_,_) -> ok end),
     test_utils:mock_expect(Nodes, PluginName, delete_entry, fun(_,_,_,_) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, submit_batch, fun(_,_,Indices, Batch) ->
+        LastSeq = maps:get(<<"seq">>, lists:last(Batch)),
+        {ok, lists:map(fun(Index) -> 
+            {Index, {LastSeq, undefined}} 
+        end, Indices)}
+    end),
     test_utils:mock_expect(Nodes, PluginName, create_index, fun(_,_,_,_) -> ok end),
     test_utils:mock_expect(Nodes, PluginName, delete_index, fun(_,_,_) -> ok end),
     test_utils:mock_expect(Nodes, PluginName, query_index, fun(_,_,_,_) -> {ok, ?HARVESTER_MOCKED_QUERY_DATA_MAP} end),

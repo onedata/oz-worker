@@ -48,21 +48,13 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Submits given Data to server located at Endpoint.
+%% Submits given batch in given index to server located at Endpoint.
 %% @end
 %%--------------------------------------------------------------------
--callback submit_entry(od_harvester:endpoint(), od_harvester:id(), 
-    od_harvester:index_id(), od_harvester:entry_id(), Data :: binary()) -> 
-    ok | {error, term()}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Deletes entry in server located at Endpoint. 
-%% @end
-%%--------------------------------------------------------------------
--callback delete_entry(od_harvester:endpoint(), od_harvester:id(), 
-    od_harvester:index_id(), od_harvester:entry_id()) -> ok | {error, term()}.
+-callback submit_batch(od_harvester:endpoint(), od_harvester:id(), 
+    od_harvester:index_id(), od_harvester:batch()) -> 
+    {ok, [{od_harvester:index_id(), {SuccessfulSeq :: integer() | undefined, 
+        FailedSeq :: integer() | undefined}}]}.
 
 
 %%--------------------------------------------------------------------

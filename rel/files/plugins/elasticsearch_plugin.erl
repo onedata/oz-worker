@@ -22,7 +22,8 @@
     get_name/0, 
     ping/1, 
     create_index/4, delete_index/3, 
-    submit_entry/5, delete_entry/4, 
+    submit_entry/5, delete_entry/4,
+    submit_batch/4,
     query_index/4, 
     query_validator/0
 ]).
@@ -110,14 +111,11 @@ submit_entry(Endpoint, HarvesterId, IndexId, Id, Data) ->
         {ok, 400,_, Body} ->
             try
                 #{<<"error">> := #{<<"type">> := ErrorType}} = json_utils:decode(Body),
-                case ErrorType of
-                    <<"mapper_parsing_exception">> -> 
+                case is_es_error_ignored(ErrorType) of
+                    true -> 
                         ?debug("Entry submit in harvester ~p in index ~p dropped because of bad schema: ~p", 
                             [HarvesterId, IndexId, Body]);
-                    <<"strict_dynamic_mapping_exception">> ->
-                        ?debug("Entry submit in harvester ~p in index ~p dropped because of bad schema: ~p",
-                            [HarvesterId, IndexId, Body]);
-                    _ ->
+                    false ->
                         ?debug("Unexpected error in harvester ~p when submiting entry for index ~p: ~p", 
                             [HarvesterId, IndexId, Body]),
                         ?ERROR_BAD_DATA(<<"payload">>)
@@ -132,6 +130,32 @@ submit_entry(Endpoint, HarvesterId, IndexId, Id, Data) ->
         {error, _} = Error -> Error
     end.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link harvester_plugin_behaviour} callback submit_batch/4.
+%% @end
+%%--------------------------------------------------------------------
+-spec submit_batch(od_harvester:endpoint(), od_harvester:id(), od_harvester:indices(), od_harvester:batch()) -> 
+    {ok, [{od_harvester:index_id(), {SuccessfulSeq :: integer() | undefined, FailedSeq :: integer() | undefined}}]}.
+submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
+    PreparedBatch = prepare_elasticsearch_batch(Batch),
+    FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),
+    LastSeq = maps:get(<<"seq">>, lists:last(Batch)),
+    {ok, utils:pmap(fun(IndexId) ->
+        case do_request(post, Endpoint, HarvesterId, IndexId, ?ENTRY_PATH(<<"_bulk">>), PreparedBatch, 
+            #{<<"content-type">> => <<"application/x-ndjson">>}, [{recv_timeout, 15000}], [{200,300}]) of
+            {ok,_,_,Body} ->
+                Res = json_utils:decode(Body),
+                case maps:get(<<"errors">>, Res) of
+                    false -> {IndexId, {LastSeq, undefined}};
+                    true -> {IndexId, parse_batch_result(Res, Batch, HarvesterId, IndexId)}
+                end;
+            {error, _} = Error -> 
+                ?debug("Error when updating index ~p in harvester ~p: ~p", [IndexId, HarvesterId, Error]),
+                {IndexId, {undefined, FirstSeq}}
+        end
+    end, Indices)}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -195,14 +219,29 @@ query_validator() -> #{
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Makes request to elasticsearch.
-%% Received status code will NOT be checked.
+%% @equiv do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, undefined).
 %% @end
 %%--------------------------------------------------------------------
 -spec do_request(http_client:method(), od_harvester:endpoint(), od_harvester:id(), 
     od_harvester:index_id(), Path :: binary(), Data :: binary()) -> ok.
 do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data) ->
     do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, undefined).
+
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% @equiv do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, 
+%%          #{<<"content-type">> => <<"application/json">>}, [], ExpectedCodes).
+%% @end
+%%--------------------------------------------------------------------
+-spec do_request(http_client:method(), od_harvester:endpoint(), od_harvester:id(),
+    od_harvester:index_id(), Path :: binary(), Data :: binary(),
+    ExpectedCodes :: [integer() | {integer(), integer()}] | undefined) -> ok.
+do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, ExpectedCodes) ->
+    do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, 
+        #{<<"content-type">> => <<"application/json">>}, [], ExpectedCodes).
 
 
 %%--------------------------------------------------------------------
@@ -215,23 +254,24 @@ do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data) ->
 %%--------------------------------------------------------------------
 -spec do_request(http_client:method(), od_harvester:endpoint(), od_harvester:id(), 
     od_harvester:index_id(), Path :: binary(), Data :: binary(), 
+    http_client:headers(), http_client:opts(),
     ExpectedCodes :: [integer() | {integer(), integer()}] | undefined) -> ok.
-do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, ExpectedCodes) ->
+do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, Headers, Opts, ExpectedCodes) ->
     Url = <<Endpoint/binary, "/", (?ES_INDEX_ID(HarvesterId, IndexId))/binary, Path/binary>>,
-    case http_client:request(Method, Url, #{<<"content-type">> => <<"application/json">>}, Data) of
-        {ok, Code, Headers, Body} = Response when is_list(ExpectedCodes) ->
+    case http_client:request(Method, Url, Headers, Data, Opts) of
+        {ok, Code, RespHeaders, Body} = Response when is_list(ExpectedCodes) ->
             case is_code_expected(Code, ExpectedCodes) of
                 true -> 
                     Response;
                 _ ->
                     ?debug("~p ~p in harvester ~p, index: ~p returned unexpected response ~p:~n ~p~n~p",
-                        [Method, Url, HarvesterId, IndexId, Code, Headers, json_utils:decode(Body)]),
+                        [Method, Url, HarvesterId, IndexId, Code, RespHeaders, json_utils:decode(Body)]),
                     ?ERROR_BAD_DATA(<<"payload">>)
             end;
         {ok,_,_,_} = Response ->
             Response;
         {error, _} = Error ->
-            ?error("~p in harvester ~p, index ~p was unsuccessful due to ~p", 
+            ?error("~p in harvester ~p, index ~p was unsuccessful due to ~w", 
                 [Method, HarvesterId, IndexId, Error]),
             ?ERROR_TEMPORARY_FAILURE
     end.
@@ -254,3 +294,73 @@ is_code_expected(Code, ExpectedCodes) ->
                  (ECode) -> Code =:= ECode
     end, ExpectedCodes).
 
+
+-spec prepare_elasticsearch_batch(od_harvester:batch()) -> binary().
+prepare_elasticsearch_batch(Batch) ->
+    Requests = lists:map(fun(BatchEntry) ->
+        #{
+            <<"operation">> := Operation,
+            <<"fileId">> := EntryId,
+            <<"payload">> := Payload
+        } = BatchEntry,
+        Operation1 = case Operation of
+            submit -> <<"index">>;
+            delete -> <<"delete">>
+        end,
+        % submit only JSON, ignore other metadata
+        {FinalOperation, Data} = case maps:find(<<"json">>, Payload) of
+            {ok, JSON} -> {Operation1, JSON};
+            _ -> {<<"delete">>, undefined}
+        end,
+        Req = json_utils:encode(#{FinalOperation => #{<<"_id">> => EntryId}}),
+        case FinalOperation of
+            <<"index">> -> str_utils:join_binary([Req, Data], <<"\n">>);
+            _ -> Req
+        end
+    end, Batch),
+    <<(str_utils:join_binary(Requests, <<"\n">>))/binary, "\n">>.
+
+
+-spec parse_batch_result(Res :: map(), od_harvester:batch(), od_harvester:id(), od_harvester:index_id()) -> 
+    {SuccessfulSeq :: integer() | undefined, FailedSeq :: integer() | undefined}.
+parse_batch_result(Res, Batch, HarvesterId, IndexId) ->
+    lists:foldl(
+        fun({EntryResponse, BatchEntry}, {PrevSeq, undefined}) -> 
+            Seq = maps:get(<<"seq">>, BatchEntry),
+            case get_entry_response_error(EntryResponse) of
+                undefined -> 
+                    {Seq, undefined};
+                {ErrorType, Error} ->
+                    case is_es_error_ignored(ErrorType) of
+                        true ->
+                            ?debug("Entry submit in harvester ~p in index ~p dropped because of not matching schema: ~p",
+                                [HarvesterId, IndexId, Error]),
+                            {Seq, undefined};
+                        false ->
+                            ?debug("Unexpected error in batch response in harvester ~p in index ~p: ~p", 
+                                [HarvesterId, IndexId, Error]),
+                            {PrevSeq, Seq}
+                    end
+            end;
+           (_, Acc) -> 
+               % ignore rest of response when first error is found 
+               Acc 
+        end, {undefined, undefined}, lists:zip(maps:get(<<"items">>, Res), Batch)).
+
+
+-spec get_entry_response_error(EntryResponse :: map()) -> {ErrorType :: binary(), Error :: map()}.
+get_entry_response_error(EntryResponse) ->
+    InnerMap = case maps:find(<<"index">>, EntryResponse) of
+        {ok, M} -> M;
+        _ -> maps:get(<<"delete">>, EntryResponse)
+    end,
+    case maps:get(<<"error">>, InnerMap, undefined) of
+        undefined -> undefined;
+        ErrorMap -> {maps:get(<<"type">>, ErrorMap), ErrorMap}
+    end.
+
+
+-spec is_es_error_ignored(Error :: binary()) -> boolean().
+is_es_error_ignored(<<"mapper_parsing_exception">>) -> true;
+is_es_error_ignored(<<"strict_dynamic_mapping_exception">>) -> true;
+is_es_error_ignored(_) -> false.

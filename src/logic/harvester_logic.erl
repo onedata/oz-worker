@@ -44,7 +44,8 @@
     list_indices/2
 ]).
 -export([
-    submit_entry/4, delete_entry/4
+    submit_entry/4, delete_entry/4,
+    submit_batch/4
 ]).
 -export([
     create_user_invite_token/2,
@@ -82,6 +83,9 @@
     has_eff_user/2,
     has_eff_group/2,
     has_space/2
+]).
+-export([
+    submit_batch/6
 ]).
 
 %%%===================================================================
@@ -443,6 +447,40 @@ submit_entry(Client, HarvesterId, FileId, Data) ->
         operation = create,
         client = Client,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {submit_entry, FileId}},
+        data = Data
+    })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Submits given batch to harvesters backend.
+%% Indices, MaxSeq and Batch are given explicitly.
+%% @end
+%%--------------------------------------------------------------------
+-spec submit_batch(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+    Indices :: od_harvester:indices(), SpaceId :: od_space:id(), Batch :: od_harvester:batch(), 
+    MaxSeq :: integer()) -> {ok, map()} | {error, term()}.
+submit_batch(Client, HarvesterId, Indices, SpaceId, Batch, MaxSeq) ->
+    submit_batch(Client, HarvesterId, SpaceId, #{
+            <<"indices">> => Indices,
+            <<"maxSeq">> => MaxSeq,
+            <<"batch">> => Batch
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Submits given batch to harvesters backend.
+%% Indices, MaxSeq and Batch are provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec submit_batch(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+    SpaceId :: od_space:id(), Data :: map()) -> {ok, map()} | {error, term()}.
+submit_batch(Client, HarvesterId, SpaceId, Data) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {submit_batch, SpaceId}},
         data = Data
     })).
 
@@ -1105,3 +1143,4 @@ has_space(HarvesterId, SpaceId) when is_binary(HarvesterId) ->
     entity_graph:has_relation(direct, top_down, od_space, SpaceId, od_harvester, HarvesterId);
 has_space(Harvester, SpaceId) ->
     entity_graph:has_relation(direct, top_down, od_space, SpaceId, Harvester).
+
