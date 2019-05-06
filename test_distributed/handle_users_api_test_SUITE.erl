@@ -73,8 +73,8 @@ add_user_test(Config) ->
     {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
         Config, ?HANDLE_UPDATE
     ),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllPrivs = privileges:handle_privileges(),
 
@@ -152,10 +152,10 @@ remove_user_test(Config) ->
     {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
         Config, ?HANDLE_UPDATE
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, U3} = oz_test_utils:create_user(Config),
         {ok, U3} = oz_test_utils:handle_add_user(Config, HandleId, U3),
         #{userId => U3}
     end,
@@ -205,8 +205,8 @@ list_users_test(Config) ->
     {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
         Config, ?HANDLE_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:handle_add_user(Config, HandleId, U3),
 
     ExpUsers = [U1, U2, U3],
@@ -242,11 +242,11 @@ list_users_test(Config) ->
 
 
 get_user_test(Config) ->
-    {ok, Creator} = oz_test_utils:create_user(Config, #od_user{name = <<"creator">>, alias = <<"creator">>}),
-    {ok, MemberWithViewPrivs} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, MemberWithoutViewPrivs} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Member} = oz_test_utils:create_user(Config, #od_user{name = <<"member">>, alias = <<"member">>}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Creator} = oz_test_utils:create_user(Config, #{<<"name">> => <<"creator">>, <<"alias">> => <<"creator">>}),
+    {ok, MemberWithViewPrivs} = oz_test_utils:create_user(Config),
+    {ok, MemberWithoutViewPrivs} = oz_test_utils:create_user(Config),
+    {ok, Member} = oz_test_utils:create_user(Config, #{<<"name">> => <<"member">>, <<"alias">> => <<"member">>}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     oz_test_utils:user_set_oz_privileges(Config, Creator, [
         ?OZ_HANDLE_SERVICES_CREATE
@@ -342,8 +342,8 @@ get_user_privileges_test(Config) ->
     {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
         Config, ?HANDLE_VIEW
     ),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
@@ -404,8 +404,8 @@ update_user_privileges_test(Config) ->
     {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
         Config, ?HANDLE_UPDATE
     ),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
@@ -603,12 +603,12 @@ get_eff_user_privileges_test(Config) ->
     {HandleId, U1, U2} = api_test_scenarios:create_basic_handle_env(
         Config, ?HANDLE_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose eff privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),

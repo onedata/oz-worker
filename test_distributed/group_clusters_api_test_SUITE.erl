@@ -64,7 +64,7 @@ list_clusters_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ExpClusters = lists:map(
         fun(_) ->
@@ -112,7 +112,7 @@ join_cluster_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_ADD_CLUSTER
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, {P1, _Macaroon1}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
@@ -240,7 +240,7 @@ get_cluster_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
     ClusterId = ProviderId,
@@ -299,7 +299,7 @@ leave_cluster_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_LEAVE_CLUSTER
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),

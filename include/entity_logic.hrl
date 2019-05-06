@@ -111,6 +111,8 @@
 -define(USER_NAME_MIDDLE_CHARS_ALLOWED, <<"\\pL\\pNd ',.-">>).
 -define(USER_NAME_LAST_CHARS_ALLOWED, <<"\\pL\\pNd.">>).
 -define(USER_NAME_MAXIMUM_LENGTH, 50).
+-define(DEFAULT_USER_NAME, <<"Unnamed User">>).
+-define(PASSWORD_MIN_LENGTH, 8).
 
 % Regexp to validate aliases. Alias must be 2-20 characters long and composed of
 % letters and digits.

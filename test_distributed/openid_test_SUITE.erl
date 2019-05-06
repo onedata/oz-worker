@@ -241,7 +241,7 @@ validate_correct_login_base(Config, TestMode) ->
     )),
 
     ExpSubjectId = <<"abxdef1x2x3x4x">>,  % {replace, "c", "x", "id"}
-    ExpUserId = user_logic:idp_uid_to_system_uid(?DUMMY_IDP, ExpSubjectId),
+    ExpUserId = linked_accounts:idp_uid_to_system_uid(?DUMMY_IDP, ExpSubjectId),
     ExpName = <<"John Doe Jr">>,
     ExpAlias = <<"jodoe">>,
     ExpEmails = [<<"john.doe@my.org">>],
@@ -374,7 +374,7 @@ authority_delegation(Config) ->
         Config, OidcSpec, Url, #{<<"sub">> => SubjectId}
     )),
 
-    ExpUserId = user_logic:idp_uid_to_system_uid(?DUMMY_IDP, SubjectId),
+    ExpUserId = linked_accounts:idp_uid_to_system_uid(?DUMMY_IDP, SubjectId),
 
     DelegationWorksSpec = fun(Success, AuthType) -> #{
         request => #{
@@ -430,7 +430,7 @@ offline_access(Config) ->
         offlineAccess => false
     }}]),
     simulate_login_flow(Config, ?DUMMY_IDP, false, false, OidcSpec, #{<<"sub">> => SubjectId}),
-    UserId = user_logic:idp_uid_to_system_uid(?DUMMY_IDP, SubjectId),
+    UserId = linked_accounts:idp_uid_to_system_uid(?DUMMY_IDP, SubjectId),
     ?assertMatch(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, []), ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % The user does not have any access/refresh token cached -> not found
@@ -482,14 +482,14 @@ offline_access_internals(Config) ->
     }}]),
     % Simulate a user with some already cached tokens
     {ok, #document{key = UserId}} = oz_test_utils:call_oz(
-        Config, user_logic, create_user_by_linked_account, [#linked_account{
+        Config, linked_accounts, acquire_user, [#linked_account{
             idp = ?DUMMY_IDP,
             subject_id = SubjectId,
             access_token = {<<"at1">>, oz_test_utils:get_mocked_time(Config) + 1000},
             refresh_token = <<"rt1">>
         }]
     ),
-    ?assertMatch(UserId, user_logic:idp_uid_to_system_uid(?DUMMY_IDP, SubjectId)),
+    ?assertMatch(UserId, linked_accounts:idp_uid_to_system_uid(?DUMMY_IDP, SubjectId)),
     ?assertMatch({ok, {<<"at1">>, 1000}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % Access token should be refreshed only when the RefreshThreshold is reached
@@ -548,7 +548,7 @@ offline_access_internals(Config) ->
     % Refreshing the token should also fetch user data and refresh it
     ?assertMatch(
         {ok, _},
-        oz_test_utils:call_oz(Config, user_logic, merge_linked_account, [UserId, #linked_account{
+        oz_test_utils:call_oz(Config, linked_accounts, merge, [UserId, #linked_account{
             idp = ?DUMMY_IDP,
             subject_id = SubjectId,
             name = <<"Old Name">>,
@@ -609,7 +609,7 @@ link_account(Config) ->
     ]),
 
     % Log in using the first IdP
-    ExpFirstUserId = user_logic:idp_uid_to_system_uid(?FIRST_IDP, FirstSubjectId),
+    ExpFirstUserId = linked_accounts:idp_uid_to_system_uid(?FIRST_IDP, FirstSubjectId),
     ?assertMatch(
         {ok, ExpFirstUserId, _},
         simulate_login_flow(Config, ?FIRST_IDP, false, false, OidcSpec, #{

@@ -59,8 +59,8 @@ list_test(Config) ->
     % Make sure that shares created in other tests are deleted.
     oz_test_utils:delete_all_entities(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME2),
@@ -124,12 +124,12 @@ create_test(Config) ->
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_MANAGE_SHARES
     ),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
     oz_test_utils:space_set_user_privileges(Config, S1, U3, [
         ?SPACE_MANAGE_SHARES
     ], []),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     VerifyFun = fun(ShareId) ->
         {ok, Share} = oz_test_utils:get_share(Config, ShareId),
@@ -238,7 +238,7 @@ get_test(Config) ->
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, ShareId} = oz_test_utils:create_share(
         Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
@@ -347,7 +347,7 @@ update_test(Config) ->
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_MANAGE_SHARES
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         ShareId = ?UNIQUE_STRING,
@@ -412,7 +412,7 @@ delete_test(Config) ->
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_MANAGE_SHARES
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         ShareId = ?UNIQUE_STRING,
@@ -486,7 +486,7 @@ public_share_page_test(Config) ->
         Config, ProviderData
     ),
 
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
 
     {ok, NewSpace} = oz_test_utils:create_space(Config, ?USER(User), ?UNIQUE_STRING),
     oz_test_utils:support_space(Config, NewProvider, NewSpace),

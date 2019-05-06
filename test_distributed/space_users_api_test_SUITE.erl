@@ -72,10 +72,10 @@ all() ->
 
 
 add_user_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, EffectiveUser} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUser} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
 
@@ -142,10 +142,10 @@ add_user_test(Config) ->
 
 
 add_user_with_privileges_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, EffectiveUser} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUser} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
 
@@ -233,7 +233,7 @@ create_user_invite_token_test(Config) ->
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_ADD_USER
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     VerifyFun = api_test_scenarios:collect_unique_tokens_fun(),
 
@@ -274,10 +274,10 @@ remove_user_test(Config) ->
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_REMOVE_USER
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, U3} = oz_test_utils:create_user(Config),
         {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
         #{userId => U3}
     end,
@@ -327,8 +327,8 @@ list_users_test(Config) ->
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW
     ),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
     ExpUsers = [U1, U2, U3],
@@ -365,11 +365,11 @@ list_users_test(Config) ->
 
 
 get_user_test(Config) ->
-    {ok, Creator} = oz_test_utils:create_user(Config, #od_user{name = <<"creator">>, alias = <<"creator">>}),
-    {ok, MemberWithViewPrivs} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, MemberWithoutViewPrivs} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Member} = oz_test_utils:create_user(Config, #od_user{name = <<"member">>, alias = <<"member">>}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Creator} = oz_test_utils:create_user(Config, #{<<"name">> => <<"creator">>, <<"alias">> => <<"creator">>}),
+    {ok, MemberWithViewPrivs} = oz_test_utils:create_user(Config),
+    {ok, MemberWithoutViewPrivs} = oz_test_utils:create_user(Config),
+    {ok, Member} = oz_test_utils:create_user(Config, #{<<"name">> => <<"member">>, <<"alias">> => <<"member">>}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(Creator), ?SPACE_NAME1),
     {ok, _} = oz_test_utils:space_add_user(Config, Space, MemberWithViewPrivs),
@@ -454,12 +454,12 @@ get_user_privileges_test(Config) ->
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW_PRIVILEGES
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
 
     AllPrivs = privileges:space_privileges(),
@@ -514,12 +514,12 @@ update_user_privileges_test(Config) ->
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_SET_PRIVILEGES
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to update user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
 
     AllPrivs = privileges:space_privileges(),
@@ -706,12 +706,12 @@ get_eff_user_privileges_test(Config) ->
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW_PRIVILEGES
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose eff privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
@@ -803,9 +803,9 @@ get_eff_user_membership_intermediaries(Config) ->
     %%      <<user>>
     %%      NonAdmin
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),

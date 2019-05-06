@@ -99,7 +99,9 @@ set_up_users(Users) ->
                 default_space = DefaultSpace,
                 groups = []
             },
-            {ok, UserId} = create_user_with_uuid(UserInfo, UserId)
+            {ok, UserInfo2} = basic_auth:toggle_basic_auth(UserInfo, true),
+            {ok, UserInfo3} = basic_auth:set_password(UserInfo2, <<"password">>),
+            {ok, UserId} = create_user_with_uuid(UserInfo3, UserId)
         end, Users)
     catch
         T:M ->

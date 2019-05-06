@@ -86,10 +86,8 @@ root_client() ->
 -spec client_connected(gs_protocol:client(), gs_server:connection_info(), gs_server:conn_ref()) ->
     ok.
 client_connected(?PROVIDER(ProvId), _, ConnectionRef) ->
-    {ok, ProviderRecord = #od_provider{
-        name = Name
-    }} = provider_logic:get(?ROOT, ProvId),
-    ?info("Provider '~ts' has connected (~s)", [Name, ProvId]),
+    {ok, ProviderRecord} = provider_logic:get(?ROOT, ProvId),
+    ?info("Provider '~ts' has connected (~s)", [ProviderRecord#od_provider.name, ProvId]),
     provider_connection:add_connection(ProvId, ConnectionRef),
     % Generate a dummy update which will cause a push to GUI clients so that
     % they can learn the provider is now online.

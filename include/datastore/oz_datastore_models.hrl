@@ -106,9 +106,10 @@
     name = <<"">> :: od_user:name(),
     alias = undefined :: od_user:alias(),
     emails = [] :: [od_user:email()],
-    % Decides if this user can login via login:password, only users created in
-    % onepanel are currently allowed to do that.
+    % Decides if this user can login via login:password
+    % (currently reserved for special users created via Onepanel)
     basic_auth_enabled = false :: boolean(),
+    password_hash = undefined :: undefined | basic_auth:password_hash(),
     linked_accounts = [] :: [od_user:linked_account()],
     entitlements = [] :: [od_group:id()],
 
@@ -316,10 +317,10 @@
     name = <<"">> :: od_harvester:name(),
     plugin :: od_harvester:plugin(),
     endpoint :: od_harvester:endpoint(),
-    
+
     gui_plugin_config = #{} :: json_utils:json_term(),
     public = false :: boolean(),
-    
+
     indices = #{} :: od_harvester:indices(),
 
     % Direct relations to other entities
@@ -447,13 +448,5 @@
     timestamp = 0 :: integer(),  % In seconds since epoch
     state_info = #{} :: state_token:state_info()
 }).
-
-%% Record used to cache authorization via basic auth credentials
--record(basic_auth_cache, {
-    expires :: non_neg_integer(),
-    password_hash :: binary(),
-    props :: maps:map()
-}).
-
 
 -endif.

@@ -51,8 +51,8 @@ od_handle_service | od_handle | od_harvester | od_cluster | oz_privileges.
 -type result() :: create_result() | get_result() | update_result() | delete_result().
 -type error() :: gs_protocol:error().
 
--type type_validator() :: any | atom | list_of_atoms | binary | alias | list_of_binaries 
-| integer | float | json | token | boolean | list_of_ipv4_addresses.
+-type type_validator() :: any | atom | list_of_atoms | binary | alias |
+list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
 fun((term()) -> boolean()) |
@@ -64,9 +64,8 @@ fun((term()) -> boolean()) |
 {relation_exists, atom(), binary(), atom(), binary(), fun((entity_id()) -> boolean())} |
 token_logic:token_type() | % Compatible only with 'token' type validator
 subdomain | domain |
-email |
-alias |
-name | user_name.
+email | alias |
+name | user_name | password.
 
 % The 'aspect' key word allows to validate the data provided in aspect
 % identifier.
@@ -401,6 +400,9 @@ fetch_entity(State = #state{entity = Entity}) when Entity /= undefined ->
     State;
 fetch_entity(State = #state{req = #el_req{gri = #gri{id = undefined}}}) ->
     State;
+fetch_entity(State = #state{req = #el_req{operation = create, gri = #gri{aspect = instance}}}) ->
+    % Skip when creating an instance with predefined Id
+    State;
 fetch_entity(State) ->
     case call_plugin(fetch_entity, State) of
         {ok, Entity} ->
@@ -592,8 +594,7 @@ report_unauthorized(#state{req = #el_req{client = ?NOBODY}}) ->
     % The client was not authenticated -> unauthorized
     throw(?ERROR_UNAUTHORIZED);
 report_unauthorized(_) ->
-    % The client was authenticated but cannot access the
-    % aspect -> forbidden
+    % The client was authenticated but cannot access the aspect -> forbidden
     throw(?ERROR_FORBIDDEN).
 
 
@@ -763,6 +764,10 @@ check_type(binary, _Key, null) ->
     undefined;
 check_type(binary, _Key, Binary) when is_binary(Binary) ->
     Binary;
+check_type(binary, _Key, null) ->
+    undefined;
+check_type(binary, _Key, undefined) ->
+    undefined;
 check_type(binary, _Key, Atom) when is_atom(Atom) ->
     atom_to_binary(Atom, utf8);
 check_type(binary, Key, _) ->
@@ -1016,6 +1021,11 @@ check_value(binary, user_name, _Key, Value) ->
     case user_logic:validate_name(Value) of
         true -> Value;
         false -> throw(?ERROR_BAD_VALUE_USER_NAME)
+    end;
+check_value(binary, password, _Key, Value) ->
+    case size(Value) >= ?PASSWORD_MIN_LENGTH of
+        true -> Value;
+        false -> throw(?ERROR_BAD_VALUE_PASSWORD)
     end;
 check_value(binary, name, _Key, Value) ->
     case validate_name(Value) of

@@ -54,7 +54,7 @@ all() ->
 
 % Check macaroon based authorization
 macaroon_test(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{name = <<"U1">>}),
+    {ok, UserId} = oz_test_utils:create_user(Config, #{<<"name">> => <<"U1">>}),
 
     {ok, Macaroon} = oz_test_utils:create_client_token(
         Config, UserId
@@ -99,9 +99,11 @@ macaroon_test(Config) ->
 
 
 basic_auth_test(Config) ->
-    % Basic auth procedure is mocked in init_per_testcase,
-    % and user is initialized there
-    UserId = ?config(user_id, Config),
+    {ok, UserId} = oz_test_utils:create_user(Config, #{
+        <<"alias">> => ?CORRECT_LOGIN,
+        <<"password">> => ?CORRECT_PASSWORD
+    }),
+
     oz_test_utils:toggle_basic_auth(Config, true),
 
     ?assert(rest_test_utils:check_rest_call(Config, #{
@@ -113,7 +115,7 @@ basic_auth_test(Config) ->
         expect => #{
             code => 200,
             body => {contains, #{
-                <<"userId">> => UserId, <<"name">> => ?CORRECT_LOGIN
+                <<"userId">> => UserId, <<"login">> => ?CORRECT_LOGIN
             }}
         }
     })),
@@ -165,7 +167,7 @@ external_access_token_test(Config) ->
     PrefixFun = ?config(prefix_fun, Config),
 
     UserIdFun = fun(IdP) ->
-        user_logic:idp_uid_to_system_uid(IdP, UserSubjectIdFun(IdP))
+        linked_accounts:idp_uid_to_system_uid(IdP, UserSubjectIdFun(IdP))
     end,
 
     XAuthTokenFun = fun(IdP) ->
@@ -249,7 +251,7 @@ gui_macaroon_test(Config) ->
     {ok, {_Provider2, Provider2Macaroon}} = oz_test_utils:create_provider(
         Config, ?UNIQUE_STRING
     ),
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{name = <<"U1">>}),
+    {ok, UserId} = oz_test_utils:create_user(Config, #{<<"name">> => <<"U1">>}),
     {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, UserId),
 
     ClusterType = ?ONEPROVIDER,
@@ -336,49 +338,13 @@ basic_auth_header(Login, Password) ->
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    Posthook = fun(NewConfig) ->
-        % Sleep a while before mocking http_client (which is done in
-        % init_per_testcase) - otherwise meck's reloading and purging the module
-        % can cause the oz-worker application to crash.
-        timer:sleep(5000),
-        NewConfig
-    end,
-    [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]} | Config].
+    [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
-
-init_per_testcase(basic_auth_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    OnepanelUserId = <<"user1Id">>,
-    UserId = user_logic:onepanel_uid_to_system_uid(OnepanelUserId),
-
-    ok = test_utils:mock_new(Nodes, http_client, [passthrough]),
-    test_utils:mock_expect(Nodes, http_client, get, fun(Url, Headers, Body, Options) ->
-        case binary:match(Url, <<"9443/api/v3/onepanel/users">>) of
-            nomatch ->
-                meck:passthrough([Url, Headers, Body, Options]);
-            _ ->
-                <<"Basic ", UserAndPassword/binary>> =
-                    maps:get(<<"authorization">>, Headers),
-                [User, Passwd] =
-                    binary:split(base64:decode(UserAndPassword), <<":">>),
-                case {User, Passwd} of
-                    {?CORRECT_LOGIN, ?CORRECT_PASSWORD} ->
-                        ResponseBody = json_utils:encode(#{
-                            <<"userId">> => OnepanelUserId,
-                            <<"userRole">> => <<"user1Role">>
-                        }),
-                        {ok, 200, #{}, ResponseBody};
-                    _ ->
-                        {ok, 401, #{}, <<"">>}
-                end
-        end
-    end),
-    [{user_id, UserId} | Config];
 
 init_per_testcase(external_access_token_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
@@ -486,10 +452,6 @@ init_per_testcase(gui_macaroon_test, Config) ->
 init_per_testcase(_, Config) ->
     Config.
 
-
-end_per_testcase(basic_auth_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, http_client);
 
 end_per_testcase(external_access_token_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),

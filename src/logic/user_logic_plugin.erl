@@ -27,6 +27,8 @@
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 -export([auth_by_oz_privilege/2]).
 
+-define(CRITICAL_SECTION(Alias, Fun), critical_section:run({alias, Alias}, Fun)).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
@@ -57,6 +59,7 @@ fetch_entity(UserId) ->
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
 operation_supported(create, authorize, private) -> true;
+operation_supported(create, instance, private) -> true;
 operation_supported(create, client_tokens, private) -> true;
 operation_supported(create, default_space, private) -> true;
 operation_supported(create, {space_alias, _}, private) -> true;
@@ -102,6 +105,8 @@ operation_supported(get, clusters, private) -> true;
 operation_supported(get, eff_clusters, private) -> true;
 
 operation_supported(update, instance, private) -> true;
+operation_supported(update, password, private) -> true;
+operation_supported(update, basic_auth, private) -> true;
 operation_supported(update, oz_privileges, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
@@ -157,6 +162,49 @@ create(#el_req{gri = #gri{aspect = authorize}, data = Data}) ->
             {ok, value, DischargeMacaroonToken};
         _ ->
             ?ERROR_BAD_VALUE_IDENTIFIER(<<"identifier">>)
+    end;
+
+create(#el_req{gri = GRI = #gri{id = ProposedUserId, aspect = instance}, data = Data}) ->
+    % Creating users with predefined UserId is reserved for Onezone logic (?ROOT auth).
+    % Users with ?OZ_USERS_CREATE privilege can create new users but the UserIds are
+    % assigned automatically (in this case ProposedUserId is undefined).
+    Name = maps:get(<<"name">>, Data, ?DEFAULT_USER_NAME),
+    Alias = maps:get(<<"alias">>, Data, undefined),
+    BasicUserRecord = #od_user{name = Name, alias = Alias},
+
+    UserRecord = case maps:find(<<"password">>, Data) of
+        error ->
+            BasicUserRecord;
+        {ok, Password} ->
+            {ok, UserRecord2} = basic_auth:toggle_basic_auth(BasicUserRecord, true),
+            {ok, UserRecord3} = basic_auth:set_password(UserRecord2, Password),
+            UserRecord3
+    end,
+
+    CreateFun = fun() ->
+        case od_user:create(#document{key = ProposedUserId, value = UserRecord}) of
+            {error, already_exists} ->
+                ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"userId">>);
+            {ok, Doc = #document{key = UserId}} ->
+                set_up_user(Doc),
+                {ok, User} = fetch_entity(UserId),
+                {ok, resource, {GRI#gri{id = UserId}, User}}
+        end
+    end,
+
+    case Alias of
+        undefined ->
+            CreateFun();
+        _ ->
+            ?CRITICAL_SECTION(Alias, fun() ->
+                case od_user:get_by_alias(Alias) of
+                    {ok, #document{}} ->
+                        % Alias is occupied by another user
+                        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"alias">>);
+                    _ ->
+                        CreateFun()
+                end
+            end)
     end;
 
 create(#el_req{gri = #gri{id = UserId, aspect = client_tokens} = GRI}) ->
@@ -228,7 +276,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
     {ok, #{
         <<"name">> => Name, <<"alias">> => Alias,
         <<"emails">> => Emails,
-        <<"linkedAccounts">> => user_logic:linked_accounts_to_maps(LinkedAccounts),
+        <<"linkedAccounts">> => linked_accounts:to_maps(LinkedAccounts),
         <<"creationTime">> => CreationTime
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, User) ->
@@ -302,38 +350,75 @@ get(#el_req{gri = #gri{aspect = eff_clusters}}, User) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
+update(Req = #el_req{gri = #gri{id = UserId, aspect = instance}, data = #{<<"name">> := Name} = Data}) ->
+    {ok, _} = od_user:update(UserId, fun(User) ->
+        {ok, User#od_user{name = Name}}
+    end),
+    update(Req#el_req{data = maps:remove(<<"name">>, Data)});
 update(#el_req{gri = #gri{id = UserId, aspect = instance}, data = Data}) ->
-    UserUpdateFun = fun(#od_user{name = OldName, alias = OldAlias} = User) ->
-        {ok, User#od_user{
-            name = maps:get(<<"name">>, Data, OldName),
-            alias = maps:get(<<"alias">>, Data, OldAlias)
-        }}
-    end,
     % If alias is specified and is not undefined (which is valid in case of
-    % removing alias), run update in synchronized block so no two
-    % identical aliases can be set
-    case maps:get(<<"alias">>, Data, undefined) of
-        undefined ->
-            {ok, _} = od_user:update(UserId, UserUpdateFun),
+    % removing alias), run update in synchronized block so no two identical
+    % aliases can be set
+
+    UserUpdateFun = fun(Alias) ->
+        {ok, _} = od_user:update(UserId, fun(User) ->
+            {ok, User#od_user{alias = Alias}}
+        end),
+        ok
+    end,
+
+    case maps:find(<<"alias">>, Data) of
+        error ->
             ok;
-        Alias ->
-            critical_section:run({alias, Alias}, fun() ->
+        {ok, undefined} ->
+            UserUpdateFun(undefined);
+        {ok, Alias} ->
+            ?CRITICAL_SECTION(Alias, fun() ->
                 % Check if this alias is occupied
-                case od_user:get_by_criterion({alias, Alias}) of
+                case od_user:get_by_alias(Alias) of
                     {ok, #document{key = UserId}} ->
                         % DB returned the same user, so the alias was modified
                         % but is identical, don't report errors.
-                        {ok, _} = od_user:update(UserId, UserUpdateFun),
                         ok;
                     {ok, #document{}} ->
                         % Alias is occupied by another user
                         ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"alias">>);
                     _ ->
                         % Alias is not occupied, update user doc
-                        {ok, _} = od_user:update(UserId, UserUpdateFun),
-                        ok
+                        UserUpdateFun(Alias)
                 end
             end)
+    end;
+
+update(#el_req{gri = #gri{id = UserId, aspect = password}, data = Data}) ->
+    OldPassword = maps:get(<<"oldPassword">>, Data),
+    NewPassword = maps:get(<<"newPassword">>, Data),
+
+    Result = od_user:update(UserId, fun(User) ->
+        basic_auth:change_password(User, OldPassword, NewPassword)
+    end),
+
+    case Result of
+        {ok, _} -> ok;
+        {error, _} = Error -> Error
+    end;
+
+update(#el_req{gri = #gri{id = UserId, aspect = basic_auth}, data = Data}) ->
+    Result = od_user:update(UserId, fun(User) ->
+        {ok, User2} = case maps:find(<<"basicAuthEnabled">>, Data) of
+            {ok, Flag} -> basic_auth:toggle_basic_auth(User, Flag);
+            error -> {ok, User}
+        end,
+        case maps:find(<<"newPassword">>, Data) of
+
+            {ok, NewPassword} -> basic_auth:set_password(User2, NewPassword);
+            error -> {ok, User2}
+        end
+    end),
+
+    case Result of
+        {ok, _} -> ok;
+        {error, _} = Error -> Error
     end;
 
 update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = Data}) ->
@@ -351,13 +436,11 @@ update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = Data}) ->
 delete(#el_req{gri = #gri{id = UserId, aspect = instance}}) ->
     % Invalidate auth tokens
     auth_tokens:invalidate_user_tokens(UserId),
-    % Invalidate basic auth cache and client tokens
+    % Invalidate client tokens
     {ok, #document{
         value = #od_user{
-            alias = Alias,
             client_tokens = Tokens
         }}} = od_user:get(UserId),
-    basic_auth_cache:delete(Alias),
     lists:foreach(
         fun(Token) ->
             {ok, Macaroon} = token_logic:deserialize(Token),
@@ -543,12 +626,12 @@ authorize(Req = #el_req{operation = create, gri = #gri{id = UserId, aspect = pro
             false
     end;
 
-authorize(Req = #el_req{client = ?USER(UserId), operation = update, gri = #gri{aspect = oz_privileges}}, _) ->
-    auth_by_oz_privilege(Req, UserId, ?OZ_SET_PRIVILEGES);
-authorize(Req = #el_req{client = ?USER(UserId), operation = delete, gri = #gri{aspect = oz_privileges}}, _) ->
-    auth_by_oz_privilege(Req, UserId, ?OZ_SET_PRIVILEGES);
+authorize(#el_req{client = ?USER(UserId), operation = Operation, gri = #gri{id = UserId, aspect = oz_privileges}}, _) ->
+    % Regular users are allowed only to view their own OZ privileges
+    % (other operations are checked in required_admin_privileges/1)
+    Operation =:= get;
 
-% Beside modification of oz_privileges, user can perform all operations on his record
+% Beside above, user can perform all operations on his record
 authorize(#el_req{client = ?USER(UserId), gri = #gri{id = UserId}}, _) ->
     true;
 
@@ -642,6 +725,12 @@ authorize(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
+required_admin_privileges(#el_req{operation = create, gri = #gri{id = undefined, aspect = instance}}) ->
+    % Creating users with predefined UserId is reserved for Onezone logic (?ROOT auth).
+    % Users with ?OZ_USERS_CREATE privilege can create new users but the UserIds are
+    % assigned automatically.
+    [?OZ_USERS_CREATE];
+
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = provider_registration_token}}) ->
     [?OZ_PROVIDERS_INVITE];
 
@@ -687,9 +776,15 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_clust
 
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
     [?OZ_USERS_UPDATE];
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = basic_auth}}) ->
+    [?OZ_USERS_MANAGE_PASSWORDS];
+required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = oz_privileges}}) ->
+    [?OZ_SET_PRIVILEGES];
 
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = instance}}) ->
     [?OZ_USERS_DELETE];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = oz_privileges}}) ->
+    [?OZ_SET_PRIVILEGES];
 
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {group, _}}}) ->
     [?OZ_USERS_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS];
@@ -723,6 +818,25 @@ validate(#el_req{operation = create, gri = #gri{aspect = authorize}}) -> #{
         <<"identifier">> => {binary, non_empty}
     }
 };
+
+validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}) ->
+    case maps:is_key(<<"password">>, Data) of
+        true -> #{
+            required => #{
+                <<"alias">> => {alias, alias},
+                <<"password">> => {binary, password}
+            },
+            optional => #{
+                <<"name">> => {binary, user_name}
+            }
+        };
+        false -> #{
+            optional => #{
+                <<"name">> => {binary, user_name},
+                <<"alias">> => {alias, alias}
+            }
+        }
+    end;
 
 validate(#el_req{operation = create, gri = #gri{aspect = client_tokens}}) -> #{
 };
@@ -772,6 +886,20 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     }
 };
 
+validate(#el_req{operation = update, gri = #gri{aspect = password}}) -> #{
+    required => #{
+        <<"oldPassword">> => {binary, any},
+        <<"newPassword">> => {binary, password}
+    }
+};
+
+validate(#el_req{operation = update, gri = #gri{aspect = basic_auth}}) -> #{
+    at_least_one => #{
+        <<"basicAuthEnabled">> => {boolean, any},
+        <<"newPassword">> => {binary, password}
+    }
+};
+
 validate(#el_req{operation = update, gri = #gri{aspect = oz_privileges}}) -> #{
     at_least_one => #{
         <<"grant">> => {list_of_atoms, privileges:oz_privileges()},
@@ -807,25 +935,6 @@ auth_by_oz_privilege(UserOrId, Privilege) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Predicate checking if given client has specified effective oz privilege based
-%% on entity logic request. If the client is the same as GRI subject, the
-%% privileges can be checked using USEr record.
-%% @end
-%%--------------------------------------------------------------------
--spec auth_by_oz_privilege(entity_logic:req(), od_user:info(),
-    privileges:oz_privilege()) -> boolean().
-auth_by_oz_privilege(ElReq, User, Privilege) ->
-    case ElReq of
-        #el_req{client = ?USER(UserId), gri = #gri{id = UserId}} ->
-            auth_by_oz_privilege(User, Privilege);
-        #el_req{client = ?USER(OtherUser)} ->
-            auth_by_oz_privilege(OtherUser, Privilege)
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
 %% Finds a linked account in given list based on subject id.
 %% @end
 %%--------------------------------------------------------------------
@@ -837,3 +946,32 @@ find_linked_account(SubId, [Account = #linked_account{subject_id = SubId} | _]) 
     Account;
 find_linked_account(SubId, [_ | Rest]) ->
     find_linked_account(SubId, Rest).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Sets up environment for a new user by granting automatic space/group
+%% memberships (depending on Onezone config).
+%% @end
+%%--------------------------------------------------------------------
+-spec set_up_user(od_user:doc()) -> ok.
+set_up_user(#document{key = UserId, value = #od_user{name = Name}}) ->
+    case oz_worker:get_env(enable_automatic_first_space, false) of
+        true ->
+            SpaceName = <<Name/binary, "'s space">>,
+            user_logic:create_space(?USER(UserId), UserId, SpaceName);
+        _ ->
+            ok
+    end,
+
+    case oz_worker:get_env(enable_global_groups, false) of
+        true ->
+            GlobalGroups = oz_worker:get_env(global_groups),
+            lists:foreach(fun({GroupId, Privileges}) ->
+                {ok, UserId} = group_logic:add_user(?ROOT, GroupId, UserId, Privileges),
+                ?info("User '~s' has been added to global group '~s'", [UserId, GroupId])
+            end, GlobalGroups);
+        _ ->
+            ok
+    end.

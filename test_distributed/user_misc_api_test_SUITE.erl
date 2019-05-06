@@ -88,11 +88,11 @@ all() ->
 create_test(Config) ->
     ExpName = ?USER_NAME1,
     ExpAlias = ?USER_ALIAS1,
-    UserRecord = #od_user{name = ExpName, alias = ExpAlias},
+    UserData = #{<<"name">> = ExpName, <<"alias">> = ExpAlias},
 
     % Try to create user without predefined id
     {ok, UserId} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
-        Config, user_logic, create, [UserRecord]
+        Config, user_logic, create, [?ROOT, UserData]
     )),
     {ok, User} = oz_test_utils:get_user(Config, UserId),
     ?assertEqual(User#od_user.name, ExpName),
@@ -101,7 +101,7 @@ create_test(Config) ->
     % Try to create a user with given Id
     PredefinedUserId = <<"ausdhf87adsga87ht2q7hrw">>,
     {ok, PredefinedUserId} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
-        Config, user_logic, create, [UserRecord, PredefinedUserId]
+        Config, user_logic, create, [?ROOT, PredefinedUserId, UserData]
     )),
     {ok, User2} = oz_test_utils:get_user(Config, PredefinedUserId),
     ?assertEqual(User2#od_user.name, ExpName),
@@ -110,7 +110,7 @@ create_test(Config) ->
     % Second try should fail (such id exists)
     ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"userId">>),
         oz_test_utils:call_oz(
-            Config, user_logic, create, [UserRecord, PredefinedUserId]
+            Config, user_logic, create, [?ROOT, PredefinedUserId, UserData]
         )
     ).
 
@@ -120,7 +120,7 @@ authorize_test(Config) ->
     {ok, {Provider, _}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
     % Generate an auth token, parse the token for 3rd party caveats and check
     % if authorize endpoint works as expected.
     AuthToken = oz_test_utils:call_oz(
@@ -172,11 +172,11 @@ list_test(Config) ->
     % Make sure that users created in other tests are deleted.
     oz_test_utils:delete_all_entities(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, Admin} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, Admin, [
         ?OZ_USERS_LIST
     ], []),
@@ -229,12 +229,16 @@ get_test(Config) ->
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{
-        name = ExpName = <<"UserName">>,
-        alias = ExpAlias = <<"UserAlias">>,
-        emails = ExpEmailList = [<<"a@a.a">>, <<"b@b.b">>]
+    {ok, User} = oz_test_utils:create_user(Config, #{
+        <<"name">> => ExpName = <<"UserName">>,
+        <<"alias">> => ExpAlias = <<"UserAlias">>
     }),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ExpEmailList = [<<"a@a.a">>, <<"b@b.b">>],
+    oz_test_utils:call_oz(Config, od_user, update, [User, fun(UserRecord) ->
+        {ok, UserRecord#od_user{emails = ExpEmailList}}
+    end]),
+
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     {ok, S1} = oz_test_utils:support_space(
@@ -408,13 +412,14 @@ get_test(Config) ->
 
 
 get_self_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{
-        name = ExpName = <<"Name">>,
-        alias = ExpAlias = <<"Alias">>,
-        emails = ExpEmailList = [
-            <<"em1@google.com">>, <<"em2@google.com">>
-        ]
+    {ok, User} = oz_test_utils:create_user(Config, #{
+        <<"name">> => ExpName = <<"Name">>,
+        <<"alias">> => ExpAlias = <<"Alias">>
     }),
+    ExpEmailList = [<<"em1@google.com">>, <<"em2@google.com">>],
+    oz_test_utils:call_oz(Config, od_user, update, [User, fun(UserRecord) ->
+        {ok, UserRecord#od_user{emails = ExpEmailList}}
+    end]),
 
     ProtectedData = #{
         <<"name">> => ExpName,
@@ -455,13 +460,13 @@ get_self_test(Config) ->
 
 update_test(Config) ->
     UsedAlias = ?UNIQUE_STRING,
-    {ok, _U1} = oz_test_utils:create_user(Config, #od_user{alias = UsedAlias}),
+    {ok, _U1} = oz_test_utils:create_user(Config, #{<<"alias">> => UsedAlias}),
 
     % Trying to set owned alias again should not raise any error
     OwnedAlias = ?UNIQUE_STRING,
     EnvSetUpFun = fun() ->
-        {ok, User} = oz_test_utils:create_user(Config, #od_user{
-            name = ?USER_NAME1, alias = OwnedAlias
+        {ok, User} = oz_test_utils:create_user(Config, #{
+            <<"name">> => ?USER_NAME1, <<"alias">> => OwnedAlias
         }),
         #{userId => User}
     end,
@@ -531,7 +536,7 @@ update_test(Config) ->
     )),
 
     % Check that regular client can't make request on behalf of other client
-    {ok, SomeUser} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, SomeUser} = oz_test_utils:create_user(Config),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = ClientSpec#client_spec{
             correct = [{admin, [?OZ_USERS_UPDATE]}],
@@ -575,10 +580,10 @@ update_test(Config) ->
 
 
 delete_test(Config) ->
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, UserId} = oz_test_utils:create_user(Config),
         #{userId => UserId}
     end,
     DeleteEntityFun = fun(#{userId := UserId} = _Env) ->
@@ -632,7 +637,7 @@ delete_test(Config) ->
 
 delete_self_test(Config) ->
     EnvSetUpFun = fun() ->
-        {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, UserId} = oz_test_utils:create_user(Config),
         #{userId => UserId}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{userId := UserId} = _Env, _) ->
@@ -659,7 +664,7 @@ delete_self_test(Config) ->
 
 
 create_client_token_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
 
     VerifyFun = fun(ClientToken) ->
         {ok, Macaroon} = onedata_macaroons:deserialize(ClientToken),
@@ -688,7 +693,7 @@ create_client_token_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % Check that regular client can't make request on behalf of other client
-    {ok, SomeUser} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, SomeUser} = oz_test_utils:create_user(Config),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = ClientSpec#client_spec{
             unauthorized = [nobody],
@@ -707,7 +712,7 @@ create_client_token_test(Config) ->
 
 
 list_client_tokens_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
     {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
 
     ExpTokens = [Macaroon | lists:map(
@@ -735,7 +740,7 @@ list_client_tokens_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     % Check that regular client can't make request on behalf of other client
-    {ok, SomeUser} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, SomeUser} = oz_test_utils:create_user(Config),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = ClientSpec#client_spec{
             unauthorized = [nobody],
@@ -755,7 +760,7 @@ list_client_tokens_test(Config) ->
 
 
 delete_client_token_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, Token} = oz_test_utils:create_client_token(Config, User),
@@ -785,7 +790,7 @@ delete_client_token_test(Config) ->
     )),
 
     % Check that regular client can't make request on behalf of other client
-    {ok, SomeUser} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, SomeUser} = oz_test_utils:create_user(Config),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = ClientSpec#client_spec{
             unauthorized = [nobody],
@@ -809,9 +814,9 @@ set_default_provider_test(Config) ->
     {ok, {P1, _}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
@@ -891,9 +896,9 @@ set_default_provider_test(Config) ->
 
 
 get_default_provider_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % Newly created user should not have a default provider
     ApiTestSpec = #api_test_spec{
@@ -972,9 +977,9 @@ get_default_provider_test(Config) ->
 
 
 unset_default_provider_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
@@ -1043,9 +1048,9 @@ unset_default_provider_test(Config) ->
 
 
 acquire_idp_access_token_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % Offline access disabled in given IdP
     oz_test_utils:overwrite_auth_config(Config, #{
@@ -1128,7 +1133,7 @@ acquire_idp_access_token_test(Config) ->
     % Simulate user login
     DummyAccessToken = <<"abcdef">>,
     Now = oz_test_utils:call_oz(Config, time_utils, cluster_time_seconds, []),
-    oz_test_utils:call_oz(Config, user_logic, merge_linked_account, [
+    oz_test_utils:call_oz(Config, linked_accounts, merge, [
         U1, #linked_account{
             idp = dummyIdP,
             subject_id = <<"123">>,
@@ -1296,9 +1301,9 @@ get_spaces_in_eff_provider_test(Config) ->
     {ok, {ProviderId, _}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_DETAILS(?UNIQUE_STRING)#{<<"subdomainDelegation">> => false}
     ),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1_1} = oz_test_utils:create_space(Config, ?USER(U1), ?UNIQUE_STRING),
     {ok, S1_2} = oz_test_utils:create_space(Config, ?USER(U1), ?UNIQUE_STRING),

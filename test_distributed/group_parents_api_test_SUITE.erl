@@ -64,7 +64,7 @@ list_parents_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ExpGroups = lists:map(
         fun(_) ->
@@ -113,7 +113,7 @@ create_parent_test(Config) ->
     {Child, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_ADD_PARENT
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllPrivs = privileges:group_privileges(),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
@@ -222,7 +222,7 @@ join_parent_test(Config) ->
     {Child, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_ADD_PARENT
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     CreateTokenForItselfFun = fun() ->
         {ok, Macaroon} = oz_test_utils:group_invite_group_token(
@@ -377,7 +377,7 @@ leave_parent_test(Config) ->
     {Child, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_LEAVE_PARENT
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, Group} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME2),
@@ -431,7 +431,7 @@ get_parent_details_test(Config) ->
     {Group, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, ParentGroup} = oz_test_utils:create_group(Config, ?ROOT,
         #{<<"name">> => ?GROUP_NAME2, <<"type">> => ?GROUP_TYPE2}

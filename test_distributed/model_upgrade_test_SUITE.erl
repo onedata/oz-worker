@@ -660,6 +660,7 @@ get_record(od_user, 10) -> #od_user{
     alias = <<"login">>,
     emails = [<<"email1@email.com">>, <<"email2@email.com">>],
     basic_auth_enabled = true,
+    password_hash = undefined,
 
     linked_accounts = [
         #linked_account{

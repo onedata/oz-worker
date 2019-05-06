@@ -67,7 +67,7 @@ all() -> ?ALL([
 %%%===================================================================
 
 multiple_connections_per_session(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, {SessionId, Cookie}} = oz_test_utils:log_in(Config, UserId),
 
     ?assert(compare_user_sessions(Config, UserId, [SessionId])),
@@ -88,7 +88,7 @@ multiple_connections_per_session(Config) ->
 
 
 multiple_sessions_per_user(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, {Session1, Cookie1}} = oz_test_utils:log_in(Config, UserId),
 
     {_ClientPid1, ServerPid1, {user, UserId}} = start_gs_connection(Config, Cookie1),
@@ -115,7 +115,7 @@ multiple_sessions_per_user(Config) ->
 
 
 session_cookie_refresh_and_grace_period(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, {SessionId, Cookie}} = oz_test_utils:log_in(Config, UserId),
     {_ClientPid1, _ServerPid1, {user, UserId}} = start_gs_connection(Config, Cookie),
     {_ClientPid2, _ServerPid2, {user, UserId}} = start_gs_connection(Config, Cookie),
@@ -148,7 +148,7 @@ session_cookie_refresh_and_grace_period(Config) ->
 
 
 cleanup_on_session_expiry(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, {SessionId, Cookie}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid1, _ServerPid1, {user, UserId}} = start_gs_connection(Config, Cookie),
     {ClientPid2, _ServerPid2, {user, UserId}} = start_gs_connection(Config, Cookie),
@@ -169,7 +169,7 @@ cleanup_on_session_expiry(Config) ->
 
 
 cleanup_on_session_delete(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, {SessionId, Cookie}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid1, ServerPid1, {user, UserId}} = start_gs_connection(Config, Cookie),
     {ClientPid2, ServerPid2, {user, UserId}} = start_gs_connection(Config, Cookie),
@@ -191,7 +191,7 @@ cleanup_on_session_delete(Config) ->
 
 
 cleanup_on_user_delete(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, {Session1, Cookie1}} = oz_test_utils:log_in(Config, UserId),
     {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, UserId),
     {ok, {Session3, Cookie3}} = oz_test_utils:log_in(Config, UserId),
@@ -213,7 +213,7 @@ cleanup_on_user_delete(Config) ->
 
 
 cleanup_of_expired_sessions_upon_other_session_expiry(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, {Session1, Cookie1}} = oz_test_utils:log_in(Config, UserId),
     {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid1, ServerPid1, {user, UserId}} = start_gs_connection(Config, Cookie1),
@@ -256,7 +256,7 @@ cleanup_of_expired_sessions_upon_other_session_expiry(Config) ->
 
 
 cleanup_of_expired_sessions_upon_other_session_delete(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, {Session1, Cookie1}} = oz_test_utils:log_in(Config, UserId),
     {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, UserId),
     {ClientPid1, ServerPid1, {user, UserId}} = start_gs_connection(Config, Cookie1),
@@ -297,7 +297,7 @@ cleanup_of_expired_sessions_upon_other_session_delete(Config) ->
 
 
 create_gui_macaroons(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, {Session1, Cookie1}} = oz_test_utils:log_in(Config, UserId),
     {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, UserId),
 
@@ -353,7 +353,7 @@ create_gui_macaroons(Config) ->
 
 
 create_gui_macaroons_via_endpoint(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, {Session, Cookie}} = oz_test_utils:log_in(Config, UserId),
 
     {ok, Token1} = ?assertMatch(
@@ -388,7 +388,7 @@ create_gui_macaroons_via_endpoint(Config) ->
     )),
 
     % A user not belonging to the provider/cluster cannot generate GUI tokens for it
-    {ok, User2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User2} = oz_test_utils:create_user(Config),
     {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, User2),
     ?assertMatch(
         ?ERROR_FORBIDDEN, oz_test_utils:call_gui_token_endpoint(Config, Cookie2, ?ONEPROVIDER, ClusterId)
@@ -427,7 +427,7 @@ create_gui_macaroons_via_endpoint(Config) ->
 
 
 expiration_of_gui_macaroons(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, {Session1, _Cookie1}} = oz_test_utils:log_in(Config, UserId),
     {ok, {Session2, _Cookie2}} = oz_test_utils:log_in(Config, UserId),
 
@@ -464,7 +464,7 @@ expiration_of_gui_macaroons(Config) ->
 
 
 reuse_or_refresh_gui_macaroons(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, {Session1, _Cookie1}} = oz_test_utils:log_in(Config, UserId),
     {ok, {Macaroon, Expires}} = oz_test_utils:call_oz(
         Config, session, acquire_gui_macaroon, [Session1, ?ONEZONE, ?ONEZONE_CLUSTER_ID]
@@ -495,7 +495,7 @@ reuse_or_refresh_gui_macaroons(Config) ->
 
 
 cleanup_of_gui_macaroons(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, {Session1, Cookie1}} = oz_test_utils:log_in(Config, UserId),
     {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, UserId),
 

@@ -127,6 +127,8 @@ translate_resource(ProtocolVersion, GRI, Data) ->
     gs_protocol:data() | fun((gs_protocol:client()) -> gs_protocol:data()).
 translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, User) ->
     #od_user{
+        basic_auth_enabled = BasicAuthEnabled,
+        password_hash = PasswordHash,
         name = Name,
         alias = Alias,
         default_space = DefaultSpace,
@@ -134,6 +136,8 @@ translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, U
     } = User,
     #{
         <<"scope">> => <<"private">>,
+        <<"basicAuthEnabled">> => BasicAuthEnabled,
+        <<"hasPassword">> => PasswordHash /= undefined,
         <<"name">> => Name,
         <<"alias">> => gs_protocol:undefined_to_null(Alias),
         <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),

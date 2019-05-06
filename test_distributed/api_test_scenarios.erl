@@ -566,8 +566,8 @@ create_basic_group_env(Config, Privs) ->
     %%              /           \
     %%           User1         User2
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
 
     AllGroupPrivs = privileges:group_privileges(),
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
@@ -594,8 +594,8 @@ create_basic_space_env(Config, Privs) ->
     %%              /           \
     %%           User1         User2
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
 
     AllSpacePrivs = privileges:space_privileges(),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
@@ -622,11 +622,11 @@ create_basic_doi_hservice_env(Config, Privs) ->
     %%              /            \
     %%           User1         User2
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
     ], []),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config),
 
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?USER(U1), ?DOI_SERVICE
@@ -658,11 +658,11 @@ create_basic_handle_env(Config, Privs) ->
     %%              /            \
     %%           User1         User2
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
     ], []),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config),
 
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?USER(U1), ?DOI_SERVICE
@@ -732,8 +732,8 @@ create_basic_cluster_env(Config, Privs) ->
     %%              /           \
     %%           User1         User2
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
 
     AllClusterPrivs = privileges:cluster_privileges(),
 
@@ -789,9 +789,9 @@ create_eff_parent_groups_env(Config) ->
     {ok, G1} = oz_test_utils:group_add_group(Config, G3, G1),
     {ok, G1} = oz_test_utils:group_add_group(Config, G2, G1),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllGroupPrivs = privileges:group_privileges(),
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
@@ -831,8 +831,8 @@ create_eff_child_groups_env(Config) ->
                 <<"alias">> => Alias,
                 <<"name">> => Name
             },
-            {ok, UserId} = oz_test_utils:create_user(Config, #od_user{
-                name = Name, alias = Alias
+            {ok, UserId} = oz_test_utils:create_user(Config, #{
+                <<"name">> => Name, <<"alias">> => Alias
             }),
             {UserId, UserDetails}
         end, lists:seq(1, 4)
@@ -893,9 +893,9 @@ create_space_eff_users_env(Config) ->
         [{G1, _} | _] = Groups, Users
     } = create_eff_child_groups_env(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllSpacePrivs = privileges:space_privileges(),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
@@ -983,12 +983,12 @@ create_hservice_eff_users_env(Config) ->
         [{G1, _} | _] = Groups, Users
     } = api_test_scenarios:create_eff_child_groups_env(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
     ], []),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllHServicePrivileges = privileges:handle_service_privileges(),
     {ok, HService} = oz_test_utils:create_handle_service(
@@ -1036,12 +1036,12 @@ create_handle_eff_users_env(Config) ->
         [{G1, _} | _] = Groups, Users
     } = api_test_scenarios:create_eff_child_groups_env(Config),
 
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, U1} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
     ], []),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config),
 
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?USER(U1), ?DOI_SERVICE
@@ -1147,9 +1147,9 @@ create_cluster_eff_users_env(Config) ->
         [{G1, _} | _] = Groups, Users
     } = create_eff_child_groups_env(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllClusterPrivs = privileges:cluster_privileges(),
 

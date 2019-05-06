@@ -17,8 +17,8 @@
 -include_lib("ctool/include/privileges.hrl").
 
 %% API
--export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
--export([get_by_criterion/1]).
+-export([create/1, save/1, get/1, exists/1, update/2, update/3, force_delete/1, list/0]).
+-export([get_by_alias/1, alias_to_id/1, get_by_linked_account/1]).
 -export([to_string/1, print_summary/0, print_summary/1]).
 -export([entity_logic_plugin/0]).
 -export([add_session/2, remove_session/2, get_all_sessions/1]).
@@ -36,10 +36,7 @@
 -type alias() :: undefined | binary().
 -type email() :: binary().
 -type linked_account() :: #linked_account{}.
--type criterion() :: {linked_account, {auth_config:idp(), SubjectId :: binary()}} |
-{email, email()} |
-{alias, alias()}.
--export_type([name/0, alias/0]).
+-export_type([name/0, alias/0, email/0, linked_account/0]).
 
 % Delay before all session connections are terminated when user is deleted.
 -define(SESSION_CLEANUP_GRACE_PERIOD, 3000).
@@ -101,6 +98,15 @@ update(UserId, Diff) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Updates user by ID or creates a new one with Default doc.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(id(), diff(), doc()) -> {ok, doc()} | {error, term()}.
+update(UserId, Diff, Default) ->
+    datastore_model:update(?CTX, UserId, Diff, Default).
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Deletes user by ID.
 %% WARNING: Must not be used directly, as deleting a user that still has
 %% relations to other entities will cause serious inconsistencies in database.
@@ -124,56 +130,55 @@ list() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Gets first user matching given criterion.
+%% Returns the first user matching given Alias.
 %% @end
 %%--------------------------------------------------------------------
--spec get_by_criterion(criterion()) -> {ok, doc()} | {error, term()}.
-get_by_criterion({email, Value}) ->
-    Fun = fun(Doc = #document{value = #od_user{emails = EmailList}}, Acc) ->
-        case lists:member(Value, EmailList) of
-            true -> {stop, [Doc | Acc]};
-            false -> {ok, Acc}
+-spec get_by_alias(alias()) -> {ok, doc()} | {error, not_found}.
+get_by_alias(Alias) ->
+    Fun = fun(Doc, _) ->
+        case Doc of
+            #document{value = #od_user{alias = Alias}} -> {stop, Doc};
+            _ -> {ok, undefined}
         end
     end,
-    case datastore_model:fold(?CTX, Fun, []) of
-        {ok, []} ->
-            {error, not_found};
-        {ok, [Doc | _]} ->
-            {ok, Doc}
-    end;
-get_by_criterion({alias, Value}) ->
-    Fun = fun(Doc = #document{value = #od_user{alias = Alias}}, Acc) ->
-        case Alias of
-            Value -> {stop, [Doc | Acc]};
-            _ -> {ok, Acc}
-        end
-    end,
-    case datastore_model:fold(?CTX, Fun, []) of
-        {ok, []} ->
-            {error, not_found};
-        {ok, [Doc | _]} ->
-            {ok, Doc}
-    end;
-get_by_criterion({linked_account, {ProviderID, UserID}}) ->
-    Fun = fun(Doc = #document{value = #od_user{linked_accounts = Accounts}}, Acc) ->
-        Found = lists:any(fun
-            (#linked_account{idp = IDP, subject_id = UID}) ->
-                case {IDP, UID} of
-                    {ProviderID, UserID} -> true;
-                    _ -> false
-                end;
-            (_) -> false
+    case datastore_model:fold(?CTX, Fun, undefined) of
+        {ok, undefined} -> {error, not_found};
+        {ok, Doc} -> {ok, Doc}
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the id of the first user matching given Alias.
+%% @end
+%%--------------------------------------------------------------------
+-spec alias_to_id(alias()) -> {ok, id()} | {error, not_found}.
+alias_to_id(Alias) ->
+    case od_user:get_by_alias(Alias) of
+        {ok, #document{key = Id}} -> {ok, Id};
+        Error -> Error
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the first user matching given linked account.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_by_linked_account(linked_account()) -> {ok, doc()} | {error, not_found}.
+get_by_linked_account(#linked_account{idp = IdP, subject_id = SubjId}) ->
+    Fun = fun(Doc = #document{value = #od_user{linked_accounts = Accounts}}, _) ->
+        Found = lists:any(fun(L) ->
+            L#linked_account.idp == IdP andalso L#linked_account.subject_id == SubjId
         end, Accounts),
         case Found of
-            true -> {stop, [Doc | Acc]};
-            _ -> {ok, Acc}
+            true -> {stop, Doc};
+            _ -> {ok, undefined}
         end
     end,
-    case datastore_model:fold(?CTX, Fun, []) of
-        {ok, []} ->
-            {error, not_found};
-        {ok, [Doc | _]} ->
-            {ok, Doc}
+    case datastore_model:fold(?CTX, Fun, undefined) of
+        {ok, undefined} -> {error, not_found};
+        {ok, Doc} -> {ok, Doc}
     end.
 
 %%--------------------------------------------------------------------
@@ -507,6 +512,7 @@ get_record_struct(9) ->
     ]};
 get_record_struct(10) ->
     % Changes:
+    %   * new field - password_hash
     %   * new field - active sessions
     %   * new field - creation_time
     %   * new field - harvesters
@@ -519,6 +525,7 @@ get_record_struct(10) ->
         {alias, string},
         {email_list, [string]},
         {basic_auth_enabled, boolean},
+        {password_hash, binary},
 
         {linked_accounts, [{record, [
             {idp, atom},
@@ -1190,6 +1197,7 @@ upgrade_record(9, User) ->
         alias = Alias,
         emails = Emails,
         basic_auth_enabled = BasicAuthEnabled,
+        password_hash = undefined,
 
         linked_accounts = LinkedAccounts,
         entitlements = Entitlements,
