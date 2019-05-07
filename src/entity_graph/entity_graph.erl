@@ -370,6 +370,7 @@ add_relation(ChType, ChId, ChAttrs, ParType, ParId, ParAttrs) ->
                     % Some other error, we have to attempt reverting the
                     % relation in parent.
                     sync_on_entity(ParType, ParId, fun() ->
+                        update_dirty_queue(bottom_up, true, ParType, ParId),
                         update_entity(ParType, ParId, ParentRevertFun)
                     end),
                     Err1
@@ -871,7 +872,6 @@ update_oz_privileges(EntityType, EntityId, PrivsToGrant, PrivsToRevoke) ->
 is_up_to_date() ->
     is_up_to_date(entity_graph_state:get()).
 
-
 %% @private
 -spec is_up_to_date(entity_graph_state:state()) -> boolean().
 is_up_to_date(#entity_graph_state{bottom_up_dirty = [], top_down_dirty = []}) ->
@@ -926,7 +926,7 @@ update_dirty_queue(Direction, Flag, EntityType, EntityId) ->
                 };
             {bottom_up, false} ->
                 EffGraphState#entity_graph_state{
-                    bottom_up_dirty = lists:keydelete(EntityId, 3, BottomUpDirty)
+                    bottom_up_dirty = lists:delete({Priority, EntityType, EntityId}, BottomUpDirty)
                 };
             {top_down, true} ->
                 EffGraphState#entity_graph_state{
@@ -936,7 +936,7 @@ update_dirty_queue(Direction, Flag, EntityType, EntityId) ->
                 };
             {top_down, false} ->
                 EffGraphState#entity_graph_state{
-                    top_down_dirty = lists:keydelete(EntityId, 3, TopDownDirty)
+                    top_down_dirty = lists:delete({Priority, EntityType, EntityId}, TopDownDirty)
                 }
         end,
         {ok, NewState}
