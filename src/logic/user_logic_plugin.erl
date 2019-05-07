@@ -185,8 +185,8 @@ create(#el_req{gri = GRI = #gri{id = ProposedUserId, aspect = instance}, data = 
         case od_user:create(#document{key = ProposedUserId, value = UserRecord}) of
             {error, already_exists} ->
                 ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"userId">>);
-            {ok, Doc = #document{key = UserId}} ->
-                set_up_user(Doc),
+            {ok, #document{key = UserId}} ->
+                set_up_user(UserId),
                 {ok, User} = fetch_entity(UserId),
                 {ok, resource, {GRI#gri{id = UserId}, User}}
         end
@@ -350,41 +350,42 @@ get(#el_req{gri = #gri{aspect = eff_clusters}}, User) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
-update(Req = #el_req{gri = #gri{id = UserId, aspect = instance}, data = #{<<"name">> := Name} = Data}) ->
-    {ok, _} = od_user:update(UserId, fun(User) ->
-        {ok, User#od_user{name = Name}}
-    end),
-    update(Req#el_req{data = maps:remove(<<"name">>, Data)});
 update(#el_req{gri = #gri{id = UserId, aspect = instance}, data = Data}) ->
-    % If alias is specified and is not undefined (which is valid in case of
-    % removing alias), run update in synchronized block so no two identical
-    % aliases can be set
-
-    UserUpdateFun = fun(Alias) ->
+    UserUpdateFun = fun(NewAlias) ->
         {ok, _} = od_user:update(UserId, fun(User) ->
-            {ok, User#od_user{alias = Alias}}
+            {ok, User#od_user{
+                name = maps:get(<<"name">>, Data, User#od_user.name),
+                alias = case NewAlias of
+                    keep -> User#od_user.alias;
+                    undefined -> undefined;
+                    Bin when is_binary(Bin) -> NewAlias
+                end
+
+            }}
         end),
         ok
     end,
 
+    % If alias is specified and is not undefined (which is valid in case of
+    % removing alias), run update in synchronized block so no two identical
+    % aliases can be set
     case maps:find(<<"alias">>, Data) of
         error ->
-            ok;
+            UserUpdateFun(keep);
         {ok, undefined} ->
             UserUpdateFun(undefined);
         {ok, Alias} ->
             ?CRITICAL_SECTION(Alias, fun() ->
-                % Check if this alias is occupied
                 case od_user:get_by_alias(Alias) of
                     {ok, #document{key = UserId}} ->
-                        % DB returned the same user, so the alias was modified
-                        % but is identical, don't report errors.
-                        ok;
+                        % Alias is held by then same user, so it was changed to
+                        % identical -> update user doc (the name might have changed)
+                        UserUpdateFun(Alias);
                     {ok, #document{}} ->
                         % Alias is occupied by another user
                         ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"alias">>);
                     _ ->
-                        % Alias is not occupied, update user doc
+                        % Alias is not occupied -> update user doc
                         UserUpdateFun(Alias)
                 end
             end)
@@ -955,12 +956,11 @@ find_linked_account(SubId, [_ | Rest]) ->
 %% memberships (depending on Onezone config).
 %% @end
 %%--------------------------------------------------------------------
--spec set_up_user(od_user:doc()) -> ok.
-set_up_user(#document{key = UserId, value = #od_user{name = Name}}) ->
+-spec set_up_user(od_user:id()) -> ok.
+set_up_user(UserId) ->
     case oz_worker:get_env(enable_automatic_first_space, false) of
         true ->
-            SpaceName = <<Name/binary, "'s space">>,
-            user_logic:create_space(?USER(UserId), UserId, SpaceName);
+            {ok, _} = user_logic:create_space(?USER(UserId), UserId, ?FIRST_SPACE_NAME);
         _ ->
             ok
     end,

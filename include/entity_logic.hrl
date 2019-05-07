@@ -122,4 +122,7 @@
 -define(ALIAS_LAST_CHARS_ALLOWED, ?ALIAS_FIRST_CHARS_ALLOWED).
 -define(ALIAS_MAXIMUM_LENGTH, 20).
 
+% Used when enable_automatic_first_space is set to true
+-define(FIRST_SPACE_NAME, <<"Personal Space">>).
+
 -endif.

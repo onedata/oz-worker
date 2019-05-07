@@ -222,6 +222,8 @@ migrate_onepanel_user_to_onezone(Config) ->
         <<"admin">>, <<"password">>
     ])),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     % The user should be added as Onezone cluster admin
     ?assert(oz_test_utils:call_oz(Config, cluster_logic, has_eff_user, [?ONEZONE_CLUSTER_ID, ExpUserId])),
 

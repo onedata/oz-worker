@@ -281,24 +281,13 @@ automatic_first_space_test(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     [test_utils:set_env(N, oz_worker, enable_automatic_first_space, false) || N <- Nodes],
     {ok, UserId} = oz_test_utils:create_user(Config),
-    {ok, UserRecord} = oz_test_utils:get_user(Config, UserId),
-    #od_user{
-        default_space = DefaultSpace,
-        spaces = Spaces
-    } = UserRecord,
-    ?assertEqual(DefaultSpace, undefined),
-    ?assertEqual(Spaces, []),
+    ?assertMatch({ok, #od_user{spaces = []}}, oz_test_utils:get_user(Config, UserId)),
+
     % Enable automatic first space and check again
     [test_utils:set_env(N, oz_worker, enable_automatic_first_space, true) || N <- Nodes],
     {ok, UserId2} = oz_test_utils:create_user(Config),
     {ok, UserRecord2} = oz_test_utils:get_user(Config, UserId2),
-    #od_user{
-        default_space = DefaultSpace2,
-        spaces = Spaces2
-    } = UserRecord2,
-    ?assertEqual(length(Spaces2), 1),
-    [SpaceId2] = Spaces2,
-    ?assertEqual(DefaultSpace2, SpaceId2),
+    [SpaceId2] = ?assertMatch([_], UserRecord2#od_user.spaces),
     {ok, #od_space{users = Users}} = oz_test_utils:get_space(Config, SpaceId2),
     ?assert(maps:is_key(UserId2, Users)).
 

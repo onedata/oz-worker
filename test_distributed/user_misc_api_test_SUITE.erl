@@ -86,31 +86,40 @@ all() ->
 
 
 create_test(Config) ->
-    ExpName = ?USER_NAME1,
-    ExpAlias = ?USER_ALIAS1,
-    UserData = #{<<"name">> = ExpName, <<"alias">> = ExpAlias},
-
     % Try to create user without predefined id
-    {ok, UserId} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
-        Config, user_logic, create, [?ROOT, UserData]
+    ExpName1 = ?USER_NAME1,
+    ExpAlias1 = ?UNIQUE_STRING,
+    UserData1 = #{<<"name">> => ExpName1, <<"alias">> => ExpAlias1},
+    {ok, UserId1} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
+        Config, user_logic, create, [?ROOT, UserData1]
     )),
-    {ok, User} = oz_test_utils:get_user(Config, UserId),
-    ?assertEqual(User#od_user.name, ExpName),
-    ?assertEqual(User#od_user.alias, ExpAlias),
+    {ok, User1} = oz_test_utils:get_user(Config, UserId1),
+    ?assertEqual(User1#od_user.name, ExpName1),
+    ?assertEqual(User1#od_user.alias, ExpAlias1),
 
     % Try to create a user with given Id
     PredefinedUserId = <<"ausdhf87adsga87ht2q7hrw">>,
+    ExpName2 = ?USER_NAME2,
+    ExpAlias2 = ?UNIQUE_STRING,
+    UserData2 = #{<<"name">> => ExpName2, <<"alias">> => ExpAlias2},
     {ok, PredefinedUserId} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
-        Config, user_logic, create, [?ROOT, PredefinedUserId, UserData]
+        Config, user_logic, create, [?ROOT, PredefinedUserId, UserData2]
     )),
     {ok, User2} = oz_test_utils:get_user(Config, PredefinedUserId),
-    ?assertEqual(User2#od_user.name, ExpName),
-    ?assertEqual(User2#od_user.alias, ExpAlias),
+    ?assertEqual(User2#od_user.name, ExpName2),
+    ?assertEqual(User2#od_user.alias, ExpAlias2),
 
     % Second try should fail (such id exists)
     ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"userId">>),
         oz_test_utils:call_oz(
-            Config, user_logic, create, [?ROOT, PredefinedUserId, UserData]
+            Config, user_logic, create, [?ROOT, PredefinedUserId, #{<<"name">> => ?UNIQUE_STRING}]
+        )
+    ),
+
+    % Reusing the already occupied alias should fail
+    ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"alias">>),
+        oz_test_utils:call_oz(
+            Config, user_logic, create, [?ROOT, #{<<"alias">> => ExpAlias2}]
         )
     ).
 
@@ -459,22 +468,21 @@ get_self_test(Config) ->
 
 
 update_test(Config) ->
-    UsedAlias = ?UNIQUE_STRING,
-    {ok, _U1} = oz_test_utils:create_user(Config, #{<<"alias">> => UsedAlias}),
+    OccupiedAlias = ?UNIQUE_STRING,
+    oz_test_utils:create_user(Config, #{<<"alias">> => OccupiedAlias}),
 
-    % Trying to set owned alias again should not raise any error
     OwnedAlias = ?UNIQUE_STRING,
     EnvSetUpFun = fun() ->
-        {ok, User} = oz_test_utils:create_user(Config, #{
+        {ok, UserId} = oz_test_utils:create_user(Config, #{
             <<"name">> => ?USER_NAME1, <<"alias">> => OwnedAlias
         }),
-        #{userId => User}
+        #{userId => UserId}
     end,
     EnvTeardownFun = fun(#{userId := UserId} = _Env) ->
         oz_test_utils:delete_user(Config, UserId)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{userId := UserId} = _Env, Data) ->
-        {ok, User} = oz_test_utils:get_user(Config, UserId),
+        {ok, UserRecord} = oz_test_utils:get_user(Config, UserId),
         {ExpName, Alias} = case ShouldSucceed of
             false ->
                 {?USER_NAME1, OwnedAlias};
@@ -488,8 +496,8 @@ update_test(Config) ->
             null -> undefined;
             _ -> Alias
         end,
-        ?assertEqual(ExpName, User#od_user.name),
-        ?assertEqual(ExpAlias, User#od_user.alias)
+        ?assertEqual(ExpName, UserRecord#od_user.name),
+        ?assertEqual(ExpAlias, UserRecord#od_user.alias)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -513,7 +521,8 @@ update_test(Config) ->
             at_least_one = [<<"name">>, <<"alias">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_USER_NAME],
-                <<"alias">> => [fun() -> ?UNIQUE_STRING end, OwnedAlias, null]
+                % Trying to set owned alias again should not raise any error
+                <<"alias">> => [OwnedAlias, fun() -> ?UNIQUE_STRING end, null]
             },
             bad_values = [
                 {<<"alias">>, <<"">>, ?ERROR_BAD_VALUE_ALIAS},
@@ -522,7 +531,7 @@ update_test(Config) ->
                 {<<"alias">>, <<"asd_">>, ?ERROR_BAD_VALUE_ALIAS},
                 {<<"alias">>, <<"verylongaliaswithatleast15chars">>, ?ERROR_BAD_VALUE_ALIAS},
                 {<<"alias">>, 1234, ?ERROR_BAD_VALUE_ALIAS},
-                {<<"alias">>, UsedAlias,
+                {<<"alias">>, OccupiedAlias,
                     ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"alias">>)},
                 {<<"name">>, <<"a_d">>, ?ERROR_BAD_VALUE_USER_NAME},
                 {<<"name">>, <<"_ad">>, ?ERROR_BAD_VALUE_USER_NAME},
