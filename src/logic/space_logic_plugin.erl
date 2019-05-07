@@ -378,7 +378,13 @@ update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {group_privileges, GroupI
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
-    entity_graph:delete_with_relations(od_space, SpaceId);
+    fun(#od_space{harvesters = Harvesters}) ->
+        lists:foreach(fun(HarvesterId) ->
+            harvester_logic_plugin:update_indices_stats(HarvesterId, all, 
+                fun(ExistingStats) -> maps:without([SpaceId], ExistingStats) end)
+            end, Harvesters),
+        entity_graph:delete_with_relations(od_space, SpaceId)
+    end;
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}}) ->
     entity_graph:remove_relation(

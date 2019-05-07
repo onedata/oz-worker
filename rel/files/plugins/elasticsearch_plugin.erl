@@ -153,7 +153,14 @@ submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
                 end;
             {error, _} = Error -> 
                 ?debug("Error when updating index ~p in harvester ~p: ~p", [IndexId, HarvesterId, Error]),
-                {IndexId, {undefined, FirstSeq}}
+                ErrorMsg = case error_rest_translator:translate(Error) of
+                    {_, {MessageFormat, FormatArgs}} ->
+                        str_utils:format_bin(
+                            str_utils:to_list(MessageFormat), FormatArgs
+                        );
+                    {_, MessageBinary} -> MessageBinary
+                end,
+                {IndexId, {undefined, {FirstSeq, ErrorMsg}}}
         end
     end, Indices)}.
 
@@ -339,7 +346,7 @@ parse_batch_result(Res, Batch, HarvesterId, IndexId) ->
                         false ->
                             ?debug("Unexpected error in batch response in harvester ~p in index ~p: ~p", 
                                 [HarvesterId, IndexId, Error]),
-                            {PrevSeq, Seq}
+                            {PrevSeq, {Seq, ErrorType}}
                     end
             end;
            (_, Acc) -> 

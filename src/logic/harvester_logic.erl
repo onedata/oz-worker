@@ -409,7 +409,7 @@ get_public_index(Client, HarvesterId, IndexId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_index_progress(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
-    IndexId :: od_harvester:index_id()) -> {ok, od_harvester:index_progress()} | {error, term()}.
+    IndexId :: od_harvester:index_id()) -> {ok, od_harvester:indices_stats()} | {error, term()}.
 get_index_progress(Client, HarvesterId, IndexId) ->
     entity_logic:handle(#el_req{
         operation = get,

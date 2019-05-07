@@ -39,10 +39,8 @@
 -type index_id() :: binary().
 -type index() :: #harvester_index{}.
 -type indices() :: #{index_id() => #harvester_index{}}.
-% Index harvesting progress is stored per space per provider and is a list containing two values: 
-%   current seq - sequence harvested in this index
-%   max_seq - highest sequence known in given space in given provider
--type index_progress() :: #{od_space:id() => #{od_provider:id() => [non_neg_integer()]}}.
+% Index harvesting progress is stored per space per provider.
+-type indices_stats() :: #{od_space:id() => #{od_provider:id() => #index_stats{}}}.
 
 % fixme batch_entry_spec
 -type batch_entry() :: map().
@@ -50,7 +48,7 @@
 
 
 -export_type([name/0, plugin/0, endpoint/0, schema/0, entry_id/0,
-    index_id/0, index/0, indices/0, index_progress/0, batch/0, batch_entry/0]).
+    index_id/0, index/0, indices/0, indices_stats/0, batch/0, batch_entry/0]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -180,7 +178,12 @@ get_record_struct(1) ->
                 {name, string},
                 {schema, string},
                 {guiPluginName, string},
-                {progress, #{string => #{string => [integer, integer]}}}
+                {progress, #{string => #{string => {record, [
+                    {current_seq, integer},
+                    {max_seq, integer},
+                    {last_update, integer},
+                    {error, string}
+                ]}}}}
             ]}
         }},
 

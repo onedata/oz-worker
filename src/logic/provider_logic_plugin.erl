@@ -137,7 +137,13 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     SpaceId = token_logic:consume(Macaroon, SupportSpaceFun),
 
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
-    {ok, Space} = space_logic_plugin:fetch_entity(SpaceId),
+    {ok, #od_space{harvesters = Harvesters} = Space} = space_logic_plugin:fetch_entity(SpaceId),
+    
+    lists:foreach(fun(HarvesterId) ->
+        harvester_logic_plugin:update_indices_stats(HarvesterId, all,
+            fun(ExistingStats) -> harvester_logic_plugin:prepare_space_stats(SpaceId, ExistingStats) end)
+        end, Harvesters),
+        
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
     {ok, resource, {NewGRI, SpaceData}};
 
@@ -315,8 +321,15 @@ update(Req = #el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     ok = dns_state:remove_delegation_config(ProviderId),
-    {ok, #od_provider{root_macaroon = RootMacaroon}} = fetch_entity(ProviderId),
+    {ok, #od_provider{root_macaroon = RootMacaroon, eff_harvesters = Harvesters}} = fetch_entity(ProviderId),
     ok = macaroon_auth:delete(RootMacaroon),
+
+    lists:foreach(fun(HarvesterId) ->
+        harvester_logic_plugin:update_indices_stats(HarvesterId, all,
+            fun(ExistingStats) -> 
+                maps:fold(fun(SpaceId, V, Acc) -> Acc#{SpaceId => maps:without([ProviderId], V)} end, #{}, ExistingStats) 
+            end)
+    end, maps:keys(Harvesters)),
 
     ClusterId = ProviderId,
     entity_graph:remove_all_relations(od_cluster, ClusterId),

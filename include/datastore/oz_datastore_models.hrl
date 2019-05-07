@@ -49,7 +49,18 @@
     schema = undefined :: od_harvester:schema() | undefined,
     % mapping of index name to one recognized by gui plugin.
     guiPluginName = undefined :: binary() | undefined,
-    progress = #{} :: od_harvester:index_progress()
+    stats = #{} :: od_harvester:indices_stats()
+}).
+
+
+%% This record must be defined here as od_harvester depends on it.
+%%   current seq - sequence harvested in this index
+%%   max_seq - highest sequence known in given space in given provider
+-record(index_stats, {
+    current_seq = 0 :: integer(),
+    max_seq = 0 :: integer(),
+    last_update = undefined:: calendar:datetime() | undefined,
+    error = undefined :: binary() | undefined
 }).
 
 

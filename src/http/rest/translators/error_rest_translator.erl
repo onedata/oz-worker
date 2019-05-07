@@ -17,7 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
--export([response/1]).
+-export([response/1, translate/1]).
 
 %%%===================================================================
 %%% API
@@ -50,7 +50,6 @@ response({error, Type}) ->
 
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Translates an entity logic error into HTTP code, headers and body.
 %% @end
