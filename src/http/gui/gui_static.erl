@@ -221,10 +221,29 @@ gui_exists(GuiPrefix, GuiHash) ->
 %%--------------------------------------------------------------------
 -spec routes() -> [{Path :: string() | binary(), module(), State :: term()}].
 routes() ->
+    % Try to guess if new or legacy custom static root is being used
+    CustomRootDir = case {filelib:is_dir(?CUSTOM_STATIC_ROOT), filelib:is_dir(?LEGACY_CUSTOM_STATIC_ROOT)} of
+        {false, true} ->
+            ?alert(
+                "Detected custom static files in deprecated location, please "
+                "use the new one:~ndeprecated path: ~s~ncorrect path:    ~s", [
+                    ?LEGACY_CUSTOM_STATIC_ROOT, ?CUSTOM_STATIC_ROOT
+                ]
+            ),
+            ?LEGACY_CUSTOM_STATIC_ROOT;
+        _ ->
+            ?CUSTOM_STATIC_ROOT
+    end,
+
+
     CustomPath = binary_to_list(oz_worker_gui_path(<<?CUSTOM_STATIC_GUI_PATH>>)),
+    ?info("Serving custom static files:~nURN:       ~s~nhost path: ~s/[...]", [
+        CustomPath,
+        CustomRootDir
+    ]),
+
     [
-        {CustomPath, cowboy_static, {dir, ?CUSTOM_STATIC_ROOT}},
-        {CustomPath, cowboy_static, {dir, ?LEGACY_CUSTOM_STATIC_ROOT}},
+        {CustomPath, cowboy_static, {dir, CustomRootDir, [{mimetypes, ?MODULE, mimetype}]}},
         {"/[...]", cowboy_static, {dir, ?GUI_STATIC_ROOT, [{mimetypes, ?MODULE, mimetype}]}}
     ].
 
@@ -330,7 +349,7 @@ ensure_link_to_index_html(StaticRoot) ->
 
 
 %% @private
--spec link_exists(Path :: file:name_all()) -> boolean().
+-spec link_exists(file:name_all()) -> boolean().
 link_exists(Path) ->
     case file:read_link(Path) of
         {ok, _} -> true;
@@ -355,6 +374,7 @@ mimetype_by_ext(<<"ogg">>) -> {<<"audio">>, <<"ogg">>, []};
 mimetype_by_ext(<<"ogv">>) -> {<<"video">>, <<"ogg">>, []};
 mimetype_by_ext(<<"png">>) -> {<<"image">>, <<"png">>, []};
 mimetype_by_ext(<<"svg">>) -> {<<"image">>, <<"svg+xml">>, []};
+mimetype_by_ext(<<"txt">>) -> {<<"text">>, <<"plain">>, []};
 mimetype_by_ext(<<"wav">>) -> {<<"audio">>, <<"x-wav">>, []};
 mimetype_by_ext(<<"webm">>) -> {<<"video">>, <<"webm">>, []};
 mimetype_by_ext(_) -> {<<"application">>, <<"octet-stream">>, []}.

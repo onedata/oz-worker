@@ -120,7 +120,7 @@ validate_login(Method, Req) ->
                     log_error({error, Reason}, IdP, StateToken, []),
                     {auth_error, {error, Reason}, StateToken, RedirectAfterLogin}
             catch
-                throw:Error ->
+                throw:{error, _} = Error ->
                     log_error(Error, IdP, StateToken, erlang:get_stacktrace()),
                     {auth_error, Error, StateToken, RedirectAfterLogin};
                 Type:Reason ->

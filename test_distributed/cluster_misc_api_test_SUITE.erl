@@ -210,7 +210,8 @@ get_private_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectC
                                 U1 := {AllPrivsWithoutView, [{od_cluster, <<"self">>}]},
                                 U2 := {[?CLUSTER_VIEW], [{od_cluster, <<"self">>}]}
                             },
-                            eff_groups = #{}
+                            eff_groups = #{},
+                            bottom_up_dirty = false
                         },
                         Cluster
                     )
