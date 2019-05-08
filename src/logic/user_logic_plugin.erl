@@ -411,7 +411,6 @@ update(#el_req{gri = #gri{id = UserId, aspect = basic_auth}, data = Data}) ->
             error -> {ok, User}
         end,
         case maps:find(<<"newPassword">>, Data) of
-
             {ok, NewPassword} -> basic_auth:set_password(User2, NewPassword);
             error -> {ok, User2}
         end

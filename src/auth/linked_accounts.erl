@@ -74,7 +74,7 @@ to_maps(LinkedAccounts) ->
 %%--------------------------------------------------------------------
 -spec idp_uid_to_system_uid(auth_config:idp(), SubjectId :: binary()) -> od_user:id().
 idp_uid_to_system_uid(IdP, SubjectId) ->
-    datastore_utils:gen_key(<<"">>, str_utils:format_bin("~p:~s", [IdP, SubjectId])).
+    datastore_utils:gen_key(<<"">>, str_utils:format_bin("~ts:~s", [IdP, SubjectId])).
 
 
 %%--------------------------------------------------------------------
@@ -106,7 +106,7 @@ acquire_user(LinkedAccount) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Adds an linked account to user's account or replaces the old one (if
+%% Adds a linked account to user's account or replaces the old one (if
 %% present). Gathers emails into user's account in the process. Blocks until
 %% user's effective relations have been fully synchronized.
 %% @end

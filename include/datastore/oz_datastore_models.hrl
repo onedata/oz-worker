@@ -106,8 +106,9 @@
     name = <<"">> :: od_user:name(),
     alias = undefined :: od_user:alias(),
     emails = [] :: [od_user:email()],
-    % Decides if this user can login via login:password
-    % (currently reserved for special users created via Onepanel)
+    % Decides if this user can login via login:password - this feature must be
+    % enabled by an admin, by default regular users are only allowed to sign in
+    % using their IdPs.
     basic_auth_enabled = false :: boolean(),
     password_hash = undefined :: undefined | basic_auth:password_hash(),
     linked_accounts = [] :: [od_user:linked_account()],

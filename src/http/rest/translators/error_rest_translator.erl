@@ -230,26 +230,14 @@ translate(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key)) ->
     {?HTTP_400_BAD_REQUEST,
         {<<"Bad value: provided \"~s\" is of invalid type">>, [Key]}
     };
-translate(?ERROR_BAD_VALUE_ALIAS) ->
-    {?HTTP_400_BAD_REQUEST, <<
-        "Bad value: provided alias must be 2-15 characters long and composed of letters and digits."
-        "Dashes and underscores are allowed (but not at the beginning or the end). "
-        "Use null value to unset the alias."
-    >>};
 translate(?ERROR_BAD_VALUE_NAME) ->
-    {?HTTP_400_BAD_REQUEST, <<
-        "Bad value: Name must be 2-50 characters long and composed of UTF-8 letters, digits, brackets and underscores."
-        "Dashes, spaces and dots are allowed (but not at the beginning or the end)."
-    >>};
+    {?HTTP_400_BAD_REQUEST, <<"Bad value: ", (?NAME_REQUIREMENTS_DESCRIPTION)/binary>>};
 translate(?ERROR_BAD_VALUE_USER_NAME) ->
-    {?HTTP_400_BAD_REQUEST, <<
-        "Bad value: User name must be 2-50 characters long and composed of UTF-8 letters and digits."
-        "Dashes, spaces, dots, commas and apostrophes are allowed (but not at the beginning or the end). "
-    >>};
+    {?HTTP_400_BAD_REQUEST, <<"Bad value: ", (?USER_NAME_REQUIREMENTS_DESCRIPTION)/binary>>};
+translate(?ERROR_BAD_VALUE_ALIAS) ->
+    {?HTTP_400_BAD_REQUEST, <<"Bad value: ", (?ALIAS_REQUIREMENTS_DESCRIPTION)/binary>>};
 translate(?ERROR_BAD_VALUE_PASSWORD) ->
-    {?HTTP_400_BAD_REQUEST,
-        <<"Bad value: Password must be at least 8 characters long.">>
-    };
+    {?HTTP_400_BAD_REQUEST, <<"Bad value: ", (?PASSWORD_REQUIREMENTS_DESCRIPTION)/binary>>};
 translate(?ERROR_BAD_VALUE_IDENTIFIER(Key)) ->
     {?HTTP_400_BAD_REQUEST, {
         <<"Bad value: provided \"~s\" is not a valid identifier.">>, [Key]

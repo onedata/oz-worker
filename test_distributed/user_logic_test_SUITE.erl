@@ -208,28 +208,40 @@ set_password_test(Config) ->
 
 
 migrate_onepanel_user_to_onezone(Config) ->
-    OnepanelUsername = <<"admin">>,
-    PasswordHash = onedata_passwords:create_hash(<<"password">>),
-    GroupMapping = oz_test_utils:get_env(Config, onepanel_role_to_group_mapping),
-    Groups = maps:get(<<"admin">>, GroupMapping, []),
+    Roles = [regular, admin],
 
-    oz_test_utils:call_oz(Config, basic_auth, migrate_onepanel_user_to_onezone, [
-        OnepanelUsername, PasswordHash, Groups
-    ]),
+    lists:foreach(fun(Role) ->
+        OnepanelUsername = str_utils:format_bin("onepanel-~s", [Role]),
+        Password = str_utils:format_bin("password-~s", [Role]),
+        PasswordHash = onedata_passwords:create_hash(Password),
+        GroupMapping = oz_test_utils:get_env(Config, onepanel_role_to_group_mapping),
+        Groups = maps:get(<<"admin">>, GroupMapping, []),
 
-    ExpUserId = basic_auth:onepanel_uid_to_system_uid(OnepanelUsername),
-    ?assertMatch({ok, ExpUserId}, oz_test_utils:call_oz(Config, basic_auth, authenticate, [
-        <<"admin">>, <<"password">>
-    ])),
+        oz_test_utils:call_oz(Config, basic_auth, migrate_onepanel_user_to_onezone, [
+            OnepanelUsername, PasswordHash, Groups
+        ]),
 
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+        ExpUserId = basic_auth:onepanel_uid_to_system_uid(OnepanelUsername),
+        ?assertMatch({ok, ExpUserId}, oz_test_utils:call_oz(Config, basic_auth, authenticate, [
+            OnepanelUsername, Password
+        ])),
 
-    % The user should be added as Onezone cluster admin
-    ?assert(oz_test_utils:call_oz(Config, cluster_logic, has_eff_user, [?ONEZONE_CLUSTER_ID, ExpUserId])),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    lists:foreach(fun(Group) ->
-        ?assert(oz_test_utils:call_oz(Config, group_logic, has_eff_user, [Group, ExpUserId]))
-    end, Groups).
+        lists:foreach(fun(Group) ->
+            ?assert(oz_test_utils:call_oz(Config, group_logic, has_eff_user, [Group, ExpUserId]))
+        end, Groups),
+
+        IsInCluster = oz_test_utils:call_oz(Config, cluster_logic, has_eff_user, [
+            ?ONEZONE_CLUSTER_ID, ExpUserId
+        ]),
+
+        % Only users with admin role should be added to Onezone cluster
+        case Role of
+            regular -> ?assertNot(IsInCluster);
+            admin -> ?assert(IsInCluster)
+        end
+    end, Roles).
 
 
 % Below macros use the variables Config and UserId, which appear in merge_groups_in_linked_accounts_test/1

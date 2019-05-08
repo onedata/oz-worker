@@ -96,31 +96,43 @@
 -define(SUBDOMAIN_VALIDATION_REGEXP,
     <<"^([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$">>).
 
-% Regexp to validate names. Name must be 2-50 characters long and composed of
-% UTF-8 letters, digits, brackets and underscores.
-% Dashes, spaces and dots are allowed (but not at the beginning or the end).
+
+-define(NAME_REQUIREMENTS_DESCRIPTION, <<
+    "Name must be 2-50 characters long and composed only of UTF-8 letters, digits, brackets and underscores."
+    "Dashes, spaces and dots are allowed (but not at the beginning or the end)."
+>>).
 -define(NAME_FIRST_CHARS_ALLOWED, <<")(\\w_">>).
 -define(NAME_MIDDLE_CHARS_ALLOWED, <<">>)(\\w_ .-">>).
 -define(NAME_LAST_CHARS_ALLOWED, ?NAME_FIRST_CHARS_ALLOWED).
 -define(NAME_MAXIMUM_LENGTH, 50).
 
-% Regexp to validate user names. User name must be 2-50 characters long and
-% composed of UTF-8 letters and digits. Dashes, spaces, dots, commas and
-% apostrophes are allowed (but not at the beginning or the end).
+
+-define(USER_NAME_REQUIREMENTS_DESCRIPTION, <<
+    "User name must be 2-50 characters long and composed only of UTF-8 letters and digits."
+    "Dashes, spaces, dots, commas and apostrophes are allowed (but not at the beginning or the end)."
+>>).
 -define(USER_NAME_FIRST_CHARS_ALLOWED, <<"\\pL\\pNd">>).
 -define(USER_NAME_MIDDLE_CHARS_ALLOWED, <<"\\pL\\pNd ',.-">>).
 -define(USER_NAME_LAST_CHARS_ALLOWED, <<"\\pL\\pNd.">>).
 -define(USER_NAME_MAXIMUM_LENGTH, 50).
 -define(DEFAULT_USER_NAME, <<"Unnamed User">>).
--define(PASSWORD_MIN_LENGTH, 8).
 
-% Regexp to validate aliases. Alias must be 2-20 characters long and composed of
-% letters and digits.
-% Dashes and underscores are allowed (but not at the beginning or the end).
+
+-define(ALIAS_REQUIREMENTS_DESCRIPTION, <<
+    "Alias must be 2-20 characters long and composed only of letters and digits."
+    "Dashes and underscores are allowed (but not at the beginning or the end). "
+>>).
 -define(ALIAS_FIRST_CHARS_ALLOWED, <<"a-z0-9A-Z">>).
 -define(ALIAS_MIDDLE_CHARS_ALLOWED, <<"a-z0-9A-Z._-">>).
 -define(ALIAS_LAST_CHARS_ALLOWED, ?ALIAS_FIRST_CHARS_ALLOWED).
 -define(ALIAS_MAXIMUM_LENGTH, 20).
+
+
+-define(PASSWORD_REQUIREMENTS_DESCRIPTION, <<
+    "Password must be at least 8 characters long."
+>>).
+-define(PASSWORD_MIN_LENGTH, 8).
+
 
 % Used when enable_automatic_first_space is set to true
 -define(FIRST_SPACE_NAME, <<"Personal Space">>).

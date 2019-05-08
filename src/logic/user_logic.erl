@@ -494,8 +494,8 @@ toggle_basic_auth(Client, UserId, BasicAuthEnabled) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Sets a new password for given user - for admins only
-%% (use change_password/4 for regular users).
+%% Sets a new password for given user - can be used by admins only
+%% (regular users must use change_password/4).
 %% @end
 %%--------------------------------------------------------------------
 -spec set_password(Client :: entity_logic:client(), UserId :: od_user:id(),

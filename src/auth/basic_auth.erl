@@ -27,7 +27,7 @@
 -export([authenticate/2]).
 -export([toggle_basic_auth/2]).
 -export([change_password/3, set_password/2]).
--export([migrate_onepanel_user_to_onezone/3]).
+-export([migrate_onepanel_user_to_onezone/4]).
 -export([onepanel_uid_to_system_uid/1]).
 
 % (Artificial) identity provider id used for creating user ids for users
@@ -123,8 +123,12 @@ set_password(User, NewPass) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec migrate_onepanel_user_to_onezone(OnepanelUsername :: binary(),
-    password_hash(), [od_group:id()]) -> {ok, od_user:id()}.
-migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Groups) ->
+    password_hash(), [od_group:id()], regular | admin) -> {ok, od_user:id()}.
+migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Groups, admin) ->
+    {ok, UserId} = migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Groups, regular),
+    ok = make_cluster_admin(UserId),
+    {ok, UserId};
+migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Groups, regular) ->
     UserId = onepanel_uid_to_system_uid(OnepanelUsername),
     UpdateFun = fun(User) ->
         {ok, User#od_user{
@@ -141,9 +145,6 @@ migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Groups) ->
     }},
     {ok, _} = od_user:update(UserId, UpdateFun, DefaultDoc),
 
-    ok = make_cluster_admin(UserId),
-
-    % Check if user's role entitles him to belong to any groups
     lists:foreach(fun(GroupId) ->
         case group_logic:add_user(?ROOT, GroupId, UserId) of
             {ok, UserId} ->
