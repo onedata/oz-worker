@@ -215,10 +215,10 @@ migrate_onepanel_user_to_onezone(Config) ->
         Password = str_utils:format_bin("password-~s", [Role]),
         PasswordHash = onedata_passwords:create_hash(Password),
         GroupMapping = oz_test_utils:get_env(Config, onepanel_role_to_group_mapping),
-        Groups = maps:get(<<"admin">>, GroupMapping, []),
+        ExpectedGroups = maps:get(atom_to_binary(Role, utf8), GroupMapping, []),
 
         oz_test_utils:call_oz(Config, basic_auth, migrate_onepanel_user_to_onezone, [
-            OnepanelUsername, PasswordHash, Groups
+            OnepanelUsername, PasswordHash, Role
         ]),
 
         ExpUserId = basic_auth:onepanel_uid_to_system_uid(OnepanelUsername),
@@ -230,7 +230,7 @@ migrate_onepanel_user_to_onezone(Config) ->
 
         lists:foreach(fun(Group) ->
             ?assert(oz_test_utils:call_oz(Config, group_logic, has_eff_user, [Group, ExpUserId]))
-        end, Groups),
+        end, ExpectedGroups),
 
         IsInCluster = oz_test_utils:call_oz(Config, cluster_logic, has_eff_user, [
             ?ONEZONE_CLUSTER_ID, ExpUserId

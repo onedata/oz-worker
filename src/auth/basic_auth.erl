@@ -27,7 +27,7 @@
 -export([authenticate/2]).
 -export([toggle_basic_auth/2]).
 -export([change_password/3, set_password/2]).
--export([migrate_onepanel_user_to_onezone/4]).
+-export([migrate_onepanel_user_to_onezone/3]).
 -export([onepanel_uid_to_system_uid/1]).
 
 % (Artificial) identity provider id used for creating user ids for users
@@ -123,13 +123,10 @@ set_password(User, NewPass) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec migrate_onepanel_user_to_onezone(OnepanelUsername :: binary(),
-    password_hash(), [od_group:id()], regular | admin) -> {ok, od_user:id()}.
-migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Groups, admin) ->
-    {ok, UserId} = migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Groups, regular),
-    ok = make_cluster_admin(UserId),
-    {ok, UserId};
-migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Groups, regular) ->
+    password_hash(), Role :: regular | admin) -> {ok, od_user:id()}.
+migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Role) ->
     UserId = onepanel_uid_to_system_uid(OnepanelUsername),
+    Groups = onepanel_role_to_groups(Role),
     UpdateFun = fun(User) ->
         {ok, User#od_user{
             alias = OnepanelUsername,
@@ -145,15 +142,8 @@ migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Groups, regular
     }},
     {ok, _} = od_user:update(UserId, UpdateFun, DefaultDoc),
 
-    lists:foreach(fun(GroupId) ->
-        case group_logic:add_user(?ROOT, GroupId, UserId) of
-            {ok, UserId} ->
-                {ok, GroupName} = group_logic:get_name(?ROOT, GroupId),
-                ?info("Added user '~s' to group '~ts'", [UserId, GroupName]);
-            ?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _) ->
-                ok
-        end
-    end, Groups),
+    add_user_to_groups(UserId, Groups),
+    maybe_make_cluster_admin(UserId, Role),
 
     {ok, UserId}.
 
@@ -167,6 +157,7 @@ migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Groups, regular
 onepanel_uid_to_system_uid(OnepanelUserId) ->
     linked_accounts:idp_uid_to_system_uid(?ONEZONE_IDP_ID, OnepanelUserId).
 
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -174,13 +165,47 @@ onepanel_uid_to_system_uid(OnepanelUserId) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Adds user with given Id as a member of the Onezone cluster with
-%% admin privileges.
+%% Determines groups based on Onepanel user role for migration purposes.
 %% @end
 %%--------------------------------------------------------------------
--spec make_cluster_admin(od_user:id()) -> ok | {error, term()}.
-make_cluster_admin(UserId) ->
-    case cluster_logic:add_user(?ROOT, ?ONEZONE_CLUSTER_ID, UserId, privileges:cluster_admin()) of
+-spec onepanel_role_to_groups(Role :: admin | regular | binary()) ->
+    [od_group:id()].
+onepanel_role_to_groups(Role) when is_atom(Role) ->
+    onepanel_role_to_groups(atom_to_binary(Role, utf8));
+
+onepanel_role_to_groups(Role) when is_binary(Role) ->
+    Mapping = oz_worker:get_env(onepanel_role_to_group_mapping, #{}),
+    maps:get(Role, Mapping, []).
+
+
+%% @private
+-spec add_user_to_groups(UserId :: od_user:id(), GroupIds :: [od_group:id()]) ->
+    ok.
+add_user_to_groups(UserId, GroupIds) ->
+    lists:foreach(fun(GroupId) ->
+        case group_logic:add_user(?ROOT, GroupId, UserId) of
+            {ok, UserId} ->
+                {ok, GroupName} = group_logic:get_name(?ROOT, GroupId),
+                ?info("Added user '~s' to group '~ts'", [UserId, GroupName]);
+            ?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _) ->
+                ok
+        end
+    end, GroupIds).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% If given user is a migrated Onepanel admin adds the user as
+%% Onezone cluster member with admin privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec maybe_make_cluster_admin(od_user:id(), Role :: admin | regular) ->
+    ok | {error, term()}.
+maybe_make_cluster_admin(UserId, admin) ->
+    case cluster_logic:add_user(
+        ?ROOT, ?ONEZONE_CLUSTER_ID, UserId, privileges:cluster_admin()
+    ) of
         {ok, _} ->
             ?info("Added user '~s' as admin of cluster '~s'", [UserId, ?ONEZONE_CLUSTER_ID]),
             ok;
@@ -188,4 +213,7 @@ make_cluster_admin(UserId) ->
             ok;
         Error ->
             Error
-    end.
+    end;
+
+maybe_make_cluster_admin(_UserId, _Role) ->
+    ok.
