@@ -483,7 +483,7 @@ update_test(Config) ->
     end,
     VerifyEndFun = fun(ShouldSucceed, #{userId := UserId} = _Env, Data) ->
         {ok, UserRecord} = oz_test_utils:get_user(Config, UserId),
-        {ExpName, Alias} = case ShouldSucceed of
+        {ExpName, ExpAlias} = case ShouldSucceed of
             false ->
                 {?USER_NAME1, OwnedAlias};
             true ->
@@ -491,10 +491,6 @@ update_test(Config) ->
                     maps:get(<<"name">>, Data, ?USER_NAME1),
                     maps:get(<<"alias">>, Data, OwnedAlias)
                 }
-        end,
-        ExpAlias = case Alias of
-            null -> undefined;
-            _ -> Alias
         end,
         ?assertEqual(ExpName, UserRecord#od_user.name),
         ?assertEqual(ExpAlias, UserRecord#od_user.alias)
@@ -522,13 +518,14 @@ update_test(Config) ->
             correct_values = #{
                 <<"name">> => [?CORRECT_USER_NAME],
                 % Trying to set owned alias again should not raise any error
-                <<"alias">> => [OwnedAlias, fun() -> ?UNIQUE_STRING end, null]
+                <<"alias">> => [OwnedAlias, fun() -> ?UNIQUE_STRING end]
             },
             bad_values = [
                 {<<"alias">>, <<"">>, ?ERROR_BAD_VALUE_ALIAS},
                 {<<"alias">>, <<"_asd">>, ?ERROR_BAD_VALUE_ALIAS},
                 {<<"alias">>, <<"-asd">>, ?ERROR_BAD_VALUE_ALIAS},
                 {<<"alias">>, <<"asd_">>, ?ERROR_BAD_VALUE_ALIAS},
+                {<<"alias">>, null, ?ERROR_BAD_VALUE_ALIAS},
                 {<<"alias">>, <<"verylongaliaswithatleast15chars">>, ?ERROR_BAD_VALUE_ALIAS},
                 {<<"alias">>, 1234, ?ERROR_BAD_VALUE_ALIAS},
                 {<<"alias">>, OccupiedAlias,
@@ -565,26 +562,12 @@ update_test(Config) ->
         data_spec = DataSpec#data_spec{
             correct_values = #{
                 <<"name">> => [?CORRECT_USER_NAME],
-                <<"alias">> => [fun() -> ?UNIQUE_STRING end, OwnedAlias, null]
+                <<"alias">> => [fun() -> ?UNIQUE_STRING end, OwnedAlias]
             }
         }
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, EnvSetUpFun, EnvTeardownFun, VerifyEndFun
-    )),
-
-    % Check that user alias can be set to undefined via user_logic
-    ApiTestSpec3 = ApiTestSpec2#api_test_spec{
-        gs_spec = undefined,
-        data_spec = DataSpec#data_spec{
-            correct_values = #{
-                <<"name">> => [?CORRECT_USER_NAME],
-                <<"alias">> => [undefined]
-            }
-        }
-    },
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec3, EnvSetUpFun, EnvTeardownFun, VerifyEndFun
     )).
 
 

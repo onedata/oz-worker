@@ -826,10 +826,6 @@ check_type(token, Key, Macaroon) ->
         true -> Macaroon;
         false -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
     end;
-check_type(alias, _Key, null) ->
-    undefined;
-check_type(alias, _Key, undefined) ->
-    undefined;
 check_type(alias, _Key, Binary) when is_binary(Binary) ->
     Binary;
 check_type(alias, _Key, _) ->
@@ -1010,8 +1006,6 @@ check_value(token, TokenType, Key, Macaroon) ->
         bad_type ->
             throw(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key))
     end;
-check_value(alias, alias, _Key, undefined) ->
-    undefined;
 check_value(alias, alias, _Key, Value) ->
     case user_logic:validate_alias(Value) of
         true -> Value;

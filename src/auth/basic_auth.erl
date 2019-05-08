@@ -126,7 +126,6 @@ set_password(User, NewPass) ->
     password_hash(), Role :: regular | admin) -> {ok, od_user:id()}.
 migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Role) ->
     UserId = onepanel_uid_to_system_uid(OnepanelUsername),
-    Groups = onepanel_role_to_groups(Role),
     UpdateFun = fun(User) ->
         {ok, User#od_user{
             alias = OnepanelUsername,
@@ -142,6 +141,7 @@ migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Role) ->
     }},
     {ok, _} = od_user:update(UserId, UpdateFun, DefaultDoc),
 
+    Groups = onepanel_role_to_groups(Role),
     add_user_to_groups(UserId, Groups),
     maybe_make_cluster_admin(UserId, Role),
 

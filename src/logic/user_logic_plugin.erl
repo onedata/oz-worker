@@ -357,7 +357,6 @@ update(#el_req{gri = #gri{id = UserId, aspect = instance}, data = Data}) ->
                 name = maps:get(<<"name">>, Data, User#od_user.name),
                 alias = case NewAlias of
                     keep -> User#od_user.alias;
-                    undefined -> undefined;
                     Bin when is_binary(Bin) -> NewAlias
                 end
 
@@ -366,14 +365,11 @@ update(#el_req{gri = #gri{id = UserId, aspect = instance}, data = Data}) ->
         ok
     end,
 
-    % If alias is specified and is not undefined (which is valid in case of
-    % removing alias), run update in synchronized block so no two identical
-    % aliases can be set
+    % If alias is specified, run update in synchronized block so no two
+    % identical aliases can be set
     case maps:find(<<"alias">>, Data) of
         error ->
             UserUpdateFun(keep);
-        {ok, undefined} ->
-            UserUpdateFun(undefined);
         {ok, Alias} ->
             ?CRITICAL_SECTION(Alias, fun() ->
                 case od_user:get_by_alias(Alias) of
