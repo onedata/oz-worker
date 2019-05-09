@@ -271,10 +271,11 @@
 
 -define(HARVESTER_INDEX_NAME, <<"index_name">>).
 -define(HARVESTER_INDEX_SCHEMA, <<"{ \"mappings\": { \"properties\": { \"foo\": { \"type\": \"keyword\" } } } }">>).
--define(HARVESTER_INDEX_CREATE_DATA, #{
-    <<"name">> => ?HARVESTER_INDEX_NAME,
+-define(HARVESTER_INDEX_CREATE_DATA(Name), #{
+    <<"name">> => Name,
     <<"schema">> => ?HARVESTER_INDEX_SCHEMA
 }).
+-define(HARVESTER_INDEX_CREATE_DATA, ?HARVESTER_INDEX_CREATE_DATA(?HARVESTER_INDEX_NAME)).
 -define(HARVESTER_INDEX_PROGRESS, #{}).
 
 -define(HARVESTER_PROTECTED_DATA(HarvesterName),
@@ -304,9 +305,13 @@
     <<"indices">> => Indices
 }).
 -define(FAILED_INDICES(Indices), #{<<"failedIndices">> := Indices}).
--define(NO_FAILED_INDICES, ?FAILED_INDICES([])).
+-define(FAILED_INDICES(Indices, DefaultSeq), lists:foldl(
+    fun({Index, Seq}, Acc) -> Acc#{Index => Seq};
+       (Index, Acc) -> Acc#{Index => DefaultSeq} end,
+    #{}, Indices)).
+-define(NO_FAILED_INDICES, ?FAILED_INDICES([], 0)).
 
--define(HARVESTER_ENTRY_BATCH, [
+-define(HARVESTER_BATCH, [
     #{<<"seq">> => 1, <<"operation">> => submit, <<"fileId">> => <<"fileid1">>, <<"payload">> => <<"{\"valid\":\"json\"}">>},
     #{<<"seq">> => 2, <<"operation">> => delete, <<"fileId">> => <<"fileid2">>, <<"payload">> => <<"{\"valid\":\"json\"}">>},
     #{<<"seq">> => 3, <<"operation">> => submit, <<"fileId">> => <<"fileid3">>, <<"payload">> => <<"invalid_json">>},
@@ -314,6 +319,17 @@
     #{<<"seq">> => 5, <<"operation">> => submit, <<"fileId">> => <<"fileid5">>, <<"payload">> => <<"{\"valid\":\"json\"}">>},
     #{<<"seq">> => 6, <<"operation">> => submit, <<"fileId">> => <<"fileid6">>, <<"payload">> => #{}}
 ]).
+
+-define(EMPTY_INDEX_STATS, ?EMPTY_INDEX_STATS(false)).
+-define(EMPTY_INDEX_STATS(Offline), #{
+    <<"currentSeq">> => 0,
+    <<"maxSeq">> => 0,
+    <<"lastUpdate">> => null,
+    <<"error">> => null,
+    <<"offline">> => Offline
+}).
+
+-define(HARVESTER_MOCK_BATCH_ENTRY(Seq, Operation), #{<<"seq">> => Seq, <<"operation">> => Operation}).
 
 -define(BAD_VALUES_NAME(Error), [
     {<<"name">>, <<"">>, Error},

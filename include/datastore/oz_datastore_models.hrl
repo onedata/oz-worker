@@ -59,8 +59,9 @@
 -record(index_stats, {
     current_seq = 0 :: integer(),
     max_seq = 0 :: integer(),
-    last_update = undefined:: calendar:datetime() | undefined,
-    error = undefined :: binary() | undefined
+    last_update = undefined :: integer() | undefined,
+    error = undefined :: binary() | undefined,
+    offline = false :: boolean()
 }).
 
 

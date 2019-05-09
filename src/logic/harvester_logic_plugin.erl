@@ -26,7 +26,10 @@
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
--export([update_indices_stats/3, prepare_space_stats/2]).
+-export([
+    update_indices_stats/3, prepare_space_stats/2, 
+    set_stats_offline_flag/3, set_stats_offline_flag/4
+]).
 
 
 %%%===================================================================
@@ -171,7 +174,7 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, client = Client,
     
     NormalizedEndpoint = case normalize_and_check_endpoint(Endpoint, Plugin) of
         {ok, NewEndpoint} -> NewEndpoint;
-        {error, Error} -> throw(Error)
+        {error, _} = Error -> throw(Error)
     end,
     
 
@@ -489,20 +492,22 @@ get(#el_req{gri = #gri{aspect = {index_progress, IndexId}}}, Harvester) ->
     #harvester_index{
         stats = Stats
     } = maps:get(IndexId, Harvester#od_harvester.indices),
-    {ok, maps:fold(fun(Space, P, Acc) ->
-        Acc#{Space => maps:fold(fun(Provider, IndexStats, Acc1) ->
+    {ok, maps:fold(fun(SpaceId, P, Acc) ->
+        Acc#{SpaceId => maps:fold(fun(ProviderId, IndexStats, Acc1) ->
             #index_stats{
                 current_seq = CurrentSeq,
                 max_seq = MaxSeq,
                 last_update = LastUpdate,
-                error = Error
+                error = Error,
+                offline = Offline
             } = IndexStats,
             Acc1#{
-                Provider => #{
+                ProviderId => #{
                     <<"currentSeq">> => CurrentSeq,
                     <<"maxSeq">> => MaxSeq,
-                    <<"lastUpdate">> => LastUpdate,
-                    <<"error">> => gs_protocol:undefined_to_null(Error)
+                    <<"lastUpdate">> => gs_protocol:undefined_to_null(LastUpdate),
+                    <<"error">> => gs_protocol:undefined_to_null(Error),
+                    <<"offline">> => Offline
                 }
             }
             end, #{}, P)}
@@ -557,7 +562,7 @@ update(#el_req{gri = #gri{id = HarvesterId, aspect = instance}, data = Data}) ->
         case normalize_and_check_endpoint(NewEndpoint, NewPlugin) of
             {ok, NormalizedEndpoint} -> 
                 {ok, NewHarvester#od_harvester{endpoint = NormalizedEndpoint}};
-            {error, Error} -> 
+            {error, _} = Error -> 
                 Error
         end
     end,
@@ -629,6 +634,9 @@ delete(#el_req{gri = #gri{id = HarvesterId, aspect = {group, GroupId}}}) ->
     );
 
 delete(#el_req{gri = #gri{id = HarvesterId, aspect = {space, SpaceId}}}) ->
+    update_indices_stats(HarvesterId, all, fun(ExistingStats) ->
+        set_stats_offline_flag(ExistingStats, SpaceId, true)
+    end),
     entity_graph:remove_relation(
         od_harvester, HarvesterId,
         od_space, SpaceId
@@ -1097,9 +1105,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = {delete_entry, _}}}) ->
 validate(#el_req{operation = create, gri = #gri{aspect = {submit_batch, _}}}) -> #{
     required => #{
         <<"maxSeq">> => {integer, {not_lower_than, 0}},
-        % no need to check index membership - bad indices are later ignored
+        % no need to check index membership - incorrect indices are later ignored
         <<"indices">> => {list_of_binaries, non_empty},
-        % fixme validate
         <<"batch">> => {any, any}
     }
 };
@@ -1241,7 +1248,7 @@ auth_by_privilege(UserId, HarvesterOrId, Privilege) ->
 %% Clears harvesting progress of successfully deleted indices.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_indices_data([od_harvester:index_id()], od_harvester:plugin(), 
+-spec delete_indices_data([od_harvester:index_id()], od_harvester:plugin(),
     od_harvester:endpoint(), od_harvester:id()) -> ok | {error, term()}.
 delete_indices_data(IndicesToRemove, Plugin, Endpoint, HarvesterId) ->
     {SuccessfulIndices, Errors} = lists:foldl(fun(IndexId, {S, E}) ->
@@ -1285,7 +1292,9 @@ perform_entry_operation(Operation, Indices, ProviderId, Plugin, Endpoint, Harves
     IndicesToUpdate = lists:filtermap(
         fun(IndexId) ->
             case maps:find(IndexId, Indices) of
-                {ok, #harvester_index{stats = #{SpaceId := #{ProviderId := [S, _]}}}} when S >= Seq ->
+                {ok, #harvester_index{
+                    stats = #{SpaceId := #{ProviderId := #index_stats{current_seq = S}}}}
+                } when S >= Seq ->
                     % Ignore already harvested sequences
                     false;
                 {ok, _} ->
@@ -1315,7 +1324,7 @@ perform_entry_operation(Operation, Indices, ProviderId, Plugin, Endpoint, Harves
 %% @end
 %%--------------------------------------------------------------------
 -spec update_indices_stats
-    (od_harvester:id(), [od_harvester:index_id()], UpdateFun) -> ok
+    (od_harvester:id(), od_harvester:indices() | all, UpdateFun) -> ok
     when UpdateFun :: fun((od_harvester:indices_stats()) -> od_harvester:indices_stats());
     (od_harvester:id(), [{od_harvester:index_id(), Mod}], UpdateFun) -> ok
     when UpdateFun :: fun((od_harvester:indices_stats(), Mod) -> od_harvester:indices_stats()),
@@ -1426,13 +1435,29 @@ normalize_and_check_endpoint(Endpoint, Plugin) ->
     end.
     
 
-prepare_provider_stats(ProviderId, ExistingStats) ->
-    maps:merge(#{ProviderId => #index_stats{}}, ExistingStats).
-
+%fixme docs
+%fixme better funs names
 prepare_space_stats(SpaceId, ExistingStats) ->
-    M = maps:get(SpaceId, ExistingStats, #{}),
+    StatsPerProvider = maps:get(SpaceId, ExistingStats, #{}),
     {ok, #od_space{providers = Providers}} = space_logic_plugin:fetch_entity(SpaceId),
     ExistingStats#{
-        SpaceId => lists:foldl(fun prepare_provider_stats/2, M, maps:keys(Providers))
-    }.
-    
+        SpaceId => lists:foldl(fun(ProviderId, NewStatsPerProvider) ->
+            M = maps:get(ProviderId, StatsPerProvider, #index_stats{}),
+            NewStatsPerProvider#{ProviderId => M#index_stats{offline = false}}
+        end, StatsPerProvider, maps:keys(Providers))}.
+
+
+set_stats_offline_flag(ExistingStats, SpaceId, Value) ->
+    StatsPerProvider = maps:get(SpaceId, ExistingStats, #{}),
+    % fixme use maps fold
+    ExistingStats#{SpaceId => lists:foldl(fun(ProviderId, NewStatsPerProvider) ->
+        set_stats_offline_flag_internal(NewStatsPerProvider, ProviderId, Value)
+    end, StatsPerProvider, maps:keys(StatsPerProvider))}.
+
+set_stats_offline_flag(ExistingStats, SpaceId, ProviderId, Value) ->
+    StatsPerProvider = maps:get(SpaceId, ExistingStats, #{}),
+    ExistingStats#{SpaceId => set_stats_offline_flag_internal(StatsPerProvider, ProviderId, Value)}.
+
+set_stats_offline_flag_internal(StatsPerProvider, ProviderId, Value) ->
+    Stats = maps:get(ProviderId, StatsPerProvider, #index_stats{}),
+    StatsPerProvider#{ProviderId => Stats#index_stats{offline = Value}}.

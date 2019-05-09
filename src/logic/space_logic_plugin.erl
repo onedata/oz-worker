@@ -399,12 +399,24 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}}) ->
     );
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {provider, ProviderId}}}) ->
-    entity_graph:remove_relation(
-        od_space, SpaceId,
-        od_provider, ProviderId
-    );
+    fun(#od_space{harvesters = Harvesters}) ->
+        lists:foreach(fun(HarvesterId) ->
+            harvester_logic_plugin:update_indices_stats(HarvesterId, all,
+                fun(ExistingStats) -> 
+                    harvester_logic_plugin:set_stats_offline_flag(ExistingStats, SpaceId, ProviderId, true)
+                end)
+        end, Harvesters),
+        
+        entity_graph:remove_relation(
+            od_space, SpaceId,
+            od_provider, ProviderId
+        )
+    end;
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {harvester, HarvesterId}}}) ->
+    harvester_logic_plugin:update_indices_stats(HarvesterId, all, fun(ExistingStats) ->
+        harvester_logic_plugin:set_stats_offline_flag(ExistingStats, SpaceId, true)
+    end),
     entity_graph:remove_relation(
         od_harvester, HarvesterId,
         od_space, SpaceId
@@ -514,9 +526,18 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Space) 
         _ ->
             false
     end;
-authorize(#el_req{operation = create, gri = #gri{aspect = harvest_metadata}}, _Space) ->
-    % authorization of this operation is later checked for each harvester
-    true;
+
+authorize(#el_req{operation = create, gri = #gri{id = SpaceId, aspect = harvest_metadata}, 
+    client = ?PROVIDER(ProviderId), data = #{<<"batch">> := Batch}}, Space) ->
+    
+    space_logic:has_provider(Space, ProviderId) andalso 
+            lists:all(fun(#{<<"fileId">> := FileId}) -> 
+                {ok, Guid} = file_id:objectid_to_guid(FileId),
+                case file_id:guid_to_space_id(Guid) of
+                    SpaceId -> true;
+                    _ -> false
+                end
+            end, Batch);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_USER);
@@ -791,8 +812,9 @@ validate(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) -> #{
 
 validate(#el_req{operation = create, gri = #gri{aspect = harvest_metadata}}) -> #{
     required => #{
-        % fixme validate
-        <<"destination">> => {any, any}
+        <<"destination">> => {any, any},
+        <<"maxSeq">> => {integer, {not_lower_than, 0}},
+        <<"batch">> => {any, any}
     }   
 };
 

@@ -232,6 +232,7 @@ get_test(Config) ->
                 fun(#od_space{
                     name = Name, users = Users, groups = #{},
                     providers = Providers, shares = [],
+                    harvesters = [],
                     eff_users = EffUsers, eff_groups = #{},
                     eff_providers = EffProviders,
                     top_down_dirty = false, bottom_up_dirty = false
@@ -262,6 +263,7 @@ get_test(Config) ->
                 <<"groups">> => #{},
                 <<"shares">> => [],
                 <<"providers">> => #{P1 => SupportSize},
+                <<"harvesters">> => [],
                 <<"effectiveUsers">> => #{
                     U1 => AllPrivsBin -- [<<"space_view">>],
                     U2 => [<<"space_view">>]

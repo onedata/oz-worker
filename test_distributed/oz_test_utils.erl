@@ -220,10 +220,12 @@
     harvester_remove_space/3,
     
     harvester_create_index/3,
+    harvester_get_index/3,
     harvester_get_index_progress/3,
     
     harvester_submit_entry/5,
-    harvester_delete_entry/5
+    harvester_delete_entry/5,
+    harvester_submit_batch/7
 ]).
 -export([
     list_clusters/1,
@@ -2366,6 +2368,19 @@ harvester_create_index(Config, HarvesterId, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves index from given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_get_index(Config :: term(), HarvesterId :: od_harvester:id(),
+    IndexId :: od_harvester:index_id()) -> ok.
+harvester_get_index(Config, HarvesterId, IndexId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, get_index, [?ROOT, HarvesterId, IndexId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Retrieves index progress from given harvester.
 %% @end
 %%--------------------------------------------------------------------
@@ -2401,6 +2416,21 @@ harvester_delete_entry(Config, ProviderId, HarvesterId, FileId, Data) ->
     ?assertMatch({ok, _}, call_oz(
         Config, harvester_logic, delete_entry, [?PROVIDER(ProviderId), HarvesterId, FileId, Data]
     )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Submits batch in given harvester as provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvester_submit_batch(Config :: term(), ProviderId :: od_provider:id(),
+    HarvesterId :: od_harvester:id(), Indices :: od_harvester:indices(), 
+    SpaceId :: od_space:id(), Batch :: od_harvester:batch(), MaxSeq :: integer()) -> ok.
+harvester_submit_batch(Config, ProviderId, HarvesterId, Indices, SpaceId, Batch, MaxSeq) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, harvester_logic, submit_batch, [?PROVIDER(ProviderId), HarvesterId, Indices, SpaceId, Batch, MaxSeq]
+    )).
+
 
 
 %%--------------------------------------------------------------------
@@ -2893,7 +2923,7 @@ minimum_support_size(Config) ->
 %%--------------------------------------------------------------------
 mock_harvester_plugins(Config, Plugins) when is_list(Plugins) ->
     Nodes = ?OZ_NODES(Config),
-    lists:foreach(fun(Plugin) -> mock_harvester_plugin(Nodes, Plugin) end, Plugins),
+    lists:foreach(fun(Plugin) -> mock_harvester_plugin(Config, Nodes, Plugin) end, Plugins),
     test_utils:mock_new(Nodes, onezone_plugins),
     
     test_utils:mock_expect(Nodes, onezone_plugins, get_plugins,
@@ -2907,21 +2937,33 @@ mock_harvester_plugins(Config, Plugin) ->
 %% Creates mocked harvester plugin on all nodes of onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec mock_harvester_plugin(Nodes :: list(), PluginName :: atom()) -> ok.
-mock_harvester_plugin(Nodes, PluginName) ->
+-spec mock_harvester_plugin(Config :: term(), Nodes :: list(), PluginName :: atom()) -> ok.
+mock_harvester_plugin(Config, Nodes, PluginName) ->
     test_utils:mock_new(Nodes, PluginName, [non_strict]),
     test_utils:mock_expect(Nodes, PluginName, type, fun() -> harvester_plugin end),
     test_utils:mock_expect(Nodes, PluginName, ping, 
         fun(?HARVESTER_ENDPOINT1) -> ok;
            (?HARVESTER_ENDPOINT2) -> ok;
-           (_) -> {error, ?ERROR_TEMPORARY_FAILURE}
+           (_) -> ?ERROR_TEMPORARY_FAILURE
         end),
     test_utils:mock_expect(Nodes, PluginName, submit_entry, fun(_,_,_,_,_) -> ok end),
     test_utils:mock_expect(Nodes, PluginName, delete_entry, fun(_,_,_,_) -> ok end),
-    test_utils:mock_expect(Nodes, PluginName, submit_batch, fun(_,_,Indices, Batch) ->
-        LastSeq = maps:get(<<"seq">>, lists:last(Batch)),
+    test_utils:mock_expect(Nodes, PluginName, submit_batch, fun(_,HarvesterId,Indices, Batch) ->
+        FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),
+        {LastSeq, ErrorSeq} = lists:foldl(
+            fun(BatchEntry, {A, undefined}) -> 
+                CurrentSeq = maps:get(<<"seq">>, BatchEntry),
+                case maps:get(<<"operation">>, BatchEntry) of
+                    fail -> {A, {CurrentSeq, <<"error_seq">>}};
+                    _ -> {CurrentSeq, undefined}
+                end;
+                (_, Acc) -> Acc
+            end, {undefined, undefined}, Batch),
         {ok, lists:map(fun(Index) -> 
-            {Index, {LastSeq, undefined}} 
+            case harvester_get_index(Config, HarvesterId, Index) of
+                {ok, #{<<"name">> := <<"fail">>}} -> {Index, {undefined, {FirstSeq, <<"error_index">>}}};
+                _ -> {Index, {LastSeq, ErrorSeq}} 
+            end
         end, Indices)}
     end),
     test_utils:mock_expect(Nodes, PluginName, create_index, fun(_,_,_,_) -> ok end),

@@ -349,6 +349,14 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     end;
 
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
+    {ok, #od_space{harvesters = Harvesters}} = space_logic_plugin:fetch_entity(SpaceId),
+    lists:foreach(fun(HarvesterId) ->
+        harvester_logic_plugin:update_indices_stats(HarvesterId, all,
+            fun(ExistingStats) ->
+                harvester_logic_plugin:set_stats_offline_flag(ExistingStats, SpaceId, ProviderId, true)
+            end)
+    end, Harvesters),
+    
     entity_graph:remove_relation(
         od_space, SpaceId, od_provider, ProviderId
     );

@@ -137,7 +137,8 @@ submit_entry(Endpoint, HarvesterId, IndexId, Id, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec submit_batch(od_harvester:endpoint(), od_harvester:id(), od_harvester:indices(), od_harvester:batch()) -> 
-    {ok, [{od_harvester:index_id(), {SuccessfulSeq :: integer() | undefined, FailedSeq :: integer() | undefined}}]}.
+    {ok, [{od_harvester:index_id(), {SuccessfulSeq :: integer() | undefined, 
+        {FailedSeq :: integer(), Error :: binary()} | undefined}}]}.
 submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
     PreparedBatch = prepare_elasticsearch_batch(Batch),
     FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),
@@ -302,6 +303,7 @@ is_code_expected(Code, ExpectedCodes) ->
     end, ExpectedCodes).
 
 
+%% @private
 -spec prepare_elasticsearch_batch(od_harvester:batch()) -> binary().
 prepare_elasticsearch_batch(Batch) ->
     Requests = lists:map(fun(BatchEntry) ->
@@ -310,13 +312,13 @@ prepare_elasticsearch_batch(Batch) ->
             <<"fileId">> := EntryId,
             <<"payload">> := Payload
         } = BatchEntry,
-        Operation1 = case Operation of
+        OperationBin = case Operation of
             submit -> <<"index">>;
             delete -> <<"delete">>
         end,
         % submit only JSON, ignore other metadata
         {FinalOperation, Data} = case maps:find(<<"json">>, Payload) of
-            {ok, JSON} -> {Operation1, JSON};
+            {ok, JSON} -> {OperationBin, JSON};
             _ -> {<<"delete">>, undefined}
         end,
         Req = json_utils:encode(#{FinalOperation => #{<<"_id">> => EntryId}}),
@@ -328,8 +330,9 @@ prepare_elasticsearch_batch(Batch) ->
     <<(str_utils:join_binary(Requests, <<"\n">>))/binary, "\n">>.
 
 
+%% @private
 -spec parse_batch_result(Res :: map(), od_harvester:batch(), od_harvester:id(), od_harvester:index_id()) -> 
-    {SuccessfulSeq :: integer() | undefined, FailedSeq :: integer() | undefined}.
+    {SuccessfulSeq :: integer() | undefined, {FailedSeq :: integer(), Error :: binary()} | undefined}.
 parse_batch_result(Res, Batch, HarvesterId, IndexId) ->
     lists:foldl(
         fun({EntryResponse, BatchEntry}, {PrevSeq, undefined}) -> 
@@ -355,6 +358,7 @@ parse_batch_result(Res, Batch, HarvesterId, IndexId) ->
         end, {undefined, undefined}, lists:zip(maps:get(<<"items">>, Res), Batch)).
 
 
+%% @private
 -spec get_entry_response_error(EntryResponse :: map()) -> {ErrorType :: binary(), Error :: map()}.
 get_entry_response_error(EntryResponse) ->
     InnerMap = case maps:find(<<"index">>, EntryResponse) of
@@ -367,6 +371,7 @@ get_entry_response_error(EntryResponse) ->
     end.
 
 
+%% @private
 -spec is_es_error_ignored(Error :: binary()) -> boolean().
 is_es_error_ignored(<<"mapper_parsing_exception">>) -> true;
 is_es_error_ignored(<<"strict_dynamic_mapping_exception">>) -> true;
