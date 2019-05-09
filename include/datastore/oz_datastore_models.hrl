@@ -42,6 +42,17 @@
     refresh_token = undefined :: undefined | binary()
 }).
 
+
+%% This record must be defined here as od_harvester depends on it.
+-record(harvester_index, {
+    name :: binary(),
+    schema = undefined :: od_harvester:schema() | undefined,
+    % mapping of index name to one recognized by gui plugin.
+    guiPluginName = undefined :: binary() | undefined,
+    progress = #{} :: od_harvester:index_progress()
+}).
+
+
 %%%===================================================================
 %%% Records synchronized via Graph Sync
 %%%===================================================================
@@ -58,26 +69,28 @@
 %
 % The below ASCII visual shows possible relations in entities graph.
 %
-%       provider----------------------------------->cluster
-%           ^                                        ^  ^
-%           |                          share         |  |
-%           |                            ^          /   |
-%           |                            |         /    |
-%         space    handle_service<-----handle     /     |
-%        ^ ^  ^       ^         ^       ^   ^    /     /
-%       /  |   \     /          |      /    |   /     /
-%      /   |    \   /           |     /     |  /     /
-%  share  user   group           user     group     /
-%                  ^                        ^      /
-%                  |                        |     /
-%                  |                        |    /
-%                group                     user-'
-%                ^   ^
-%               /     \
-%              /       \
-%            user     user
+%           provider------------------------------------------>cluster
+%              ^                                                ^  ^
+%              |                                 share          |  |
+%              |                                   ^           /   |
+%              |                                   |          /    |
+%            space            handle_service<----handle      /     |
+%           ^ ^ ^ ^             ^         ^       ^  ^      /     /
+%          /  | |  \           /          |      /   |     /     /
+%         /   | |   \         /           |     /    |    /     /
+%        /   /   \   \       /            |    /     |   /     /
+%       /   /     \   \     /             |   /      |  /     /
+% share user harvester group             user      group     /
+%              ^    ^     ^                          ^      /
+%             /      \    |                          |     /
+%            /        \   |                          |    /
+%          user        group                        user-'
+%                      ^   ^
+%                     /     \
+%                    /       \
+%                  user      user
 %
-% Members of groups, spaces, providers, handle_services and handles are
+% Members of groups, spaces, providers, handle_services, handles and harvesters are
 % calculated bottom-up.
 %
 % Memberships of users, groups and spaces are calculated top-down.
@@ -118,6 +131,7 @@
     spaces = [] :: entity_graph:relations(od_space:id()),
     handle_services = [] :: entity_graph:relations(od_handle_service:id()),
     handles = [] :: entity_graph:relations(od_handle:id()),
+    harvesters = [] :: entity_graph:relations(od_harvester:id()),
     clusters = [] :: entity_graph:relations(od_cluster:id()),
 
     % Effective relations to other entities
@@ -126,6 +140,7 @@
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
     eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
+    eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
     eff_clusters = #{} :: entity_graph:eff_relations(od_cluster:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
@@ -157,6 +172,7 @@
     spaces = [] :: entity_graph:relations(od_space:id()),
     handle_services = [] :: entity_graph:relations(od_handle_service:id()),
     handles = [] :: entity_graph:relations(od_handle:id()),
+    harvesters = [] :: entity_graph:relations(od_harvester:id()),
     clusters = [] :: entity_graph:relations(od_cluster:id()),
 
     % Effective relations to other entities
@@ -165,6 +181,7 @@
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
     eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
+    eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
     eff_clusters = #{} :: entity_graph:eff_relations(od_cluster:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
@@ -186,6 +203,7 @@
     providers = #{} :: entity_graph:relations_with_attrs(od_provider:id(), Size :: pos_integer()),
     % All shares that belong to this space.
     shares = [] :: entity_graph:relations(od_share:id()),
+    harvesters = [] :: entity_graph:relations(od_harvester:id()),
 
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
@@ -193,6 +211,9 @@
     % Effective providers contain only direct providers, but this is needed to
     % track changes in spaces and propagate them top-down.
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
+    % Effective harvesters contain only direct harvesters, but this is needed to
+    % track changes in spaces and propagate them bottom-up.
+    eff_harvesters = #{} :: entity_graph:eff_relations(od_provider:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | entity_logic:client(),
@@ -239,6 +260,7 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations(od_user:id()),
     eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
+    eff_harvesters = #{} :: entity_graph:eff_relations(od_group:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
 
@@ -288,6 +310,33 @@
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
+}).
+
+-record(od_harvester, {
+    name = <<"">> :: od_harvester:name(),
+    plugin :: od_harvester:plugin(),
+    endpoint :: od_harvester:endpoint(),
+    
+    gui_plugin_config = #{} :: json_utils:json_term(),
+    public = false :: boolean(),
+    
+    indices = #{} :: od_harvester:indices(),
+
+    % Direct relations to other entities
+    users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
+    groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
+    spaces = [] :: entity_graph:relations(od_space:id()),
+
+    % Effective relations to other entities
+    eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
+    eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
+
+    % Marks that the record's effective relations are not up to date.
+    bottom_up_dirty = true :: boolean(),
+    top_down_dirty = true :: boolean()
 }).
 
 %% This record defines a Onezone/Oneprovider cluster.
@@ -405,5 +454,6 @@
     password_hash :: binary(),
     props :: maps:map()
 }).
+
 
 -endif.

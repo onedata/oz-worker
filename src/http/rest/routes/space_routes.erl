@@ -195,7 +195,7 @@ routes() -> [
         method = 'PUT',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {group, ?BINDING(gid)}}
     }},
-    %% Get group details
+    %% Get space's group details
     %% This operation requires one of the following privileges:
     %% - space_view
     %% - oz_groups_view
@@ -310,5 +310,41 @@ routes() -> [
     {<<"/spaces/:id/providers/:pid">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {provider, ?BINDING(pid)}}
+    }},
+    %% List space harvesters
+    %% This operation requires one of the following privileges:
+    %% - space_view
+    %% - oz_spaces_list_relationships
+    {<<"/spaces/:id/harvesters">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = harvesters}
+    }},
+    %% Join harvester by space
+    %% This operation requires one of the following privileges:
+    %% - space_add_harvester
+    %% - oz_harvesters_add_relationships
+    %% - oz_spaces_add_relationships
+    {<<"/spaces/:id/harvesters/join">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_harvester, id = undefined, aspect = join},
+        b_auth_hint = ?AS_SPACE(?BINDING(id))
+    }},
+    %% Get harvester details
+    %% This operation requires one of the following privileges:
+    %% - space_view
+    %% - oz_harvesters_view
+    {<<"/spaces/:id/harvesters/:hid">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(hid), aspect = instance, scope = protected},
+        b_auth_hint = ?THROUGH_SPACE(?BINDING(id))
+    }},
+    %% Remove space from harvester.
+    %% This operation requires one of the following privileges:
+    %% - space_remove_harvester
+    %% - oz_spaces_remove_relationships
+    %% - oz_harvesters_remove_relationships
+    {<<"/spaces/:id/harvesters/:hid">>, #rest_req{
+        method = 'DELETE',
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {harvester, ?BINDING(hid)}}
     }}
 ].

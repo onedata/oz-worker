@@ -63,6 +63,10 @@ translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {Access
         <<"token">> => AccessToken,
         <<"ttl">> => Expires
     };
+translate_value(_, #gri{type = od_harvester, aspect = {submit_entry, _}}, FailedIndices) ->
+    FailedIndices;
+translate_value(_, #gri{type = od_harvester, aspect = {delete_entry, _}}, FailedIndices) ->
+    FailedIndices;
 
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n
@@ -256,7 +260,8 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
 
         <<"spaces">> => Spaces,
         <<"effectiveUsers">> => entity_graph:get_relations(effective, bottom_up, od_user, Provider),
-        <<"effectiveGroups">> => entity_graph:get_relations(effective, bottom_up, od_group, Provider)
+        <<"effectiveGroups">> => entity_graph:get_relations(effective, bottom_up, od_group, Provider),
+        <<"effectiveHarvesters">> => entity_graph:get_relations(effective, bottom_up, od_harvester, Provider)
 
     };
 
@@ -321,6 +326,13 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public},
         <<"publicHandle">> => PublicHandle,
         <<"metadata">> => Metadata,
         <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp)
+    };
+
+translate_resource(_, #gri{type = od_harvester, aspect = instance, scope = private}, Harvester) ->
+    #od_harvester{indices = Indices} = Harvester,
+    #{
+        <<"indices">> => maps:keys(Indices),
+        <<"spaces">> => entity_graph:get_relations(direct, top_down, od_space, Harvester)
     };
 
 translate_resource(ProtocolVersion, GRI, Data) ->

@@ -33,6 +33,7 @@ get_models() -> [
     od_provider,
     od_handle_service,
     od_handle,
+    od_harvester,
     od_cluster,
     gs_server_state,
     onedata_auth,

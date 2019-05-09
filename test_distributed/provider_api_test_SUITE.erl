@@ -52,6 +52,7 @@
     list_eff_groups_test/1,
     get_eff_group_test/1,
     get_eff_group_membership_intermediaries/1,
+    list_eff_harvesters_test/1,
 
     list_spaces_test/1,
     list_self_spaces_test/1,
@@ -89,6 +90,7 @@ all() ->
         list_eff_groups_test,
         get_eff_group_test,
         get_eff_group_membership_intermediaries,
+        list_eff_harvesters_test,
 
         list_spaces_test,
         list_self_spaces_test,
@@ -395,6 +397,7 @@ get_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ExpName, <<"domain">> => ExpDomain,
                 <<"effectiveGroups">> => [], <<"effectiveUsers">> => [U1],
+                <<"effectiveHarvesters">> => [],
                 <<"latitude">> => ExpLatitude, <<"longitude">> => ExpLongitude,
                 <<"spaces">> => #{S1 => SupportSize},
                 <<"subdomain">> => <<"undefined">>,
@@ -1341,6 +1344,86 @@ get_eff_group_membership_intermediaries(Config) ->
         },
         ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
     end, ExpectedMembershipIntermediaries).
+
+
+list_eff_harvesters_test(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%             Provider1   
+    %%              /      \  
+    %%           Space1   Space2      
+    %%           /   \    /    \      
+    %% Harvester1     \  /      Harvester3         
+    %%     |       Harvester2       |
+    %%   User1         |          User1
+    %%               User1   
+    %%      <<user>>
+    %%      NonAdmin
+    
+    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME1
+    ),
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+
+    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space(Config, P1, S2),
+
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
+    {ok, H2} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
+    {ok, H3} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
+
+    oz_test_utils:harvester_add_space(Config, H1, S1),
+    oz_test_utils:harvester_add_space(Config, H2, S1),
+    oz_test_utils:harvester_add_space(Config, H2, S2),
+    oz_test_utils:harvester_add_space(Config, H3, S2),
+    
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    
+    ExpHarvesters = [H1, H2, H3],
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_PROVIDERS_LIST_RELATIONSHIPS]},
+                {provider, P1, P1Macaroon}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {user, U1},
+                {provider, P2, P2Macaroon}
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = provider_logic,
+            function = get_eff_harvesters,
+            args = [client, P1],
+            expected_result = ?OK_LIST(ExpHarvesters)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % check also space_logic:has_eff_harvester function
+    lists:foreach(
+        fun(HarvesterId) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, provider_logic, has_eff_harvester, [P1, HarvesterId])
+            )
+        end, ExpHarvesters
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, provider_logic, has_eff_harvester, [P1, <<"asdiucyaie827346w">>])
+    ).
 
 
 list_spaces_test(Config) ->
@@ -2503,6 +2586,9 @@ init_per_testcase(check_my_ports_test, Config) ->
             end
         end),
     init_per_testcase(default, Config);
+init_per_testcase(list_eff_harvesters_test, Config) ->
+    oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
+    init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
     Config.
 
@@ -2510,6 +2596,9 @@ init_per_testcase(_, Config) ->
 end_per_testcase(check_my_ports_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_unload(Nodes, http_client),
+    end_per_testcase(default, Config);
+end_per_testcase(list_eff_harvesters_test, Config) ->
+    oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
     end_per_testcase(default, Config);
 end_per_testcase(_, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),

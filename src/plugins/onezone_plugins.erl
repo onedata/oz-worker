@@ -40,12 +40,24 @@
 -define(PLUGINS_DIR, oz_worker:get_env(plugins_directory)).
 -define(INCLUDES_DIR, filename:join(code:lib_dir(?APP_NAME), "include")).
 -define(COMPILE_OPTS, [return_errors, {i, ?INCLUDES_DIR}]).
+-define(PLUGINS_KEY, onezone_plugins).
 
--export([init/0]).
+-export([init/0, get_plugins/1]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns all loaded plugins of specified type. 
+%% @end
+%%--------------------------------------------------------------------
+-spec get_plugins(Type :: atom()) -> [module()].
+get_plugins(Type) ->
+    {ok, AllPlugins} = simple_cache:get(?PLUGINS_KEY),
+    [P || P <- AllPlugins, P:type() =:= Type].
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -78,14 +90,15 @@ init() ->
             {module, Module} = code:load_file(Module),
             validate_plugin(Module),
             ?info("  -> ~p: successfully loaded", [Module]),
-            ok
+            {ok, Module}
         catch Type:Reason ->
             ?error_stacktrace("Cannot load ~s plugin due to ~p:~p", [Plugin, Type, Reason]),
             error
         end
     end, PluginFiles),
 
-    lists:all(fun(Res) -> Res =:= ok end, ValidationResults).
+    simple_cache:put(?PLUGINS_KEY, [Plugin || {ok, Plugin} <- ValidationResults]),
+    lists:all(fun(Res) -> Res =/= error end, ValidationResults).
 
 %%%===================================================================
 %%% Internal functions
@@ -126,6 +139,9 @@ validate_plugin(Module, attribute_mapper) ->
     end;
 validate_plugin(_, openid_plugin) ->
     % openid_plugin does not undergo validation
+    ok;
+validate_plugin(_, harvester_plugin) ->
+    % harvester_plugin does not undergo validation
     ok;
 validate_plugin(_, Type) ->
     throw({bad_plugin_type, Type}).

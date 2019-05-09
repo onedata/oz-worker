@@ -135,6 +135,13 @@ get_response(#gri{aspect = handles}, Handles) ->
 get_response(#gri{aspect = eff_handles}, Handles) ->
     rest_translator:ok_body_reply(#{<<"handles">> => Handles});
 
+get_response(#gri{aspect = harvesters}, Harvesters) ->
+    rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters});
+
+get_response(#gri{aspect = eff_harvesters}, Harvesters) ->
+    rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters});
+
+
 get_response(#gri{aspect = clusters}, Clusters) ->
     rest_translator:ok_body_reply(#{<<"clusters">> => Clusters});
 

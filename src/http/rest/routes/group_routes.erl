@@ -540,6 +540,69 @@ routes() -> [
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
+    %% Create a new harvester for given group
+    %% This operation requires one of the following privileges:
+    %% - group_add_harvester
+    %% - oz_groups_add_relationships
+    %% - oz_harvesters_create
+    {<<"/groups/:id/harvesters">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_harvester, id = undefined, aspect = instance},
+        b_auth_hint = ?AS_GROUP(?BINDING(id))
+    }},
+    %% List group's harvesters
+    %% This operation requires one of the following privileges:
+    %% - group_view
+    %% - oz_groups_list_relationships
+    {<<"/groups/:id/harvesters">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = harvesters}
+    }},
+    %% Join harvester by group
+    %% This operation requires one of the following privileges:
+    %% - group_add_harvester
+    %% - oz_harvesters_add_relationships
+    %% - oz_groups_add_relationships
+    {<<"/groups/:id/harvesters/join">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_harvester, id = undefined, aspect = join},
+        b_auth_hint = ?AS_GROUP(?BINDING(id))
+    }},
+    %% Get group's harvester details
+    %% This operation requires one of the following privileges:
+    %% - group_view
+    %% - oz_harvesters_view
+    {<<"/groups/:id/harvesters/:hid">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(hid), aspect = instance, scope = protected},
+        b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
+    }},
+    %% Remove group from harvester
+    %% This operation requires one of the following privileges:
+    %% - group_leave_harvester
+    %% - oz_harvesters_remove_relationships
+    %% - oz_groups_remove_relationships
+    {<<"/groups/:id/harvesters/:hid">>, #rest_req{
+        method = 'DELETE',
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {harvester, ?BINDING(hid)}}
+    }},
+    %% List effective group's harvesters
+    %% This operation requires one of the following privileges:
+    %% - group_view
+    %% - oz_groups_list_relationships
+    {<<"/groups/:id/effective_harvesters">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_harvesters}
+    }},
+    %% Get effective group harvester details
+    %% This operation requires one of the following privileges:
+    %% - group_view
+    %% - oz_harvesters_view
+    {<<"/groups/:id/effective_harvesters/:hid">>, #rest_req{
+        method = 'GET',
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(hid), aspect = instance, scope = protected},
+        b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
+    }},
     %% List group's clusters
     %% This operation does not require any specific privileges.
     {<<"/groups/:id/clusters">>, #rest_req{

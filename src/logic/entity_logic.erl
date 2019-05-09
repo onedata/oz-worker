@@ -34,9 +34,9 @@
 -type entity_id() :: undefined | od_user:id() | od_group:id() | od_space:id() |
 od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id() | od_cluster:id().
 -type entity_type() :: od_user | od_group | od_space | od_share | od_provider |
-od_handle_service | od_handle | od_cluster | oz_privileges.
+od_handle_service | od_handle | od_harvester | od_cluster | oz_privileges.
 -type entity() :: undefined | #od_user{} | #od_group{} | #od_space{} |
-#od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{} | #od_cluster{}.
+#od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{} | #od_harvester{} | #od_cluster{}.
 -type aspect() :: gs_protocol:aspect().
 -type scope() :: gs_protocol:scope().
 -type data_format() :: gs_protocol:data_format().
@@ -51,8 +51,8 @@ od_handle_service | od_handle | od_cluster | oz_privileges.
 -type result() :: create_result() | get_result() | update_result() | delete_result().
 -type error() :: gs_protocol:error().
 
--type type_validator() :: any | atom | list_of_atoms | binary | alias |
-list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addresses.
+-type type_validator() :: any | atom | list_of_atoms | binary | alias | list_of_binaries 
+| integer | float | json | token | boolean | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
 fun((term()) -> boolean()) |
@@ -401,15 +401,13 @@ fetch_entity(State = #state{entity = Entity}) when Entity /= undefined ->
     State;
 fetch_entity(State = #state{req = #el_req{gri = #gri{id = undefined}}}) ->
     State;
-fetch_entity(St = #state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}) when is_binary(Id) ->
-    case Plugin:fetch_entity(Id) of
+fetch_entity(State) ->
+    case call_plugin(fetch_entity, State) of
         {ok, Entity} ->
-            St#state{entity = Entity};
+            State#state{entity = Entity};
         ?ERROR_NOT_FOUND ->
             throw(?ERROR_NOT_FOUND)
-    end;
-fetch_entity(_) ->
-    throw(?ERROR_NOT_FOUND).
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -420,13 +418,8 @@ fetch_entity(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_create(State :: #state{}) -> create_result().
-call_create(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
-    case Plugin:create(ElReq) of
-        Fun when is_function(Fun, 1) ->
-            Fun(Entity);
-        Result ->
-            Result
-    end.
+call_create(State) ->
+    call_plugin(create, State).
 
 
 %%--------------------------------------------------------------------
@@ -437,8 +430,8 @@ call_create(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_get(State :: #state{}) -> get_result().
-call_get(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
-    Plugin:get(ElReq, Entity).
+call_get(State) ->
+    call_plugin(get, State).
 
 
 %%--------------------------------------------------------------------
@@ -449,8 +442,8 @@ call_get(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_update(State :: #state{}) -> update_result().
-call_update(#state{req = ElReq, plugin = Plugin}) ->
-    Plugin:update(ElReq).
+call_update(State) ->
+    call_plugin(update, State).
 
 
 %%--------------------------------------------------------------------
@@ -461,8 +454,8 @@ call_update(#state{req = ElReq, plugin = Plugin}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_delete(State :: #state{}) -> delete_result().
-call_delete(#state{req = ElReq, plugin = Plugin}) ->
-    Plugin:delete(ElReq).
+call_delete(State) ->
+    call_plugin(delete, State).
 
 
 %%--------------------------------------------------------------------
@@ -484,10 +477,9 @@ ensure_operation_supported(State) ->
 
 
 -spec ensure_operation_supported_internal(#state{}) -> boolean().
-ensure_operation_supported_internal(#state{req = Req, plugin = Plugin}) ->
+ensure_operation_supported_internal(State) ->
     try
-        #el_req{operation = Operation, gri = #gri{aspect = Aspect, scope = Scope}} = Req,
-        Plugin:operation_supported(Operation, Aspect, Scope)
+        call_plugin(operation_supported, State)
     catch _:_ ->
         % No need for log here, 'operation_supported' may crash depending on
         % what the request contains and this is expected.
@@ -512,15 +504,14 @@ ensure_exists(State) ->
 -spec ensure_exists_internal(#state{}) -> boolean().
 ensure_exists_internal(#state{req = #el_req{gri = #gri{id = undefined}}}) ->
     true;
-ensure_exists_internal(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
+ensure_exists_internal(State) ->
     try
-        Plugin:exists(ElReq, Entity)
+        call_plugin(exists, State)
     catch _:_ ->
         % No need for log here, 'exists' may crash depending on what the
         % request contains and this is expected.
         false
     end.
-
 
 %%--------------------------------------------------------------------
 %% @private
@@ -572,18 +563,18 @@ resolve_auto_scope([Scope | Rest], State = #state{req = Req = #el_req{operation 
 
 
 -spec is_client_authorized(#state{}) -> boolean().
-is_client_authorized(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
+is_client_authorized(State) ->
     try
-        Plugin:authorize(ElReq, Entity)
+        call_plugin(authorize, State)
     catch _:_ ->
         false
     end.
 
 
 -spec is_authorized_as_admin(#state{}) -> boolean().
-is_authorized_as_admin(#state{req = ElReq, plugin = Plugin}) ->
+is_authorized_as_admin(#state{req = ElReq} = State) ->
     try
-        case Plugin:required_admin_privileges(ElReq) of
+        case call_plugin(required_admin_privileges, State) of
             forbidden ->
                 false;
             Privileges ->
@@ -615,10 +606,9 @@ report_unauthorized(_) ->
 -spec ensure_valid(State :: #state{}) -> #state{}.
 ensure_valid(State) ->
     #state{
-        req = #el_req{gri = #gri{aspect = Aspect}, data = Data} = Req,
-        plugin = Plugin
+        req = #el_req{gri = #gri{aspect = Aspect}, data = Data} = Req
     } = State,
-    ValidatorsMap = Plugin:validate(Req),
+    ValidatorsMap = call_plugin(validate, State),
     % Get all types of validators
     Required = maps:get(required, ValidatorsMap, #{}),
     Optional = maps:get(optional, ValidatorsMap, #{}),
@@ -769,6 +759,8 @@ check_type(list_of_atoms, Key, Values) ->
         _:_ ->
             throw(?ERROR_BAD_VALUE_LIST_OF_ATOMS(Key))
     end;
+check_type(binary, _Key, null) ->
+    undefined;
 check_type(binary, _Key, Binary) when is_binary(Binary) ->
     Binary;
 check_type(binary, _Key, Atom) when is_atom(Atom) ->
@@ -874,6 +866,8 @@ check_value(atom, non_empty, Key, '') ->
 check_value(list_of_atoms, non_empty, Key, []) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(binary, non_empty, Key, <<"">>) ->
+    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+check_value(binary, non_empty, Key, undefined) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(list_of_binaries, non_empty, Key, []) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
@@ -1033,3 +1027,37 @@ check_value(TypeRule, ValueRule, Key, _) ->
         TypeRule, ValueRule, Key
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Performs operation on proper entity logic plugin.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_plugin(Operation :: atom(), #state{}) -> term().
+call_plugin(fetch_entity, #state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}) when is_binary(Id)->
+    Plugin:fetch_entity(Id);
+call_plugin(fetch_entity, _) ->
+    ?ERROR_NOT_FOUND;
+call_plugin(operation_supported,  #state{plugin = Plugin, req = #el_req{operation = Operation,
+    gri =#gri{aspect = Aspect, scope = Scope}}}) ->
+    Plugin:operation_supported(Operation, Aspect, Scope);
+call_plugin(exists, #state{plugin = Plugin, req = ElReq, entity = Entity}) ->
+    Plugin:exists(ElReq, Entity);
+call_plugin(authorize, #state{plugin = Plugin, req = ElReq, entity = Entity}) ->
+    Plugin:authorize(ElReq, Entity);
+call_plugin(required_admin_privileges, #state{plugin = Plugin, req = ElReq}) ->
+    Plugin:required_admin_privileges(ElReq);
+call_plugin(get, #state{plugin = Plugin, req = ElReq, entity = Entity}) ->
+    Plugin:get(ElReq, Entity);
+call_plugin(update, #state{plugin = Plugin, req = ElReq}) ->
+    Plugin:update(ElReq);
+call_plugin(Operation, #state{plugin = Plugin, req = ElReq, entity = Entity}) ->
+    % covers create, delete, validate
+    case Plugin:Operation(ElReq) of
+        Fun when is_function(Fun, 1) ->
+            Fun(Entity);
+        Result ->
+            Result
+    end.

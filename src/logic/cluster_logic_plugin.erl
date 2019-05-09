@@ -718,7 +718,7 @@ update_version_info(Cluster, ClusterId, ServiceType, VersionKey, Data) ->
             ClusterType = Cluster#od_cluster.type,
             Service = onedata:service_by_type(ClusterType, ServiceType),
             {Release, Build, RequestedGuiHash} = cluster_logic:json_to_version_info(VersionData),
-            GuiExists = gui_static:gui_exists(Service, RequestedGuiHash),
+            GuiExists = gui_static:gui_exists(onedata:service_shortname(Service), RequestedGuiHash),
             GuiHash = case {GuiExists, ClusterType} of
                 {true, _} ->
                     RequestedGuiHash;
@@ -731,7 +731,7 @@ update_version_info(Cluster, ClusterId, ServiceType, VersionKey, Data) ->
                     throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<VersionKey/binary, ".gui">>))
             end,
             {_, _, OldGuiHash} = get_version_info(Cluster, ServiceType),
-            GuiHash /= OldGuiHash andalso gui_static:link_service_gui(Service, ClusterId, GuiHash),
+            GuiHash /= OldGuiHash andalso gui_static:link_gui(onedata:service_shortname(Service), ClusterId, GuiHash),
             set_version_info(Cluster, ServiceType, {Release, Build, GuiHash})
     end.
 

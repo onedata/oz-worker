@@ -476,7 +476,7 @@ public_share_page_test(Config) ->
         Config, ProviderData
     ),
     NewClusterId = NewProvider,
-    {DummyGuiHash, _IndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_WORKER),
+    {DummyGuiHash, _IndexContent} = oz_test_utils:deploy_dummy_gui(Config, onedata:service_shortname(?OP_WORKER)),
     ok = oz_test_utils:call_oz(Config, cluster_logic, update_version_info, [
         ?PROVIDER(NewProvider), NewClusterId, ?WORKER, {<<"19.02.1">>, <<"build-123">>, DummyGuiHash}
     ]),

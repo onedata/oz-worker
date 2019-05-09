@@ -38,6 +38,8 @@
     add_user/3, add_user/4,
     add_group/3, add_group/4,
     create_group/3, create_group/4,
+    
+    join_harvester/3,
 
     get_users/2, get_eff_users/2,
     get_user/3, get_eff_user/3,
@@ -53,10 +55,13 @@
 
     get_providers/2, get_provider/3,
 
+    get_harvesters/2, get_harvester/3,
+
     update_user_privileges/5, update_user_privileges/4,
     update_group_privileges/5, update_group_privileges/4,
 
     leave_provider/3,
+    remove_harvester/3,
 
     remove_user/3,
     remove_group/3
@@ -67,12 +72,14 @@
     has_direct_user/2,
     has_eff_user/2,
     has_eff_group/2,
-    has_provider/2
+    has_provider/2,
+    has_harvester/2
 ]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -148,7 +155,7 @@ list(Client) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Client :: entity_logic:client(), SpaceId :: od_space:id(),
-    Data :: #{}) -> ok | {error, term()}.
+    NameOrData :: binary() | #{}) -> ok | {error, term()}.
 update(Client, SpaceId, NewName) when is_binary(NewName) ->
     update(Client, SpaceId, #{<<"name">> => NewName});
 update(Client, SpaceId, Data) ->
@@ -332,6 +339,29 @@ create_group(Client, SpaceId, Data) ->
         data = Data,
         auth_hint = AuthHint
     })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Joins a harvester on behalf of given group based on harvester_invite_space token.
+%% Has two variants:
+%% 1) Token is given explicitly (as binary() or macaroon())
+%% 2) Token is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec join_harvester(Client :: entity_logic:client(), SpaceId :: od_group:id(),
+    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    {ok, od_harvester:id()} | {error, term()}.
+join_harvester(Client, SpaceId, Data) when is_map(Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_harvester, id = undefined, aspect = join},
+        auth_hint = ?AS_SPACE(SpaceId),
+        data = Data
+    }));
+join_harvester(Client, SpaceId, Token) ->
+    join_harvester(Client, SpaceId, #{<<"token">> => Token}).
 
 
 %%--------------------------------------------------------------------
@@ -620,6 +650,39 @@ get_provider(Client, SpaceId, ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves the list of harvesters of given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_harvesters(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
+    {ok, [od_harvester:id()]} | {error, term()}.
+get_harvesters(Client, SpaceId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_space, id = SpaceId, aspect = harvesters}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific harvester among harvesters of given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_harvester(Client :: entity_logic:client(), SpaceId :: od_space:id(),
+    HarvesterId :: od_harvester:id()) -> {ok, #{}} | {error, term()}.
+get_harvester(Client, SpaceId, HarvesterId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = protected},
+        auth_hint = ?THROUGH_SPACE(SpaceId)
+    }).
+
+
+%%--------------------------------------------------------------------
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Updates privileges of specified user of given space.
 %% Allows to specify privileges to grant and to revoke.
 %% @end
@@ -696,6 +759,21 @@ leave_provider(Client, SpaceId, ProviderId) ->
         operation = delete,
         client = Client,
         gri = #gri{type = od_space, id = SpaceId, aspect = {provider, ProviderId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes space from specified harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_harvester(Client :: entity_logic:client(), SpaceId :: od_space:id(),
+    HarvesterId :: od_harvester:id()) -> ok | {error, term()}.
+remove_harvester(Client, SpaceId, HarvesterId) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_space, id = SpaceId, aspect = {harvester, HarvesterId}}
     }).
 
 
@@ -805,3 +883,16 @@ has_provider(SpaceId, ProviderId) when is_binary(SpaceId) ->
     entity_graph:has_relation(direct, top_down, od_provider, ProviderId, od_space, SpaceId);
 has_provider(Space, ProviderId) ->
     entity_graph:has_relation(direct, top_down, od_provider, ProviderId, Space).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether given space is member of specified harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_harvester(SpaceOrId :: od_space:id() | #od_space{},
+    HarvesterId :: od_harvester:id()) -> boolean().
+has_harvester(SpaceId, HarvesterId) when is_binary(SpaceId) ->
+    entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, od_space, SpaceId);
+has_harvester(Space, HarvesterId) ->
+    entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, Space).

@@ -243,6 +243,7 @@ get_record_struct(4) ->
     get_record_struct(3);
 get_record_struct(5) ->
     % * new field - creation_time
+    % * new field - eff harvesters
     {record, [
         {name, string},
         {admin_email, string},
@@ -259,6 +260,7 @@ get_record_struct(5) ->
 
         {eff_users, #{string => [{atom, string}]}},
         {eff_groups, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}}, % New field
 
         {creation_time, integer}, % New field
 
@@ -414,6 +416,7 @@ upgrade_record(4, Provider) ->
 
         eff_users = EffUsers,
         eff_groups = EffGroups,
+        eff_harvesters = #{},
 
         creation_time = time_utils:system_time_seconds(),
 

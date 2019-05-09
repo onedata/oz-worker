@@ -509,6 +509,8 @@ get_record_struct(10) ->
     % Changes:
     %   * new field - active sessions
     %   * new field - creation_time
+    %   * new field - harvesters
+    %   * new field - eff_harvesters
     %   * new field - clusters
     %   * new field - eff_clusters
     %   * the privileges are translated
@@ -546,6 +548,7 @@ get_record_struct(10) ->
         {spaces, [string]},
         {handle_services, [string]},
         {handles, [string]},
+        {harvesters, [string]},
         {clusters, [string]},
 
         {eff_groups, #{string => [{atom, string}]}},
@@ -553,6 +556,7 @@ get_record_struct(10) ->
         {eff_providers, #{string => [{atom, string}]}},
         {eff_handle_services, #{string => [{atom, string}]}},
         {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
         {eff_clusters, #{string => [{atom, string}]}},
 
         {creation_time, integer}, % New field
@@ -1205,6 +1209,7 @@ upgrade_record(9, User) ->
         spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles,
+        harvesters = [],
         clusters = [],
 
         eff_groups = EffGroups,
@@ -1212,6 +1217,7 @@ upgrade_record(9, User) ->
         eff_providers = EffProviders,
         eff_handle_services = EffHandleServices,
         eff_handles = EffHandles,
+        eff_harvesters = #{},
         eff_clusters = #{},
 
         creation_time = time_utils:system_time_seconds(),

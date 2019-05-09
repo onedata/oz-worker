@@ -76,6 +76,7 @@ operation_supported(get, eff_users, private) -> true;
 operation_supported(get, {eff_user_membership, _}, private) -> true;
 operation_supported(get, eff_groups, private) -> true;
 operation_supported(get, {eff_group_membership, _}, private) -> true;
+operation_supported(get, eff_harvesters, private) -> true;
 operation_supported(get, spaces, private) -> true;
 operation_supported(get, {user_spaces, _}, private) -> true;
 operation_supported(get, {group_spaces, _}, private) -> true;
@@ -106,6 +107,7 @@ is_subscribable(instance, _) -> true;
 is_subscribable({user_spaces, _}, private) -> true;
 is_subscribable({eff_user_membership, _}, private) -> true;
 is_subscribable({eff_group_membership, _}, private) -> true;
+is_subscribable(eff_harvesters, _) -> true;
 is_subscribable(_, _) -> false.
 
 
@@ -239,6 +241,8 @@ get(#el_req{gri = #gri{aspect = eff_groups}}, Provider) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_group, Provider)};
 get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Provider) ->
     {ok, entity_graph:get_intermediaries(bottom_up, od_group, GroupId, Provider)};
+get(#el_req{gri = #gri{aspect = eff_harvesters}}, Provider) ->
+    {ok, entity_graph:get_relations(effective, bottom_up, od_harvester, Provider)};
 
 get(#el_req{gri = #gri{aspect = spaces}}, Provider) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_space, Provider)};
@@ -467,6 +471,9 @@ authorize(Req = #el_req{operation = get, client = ?USER(UserId), gri = #gri{aspe
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_group_membership, _}}}, _) ->
     auth_by_self(Req);
 
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_harvesters}}, _) ->
+    auth_by_self(Req);
+
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = spaces}}, _) ->
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
@@ -524,6 +531,8 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_group
     [?OZ_PROVIDERS_LIST_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {eff_group_membership, _}}}) ->
     [?OZ_PROVIDERS_VIEW];
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_harvesters}}) ->
+    [?OZ_PROVIDERS_LIST_RELATIONSHIPS];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = spaces}}) ->
     [?OZ_PROVIDERS_LIST_RELATIONSHIPS];

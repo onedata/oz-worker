@@ -101,12 +101,12 @@ oz_panel_gui_setup_works(Config) ->
     % Simulate cluster setup procedure performed by oz_panel
     Release = <<"mock-release">>,
     Build = <<"mock-build">>,
-    %{GuiHash, OzpIndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OZ_PANEL),
+    %{GuiHash, OzpIndexContent} = oz_test_utils:deploy_dummy_gui(Config, onedata:service_shortname(?OZ_PANEL)),
     {GuiPackage, IndexContent} = oz_test_utils:create_dummy_gui_package(),
-    {ok, GuiHash} = gui:package_hash(GuiPackage),
     oz_test_utils:copy_file_to_onezone_nodes(Config, GuiPackage),
 
-    ok = oz_test_utils:call_oz(Config, gui_static, deploy_package, [?OZ_PANEL, GuiPackage]),
+    {ok, GuiHash} = gui:package_hash(GuiPackage),
+    ok = oz_test_utils:call_oz(Config, gui_static, deploy_package, [onedata:service_shortname(?OZ_PANEL), GuiPackage]),
     ok = oz_test_utils:call_oz(Config, cluster_logic, update_version_info, [
         ?ROOT, ?ONEZONE_CLUSTER_ID, ?ONEPANEL, {Release, Build, GuiHash}
     ]),
@@ -139,7 +139,7 @@ op_worker_and_panel_gui_is_linked_upon_version_info_update(Config) ->
     {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     ClusterId = ProviderId,
 
-    {OpGuiHash, OpIndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_WORKER),
+    {OpGuiHash, OpIndexContent} = oz_test_utils:deploy_dummy_gui(Config, onedata:service_shortname(?OP_WORKER)),
 
     oz_test_utils:call_oz(Config, cluster_logic, update_version_info, [
         ?PROVIDER(ProviderId), ClusterId, ?WORKER, {<<"18.07.1-WORKER">>, <<"build-WORKER">>, OpGuiHash}
@@ -157,7 +157,7 @@ op_worker_and_panel_gui_is_linked_upon_version_info_update(Config) ->
     ?assert(file_is_served(Config, ?EMPTY_INDEX_CONTENT(Config, ?OP_PANEL), [<<"/opp/">>, ClusterId, <<"/index.html">>])),
     ?assert(version_info_is_set(Config, ClusterId, ?ONEPANEL, {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH})),
 
-    {OppGuiHash, OppIndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_PANEL),
+    {OppGuiHash, OppIndexContent} = oz_test_utils:deploy_dummy_gui(Config, onedata:service_shortname(?OP_PANEL)),
     oz_test_utils:call_oz(Config, cluster_logic, update_version_info, [
         ?PROVIDER(ProviderId), ClusterId, ?ONEPANEL, {<<"18.07.1-PANEL">>, <<"build-PANEL">>, OppGuiHash}
     ]),
@@ -179,11 +179,11 @@ gui_is_unlinked_after_provider_deletion(Config) ->
     {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     ClusterId = ProviderId,
 
-    {OpGuiHash, OpIndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_WORKER),
+    {OpGuiHash, OpIndexContent} = oz_test_utils:deploy_dummy_gui(Config, onedata:service_shortname(?OP_WORKER)),
     oz_test_utils:call_oz(Config, cluster_logic, update_version_info, [
         ?PROVIDER(ProviderId), ClusterId, ?WORKER, {<<"18.07.1-WORKER">>, <<"build-WORKER">>, OpGuiHash}
     ]),
-    {OppGuiHash, OppIndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_PANEL),
+    {OppGuiHash, OppIndexContent} = oz_test_utils:deploy_dummy_gui(Config, onedata:service_shortname(?OP_PANEL)),
     oz_test_utils:call_oz(Config, cluster_logic, update_version_info, [
         ?PROVIDER(ProviderId), ClusterId, ?ONEPANEL, {<<"18.07.1-PANEL">>, <<"build-PANEL">>, OppGuiHash}
     ]),
@@ -350,7 +350,7 @@ gui_upload_page_deploys_op_worker_gui_on_all_nodes(Config) ->
     {OpGuiPackage, OpIndexContent} = oz_test_utils:create_dummy_gui_package(),
     {ok, OpGuiHash} = gui:package_hash(OpGuiPackage),
 
-    ?assertNot(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?OP_WORKER, OpGuiHash])),
+    ?assertNot(oz_test_utils:call_oz(Config, gui_static, gui_exists, [onedata:service_shortname(?OP_WORKER), OpGuiHash])),
     ?assertMatch(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"workerVersion.gui">>), oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
             ?PROVIDER(ProviderId), ClusterId, ?WORKER, {<<"18.07.1">>, <<"build">>, OpGuiHash}
@@ -366,7 +366,7 @@ gui_upload_page_deploys_op_worker_gui_on_all_nodes(Config) ->
         [?SSL_OPTS(Config)]
     )),
 
-    ?assert(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?OP_WORKER, OpGuiHash])),
+    ?assert(oz_test_utils:call_oz(Config, gui_static, gui_exists, [onedata:service_shortname(?OP_WORKER), OpGuiHash])),
     ?assertMatch(ok, oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
             ?PROVIDER(ProviderId), ClusterId, ?WORKER, {<<"18.07.1">>, <<"build">>, OpGuiHash}
@@ -387,7 +387,7 @@ gui_upload_page_deploys_op_panel_gui_on_all_nodes(Config) ->
     {OppGuiPackage, OppIndexContent} = oz_test_utils:create_dummy_gui_package(),
     {ok, OppGuiHash} = gui:package_hash(OppGuiPackage),
 
-    ?assertNot(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?OP_PANEL, OppGuiHash])),
+    ?assertNot(oz_test_utils:call_oz(Config, gui_static, gui_exists, [onedata:service_shortname(?OP_PANEL), OppGuiHash])),
     ?assertMatch(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"onepanelVersion.gui">>), oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
             ?PROVIDER(ProviderId), ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build">>, OppGuiHash}
@@ -403,7 +403,7 @@ gui_upload_page_deploys_op_panel_gui_on_all_nodes(Config) ->
         [?SSL_OPTS(Config)]
     )),
 
-    ?assert(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?OP_PANEL, OppGuiHash])),
+    ?assert(oz_test_utils:call_oz(Config, gui_static, gui_exists, [onedata:service_shortname(?OP_PANEL), OppGuiHash])),
     ?assertMatch(ok, oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
             ?PROVIDER(ProviderId), ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build">>, OppGuiHash}
@@ -422,7 +422,7 @@ empty_gui_is_linked_after_failed_op_worker_version_update(Config) ->
     ClusterId = ProviderId,
 
     % First link correct GUI to provider
-    {OpGuiHash, _OpIndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_WORKER),
+    {OpGuiHash, _OpIndexContent} = oz_test_utils:deploy_dummy_gui(Config, onedata:service_shortname(?OP_WORKER)),
     ?assertMatch(ok, oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
             ?PROVIDER(ProviderId), ClusterId, ?WORKER, {<<"18.07.1">>, <<"build-1">>, OpGuiHash}
@@ -450,7 +450,7 @@ empty_gui_is_linked_after_failed_op_panel_version_update(Config) ->
     ClusterId = ProviderId,
 
     % First link correct GUI to onepanel
-    {OppGuiHash, _OpIndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_PANEL),
+    {OppGuiHash, _OpIndexContent} = oz_test_utils:deploy_dummy_gui(Config, onedata:service_shortname(?OP_PANEL)),
     ?assertMatch(ok, oz_test_utils:call_oz(
         Config, cluster_logic, update_version_info, [
             ?PROVIDER(ProviderId), ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build-1">>, OppGuiHash}

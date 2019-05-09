@@ -74,9 +74,11 @@
     create_space/3,
     create_handle_service/5, create_handle_service/3,
     create_handle/6, create_handle/3,
+    create_harvester/3, create_harvester/6,
 
     join_group/3,
     join_space/3,
+    join_harvester/3,
     join_cluster/3,
 
     get_groups/2, get_eff_groups/2,
@@ -94,6 +96,9 @@
     get_handles/2, get_eff_handles/2,
     get_handle/3, get_eff_handle/3,
 
+    get_harvesters/2, get_eff_harvesters/2,
+    get_harvester/3, get_eff_harvester/3,
+
     get_clusters/1, get_clusters/2, get_eff_clusters/2,
     get_cluster/3, get_eff_cluster/3,
 
@@ -101,6 +106,7 @@
     leave_space/3,
     leave_handle_service/3,
     leave_handle/3,
+    leave_harvester/3,
     leave_cluster/3
 ]).
 -export([
@@ -111,6 +117,7 @@
     has_eff_provider/2,
     has_eff_handle_service/2,
     has_eff_handle/2,
+    has_eff_harvester/2,
     has_eff_cluster/2
 ]).
 -export([
@@ -790,6 +797,42 @@ create_handle(Client, UserId, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Creates a new harvester for given user. 
+%% Harvester name, endpoint plugin and config are given explicitly.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_harvester(Client :: entity_logic:client(), UserId :: od_user:id(), Name :: binary(),
+    Endpoint :: binary(), Plugin :: binary(), Config :: maps:map()) -> {ok, od_harvester:id()} | {error, term()}.
+create_harvester(Client, UserId, Name, Endpoint, Plugin, Config) ->
+    create_harvester(Client, UserId, #{
+        <<"name">> => Name,
+        <<"endpoint">> => Endpoint,
+        <<"plugin">> => Plugin,
+        <<"guiPluginConfig">> => Config
+    }).
+
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new harvester for given user. 
+%% Harvester name, endpoint plugin and config are provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_harvester(Client :: entity_logic:client(), UserId :: od_user:id(),
+    Data :: #{}) -> {ok, od_harvester:id()} | {error, term()}.
+create_harvester(Client, UserId, Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_harvester, id = undefined, aspect = instance},
+        auth_hint = ?AS_USER(UserId),
+        data = Data
+    })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Joins a group on behalf of given user based on group_invite_user token.
 %% Has two variants:
 %% 1) Token is given explicitly (as binary() or macaroon())
@@ -832,6 +875,29 @@ join_space(Client, UserId, Data) when is_map(Data) ->
     }));
 join_space(Client, UserId, Token) ->
     join_space(Client, UserId, #{<<"token">> => Token}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Joins a harvester on behalf of given user based on harvester_invite_user token.
+%% Has two variants:
+%% 1) Token is given explicitly (as binary() or macaroon())
+%% 2) Token is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec join_harvester(Client :: entity_logic:client(), UserId :: od_user:id(),
+    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    {ok, od_harvester:id()} | {error, term()}.
+join_harvester(Client, UserId, Data) when is_map(Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_harvester, id = undefined, aspect = join},
+        auth_hint = ?AS_USER(UserId),
+        data = Data
+    }));
+join_harvester(Client, UserId, Token) ->
+    join_harvester(Client, UserId, #{<<"token">> => Token}).
 
 
 %%--------------------------------------------------------------------
@@ -1231,6 +1297,68 @@ get_eff_cluster(Client, UserId, ClusterId) ->
         auth_hint = ?THROUGH_USER(UserId)
     }).
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of harvesters of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_harvesters(Client :: entity_logic:client(), UserId :: od_user:id()) ->
+    {ok, [od_harvester:id()]} | {error, term()}.
+get_harvesters(Client, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_user, id = UserId, aspect = harvesters}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective harvesters of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_harvesters(Client :: entity_logic:client(), UserId :: od_user:id()) ->
+    {ok, [od_harvester:id()]} | {error, term()}.
+get_eff_harvesters(Client, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_user, id = UserId, aspect = eff_harvesters}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific harvester among harvesters of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_harvester(Client :: entity_logic:client(), UserId :: od_user:id(),
+    HarvesterId :: od_harvester:id()) -> {ok, #{}} | {error, term()}.
+get_harvester(Client, UserId, HarvesterId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = protected},
+        auth_hint = ?THROUGH_USER(UserId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective harvester among
+%% effective harvesters of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_harvester(Client :: entity_logic:client(), UserId :: od_user:id(),
+    HarvesterId :: od_harvester:id()) -> {ok, #{}} | {error, term()}.
+get_eff_harvester(Client, UserId, HarvesterId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = protected},
+        auth_hint = ?THROUGH_USER(UserId)
+    }).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -1289,6 +1417,21 @@ leave_handle(Client, UserId, HandleId) ->
         operation = delete,
         client = Client,
         gri = #gri{type = od_user, id = UserId, aspect = {handle, HandleId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves specified harvester on behalf of given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec leave_harvester(Client :: entity_logic:client(), UserId :: od_user:id(),
+    HarvesterId :: od_harvester:id()) -> ok | {error, term()}.
+leave_harvester(Client, UserId, HarvesterId) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        client = Client,
+        gri = #gri{type = od_user, id = UserId, aspect = {harvester, HarvesterId}}
     }).
 
 
@@ -1394,6 +1537,19 @@ has_eff_handle(UserId, HandleId) when is_binary(UserId) ->
     entity_graph:has_relation(effective, top_down, od_handle, HandleId, od_user, UserId);
 has_eff_handle(User, HandleId) ->
     entity_graph:has_relation(effective, top_down, od_handle, HandleId, User).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether given user belongs to specified effective harvester_service.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_harvester(UserIdOrUser :: od_user:id() | #od_user{},
+    HarvesterId :: od_harvester:id()) -> boolean().
+has_eff_harvester(UserId, HarvesterId) when is_binary(UserId) ->
+    entity_graph:has_relation(effective, top_down, od_harvester, HarvesterId, od_user, UserId);
+has_eff_harvester(User, HarvesterId) ->
+    entity_graph:has_relation(effective, top_down, od_harvester, HarvesterId, User).
 
 
 %%--------------------------------------------------------------------

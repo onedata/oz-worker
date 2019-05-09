@@ -22,5 +22,8 @@
 -define(CLUSTER_INVITE_USER_TOKEN, cluster_invite_user_token).
 -define(CLUSTER_INVITE_GROUP_TOKEN, cluster_invite_group_token).
 -define(PROVIDER_REGISTRATION_TOKEN, provider_registration_token).
+-define(HARVESTER_INVITE_USER_TOKEN, harvester_invite_user_token).
+-define(HARVESTER_INVITE_GROUP_TOKEN, harvester_invite_group_token).
+-define(HARVESTER_INVITE_SPACE_TOKEN, harvester_invite_space_token).
 
 -endif.

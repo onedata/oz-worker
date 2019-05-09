@@ -281,6 +281,8 @@ translate(?ERROR_SUBDOMAIN_DELEGATION_DISABLED) ->
     {?HTTP_400_BAD_REQUEST, <<"Subdomain delegation is disabled for this Oneprovider.">>};
 translate(?ERROR_BAD_VALUE_EMAIL) ->
     {?HTTP_400_BAD_REQUEST, <<"Bad value: provided e-mail is not a valid e-mail.">>};
+translate(?ERROR_TEMPORARY_FAILURE) ->
+    {?HTTP_503_SERVICE_UNAVAILABLE, <<"Service unavailable: temporary failure.">>};
 % Wildcard match
 translate({error, Reason}) ->
     ?error("Unexpected error: {error, ~p} in rest error translator", [Reason]),

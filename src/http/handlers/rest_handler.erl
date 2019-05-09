@@ -26,7 +26,8 @@
 -type bound_gri() :: #b_gri{}.
 -type bound_auth_hint() :: undefined | {
     throughUser | throughGroup | throughSpace | throughProvider |
-    throughHandleService | throughHandle | throughCluster | asUser | asGroup,
+    throughHandleService | throughHandle | throughHarvester | throughCluster | 
+    asUser | asGroup | asSpace,
     binding()
 }.
 
@@ -214,6 +215,7 @@ rest_routes() ->
         provider_routes:routes(),
         handle_service_routes:routes(),
         handle_routes:routes(),
+        harvester_routes:routes(),
         cluster_routes:routes(),
         zone_routes:routes()
     ]),

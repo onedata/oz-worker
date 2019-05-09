@@ -63,11 +63,14 @@ handshake_attributes(_Client) ->
 translate_value(_, #gri{aspect = TokenType}, Macaroon) when
     TokenType == invite_user_token;
     TokenType == invite_group_token;
+    TokenType == invite_space_token;
     TokenType == invite_provider_token;
     TokenType == provider_registration_token ->
 
     {ok, Token} = onedata_macaroons:serialize(Macaroon),
     Token;
+translate_value(_, #gri{type = od_harvester, aspect = {query, _}}, Response) ->
+    Response;
 
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n
@@ -95,6 +98,8 @@ translate_resource(_, GRI = #gri{type = od_space}, Data) ->
     translate_space(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_provider}, Data) ->
     translate_provider(GRI, Data);
+translate_resource(_, GRI = #gri{type = od_harvester}, Data) ->
+    translate_harvester(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_cluster}, Data) ->
     translate_cluster(GRI, Data);
 
@@ -138,6 +143,7 @@ translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, U
         <<"groupList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_groups, scope = private}),
         <<"spaceList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_spaces, scope = private}),
         <<"providerList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_providers, scope = private}),
+        <<"harvesterList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_harvesters, scope = private}),
         <<"clusterList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_clusters, scope = private}),
         <<"info">> => #{
             <<"creationTime">> => User#od_user.creation_time
@@ -218,6 +224,14 @@ translate_user(#gri{aspect = eff_providers}, Providers) ->
             end, Providers)
     };
 
+translate_user(#gri{aspect = eff_harvesters}, Harvesters) ->
+    #{
+        <<"list">> => lists:map(
+            fun(HarvesterId) ->
+                gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = auto})
+            end, Harvesters)
+    };
+
 translate_user(#gri{aspect = eff_clusters}, Clusters) ->
     #{
         <<"list">> => lists:map(
@@ -248,26 +262,28 @@ translate_group(#gri{id = GroupId, aspect = instance, scope = private}, Group) -
         <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = users}),
         <<"effUserList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = eff_users}),
         <<"spaceList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = spaces}),
+        <<"harvesterList">> => gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = eff_harvesters}),
         <<"info">> => maps:merge(translate_creator(Group#od_group.creator), #{
             <<"creationTime">> => Group#od_group.creation_time
         })
     } end;
 
-translate_group(#gri{aspect = instance, scope = protected}, Group) ->
+translate_group(#gri{id = GroupId, aspect = instance, scope = protected}, Group) ->
     #{
         <<"name">> := Name,
         <<"type">> := Type,
         <<"creator">> := Creator,
         <<"creationTime">> := CreationTime
     } = Group,
-    #{
+    fun(?USER(UserId)) -> #{
         <<"name">> => Name,
         <<"type">> => Type,
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
         }),
-        <<"scope">> => <<"protected">>
-    };
+        <<"scope">> => <<"protected">>,
+        <<"directMembership">> => group_logic:has_direct_user(GroupId, UserId)
+    } end;
 
 translate_group(#gri{aspect = instance, scope = shared}, Group) ->
     #{
@@ -356,6 +372,14 @@ translate_group(#gri{aspect = spaces}, Spaces) ->
             fun(SpaceId) ->
                 gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
             end, Spaces)
+    };
+
+translate_group(#gri{aspect = eff_harvesters}, Harvesters) ->
+    #{
+        <<"list">> => lists:map(
+            fun(HarvesterId) ->
+                gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = auto})
+            end, Harvesters)
     }.
 
 
@@ -380,6 +404,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
         <<"effGroupList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = eff_groups}),
         <<"supportSizes">> => Providers,
         <<"providerList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = providers}),
+        <<"harvesterList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = harvesters}),
         <<"info">> => maps:merge(translate_creator(Space#od_space.creator), #{
             <<"creationTime">> => Space#od_space.creation_time,
             <<"sharedDirectories">> => length(Shares)
@@ -394,16 +419,17 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"creator">> := Creator,
         <<"sharedDirectories">> := SharedDirectories
     } = SpaceData,
-    #{
+    fun(?USER(UserId)) -> #{
         <<"name">> => Name,
         <<"scope">> => <<"protected">>,
+        <<"directMembership">> => space_logic:has_direct_user(SpaceId, UserId),
         <<"supportSizes">> => Providers,
         <<"providerList">> => gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = providers}),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime,
             <<"sharedDirectories">> => SharedDirectories
         })
-    };
+    } end;
 
 translate_space(#gri{aspect = users}, Users) ->
     #{
@@ -469,6 +495,14 @@ translate_space(#gri{aspect = providers, scope = private}, Providers) ->
             fun(ProviderId) ->
                 gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = auto})
             end, Providers)
+    };
+
+translate_space(#gri{aspect = harvesters}, Harvesters) ->
+    #{
+        <<"list">> => lists:map(
+            fun(HarvesterId) ->
+                gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = auto})
+            end, Harvesters)
     }.
 
 
@@ -556,6 +590,160 @@ translate_provider(#gri{aspect = spaces}, Spaces) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
+%% Translates GET result for harvester related aspects.
+%% @end
+%%--------------------------------------------------------------------
+-spec translate_harvester(gs_protocol:gri(), Data :: term()) ->
+    gs_protocol:data() | fun((gs_protocol:client()) -> gs_protocol:data()).
+translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, Harvester) ->
+    #od_harvester{
+        name = Name, endpoint = Endpoint,
+        plugin = Plugin
+    } = Harvester,
+    fun(?USER(UserId)) -> #{
+        <<"name">> => Name,
+        <<"scope">> => <<"private">>,
+        <<"endpoint">> => Endpoint,
+        <<"plugin">> => atom_to_binary(Plugin, utf8),
+        <<"indexList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = indices}),
+        <<"canViewPrivileges">> => harvester_logic:has_eff_privilege(Harvester, UserId, ?HARVESTER_VIEW_PRIVILEGES),
+        <<"directMembership">> => harvester_logic:has_direct_user(Harvester, UserId),
+        <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = users}),
+        <<"effUserList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = eff_users}),
+        <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = groups}),
+        <<"effGroupList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = eff_groups}),
+        <<"spaceList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = spaces}),
+        <<"info">> => maps:merge(translate_creator(Harvester#od_harvester.creator), #{
+            <<"creationTime">> => Harvester#od_harvester.creation_time
+        })
+    } end;
+
+translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}, HarvesterData) ->
+    #{
+        <<"name">> := Name,
+        <<"public">> := Public,
+        <<"plugin">> := Plugin,
+        <<"endpoint">> := Endpoint,
+        <<"creationTime">> := CreationTime,
+        <<"creator">> := Creator
+    } = HarvesterData,
+    fun(?USER(UserId)) -> #{
+        <<"name">> => Name,
+        <<"public">> => Public,
+        <<"plugin">> => Plugin,
+        <<"endpoint">> => Endpoint,
+        <<"scope">> => <<"protected">>,
+        <<"directMembership">> => harvester_logic:has_direct_user(HarvesterId, UserId),
+        <<"info">> => maps:merge(translate_creator(Creator), #{
+            <<"creationTime">> => CreationTime
+        })
+    } end;
+
+translate_harvester(#gri{aspect = gui_plugin_config}, Config) ->
+    #{
+        <<"guiPluginConfig">> => Config
+    };
+
+translate_harvester(#gri{aspect = users}, Users) ->
+    #{
+        <<"list">> => lists:map(
+            fun(UserId) ->
+                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+            end, Users)
+    };
+
+translate_harvester(#gri{aspect = eff_users}, Users) ->
+    #{
+        <<"list">> => lists:map(
+            fun(UserId) ->
+                gs_protocol:gri_to_string(#gri{type = od_user, id = UserId, aspect = instance, scope = auto})
+            end, Users)
+    };
+
+translate_harvester(#gri{aspect = groups}, Groups) ->
+    #{
+        <<"list">> => lists:map(
+            fun(GroupId) ->
+                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
+            end, Groups)
+    };
+
+translate_harvester(#gri{aspect = eff_groups}, Groups) ->
+    #{
+        <<"list">> => lists:map(
+            fun(GroupId) ->
+                gs_protocol:gri_to_string(#gri{type = od_group, id = GroupId, aspect = instance, scope = auto})
+            end, Groups)
+    };
+
+translate_harvester(#gri{aspect = spaces}, Spaces) ->
+    #{
+        <<"list">> => lists:map(
+            fun(SpaceId) ->
+                gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
+            end, Spaces)
+    };
+
+translate_harvester(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
+    };
+
+translate_harvester(#gri{aspect = {eff_user_privileges, _UserId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
+    };
+
+translate_harvester(#gri{aspect = {eff_user_membership, _UserId}}, Intermediaries) ->
+    format_intermediaries(Intermediaries);
+
+translate_harvester(#gri{aspect = {eff_group_membership, _UserId}}, Intermediaries) ->
+    format_intermediaries(Intermediaries);
+
+translate_harvester(#gri{aspect = {group_privileges, _GroupId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
+    };
+
+translate_harvester(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
+    #{
+        <<"privileges">> => Privileges
+    };
+
+translate_harvester(#gri{aspect = all_plugins}, Plugins) ->
+    #{
+        <<"allPlugins">> => Plugins
+    };
+
+translate_harvester(#gri{aspect = {index, _}}, IndexData) ->
+    #{
+        <<"name">> := Name,
+        <<"schema">> := Schema,
+        <<"guiPluginName">> := GuiPluginName
+    } = IndexData,
+    #{
+        <<"name">> => Name,
+        <<"schema">> => gs_protocol:undefined_to_null(Schema),
+        <<"guiPluginName">> => gs_protocol:undefined_to_null(GuiPluginName)
+    };
+
+translate_harvester(#gri{aspect = indices, id = HarvesterId}, Indices) ->
+    #{
+        <<"list">> => lists:map(
+            fun(IndexId) ->
+                gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}, scope = private})
+            end, Indices)
+    };
+
+translate_harvester(#gri{aspect = {index_progress, _}}, IndexProgress) ->
+    #{
+        <<"indexProgress">> => IndexProgress
+    }.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
 %% Translates GET result for cluster related aspects.
 %% @end
 %%--------------------------------------------------------------------
@@ -609,8 +797,9 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = protected}, Cl
     } = Cluster,
 
     ProviderId = ClusterId,
-    #{
+    fun(?USER(UserId)) -> #{
         <<"scope">> => <<"protected">>,
+        <<"directMembership">> => cluster_logic:has_direct_user(ClusterId, UserId),
         <<"type">> => Type,
         <<"provider">> => case Type of
             ?ONEZONE ->
@@ -627,7 +816,7 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = protected}, Cl
             <<"creationTime">> => CreationTime
         }),
         <<"canViewPrivateData">> => false
-    };
+    } end;
 
 translate_cluster(#gri{aspect = users}, Users) ->
     #{

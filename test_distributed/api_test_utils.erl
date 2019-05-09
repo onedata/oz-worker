@@ -515,6 +515,8 @@ prepare_gs_spec(_Config, GsSpec, Client, Data, Env) ->
 
 
 % Convert placeholders in gri into real data
+prepare_gri(#gri{aspect = {A, Id}} = Gri, Env) when is_atom(Id) ->
+    prepare_gri(Gri#gri{aspect = {A, maps:get(Id, Env, Id)}}, Env);
 prepare_gri(#gri{id = Id} = Gri, Env) when is_atom(Id) ->
     Gri#gri{id = maps:get(Id, Env, Id)};
 prepare_gri(Gri, _Env) ->
