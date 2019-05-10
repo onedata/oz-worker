@@ -18,7 +18,7 @@
 
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, update/3, force_delete/1, list/0]).
--export([get_by_alias/1, alias_to_id/1, get_by_linked_account/1]).
+-export([get_by_alias/1, get_by_linked_account/1]).
 -export([to_string/1, print_summary/0, print_summary/1]).
 -export([entity_logic_plugin/0]).
 -export([add_session/2, remove_session/2, get_all_sessions/1]).
@@ -144,19 +144,6 @@ get_by_alias(Alias) ->
     case datastore_model:fold(?CTX, Fun, undefined) of
         {ok, undefined} -> {error, not_found};
         {ok, Doc} -> {ok, Doc}
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns the id of the first user matching given Alias.
-%% @end
-%%--------------------------------------------------------------------
--spec alias_to_id(alias()) -> {ok, id()} | {error, not_found}.
-alias_to_id(Alias) ->
-    case od_user:get_by_alias(Alias) of
-        {ok, #document{key = Id}} -> {ok, Id};
-        Error -> Error
     end.
 
 
