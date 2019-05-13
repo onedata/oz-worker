@@ -61,10 +61,10 @@ all() ->
 
 
 list_harvesters_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ExpHarvesters = lists:map(
         fun(_) ->
@@ -120,9 +120,9 @@ list_harvesters_test(Config) ->
 
 create_harvester_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, U2, [?OZ_HARVESTERS_CREATE], []),
 
     ExpName = ?CORRECT_NAME,
@@ -201,8 +201,8 @@ create_harvester_test(Config) ->
 
 
 join_harvester_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
@@ -322,9 +322,9 @@ join_harvester_test(Config) ->
 
 
 get_harvester_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
     {ok, U1} = oz_test_utils:harvester_add_user(Config, H1, U1),
@@ -375,9 +375,9 @@ get_harvester_test(Config) ->
 
 
 leave_harvester_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),

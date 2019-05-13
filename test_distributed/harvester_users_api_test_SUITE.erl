@@ -74,10 +74,10 @@ all() ->
 
 
 add_user_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, EffectiveUser} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUser} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
     {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
@@ -145,10 +145,10 @@ add_user_test(Config) ->
 
 
 add_user_with_privileges_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, EffectiveUser} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUser} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
     {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
@@ -237,7 +237,7 @@ create_user_invite_token_test(Config) ->
     {H1, U1, U2} = api_test_scenarios:create_basic_harvester_env(
         Config, ?HARVESTER_ADD_USER
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     VerifyFun = api_test_scenarios:collect_unique_tokens_fun(),
 
@@ -278,10 +278,10 @@ remove_user_test(Config) ->
     {H1, U1, U2} = api_test_scenarios:create_basic_harvester_env(
         Config, ?HARVESTER_REMOVE_USER
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, U3} = oz_test_utils:create_user(Config),
         {ok, U3} = oz_test_utils:harvester_add_user(Config, H1, U3),
         #{userId => U3}
     end,
@@ -331,8 +331,8 @@ list_users_test(Config) ->
     {H1, U1, U2} = api_test_scenarios:create_basic_harvester_env(
         Config, ?HARVESTER_VIEW
     ),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, U3} = oz_test_utils:harvester_add_user(Config, H1, U3),
     ExpUsers = [U1, U2, U3],
@@ -369,11 +369,15 @@ list_users_test(Config) ->
 
 
 get_user_test(Config) ->
-    {ok, Creator} = oz_test_utils:create_user(Config, #od_user{name = <<"creator">>, alias = <<"creator">>}),
-    {ok, MemberWithViewPrivs} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, MemberWithoutViewPrivs} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Member} = oz_test_utils:create_user(Config, #od_user{name = <<"member">>, alias = <<"member">>}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Creator} = oz_test_utils:create_user(Config, #{
+        <<"name">> => <<"creator">>, <<"alias">> => <<"creator">>
+    }),
+    {ok, MemberWithViewPrivs} = oz_test_utils:create_user(Config),
+    {ok, MemberWithoutViewPrivs} = oz_test_utils:create_user(Config),
+    {ok, Member} = oz_test_utils:create_user(Config, #{
+        <<"name">> => <<"member">>, <<"alias">> => <<"member">>
+    }),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     oz_test_utils:user_set_oz_privileges(Config, Creator, [?OZ_HARVESTERS_CREATE], []),
     {ok, Harvester} = oz_test_utils:create_harvester(Config, ?USER(Creator), ?HARVESTER_CREATE_DATA),
@@ -459,12 +463,12 @@ get_user_privileges_test(Config) ->
     {H1, U1, U2} = api_test_scenarios:create_basic_harvester_env(
         Config, ?HARVESTER_VIEW_PRIVILEGES
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:harvester_add_user(Config, H1, U3),
 
     AllPrivs = privileges:harvester_privileges(),
@@ -519,12 +523,12 @@ update_user_privileges_test(Config) ->
     {H1, U1, U2} = api_test_scenarios:create_basic_harvester_env(
         Config, ?HARVESTER_SET_PRIVILEGES
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to update user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:harvester_add_user(Config, H1, U3),
 
     AllPrivs = privileges:harvester_privileges(),
@@ -711,12 +715,12 @@ get_eff_user_privileges_test(Config) ->
     {H1, U1, U2} = api_test_scenarios:create_basic_harvester_env(
         Config, ?HARVESTER_VIEW_PRIVILEGES
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose eff privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
@@ -808,10 +812,10 @@ get_eff_user_membership_intermediaries(Config) ->
     %%      <<user>>
     %%      NonAdmin
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),

@@ -702,8 +702,8 @@ create_basic_harvester_env(Config, Privs) ->
     %%              /           \
     %%           User1         User2
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
 
     AllHarvesterPrivs = privileges:harvester_privileges(),
     {ok, Harvester} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
@@ -1098,9 +1098,9 @@ create_harvester_eff_users_env(Config) ->
         [{G1, _} | _] = Groups, Users
     } = create_eff_child_groups_env(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllHarvesterPrivs = privileges:harvester_privileges(),
     {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),

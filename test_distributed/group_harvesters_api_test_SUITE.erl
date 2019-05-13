@@ -65,7 +65,7 @@ list_harvesters_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, H1} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_CREATE_DATA),
     {ok, H2} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_CREATE_DATA),
@@ -110,7 +110,7 @@ get_harvester_details_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, H1} = oz_test_utils:group_create_harvester(Config, G1, ?HARVESTER_CREATE_DATA),
 
@@ -154,7 +154,7 @@ create_harvester_test(Config) ->
         Config, ?GROUP_ADD_HARVESTER
     ),
     oz_test_utils:group_set_oz_privileges(Config, G1, [?OZ_HARVESTERS_CREATE], []),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllPrivs = privileges:harvester_privileges(),
 
@@ -231,7 +231,7 @@ join_harvester_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_ADD_HARVESTER
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
@@ -359,7 +359,7 @@ leave_harvester_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_REMOVE_HARVESTER
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, H1} = oz_test_utils:group_create_harvester(

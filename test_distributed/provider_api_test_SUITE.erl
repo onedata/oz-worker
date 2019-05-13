@@ -1360,9 +1360,9 @@ list_eff_harvesters_test(Config) ->
     %%      <<user>>
     %%      NonAdmin
     
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1

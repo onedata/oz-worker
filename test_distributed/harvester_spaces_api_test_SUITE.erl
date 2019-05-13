@@ -55,10 +55,10 @@ all() ->
 
 
 add_space_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, UserNoAddSpacePriv} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, UserNoAddHarvesterPriv} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, UserNoAddSpacePriv} = oz_test_utils:create_user(Config),
+    {ok, UserNoAddHarvesterPriv} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     oz_test_utils:user_set_oz_privileges(Config, User, [?OZ_HARVESTERS_CREATE], []),
@@ -141,7 +141,7 @@ create_space_invite_token_test(Config) ->
     {H1, U1, U2} = api_test_scenarios:create_basic_harvester_env(
         Config, ?HARVESTER_ADD_SPACE
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     VerifyFun = api_test_scenarios:collect_unique_tokens_fun(),
 
@@ -183,7 +183,7 @@ remove_space_test(Config) ->
     {H1, U1, U2} = api_test_scenarios:create_basic_harvester_env(
         Config, ?HARVESTER_REMOVE_SPACE
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
@@ -237,7 +237,7 @@ list_spaces_test(Config) ->
     {H1, U1, U2} = api_test_scenarios:create_basic_harvester_env(
         Config, ?HARVESTER_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ExpSpaces = lists:map(
         fun(_) ->
@@ -286,7 +286,7 @@ get_space_test(Config) ->
     {H1, U1, U2} = api_test_scenarios:create_basic_harvester_env(
         Config, ?HARVESTER_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(
         Config, ?ROOT, ?SPACE_NAME1
