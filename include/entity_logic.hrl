@@ -98,7 +98,7 @@
 
 
 -define(NAME_REQUIREMENTS_DESCRIPTION, <<
-    "Name must be 2-50 characters long and composed only of UTF-8 letters, digits, brackets and underscores."
+    "Name must be 2-50 characters long and composed only of UTF-8 letters, digits, brackets and underscores. "
     "Dashes, spaces and dots are allowed (but not at the beginning or the end)."
 >>).
 -define(NAME_FIRST_CHARS_ALLOWED, <<")(\\w_">>).
@@ -108,7 +108,7 @@
 
 
 -define(USER_NAME_REQUIREMENTS_DESCRIPTION, <<
-    "User name must be 2-50 characters long and composed only of UTF-8 letters and digits."
+    "User name must be 2-50 characters long and composed only of UTF-8 letters and digits. "
     "Dashes, spaces, dots, commas and apostrophes are allowed (but not at the beginning or the end)."
 >>).
 -define(USER_NAME_FIRST_CHARS_ALLOWED, <<"\\pL\\pNd">>).
@@ -119,7 +119,7 @@
 
 
 -define(ALIAS_REQUIREMENTS_DESCRIPTION, <<
-    "Alias must be 2-20 characters long and composed only of letters and digits."
+    "Alias must be 2-20 characters long and composed only of letters and digits. "
     "Dashes and underscores are allowed (but not at the beginning or the end). "
 >>).
 -define(ALIAS_FIRST_CHARS_ALLOWED, <<"a-z0-9A-Z">>).

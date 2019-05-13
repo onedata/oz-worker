@@ -100,7 +100,7 @@ acquire_user(LinkedAccount) ->
         {ok, #document{key = UserId}} ->
             merge(UserId, LinkedAccount);
         {error, not_found} ->
-            to_new_user(LinkedAccount)
+            create_user(LinkedAccount)
     end.
 
 
@@ -165,8 +165,8 @@ build_test_user_info(LinkedAccount) ->
 %% it must be ensured that a user with such linked account does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec to_new_user(od_user:linked_account()) -> {ok, od_user:doc()}.
-to_new_user(LinkedAccount) ->
+-spec create_user(od_user:linked_account()) -> {ok, od_user:doc()}.
+create_user(LinkedAccount) ->
     #linked_account{
         idp = IdP,
         subject_id = SubjectId,

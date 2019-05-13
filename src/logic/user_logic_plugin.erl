@@ -627,7 +627,7 @@ authorize(#el_req{client = ?USER(UserId), operation = Operation, gri = #gri{id =
     % (other operations are checked in required_admin_privileges/1)
     Operation =:= get;
 
-% Beside above, user can perform all operations on his record
+% User can perform all operations on his record except modification of oz_privileges (handled above)
 authorize(#el_req{client = ?USER(UserId), gri = #gri{id = UserId}}, _) ->
     true;
 

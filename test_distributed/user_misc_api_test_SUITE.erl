@@ -471,10 +471,10 @@ update_test(Config) ->
     OccupiedAlias = ?UNIQUE_STRING,
     oz_test_utils:create_user(Config, #{<<"alias">> => OccupiedAlias}),
 
-    OwnedAlias = ?UNIQUE_STRING,
+    CurrentAlias = ?UNIQUE_STRING,
     EnvSetUpFun = fun() ->
         {ok, UserId} = oz_test_utils:create_user(Config, #{
-            <<"name">> => ?USER_NAME1, <<"alias">> => OwnedAlias
+            <<"name">> => ?USER_NAME1, <<"alias">> => CurrentAlias
         }),
         #{userId => UserId}
     end,
@@ -485,11 +485,11 @@ update_test(Config) ->
         {ok, UserRecord} = oz_test_utils:get_user(Config, UserId),
         {ExpName, ExpAlias} = case ShouldSucceed of
             false ->
-                {?USER_NAME1, OwnedAlias};
+                {?USER_NAME1, CurrentAlias};
             true ->
                 {
                     maps:get(<<"name">>, Data, ?USER_NAME1),
-                    maps:get(<<"alias">>, Data, OwnedAlias)
+                    maps:get(<<"alias">>, Data, CurrentAlias)
                 }
         end,
         ?assertEqual(ExpName, UserRecord#od_user.name),
@@ -517,8 +517,8 @@ update_test(Config) ->
             at_least_one = [<<"name">>, <<"alias">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_USER_NAME],
-                % Trying to set owned alias again should not raise any error
-                <<"alias">> => [OwnedAlias, fun() -> ?UNIQUE_STRING end]
+                % Trying to set current alias again should not raise any error
+                <<"alias">> => [CurrentAlias, fun() -> ?UNIQUE_STRING end]
             },
             bad_values = [
                 {<<"alias">>, <<"">>, ?ERROR_BAD_VALUE_ALIAS},
@@ -562,7 +562,7 @@ update_test(Config) ->
         data_spec = DataSpec#data_spec{
             correct_values = #{
                 <<"name">> => [?CORRECT_USER_NAME],
-                <<"alias">> => [fun() -> ?UNIQUE_STRING end, OwnedAlias]
+                <<"alias">> => [fun() -> ?UNIQUE_STRING end, CurrentAlias]
             }
         }
     },
