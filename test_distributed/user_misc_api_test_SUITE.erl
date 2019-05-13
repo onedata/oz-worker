@@ -487,10 +487,10 @@ update_test(Config) ->
     OccupiedUsername = ?UNIQUE_STRING,
     oz_test_utils:create_user(Config, #{<<"username">> => OccupiedUsername}),
 
-    OwnedUsername = ?UNIQUE_STRING,
+    CurrentUsername = ?UNIQUE_STRING,
     EnvSetUpFun = fun() ->
         {ok, UserId} = oz_test_utils:create_user(Config, #{
-            <<"fullName">> => ?USER_FULL_NAME1, <<"username">> => OwnedUsername
+            <<"fullName">> => ?USER_FULL_NAME1, <<"username">> => CurrentUsername
         }),
         #{userId => UserId}
     end,
@@ -501,11 +501,11 @@ update_test(Config) ->
         {ok, UserRecord} = oz_test_utils:get_user(Config, UserId),
         {ExpFullName, ExpUsername} = case ShouldSucceed of
             false ->
-                {?USER_FULL_NAME1, OwnedUsername};
+                {?USER_FULL_NAME1, CurrentUsername};
             true ->
                 {
                     maps:get(<<"fullName">>, Data, ?USER_FULL_NAME1),
-                    maps:get(<<"username">>, Data, OwnedUsername)
+                    maps:get(<<"username">>, Data, CurrentUsername)
                 }
         end,
         ?assertEqual(ExpFullName, UserRecord#od_user.full_name),
@@ -533,8 +533,8 @@ update_test(Config) ->
             at_least_one = [<<"fullName">>, <<"username">>],
             correct_values = #{
                 <<"fullName">> => [?CORRECT_USER_NAME],
-                % Trying to set owned username again should not raise any error
-                <<"username">> => [OwnedUsername, fun() -> ?UNIQUE_STRING end]
+                % Trying to set current username again should not raise any error
+                <<"username">> => [CurrentUsername, fun() -> ?UNIQUE_STRING end]
             },
             bad_values = [
                 {<<"username">>, <<"">>, ?ERROR_BAD_VALUE_USERNAME},
@@ -578,7 +578,7 @@ update_test(Config) ->
         data_spec = DataSpec#data_spec{
             correct_values = #{
                 <<"fullName">> => [?CORRECT_USER_NAME],
-                <<"username">> => [fun() -> ?UNIQUE_STRING end, OwnedUsername]
+                <<"username">> => [fun() -> ?UNIQUE_STRING end, CurrentUsername]
             }
         }
     },
