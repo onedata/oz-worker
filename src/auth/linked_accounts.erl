@@ -71,7 +71,7 @@ to_maps(LinkedAccounts) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @equiv idp_uid_to_system_uid(IdP, SubjectId)
+%% @equiv gen_user_id(IdP, SubjectId)
 %% @end
 %%--------------------------------------------------------------------
 -spec gen_user_id(od_user:linked_account()) -> od_user:id().
@@ -112,7 +112,7 @@ acquire_user(LinkedAccount) ->
         {ok, #document{key = UserId}} ->
             merge(UserId, LinkedAccount);
         {error, not_found} ->
-            to_new_user(LinkedAccount)
+            create_user(LinkedAccount)
     end.
 
 
@@ -176,8 +176,8 @@ build_test_user_info(LinkedAccount) ->
 %% it must be ensured that a user with such linked account does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec to_new_user(od_user:linked_account()) -> {ok, od_user:doc()}.
-to_new_user(LinkedAccount = #linked_account{full_name = FullName, username = Username}) ->
+-spec create_user(od_user:linked_account()) -> {ok, od_user:doc()}.
+create_user(LinkedAccount = #linked_account{full_name = FullName, username = Username}) ->
     ProposedUserId = gen_user_id(LinkedAccount),
     {ok, UserId} = user_logic:create(?ROOT, ProposedUserId, #{
         <<"fullName">> => user_logic:normalize_full_name(FullName)

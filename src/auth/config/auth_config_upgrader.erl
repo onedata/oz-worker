@@ -97,7 +97,7 @@ rename_nested_key(Map, [NestedKey | RestKeys], NewKey) ->
         {ok, NestedValue} ->
             case RestKeys of
                 [] ->
-                    maps:without([NestedKey], Map#{NewKey => NestedValue});
+                    maps:remove(NestedKey, Map#{NewKey => NestedValue});
                 _ ->
                     Map#{NestedKey => rename_nested_key(NestedValue, RestKeys, NewKey)}
             end
