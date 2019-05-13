@@ -190,7 +190,7 @@ get_saml_sp_config() ->
 
 
 idp_exists() ->
-    ?assert(auth_config:idp_exists(onepanel)),
+    ?assert(auth_config:idp_exists(basicAuth)),
     ?assert(auth_config:idp_exists(my_idp)),
     ?assert(auth_config:idp_exists(egi)),
     ?assert(auth_config:idp_exists(elixir)),
@@ -259,7 +259,7 @@ get_supported_idps_in_gui_format() ->
         <<"iconPath">> => <<"/ozw/onezone", IconPath/binary>>,
         <<"iconBackgroundColor">> => IconBgColor
     } end,
-    OnepanelEntry = Entry(onepanel, <<"Onepanel account">>, <<"/assets/images/auth-providers/key.svg">>, <<"#4BD187">>),
+    BasicAuthEntry = Entry(basicAuth, <<"username & password">>, <<"/assets/images/auth-providers/key.svg">>, <<"#4BD187">>),
     MyIdpEntry = Entry(my_idp, <<"My IdP">>, <<"/custom/auth-providers/my-idp.svg">>, <<"#1E2325">>),
     EgiEntry = Entry(egi, <<"EGI">>, <<"/assets/images/auth-providers/default.svg">>, <<"#333">>),
     ElixirEntry = Entry(elixir, <<"Elixir">>, <<"/assets/images/auth-providers/elixir.svg">>, <<"#FF7A04">>),
@@ -267,7 +267,7 @@ get_supported_idps_in_gui_format() ->
 
     get_supported_idps_base(
         fun auth_config:get_supported_idps_in_gui_format/0,
-        OnepanelEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry
+        BasicAuthEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry
     ).
 
 
@@ -276,7 +276,7 @@ get_supported_idps_in_configuration_format() ->
         <<"id">> => IdP,
         <<"offlineAccess">> => OfflineAccess
     } end,
-    OnepanelEntry = Entry(onepanel, false),
+    BasicAuthEntry = Entry(basicAuth, false),
     MyIdpEntry = Entry(my_idp, true),
     EgiEntry = Entry(egi, false),
     ElixirEntry = Entry(elixir, false),
@@ -284,26 +284,26 @@ get_supported_idps_in_configuration_format() ->
 
     get_supported_idps_base(
         fun auth_config:get_supported_idps_in_configuration_format/0,
-        OnepanelEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry
+        BasicAuthEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry
     ).
 
 
-get_supported_idps_base(GetIdPsFun, OnepanelEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry) ->
-    ?assertMatch([OnepanelEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry], GetIdPsFun()),
+get_supported_idps_base(GetIdPsFun, BasicAuthEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry) ->
+    ?assertMatch([BasicAuthEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry], GetIdPsFun()),
 
     % Check if switching on/off certain protocols modifies IdPs list
     modify_config_mock(fun(MockConfig = #{samlConfig := SamlConfig}) ->
         maps:put(samlConfig, SamlConfig#{enabled => false}, MockConfig)
     end),
-    ?assertMatch([OnepanelEntry, MyIdpEntry, EgiEntry], GetIdPsFun()),
+    ?assertMatch([BasicAuthEntry, MyIdpEntry, EgiEntry], GetIdPsFun()),
 
     modify_config_mock(fun(MockConfig = #{openidConfig := SamlConfig}) ->
         maps:put(openidConfig, SamlConfig#{enabled => false}, MockConfig)
     end),
-    ?assertMatch([OnepanelEntry], GetIdPsFun()),
+    ?assertMatch([BasicAuthEntry], GetIdPsFun()),
 
-    modify_config_mock(fun(MockConfig = #{onepanelAuthConfig := SamlConfig}) ->
-        maps:put(onepanelAuthConfig, SamlConfig#{enabled => false}, MockConfig)
+    modify_config_mock(fun(MockConfig = #{basicAuthConfig := SamlConfig}) ->
+        maps:put(basicAuthConfig, SamlConfig#{enabled => false}, MockConfig)
     end),
     ?assertMatch([], GetIdPsFun()),
 
@@ -317,10 +317,10 @@ get_supported_idps_base(GetIdPsFun, OnepanelEntry, MyIdpEntry, EgiEntry, ElixirE
     end),
     ?assertMatch([MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry], GetIdPsFun()),
 
-    modify_config_mock(fun(MockConfig = #{onepanelAuthConfig := SamlConfig}) ->
-        maps:put(onepanelAuthConfig, SamlConfig#{enabled => true}, MockConfig)
+    modify_config_mock(fun(MockConfig = #{basicAuthConfig := SamlConfig}) ->
+        maps:put(basicAuthConfig, SamlConfig#{enabled => true}, MockConfig)
     end),
-    ?assertMatch([OnepanelEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry], GetIdPsFun()),
+    ?assertMatch([BasicAuthEntry, MyIdpEntry, EgiEntry, ElixirEntry, CERNEntry], GetIdPsFun()),
 
     % Simulate no config file at all
     oz_worker:set_env(auth_config_file, "inexistent-file.config"),
@@ -331,29 +331,29 @@ get_supported_idps_base(GetIdPsFun, OnepanelEntry, MyIdpEntry, EgiEntry, ElixirE
 get_attribute_mapping() ->
     % Check if attribute mapping rules are properly inherited and overwritten
     ?assertEqual({required, "sub"}, auth_config:get_attribute_mapping(egi, subjectId)),
-    ?assertEqual({required, {any, ["name", "login"]}}, auth_config:get_attribute_mapping(egi, name)),
-    ?assertEqual(undefined, auth_config:get_attribute_mapping(egi, alias)),
+    ?assertEqual({required, {any, ["name", "displayName"]}}, auth_config:get_attribute_mapping(egi, fullName)),
+    ?assertEqual(undefined, auth_config:get_attribute_mapping(egi, username)),
     ?assertEqual(undefined, auth_config:get_attribute_mapping(egi, emails)),
     ?assertEqual({required, "groups"}, auth_config:get_attribute_mapping(egi, entitlements)),
     ?assertEqual({optional, "organization"}, auth_config:get_attribute_mapping(egi, custom)),
 
     ?assertEqual({required, "id"}, auth_config:get_attribute_mapping(my_idp, subjectId)),
-    ?assertEqual({required, {any, ["name", "login"]}}, auth_config:get_attribute_mapping(my_idp, name)),
-    ?assertEqual({optional, "login"}, auth_config:get_attribute_mapping(my_idp, alias)),
+    ?assertEqual({required, {any, ["name", "displayName"]}}, auth_config:get_attribute_mapping(my_idp, fullName)),
+    ?assertEqual({optional, "username"}, auth_config:get_attribute_mapping(my_idp, username)),
     ?assertEqual({optional, "email"}, auth_config:get_attribute_mapping(my_idp, emails)),
     ?assertEqual({optional, "edu_person_entitlements"}, auth_config:get_attribute_mapping(my_idp, entitlements)),
     ?assertEqual(undefined, auth_config:get_attribute_mapping(my_idp, custom)),
 
     ?assertEqual({required, eduPersonUniqueId}, auth_config:get_attribute_mapping(elixir, subjectId)),
-    ?assertEqual({required, {any, [displayName, surName]}}, auth_config:get_attribute_mapping(elixir, name)),
-    ?assertEqual({optional, eduPersonPrincipalName}, auth_config:get_attribute_mapping(elixir, alias)),
+    ?assertEqual({required, {any, [displayName, surName]}}, auth_config:get_attribute_mapping(elixir, fullName)),
+    ?assertEqual({optional, eduPersonPrincipalName}, auth_config:get_attribute_mapping(elixir, username)),
     ?assertEqual({optional, mail}, auth_config:get_attribute_mapping(elixir, emails)),
     ?assertEqual(undefined, auth_config:get_attribute_mapping(elixir, entitlements)),
     ?assertEqual({required, 'urn:oid:1.3.6.1.4.1.25178.1.2.9'}, auth_config:get_attribute_mapping(elixir, custom)),
 
     ?assertEqual({required, eduPersonTargetedID}, auth_config:get_attribute_mapping(cern, subjectId)),
-    ?assertEqual({required, displayName}, auth_config:get_attribute_mapping(cern, name)),
-    ?assertEqual({optional, eduPersonPrincipalName}, auth_config:get_attribute_mapping(cern, alias)),
+    ?assertEqual({required, displayName}, auth_config:get_attribute_mapping(cern, fullName)),
+    ?assertEqual({optional, eduPersonPrincipalName}, auth_config:get_attribute_mapping(cern, username)),
     ?assertEqual({optional, mail}, auth_config:get_attribute_mapping(cern, emails)),
     ?assertEqual({optional, eduPersonEntitlement}, auth_config:get_attribute_mapping(cern, entitlements)),
     ?assertEqual({optional, eduPersonScopedAffiliation}, auth_config:get_attribute_mapping(cern, custom)),
@@ -416,7 +416,7 @@ get_entitlement_mapping_config() ->
 
 
 get_authority_delegation_config() ->
-    ?assertEqual(false, auth_config:get_authority_delegation_config(onepanel)),
+    ?assertEqual(false, auth_config:get_authority_delegation_config(basicAuth)),
     ?assertEqual(false, auth_config:get_authority_delegation_config(my_idp)),
     ?assertEqual({true, <<"egi:">>}, auth_config:get_authority_delegation_config(egi)),
     ?assertEqual(false, auth_config:get_authority_delegation_config(elixir)),
@@ -428,7 +428,7 @@ get_idps_with_offline_access() ->
 
 
 has_offline_access_enabled() ->
-    ?assertEqual(false, auth_config:has_offline_access_enabled(onepanel)),
+    ?assertEqual(false, auth_config:has_offline_access_enabled(basicAuth)),
     ?assertEqual(true, auth_config:has_offline_access_enabled(my_idp)),
     ?assertEqual(false, auth_config:has_offline_access_enabled(egi)),
     ?assertEqual(false, auth_config:has_offline_access_enabled(elixir)),
@@ -454,9 +454,9 @@ get_mock_config_file() ->
 
 mock_auth_config_file() ->
     #{
-        version => 2,
+        version => 3,
 
-        onepanelAuthConfig => #{
+        basicAuthConfig => #{
             enabled => true
         },
 
@@ -480,8 +480,8 @@ mock_auth_config_file() ->
                 preferredSsoBinding => http_redirect,
                 attributeMapping => #{
                     subjectId => {required, eduPersonTargetedID},
-                    name => {required, displayName},
-                    alias => {optional, eduPersonPrincipalName},
+                    fullName => {required, displayName},
+                    username => {optional, eduPersonPrincipalName},
                     emails => {optional, mail},
                     entitlements => {optional, eduPersonEntitlement},
                     custom => {optional, eduPersonScopedAffiliation}
@@ -505,8 +505,8 @@ mock_auth_config_file() ->
                 plugin => default_oidc_plugin,
                 attributeMapping => #{
                     subjectId => {required, "sub"},
-                    name => {required, {any, ["name", "login"]}},
-                    alias => {optional, "login"},
+                    fullName => {required, {any, ["name", "displayName"]}},
+                    username => {optional, "username"},
                     emails => {optional, "email"},
                     entitlements => {optional, "edu_person_entitlements"},
                     custom => {optional, "organization"}
@@ -520,11 +520,11 @@ mock_auth_config_file() ->
             }
         },
         supportedIdps => [
-            {onepanel, #{
-                displayName => "Onepanel account",
+            {basicAuth, #{
+                displayName => "username & password",
                 iconPath => "/assets/images/auth-providers/key.svg",
                 iconBackgroundColor => "#4BD187",
-                protocol => onepanelAuth
+                protocol => basicAuth
             }},
             {my_idp, #{
                 displayName => "My IdP",
@@ -568,7 +568,7 @@ mock_auth_config_file() ->
                         tokenPrefix => "egi:"
                     },
                     attributeMapping => #{
-                        alias => undefined,
+                        username => undefined,
                         emails => undefined,
                         entitlements => {required, "groups"}
                     },
@@ -588,7 +588,7 @@ mock_auth_config_file() ->
                     metadataUrl => ?ELIXIR_METADATA_URL,
                     attributeMapping => #{
                         subjectId => {required, eduPersonUniqueId},
-                        name => {required, {any, [displayName, surName]}},
+                        fullName => {required, {any, [displayName, surName]}},
                         entitlements => undefined,
                         custom => {required, 'urn:oid:1.3.6.1.4.1.25178.1.2.9'}
                     },

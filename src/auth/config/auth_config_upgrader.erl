@@ -14,7 +14,8 @@
 -include_lib("auth/auth_common.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--export([upgrade/3]).
+-export([v1_to_v2/2]).
+-export([v2_to_v3/1]).
 
 %%%===================================================================
 %%% API functions
@@ -26,19 +27,84 @@
 %% saml.config (if present) in the process.
 %% @end
 %%--------------------------------------------------------------------
--spec upgrade(Version :: integer(), auth_config:config_v1(), auth_config:saml_config_v1()) ->
-    auth_config:config_v2().
-upgrade(2, AuthConfig, SamlConfig) ->
+-spec v1_to_v2(auth_config:config_v1(), auth_config:saml_config_v1()) ->
+    auth_config:config_v2_or_later().
+v1_to_v2(AuthConfig, SamlConfig) ->
     #{
-        version => ?CURRENT_CONFIG_VERSION,
-        onepanelAuthConfig =>  onepanel_auth_config_entry(AuthConfig),
+        version => 2,
+        onepanelAuthConfig => onepanel_auth_config_entry(AuthConfig),
         samlConfig => saml_config_entry(SamlConfig),
         openidConfig => openid_config_entry(AuthConfig),
         supportedIdps => supported_idps(AuthConfig, SamlConfig)
     }.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Performs auth.config upgrade from version 2 to 3.
+%% @end
+%%--------------------------------------------------------------------
+-spec v2_to_v3(auth_config:config_v2_or_later()) -> auth_config:config_v2_or_later().
+v2_to_v3(AuthConfig) ->
+    % onepanelAuthConfig renamed to basicAuthConfig
+    Cfg2 = rename_nested_key(AuthConfig, [onepanelAuthConfig], basicAuthConfig),
+
+    % 'onepanel' special IdP renamed to 'basicAuth'
+    % 'onepanelAuth' protocol renamed to 'basicAuth'
+    SupportedIdPs = maps:get(supportedIdps, AuthConfig, []),
+    BasicAuthIdP = case proplists:lookup(onepanel, SupportedIdPs) of
+        none ->
+            [];
+        {onepanel, OnepanelIdP} ->
+            [{basicAuth, OnepanelIdP#{
+                displayName => "username & password",
+                iconPath => "/assets/images/auth-providers/basicauth.svg",
+                protocol => basicAuth
+            }}]
+    end,
+    SupportedIdPs2 = BasicAuthIdP ++ proplists:delete(onepanel, SupportedIdPs),
+
+    % 'alias' renamed to 'username' (attribute mapping)
+    % 'name' renamed to 'fullName' (attribute mapping)
+    Cfg3 = rename_nested_key(Cfg2, [openidConfig, defaultProtocolConfig, attributeMapping, alias], username),
+    Cfg4 = rename_nested_key(Cfg3, [openidConfig, defaultProtocolConfig, attributeMapping, name], fullName),
+    Cfg5 = rename_nested_key(Cfg4, [samlConfig, defaultProtocolConfig, attributeMapping, alias], username),
+    Cfg6 = rename_nested_key(Cfg5, [samlConfig, defaultProtocolConfig, attributeMapping, name], fullName),
+    Cfg6#{
+        version => 3,
+        supportedIdps => lists:map(fun({IdP, IdPCfg}) ->
+            IdPCfg2 = rename_nested_key(IdPCfg, [protocolConfig, attributeMapping, alias], username),
+            IdPCfg3 = rename_nested_key(IdPCfg2, [protocolConfig, attributeMapping, name], fullName),
+            {IdP, IdPCfg3}
+        end, SupportedIdPs2)
+    }.
+
 %%%===================================================================
-%%% Internal functions
+%%% Helper functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Renames a key in an arbitrarily nested map, if exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec rename_nested_key(map(), NestedKeys :: [atom()], NewKey :: atom()) -> map().
+rename_nested_key(Map, [NestedKey | RestKeys], NewKey) ->
+    case maps:find(NestedKey, Map) of
+        error ->
+            Map;
+        {ok, NestedValue} ->
+            case RestKeys of
+                [] ->
+                    maps:without([NestedKey], Map#{NewKey => NestedValue});
+                _ ->
+                    Map#{NestedKey => rename_nested_key(NestedValue, RestKeys, NewKey)}
+            end
+    end.
+
+%%%===================================================================
+%%% Functions concerning v1 to v2 upgrade
 %%%===================================================================
 
 -spec onepanel_auth_config_entry(auth_config:config_v1()) -> auth_config:config_section().
@@ -113,8 +179,8 @@ openid_config_entry(AuthConfig) ->
                     plugin => default_oidc_plugin,
                     attributeMapping => #{
                         subjectId => {required, "sub"},
-                        alias => {optional, "login"},
-                        name => {optional, {any, ["name", "login"]}},
+                        alias => {optional, "username"},
+                        name => {optional, {any, ["name", "fullName"]}},
                         emails => {optional, "email"},
                         entitlements => {optional, "groups"},
                         custom => {optional, "name"}
@@ -318,8 +384,8 @@ oidc_attribute_mapping(plgrid) -> #{
 };
 oidc_attribute_mapping(_) -> #{
     subjectId => {required, "sub"},
-    name => {optional, {any, ["name", "login"]}},
-    alias => {optional, "login"},
+    name => {optional, {any, ["name", "fullName"]}},
+    alias => {optional, "username"},
     emails => {optional, "email"},
     entitlements => {optional, "groups"},
     custom => undefined

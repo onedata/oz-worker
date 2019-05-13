@@ -370,12 +370,12 @@ list_users_test(Config) ->
 
 get_user_test(Config) ->
     {ok, Creator} = oz_test_utils:create_user(Config, #{
-        <<"name">> => <<"creator">>, <<"alias">> => <<"creator">>
+        <<"fullName">> => <<"creator">>, <<"username">> => <<"creator">>
     }),
     {ok, MemberWithViewPrivs} = oz_test_utils:create_user(Config),
     {ok, MemberWithoutViewPrivs} = oz_test_utils:create_user(Config),
     {ok, Member} = oz_test_utils:create_user(Config, #{
-        <<"name">> => <<"member">>, <<"alias">> => <<"member">>
+        <<"fullName">> => <<"member">>, <<"username">> => <<"member">>
     }),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
@@ -393,10 +393,10 @@ get_user_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    lists:foreach(fun({SubjectUser, ExpName, ExpAlias}) ->
+    lists:foreach(fun({SubjectUser, ExpFullName, ExpUsername}) ->
         ExpUserDetails = #{
-            <<"alias">> => ExpAlias,
-            <<"name">> => ExpName
+            <<"username">> => ExpUsername,
+            <<"fullName">> => ExpFullName
         },
         ApiTestSpec = #api_test_spec{
             client_spec = #client_spec{
@@ -424,8 +424,11 @@ get_user_test(Config) ->
                 expected_code = ?HTTP_200_OK,
                 expected_body = ExpUserDetails#{
                     <<"userId">> => SubjectUser,
+
                     % TODO VFS-4506 deprecated, included for backward compatibility
-                    <<"login">> => ExpAlias
+                    <<"name">> => ExpFullName,
+                    <<"login">> => ExpUsername,
+                    <<"alias">> => ExpUsername
                 }
             },
             logic_spec = #logic_spec{
@@ -447,8 +450,11 @@ get_user_test(Config) ->
                             oz_test_utils:decode_gri(Config, EncodedGri)
                         )
                     end,
+
                     % TODO VFS-4506 deprecated, included for backward compatibility
-                    <<"login">> => maps:get(<<"alias">>, ExpUserDetails)
+                    <<"name">> => ExpFullName,
+                    <<"login">> => ExpUsername,
+                    <<"alias">> => ExpUsername
                 })
             }
         },
@@ -653,8 +659,11 @@ get_eff_user_test(Config) ->
                     expected_code = ?HTTP_200_OK,
                     expected_body = UserDetails#{
                         <<"userId">> => UserId,
+
                         % TODO VFS-4506 deprecated, included for backward compatibility
-                        <<"login">> => maps:get(<<"alias">>, UserDetails)
+                        <<"name">> => maps:get(<<"fullName">>, UserDetails),
+                        <<"login">> => maps:get(<<"username">>, UserDetails),
+                        <<"alias">> => maps:get(<<"username">>, UserDetails)
                     }
                 },
                 logic_spec = #logic_spec{
@@ -677,8 +686,11 @@ get_eff_user_test(Config) ->
                             ),
                             ?assertEqual(Id, UserId)
                         end,
+
                         % TODO VFS-4506 deprecated, included for backward compatibility
-                        <<"login">> => maps:get(<<"alias">>, UserDetails)
+                        <<"name">> => maps:get(<<"fullName">>, UserDetails),
+                        <<"login">> => maps:get(<<"username">>, UserDetails),
+                        <<"alias">> => maps:get(<<"username">>, UserDetails)
                     })
                 }
             },

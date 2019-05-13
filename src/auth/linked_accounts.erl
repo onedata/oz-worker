@@ -16,7 +16,7 @@
 
 %% API
 -export([to_map/1, to_maps/1]).
--export([idp_uid_to_system_uid/2]).
+-export([gen_user_id/1, gen_user_id/2]).
 -export([find_user/1, acquire_user/1]).
 -export([merge/2]).
 -export([build_test_user_info/1]).
@@ -35,8 +35,8 @@ to_map(LinkedAccount) ->
     #linked_account{
         idp = IdP,
         subject_id = SubjectId,
-        alias = Alias,
-        name = Name,
+        username = Username,
+        full_name = FullName,
         emails = Emails,
         entitlements = Entitlements,
         custom = Custom
@@ -44,14 +44,16 @@ to_map(LinkedAccount) ->
     #{
         <<"idp">> => IdP,
         <<"subjectId">> => SubjectId,
-        <<"name">> => gs_protocol:undefined_to_null(Name),
-        <<"alias">> => gs_protocol:undefined_to_null(Alias),
+        <<"fullName">> => gs_protocol:undefined_to_null(FullName),
+        <<"username">> => gs_protocol:undefined_to_null(Username),
         <<"emails">> => Emails,
         <<"entitlements">> => Entitlements,
         <<"custom">> => Custom,
 
         % TODO VFS-4506 deprecated, included for backward compatibility
-        <<"login">> => gs_protocol:undefined_to_null(Alias),
+        <<"name">> => gs_protocol:undefined_to_null(FullName),
+        <<"login">> => gs_protocol:undefined_to_null(Username),
+        <<"alias">> => gs_protocol:undefined_to_null(Username),
         <<"emailList">> => Emails,
         <<"groups">> => Entitlements
     }.
@@ -69,11 +71,21 @@ to_maps(LinkedAccounts) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Constructs user id based on Identity Provider name and user's id in that IdP.
+%% @equiv idp_uid_to_system_uid(IdP, SubjectId)
 %% @end
 %%--------------------------------------------------------------------
--spec idp_uid_to_system_uid(auth_config:idp(), SubjectId :: binary()) -> od_user:id().
-idp_uid_to_system_uid(IdP, SubjectId) ->
+-spec gen_user_id(od_user:linked_account()) -> od_user:id().
+gen_user_id(#linked_account{idp = IdP, subject_id = SubjectId}) ->
+    gen_user_id(IdP, SubjectId).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Constructs user id based on IdP name and user's subjectId in that IdP.
+%% @end
+%%--------------------------------------------------------------------
+-spec gen_user_id(auth_config:idp(), SubjectId :: binary()) -> od_user:id().
+gen_user_id(IdP, SubjectId) ->
     datastore_utils:gen_key(<<"">>, str_utils:format_bin("~ts:~s", [IdP, SubjectId])).
 
 
@@ -136,19 +148,18 @@ merge(UserId, LinkedAccount) ->
 build_test_user_info(LinkedAccount) ->
     #linked_account{
         idp = IdP,
-        subject_id = SubjectId,
-        name = Name,
-        alias = Alias,
+        full_name = FullName,
+        username = Username,
         emails = Emails,
         entitlements = Entitlements
     } = LinkedAccount,
     MappedEntitlements = entitlement_mapping:map_entitlements(IdP, Entitlements),
     {GroupIds, _} = lists:unzip(MappedEntitlements),
-    UserId = idp_uid_to_system_uid(IdP, SubjectId),
+    UserId = gen_user_id(LinkedAccount),
     {UserId, #{
         <<"userId">> => UserId,
-        <<"name">> => user_logic:normalize_name(Name),
-        <<"alias">> => user_logic:normalize_alias(Alias),
+        <<"fullName">> => user_logic:normalize_full_name(FullName),
+        <<"username">> => user_logic:normalize_username(Username),
         <<"emails">> => normalize_emails(Emails),
         <<"linkedAccounts">> => [to_map(LinkedAccount)],
         <<"groups">> => GroupIds
@@ -166,21 +177,13 @@ build_test_user_info(LinkedAccount) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec to_new_user(od_user:linked_account()) -> {ok, od_user:doc()}.
-to_new_user(LinkedAccount) ->
-    #linked_account{
-        idp = IdP,
-        subject_id = SubjectId,
-        name = Name,
-        alias = Alias
-    } = LinkedAccount,
-    ProposedUserId = idp_uid_to_system_uid(IdP, SubjectId),
+to_new_user(LinkedAccount = #linked_account{full_name = FullName, username = Username}) ->
+    ProposedUserId = gen_user_id(LinkedAccount),
     {ok, UserId} = user_logic:create(?ROOT, ProposedUserId, #{
-        <<"name">> => user_logic:normalize_name(Name)
+        <<"fullName">> => user_logic:normalize_full_name(FullName)
     }),
-    % Setting the alias might fail (if it's not unique) - it's not considered a failure.
-    user_logic:update(?ROOT, UserId, #{
-        <<"alias">> => user_logic:normalize_alias(Alias)
-    }),
+    % Setting the username might fail (if it's not unique) - it's not considered a failure.
+    user_logic:update_username(?ROOT, UserId, user_logic:normalize_username(Username)),
     merge(UserId, LinkedAccount).
 
 

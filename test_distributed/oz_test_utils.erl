@@ -16,6 +16,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include("api_test_utils.hrl").
+-include("auth/auth_common.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/api_errors.hrl").
@@ -343,8 +344,8 @@ create_user(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a user in onezone. Name, Alias and Password can be provided in a
-%% proper Data object.
+%% Creates a user in onezone. full_name, username and password can be provided
+%% in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_user(Config :: term(), Data :: #{}) -> {ok, od_user:id()}.
@@ -3054,19 +3055,19 @@ ensure_entity_graph_is_up_to_date(Config, Retries) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Turns the onepanelAuth (login with basic credentials) on/off by overwriting
+%% Turns the basicAuth (login with username & password) on/off by overwriting
 %% auth.config.
 %% @end
 %%--------------------------------------------------------------------
 -spec toggle_basic_auth(Config :: term(), boolean()) -> ok.
 toggle_basic_auth(Config, Flag) ->
     AuthConfigData = #{
-        onepanelAuthConfig => #{
+        basicAuthConfig => #{
             enabled => Flag
         },
         supportedIdps => [
-            {onepanel, #{
-                protocol => onepanelAuth
+            {basicAuth, #{
+                protocol => basicAuth
             }}
         ]
     },
@@ -3078,7 +3079,7 @@ toggle_basic_auth(Config, Flag) ->
 %% Returns parsed auth.config.
 %% @end
 %%--------------------------------------------------------------------
--spec read_auth_config(Config :: term()) -> auth_config:config_v2().
+-spec read_auth_config(Config :: term()) -> auth_config:config_v2_or_later().
 read_auth_config(Config) ->
     AuthConfigPath = get_env(Config, auth_config_file),
     {ok, [AuthConfig]} = oz_test_utils:call_oz(Config, file, consult, [AuthConfigPath]),
@@ -3104,9 +3105,9 @@ overwrite_config(TestConfig, ConfigFileEnv, ConfigData) ->
 %% Overwrites auth.config with given data.
 %% @end
 %%--------------------------------------------------------------------
--spec overwrite_auth_config(TestConfig :: term(), auth_config:config_v2()) -> ok.
+-spec overwrite_auth_config(TestConfig :: term(), auth_config:config_v2_or_later()) -> ok.
 overwrite_auth_config(TestConfig, AuthConfigData) ->
-    overwrite_config(TestConfig, auth_config_file, AuthConfigData#{version => 2}),
+    overwrite_config(TestConfig, auth_config_file, AuthConfigData#{version => ?CURRENT_CONFIG_VERSION}),
     rpc:multicall(?OZ_NODES(TestConfig), auth_config, force_auth_config_reload, []),
     ok.
 
@@ -3116,9 +3117,9 @@ overwrite_auth_config(TestConfig, AuthConfigData) ->
 %% Overwrites test.auth.config with given data.
 %% @end
 %%--------------------------------------------------------------------
--spec overwrite_test_auth_config(TestConfig :: term(), auth_config:config_v2()) -> ok.
+-spec overwrite_test_auth_config(TestConfig :: term(), auth_config:config_v2_or_later()) -> ok.
 overwrite_test_auth_config(TestConfig, AuthConfigData) ->
-    overwrite_config(TestConfig, test_auth_config_file, AuthConfigData#{version => 2}),
+    overwrite_config(TestConfig, test_auth_config_file, AuthConfigData#{version => ?CURRENT_CONFIG_VERSION}),
     ok.
 
 

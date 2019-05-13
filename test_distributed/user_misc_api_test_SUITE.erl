@@ -87,39 +87,39 @@ all() ->
 
 create_test(Config) ->
     % Try to create user without predefined id
-    ExpName1 = ?USER_NAME1,
-    ExpAlias1 = ?UNIQUE_STRING,
-    UserData1 = #{<<"name">> => ExpName1, <<"alias">> => ExpAlias1},
+    ExpFullName1 = ?USER_FULL_NAME1,
+    ExpUsername1 = ?UNIQUE_STRING,
+    UserData1 = #{<<"fullName">> => ExpFullName1, <<"username">> => ExpUsername1},
     {ok, UserId1} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
         Config, user_logic, create, [?ROOT, UserData1]
     )),
     {ok, User1} = oz_test_utils:get_user(Config, UserId1),
-    ?assertEqual(User1#od_user.name, ExpName1),
-    ?assertEqual(User1#od_user.alias, ExpAlias1),
+    ?assertEqual(User1#od_user.full_name, ExpFullName1),
+    ?assertEqual(User1#od_user.username, ExpUsername1),
 
     % Try to create a user with given Id
     PredefinedUserId = <<"ausdhf87adsga87ht2q7hrw">>,
-    ExpName2 = ?USER_NAME2,
-    ExpAlias2 = ?UNIQUE_STRING,
-    UserData2 = #{<<"name">> => ExpName2, <<"alias">> => ExpAlias2},
+    ExpFullName2 = ?USER_FULL_NAME2,
+    ExpUsername2 = ?UNIQUE_STRING,
+    UserData2 = #{<<"fullName">> => ExpFullName2, <<"username">> => ExpUsername2},
     {ok, PredefinedUserId} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
         Config, user_logic, create, [?ROOT, PredefinedUserId, UserData2]
     )),
     {ok, User2} = oz_test_utils:get_user(Config, PredefinedUserId),
-    ?assertEqual(User2#od_user.name, ExpName2),
-    ?assertEqual(User2#od_user.alias, ExpAlias2),
+    ?assertEqual(User2#od_user.full_name, ExpFullName2),
+    ?assertEqual(User2#od_user.username, ExpUsername2),
 
     % Second try should fail (such id exists)
     ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"userId">>),
         oz_test_utils:call_oz(
-            Config, user_logic, create, [?ROOT, PredefinedUserId, #{<<"name">> => ?UNIQUE_STRING}]
+            Config, user_logic, create, [?ROOT, PredefinedUserId, #{<<"fullName">> => ?UNIQUE_STRING}]
         )
     ),
 
-    % Reusing the already occupied alias should fail
-    ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"alias">>),
+    % Reusing the already occupied username should fail
+    ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>),
         oz_test_utils:call_oz(
-            Config, user_logic, create, [?ROOT, #{<<"alias">> => ExpAlias2}]
+            Config, user_logic, create, [?ROOT, #{<<"username">> => ExpUsername2}]
         )
     ).
 
@@ -239,8 +239,8 @@ get_test(Config) ->
         Config, ?PROVIDER_NAME1
     ),
     {ok, User} = oz_test_utils:create_user(Config, #{
-        <<"name">> => ExpName = <<"UserName">>,
-        <<"alias">> => ExpAlias = <<"UserAlias">>
+        <<"fullName">> => ExpFullName = <<"UserName">>,
+        <<"username">> => ExpUsername = <<"UserUsername">>
     }),
     ExpEmailList = [<<"a@a.a">>, <<"b@b.b">>],
     oz_test_utils:call_oz(Config, od_user, update, [User, fun(UserRecord) ->
@@ -257,8 +257,8 @@ get_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ProtectedData = #{
-        <<"name">> => ExpName,
-        <<"alias">> => ExpAlias,
+        <<"fullName">> => ExpFullName,
+        <<"username">> => ExpUsername,
         <<"emails">> => ExpEmailList,
         <<"linkedAccounts">> => []
     },
@@ -283,7 +283,7 @@ get_test(Config) ->
             args = [client, User],
             expected_result = ?OK_TERM(
                 fun(#od_user{
-                    name = Name, alias = Alias,
+                    full_name = FullName, username = Username,
                     emails = EmailList,
                     basic_auth_enabled = false,
                     linked_accounts = [],
@@ -302,8 +302,8 @@ get_test(Config) ->
                     handle_services = [], eff_handle_services = #{},
                     handles = [], eff_handles = #{}
                 }) ->
-                    ?assertEqual(ExpName, Name),
-                    ?assertEqual(ExpAlias, Alias),
+                    ?assertEqual(ExpFullName, FullName),
+                    ?assertEqual(ExpUsername, Username),
                     ?assertEqual(ExpEmailList, EmailList),
                     ?assertEqual(SpaceId, S1),
                     ?assertEqual(EffSpaces, #{S1 => [{od_user, <<"self">>}]}),
@@ -322,8 +322,8 @@ get_test(Config) ->
                 <<"effectiveSpaces">> => [S1],
                 <<"emails">> => ExpEmailList,
                 <<"linkedAccounts">> => [],
-                <<"alias">> => ExpAlias,
-                <<"name">> => ExpName,
+                <<"fullName">> => ExpFullName,
+                <<"username">> => ExpUsername,
                 <<"spaceAliases">> => #{},
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
@@ -331,9 +331,12 @@ get_test(Config) ->
                     ),
                     ?assertEqual(User, Id)
                 end,
+
                 % TODO VFS-4506 deprecated fields, included for backward compatibility
-                <<"emailList">> => ExpEmailList,
-                <<"login">> => ExpAlias
+                <<"name">> => ExpFullName,
+                <<"login">> => ExpUsername,
+                <<"alias">> => ExpUsername,
+                <<"emailList">> => ExpEmailList
             })
         }
     },
@@ -359,9 +362,12 @@ get_test(Config) ->
             expected_code = ?HTTP_200_OK,
             expected_body = ProtectedData#{
                 <<"userId">> => User,
+
                 % TODO VFS-4506 deprecated fields, included for backward compatibility
-                <<"emailList">> => ExpEmailList,
-                <<"login">> => ExpAlias
+                <<"name">> => ExpFullName,
+                <<"login">> => ExpUsername,
+                <<"alias">> => ExpUsername,
+                <<"emailList">> => ExpEmailList
             }
         },
         logic_spec = LogicSpec = #logic_spec{
@@ -382,9 +388,12 @@ get_test(Config) ->
                     ),
                     ?assertEqual(Id, User)
                 end,
+
                 % TODO VFS-4506 deprecated fields, included for backward compatibility
-                <<"emailList">> => ExpEmailList,
-                <<"login">> => ExpAlias
+                <<"name">> => ExpFullName,
+                <<"login">> => ExpUsername,
+                <<"alias">> => ExpUsername,
+                <<"emailList">> => ExpEmailList
             })
         }
     },
@@ -396,8 +405,8 @@ get_test(Config) ->
         logic_spec = LogicSpec#logic_spec{
             function = get_shared_data,
             expected_result = ?OK_MAP_CONTAINS(#{
-                <<"name">> => ExpName,
-                <<"alias">> => ExpAlias
+                <<"fullName">> => ExpFullName,
+                <<"username">> => ExpUsername
             })
         },
         gs_spec = GsSpec#gs_spec{
@@ -405,15 +414,19 @@ get_test(Config) ->
                 type = od_user, id = User, aspect = instance, scope = shared
             },
             expected_result = ?OK_MAP(#{
-                <<"name">> => ExpName,
-                <<"alias">> => ExpAlias,
+                <<"fullName">> => ExpFullName,
+                <<"username">> => ExpUsername,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
                     ),
                     ?assertEqual(Id, User)
                 end,
-                <<"login">> => ExpAlias
+
+                % TODO VFS-4506 deprecated fields, included for backward compatibility
+                <<"name">> => ExpFullName,
+                <<"login">> => ExpUsername,
+                <<"alias">> => ExpUsername
             })
         }
     },
@@ -422,8 +435,8 @@ get_test(Config) ->
 
 get_self_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config, #{
-        <<"name">> => ExpName = <<"Name">>,
-        <<"alias">> => ExpAlias = <<"Alias">>
+        <<"fullName">> => ExpFullName = <<"FullName">>,
+        <<"username">> => ExpUsername = <<"Username">>
     }),
     ExpEmailList = [<<"em1@google.com">>, <<"em2@google.com">>],
     oz_test_utils:call_oz(Config, od_user, update, [User, fun(UserRecord) ->
@@ -431,12 +444,15 @@ get_self_test(Config) ->
     end]),
 
     ProtectedData = #{
-        <<"name">> => ExpName,
-        <<"alias">> => ExpAlias,
+        <<"fullName">> => ExpFullName,
+        <<"username">> => ExpUsername,
         <<"emails">> => ExpEmailList,
         <<"linkedAccounts">> => [],
+
         % TODO VFS-4506 deprecated, included for backward compatibility
-        <<"login">> => ExpAlias,
+        <<"name">> => ExpFullName,
+        <<"login">> => ExpUsername,
+        <<"alias">> => ExpUsername,
         <<"emailList">> => ExpEmailList
     },
 
@@ -468,13 +484,13 @@ get_self_test(Config) ->
 
 
 update_test(Config) ->
-    OccupiedAlias = ?UNIQUE_STRING,
-    oz_test_utils:create_user(Config, #{<<"alias">> => OccupiedAlias}),
+    OccupiedUsername = ?UNIQUE_STRING,
+    oz_test_utils:create_user(Config, #{<<"username">> => OccupiedUsername}),
 
-    OwnedAlias = ?UNIQUE_STRING,
+    OwnedUsername = ?UNIQUE_STRING,
     EnvSetUpFun = fun() ->
         {ok, UserId} = oz_test_utils:create_user(Config, #{
-            <<"name">> => ?USER_NAME1, <<"alias">> => OwnedAlias
+            <<"fullName">> => ?USER_FULL_NAME1, <<"username">> => OwnedUsername
         }),
         #{userId => UserId}
     end,
@@ -483,17 +499,17 @@ update_test(Config) ->
     end,
     VerifyEndFun = fun(ShouldSucceed, #{userId := UserId} = _Env, Data) ->
         {ok, UserRecord} = oz_test_utils:get_user(Config, UserId),
-        {ExpName, ExpAlias} = case ShouldSucceed of
+        {ExpFullName, ExpUsername} = case ShouldSucceed of
             false ->
-                {?USER_NAME1, OwnedAlias};
+                {?USER_FULL_NAME1, OwnedUsername};
             true ->
                 {
-                    maps:get(<<"name">>, Data, ?USER_NAME1),
-                    maps:get(<<"alias">>, Data, OwnedAlias)
+                    maps:get(<<"fullName">>, Data, ?USER_FULL_NAME1),
+                    maps:get(<<"username">>, Data, OwnedUsername)
                 }
         end,
-        ?assertEqual(ExpName, UserRecord#od_user.name),
-        ?assertEqual(ExpAlias, UserRecord#od_user.alias)
+        ?assertEqual(ExpFullName, UserRecord#od_user.full_name),
+        ?assertEqual(ExpUsername, UserRecord#od_user.username)
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -514,26 +530,26 @@ update_test(Config) ->
             expected_result = ?OK
         },
         data_spec = DataSpec = #data_spec{
-            at_least_one = [<<"name">>, <<"alias">>],
+            at_least_one = [<<"fullName">>, <<"username">>],
             correct_values = #{
-                <<"name">> => [?CORRECT_USER_NAME],
-                % Trying to set owned alias again should not raise any error
-                <<"alias">> => [OwnedAlias, fun() -> ?UNIQUE_STRING end]
+                <<"fullName">> => [?CORRECT_USER_NAME],
+                % Trying to set owned username again should not raise any error
+                <<"username">> => [OwnedUsername, fun() -> ?UNIQUE_STRING end]
             },
             bad_values = [
-                {<<"alias">>, <<"">>, ?ERROR_BAD_VALUE_ALIAS},
-                {<<"alias">>, <<"_asd">>, ?ERROR_BAD_VALUE_ALIAS},
-                {<<"alias">>, <<"-asd">>, ?ERROR_BAD_VALUE_ALIAS},
-                {<<"alias">>, <<"asd_">>, ?ERROR_BAD_VALUE_ALIAS},
-                {<<"alias">>, null, ?ERROR_BAD_VALUE_ALIAS},
-                {<<"alias">>, <<"verylongaliaswithatleast15chars">>, ?ERROR_BAD_VALUE_ALIAS},
-                {<<"alias">>, 1234, ?ERROR_BAD_VALUE_ALIAS},
-                {<<"alias">>, OccupiedAlias,
-                    ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"alias">>)},
-                {<<"name">>, <<"a_d">>, ?ERROR_BAD_VALUE_USER_NAME},
-                {<<"name">>, <<"_ad">>, ?ERROR_BAD_VALUE_USER_NAME},
-                {<<"name">>, <<"ad_">>, ?ERROR_BAD_VALUE_USER_NAME}
-                | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_USER_NAME)
+                {<<"username">>, <<"">>, ?ERROR_BAD_VALUE_USERNAME},
+                {<<"username">>, <<"_asd">>, ?ERROR_BAD_VALUE_USERNAME},
+                {<<"username">>, <<"-asd">>, ?ERROR_BAD_VALUE_USERNAME},
+                {<<"username">>, <<"asd_">>, ?ERROR_BAD_VALUE_USERNAME},
+                {<<"username">>, null, ?ERROR_BAD_VALUE_USERNAME},
+                {<<"username">>, <<"verylongusernamewithatleast20chars">>, ?ERROR_BAD_VALUE_USERNAME},
+                {<<"username">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"username">>)},
+                {<<"username">>, OccupiedUsername,
+                    ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>)},
+                {<<"fullName">>, <<"a_d">>, ?ERROR_BAD_VALUE_FULL_NAME},
+                {<<"fullName">>, <<"_ad">>, ?ERROR_BAD_VALUE_FULL_NAME},
+                {<<"fullName">>, <<"ad_">>, ?ERROR_BAD_VALUE_FULL_NAME}
+                | ?BAD_VALUES_FULL_NAME(?ERROR_BAD_VALUE_FULL_NAME)
             ]
         }
     },
@@ -561,8 +577,8 @@ update_test(Config) ->
         },
         data_spec = DataSpec#data_spec{
             correct_values = #{
-                <<"name">> => [?CORRECT_USER_NAME],
-                <<"alias">> => [fun() -> ?UNIQUE_STRING end, OwnedAlias]
+                <<"fullName">> => [?CORRECT_USER_NAME],
+                <<"username">> => [fun() -> ?UNIQUE_STRING end, OwnedUsername]
             }
         }
     },

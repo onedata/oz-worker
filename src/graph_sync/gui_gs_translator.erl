@@ -129,8 +129,8 @@ translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, U
     #od_user{
         basic_auth_enabled = BasicAuthEnabled,
         password_hash = PasswordHash,
-        name = Name,
-        alias = Alias,
+        full_name = FullName,
+        username = Username,
         default_space = DefaultSpace,
         default_provider = DefaultProvider
     } = User,
@@ -138,8 +138,8 @@ translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, U
         <<"scope">> => <<"private">>,
         <<"basicAuthEnabled">> => BasicAuthEnabled,
         <<"hasPassword">> => PasswordHash /= undefined,
-        <<"name">> => Name,
-        <<"alias">> => gs_protocol:undefined_to_null(Alias),
+        <<"fullName">> => FullName,
+        <<"username">> => gs_protocol:undefined_to_null(Username),
         <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
         <<"defaultProviderId">> => gs_protocol:undefined_to_null(DefaultProvider),
         <<"clientTokenList">> => gs_protocol:gri_to_string(GRI#gri{aspect = client_tokens, scope = private}),
@@ -156,24 +156,24 @@ translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, U
 
 translate_user(#gri{aspect = instance, scope = protected}, User) ->
     #{
-        <<"name">> := Name,
-        <<"alias">> := Alias
+        <<"fullName">> := FullName,
+        <<"username">> := Username
     } = User,
     #{
         <<"scope">> => <<"protected">>,
-        <<"name">> => Name,
-        <<"alias">> => gs_protocol:undefined_to_null(Alias)
+        <<"fullName">> => FullName,
+        <<"username">> => gs_protocol:undefined_to_null(Username)
     };
 
 translate_user(#gri{aspect = instance, scope = shared}, User) ->
     #{
-        <<"name">> := Name,
-        <<"alias">> := Alias
+        <<"fullName">> := FullName,
+        <<"username">> := Username
     } = User,
     #{
         <<"scope">> => <<"shared">>,
-        <<"name">> => Name,
-        <<"alias">> => gs_protocol:undefined_to_null(Alias)
+        <<"fullName">> => FullName,
+        <<"username">> => gs_protocol:undefined_to_null(Username)
     };
 
 translate_user(GRI = #gri{aspect = client_tokens}, ClientTokens) ->
@@ -193,8 +193,8 @@ translate_user(#gri{aspect = {client_token, ClientToken}}, ClientToken) ->
 translate_user(GRI = #gri{aspect = linked_accounts}, LinkedAccounts) ->
     #{
         <<"list">> => lists:map(
-            fun(#linked_account{subject_id = UserId}) ->
-                gs_protocol:gri_to_string(GRI#gri{aspect = {linked_account, UserId}, scope = private})
+            fun(GeneratedUserId) ->
+                gs_protocol:gri_to_string(GRI#gri{aspect = {linked_account, GeneratedUserId}, scope = private})
             end, LinkedAccounts)
     };
 

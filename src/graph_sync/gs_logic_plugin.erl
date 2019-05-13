@@ -199,10 +199,10 @@ handle_rpc(_, _, <<"getSupportedIdPs">>, Data) ->
             {ok, #{
                 <<"idps">> => [
                     #{
-                        <<"id">> => <<"onepanel">>,
-                        <<"displayName">> => <<"Onepanel account">>,
+                        <<"id">> => <<"basicAuth">>,
+                        <<"displayName">> => <<"username & password">>,
                         <<"iconPath">> => gui_static:oz_worker_gui_path(
-                            <<"/assets/images/auth-providers/onepanel.svg">>
+                            <<"/assets/images/auth-providers/basicauth.svg">>
                         ),
                         <<"iconBackgroundColor">> => <<"#4BD187">>
                     },

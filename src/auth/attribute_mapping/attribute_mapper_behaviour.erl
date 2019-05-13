@@ -19,8 +19,8 @@
 %% The Onedata attribute is one of the below, and should return a value in
 %% corresponding type:
 %%      * subjectId - binary()
-%%      * name - binary() | undefined
-%%      * alias - binary() | undefined
+%%      * fullName - binary() | undefined
+%%      * username - binary() | undefined
 %%      * emails - [binary()]
 %%      * entitlements - [binary()]
 %%      * custom - json_utils:json_term()

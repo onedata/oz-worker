@@ -904,8 +904,11 @@ get_eff_user_test(Config) ->
                     expected_code = ?HTTP_200_OK,
                     expected_body = ExpDetails#{
                         <<"userId">> => UserId,
+
                         % TODO VFS-4506 deprecated, included for backward compatibility
-                        <<"login">> => maps:get(<<"alias">>, ExpDetails),
+                        <<"name">> => maps:get(<<"fullName">>, UserDetails),
+                        <<"login">> => maps:get(<<"username">>, UserDetails),
+                        <<"alias">> => maps:get(<<"username">>, UserDetails),
                         <<"emailList">> => maps:get(<<"emails">>, ExpDetails)
                     }
                 },
@@ -929,8 +932,11 @@ get_eff_user_test(Config) ->
                             ),
                             ?assertEqual(Id, UserId)
                         end,
+
                         % TODO VFS-4506 deprecated, included for backward compatibility
-                        <<"login">> => maps:get(<<"alias">>, ExpDetails),
+                        <<"name">> => maps:get(<<"fullName">>, UserDetails),
+                        <<"login">> => maps:get(<<"username">>, UserDetails),
+                        <<"alias">> => maps:get(<<"username">>, UserDetails),
                         <<"emailList">> => maps:get(<<"emails">>, ExpDetails)
                     })
                 }

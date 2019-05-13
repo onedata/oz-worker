@@ -7,7 +7,7 @@
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% This module provides an API for user authentication with Basic Auth
-%%% (login & password).
+%%% (username & password).
 %%% @end
 %%%-------------------------------------------------------------------
 -module(basic_auth).
@@ -40,16 +40,16 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Authenticates a user by basic credentials (login & password).
+%% Authenticates a user by basic credentials (username & password).
 %% @end
 %%--------------------------------------------------------------------
--spec authenticate(od_user:alias(), password()) -> {ok, od_user:id()} | {error, term()}.
-authenticate(Alias, Password) ->
-    case auth_config:is_onepanel_auth_enabled() of
+-spec authenticate(od_user:username(), password()) -> {ok, od_user:id()} | {error, term()}.
+authenticate(Username, Password) ->
+    case auth_config:is_basic_auth_enabled() of
         false ->
             ?ERROR_BASIC_AUTH_NOT_SUPPORTED;
         true ->
-            case od_user:get_by_alias(Alias) of
+            case od_user:get_by_username(Username) of
                 {ok, #document{value = #od_user{basic_auth_enabled = false}}} ->
                     ?ERROR_BASIC_AUTH_DISABLED;
                 {ok, #document{value = #od_user{password_hash = undefined}}} ->
@@ -69,7 +69,7 @@ authenticate(Alias, Password) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Enables/disables basic auth (ability to sign in by login & password)
+%% Enables/disables basic auth (ability to sign in by username & password)
 %% in given user record.
 %% @end
 %%--------------------------------------------------------------------
@@ -128,14 +128,14 @@ migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Role) ->
     UserId = onepanel_uid_to_system_uid(OnepanelUsername),
     UpdateFun = fun(User) ->
         {ok, User#od_user{
-            alias = OnepanelUsername,
+            username = OnepanelUsername,
             basic_auth_enabled = true,
             password_hash = PasswordHash
         }}
     end,
     DefaultDoc = #document{key = UserId, value = #od_user{
-        name = user_logic:normalize_name(OnepanelUsername),
-        alias = OnepanelUsername,
+        full_name = user_logic:normalize_full_name(OnepanelUsername),
+        username = OnepanelUsername,
         basic_auth_enabled = true,
         password_hash = PasswordHash
     }},
@@ -155,7 +155,7 @@ migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Role) ->
 %%--------------------------------------------------------------------
 -spec onepanel_uid_to_system_uid(OnepanelUserId :: binary()) -> od_user:id().
 onepanel_uid_to_system_uid(OnepanelUserId) ->
-    linked_accounts:idp_uid_to_system_uid(?ONEZONE_IDP_ID, OnepanelUserId).
+    linked_accounts:gen_user_id(?ONEZONE_IDP_ID, OnepanelUserId).
 
 
 %%%===================================================================
