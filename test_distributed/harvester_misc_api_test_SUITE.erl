@@ -664,16 +664,13 @@ delete_harvested_metadata_test(Config) ->
             Config, H1, U2, [?HARVESTER_DELETE], []
         ),
         oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
+        oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
         #{harvesterId => H1}
     end,
-    DeleteEntityFun = fun(#{harvesterId := HarvesterId} = _Env) ->
-        oz_test_utils:delete_harvester(Config, HarvesterId)
-    end,
     VerifyEndFun = fun(ShouldSucceed, #{harvesterId := HarvesterId} = _Env, _Data) ->
-        {ok, Harvesters} = oz_test_utils:list_harvesters(Config),
         case ShouldSucceed of
             true ->
-                mock_assert_num_calls_sum(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 3, 1);
+                mock_assert_num_calls_sum(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 3, 2);
             _ ->
                 test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 3, 0)
         end,
@@ -681,6 +678,7 @@ delete_harvested_metadata_test(Config) ->
             rpc:call(Node, meck, reset, [?HARVESTER_MOCK_PLUGIN])
         end, OzNodes),
         % assert that harvester was not deleted
+        {ok, Harvesters} = oz_test_utils:list_harvesters(Config),
         ?assert(lists:member(HarvesterId, Harvesters))
     end,
 
@@ -714,9 +712,7 @@ delete_harvested_metadata_test(Config) ->
             expected_result = ?OK
         }
     },
-    ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
-    )).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
 
 
 create_index_test(Config) ->
@@ -1371,8 +1367,7 @@ submit_batch_test(Config) ->
             module = harvester_logic,
             function = submit_batch,
             args = [client, H1, S1, data],
-            % fixme proper result
-            expected_result = ?OK_MAP_CONTAINS(#{})
+            expected_result = ?OK_MAP(#{})
         },
         gs_spec = #gs_spec{
             operation = create,

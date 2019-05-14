@@ -1248,22 +1248,17 @@ auth_by_privilege(UserId, HarvesterOrId, Privilege) ->
 %% Clears harvesting progress of successfully deleted indices.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_indices_data([od_harvester:index_id()], od_harvester:plugin(),
+-spec delete_indices_data(od_harvester:indices(), od_harvester:plugin(),
     od_harvester:endpoint(), od_harvester:id()) -> ok | {error, term()}.
 delete_indices_data(IndicesToRemove, Plugin, Endpoint, HarvesterId) ->
-    {SuccessfulIndices, Errors} = lists:foldl(fun(IndexId, {S, E}) ->
-        case Plugin:delete_index(Endpoint, HarvesterId, IndexId) of
-            ok -> {[IndexId | S], E};
-            Error -> {S, [Error| E]}
-        end
-    end, {[],[]}, IndicesToRemove),
+    lists:foreach(fun(IndexId) ->
+        % fixme add appropriate comment
+        spawn(fun() -> Plugin:delete_index(Endpoint, HarvesterId, IndexId) end)
+    end, IndicesToRemove),
     
-    update_indices_stats(HarvesterId, SuccessfulIndices, fun(_) -> #index_stats{} end),
-    
-    case Errors of
-        [Error | _] -> Error;
-        _ -> ok
-    end.
+    update_indices_stats(HarvesterId, IndicesToRemove, fun(ExistingStats) ->
+        prepare_stats(ExistingStats)
+    end).
 
 
 %%--------------------------------------------------------------------
@@ -1436,7 +1431,9 @@ normalize_and_check_endpoint(Endpoint, Plugin) ->
     
 
 %fixme docs
-%fixme better funs names
+prepare_stats(ExistingStats) ->
+    lists:foldl(fun(SpaceId, NewExistingStats) -> prepare_space_stats(SpaceId, NewExistingStats) end, ExistingStats, maps:keys(ExistingStats)).
+
 prepare_space_stats(SpaceId, ExistingStats) ->
     StatsPerProvider = maps:get(SpaceId, ExistingStats, #{}),
     {ok, #od_space{providers = Providers}} = space_logic_plugin:fetch_entity(SpaceId),
