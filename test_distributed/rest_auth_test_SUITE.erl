@@ -22,9 +22,9 @@
 -include("api_test_utils.hrl").
 
 
--define(CORRECT_LOGIN, <<"user-login">>).
+-define(CORRECT_USERNAME, <<"user-username">>).
 -define(CORRECT_PASSWORD, <<"user-passwd">>).
--define(BAD_LOGIN, <<"bad-login">>).
+-define(BAD_USERNAME, <<"bad-username">>).
 -define(BAD_PASSWORD, <<"bad-passwd">>).
 
 
@@ -54,7 +54,7 @@ all() ->
 
 % Check macaroon based authorization
 macaroon_test(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #{<<"name">> => <<"U1">>}),
+    {ok, UserId} = oz_test_utils:create_user(Config, #{<<"fullName">> => <<"U1">>}),
 
     {ok, Macaroon} = oz_test_utils:create_client_token(
         Config, UserId
@@ -68,7 +68,7 @@ macaroon_test(Config) ->
         },
         expect => #{
             code => 200,
-            body => {contains, #{<<"name">> => <<"U1">>}}
+            body => {contains, #{<<"fullName">> => <<"U1">>}}
         }
     })),
 
@@ -80,7 +80,7 @@ macaroon_test(Config) ->
         },
         expect => #{
             code => 200,
-            body => {contains, #{<<"name">> => <<"U1">>}}
+            body => {contains, #{<<"fullName">> => <<"U1">>}}
         }
     })),
 
@@ -100,7 +100,7 @@ macaroon_test(Config) ->
 
 basic_auth_test(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config, #{
-        <<"alias">> => ?CORRECT_LOGIN,
+        <<"username">> => ?CORRECT_USERNAME,
         <<"password">> => ?CORRECT_PASSWORD
     }),
 
@@ -110,12 +110,12 @@ basic_auth_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => basic_auth_header(?CORRECT_LOGIN, ?CORRECT_PASSWORD)
+            headers => basic_auth_header(?CORRECT_USERNAME, ?CORRECT_PASSWORD)
         },
         expect => #{
             code => 200,
             body => {contains, #{
-                <<"userId">> => UserId, <<"login">> => ?CORRECT_LOGIN
+                <<"userId">> => UserId, <<"username">> => ?CORRECT_USERNAME
             }}
         }
     })),
@@ -123,7 +123,7 @@ basic_auth_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => basic_auth_header(?BAD_LOGIN, ?BAD_PASSWORD)
+            headers => basic_auth_header(?BAD_USERNAME, ?BAD_PASSWORD)
         },
         expect => #{
             code => 401
@@ -136,7 +136,7 @@ basic_auth_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => basic_auth_header(?CORRECT_LOGIN, ?CORRECT_PASSWORD)
+            headers => basic_auth_header(?CORRECT_USERNAME, ?CORRECT_PASSWORD)
         },
         expect => #{
             code => 400
@@ -146,7 +146,7 @@ basic_auth_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => basic_auth_header(?BAD_LOGIN, ?BAD_PASSWORD)
+            headers => basic_auth_header(?BAD_USERNAME, ?BAD_PASSWORD)
         },
         expect => #{
             code => 400
@@ -162,12 +162,12 @@ external_access_token_test(Config) ->
     AnotherIdP = ?config(anotherIdP, Config),
     DisabledIdP = ?config(disabledIdP, Config),
     UserSubjectIdFun = ?config(user_subject_id_fun, Config),
-    UserNameFun = ?config(user_name_fun, Config),
+    UserFullNameFun = ?config(user_full_name_fun, Config),
     CorrectAccessTokenFun = ?config(correct_access_token_fun, Config),
     PrefixFun = ?config(prefix_fun, Config),
 
     UserIdFun = fun(IdP) ->
-        linked_accounts:idp_uid_to_system_uid(IdP, UserSubjectIdFun(IdP))
+        linked_accounts:gen_user_id(IdP, UserSubjectIdFun(IdP))
     end,
 
     XAuthTokenFun = fun(IdP) ->
@@ -184,7 +184,7 @@ external_access_token_test(Config) ->
             code => 200,
             body => {contains, #{
                 <<"userId">> => UserIdFun(DummyIdP),
-                <<"name">> => UserNameFun(DummyIdP)
+                <<"fullName">> => UserFullNameFun(DummyIdP)
             }}
         }
     })),
@@ -199,7 +199,7 @@ external_access_token_test(Config) ->
             code => 200,
             body => {contains, #{
                 <<"userId">> => UserIdFun(AnotherIdP),
-                <<"name">> => UserNameFun(AnotherIdP)
+                <<"fullName">> => UserFullNameFun(AnotherIdP)
             }}
         }
     })),
@@ -251,7 +251,7 @@ gui_macaroon_test(Config) ->
     {ok, {_Provider2, Provider2Macaroon}} = oz_test_utils:create_provider(
         Config, ?UNIQUE_STRING
     ),
-    {ok, UserId} = oz_test_utils:create_user(Config, #{<<"name">> => <<"U1">>}),
+    {ok, UserId} = oz_test_utils:create_user(Config, #{<<"fullName">> => <<"U1">>}),
     {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, UserId),
 
     ClusterType = ?ONEPROVIDER,
@@ -273,7 +273,7 @@ gui_macaroon_test(Config) ->
         },
         expect => #{
             code => 200, % correct audience
-            body => {contains, #{<<"name">> => <<"U1">>}}
+            body => {contains, #{<<"fullName">> => <<"U1">>}}
         }
     })),
 
@@ -327,9 +327,9 @@ gui_macaroon_test(Config) ->
 %%% Helper functions
 %%%===================================================================
 
-basic_auth_header(Login, Password) ->
-    UserAndPassword = base64:encode(<<Login/binary, ":", Password/binary>>),
-    #{<<"authorization">> => <<"Basic ", UserAndPassword/binary>>}.
+basic_auth_header(Username, Password) ->
+    UserPasswdB64 = base64:encode(<<Username/binary, ":", Password/binary>>),
+    #{<<"authorization">> => <<"Basic ", UserPasswdB64/binary>>}.
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -367,7 +367,7 @@ init_per_testcase(external_access_token_test, Config) ->
         (anotherIdP) -> <<"user2subjectId">>;
         (disabledIdP) -> <<"user3subjectId">>
     end,
-    UserNameFun = fun
+    UserFullNameFun = fun
         (dummyIdP) -> <<"User1">>;
         (anotherIdP) -> <<"User2">>;
         (disabledIdP) -> <<"User3">>
@@ -388,7 +388,7 @@ init_per_testcase(external_access_token_test, Config) ->
                     },
                     attributeMapping => #{
                         subjectId => {required, "id"},
-                        name => {required, "name"}
+                        fullName => {required, "name"}
                     }
                 }
             }},
@@ -402,7 +402,7 @@ init_per_testcase(external_access_token_test, Config) ->
                     },
                     attributeMapping => #{
                         subjectId => {required, "id"},
-                        name => {required, "name"}
+                        fullName => {required, "name"}
                     }
                 }
             }},
@@ -416,7 +416,7 @@ init_per_testcase(external_access_token_test, Config) ->
                     },
                     attributeMapping => #{
                         subjectId => {required, "id"},
-                        name => {required, "name"}
+                        fullName => {required, "name"}
                     }
                 }
             }}
@@ -427,7 +427,7 @@ init_per_testcase(external_access_token_test, Config) ->
     ok = test_utils:mock_expect(Nodes, default_oidc_plugin, get_user_info, fun(IdP, AccessToken) ->
         case AccessToken =:= CorrectAccessTokenFun(IdP) of
             true ->
-                {ok, #{<<"id">> => UserSubjectIdFun(IdP), <<"name">> => UserNameFun(IdP)}};
+                {ok, #{<<"id">> => UserSubjectIdFun(IdP), <<"name">> => UserFullNameFun(IdP)}};
             false ->
                 throw(?ERROR_BAD_IDP_RESPONSE(IdP, 401, #{}, <<>>))
 
@@ -439,7 +439,7 @@ init_per_testcase(external_access_token_test, Config) ->
         {anotherIdP, AnotherIdP},
         {disabledIdP, DisabledIdP},
         {user_subject_id_fun, UserSubjectIdFun},
-        {user_name_fun, UserNameFun},
+        {user_full_name_fun, UserFullNameFun},
         {correct_access_token_fun, CorrectAccessTokenFun},
         {prefix_fun, PrefixFun} |
         Config

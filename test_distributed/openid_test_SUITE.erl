@@ -173,8 +173,8 @@ validate_correct_login_base(Config, TestMode) ->
     overwrite_auth_config(Config, TestMode, [{?DUMMY_IDP, OidcSpec, #{
         attributeMapping => #{
             subjectId => {required, {replace, "c", "x", "id"}},
-            name => {optional, {any, ["fullName", {join, " ", "nameTokens"}]}},
-            alias => {optional, {nested, ["alias", "value"]}},
+            fullName => {optional, {any, ["fullName", {join, " ", "nameTokens"}]}},
+            username => {optional, {nested, ["username", "value"]}},
             emails => {required, {filter, ".*@my.org", {split, ",", "emails"}}},
             entitlements => {optional, {concat, [
                 {str_list, ["a", "b", "c", "d"]},
@@ -213,7 +213,7 @@ validate_correct_login_base(Config, TestMode) ->
         Config, OidcSpec, Url, #{
             <<"id">> => <<"abcdef1c2c3c4c">>,
             <<"nameTokens">> => [<<"John">>, <<"Doe">>, <<"Jr">>],
-            <<"alias">> => #{
+            <<"username">> => #{
                 <<"value">> => <<"jodoe">>
             },
             <<"groups">> => [
@@ -241,9 +241,9 @@ validate_correct_login_base(Config, TestMode) ->
     )),
 
     ExpSubjectId = <<"abxdef1x2x3x4x">>,  % {replace, "c", "x", "id"}
-    ExpUserId = linked_accounts:idp_uid_to_system_uid(?DUMMY_IDP, ExpSubjectId),
-    ExpName = <<"John Doe Jr">>,
-    ExpAlias = <<"jodoe">>,
+    ExpUserId = linked_accounts:gen_user_id(?DUMMY_IDP, ExpSubjectId),
+    ExpFullName = <<"John Doe Jr">>,
+    ExpUsername = <<"jodoe">>,
     ExpEmails = [<<"john.doe@my.org">>],
     ExpEntitlements = [
         <<"a:some/1">>,
@@ -294,13 +294,13 @@ validate_correct_login_base(Config, TestMode) ->
 
             ?assertMatch(
                 {ok, #od_user{
-                    name = ExpName,
-                    alias = ExpAlias,
+                    full_name = ExpFullName,
+                    username = ExpUsername,
                     emails = ExpEmails,
                     linked_accounts = [#linked_account{
                         subject_id = ExpSubjectId,
-                        name = ExpName,
-                        alias = ExpAlias,
+                        full_name = ExpFullName,
+                        username = ExpUsername,
                         emails = ExpEmails,
                         entitlements = ExpEntitlements,
                         custom = ExpCustom
@@ -327,13 +327,13 @@ validate_correct_login_base(Config, TestMode) ->
 
             ?assertMatch(
                 #{
-                    <<"name">> := ExpName,
-                    <<"alias">> := ExpAlias,
+                    <<"fullName">> := ExpFullName,
+                    <<"username">> := ExpUsername,
                     <<"emails">> := ExpEmails,
                     <<"linkedAccounts">> := [#{
                         <<"subjectId">> := ExpSubjectId,
-                        <<"name">> := ExpName,
-                        <<"alias">> := ExpAlias,
+                        <<"fullName">> := ExpFullName,
+                        <<"username">> := ExpUsername,
                         <<"emails">> := ExpEmails,
                         <<"entitlements">> := ExpEntitlements,
                         <<"custom">> := ExpCustom
@@ -374,7 +374,7 @@ authority_delegation(Config) ->
         Config, OidcSpec, Url, #{<<"sub">> => SubjectId}
     )),
 
-    ExpUserId = linked_accounts:idp_uid_to_system_uid(?DUMMY_IDP, SubjectId),
+    ExpUserId = linked_accounts:gen_user_id(?DUMMY_IDP, SubjectId),
 
     DelegationWorksSpec = fun(Success, AuthType) -> #{
         request => #{
@@ -430,7 +430,7 @@ offline_access(Config) ->
         offlineAccess => false
     }}]),
     simulate_login_flow(Config, ?DUMMY_IDP, false, false, OidcSpec, #{<<"sub">> => SubjectId}),
-    UserId = linked_accounts:idp_uid_to_system_uid(?DUMMY_IDP, SubjectId),
+    UserId = linked_accounts:gen_user_id(?DUMMY_IDP, SubjectId),
     ?assertMatch(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, []), ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % The user does not have any access/refresh token cached -> not found
@@ -470,13 +470,12 @@ offline_access(Config) ->
 
 
 offline_access_internals(Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
     SubjectId = <<"offline_access_internals-abcdewq">>,
     RefreshThreshold = oz_test_utils:get_env(Config, idp_access_token_refresh_threshold),
     overwrite_auth_config(Config, false, [{?DUMMY_IDP, ?CORRECT_OIDC_SPEC, #{
         attributeMapping => #{
             subjectId => {required, "sub"},
-            name => {optional, "name"}
+            fullName => {optional, "name"}
         },
         offlineAccess => true
     }}]),
@@ -489,7 +488,7 @@ offline_access_internals(Config) ->
             refresh_token = <<"rt1">>
         }]
     ),
-    ?assertMatch(UserId, linked_accounts:idp_uid_to_system_uid(?DUMMY_IDP, SubjectId)),
+    ?assertMatch(UserId, linked_accounts:gen_user_id(?DUMMY_IDP, SubjectId)),
     ?assertMatch({ok, {<<"at1">>, 1000}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % Access token should be refreshed only when the RefreshThreshold is reached
@@ -551,14 +550,14 @@ offline_access_internals(Config) ->
         oz_test_utils:call_oz(Config, linked_accounts, merge, [UserId, #linked_account{
             idp = ?DUMMY_IDP,
             subject_id = SubjectId,
-            name = <<"Old Name">>,
+            full_name = <<"Old Name">>,
             access_token = {<<"at5">>, oz_test_utils:get_mocked_time(Config) + 1000},
             refresh_token = <<"rt5">>
         }])
     ),
     ?assertMatch(
         {ok, #od_user{linked_accounts = [#linked_account{
-            name = <<"Old Name">>,
+            full_name = <<"Old Name">>,
             refresh_token = <<"rt5">>
         }]}},
         oz_test_utils:get_user(Config, UserId)
@@ -575,7 +574,7 @@ offline_access_internals(Config) ->
     ?assertMatch({ok, {<<"at6">>, 1600}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
     ?assertMatch(
         {ok, #od_user{linked_accounts = [#linked_account{
-            name = <<"New Name">>,
+            full_name = <<"New Name">>,
             refresh_token = <<"rt6">>
         }]}},
         oz_test_utils:get_user(Config, UserId)
@@ -609,7 +608,7 @@ link_account(Config) ->
     ]),
 
     % Log in using the first IdP
-    ExpFirstUserId = linked_accounts:idp_uid_to_system_uid(?FIRST_IDP, FirstSubjectId),
+    ExpFirstUserId = linked_accounts:gen_user_id(?FIRST_IDP, FirstSubjectId),
     ?assertMatch(
         {ok, ExpFirstUserId, _},
         simulate_login_flow(Config, ?FIRST_IDP, false, false, OidcSpec, #{

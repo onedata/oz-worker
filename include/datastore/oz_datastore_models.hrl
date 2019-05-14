@@ -30,8 +30,8 @@
 -record(linked_account, {
     idp :: atom(),
     subject_id :: binary(),
-    name = undefined :: undefined | binary(),
-    alias = undefined :: undefined | binary(),
+    full_name = undefined :: undefined | binary(),
+    username = undefined :: undefined | binary(),
     emails = [] :: [binary()],
     % A list of entitlements in given IdP, they must be normalized according
     % to specification in idp_group_mapping.
@@ -103,14 +103,15 @@
 
 %% This record defines a user and is handled as a database document
 -record(od_user, {
-    name = <<"">> :: od_user:name(),
-    alias = undefined :: od_user:alias(),
-    emails = [] :: [od_user:email()],
+    full_name = ?DEFAULT_FULL_NAME :: od_user:full_name(),
+    username = undefined :: undefined | od_user:username(),
     % Decides if this user can login via login:password - this feature must be
     % enabled by an admin, by default regular users are only allowed to sign in
     % using their IdPs.
     basic_auth_enabled = false :: boolean(),
     password_hash = undefined :: undefined | basic_auth:password_hash(),
+    emails = [] :: [od_user:email()],
+
     linked_accounts = [] :: [od_user:linked_account()],
     entitlements = [] :: [od_group:id()],
 

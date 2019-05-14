@@ -110,11 +110,11 @@
 -define(URL(Config, PathTokens), oz_test_utils:oz_rest_url(Config, PathTokens)).
 
 %% Example test data for users
--define(USER_NAME1, <<"user1">>).
--define(USER_NAME2, <<"user2">>).
--define(USER_NAME3, <<"user3">>).
--define(USER_ALIAS1, <<"alias1">>).
--define(USER_ALIAS2, <<"alias2">>).
+-define(USER_FULL_NAME1, <<"user1">>).
+-define(USER_FULL_NAME2, <<"user2">>).
+-define(USER_FULL_NAME3, <<"user3">>).
+-define(USER_USERNAME1, <<"username1">>).
+-define(USER_USERNAME2, <<"username2">>).
 
 %% Example test data for groups
 -define(GROUP_NAME1, <<"group1">>).
@@ -287,12 +287,12 @@
 
 -define(HARVESTER_CREATE_DATA(HarvesterName, HarvesterPlugin),
     #{
-    <<"name">> => HarvesterName,
-    <<"endpoint">> => ?HARVESTER_ENDPOINT1,
-    <<"plugin">> => HarvesterPlugin,
-    <<"guiPluginConfig">> => ?HARVESTER_GUI_PLUGIN_CONFIG
+        <<"name">> => HarvesterName,
+        <<"endpoint">> => ?HARVESTER_ENDPOINT1,
+        <<"plugin">> => HarvesterPlugin,
+        <<"guiPluginConfig">> => ?HARVESTER_GUI_PLUGIN_CONFIG
     }).
--define(HARVESTER_CREATE_DATA(HarvesterName), ?HARVESTER_CREATE_DATA(HarvesterName, ?HARVESTER_MOCK_PLUGIN_BINARY)). 
+-define(HARVESTER_CREATE_DATA(HarvesterName), ?HARVESTER_CREATE_DATA(HarvesterName, ?HARVESTER_MOCK_PLUGIN_BINARY)).
 -define(HARVESTER_CREATE_DATA, ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)).
 
 -define(HARVESTER_MOCKED_QUERY_DATA_MAP, #{<<"key">> => <<"mocked_query_data">>}).
@@ -306,19 +306,37 @@
 -define(FAILED_INDICES(Indices), #{<<"failedIndices">> := Indices}).
 -define(NO_FAILED_INDICES, ?FAILED_INDICES([])).
 
+-define(BAD_VALUES_NAME(Error), [
+    {<<"name">>, <<"">>, Error},
+    {<<"name">>, <<"a">>, Error},
+    {<<"name">>, <<"-asd">>, Error},
+    {<<"name">>, <<"/asd">>, Error},
+    {<<"name">>, <<":asd">>, Error},
+    {<<"name">>, <<"asd★">>, Error},
+    {<<"name">>, <<"asd-">>, Error},
+    {<<"name">>, <<"very_very_very_long_name_with_at_lest_50_characters">>, Error},
+    {<<"name">>, <<".asd">>, Error},
+    {<<"name">>, <<"asd ">>, Error},
+    {<<"name">>, <<" asd ">>, Error},
+    {<<"name">>, <<" asd">>, Error},
+    {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)}
+]).
 
--define(BAD_VALUES_NAME(Error),
-    [{<<"name">>, <<"">>, Error},
-        {<<"name">>, <<"a">>, Error},
-        {<<"name">>, <<"-asd">>, Error},
-        {<<"name">>, <<"/asd">>, Error},
-        {<<"name">>, <<":asd">>, Error},
-        {<<"name">>, <<"asd★">>, Error},
-        {<<"name">>, <<"asd-">>, Error},
-        {<<"name">>, <<"very_very_very_long_name_with_at_lest_50_characters">>, Error},
-        {<<"name">>, <<".asd">>, Error},
-        {<<"name">>, <<"asd ">>, Error},
-        {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)}]).
+-define(BAD_VALUES_FULL_NAME(Error), [
+    {<<"fullName">>, <<"">>, Error},
+    {<<"fullName">>, <<"T">>, Error},
+    {<<"fullName">>, <<"-Tom">>, Error},
+    {<<"fullName">>, <<"/Tom">>, Error},
+    {<<"fullName">>, <<":Tom">>, Error},
+    {<<"fullName">>, <<"Tom★">>, Error},
+    {<<"fullName">>, <<"Tom-">>, Error},
+    {<<"fullName">>, <<"very_very_very_long_fullName_with_at_lest_50_characters">>, Error},
+    {<<"fullName">>, <<".Tom">>, Error},
+    {<<"fullName">>, <<"Tom ">>, Error},
+    {<<"fullName">>, <<" Tom ">>, Error},
+    {<<"fullName">>, <<" Tom">>, Error},
+    {<<"fullName">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"fullName">>)}
+]).
 
 -define(CORRECT_NAME, <<"_πœę ßþą_śðæŋ-əłżź.ćńµジ(ャパル)パスで 日本を- 旅す.る()"/utf8>>).
 

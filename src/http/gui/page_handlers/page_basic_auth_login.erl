@@ -37,14 +37,14 @@ handle(<<"POST">>, Req) ->
     try
         case auth_logic:authorize_by_basic_auth(Req) of
             {true, ?USER(UserId)} ->
-                {ok, UserName} = user_logic:get_name(?ROOT, UserId),
-                ?info("User '~ts' has logged in (~s)", [UserName, UserId]),
+                {ok, FullName} = user_logic:get_full_name(?ROOT, UserId),
+                ?info("User '~ts' has logged in (~s)", [FullName, UserId]),
                 Req2 = gui_session:log_in(UserId, Req),
                 JSONHeader = #{<<"content-type">> => <<"application/json">>},
                 Body = json_utils:encode(#{<<"url">> => <<"/">>}),
                 cowboy_req:reply(?HTTP_200_OK, JSONHeader, Body, Req2);
             ?ERROR_BAD_BASIC_CREDENTIALS ->
-                cowboy_req:reply(?HTTP_401_UNAUTHORIZED, #{}, <<"Invalid login or password">>, Req);
+                cowboy_req:reply(?HTTP_401_UNAUTHORIZED, #{}, <<"Invalid username or password">>, Req);
             ?ERROR_BASIC_AUTH_DISABLED ->
                 cowboy_req:reply(?HTTP_401_UNAUTHORIZED, #{}, <<"Basic auth is disabled for this user">>, Req);
             ?ERROR_BASIC_AUTH_NOT_SUPPORTED ->

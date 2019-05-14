@@ -18,7 +18,7 @@
 
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, update/3, force_delete/1, list/0]).
--export([get_by_alias/1, get_by_linked_account/1]).
+-export([get_by_username/1, get_by_linked_account/1]).
 -export([to_string/1, print_summary/0, print_summary/1]).
 -export([entity_logic_plugin/0]).
 -export([add_session/2, remove_session/2, get_all_sessions/1]).
@@ -32,11 +32,11 @@
 -type diff() :: datastore_doc:diff(record()).
 -export_type([id/0, record/0]).
 
--type name() :: binary().
--type alias() :: undefined | binary().
+-type full_name() :: binary().
+-type username() :: binary().
 -type email() :: binary().
 -type linked_account() :: #linked_account{}.
--export_type([name/0, alias/0, email/0, linked_account/0]).
+-export_type([full_name/0, username/0, email/0, linked_account/0]).
 
 % Delay before all session connections are terminated when user is deleted.
 -define(SESSION_CLEANUP_GRACE_PERIOD, 3000).
@@ -130,14 +130,14 @@ list() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns the first user matching given Alias.
+%% Returns the first user matching given Username.
 %% @end
 %%--------------------------------------------------------------------
--spec get_by_alias(alias()) -> {ok, doc()} | {error, not_found}.
-get_by_alias(Alias) ->
+-spec get_by_username(username()) -> {ok, doc()} | {error, not_found}.
+get_by_username(Username) ->
     Fun = fun(Doc, _) ->
         case Doc of
-            #document{value = #od_user{alias = Alias}} -> {stop, Doc};
+            #document{value = #od_user{username = Username}} -> {stop, Doc};
             _ -> {ok, undefined}
         end
     end,
@@ -185,7 +185,7 @@ to_string(UserId) ->
 %%--------------------------------------------------------------------
 -spec print_summary() -> ok.
 print_summary() ->
-    print_summary(name).
+    print_summary(full_name).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -193,10 +193,10 @@ print_summary() ->
 %% Sorts the records by given attribute (specified by name or position).
 %% @end
 %%--------------------------------------------------------------------
--spec print_summary(id | name | alias | groups | spaces | providers | pos_integer()) -> ok.
+-spec print_summary(id | full_name | username | groups | spaces | providers | pos_integer()) -> ok.
 print_summary(id) -> print_summary(1);
-print_summary(name) -> print_summary(2);
-print_summary(alias) -> print_summary(3);
+print_summary(full_name) -> print_summary(2);
+print_summary(username) -> print_summary(3);
 print_summary(email) -> print_summary(4);
 print_summary(groups) -> print_summary(5);
 print_summary(spaces) -> print_summary(6);
@@ -206,8 +206,8 @@ print_summary(SortPos) when is_integer(SortPos) ->
     UserAttrs = lists:map(fun(#document{key = Id, value = U}) ->
         {
             Id,
-            U#od_user.name,
-            case U#od_user.alias of undefined -> "-"; Alias -> Alias end,
+            U#od_user.full_name,
+            case U#od_user.username of undefined -> "-"; Username -> Username end,
             case U#od_user.emails of [] -> "-"; Emails -> hd(Emails) end,
             {length(U#od_user.groups), maps:size(U#od_user.eff_groups)},
             {length(U#od_user.spaces), maps:size(U#od_user.eff_spaces)},
@@ -215,17 +215,17 @@ print_summary(SortPos) when is_integer(SortPos) ->
         }
     end, Users),
     Sorted = lists:keysort(SortPos, UserAttrs),
-    io:format("-------------------------------------------------------------------------------------------------------------------------------------------------~n"),
-    io:format("Id                                Name                 Alias           Email                          Groups (eff)   Spaces (eff)   Eff providers~n"),
-    io:format("-------------------------------------------------------------------------------------------------------------------------------------------------~n"),
-    lists:foreach(fun({Id, Name, Alias, Email, {Groups, EffGroups}, {Spaces, EffSpaces}, Providers}) ->
+    io:format("------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("Id                                FullName             Username             Email                          Groups (eff)   Spaces (eff)   Eff providers~n"),
+    io:format("------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    lists:foreach(fun({Id, FullName, Username, Email, {Groups, EffGroups}, {Spaces, EffSpaces}, Providers}) ->
         GroupsStr = str_utils:format("~B (~B)", [Groups, EffGroups]),
         SpacesStr = str_utils:format("~B (~B)", [Spaces, EffSpaces]),
-        io:format("~-33s ~-20ts ~-15ts ~-30ts ~-14s ~-14s ~-14B~n", [
-            Id, Name, Alias, Email, GroupsStr, SpacesStr, Providers
+        io:format("~-33s ~-20ts ~-20ts ~-30ts ~-14s ~-14s ~-14B~n", [
+            Id, FullName, Username, Email, GroupsStr, SpacesStr, Providers
         ])
     end, Sorted),
-    io:format("-------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
     io:format("~B users in total~n", [length(Sorted)]).
 
 %%--------------------------------------------------------------------
@@ -499,6 +499,10 @@ get_record_struct(9) ->
     ]};
 get_record_struct(10) ->
     % Changes:
+    %   * renamed alias -> username
+    %   * renamed name -> full_name
+    %   * linked_account: renamed alias -> username
+    %   * linked_account: renamed name -> full_name
     %   * new field - password_hash
     %   * new field - active sessions
     %   * new field - creation_time
@@ -508,17 +512,17 @@ get_record_struct(10) ->
     %   * new field - eff_clusters
     %   * the privileges are translated
     {record, [
-        {name, string},
-        {alias, string},
-        {email_list, [string]},
+        {full_name, string},
+        {username, string},
         {basic_auth_enabled, boolean},
-        {password_hash, binary},
+        {password_hash, binary}, % New field
+        {emails, [string]},
 
         {linked_accounts, [{record, [
             {idp, atom},
             {subject_id, string},
-            {name, string},
-            {alias, string},
+            {full_name, string},
+            {username, string},
             {emails, [string]},
             {entitlements, [string]},
             {custom, {custom, {json_utils, encode, decode}}},
@@ -543,7 +547,7 @@ get_record_struct(10) ->
         {handle_services, [string]},
         {handles, [string]},
         {harvesters, [string]},
-        {clusters, [string]},
+        {clusters, [string]}, % New field
 
         {eff_groups, #{string => [{atom, string}]}},
         {eff_spaces, #{string => [{atom, string}]}},
@@ -551,7 +555,7 @@ get_record_struct(10) ->
         {eff_handle_services, #{string => [{atom, string}]}},
         {eff_handles, #{string => [{atom, string}]}},
         {eff_harvesters, #{string => [{atom, string}]}},
-        {eff_clusters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}}, % New field
 
         {creation_time, integer}, % New field
 
@@ -1075,18 +1079,26 @@ upgrade_record(8, User) ->
     } = User,
 
     TransformedLinkedAccounts = lists:map(fun(LinkedAccount) ->
-        {linked_account, IdP, SubjectId, LAName, LAAlias, LAEmails, LAEntitlements, Custom} = LinkedAccount,
+        {linked_account,
+            IdP,
+            SubjectId,
+            LAName,
+            LAAlias,
+            LAEmails,
+            LAEntitlements,
+            Custom
+        } = LinkedAccount,
 
-        #linked_account{
-            idp = IdP,
-            subject_id = SubjectId,
-            name = LAName,
-            alias = LAAlias,
-            emails = LAEmails,
-            entitlements = LAEntitlements,
-            custom = Custom,
-            access_token = {undefined, 0},
-            refresh_token = undefined
+        {linked_account,
+            IdP,
+            SubjectId,
+            LAName,
+            LAAlias,
+            LAEmails,
+            LAEntitlements,
+            Custom,
+            {undefined, 0},
+            undefined
         }
     end, LinkedAccounts),
 
@@ -1179,14 +1191,40 @@ upgrade_record(9, User) ->
         end, Privileges)))
     end,
 
+    TransformedLinkedAccounts = lists:map(fun(LinkedAccount) ->
+        {linked_account,
+            IdP,
+            SubjectId,
+            LAName,
+            LAAlias,
+            LAEmails,
+            LAEntitlements,
+            Custom,
+            AccessToken,
+            RefreshToken
+        } = LinkedAccount,
+
+        #linked_account{
+            idp = IdP,
+            subject_id = SubjectId,
+            full_name = LAName,
+            username = LAAlias,
+            emails = LAEmails,
+            entitlements = LAEntitlements,
+            custom = Custom,
+            access_token = AccessToken,
+            refresh_token = RefreshToken
+        }
+    end, LinkedAccounts),
+
     {10, #od_user{
-        name = Name,
-        alias = Alias,
-        emails = Emails,
+        full_name = Name,
+        username = Alias,
         basic_auth_enabled = BasicAuthEnabled,
         password_hash = undefined,
+        emails = Emails,
 
-        linked_accounts = LinkedAccounts,
+        linked_accounts = TransformedLinkedAccounts,
         entitlements = Entitlements,
 
         active_sessions = [],

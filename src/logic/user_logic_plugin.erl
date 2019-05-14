@@ -27,7 +27,7 @@
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 -export([auth_by_oz_privilege/2]).
 
--define(CRITICAL_SECTION(Alias, Fun), critical_section:run({alias, Alias}, Fun)).
+-define(LOCK_ON_USERNAME(Username, Fun), critical_section:run({username, Username}, Fun)).
 
 %%%===================================================================
 %%% API
@@ -168,9 +168,9 @@ create(#el_req{gri = GRI = #gri{id = ProposedUserId, aspect = instance}, data = 
     % Creating users with predefined UserId is reserved for Onezone logic (?ROOT auth).
     % Users with ?OZ_USERS_CREATE privilege can create new users but the UserIds are
     % assigned automatically (in this case ProposedUserId is undefined).
-    Name = maps:get(<<"name">>, Data, ?DEFAULT_USER_NAME),
-    Alias = maps:get(<<"alias">>, Data, undefined),
-    BasicUserRecord = #od_user{name = Name, alias = Alias},
+    FullName = maps:get(<<"fullName">>, Data, ?DEFAULT_FULL_NAME),
+    Username = maps:get(<<"username">>, Data, undefined),
+    BasicUserRecord = #od_user{full_name = FullName, username = Username},
 
     UserRecord = case maps:find(<<"password">>, Data) of
         error ->
@@ -192,15 +192,15 @@ create(#el_req{gri = GRI = #gri{id = ProposedUserId, aspect = instance}, data = 
         end
     end,
 
-    case Alias of
+    case Username of
         undefined ->
             CreateFun();
         _ ->
-            ?CRITICAL_SECTION(Alias, fun() ->
-                case od_user:get_by_alias(Alias) of
+            ?LOCK_ON_USERNAME(Username, fun() ->
+                case od_user:get_by_username(Username) of
                     {ok, #document{}} ->
-                        % Alias is occupied by another user
-                        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"alias">>);
+                        % Username is occupied by another user
+                        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>);
                     _ ->
                         CreateFun()
                 end
@@ -270,20 +270,20 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, User) ->
     {ok, User};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
     #od_user{
-        name = Name, alias = Alias, emails = Emails,
+        full_name = FullName, username = Username, emails = Emails,
         linked_accounts = LinkedAccounts, creation_time = CreationTime
     } = User,
     {ok, #{
-        <<"name">> => Name, <<"alias">> => Alias,
+        <<"fullName">> => FullName, <<"username">> => Username,
         <<"emails">> => Emails,
         <<"linkedAccounts">> => linked_accounts:to_maps(LinkedAccounts),
         <<"creationTime">> => CreationTime
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, User) ->
-    #od_user{name = Name, alias = Alias, creation_time = CreationTime} = User,
+    #od_user{full_name = FullName, username = Username, creation_time = CreationTime} = User,
     {ok, #{
-        <<"name">> => Name,
-        <<"alias">> => Alias,
+        <<"fullName">> => FullName,
+        <<"username">> => Username,
         <<"creationTime">> => CreationTime
     }};
 
@@ -299,9 +299,9 @@ get(#el_req{gri = #gri{aspect = {client_token, Id}}}, _User) ->
     {ok, Id};
 
 get(#el_req{gri = #gri{aspect = linked_accounts}}, User) ->
-    {ok, User#od_user.linked_accounts};
-get(#el_req{gri = #gri{aspect = {linked_account, SubId}}}, User) ->
-    {ok, find_linked_account(SubId, User#od_user.linked_accounts)};
+    {ok, lists:map(fun linked_accounts:gen_user_id/1, User#od_user.linked_accounts)};
+get(#el_req{gri = #gri{aspect = {linked_account, UserId}}}, User) ->
+    {ok, find_linked_account(UserId, User#od_user.linked_accounts)};
 
 get(#el_req{gri = #gri{aspect = default_space}}, User) ->
     {ok, User#od_user.default_space};
@@ -351,13 +351,13 @@ get(#el_req{gri = #gri{aspect = eff_clusters}}, User) ->
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
 update(#el_req{gri = #gri{id = UserId, aspect = instance}, data = Data}) ->
-    UserUpdateFun = fun(NewAlias) ->
+    UserUpdateFun = fun(NewUsername) ->
         {ok, _} = od_user:update(UserId, fun(User) ->
             {ok, User#od_user{
-                name = maps:get(<<"name">>, Data, User#od_user.name),
-                alias = case NewAlias of
-                    keep -> User#od_user.alias;
-                    Bin when is_binary(Bin) -> NewAlias
+                full_name = maps:get(<<"fullName">>, Data, User#od_user.full_name),
+                username = case NewUsername of
+                    keep -> User#od_user.username;
+                    Bin when is_binary(Bin) -> NewUsername
                 end
 
             }}
@@ -365,24 +365,25 @@ update(#el_req{gri = #gri{id = UserId, aspect = instance}, data = Data}) ->
         ok
     end,
 
-    % If alias is specified, run update in synchronized block so no two
-    % identical aliases can be set
-    case maps:find(<<"alias">>, Data) of
+    % If username is specified, run update in synchronized block so no two
+    % identical usernames can be set
+    case maps:find(<<"username">>, Data) of
         error ->
             UserUpdateFun(keep);
-        {ok, Alias} ->
-            ?CRITICAL_SECTION(Alias, fun() ->
-                case od_user:get_by_alias(Alias) of
+        {ok, Username} ->
+            ?LOCK_ON_USERNAME(Username, fun() ->
+                case od_user:get_by_username(Username) of
                     {ok, #document{key = UserId}} ->
-                        % Alias is held by then same user, so it was changed to
-                        % identical -> update user doc (the name might have changed)
-                        UserUpdateFun(Alias);
+                        % Username is held by then same user, so it was changed to
+                        % identical -> update user doc
+                        % (the full_name might have changed)
+                        UserUpdateFun(Username);
                     {ok, #document{}} ->
-                        % Alias is occupied by another user
-                        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"alias">>);
+                        % Username is occupied by another user
+                        ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>);
                     _ ->
-                        % Alias is not occupied -> update user doc
-                        UserUpdateFun(Alias)
+                        % Username is not occupied -> update user doc
+                        UserUpdateFun(Username)
                 end
             end)
     end;
@@ -819,17 +820,17 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}
     case maps:is_key(<<"password">>, Data) of
         true -> #{
             required => #{
-                <<"alias">> => {alias, alias},
+                <<"username">> => {binary, username},
                 <<"password">> => {binary, password}
             },
             optional => #{
-                <<"name">> => {binary, user_name}
+                <<"fullName">> => {binary, full_name}
             }
         };
         false -> #{
             optional => #{
-                <<"name">> => {binary, user_name},
-                <<"alias">> => {alias, alias}
+                <<"fullName">> => {binary, full_name},
+                <<"username">> => {binary, username}
             }
         }
     end;
@@ -877,8 +878,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = provider_registration_t
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
-        <<"name">> => {binary, user_name},
-        <<"alias">> => {alias, alias}
+        <<"fullName">> => {binary, full_name},
+        <<"username">> => {binary, username}
     }
 };
 
@@ -931,17 +932,21 @@ auth_by_oz_privilege(UserOrId, Privilege) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Finds a linked account in given list based on subject id.
+%% Finds a linked account in given list based on UserId generated from the
+%% linked account record.
 %% @end
 %%--------------------------------------------------------------------
--spec find_linked_account(SubId :: binary(), [od_user:linked_account()]) ->
+-spec find_linked_account(GeneratedUserId :: binary(), [od_user:linked_account()]) ->
     undefined | od_user:linked_account().
 find_linked_account(_, []) ->
     undefined;
-find_linked_account(SubId, [Account = #linked_account{subject_id = SubId} | _]) ->
-    Account;
-find_linked_account(SubId, [_ | Rest]) ->
-    find_linked_account(SubId, Rest).
+find_linked_account(GeneratedUserId, [LinkedAccount | Rest]) ->
+    case linked_accounts:gen_user_id(LinkedAccount) of
+        GeneratedUserId ->
+            LinkedAccount;
+        _ ->
+            find_linked_account(GeneratedUserId, Rest)
+    end.
 
 
 %%--------------------------------------------------------------------

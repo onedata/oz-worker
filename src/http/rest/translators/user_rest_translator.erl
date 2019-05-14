@@ -58,32 +58,37 @@ get_response(#gri{id = undefined, aspect = list}, Users) ->
 
 get_response(#gri{id = UserId, aspect = instance, scope = protected}, UserData) ->
     #{
-        <<"name">> := Name, <<"alias">> := Alias,
+        <<"fullName">> := FullName, <<"username">> := Username,
         <<"emails">> := Emails,
         <<"linkedAccounts">> := LinkedAccounts
     } = UserData,
     rest_translator:ok_body_reply(#{
         <<"userId">> => UserId,
-        <<"name">> => Name,
-        <<"alias">> => gs_protocol:undefined_to_null(Alias),
+        <<"fullName">> => FullName,
+        <<"username">> => gs_protocol:undefined_to_null(Username),
         <<"emails">> => Emails,
         <<"linkedAccounts">> => LinkedAccounts,
 
         % TODO VFS-4506 deprecated fields, included for backward compatibility
-        <<"login">> => gs_protocol:undefined_to_null(Alias),
+        <<"name">> => FullName,
+        <<"login">> => gs_protocol:undefined_to_null(Username),
+        <<"alias">> => gs_protocol:undefined_to_null(Username),
         <<"emailList">> => Emails
     });
 
 get_response(#gri{id = UserId, aspect = instance, scope = shared}, UserData) ->
     #{
-        <<"name">> := Name, <<"alias">> := Alias
+        <<"fullName">> := FullName, <<"username">> := Username
     } = UserData,
     rest_translator:ok_body_reply(#{
         <<"userId">> => UserId,
-        <<"name">> => Name,
-        <<"alias">> => gs_protocol:undefined_to_null(Alias),
+        <<"fullName">> => FullName,
+        <<"username">> => gs_protocol:undefined_to_null(Username),
+
         % TODO VFS-4506 deprecated fields, included for backward compatibility
-        <<"login">> => gs_protocol:undefined_to_null(Alias)
+        <<"name">> => FullName,
+        <<"login">> => gs_protocol:undefined_to_null(Username),
+        <<"alias">> => gs_protocol:undefined_to_null(Username)
     });
 
 get_response(#gri{aspect = oz_privileges}, Privileges) ->

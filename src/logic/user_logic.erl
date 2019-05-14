@@ -49,7 +49,7 @@
     acquire_idp_access_token/3
 ]).
 -export([
-    update_name/3, update_alias/3, update/3,
+    update_full_name/3, update_username/3, update/3,
     change_password/4,
     toggle_basic_auth/3, set_password/3, update_basic_auth_config/3,
     update_oz_privileges/4, update_oz_privileges/3,
@@ -77,7 +77,7 @@
     join_harvester/3,
     join_cluster/3,
 
-    get_name/2,
+    get_full_name/2,
 
     get_groups/2, get_eff_groups/2,
     get_group/3, get_eff_group/3,
@@ -119,8 +119,8 @@
     has_eff_cluster/2
 ]).
 -export([
-    validate_name/1, normalize_name/1,
-    validate_alias/1, normalize_alias/1,
+    validate_full_name/1, normalize_full_name/1,
+    validate_username/1, normalize_username/1,
     reset_entitlements/1,
     get_default_provider_if_online/1
 ]).
@@ -131,7 +131,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new user document in database. No user name/alias is set.
+%% Creates a new user document in database. No full_name/username is set.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client()) ->
@@ -142,8 +142,8 @@ create(Client) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new user document in database. Name, Alias and Password
-%% are provided in a proper Data object.
+%% Creates a new user document in database. full_name, username and password
+%% can be provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client(), Data :: #{}) ->
@@ -155,7 +155,7 @@ create(Client, Data) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a new user document in database with proposed UserId.
-%% Name, Alias and Password are provided in a proper Data object.
+%% full_name, username and password can be provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client(), ProposedUserId :: undefined | od_user:id(), Data :: #{}) ->
@@ -298,17 +298,18 @@ get_as_user_details(#client{type = user, id = UserId} = Client) ->
 get_as_user_details(Client, UserId) ->
     case get_protected_data(Client, UserId) of
         {ok, Map} ->
-            #{<<"name">> := Name, <<"alias">> := Alias,
+            #{<<"fullName">> := FullName, <<"username">> := Username,
                 <<"linkedAccounts">> := Accounts, <<"emails">> := Emails
             } = Map,
             {ok, #user_details{
                 id = UserId,
-                name = Name,
-                email_list = Emails,
+                full_name = FullName,
+                username = Username,
                 linked_accounts = json_utils:map_to_list(Accounts),
-                alias = Alias
+                emails = Emails
             }};
-        Error -> Error
+        {error, _} = Error ->
+            Error
     end.
 
 
@@ -423,29 +424,29 @@ list_client_tokens(Client, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates the name of given user.
+%% Updates the full_name of given user.
 %% @end
 %%--------------------------------------------------------------------
--spec update_name(Client :: entity_logic:client(), UserId :: od_user:id(),
+-spec update_full_name(Client :: entity_logic:client(), UserId :: od_user:id(),
     NewName :: binary()) -> ok | {error, term()}.
-update_name(Client, UserId, NewName) ->
-    update(Client, UserId, #{<<"name">> => NewName}).
+update_full_name(Client, UserId, NewName) ->
+    update(Client, UserId, #{<<"fullName">> => NewName}).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates the alias of given user.
+%% Updates the username of given user.
 %% @end
 %%--------------------------------------------------------------------
--spec update_alias(Client :: entity_logic:client(), UserId :: od_user:id(),
-    NewAlias :: od_user:alias()) -> ok | {error, term()}.
-update_alias(Client, UserId, NewAlias) ->
-    update(Client, UserId, #{<<"alias">> => NewAlias}).
+-spec update_username(Client :: entity_logic:client(), UserId :: od_user:id(),
+    NewUsername :: od_user:username()) -> ok | {error, term()}.
+update_username(Client, UserId, NewUsername) ->
+    update(Client, UserId, #{<<"username">> => NewUsername}).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates information of given user (name and alias).
+%% Updates information of given user (full_name and username).
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Client :: entity_logic:client(), UserId :: od_user:id(),
@@ -980,11 +981,11 @@ join_cluster(Client, UserId, Token) ->
     join_cluster(Client, UserId, #{<<"token">> => Token}).
 
 
--spec get_name(entity_logic:client(), od_user:id()) ->
-    {ok, od_user:name()} | {error, term()}.
-get_name(Client, UserId) ->
+-spec get_full_name(entity_logic:client(), od_user:id()) ->
+    {ok, od_user:full_name()} | {error, term()}.
+get_full_name(Client, UserId) ->
     case get(Client, UserId) of
-        {ok, #od_user{name = Name}} -> {ok, Name};
+        {ok, #od_user{full_name = FullName}} -> {ok, FullName};
         {error, _} = Error -> Error
     end.
 
@@ -1633,65 +1634,63 @@ has_eff_cluster(User, ClusterId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Validates user name against allowed format.
+%% Validates user full_name against allowed format.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_name(binary()) -> boolean().
-validate_name(Name) ->
+-spec validate_full_name(binary()) -> boolean().
+validate_full_name(FullName) ->
     entity_logic:validate_name(
-        Name, ?USER_NAME_FIRST_CHARS_ALLOWED, ?USER_NAME_MIDDLE_CHARS_ALLOWED,
-        ?USER_NAME_LAST_CHARS_ALLOWED, ?USER_NAME_MAXIMUM_LENGTH
+        FullName, ?FULL_NAME_FIRST_CHARS_ALLOWED, ?FULL_NAME_MIDDLE_CHARS_ALLOWED,
+        ?FULL_NAME_LAST_CHARS_ALLOWED, ?FULL_NAME_MAXIMUM_LENGTH
     ).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% @see entity_logic:normalize_name/9.
-%% Normalizes user name to fit the allowed format.
+%% Normalizes user full_name to fit the allowed format.
 %% @end
 %%--------------------------------------------------------------------
--spec normalize_name(undefined | od_user:name()) -> od_user:name().
-normalize_name(undefined) ->
-    ?DEFAULT_USER_NAME;
-normalize_name(Name) ->
-    entity_logic:normalize_name(Name,
-        ?USER_NAME_FIRST_CHARS_ALLOWED, <<"">>,
-        ?USER_NAME_MIDDLE_CHARS_ALLOWED, <<"-">>,
-        ?USER_NAME_LAST_CHARS_ALLOWED, <<"">>,
-        ?USER_NAME_MAXIMUM_LENGTH, ?DEFAULT_USER_NAME
+-spec normalize_full_name(undefined | od_user:full_name()) -> od_user:full_name().
+normalize_full_name(undefined) ->
+    ?DEFAULT_FULL_NAME;
+normalize_full_name(FullName) ->
+    entity_logic:normalize_name(FullName,
+        ?FULL_NAME_FIRST_CHARS_ALLOWED, <<"">>,
+        ?FULL_NAME_MIDDLE_CHARS_ALLOWED, <<"-">>,
+        ?FULL_NAME_LAST_CHARS_ALLOWED, <<"">>,
+        ?FULL_NAME_MAXIMUM_LENGTH, ?DEFAULT_FULL_NAME
     ).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Validates user alias against allowed format.
+%% Validates username against allowed format.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_alias(od_user:alias()) -> boolean().
-validate_alias(undefined) ->
-    undefined;
-validate_alias(Alias) ->
+-spec validate_username(od_user:username()) -> boolean().
+validate_username(Username) ->
     entity_logic:validate_name(
-        Alias, ?ALIAS_FIRST_CHARS_ALLOWED, ?ALIAS_MIDDLE_CHARS_ALLOWED,
-        ?ALIAS_LAST_CHARS_ALLOWED, ?ALIAS_MAXIMUM_LENGTH
+        Username, ?USERNAME_FIRST_CHARS_ALLOWED, ?USERNAME_MIDDLE_CHARS_ALLOWED,
+        ?USERNAME_LAST_CHARS_ALLOWED, ?USERNAME_MAXIMUM_LENGTH
     ).
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% @see entity_logic:normalize_name/9.
-%% Normalizes user alias to fit the allowed format.
+%% Normalizes username to fit the allowed format.
 %% @end
 %%--------------------------------------------------------------------
--spec normalize_alias(od_user:alias()) -> od_user:alias().
-normalize_alias(undefined) ->
+-spec normalize_username(od_user:username()) -> od_user:username().
+normalize_username(undefined) ->
     undefined;
-normalize_alias(Alias) ->
-    entity_logic:normalize_name(Alias,
-        ?ALIAS_FIRST_CHARS_ALLOWED, <<"">>,
-        ?ALIAS_MIDDLE_CHARS_ALLOWED, <<"-">>,
-        ?ALIAS_LAST_CHARS_ALLOWED, <<"">>,
-        ?ALIAS_MAXIMUM_LENGTH, undefined
+normalize_username(Username) ->
+    entity_logic:normalize_name(Username,
+        ?USERNAME_FIRST_CHARS_ALLOWED, <<"">>,
+        ?USERNAME_MIDDLE_CHARS_ALLOWED, <<"-">>,
+        ?USERNAME_LAST_CHARS_ALLOWED, <<"">>,
+        ?USERNAME_MAXIMUM_LENGTH, undefined
     ).
 
 

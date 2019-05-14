@@ -107,25 +107,25 @@
 -define(NAME_MAXIMUM_LENGTH, 50).
 
 
--define(USER_NAME_REQUIREMENTS_DESCRIPTION, <<
-    "User name must be 2-50 characters long and composed only of UTF-8 letters and digits. "
+-define(FULL_NAME_REQUIREMENTS_DESCRIPTION, <<
+    "Full name must be 2-50 characters long and composed only of UTF-8 letters and digits. "
     "Dashes, spaces, dots, commas and apostrophes are allowed (but not at the beginning or the end)."
 >>).
--define(USER_NAME_FIRST_CHARS_ALLOWED, <<"\\pL\\pNd">>).
--define(USER_NAME_MIDDLE_CHARS_ALLOWED, <<"\\pL\\pNd ',.-">>).
--define(USER_NAME_LAST_CHARS_ALLOWED, <<"\\pL\\pNd.">>).
--define(USER_NAME_MAXIMUM_LENGTH, 50).
--define(DEFAULT_USER_NAME, <<"Unnamed User">>).
+-define(FULL_NAME_FIRST_CHARS_ALLOWED, <<"\\pL\\pNd">>).
+-define(FULL_NAME_MIDDLE_CHARS_ALLOWED, <<"\\pL\\pNd ',.-">>).
+-define(FULL_NAME_LAST_CHARS_ALLOWED, <<"\\pL\\pNd.">>).
+-define(FULL_NAME_MAXIMUM_LENGTH, 50).
+-define(DEFAULT_FULL_NAME, <<"Unnamed User">>).
 
 
--define(ALIAS_REQUIREMENTS_DESCRIPTION, <<
-    "Alias must be 2-20 characters long and composed only of letters and digits. "
+-define(USERNAME_REQUIREMENTS_DESCRIPTION, <<
+    "Username must be 2-20 characters long and composed only of letters and digits. "
     "Dashes and underscores are allowed (but not at the beginning or the end). "
 >>).
--define(ALIAS_FIRST_CHARS_ALLOWED, <<"a-z0-9A-Z">>).
--define(ALIAS_MIDDLE_CHARS_ALLOWED, <<"a-z0-9A-Z._-">>).
--define(ALIAS_LAST_CHARS_ALLOWED, ?ALIAS_FIRST_CHARS_ALLOWED).
--define(ALIAS_MAXIMUM_LENGTH, 20).
+-define(USERNAME_FIRST_CHARS_ALLOWED, <<"a-z0-9A-Z">>).
+-define(USERNAME_MIDDLE_CHARS_ALLOWED, <<"a-z0-9A-Z._-">>).
+-define(USERNAME_LAST_CHARS_ALLOWED, ?USERNAME_FIRST_CHARS_ALLOWED).
+-define(USERNAME_MAXIMUM_LENGTH, 20).
 
 
 -define(PASSWORD_REQUIREMENTS_DESCRIPTION, <<

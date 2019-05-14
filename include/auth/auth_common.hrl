@@ -16,7 +16,7 @@
 
 -include_lib("ctool/include/logging.hrl").
 
--define(CURRENT_CONFIG_VERSION, 2).
+-define(CURRENT_CONFIG_VERSION, 3).
 
 -define(XRDS_CACHE_TTL, oz_worker:get_env(openid_xrds_cache_ttl, timer:hours(1))).
 

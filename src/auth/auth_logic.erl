@@ -309,10 +309,10 @@ authorize_by_gui_macaroon(Macaroon, ClusterType, ClusterId) ->
 %%--------------------------------------------------------------------
 -spec authorize_by_basic_auth(UserPasswdB64 :: binary() | cowboy_req:req()) ->
     {true, #client{}} | {error, term()}.
-authorize_by_basic_auth(LoginPasswdB64) when is_binary(LoginPasswdB64) ->
-    LoginPasswd = base64:decode(LoginPasswdB64),
-    [Login, Passwd] = binary:split(LoginPasswd, <<":">>),
-    case basic_auth:authenticate(Login, Passwd) of
+authorize_by_basic_auth(UserPasswdB64) when is_binary(UserPasswdB64) ->
+    UserPasswd = base64:decode(UserPasswdB64),
+    [Username, Passwd] = binary:split(UserPasswd, <<":">>),
+    case basic_auth:authenticate(Username, Passwd) of
         {ok, UserId} ->
             {true, ?USER(UserId)};
         {error, _} = Error ->
@@ -320,8 +320,8 @@ authorize_by_basic_auth(LoginPasswdB64) when is_binary(LoginPasswdB64) ->
     end;
 authorize_by_basic_auth(Req) ->
     case cowboy_req:header(<<"authorization">>, Req, undefined) of
-        <<"Basic ", LoginPasswdB64/binary>> ->
-            authorize_by_basic_auth(LoginPasswdB64);
+        <<"Basic ", UserPasswdB64/binary>> ->
+            authorize_by_basic_auth(UserPasswdB64);
         _ ->
             false
     end.
@@ -416,7 +416,7 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
 
     LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
     LinkedAccountMap = maps:without(
-        [<<"login">>, <<"emailList">>, <<"groups">>], % do not include deprecated fields
+        [<<"name">>, <<"login">>, <<"alias">>, <<"emailList">>, <<"groups">>], % do not include deprecated fields
         linked_accounts:to_map(LinkedAccount)
     ),
     ?auth_debug("Attributes from IdP '~p' (state: ~s) sucessfully mapped:~n~ts", [
@@ -438,9 +438,9 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
     {ok, od_user:id()}.
 validate_login_by_linked_account(LinkedAccount) ->
     {ok, #document{key = UserId, value = #od_user{
-        name = UserName
+        full_name = FullName
     }}} = linked_accounts:acquire_user(LinkedAccount),
-    ?info("User '~ts' has logged in (~s)", [UserName, UserId]),
+    ?info("User '~ts' has logged in (~s)", [FullName, UserId]),
     {ok, UserId}.
 
 
@@ -464,10 +464,10 @@ validate_link_account_request(LinkedAccount, TargetUserId) ->
         {error, not_found} ->
             % ok, add new linked account to the user
             {ok, #document{value = #od_user{
-                name = UserName
+                full_name = FullName
             }}} = linked_accounts:merge(TargetUserId, LinkedAccount),
             ?info("User ~ts (~s) has linked his account from '~p'", [
-                UserName, TargetUserId, LinkedAccount#linked_account.idp
+                FullName, TargetUserId, LinkedAccount#linked_account.idp
             ]),
             {ok, TargetUserId}
     end.
