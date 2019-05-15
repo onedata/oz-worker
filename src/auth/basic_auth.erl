@@ -85,15 +85,14 @@ toggle_basic_auth(UserRecord, Flag) ->
 %%--------------------------------------------------------------------
 -spec change_password(od_user:record(), OldPass :: password(), NewPass :: password()) ->
     {ok, od_user:record()} | {error, term()}.
-change_password(#od_user{basic_auth_enabled = false}, _, _) ->
+change_password(#od_user{basic_auth_enabled = false} = _User, _OldPass, _NewPass) ->
     ?ERROR_BASIC_AUTH_DISABLED;
-change_password(#od_user{password_hash = undefined} = User, OldPass, NewPass) ->
-    case OldPass of
-        undefined ->
-            {ok, User#od_user{password_hash = onedata_passwords:create_hash(NewPass)}};
-        _ ->
-            ?ERROR_BAD_BASIC_CREDENTIALS
-    end;
+change_password(#od_user{password_hash = undefined} = User, undefined, NewPass) ->
+    {ok, User#od_user{password_hash = onedata_passwords:create_hash(NewPass)}};
+change_password(#od_user{password_hash = undefined} = _User, _OldPass, _NewPass) ->
+    ?ERROR_BAD_BASIC_CREDENTIALS;
+change_password(#od_user{password_hash = _Hash} = _User, undefined, _NewPass) ->
+    ?ERROR_BAD_BASIC_CREDENTIALS;
 change_password(#od_user{password_hash = Hash} = User, OldPass, NewPass) ->
     case onedata_passwords:verify(OldPass, Hash) of
         true ->

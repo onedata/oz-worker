@@ -50,7 +50,7 @@
 ]).
 -export([
     update_full_name/3, update_username/3, update/3,
-    change_password/4,
+    change_password/3, change_password/4,
     toggle_basic_auth/3, set_password/3, update_basic_auth_config/3,
     update_oz_privileges/4, update_oz_privileges/3,
     set_default_space/3,
@@ -468,14 +468,19 @@ update(Client, UserId, Data) ->
 -spec change_password(Client :: entity_logic:client(), UserId :: od_user:id(),
     OldPassword :: binary(), NewPassword :: basic_auth:password()) -> ok | {error, term()}.
 change_password(Client, UserId, OldPassword, NewPassword) ->
+    change_password(Client, UserId, #{
+        <<"oldPassword">> => OldPassword,
+        <<"newPassword">> => NewPassword
+    }).
+
+-spec change_password(Client :: entity_logic:client(), UserId :: od_user:id(),
+    Data :: #{}) -> ok | {error, term()}.
+change_password(Client, UserId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
         client = Client,
         gri = #gri{type = od_user, id = UserId, aspect = password},
-        data = #{
-            <<"oldPassword">> => OldPassword,
-            <<"newPassword">> => NewPassword
-        }
+        data = Data
     }).
 
 

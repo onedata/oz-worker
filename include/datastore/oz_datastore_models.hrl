@@ -424,8 +424,8 @@
 
 -record(entity_graph_state, {
     refresh_in_progress = false :: boolean(),
-    bottom_up_dirty = [] :: [{Priority :: integer(), EntityType :: atom(), EntityId :: binary()}],
-    top_down_dirty = [] :: [{Priority :: integer(), EntityType :: atom(), EntityId :: binary()}]
+    bottom_up_dirty = ordsets:new() :: entity_graph_state:dirty_queue(),
+    top_down_dirty = ordsets:new() :: entity_graph_state:dirty_queue()
 }).
 
 %% Model that holds the last processed seq for Graph Sync server.

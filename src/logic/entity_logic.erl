@@ -760,8 +760,6 @@ check_type(list_of_atoms, Key, Values) ->
         _:_ ->
             throw(?ERROR_BAD_VALUE_LIST_OF_ATOMS(Key))
     end;
-check_type(binary, _Key, null) ->
-    undefined;
 check_type(binary, _Key, Binary) when is_binary(Binary) ->
     Binary;
 check_type(binary, _Key, null) ->
@@ -1012,6 +1010,8 @@ check_value(binary, full_name, _Key, Value) ->
         true -> Value;
         false -> throw(?ERROR_BAD_VALUE_FULL_NAME)
     end;
+check_value(binary, password, _Key, undefined) ->
+    throw(?ERROR_BAD_VALUE_PASSWORD);
 check_value(binary, password, _Key, Value) ->
     case size(Value) >= ?PASSWORD_MIN_LENGTH of
         true -> Value;

@@ -32,11 +32,14 @@
 ]).
 -export([
     create_test/1,
+    create_with_predefined_id_test/1,
     authorize_test/1,
     list_test/1,
     get_test/1,
     get_self_test/1,
     update_test/1,
+    change_password_test/1,
+    update_basic_auth_config/1,
     delete_test/1,
     delete_self_test/1,
 
@@ -57,11 +60,14 @@
 all() ->
     ?ALL([
         create_test,
+        create_with_predefined_id_test,
         authorize_test,
         list_test,
         get_test,
         get_self_test,
         update_test,
+        change_password_test,
+        update_basic_auth_config,
         delete_test,
         delete_self_test,
 
@@ -84,30 +90,125 @@ all() ->
 %%% Test functions
 %%%===================================================================
 
-
 create_test(Config) ->
-    % Try to create user without predefined id
-    ExpFullName1 = ?USER_FULL_NAME1,
-    ExpUsername1 = ?UNIQUE_STRING,
-    UserData1 = #{<<"fullName">> => ExpFullName1, <<"username">> => ExpUsername1},
-    {ok, UserId1} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
-        Config, user_logic, create, [?ROOT, UserData1]
-    )),
-    {ok, User1} = oz_test_utils:get_user(Config, UserId1),
-    ?assertEqual(User1#od_user.full_name, ExpFullName1),
-    ?assertEqual(User1#od_user.username, ExpUsername1),
+    TestCases = [
+        %   fullName        username       password
+        {default_value, default_value, default_value},
 
-    % Try to create a user with given Id
+        {default_value, ?UNIQUE_STRING, default_value},
+        {?UNIQUE_STRING, default_value, default_value},
+        {?UNIQUE_STRING, ?UNIQUE_STRING, default_value},
+
+        {default_value, ?UNIQUE_STRING, ?UNIQUE_STRING},
+        {?UNIQUE_STRING, ?UNIQUE_STRING, ?UNIQUE_STRING}
+    ],
+
+    lists:foreach(fun({FullName, Username, Password}) ->
+        {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+        ExpFullName = case FullName of
+            default_value -> ?DEFAULT_FULL_NAME;
+            _ -> FullName
+        end,
+
+        ExpUsername = case Username of
+            default_value -> undefined;
+            _ -> Username
+        end,
+
+        ExpBasicAuthEnabled = case Password of
+            default_value -> false;
+            _ -> true
+        end,
+
+        VerifyFun = fun(UserId) ->
+            {ok, User} = oz_test_utils:get_user(Config, UserId),
+            ?assertEqual(ExpFullName, User#od_user.full_name),
+            ?assertEqual(ExpUsername, User#od_user.username),
+            ?assertEqual(ExpBasicAuthEnabled, User#od_user.basic_auth_enabled),
+            case Password of
+                default_value ->
+                    ok;
+                _ ->
+                    ?assert(onedata_passwords:verify(Password, User#od_user.password_hash))
+            end,
+            true
+        end,
+
+        EnvTearDownFun = fun(_) ->
+            oz_test_utils:delete_all_entities(Config)
+        end,
+
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_USERS_CREATE]}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, NonAdmin}
+                ]
+            },
+            rest_spec = #rest_spec{
+                method = post,
+                path = <<"/users">>,
+                expected_code = ?HTTP_201_CREATED,
+                expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
+                    BaseURL = ?URL(Config, [<<"/users/">>]),
+                    [UserId] = binary:split(Location, [BaseURL], [global, trim_all]),
+                    VerifyFun(UserId)
+                end
+            },
+            logic_spec = #logic_spec{
+                module = user_logic,
+                function = create,
+                args = [client, data],
+                expected_result = ?OK_TERM(VerifyFun)
+            },
+            gs_spec = #gs_spec{
+                operation = create,
+                gri = #gri{type = od_user, aspect = instance},
+                expected_result = ?OK_MAP_CONTAINS(#{
+                    <<"gri">> => fun(EncodedGri) ->
+                        #gri{id = Id} = oz_test_utils:decode_gri(
+                            Config, EncodedGri
+                        ),
+                        VerifyFun(Id)
+                    end
+                })
+            },
+            data_spec = #data_spec{
+                required = lists:flatten([
+                    case FullName of default_value -> []; _ -> <<"fullName">> end,
+                    case Username of default_value -> []; _ -> <<"username">> end,
+                    case Password of default_value -> []; _ -> <<"password">> end
+                ]),
+                correct_values = lists:foldl(fun(M, Acc) -> maps:merge(M, Acc) end, #{}, [
+                    case FullName of default_value -> #{}; Val -> #{<<"fullName">> => [Val]} end,
+                    case Username of default_value -> #{}; Val -> #{<<"username">> => [Val]} end,
+                    case Password of default_value -> #{}; Val -> #{<<"password">> => [Val]} end
+                ]),
+                bad_values = ?BAD_VALUES_FULL_NAME(?ERROR_BAD_VALUE_FULL_NAME)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec, undefined, EnvTearDownFun, undefined))
+    end, TestCases).
+
+
+create_with_predefined_id_test(Config) ->
+    % Creating users with predefined ids is reserved for internal Onezone logic
+    % (?ROOT auth).
     PredefinedUserId = <<"ausdhf87adsga87ht2q7hrw">>,
-    ExpFullName2 = ?USER_FULL_NAME2,
-    ExpUsername2 = ?UNIQUE_STRING,
-    UserData2 = #{<<"fullName">> => ExpFullName2, <<"username">> => ExpUsername2},
+    ExpFullName = ?USER_FULL_NAME1,
+    ExpUsername = ?UNIQUE_STRING,
+    UserData = #{<<"fullName">> => ExpFullName, <<"username">> => ExpUsername},
     {ok, PredefinedUserId} = ?assertMatch({ok, _}, oz_test_utils:call_oz(
-        Config, user_logic, create, [?ROOT, PredefinedUserId, UserData2]
+        Config, user_logic, create, [?ROOT, PredefinedUserId, UserData]
     )),
-    {ok, User2} = oz_test_utils:get_user(Config, PredefinedUserId),
-    ?assertEqual(User2#od_user.full_name, ExpFullName2),
-    ?assertEqual(User2#od_user.username, ExpUsername2),
+    {ok, User} = oz_test_utils:get_user(Config, PredefinedUserId),
+    ?assertEqual(User#od_user.full_name, ExpFullName),
+    ?assertEqual(User#od_user.username, ExpUsername),
 
     % Second try should fail (such id exists)
     ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"userId">>),
@@ -119,7 +220,7 @@ create_test(Config) ->
     % Reusing the already occupied username should fail
     ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"username">>),
         oz_test_utils:call_oz(
-            Config, user_logic, create, [?ROOT, #{<<"username">> => ExpUsername2}]
+            Config, user_logic, create, [?ROOT, #{<<"username">> => ExpUsername}]
         )
     ).
 
@@ -362,6 +463,7 @@ get_test(Config) ->
             expected_code = ?HTTP_200_OK,
             expected_body = ProtectedData#{
                 <<"userId">> => User,
+                <<"basicAuthEnabled">> => false,
 
                 % TODO VFS-4506 deprecated fields, included for backward compatibility
                 <<"name">> => ExpFullName,
@@ -462,7 +564,10 @@ get_self_test(Config) ->
             method = get,
             path = <<"/user">>,
             expected_code = ?HTTP_200_OK,
-            expected_body = ProtectedData#{<<"userId">> => User}
+            expected_body = ProtectedData#{
+                <<"userId">> => User,
+                <<"basicAuthEnabled">> => false
+            }
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -585,6 +690,261 @@ update_test(Config) ->
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, EnvSetUpFun, EnvTeardownFun, VerifyEndFun
     )).
+
+
+change_password_test(Config) ->
+    TestCases = [
+        % {WasBasicAuthEnabled, OldPassword, ExpHttpCode, ExpResult}
+        {false, undefined, ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERROR_BASIC_AUTH_DISABLED)},
+        {true, undefined, ?HTTP_204_NO_CONTENT, ?OK},
+        {true, ?UNIQUE_STRING, ?HTTP_204_NO_CONTENT, ?OK}
+    ],
+
+    lists:foreach(fun({WasBasicAuthEnabled, OldPassword, ExpHttpCode, ExpResult}) ->
+        EnvSetUpFun = fun() ->
+            UserData = case OldPassword of
+                undefined -> #{<<"username">> => ?UNIQUE_STRING};
+                _ -> #{<<"username">> => ?UNIQUE_STRING, <<"password">> => OldPassword}
+            end,
+            {ok, UserId} = oz_test_utils:create_user(Config, UserData),
+            oz_test_utils:call_oz(Config, user_logic, toggle_basic_auth, [?ROOT, UserId, WasBasicAuthEnabled]),
+            #{userId => UserId}
+        end,
+
+        ApiTestSpec = #api_test_spec{
+            client_spec = ClientSpec = #client_spec{
+                correct = [
+                    root,
+                    {user, userId}
+                ]
+            },
+            rest_spec = #rest_spec{
+                method = patch,
+                path = <<"/user/password">>,
+                expected_code = ExpHttpCode
+            },
+            gs_spec = GsSpec = #gs_spec{
+                operation = update,
+                gri = #gri{type = od_user, id = ?SELF, aspect = password},
+                expected_result = ExpResult
+            },
+            data_spec = #data_spec{
+                required = [<<"oldPassword">>, <<"newPassword">>],
+                correct_values = #{
+                    <<"oldPassword">> => [gs_protocol:undefined_to_null(OldPassword)],
+                    <<"newPassword">> => [?UNIQUE_STRING]
+                },
+                bad_values = [
+                    {<<"oldPassword">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"oldPassword">>)},
+                    {<<"oldPassword">>, 34.5, ?ERROR_BAD_VALUE_BINARY(<<"oldPassword">>)},
+                    {<<"oldPassword">>, <<"bad-old-password">>, case WasBasicAuthEnabled of
+                        false -> ?ERROR_BASIC_AUTH_DISABLED;
+                        true -> ?ERROR_BAD_BASIC_CREDENTIALS
+                    end},
+                    {<<"newPassword">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"newPassword">>)},
+                    {<<"newPassword">>, 34.5, ?ERROR_BAD_VALUE_BINARY(<<"newPassword">>)},
+                    {<<"newPassword">>, null, ?ERROR_BAD_VALUE_PASSWORD},
+                    {<<"newPassword">>, <<"">>, ?ERROR_BAD_VALUE_PASSWORD},
+                    {<<"newPassword">>, <<"short">>, ?ERROR_BAD_VALUE_PASSWORD}
+                ]
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, undefined)),
+
+        % Check that regular client can't make request on behalf of other client
+        {ok, SomeUser} = oz_test_utils:create_user(Config),
+        ApiTestSpec2 = ApiTestSpec#api_test_spec{
+            client_spec = ClientSpec#client_spec{
+                unauthorized = [nobody],
+                forbidden = [{user, SomeUser}]
+            },
+            rest_spec = undefined,
+            logic_spec = #logic_spec{
+                module = user_logic,
+                function = change_password,
+                args = [client, userId, data],
+                expected_result = ExpResult
+            },
+            gs_spec = GsSpec#gs_spec{
+                gri = #gri{type = od_user, id = userId, aspect = password}
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec2, EnvSetUpFun, undefined, undefined))
+    end, TestCases).
+
+
+update_basic_auth_config(Config) ->
+    TestCases = [
+        % {WasBasicAuthEnabled, OldPassword, Data, ExpHttpCode, ExpResult}
+        {
+            false, undefined, #{<<"newPassword">> => ?UNIQUE_STRING},
+            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERROR_BASIC_AUTH_DISABLED)
+        },
+        {
+            false, ?UNIQUE_STRING, #{<<"newPassword">> => ?UNIQUE_STRING},
+            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERROR_BASIC_AUTH_DISABLED)
+        },
+        {
+            true, undefined, #{<<"newPassword">> => ?UNIQUE_STRING},
+            ?HTTP_204_NO_CONTENT, ?OK
+        },
+        {
+            true, ?UNIQUE_STRING, #{<<"newPassword">> => ?UNIQUE_STRING},
+            ?HTTP_204_NO_CONTENT, ?OK
+        },
+
+        {
+            false, undefined, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => false},
+            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERROR_BASIC_AUTH_DISABLED)
+        },
+        {
+            false, ?UNIQUE_STRING, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => false},
+            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERROR_BASIC_AUTH_DISABLED)
+        },
+        {
+            true, undefined, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => false},
+            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERROR_BASIC_AUTH_DISABLED)
+        },
+        {
+            true, ?UNIQUE_STRING, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => false},
+            ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERROR_BASIC_AUTH_DISABLED)
+        },
+
+        {
+            false, undefined, #{<<"basicAuthEnabled">> => false},
+            ?HTTP_204_NO_CONTENT, ?OK
+        },
+        {
+            true, undefined, #{<<"basicAuthEnabled">> => false},
+            ?HTTP_204_NO_CONTENT, ?OK
+        },
+        {
+            false, ?UNIQUE_STRING, #{<<"basicAuthEnabled">> => false},
+            ?HTTP_204_NO_CONTENT, ?OK
+        },
+        {
+            true, ?UNIQUE_STRING, #{<<"basicAuthEnabled">> => false},
+            ?HTTP_204_NO_CONTENT, ?OK
+        },
+
+        {
+            false, undefined, #{<<"basicAuthEnabled">> => true},
+            ?HTTP_204_NO_CONTENT, ?OK
+        },
+        {
+            true, undefined, #{<<"basicAuthEnabled">> => true},
+            ?HTTP_204_NO_CONTENT, ?OK
+        },
+        {
+            false, ?UNIQUE_STRING, #{<<"basicAuthEnabled">> => true},
+            ?HTTP_204_NO_CONTENT, ?OK
+        },
+        {
+            true, ?UNIQUE_STRING, #{<<"basicAuthEnabled">> => true},
+            ?HTTP_204_NO_CONTENT, ?OK
+        },
+
+        {
+            false, undefined, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => true},
+            ?HTTP_204_NO_CONTENT, ?OK
+        },
+        {
+            false, ?UNIQUE_STRING, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => true},
+            ?HTTP_204_NO_CONTENT, ?OK
+        },
+        {
+            true, undefined, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => true},
+            ?HTTP_204_NO_CONTENT, ?OK
+        },
+        {
+            true, ?UNIQUE_STRING, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => true},
+            ?HTTP_204_NO_CONTENT, ?OK
+        }
+    ],
+
+    lists:foreach(fun({WasBasicAuthEnabled, OldPassword, Data, ExpHttpCode, ExpResult}) ->
+        {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+        EnvSetUpFun = fun() ->
+            UserData = case OldPassword of
+                undefined -> #{<<"username">> => ?UNIQUE_STRING};
+                _ -> #{<<"username">> => ?UNIQUE_STRING, <<"password">> => OldPassword}
+            end,
+            {ok, UserId} = oz_test_utils:create_user(Config, UserData),
+            oz_test_utils:call_oz(Config, user_logic, toggle_basic_auth, [?ROOT, UserId, WasBasicAuthEnabled]),
+
+            #{userId => UserId}
+        end,
+
+        VerifyEndFun = fun(WasDataCorrect, #{userId := UserId}, RequestData) ->
+            % Success depends if the test case generator picked correct data and
+            % we expected the whole operation to be successful (it might fail
+            % due to different reasons than request Data).
+            ShouldSucceed = WasDataCorrect andalso ExpResult =:= ?OK,
+            {ok, User} = oz_test_utils:get_user(Config, UserId),
+            case ShouldSucceed of
+                true ->
+                    BasicAuthEnabled = maps:get(<<"basicAuthEnabled">>, RequestData, WasBasicAuthEnabled),
+                    ?assertEqual(User#od_user.basic_auth_enabled, BasicAuthEnabled),
+                    CurrentPassword = case RequestData of
+                        #{<<"newPassword">> := NewPassword} -> NewPassword;
+                        _ -> OldPassword
+                    end,
+                    case {BasicAuthEnabled, CurrentPassword} of
+                        {false, _} -> ok;
+                        {true, undefined} -> ok;
+                        _ -> ?assert(onedata_passwords:verify(CurrentPassword, User#od_user.password_hash))
+                    end;
+                false ->
+                    ?assertEqual(WasBasicAuthEnabled, User#od_user.basic_auth_enabled),
+                    case {WasBasicAuthEnabled, OldPassword} of
+                        {false, _} -> ok;
+                        {true, undefined} -> ok;
+                        _ -> ?assert(onedata_passwords:verify(OldPassword, User#od_user.password_hash))
+                    end
+            end
+        end,
+
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_USERS_MANAGE_PASSWORDS]}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, userId},
+                    {user, NonAdmin}
+                ]
+            },
+            rest_spec = #rest_spec{
+                method = patch,
+                path = [<<"/users/">>, userId, <<"/basic_auth">>],
+                expected_code = ExpHttpCode
+            },
+            logic_spec = #logic_spec{
+                module = user_logic,
+                function = update_basic_auth_config,
+                args = [client, userId, data],
+                expected_result = ExpResult
+            },
+            data_spec = #data_spec{
+                required = maps:keys(Data),
+                correct_values = maps:map(fun(_Key, Val) ->
+                    [Val]
+                end, Data),
+                bad_values = [
+                    {<<"newPassword">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"newPassword">>)},
+                    {<<"newPassword">>, 34.5, ?ERROR_BAD_VALUE_BINARY(<<"newPassword">>)},
+                    {<<"newPassword">>, null, ?ERROR_BAD_VALUE_PASSWORD},
+                    {<<"newPassword">>, <<"">>, ?ERROR_BAD_VALUE_PASSWORD},
+                    {<<"newPassword">>, <<"short">>, ?ERROR_BAD_VALUE_PASSWORD}
+                ]
+            }
+        },
+
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun))
+    end, TestCases).
 
 
 delete_test(Config) ->

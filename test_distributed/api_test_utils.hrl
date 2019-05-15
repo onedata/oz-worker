@@ -102,7 +102,7 @@
 %% Example test data
 -define(UNIQUE_STRING,
     <<
-        "unique",
+        "uniquestr",
         (integer_to_binary(erlang:unique_integer([positive])))/binary
     >>
 ).

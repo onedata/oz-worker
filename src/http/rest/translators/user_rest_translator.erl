@@ -33,6 +33,9 @@
 create_response(#gri{aspect = authorize}, _, value, DischargeMacaroon) ->
     rest_translator:ok_body_reply({binary, DischargeMacaroon});
 
+create_response(#gri{aspect = instance}, _, resource, {#gri{id = UserId}, _}) ->
+    rest_translator:created_reply([<<"users">>, UserId]);
+
 create_response(#gri{aspect = client_tokens}, _, resource, {_, Token}) ->
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 
@@ -58,11 +61,13 @@ get_response(#gri{id = undefined, aspect = list}, Users) ->
 
 get_response(#gri{id = UserId, aspect = instance, scope = protected}, UserData) ->
     #{
+        <<"basicAuthEnabled">> := BasicAuthEnabled,
         <<"fullName">> := FullName, <<"username">> := Username,
         <<"emails">> := Emails,
         <<"linkedAccounts">> := LinkedAccounts
     } = UserData,
     rest_translator:ok_body_reply(#{
+        <<"basicAuthEnabled">> => BasicAuthEnabled,
         <<"userId">> => UserId,
         <<"fullName">> => FullName,
         <<"username">> => gs_protocol:undefined_to_null(Username),

@@ -27,6 +27,13 @@
 %%--------------------------------------------------------------------
 -spec routes() -> [{binary(), #rest_req{}}].
 routes() -> [
+    %% Create new user
+    %% This operation requires one of the following privileges:
+    %% - oz_users_create
+    {<<"/users">>, #rest_req{
+        method = 'POST',
+        b_gri = #b_gri{type = od_user, id = undefined, aspect = instance}
+    }},
     %% List all users
     %% This operation requires one of the following privileges:
     %% - oz_users_list
@@ -47,6 +54,12 @@ routes() -> [
     {<<"/users/:id">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_user, id = ?BINDING(id), aspect = instance}
+    }},
+    %% Change user's basic auth settings
+    %% This operation does not require any specific privileges.
+    {<<"/users/:id/basic_auth">>, #rest_req{
+        method = 'PATCH',
+        b_gri = #b_gri{type = od_user, id = ?BINDING(id), aspect = basic_auth}
     }},
     %% List user admin privileges
     %% This operation requires one of the following privileges:
@@ -99,6 +112,12 @@ routes() -> [
     {<<"/user">>, #rest_req{
         method = 'DELETE',
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = instance}
+    }},
+    %% Change user's password
+    %% This operation does not require any specific privileges.
+    {<<"/user/password">>, #rest_req{
+        method = 'PATCH',
+        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = password}
     }},
     %% Authenticate user
     %% This operation does not require any specific privileges.
