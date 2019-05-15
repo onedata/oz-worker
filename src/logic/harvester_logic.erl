@@ -37,7 +37,7 @@
 -export([
     create_index/3, create_index/4, create_index/5, 
     get_index/3, get_public_index/3, 
-    get_index_progress/3, 
+    get_index_stats/3, 
     update_index/4,
     delete_index/3, delete_index_metadata/3,
     query_index/4,
@@ -405,16 +405,16 @@ get_public_index(Client, HarvesterId, IndexId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves a harvester index progress from database.
+%% Retrieves a harvester index stats from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_index_progress(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec get_index_stats(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
     IndexId :: od_harvester:index_id()) -> {ok, od_harvester:indices_stats()} | {error, term()}.
-get_index_progress(Client, HarvesterId, IndexId) ->
+get_index_stats(Client, HarvesterId, IndexId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index_progress, IndexId}}
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index_stats, IndexId}}
     }).
 
 

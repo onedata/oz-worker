@@ -765,9 +765,9 @@ translate_harvester(#gri{aspect = indices, id = HarvesterId}, Indices) ->
             end, Indices)
     };
 
-translate_harvester(#gri{aspect = {index_progress, _}}, IndexProgress) ->
+translate_harvester(#gri{aspect = {index_stats, _}}, IndexStats) ->
     #{
-        <<"indexProgress">> => IndexProgress
+        <<"indexStats">> => IndexStats
     }.
 
 

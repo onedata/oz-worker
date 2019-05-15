@@ -221,7 +221,7 @@
     
     harvester_create_index/3,
     harvester_get_index/3,
-    harvester_get_index_progress/3,
+    harvester_get_index_stats/3,
     
     harvester_submit_entry/5,
     harvester_delete_entry/5,
@@ -2381,14 +2381,14 @@ harvester_get_index(Config, HarvesterId, IndexId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves index progress from given harvester.
+%% Retrieves index stats from given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec harvester_get_index_progress(Config :: term(), HarvesterId :: od_harvester:id(), 
+-spec harvester_get_index_stats(Config :: term(), HarvesterId :: od_harvester:id(), 
     IndexId :: od_harvester:index_id()) -> ok.
-harvester_get_index_progress(Config, HarvesterId, IndexId) ->
+harvester_get_index_stats(Config, HarvesterId, IndexId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, harvester_logic, get_index_progress, [?ROOT, HarvesterId, IndexId]
+        Config, harvester_logic, get_index_stats, [?ROOT, HarvesterId, IndexId]
     )).
 
 

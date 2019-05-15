@@ -39,7 +39,7 @@
 -type index_id() :: binary().
 -type index() :: #harvester_index{}.
 -type indices() :: #{index_id() => #harvester_index{}}.
-% Index harvesting progress is stored per space per provider.
+% Index harvesting stats are stored per space per provider.
 -type indices_stats() :: #{od_space:id() => #{od_provider:id() => #index_stats{}}}.
 
 -type index_operation() :: submit | delete.

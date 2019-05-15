@@ -125,8 +125,8 @@ get_response(#gri{aspect = {index, IndexId}}, IndexData) ->
         <<"guiPluginName">> => gs_protocol:undefined_to_null(GuiPluginName)
     });
 
-get_response(#gri{aspect = {index_progress, _}}, IndexProgress) ->
-    rest_translator:ok_body_reply(IndexProgress);
+get_response(#gri{aspect = {index_stats, _}}, IndexStats) ->
+    rest_translator:ok_body_reply(IndexStats);
 
 get_response(#gri{aspect = gui_plugin_config}, Config) ->
     rest_translator:ok_body_reply(#{<<"guiPluginConfig">> => Config});
