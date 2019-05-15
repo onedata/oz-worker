@@ -827,7 +827,8 @@ get_index_test(Config) ->
                 <<"indexId">> => IndexId,
                 <<"name">> => ?HARVESTER_INDEX_NAME,
                 <<"schema">> => ?HARVESTER_INDEX_SCHEMA,
-                <<"guiPluginName">> => null
+                <<"guiPluginName">> => null,
+                <<"pluginIndexId">> => ?HARVESTER_PLUGIN_INDEX_ID(H1, IndexId)
             }
         },
         logic_spec = #logic_spec{
@@ -837,7 +838,8 @@ get_index_test(Config) ->
             expected_result = ?OK_MAP(#{
                 <<"name">> => ?HARVESTER_INDEX_NAME,
                 <<"schema">> => ?HARVESTER_INDEX_SCHEMA,
-                <<"guiPluginName">> => undefined
+                <<"guiPluginName">> => undefined,
+                <<"pluginIndexId">> => ?HARVESTER_PLUGIN_INDEX_ID(H1, IndexId)
             })
         }
     },

@@ -19,7 +19,8 @@
 
 -export([type/0]).
 -export([
-    get_name/0, 
+    get_name/0,
+    get_plugin_index_id/2,
     ping/1, 
     create_index/4, delete_index/3, 
     submit_entry/5, delete_entry/4,
@@ -53,7 +54,16 @@ type() ->
 -spec get_name() -> binary().
 get_name() ->
     <<"Elasticsearch plugin">>.
-    
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link harvester_plugin_behaviour} callback get_name/0
+%% @end
+%%--------------------------------------------------------------------
+-spec get_plugin_index_id(od_harvester:id(), od_harvester:index_id()) -> binary().
+get_plugin_index_id(HarvesterId, IndexId) ->
+    ?ES_INDEX_ID(HarvesterId, IndexId).
     
 %%--------------------------------------------------------------------
 %% @doc

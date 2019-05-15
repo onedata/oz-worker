@@ -328,6 +328,8 @@
     <<"offline">> => Offline
 }).
 
+-define(HARVESTER_PLUGIN_INDEX_ID(H, I), <<H/binary, I/binary>>).
+
 -define(HARVESTER_MOCK_BATCH_ENTRY(Seq, Operation), #{<<"seq">> => Seq, <<"operation">> => Operation}).
 
 -define(BAD_VALUES_NAME(Error), [

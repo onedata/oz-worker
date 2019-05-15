@@ -116,13 +116,15 @@ get_response(#gri{aspect = {index, IndexId}}, IndexData) ->
     #{
         <<"name">> := Name,
         <<"schema">> := Schema,
-        <<"guiPluginName">> := GuiPluginName
+        <<"guiPluginName">> := GuiPluginName,
+        <<"pluginIndexId">> := PluginIndexId
     } = IndexData,
     rest_translator:ok_body_reply(#{
         <<"indexId">> => IndexId,
         <<"name">> => Name,
         <<"schema">> => gs_protocol:undefined_to_null(Schema),
-        <<"guiPluginName">> => gs_protocol:undefined_to_null(GuiPluginName)
+        <<"guiPluginName">> => gs_protocol:undefined_to_null(GuiPluginName),
+        <<"pluginIndexId">> => PluginIndexId
     });
 
 get_response(#gri{aspect = {index_stats, _}}, IndexStats) ->

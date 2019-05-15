@@ -513,16 +513,18 @@ get(#el_req{gri = #gri{aspect = {index_progress, IndexId}}}, Harvester) ->
             end, #{}, P)}
         end, #{}, Stats)};
 
-get(#el_req{gri = #gri{aspect = {index, IndexId}, scope = private}}, Harvester) ->
+get(#el_req{gri = #gri{id = HarvesterId, aspect = {index, IndexId}, scope = private}}, Harvester) ->
     #harvester_index{
         name = Name,
         schema = Schema,
         guiPluginName = GuiPluginName
     } = maps:get(IndexId, Harvester#od_harvester.indices),
+    Plugin = Harvester#od_harvester.plugin,
     {ok, #{
         <<"name">> => Name,
         <<"schema">> => Schema,
-        <<"guiPluginName">> => GuiPluginName
+        <<"guiPluginName">> => GuiPluginName,
+        <<"pluginIndexId">> => Plugin:get_plugin_index_id(HarvesterId, IndexId)
     }};
 
 get(#el_req{gri = #gri{aspect = {index, IndexId}, scope = public}}, Harvester) ->

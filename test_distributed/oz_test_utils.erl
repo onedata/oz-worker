@@ -2941,6 +2941,7 @@ mock_harvester_plugins(Config, Plugin) ->
 mock_harvester_plugin(Config, Nodes, PluginName) ->
     test_utils:mock_new(Nodes, PluginName, [non_strict]),
     test_utils:mock_expect(Nodes, PluginName, type, fun() -> harvester_plugin end),
+    test_utils:mock_expect(Nodes, PluginName, get_plugin_index_id, fun(H, I) -> ?HARVESTER_PLUGIN_INDEX_ID(H,I) end),
     test_utils:mock_expect(Nodes, PluginName, ping, 
         fun(?HARVESTER_ENDPOINT1) -> ok;
            (?HARVESTER_ENDPOINT2) -> ok;
