@@ -139,7 +139,7 @@ basic_auth_test(Config) ->
             headers => basic_auth_header(?CORRECT_USERNAME, ?CORRECT_PASSWORD)
         },
         expect => #{
-            code => 400
+            code => 401
         }
     })),
     ?assert(rest_test_utils:check_rest_call(Config, #{
@@ -149,7 +149,7 @@ basic_auth_test(Config) ->
             headers => basic_auth_header(?BAD_USERNAME, ?BAD_PASSWORD)
         },
         expect => #{
-            code => 400
+            code => 401
         }
     })),
 

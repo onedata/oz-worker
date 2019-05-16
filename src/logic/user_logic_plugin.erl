@@ -270,10 +270,12 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, User) ->
     {ok, User};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
     #od_user{
+        basic_auth_enabled = BasicAuthEnabled,
         full_name = FullName, username = Username, emails = Emails,
         linked_accounts = LinkedAccounts, creation_time = CreationTime
     } = User,
     {ok, #{
+        <<"basicAuthEnabled">> => BasicAuthEnabled,
         <<"fullName">> => FullName, <<"username">> => Username,
         <<"emails">> => Emails,
         <<"linkedAccounts">> => linked_accounts:to_maps(LinkedAccounts),
@@ -610,9 +612,13 @@ exists(#el_req{gri = #gri{id = Id}}, #od_user{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
+
+%% Publicly available operations
 authorize(#el_req{operation = create, gri = #gri{aspect = authorize}}, _) ->
     true;
 
+
+%% Operations reserved for admins or available to users in certain circumstances
 authorize(Req = #el_req{operation = create, gri = #gri{id = UserId, aspect = provider_registration_token}}, _) ->
     case Req#el_req.client of
         ?USER(UserId) ->
@@ -628,10 +634,17 @@ authorize(#el_req{client = ?USER(UserId), operation = Operation, gri = #gri{id =
     % (other operations are checked in required_admin_privileges/1)
     Operation =:= get;
 
-% User can perform all operations on his record except modification of oz_privileges (handled above)
+authorize(#el_req{operation = update, gri = #gri{aspect = basic_auth}}, _) ->
+    % basic_auth settings modification is restricted to admins only
+    false;
+
+
+%% User can perform all operations on his record except the restricted ones handled above
 authorize(#el_req{client = ?USER(UserId), gri = #gri{id = UserId}}, _) ->
     true;
 
+
+%% Operations available to other subjects
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, User) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?PROVIDER(ProviderId), ?THROUGH_PROVIDER(ProviderId)} ->

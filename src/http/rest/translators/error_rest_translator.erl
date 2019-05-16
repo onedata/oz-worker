@@ -281,7 +281,7 @@ translate(?ERROR_SUBDOMAIN_DELEGATION_DISABLED) ->
     {?HTTP_400_BAD_REQUEST, <<"Subdomain delegation is disabled for this Oneprovider.">>};
 
 translate(?ERROR_BASIC_AUTH_NOT_SUPPORTED) ->
-    {?HTTP_400_BAD_REQUEST, <<"Basic auth is not supported by this Onezone.">>};
+    {?HTTP_401_UNAUTHORIZED, <<"Basic auth is not supported by this Onezone.">>};
 translate(?ERROR_BASIC_AUTH_DISABLED) ->
     {?HTTP_400_BAD_REQUEST, <<"Basic auth is disabled for this user.">>};
 

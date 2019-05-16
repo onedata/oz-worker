@@ -195,7 +195,7 @@ init_state() ->
 -spec verify_state_of_all_entities() -> ok.
 verify_state_of_all_entities() ->
     EntityTypes = [
-        od_user, od_group, od_space, od_provider, 
+        od_user, od_group, od_space, od_provider,
         od_handle_service, od_handle, od_harvester, od_cluster
     ],
     lists:foreach(
@@ -926,6 +926,7 @@ update_dirty_queue(top_down, _, od_handle, _) ->
     ok;
 update_dirty_queue(Direction, Flag, EntityType, EntityId) ->
     Priority = get_priority(Direction, EntityType),
+    QueueEntry = {Priority, EntityType, EntityId},
     entity_graph_state:update(fun(EffGraphState) ->
         #entity_graph_state{
             bottom_up_dirty = BottomUpDirty,
@@ -934,23 +935,19 @@ update_dirty_queue(Direction, Flag, EntityType, EntityId) ->
         NewState = case {Direction, Flag} of
             {bottom_up, true} ->
                 EffGraphState#entity_graph_state{
-                    bottom_up_dirty = lists:sort(lists:keystore(
-                        EntityId, 3, BottomUpDirty, {Priority, EntityType, EntityId}
-                    ))
+                    bottom_up_dirty = ordsets:add_element(QueueEntry, BottomUpDirty)
                 };
             {bottom_up, false} ->
                 EffGraphState#entity_graph_state{
-                    bottom_up_dirty = lists:delete({Priority, EntityType, EntityId}, BottomUpDirty)
+                    bottom_up_dirty = ordsets:del_element(QueueEntry, BottomUpDirty)
                 };
             {top_down, true} ->
                 EffGraphState#entity_graph_state{
-                    top_down_dirty = lists:sort(lists:keystore(
-                        EntityId, 3, TopDownDirty, {Priority, EntityType, EntityId}
-                    ))
+                    top_down_dirty = ordsets:add_element(QueueEntry, TopDownDirty)
                 };
             {top_down, false} ->
                 EffGraphState#entity_graph_state{
-                    top_down_dirty = lists:delete({Priority, EntityType, EntityId}, TopDownDirty)
+                    top_down_dirty = ordsets:del_element(QueueEntry, TopDownDirty)
                 }
         end,
         {ok, NewState}
@@ -1599,8 +1596,8 @@ gather_eff_from_itself(bottom_up, #od_cluster{} = Cluster) ->
     };
 gather_eff_from_itself(top_down, #od_user{} = User) ->
     #od_user{
-        groups = Groups, spaces = Spaces, 
-        handle_services = HServices, handles = Handles, 
+        groups = Groups, spaces = Spaces,
+        handle_services = HServices, handles = Handles,
         harvesters = Harvesters, clusters = Clusters,
         oz_privileges = OzPrivileges
     } = User,

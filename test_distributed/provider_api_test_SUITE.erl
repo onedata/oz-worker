@@ -904,6 +904,7 @@ get_eff_user_test(Config) ->
                     expected_code = ?HTTP_200_OK,
                     expected_body = ExpDetails#{
                         <<"userId">> => UserId,
+                        <<"basicAuthEnabled">> => false,
 
                         % TODO VFS-4506 deprecated, included for backward compatibility
                         <<"name">> => maps:get(<<"fullName">>, UserDetails),
