@@ -22,6 +22,7 @@ TARGET_DIR='_build/default/lib'
 ARCHIVE_NAME='gui_static.tar.gz'
 # Image which will be used by default to get the static files. If it cannot
 # be resolved, the script will fall back to secondary.
-PRIMARY_IMAGE='docker.onedata.org/onezone-gui:ID-b2dac8ecc4'  # @fixme
+# @fixme proper GUI image
+PRIMARY_IMAGE='docker.onedata.org/onezone-gui:SHA256-4493496881286e6015289344854549f31541eec7f35eb8ef6fce41084da432fd'
 # Image which will be used if primary image is not resolved.
-SECONDARY_IMAGE='onedata/onezone-gui:ID-b2dac8ecc4'
+SECONDARY_IMAGE='onedata/onezone-gui:SHA256-4493496881286e6015289344854549f31541eec7f35eb8ef6fce41084da432fd'
