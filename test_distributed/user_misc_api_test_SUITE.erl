@@ -184,7 +184,7 @@ create_test(Config) ->
                     case Username of default_value -> []; _ -> <<"username">> end,
                     case Password of default_value -> []; _ -> <<"password">> end
                 ]),
-                correct_values = lists:foldl(fun(M, Acc) -> maps:merge(M, Acc) end, #{}, [
+                correct_values = lists:foldl(fun maps:merge/2, #{}, [
                     case FullName of default_value -> #{}; Val -> #{<<"fullName">> => [Val]} end,
                     case Username of default_value -> #{}; Val -> #{<<"username">> => [Val]} end,
                     case Password of default_value -> #{}; Val -> #{<<"password">> => [Val]} end
@@ -207,8 +207,8 @@ create_with_predefined_id_test(Config) ->
         Config, user_logic, create, [?ROOT, PredefinedUserId, UserData]
     )),
     {ok, User} = oz_test_utils:get_user(Config, PredefinedUserId),
-    ?assertEqual(User#od_user.full_name, ExpFullName),
-    ?assertEqual(User#od_user.username, ExpUsername),
+    ?assertEqual(ExpFullName, User#od_user.full_name),
+    ?assertEqual(ExpUsername, User#od_user.username),
 
     % Second try should fail (such id exists)
     ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"userId">>),
