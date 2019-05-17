@@ -27,7 +27,7 @@
 -export([authenticate/2]).
 -export([toggle_basic_auth/2]).
 -export([change_password/3, set_password/2]).
--export([migrate_onepanel_user_to_onezone/3]).
+-export([migrate_onepanel_user_to_onezone/4]).
 -export([onepanel_uid_to_system_uid/1]).
 
 % (Artificial) identity provider id used for creating user ids for users
@@ -121,10 +121,11 @@ set_password(User, NewPass) ->
 %% migration between versions 18.02 and 19.02.
 %% @end
 %%--------------------------------------------------------------------
--spec migrate_onepanel_user_to_onezone(OnepanelUsername :: binary(),
-    password_hash(), Role :: regular | admin) -> {ok, od_user:id()}.
-migrate_onepanel_user_to_onezone(OnepanelUsername, PasswordHash, Role) ->
-    UserId = onepanel_uid_to_system_uid(OnepanelUsername),
+-spec migrate_onepanel_user_to_onezone(OnepanelUserId :: binary(),
+    OnepanelUsername :: binary(), password_hash(), Role :: regular | admin) ->
+    {ok, od_user:id()}.
+migrate_onepanel_user_to_onezone(OnepanelUserId, OnepanelUsername, PasswordHash, Role) ->
+    UserId = onepanel_uid_to_system_uid(OnepanelUserId),
     UpdateFun = fun(User) ->
         {ok, User#od_user{
             username = OnepanelUsername,
