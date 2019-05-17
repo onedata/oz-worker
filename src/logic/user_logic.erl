@@ -305,7 +305,7 @@ get_as_user_details(Client, UserId) ->
                 id = UserId,
                 full_name = FullName,
                 username = Username,
-                linked_accounts = json_utils:map_to_list(Accounts),
+                linked_accounts = Accounts,
                 emails = Emails
             }};
         {error, _} = Error ->
