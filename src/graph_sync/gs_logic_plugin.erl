@@ -23,7 +23,7 @@
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 %% API
--export([authorize/1]).
+-export([verify_handshake_auth/1]).
 -export([client_to_identity/1, root_client/0]).
 -export([client_connected/3, client_disconnected/3]).
 -export([verify_auth_override/2]).
@@ -38,22 +38,22 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link gs_logic_plugin_behaviour} callback authorize/1.
+%% {@link gs_logic_plugin_behaviour} callback verify_handshake_auth/1.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize(cowboy_req:req()) ->
-    {ok, gs_protocol:client(), gs_server:connection_info(), cowboy_req:req()}  |
-    gs_protocol:error().
-authorize(Req) ->
-    case authorize_by_macaroons(Req) of
-        {true, MacaroonClient, ConnectionInfo, NewReq} ->
-            {ok, MacaroonClient, ConnectionInfo, NewReq};
-        {true, MacaroonClient} ->
-            {ok, MacaroonClient, undefined, Req};
+-spec verify_handshake_auth(gs_protocol:auth()) ->
+    {ok, gs_protocol:client(), gs_server:connection_info()} | gs_protocol:error().
+verify_handshake_auth(undefined) ->
+    {ok, ?NOBODY, undefined};
+verify_handshake_auth({macaroon, Macaroon, DischargeMacaroons}) ->
+    case auth_logic:authorize_by_onezone_gui_macaroon(Macaroon) of
+        {true, Client, SessionId} ->
+            {ok, Client, SessionId};
         {error, _} ->
-            ?ERROR_UNAUTHORIZED;
-        false ->
-            {ok, ?NOBODY, undefined, Req}
+            case auth_logic:authorize_by_macaroons(Macaroon, DischargeMacaroons) of
+                {true, Client} -> {ok, Client, undefined};
+                {error, _} = Error -> Error
+            end
     end.
 
 
@@ -281,28 +281,3 @@ handle_graph_request(Client, AuthHint, GRI, Operation, Data, Entity) ->
 is_subscribable(#gri{type = EntityType, aspect = Aspect, scope = Scope}) ->
     ElPlugin = EntityType:entity_logic_plugin(),
     ElPlugin:is_subscribable(Aspect, Scope).
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Tries to authorize the client based on a token in URL params or a proper header.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_macaroons(cowboy_req:req()) ->
-    false | {error, term()} | {true, gs_protocol:client()} |
-    {true, gs_protocol:client(), gs_server:connection_info(), cowboy_req:req()}.
-authorize_by_macaroons(Req) ->
-    QueryParams = cowboy_req:parse_qs(Req),
-    case proplists:get_value(<<"token">>, QueryParams, undefined) of
-        undefined ->
-            auth_logic:authorize_by_macaroons(Req);
-        Token ->
-            case auth_logic:authorize_by_onezone_gui_macaroon(Token) of
-                {true, Client, SessionId} -> {true, Client, SessionId, Req};
-                {error, _} = Error -> Error
-            end
-    end.
