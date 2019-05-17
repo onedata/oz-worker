@@ -19,6 +19,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include("auth/entitlement_mapping.hrl").
 -include("http/gui_paths.hrl").
+-include("api_test_utils.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
@@ -211,6 +212,7 @@ migrate_onepanel_user_to_onezone(Config) ->
     Roles = [regular, admin],
 
     lists:foreach(fun(Role) ->
+        OnepanelUserId = ?UNIQUE_STRING,
         OnepanelUsername = str_utils:format_bin("onepanel-~s", [Role]),
         Password = str_utils:format_bin("password-~s", [Role]),
         PasswordHash = onedata_passwords:create_hash(Password),
@@ -218,10 +220,10 @@ migrate_onepanel_user_to_onezone(Config) ->
         ExpectedGroups = maps:get(atom_to_binary(Role, utf8), GroupMapping, []),
 
         oz_test_utils:call_oz(Config, basic_auth, migrate_onepanel_user_to_onezone, [
-            OnepanelUsername, PasswordHash, Role
+            OnepanelUserId, OnepanelUsername, PasswordHash, Role
         ]),
 
-        ExpUserId = basic_auth:onepanel_uid_to_system_uid(OnepanelUsername),
+        ExpUserId = basic_auth:onepanel_uid_to_system_uid(OnepanelUserId),
         ?assertMatch({ok, ExpUserId}, oz_test_utils:call_oz(Config, basic_auth, authenticate, [
             OnepanelUsername, Password
         ])),
