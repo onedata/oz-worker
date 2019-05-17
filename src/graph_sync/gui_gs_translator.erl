@@ -633,7 +633,7 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator
     } = HarvesterData,
-    fun(?USER(UserId)) -> #{
+    fun(?USER(UserId)) -> ProtectedData = #{
         <<"scope">> => <<"protected">>,
         <<"name">> => Name,
         <<"public">> => Public,
@@ -642,8 +642,17 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
         <<"directMembership">> => harvester_logic:has_direct_user(HarvesterId, UserId),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
-        })
-    } end;
+        })},
+        case Public of
+            true -> 
+                ProtectedData#{
+                    <<"guiPluginConfig">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
+                    <<"indexList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = indices})
+                };
+            _ ->
+                ProtectedData
+        end
+    end;
 
 translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = public}, HarvesterData) ->
     #{

@@ -271,7 +271,7 @@ create(#el_req{client = Client, gri = #gri{id = SpaceId, aspect = harvest_metada
     
     {ok, value, lists:foldl(
         fun({HarvesterId, {error, _} = Error}, Acc) -> 
-            Acc#{HarvesterId => Error};
+            Acc#{HarvesterId => #{<<"error">> => gs_protocol_errors:error_to_json(0, Error)}};
            ({HarvesterId, FailedIndices}, Acc) ->
                 case maps:size(FailedIndices) of
                     0 -> Acc;
@@ -403,7 +403,7 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {provider, ProviderId}}}) ->
         lists:foreach(fun(HarvesterId) ->
             harvester_logic_plugin:update_indices_stats(HarvesterId, all,
                 fun(ExistingStats) -> 
-                    harvester_logic_plugin:set_stats_offline_flag(ExistingStats, SpaceId, ProviderId, true)
+                    harvester_logic_plugin:prepare_index_stats(ExistingStats, SpaceId, ProviderId, true)
                 end)
         end, Harvesters),
         
@@ -414,13 +414,15 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {provider, ProviderId}}}) ->
     end;
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {harvester, HarvesterId}}}) ->
-    harvester_logic_plugin:update_indices_stats(HarvesterId, all, fun(ExistingStats) ->
-        harvester_logic_plugin:set_stats_offline_flag(ExistingStats, SpaceId, true)
-    end),
-    entity_graph:remove_relation(
-        od_harvester, HarvesterId,
-        od_space, SpaceId
-    ).
+    fun(#od_space{providers = Providers}) ->
+        harvester_logic_plugin:update_indices_stats(HarvesterId, all, fun(ExistingStats) ->
+            harvester_logic_plugin:prepare_index_stats(ExistingStats, SpaceId, maps:keys(Providers), true)
+        end),
+        entity_graph:remove_relation(
+            od_harvester, HarvesterId,
+            od_space, SpaceId
+        )
+    end.
 
 
 %%--------------------------------------------------------------------

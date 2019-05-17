@@ -99,7 +99,7 @@ get(Client, ShareId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_public_data(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
-    {ok, maps:map()} | {error, term()}.
+    {ok, map()} | {error, term()}.
 get_public_data(Client, ShareId) ->
     entity_logic:handle(#el_req{
         operation = get,

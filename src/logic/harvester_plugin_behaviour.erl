@@ -56,6 +56,15 @@
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Deletes given index harvested metadata from server located at Endpoint.
+%% @end
+%%--------------------------------------------------------------------
+-callback delete_index_metadata(od_harvester:endpoint(), od_harvester:id(),
+    od_harvester:index_id()) -> {ok | {error, term()}}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Submits given batch in given index to server located at Endpoint.
 %% @end
 %%--------------------------------------------------------------------

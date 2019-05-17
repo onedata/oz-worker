@@ -54,14 +54,18 @@
 
 
 %% This record must be defined here as od_harvester depends on it.
-%%   current seq - sequence harvested in this index
-%%   max_seq - highest sequence known in given space in given provider
 -record(index_stats, {
+    % sequence harvested in this index
     current_seq = 0 :: integer(),
+    % highest sequence known in given space in given provider
     max_seq = 0 :: integer(),
+    % timestamp of last harvestation
     last_update = undefined :: integer() | undefined,
+    % short description of encountered error if last harvestation failed
     error = undefined :: binary() | undefined,
-    offline = false :: boolean()
+    % stats are marked archival when it is no longer possible to harvest metadata
+    % in given space in given provider e.g space was removed from harvester
+    archival = false :: boolean()
 }).
 
 

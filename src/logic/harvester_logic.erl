@@ -44,8 +44,7 @@
     list_indices/2
 ]).
 -export([
-    submit_entry/4, delete_entry/4,
-    submit_batch/4
+    submit_batch/4, submit_batch/6
 ]).
 -export([
     create_user_invite_token/2,
@@ -83,9 +82,6 @@
     has_eff_user/2,
     has_eff_group/2,
     has_space/2
-]).
--export([
-    submit_batch/6
 ]).
 
 %%%===================================================================
@@ -437,22 +433,6 @@ update_index(Client, HarvesterId, IndexId, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Submits given data to harvesters backend.
-%% @end
-%%--------------------------------------------------------------------
--spec submit_entry(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
-    FileId :: binary(), Data :: binary()) -> {ok, map()} | {error, term()}.
-submit_entry(Client, HarvesterId, FileId, Data) ->
-    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
-        operation = create,
-        client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {submit_entry, FileId}},
-        data = Data
-    })).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Submits given batch to harvesters backend.
 %% Indices, MaxSeq and Batch are given explicitly.
 %% @end
@@ -481,22 +461,6 @@ submit_batch(Client, HarvesterId, SpaceId, Data) ->
         operation = create,
         client = Client,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {submit_batch, SpaceId}},
-        data = Data
-    })).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Removes given FileId from harvesters backend.
-%% @end
-%%--------------------------------------------------------------------
--spec delete_entry(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
-    FileId :: binary(), Data :: map()) -> {ok, map()} | {error, term()}.
-delete_entry(Client, HarvesterId, FileId, Data) ->
-    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
-        operation = create,
-        client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {delete_entry, FileId}},
         data = Data
     })).
 

@@ -29,7 +29,7 @@
 -type id() :: binary().
 -type record() :: #state_token{}.
 -type doc() :: datastore_doc:doc(record()).
--type state_info() :: maps:map().
+-type state_info() :: map().
 -export_type([doc/0, record/0, id/0, state_info/0]).
 
 -define(CTX, #{

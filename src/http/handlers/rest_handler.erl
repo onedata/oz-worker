@@ -204,7 +204,7 @@ delete_resource(Req, State) ->
 %% Returns all REST routes in the cowboy router format.
 %% @end
 %%--------------------------------------------------------------------
--spec rest_routes() -> [{binary(), module(), maps:map()}].
+-spec rest_routes() -> [{binary(), module(), map()}].
 rest_routes() ->
     AllRoutes = lists:flatten([
         dev_utils:dev_provider_registration_route(),

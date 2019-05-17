@@ -141,7 +141,7 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     
     lists:foreach(fun(HarvesterId) ->
         harvester_logic_plugin:update_indices_stats(HarvesterId, all,
-            fun(ExistingStats) -> harvester_logic_plugin:prepare_space_stats(SpaceId, ExistingStats) end)
+            fun(ExistingStats) -> harvester_logic_plugin:prepare_index_stats(ExistingStats, SpaceId, ProviderId, false) end)
         end, Harvesters),
         
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
@@ -353,7 +353,7 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
     lists:foreach(fun(HarvesterId) ->
         harvester_logic_plugin:update_indices_stats(HarvesterId, all,
             fun(ExistingStats) ->
-                harvester_logic_plugin:set_stats_offline_flag(ExistingStats, SpaceId, ProviderId, true)
+                harvester_logic_plugin:prepare_index_stats(ExistingStats, SpaceId, ProviderId, true)
             end)
     end, Harvesters),
     
@@ -871,7 +871,7 @@ update_provider_subomain(ProviderId, Data) ->
 %% Creates a new provider document in database.
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider(Data :: maps:map(), ProviderId :: od_provider:id(),
+-spec create_provider(Data :: map(), ProviderId :: od_provider:id(),
     GRI :: entity_logic:gri()) -> entity_logic:create_result().
 create_provider(Data, ProviderId, GRI) ->
     Token = maps:get(<<"token">>, Data, undefined),

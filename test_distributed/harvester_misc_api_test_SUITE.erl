@@ -670,9 +670,9 @@ delete_harvested_metadata_test(Config) ->
     VerifyEndFun = fun(ShouldSucceed, #{harvesterId := HarvesterId} = _Env, _Data) ->
         case ShouldSucceed of
             true ->
-                mock_assert_num_calls_sum(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 3, 2);
+                mock_assert_num_calls_sum(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index_metadata, 3, 2);
             _ ->
-                test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 3, 0)
+                test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index_metadata, 3, 0)
         end,
         lists:foreach(fun(Node) ->
             rpc:call(Node, meck, reset, [?HARVESTER_MOCK_PLUGIN])
@@ -1098,9 +1098,9 @@ delete_index_metadata_test(Config) ->
         {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
         case ShouldSucceed of
             true ->
-                mock_assert_num_calls_sum(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 3, 1);
+                mock_assert_num_calls_sum(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index_metadata, 3, 1);
             _ ->
-                test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 3, 0)
+                test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index_metadata, 3, 0)
         end,
         % assert that index was not deleted from harvester
         ?assertEqual([IndexId], maps:keys(Harvester#od_harvester.indices))
@@ -1198,6 +1198,7 @@ query_index_test(Config) ->
     PublicHarvesterApiTestSpec = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
             correct = [
+                nobody,
                 {user, U1},
                 {user, U2}
             ]
@@ -1368,15 +1369,10 @@ submit_batch_test(Config) ->
             args = [client, H1, S1, data],
             expected_result = ?OK_MAP(#{})
         },
-        gs_spec = #gs_spec{
-            operation = create,
-            gri = #gri{type = od_harvester, id = H1, aspect = {submit_batch, S1}},
-            expected_result = ?OK_MAP_CONTAINS(#{})
-        },
         data_spec = #data_spec{
             required = [<<"indices">>, <<"maxSeq">>, <<"batch">>],
             correct_values = #{
-                <<"batch">> => [?HARVESTER_BATCH],
+                <<"batch">> => [?HARVESTER_BATCH(<<"fileId">>)],
                 <<"indices">> => [[IndexId]],
                 <<"maxSeq">> => [1000]
             }

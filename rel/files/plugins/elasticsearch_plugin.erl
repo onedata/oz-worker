@@ -23,7 +23,7 @@
     get_plugin_index_id/2,
     ping/1, 
     create_index/4, delete_index/3, 
-    submit_entry/5, delete_entry/4,
+    delete_index_metadata/3,
     submit_batch/4,
     query_index/4, 
     query_validator/0
@@ -64,6 +64,7 @@ get_name() ->
 -spec get_plugin_index_id(od_harvester:id(), od_harvester:index_id()) -> binary().
 get_plugin_index_id(HarvesterId, IndexId) ->
     ?ES_INDEX_ID(HarvesterId, IndexId).
+
     
 %%--------------------------------------------------------------------
 %% @doc
@@ -109,6 +110,32 @@ delete_index(Endpoint, HarvesterId, IndexId) ->
         {error, _} = Error -> Error
     end.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link harvester_plugin_behaviour} callback delete_index_metadata/3.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_index_metadata(od_harvester:endpoint(), od_harvester:id(), od_harvester:index_id()) ->
+    {ok | {error, term()}}.
+delete_index_metadata(Endpoint, HarvesterId, IndexId) ->
+    RequestData = #{
+        <<"query">> =>#{
+            <<"match_all">> => #{}
+        }
+    },
+    % only schedule deletion of harvested metadata and do not wait for response because deletion could take a lot of time
+    spawn(fun() -> 
+        do_request(post, Endpoint, HarvesterId, IndexId,
+            ?ENTRY_PATH(<<"_delete_by_query?conflicts=proceed">>),
+            json_utils:encode(RequestData),
+            [{200,300}]
+        )
+    end),
+    ok.
+
+
+% fixme remove
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link harvester_plugin_behaviour} callback submit_entry/4.
@@ -175,6 +202,8 @@ submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
         end
     end, Indices)}.
 
+
+% fixme remove
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link harvester_plugin_behaviour} callback delete_entry/3.
@@ -219,7 +248,7 @@ query_index(Endpoint, HarvesterId, IndexId, Data) ->
 %% {@link harvester_plugin_behaviour} callback query_validator/0.
 %% @end
 %%--------------------------------------------------------------------
--spec query_validator() -> maps:map().
+-spec query_validator() -> map().
 query_validator() -> #{
     required => #{
         <<"method">> => {atom, [post, get]},

@@ -27,8 +27,8 @@
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
 -export([
-    update_indices_stats/3, prepare_space_stats/2, 
-    set_stats_offline_flag/3, set_stats_offline_flag/4
+    update_indices_stats/3,
+    prepare_index_stats/3, prepare_index_stats/4
 ]).
 
 
@@ -106,7 +106,7 @@ operation_supported(get, {eff_group_membership, _}, private) -> true;
 
 operation_supported(get, spaces, private) -> true;
 operation_supported(get, indices, private) -> true;
-operation_supported(get, {index_progress, _}, private) -> true;
+operation_supported(get, {index_stats, _}, private) -> true;
 
 operation_supported(update, instance, private) -> true;
 operation_supported(update, gui_plugin_config, private) -> true;
@@ -152,7 +152,7 @@ is_subscribable(gui_plugin_config, private) -> true;
 is_subscribable(index, _) -> true;
 is_subscribable(indices, private) -> true;
 is_subscribable({index, _}, _) -> true;
-is_subscribable({index_progress, _}, private) -> true;
+is_subscribable({index_stats, _}, private) -> true;
 is_subscribable(_, _) -> false.
 
 
@@ -234,7 +234,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
                     od_space, SpaceId
                 ),
                 update_indices_stats(HarvesterId, all,
-                    fun(ExistingStats) -> prepare_space_stats(SpaceId, ExistingStats) end);
+                    fun(ExistingStats) -> prepare_index_stats(ExistingStats, SpaceId, false) end);
             _ ->
                 ok
         end,
@@ -309,7 +309,7 @@ create(#el_req{gri = #gri{id = HarvesterId, aspect = {space, SpaceId}}}) ->
     {ok, Space} = space_logic_plugin:fetch_entity(SpaceId),
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
     update_indices_stats(HarvesterId, all, 
-        fun(ExistingStats) -> prepare_space_stats(SpaceId, ExistingStats) end),
+        fun(ExistingStats) -> prepare_index_stats(ExistingStats, SpaceId, false) end),
     {ok, resource, {NewGRI, ?THROUGH_SPACE(HarvesterId), SpaceData}};
 
 create(Req = #el_req{gri = GRI = #gri{id = HarvesterId, aspect = group}}) ->
@@ -334,7 +334,7 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
     GuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data, undefined)),
     
     UpdateFun = fun(#od_harvester{indices = Indices, plugin = Plugin, endpoint = Endpoint, spaces = Spaces} = Harvester) ->
-        IndexStats = lists:foldl(fun prepare_space_stats/2, #{}, Spaces),
+        IndexStats = lists:foldl(fun(SpaceId, ExistingStats) -> prepare_index_stats(ExistingStats, SpaceId, false) end, #{}, Spaces),
         Index = #harvester_index{
             name = Name,
             schema = Schema,
@@ -359,14 +359,16 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
         {ok, _} -> {ok, resource, {NewGri, IndexData}};
         {error, _} = Error -> Error
     end;
-    
+
+% fixme remove
 create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_entry, FileId}, id = HarvesterId}, data = Data}) ->
     fun(#od_harvester{plugin = Plugin, endpoint = Endpoint, indices = Indices}) ->
         {ok, FailedIndices} = perform_entry_operation(submit_entry, Indices, ProviderId, 
             Plugin, Endpoint, HarvesterId, FileId, Data),
         {ok, value, #{<<"failedIndices">> => FailedIndices}}
     end;
-    
+
+% fixme remove
 create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {delete_entry, FileId}, id = HarvesterId}, data = Data}) ->
     fun(#od_harvester{plugin = Plugin, endpoint = Endpoint, indices = Indices}) ->
         {ok, FailedIndices} = perform_entry_operation(delete_entry, Indices, ProviderId, 
@@ -488,31 +490,6 @@ get(#el_req{gri = #gri{aspect = spaces}}, Harvester) ->
 get(#el_req{gri = #gri{aspect = indices}}, Harvester) ->
     {ok, maps:keys(Harvester#od_harvester.indices)};
 
-get(#el_req{gri = #gri{aspect = {index_progress, IndexId}}}, Harvester) ->
-    #harvester_index{
-        stats = Stats
-    } = maps:get(IndexId, Harvester#od_harvester.indices),
-    {ok, maps:fold(fun(SpaceId, P, Acc) ->
-        Acc#{SpaceId => maps:fold(fun(ProviderId, IndexStats, Acc1) ->
-            #index_stats{
-                current_seq = CurrentSeq,
-                max_seq = MaxSeq,
-                last_update = LastUpdate,
-                error = Error,
-                offline = Offline
-            } = IndexStats,
-            Acc1#{
-                ProviderId => #{
-                    <<"currentSeq">> => CurrentSeq,
-                    <<"maxSeq">> => MaxSeq,
-                    <<"lastUpdate">> => gs_protocol:undefined_to_null(LastUpdate),
-                    <<"error">> => gs_protocol:undefined_to_null(Error),
-                    <<"offline">> => Offline
-                }
-            }
-            end, #{}, P)}
-        end, #{}, Stats)};
-
 get(#el_req{gri = #gri{id = HarvesterId, aspect = {index, IndexId}, scope = private}}, Harvester) ->
     #harvester_index{
         name = Name,
@@ -533,7 +510,32 @@ get(#el_req{gri = #gri{aspect = {index, IndexId}, scope = public}}, Harvester) -
     } = maps:get(IndexId, Harvester#od_harvester.indices),
     {ok, #{
         <<"guiPluginName">> => GuiPluginName
-    }}.
+    }};
+
+get(#el_req{gri = #gri{aspect = {index_stats, IndexId}}}, Harvester) ->
+    #harvester_index{
+        stats = Stats
+    } = maps:get(IndexId, Harvester#od_harvester.indices),
+    {ok, maps:fold(fun(SpaceId, P, Acc) ->
+        Acc#{SpaceId => maps:fold(fun(ProviderId, IndexStats, Acc1) ->
+            #index_stats{
+                current_seq = CurrentSeq,
+                max_seq = MaxSeq,
+                last_update = LastUpdate,
+                error = Error,
+                archival = Archival
+            } = IndexStats,
+            Acc1#{
+                ProviderId => #{
+                    <<"currentSeq">> => CurrentSeq,
+                    <<"maxSeq">> => MaxSeq,
+                    <<"lastUpdate">> => gs_protocol:undefined_to_null(LastUpdate),
+                    <<"error">> => gs_protocol:undefined_to_null(Error),
+                    <<"archival">> => Archival
+                }
+            }
+        end, #{}, P)}
+    end, #{}, Stats)}.
 
 
 %%--------------------------------------------------------------------
@@ -637,7 +639,7 @@ delete(#el_req{gri = #gri{id = HarvesterId, aspect = {group, GroupId}}}) ->
 
 delete(#el_req{gri = #gri{id = HarvesterId, aspect = {space, SpaceId}}}) ->
     update_indices_stats(HarvesterId, all, fun(ExistingStats) ->
-        set_stats_offline_flag(ExistingStats, SpaceId, true)
+        prepare_index_stats(ExistingStats, SpaceId, true)
     end),
     entity_graph:remove_relation(
         od_harvester, HarvesterId,
@@ -653,12 +655,14 @@ delete(#el_req{gri = #gri{id = HarvesterId, aspect = {index, IndexId}}}) ->
 delete(#el_req{gri = #gri{id = HarvesterId, aspect = metadata}}) ->
     fun(#od_harvester{indices = ExistingIndices, plugin = Plugin, endpoint = Endpoint}) ->
         IndicesIds = maps:keys(ExistingIndices),
-        delete_indices_data(IndicesIds, Plugin, Endpoint, HarvesterId)
+        lists:foreach(fun(IndexId) ->
+            Plugin:delete_index_metadata(Endpoint, HarvesterId, IndexId)
+        end, IndicesIds)
     end;
 
 delete(#el_req{gri = #gri{id = HarvesterId, aspect = {index_metadata, IndexId}}}) ->
     fun(#od_harvester{plugin = Plugin, endpoint = Endpoint}) ->
-        delete_indices_data([IndexId], Plugin, Endpoint, HarvesterId)
+        Plugin:delete_index_metadata(Endpoint, HarvesterId, IndexId)
     end.
 
 
@@ -713,7 +717,7 @@ exists(#el_req{gri = #gri{aspect = {space, SpaceId}}}, Harvester) ->
 exists(#el_req{gri = #gri{aspect = {index, IndexId}}}, Harvester) ->
     maps:is_key(IndexId, Harvester#od_harvester.indices);
 
-exists(#el_req{gri = #gri{aspect = {index_progress, IndexId}}}, Harvester) ->
+exists(#el_req{gri = #gri{aspect = {index_stats, IndexId}}}, Harvester) ->
     maps:is_key(IndexId, Harvester#od_harvester.indices);
 
 % All other aspects exist if harvester record exists.
@@ -817,9 +821,14 @@ authorize(#el_req{operation = create, gri = #gri{aspect = {submit_batch, SpaceId
             false
     end;
 
-authorize(#el_req{operation = create, gri = #gri{aspect = {query, _}}, client = ?USER(UserId)}, Harvester) ->
-    Harvester#od_harvester.public orelse
-    entity_graph:has_relation(effective, bottom_up, od_user, UserId, Harvester);
+authorize(#el_req{operation = create, gri = #gri{aspect = {query, _}}, client = Client}, Harvester) ->
+    case Client of
+        ?USER(UserId) -> Harvester#od_harvester.public orelse
+            entity_graph:has_relation(effective, bottom_up, od_user, UserId, Harvester);
+        _ ->
+            % client can be nobody
+            Harvester#od_harvester.public
+    end;
 
 authorize(#el_req{operation = get, client = Client, gri = #gri{aspect = instance, scope = private}}, Harvester) ->
     case Client of
@@ -1026,7 +1035,7 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = indices}}
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {index, _}, scope = private}}) ->
     [?OZ_HARVESTERS_VIEW];
 
-required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {index_progress, _}}}) ->
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = {index_stats, _}}}) ->
     [?OZ_HARVESTERS_VIEW];
 
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
@@ -1246,26 +1255,6 @@ auth_by_privilege(UserId, HarvesterOrId, Privilege) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Deletes indices data by calling harvester plugin.
-%% Clears harvesting progress of successfully deleted indices.
-%% @end
-%%--------------------------------------------------------------------
--spec delete_indices_data(od_harvester:indices(), od_harvester:plugin(),
-    od_harvester:endpoint(), od_harvester:id()) -> ok | {error, term()}.
-delete_indices_data(IndicesToRemove, Plugin, Endpoint, HarvesterId) ->
-    lists:foreach(fun(IndexId) ->
-        % fixme add appropriate comment
-        spawn(fun() -> Plugin:delete_index(Endpoint, HarvesterId, IndexId) end)
-    end, IndicesToRemove),
-    
-    update_indices_stats(HarvesterId, IndicesToRemove, fun(ExistingStats) ->
-        prepare_stats(ExistingStats)
-    end).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
 %% Performs given operation regarding harvester entry by calling harvester plugin. 
 %% Updates harvester record appropriately.
 %% Returns lists of indices for which operation failed.
@@ -1349,7 +1338,7 @@ update_indices_stats_internal(IndicesToUpdate, ExistingIndices, UpdateFun) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Updates given index stats using UpdateFun and returns updated indices map.
+%% Updates given index stats using UpdateFun and returns updated indices stats.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_index_stats(od_harvester:indices(), od_harvester:index_id(), UpdateFun) ->
@@ -1367,7 +1356,7 @@ update_index_stats(Indices, IndexId, UpdateFun) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Updates current sequence number and max sequence number for given index progress.
+%% Updates current sequence number and max sequence number for given index stats.
 %% When NewSeq is undefined current sequence number will not be updated.
 %% Sequence numbers are stored per space per provider.
 %% @end
@@ -1375,8 +1364,8 @@ update_index_stats(Indices, IndexId, UpdateFun) ->
 -spec update_seqs(od_harvester:indices_stats(), od_space:id(), od_provider:id(),
     NewSeq :: non_neg_integer() | undefined, NewMaxSeq :: non_neg_integer(), 
     ErrorMsg :: binary() | undefined) -> od_harvester:indices_stats().
-update_seqs(Progress, SpaceId, ProviderId, NewSeq, NewMaxSeq, ErrorMsg) -> 
-    SeqsPerProvider = maps:get(SpaceId, Progress, #{}),
+update_seqs(Stats, SpaceId, ProviderId, NewSeq, NewMaxSeq, ErrorMsg) -> 
+    SeqsPerProvider = maps:get(SpaceId, Stats, #{}),
     #index_stats{
         current_seq = CurrentSeq, 
         max_seq = CurrentMaxSeq
@@ -1387,7 +1376,7 @@ update_seqs(Progress, SpaceId, ProviderId, NewSeq, NewMaxSeq, ErrorMsg) ->
         _-> max(NewSeq, CurrentSeq)
     end, 
     
-    Progress#{
+    Stats#{
         SpaceId => SeqsPerProvider#{
             ProviderId => #index_stats{
                 current_seq = NewCurrentSeq, 
@@ -1417,7 +1406,7 @@ call_plugin(delete_entry, Plugin, Endpoint, HarvesterId, IndexId, FileId, _) ->
 %% @private
 %% @doc
 %% Normalizes endpoint by removing trailing slash.
-%% Check whether endpoint responds to ping.
+%% Checks whether resulting endpoint is responding.
 %% @end
 %%--------------------------------------------------------------------
 -spec normalize_and_check_endpoint(od_harvester:endpoint() | undefined, od_harvester:plugin()) -> 
@@ -1430,33 +1419,38 @@ normalize_and_check_endpoint(Endpoint, Plugin) ->
         ok -> {ok, NormalizedEndpoint};
         {error, _} = Error -> Error
     end.
-    
 
-%fixme docs
-prepare_stats(ExistingStats) ->
-    lists:foldl(fun(SpaceId, NewExistingStats) -> prepare_space_stats(SpaceId, NewExistingStats) end, ExistingStats, maps:keys(ExistingStats)).
 
-prepare_space_stats(SpaceId, ExistingStats) ->
-    StatsPerProvider = maps:get(SpaceId, ExistingStats, #{}),
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Sets archival flag in existing stats to given value
+%% and creates missing stats for all providers in given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec prepare_index_stats(od_harvester:indices_stats(), od_space:id(), boolean()) ->
+    od_harvester:indices_stats().
+prepare_index_stats(ExistingStats, SpaceId, ArchivalFlagValue) ->
     {ok, #od_space{providers = Providers}} = space_logic_plugin:fetch_entity(SpaceId),
+    prepare_index_stats(ExistingStats, SpaceId, maps:keys(Providers), ArchivalFlagValue).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Sets archival flag in existing stats to given value
+%% and creates missing stats for all given providers in given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec prepare_index_stats(od_harvester:indices_stats(), od_space:id(),
+    od_provider:id() | [od_provider:id()], boolean()) -> od_harvester:indices_stats().
+prepare_index_stats(ExistingStats, SpaceId, Provider, ArchivalFlagValue) when is_binary(Provider) ->
+    prepare_index_stats(ExistingStats, SpaceId, [Provider], ArchivalFlagValue);
+
+prepare_index_stats(ExistingStats, SpaceId, Providers, ArchivalFlagValue) ->
+    StatsPerProvider = maps:get(SpaceId, ExistingStats, #{}),
     ExistingStats#{
         SpaceId => lists:foldl(fun(ProviderId, NewStatsPerProvider) ->
-            M = maps:get(ProviderId, StatsPerProvider, #index_stats{}),
-            NewStatsPerProvider#{ProviderId => M#index_stats{offline = false}}
-        end, StatsPerProvider, maps:keys(Providers))}.
-
-
-set_stats_offline_flag(ExistingStats, SpaceId, Value) ->
-    StatsPerProvider = maps:get(SpaceId, ExistingStats, #{}),
-    % fixme use maps fold
-    ExistingStats#{SpaceId => lists:foldl(fun(ProviderId, NewStatsPerProvider) ->
-        set_stats_offline_flag_internal(NewStatsPerProvider, ProviderId, Value)
-    end, StatsPerProvider, maps:keys(StatsPerProvider))}.
-
-set_stats_offline_flag(ExistingStats, SpaceId, ProviderId, Value) ->
-    StatsPerProvider = maps:get(SpaceId, ExistingStats, #{}),
-    ExistingStats#{SpaceId => set_stats_offline_flag_internal(StatsPerProvider, ProviderId, Value)}.
-
-set_stats_offline_flag_internal(StatsPerProvider, ProviderId, Value) ->
-    Stats = maps:get(ProviderId, StatsPerProvider, #index_stats{}),
-    StatsPerProvider#{ProviderId => Stats#index_stats{offline = Value}}.
+            Stats = maps:get(ProviderId, StatsPerProvider, #index_stats{archival = ArchivalFlagValue}),
+            NewStatsPerProvider#{ProviderId => Stats#index_stats{archival = ArchivalFlagValue}}
+        end, StatsPerProvider, Providers)}.

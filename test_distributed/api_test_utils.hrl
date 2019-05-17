@@ -310,22 +310,22 @@
     #{}, Indices)).
 -define(NO_FAILED_INDICES, ?FAILED_INDICES([], 0)).
 
--define(HARVESTER_BATCH, [
-    #{<<"seq">> => 1, <<"operation">> => submit, <<"fileId">> => <<"fileid1">>, <<"payload">> => <<"{\"valid\":\"json\"}">>},
-    #{<<"seq">> => 2, <<"operation">> => delete, <<"fileId">> => <<"fileid2">>, <<"payload">> => <<"{\"valid\":\"json\"}">>},
-    #{<<"seq">> => 3, <<"operation">> => submit, <<"fileId">> => <<"fileid3">>, <<"payload">> => <<"invalid_json">>},
-    #{<<"seq">> => 4, <<"operation">> => delete, <<"fileId">> => <<"fileid4">>, <<"payload">> => <<"{\"valid\":\"json\"}">>},
-    #{<<"seq">> => 5, <<"operation">> => submit, <<"fileId">> => <<"fileid5">>, <<"payload">> => <<"{\"valid\":\"json\"}">>},
-    #{<<"seq">> => 6, <<"operation">> => submit, <<"fileId">> => <<"fileid6">>, <<"payload">> => #{}}
+-define(HARVESTER_BATCH(FileId), [
+    #{<<"seq">> => 1, <<"operation">> => submit, <<"fileId">> => FileId, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 2, <<"operation">> => delete, <<"fileId">> => FileId, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 3, <<"operation">> => submit, <<"fileId">> => FileId, <<"payload">> => <<"invalid_json">>},
+    #{<<"seq">> => 4, <<"operation">> => delete, <<"fileId">> => FileId, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 5, <<"operation">> => submit, <<"fileId">> => FileId, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 6, <<"operation">> => submit, <<"fileId">> => FileId, <<"payload">> => #{}}
 ]).
 
 -define(EMPTY_INDEX_STATS, ?EMPTY_INDEX_STATS(false)).
--define(EMPTY_INDEX_STATS(Offline), #{
+-define(EMPTY_INDEX_STATS(Archival), #{
     <<"currentSeq">> => 0,
     <<"maxSeq">> => 0,
     <<"lastUpdate">> => null,
     <<"error">> => null,
-    <<"offline">> => Offline
+    <<"archival">> => Archival
 }).
 
 -define(HARVESTER_PLUGIN_INDEX_ID(H, I), <<H/binary, I/binary>>).

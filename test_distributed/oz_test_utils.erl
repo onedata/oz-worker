@@ -1370,7 +1370,7 @@ create_share(Config, Client, ShareId, Name, RootFileId, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_share(Config :: term(), Client :: entity_logic:client(),
-    Data :: maps:map()) -> {ok, od_share:id()}.
+    Data :: map()) -> {ok, od_share:id()}.
 create_share(Config, Client, Data) ->
     ?assertMatch({ok, _}, call_oz(
         Config, share_logic, create, [Client, Data]
@@ -1625,7 +1625,7 @@ create_handle_service(Config, Client, Name, ProxyEndpoint, ServiceProperties) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_handle_service(Config :: term(), Client :: entity_logic:client(),
-    Data :: maps:map()) -> {ok, od_handle_service:id()}.
+    Data :: map()) -> {ok, od_handle_service:id()}.
 create_handle_service(Config, Client, Data) ->
     Result = case Client of
         ?USER(UserId) ->
@@ -1850,7 +1850,7 @@ create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId, Metadat
 %% @end
 %%--------------------------------------------------------------------
 -spec create_handle(Config :: term(), Client :: entity_logic:client(),
-    Data :: maps:map()) -> {ok, od_handle:id()}.
+    Data :: map()) -> {ok, od_handle:id()}.
 create_handle(Config, Client, Data) ->
     Result = case Client of
         ?USER(UserId) ->
@@ -1892,7 +1892,7 @@ get_handle(Config, HandleId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_handle(Config :: term(), HandleId :: od_handle:id(),
-    Data :: maps:map()) -> ok.
+    Data :: map()) -> ok.
 update_handle(Config, HandleId, Data) ->
     ?assertMatch(ok, call_oz(Config, handle_logic, update, [
         ?ROOT, HandleId, Data
@@ -2359,7 +2359,7 @@ harvester_remove_group(Config, HarvesterId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec harvester_create_index(Config :: term(), HarvesterId :: od_harvester:id(), 
-    Data :: maps:map()) -> ok.
+    Data :: map()) -> ok.
 harvester_create_index(Config, HarvesterId, Data) ->
     ?assertMatch({ok, _}, call_oz(
         Config, harvester_logic, create_index, [?ROOT, HarvesterId, Data]
@@ -2464,7 +2464,7 @@ get_cluster(Config, ClusterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_cluster(Config :: term(), ClusterId :: od_cluster:id(),
-    Data :: maps:map()) -> ok.
+    Data :: map()) -> ok.
 update_cluster(Config, ClusterId, Data) ->
     ?assertMatch(ok, call_oz(Config, cluster_logic, update, [
         ?ROOT, ClusterId, Data
@@ -2969,6 +2969,7 @@ mock_harvester_plugin(Config, Nodes, PluginName) ->
     end),
     test_utils:mock_expect(Nodes, PluginName, create_index, fun(_,_,_,_) -> ok end),
     test_utils:mock_expect(Nodes, PluginName, delete_index, fun(_,_,_) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, delete_index_metadata, fun(_,_,_) -> ok end),
     test_utils:mock_expect(Nodes, PluginName, query_index, fun(_,_,_,_) -> {ok, ?HARVESTER_MOCKED_QUERY_DATA_MAP} end),
     test_utils:mock_expect(Nodes, PluginName, query_validator, fun() -> ?HARVESTER_PLUGIN:query_validator() end).
 

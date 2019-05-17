@@ -243,7 +243,7 @@ get(Client, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_protected_data(Client :: entity_logic:client(), UserId :: od_user:id()) ->
-    {ok, maps:map()} | {error, term()}.
+    {ok, map()} | {error, term()}.
 get_protected_data(Client, UserId) ->
     get_protected_data(Client, UserId, undefined).
 
@@ -262,7 +262,7 @@ get_protected_data(Client, UserId, AuthHint) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_shared_data(Client :: entity_logic:client(), UserId :: od_user:id()) ->
-    {ok, maps:map()} | {error, term()}.
+    {ok, map()} | {error, term()}.
 get_shared_data(Client, UserId) ->
     get_shared_data(Client, UserId, undefined).
 
@@ -865,7 +865,7 @@ create_handle(Client, UserId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_harvester(Client :: entity_logic:client(), UserId :: od_user:id(), Name :: binary(),
-    Endpoint :: binary(), Plugin :: binary(), Config :: maps:map()) -> {ok, od_harvester:id()} | {error, term()}.
+    Endpoint :: binary(), Plugin :: binary(), Config :: map()) -> {ok, od_harvester:id()} | {error, term()}.
 create_harvester(Client, UserId, Name, Endpoint, Plugin, Config) ->
     create_harvester(Client, UserId, #{
         <<"name">> => Name,

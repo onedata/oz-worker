@@ -195,7 +195,7 @@ get_record_struct(1) ->
                     {max_seq, integer},
                     {last_update, integer},
                     {error, string},
-                    {offline, boolean}
+                    {archival, boolean}
                 ]}}}}
             ]}
         }},
