@@ -68,6 +68,8 @@
 
     get_spaces/2, get_space/3,
 
+    get_eff_providers/2, get_eff_provider/3,
+
     update_user_privileges/5, update_user_privileges/4,
     update_group_privileges/5, update_group_privileges/4,
 
@@ -81,7 +83,8 @@
     has_direct_user/2,
     has_eff_user/2,
     has_eff_group/2,
-    has_space/2
+    has_space/2,
+    has_eff_provider/2
 ]).
 
 %%%===================================================================
@@ -923,6 +926,38 @@ get_space(Client, HarvesterId, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves the list of effective providers of given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_providers(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+    {ok, [od_provider:id()]} | {error, term()}.
+get_eff_providers(Client, HarvesterId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = eff_providers}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective provider among
+%% effective providers of given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_provider(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+    ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
+get_eff_provider(Client, HarvesterId, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = instance, scope = shared},
+        auth_hint = ?THROUGH_HARVESTER(HarvesterId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Updates privileges of specified user of given harvester.
 %% Allows to specify privileges to grant and to revoke.
 %% @end
@@ -1107,4 +1142,17 @@ has_space(HarvesterId, SpaceId) when is_binary(HarvesterId) ->
     entity_graph:has_relation(direct, top_down, od_space, SpaceId, od_harvester, HarvesterId);
 has_space(Harvester, SpaceId) ->
     entity_graph:has_relation(direct, top_down, od_space, SpaceId, Harvester).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified provider is an effective provider of given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_provider(HarvesterOrId :: od_harvester:id() | #od_harvester{},
+    ProviderId :: od_provider:id()) -> boolean().
+has_eff_provider(HarvesterId, ProviderId) when is_binary(HarvesterId) ->
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, od_harvester, HarvesterId);
+has_eff_provider(Harvester, ProviderId) ->
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Harvester).
 

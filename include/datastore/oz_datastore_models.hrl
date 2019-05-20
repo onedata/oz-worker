@@ -279,7 +279,7 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations(od_user:id()),
     eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
-    eff_harvesters = #{} :: entity_graph:eff_relations(od_group:id()),
+    eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
 
@@ -349,6 +349,7 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
+    eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | entity_logic:client(),

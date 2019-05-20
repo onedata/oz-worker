@@ -36,7 +36,10 @@
     create_space_invite_token_test/1,
     remove_space_test/1,
     list_spaces_test/1,
-    get_space_test/1
+    get_space_test/1,
+
+    list_eff_providers_test/1,
+    get_eff_provider_test/1
 ]).
 
 all() ->
@@ -45,7 +48,10 @@ all() ->
         create_space_invite_token_test,
         remove_space_test,
         list_spaces_test,
-        get_space_test
+        get_space_test,
+
+        list_eff_providers_test,
+        get_eff_provider_test
     ]).
 
 
@@ -340,6 +346,134 @@ get_space_test(Config) ->
                     ),
                     ?assertEqual(Id, S1)
                 end
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+list_eff_providers_test(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%  Provider1   Provider2  Provider3
+    %%          \    /    \    /
+    %%           \  /      \  /
+    %%           Space1   Space2
+    %%               \    /
+    %%                \  /
+    %%             Harvester1
+    %%                 |
+    %%               User1
+    %%      <<user>>
+    %%      NonAdmin
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    {ok, {P1, _P1Macaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME2),
+    {ok, {P3, _P3Macaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME2),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+
+    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space(Config, P2, S1),
+    oz_test_utils:support_space(Config, P2, S2),
+    oz_test_utils:support_space(Config, P3, S2),
+
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
+
+    oz_test_utils:harvester_add_space(Config, H1, S1),
+    oz_test_utils:harvester_add_space(Config, H1, S2),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    ExpProviders = [P1, P2, P3],
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_HARVESTERS_LIST_RELATIONSHIPS]},
+                {user, U1}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {provider, P2, P2Macaroon}
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = harvester_logic,
+            function = get_eff_providers,
+            args = [client, H1],
+            expected_result = ?OK_LIST(ExpProviders)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % check also harvester_logic:has_eff_provider function
+    lists:foreach(
+        fun(ProviderId) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, harvester_logic, has_eff_provider, [H1, ProviderId])
+            )
+        end, ExpProviders
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, harvester_logic, has_eff_provider, [H1, <<"asdiucyaie827346w">>])
+    ).
+
+get_eff_provider_test(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%      Provider1
+    %%          |
+    %%       Space1
+    %%          |
+    %%      Harvester1
+    %%          |
+    %%        User1
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    {ok, {P1, _P1Macaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+
+    oz_test_utils:support_space(Config, P1, S1),
+
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
+
+    oz_test_utils:harvester_add_space(Config, H1, S1),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_PROVIDERS_VIEW]},
+                {user, U1}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin}
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = harvester_logic,
+            function = get_eff_provider,
+            args = [client, H1, P1],
+            expected_result = ?OK_MAP(#{
+                <<"name">> => ?PROVIDER_NAME1
             })
         }
     },

@@ -206,6 +206,7 @@ get_record_struct(1) ->
 
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => [{atom, string}]}}, 
 
         {creation_time, integer}, 
         {creator, {record, [ 

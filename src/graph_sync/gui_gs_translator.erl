@@ -567,6 +567,16 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = protected}, Pr
         }
     } end;
 
+translate_provider(#gri{aspect = instance, scope = shared}, Provider) ->
+    #{
+        <<"name">> := Name
+    } = Provider,
+
+    #{
+        <<"scope">> => <<"shared">>,
+        <<"name">> => Name
+    };
+
 translate_provider(#gri{aspect = {eff_user_membership, _UserId}}, Intermediaries) ->
     format_intermediaries(Intermediaries);
 
@@ -619,6 +629,7 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, 
         <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = groups}),
         <<"effGroupList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = eff_groups}),
         <<"spaceList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = spaces}),
+        <<"effProviderList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = eff_providers}),
         <<"info">> => maps:merge(translate_creator(Harvester#od_harvester.creator), #{
             <<"creationTime">> => Harvester#od_harvester.creation_time
         })
@@ -713,6 +724,14 @@ translate_harvester(#gri{aspect = spaces}, Spaces) ->
             fun(SpaceId) ->
                 gs_protocol:gri_to_string(#gri{type = od_space, id = SpaceId, aspect = instance, scope = auto})
             end, Spaces)
+    };
+
+translate_harvester(#gri{aspect = eff_providers}, Groups) ->
+    #{
+        <<"list">> => lists:map(
+            fun(ProviderId) ->
+                gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = auto})
+            end, Groups)
     };
 
 translate_harvester(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->

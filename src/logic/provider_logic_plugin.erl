@@ -71,6 +71,7 @@ operation_supported(get, list, private) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
+operation_supported(get, instance, shared) -> true;
 
 operation_supported(get, eff_users, private) -> true;
 operation_supported(get, {eff_user_membership, _}, private) -> true;
@@ -216,7 +217,9 @@ get(#el_req{gri = #gri{id = Id, aspect = instance, scope = protected}}, Provider
         <<"online">> => provider_connection:is_online(Id),
         <<"creationTime">> => CreationTime
     }};
-
+get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Provider) ->
+    #od_provider{name = Name} = Provider,
+    {ok, #{<<"name">> => Name}};
 
 get(#el_req{gri = #gri{aspect = domain_config, id = ProviderId}}, Provider) ->
     #od_provider{
@@ -472,6 +475,16 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
         _ ->
             % Access to private data also allows access to protected data
             authorize(Req#el_req{gri = #gri{scope = private}}, Provider)
+    end;
+
+authorize(Req = #el_req{operation = get, gri = #gri{id = ProviderId, aspect = instance, scope = shared}}, Provider) ->
+    case {Req#el_req.client, Req#el_req.auth_hint} of
+        {?USER(UserId), ?THROUGH_HARVESTER(HarvesterId)} ->
+            provider_logic:has_eff_harvester(ProviderId, HarvesterId)
+                andalso harvester_logic:has_eff_user(HarvesterId, UserId);
+        _ ->
+            % Access to protected data also allows access to shared data
+            authorize(Req#el_req{gri = #gri{scope = protected}}, Provider)
     end;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_users}}, _) ->

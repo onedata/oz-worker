@@ -397,7 +397,6 @@ get_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ExpName, <<"domain">> => ExpDomain,
                 <<"effectiveGroups">> => [], <<"effectiveUsers">> => [U1],
-                <<"effectiveHarvesters">> => [],
                 <<"latitude">> => ExpLatitude, <<"longitude">> => ExpLongitude,
                 <<"spaces">> => #{S1 => SupportSize},
                 <<"subdomain">> => <<"undefined">>,
@@ -1420,7 +1419,7 @@ list_eff_harvesters_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-    % check also space_logic:has_eff_harvester function
+    % check also provider_logic:has_eff_harvester function
     lists:foreach(
         fun(HarvesterId) ->
             ?assert(oz_test_utils:call_oz(

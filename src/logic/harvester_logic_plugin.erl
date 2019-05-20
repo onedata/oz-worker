@@ -105,6 +105,9 @@ operation_supported(get, {eff_group_privileges, _}, private) -> true;
 operation_supported(get, {eff_group_membership, _}, private) -> true;
 
 operation_supported(get, spaces, private) -> true;
+
+operation_supported(get, eff_providers, private) -> true;
+
 operation_supported(get, indices, private) -> true;
 operation_supported(get, {index_stats, _}, private) -> true;
 
@@ -486,6 +489,9 @@ get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Harvester) ->
 
 get(#el_req{gri = #gri{aspect = spaces}}, Harvester) ->
     {ok, entity_graph:get_relations(direct, top_down, od_space, Harvester)};
+
+get(#el_req{gri = #gri{aspect = eff_providers}}, Harvester) ->
+    {ok, entity_graph:get_relations(effective, top_down, od_provider, Harvester)};
 
 get(#el_req{gri = #gri{aspect = indices}}, Harvester) ->
     {ok, maps:keys(Harvester#od_harvester.indices)};
@@ -1029,6 +1035,9 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_group
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = spaces}}) ->
     [?OZ_HARVESTERS_LIST_RELATIONSHIPS];
 
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_providers}}) ->
+    [?OZ_HARVESTERS_LIST_RELATIONSHIPS];
+
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = indices}}) ->
     [?OZ_HARVESTERS_VIEW];
 
@@ -1425,7 +1434,7 @@ normalize_and_check_endpoint(Endpoint, Plugin) ->
 %% @private
 %% @doc
 %% Sets archival flag in existing stats to given value
-%% and creates missing stats for all providers in given space.
+%% and creates missing stats for all providers that support given space.
 %% @end
 %%--------------------------------------------------------------------
 -spec prepare_index_stats(od_harvester:indices_stats(), od_space:id(), boolean()) ->
