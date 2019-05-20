@@ -24,6 +24,7 @@
 -export([
     get/2,
     get_protected_data/2,
+    get_public_data/2,
     list/1
 ]).
 -export([
@@ -157,6 +158,21 @@ get_protected_data(Client, ClusterId) ->
         operation = get,
         client = Client,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = instance, scope = protected}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves public cluster data from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_public_data(Client :: entity_logic:client(), ClusterId :: od_cluster:id()) ->
+    {ok, maps:map()} | {error, term()}.
+get_public_data(Client, ClusterId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_cluster, id = ClusterId, aspect = instance, scope = public}
     }).
 
 

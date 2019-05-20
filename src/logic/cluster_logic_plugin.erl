@@ -67,6 +67,7 @@ operation_supported(get, list, private) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
+operation_supported(get, instance, public) -> true;
 
 operation_supported(get, users, private) -> true;
 operation_supported(get, eff_users, private) -> true;
@@ -247,6 +248,20 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Cluster) ->
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
     }};
+get(#el_req{gri = #gri{aspect = instance, scope = public}}, Cluster) ->
+    #od_cluster{
+        type = Type,
+        worker_version = WorkerVersion,
+        onepanel_version = OnepanelVersion,
+        creation_time = CreationTime
+    } = Cluster,
+
+    {ok, #{
+        <<"type">> => Type,
+        <<"workerVersion">> => cluster_logic:version_info_to_json(WorkerVersion),
+        <<"onepanelVersion">> => cluster_logic:version_info_to_json(OnepanelVersion),
+        <<"creationTime">> => CreationTime
+    }};
 
 get(#el_req{gri = #gri{aspect = users}}, Cluster) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_user, Cluster)};
@@ -415,7 +430,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_tok
 authorize(#el_req{client = ?USER(UserId), operation = get, gri = #gri{aspect = instance, scope = private}}, Cluster) ->
     auth_by_privilege(UserId, Cluster, ?CLUSTER_VIEW);
 
-authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = ClusterId, aspect = instance, scope = protected}}, Cluster) ->
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Cluster) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this cluster is checked in 'exists'
@@ -429,22 +444,17 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = ClusterId, aspect
             group_logic:has_eff_privilege(GroupId, ClientUserId, ?GROUP_VIEW);
 
         {?USER(ClientUserId), _} ->
-            % Protected scope does not carry any sensitive information.
-            %   * Onezone - available to all users
-            %   * Oneprovider - available to provider/cluster effective users
-            case Cluster#od_cluster.type of
-                ?ONEZONE ->
-                    true;
-                ?ONEPROVIDER ->
-                    ProviderId = ClusterId,
-                    provider_logic:has_eff_user(ProviderId, ClientUserId) orelse
-                        cluster_logic:has_eff_user(Cluster, ClientUserId)
-            end;
+            cluster_logic:has_eff_user(Cluster, ClientUserId);
 
         _ ->
             % Access to private data also allows access to protected data
             authorize(Req#el_req{gri = GRI#gri{scope = private}}, Cluster)
     end;
+
+authorize(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}}, _) ->
+    % Public scope does not carry any sensitive information.
+    true;
+
 
 authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
     true;

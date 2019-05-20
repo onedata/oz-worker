@@ -786,8 +786,7 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Clus
         <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = users}),
         <<"effUserList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = eff_users}),
         <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = groups}),
-        <<"effGroupList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = eff_groups}),
-        <<"canViewPrivateData">> => cluster_logic:has_eff_privilege(Cluster, UserId, ?CLUSTER_VIEW)
+        <<"effGroupList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = eff_groups})
     } end;
 
 translate_cluster(#gri{id = ClusterId, aspect = instance, scope = protected}, Cluster) ->
@@ -818,8 +817,35 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = protected}, Cl
         <<"onepanelProxy">> => OnepanelProxy,
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
-        }),
-        <<"canViewPrivateData">> => false
+        })
+    } end;
+
+translate_cluster(#gri{id = ClusterId, aspect = instance, scope = public}, Cluster) ->
+    #{
+        <<"type">> := Type,
+        <<"workerVersion">> := WorkerVersion,
+        <<"onepanelVersion">> := OnepanelVersion,
+        <<"creationTime">> := CreationTime
+    } = Cluster,
+
+    ProviderId = ClusterId,
+    fun(?USER(UserId)) -> #{
+        <<"scope">> => <<"public">>,
+        <<"directMembership">> => cluster_logic:has_direct_user(ClusterId, UserId),
+        <<"type">> => Type,
+        <<"provider">> => case Type of
+            ?ONEZONE ->
+                null;
+            ?ONEPROVIDER ->
+                gs_protocol:gri_to_string(#gri{
+                    type = od_provider, id = ProviderId, aspect = instance, scope = auto
+                })
+        end,
+        <<"workerVersion">> => WorkerVersion,
+        <<"onepanelVersion">> => OnepanelVersion,
+        <<"info">> => #{
+            <<"creationTime">> => CreationTime
+        }
     } end;
 
 translate_cluster(#gri{aspect = users}, Users) ->

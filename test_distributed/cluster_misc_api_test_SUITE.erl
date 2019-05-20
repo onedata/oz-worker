@@ -133,7 +133,12 @@ get_onezone_cluster_test(Config) ->
     ),
     get_protected_data_test_base(
         Config, ?ONEZONE_CLUSTER_ID, ?ONEZONE, VersionInfo,
-        [{user, NonAdmin}], % Every user of onezone is allowed to view protected data
+        [],
+        [{user, NonAdmin}]
+    ),
+    get_public_data_test_base(
+        Config, ?ONEZONE_CLUSTER_ID, ?ONEZONE, VersionInfo,
+        [{user, NonAdmin}], % Every user of onezone is allowed to view public data
         []
     ).
 
@@ -157,8 +162,14 @@ get_oneprovider_cluster_test(Config) ->
     ),
     get_protected_data_test_base(
         Config, ClusterId, ?ONEPROVIDER, VersionInfo,
-        [{provider, ProviderId, Macaroon}, {user, EffUserOfProvider}],
-        [{user, NonAdmin}] % Only provider/cluster effective users are allowed to view protected data
+        [{provider, ProviderId, Macaroon}],
+        [{user, NonAdmin}, {user, EffUserOfProvider}]
+    ),
+    get_public_data_test_base(
+        Config, ClusterId, ?ONEPROVIDER, VersionInfo,
+        % Every user of onezone is allowed to view public data
+        [{provider, ProviderId, Macaroon}, {user, EffUserOfProvider}, {user, NonAdmin}],
+        []
     ).
 
 
@@ -175,7 +186,7 @@ get_private_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectC
     ExpectedOnepanelProxy = false,
 
     % Get and check private data
-    GetPrivateDataApiTestSpec = #api_test_spec{
+    ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
@@ -220,7 +231,7 @@ get_private_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectC
         }
         % @todo gs
     },
-    ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 get_protected_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectClients, ForbiddenClients) ->
@@ -253,7 +264,7 @@ get_protected_data_test_base(Config, ClusterId, ClusterType, VersionInfo, Correc
     },
 
     % Get and check protected data
-    GetProtectedDataApiTestSpec = #api_test_spec{
+    ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
@@ -281,7 +292,60 @@ get_protected_data_test_base(Config, ClusterId, ClusterType, VersionInfo, Correc
         }
         % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+get_public_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectClients, ForbiddenClients) ->
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, AnyUser} = oz_test_utils:create_user(Config),
+    {ok, U1} = oz_test_utils:cluster_add_user(Config, ClusterId, U1),
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U1, [], [?CLUSTER_VIEW]),
+    {ok, U2} = oz_test_utils:cluster_add_user(Config, ClusterId, U2),
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U2, [?CLUSTER_VIEW], []),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {Release, Build, Gui} = VersionInfo,
+    ExpectedWorkerVersionInfoJson = #{
+        <<"release">> => Release,
+        <<"build">> => Build,
+        <<"gui">> => Gui
+    },
+    ExpectedOnepanelVersionInfoJson = #{
+        <<"release">> => ?DEFAULT_RELEASE_VERSION,
+        <<"build">> => ?DEFAULT_BUILD_VERSION,
+        <<"gui">> => ?EMPTY_GUI_HASH
+    },
+
+    ClusterDetails = #{
+        <<"type">> => ClusterType,
+        <<"workerVersion">> => ExpectedWorkerVersionInfoJson,
+        <<"onepanelVersion">> => ExpectedOnepanelVersionInfoJson
+    },
+
+    % Get and check public data
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_CLUSTERS_VIEW]},
+                {user, U1},
+                {user, U2},
+                {user, AnyUser},
+                nobody
+            ] ++ CorrectClients,
+            unauthorized = [],
+            forbidden = ForbiddenClients
+        },
+        logic_spec = #logic_spec{
+            module = cluster_logic,
+            function = get_public_data,
+            args = [client, ClusterId],
+            expected_result = ?OK_MAP_CONTAINS(ClusterDetails)
+        }
+        % TODO gs
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 update_onepanel_proxy_test(Config) ->
