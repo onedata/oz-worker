@@ -411,7 +411,7 @@ terminate_clients(Config, SupervisorPid) ->
 
 create_n_users(Config, Number) ->
     lists:map(fun(_) ->
-        {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, User} = oz_test_utils:create_user(Config),
         User
     end, lists:seq(1, Number)).
 

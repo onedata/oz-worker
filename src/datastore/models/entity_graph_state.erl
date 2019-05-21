@@ -26,6 +26,9 @@
 -type diff() :: datastore_doc:diff(state()).
 -export_type([state/0, diff/0]).
 
+-type dirty_queue() :: ordsets:ordset({Priority :: integer(), entity_logic:entity_type(), entity_logic:entity_id()}).
+-export_type([dirty_queue/0]).
+
 -define(STATE_KEY, <<"entity_graph_state">>).
 
 -define(CTX, #{

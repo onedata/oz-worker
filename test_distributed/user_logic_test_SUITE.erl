@@ -19,9 +19,11 @@
 -include("datastore/oz_datastore_models.hrl").
 -include("auth/entitlement_mapping.hrl").
 -include("http/gui_paths.hrl").
+-include("api_test_utils.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 -include_lib("gui/include/gui_session.hrl").
@@ -33,19 +35,21 @@
     init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
-    basic_auth_cache_test/1,
-    basic_auth_login_test/1,
-    automatic_group_membership_test/1,
+    basic_auth_authenticate_test/1,
+    basic_auth_endpoint_test/1,
     change_password_test/1,
+    set_password_test/1,
+    migrate_onepanel_user_to_onezone/1,
     coalesce_entitlements_test/1
 ]).
 
 all() ->
     ?ALL([
-        basic_auth_cache_test,
-        basic_auth_login_test,
-        automatic_group_membership_test,
+        basic_auth_authenticate_test,
+        basic_auth_endpoint_test,
         change_password_test,
+        set_password_test,
+        migrate_onepanel_user_to_onezone,
         coalesce_entitlements_test
     ]).
 
@@ -54,193 +58,192 @@ all() ->
 %%% Test functions
 %%%===================================================================
 
-% Check if basic auth login endpoint works.
-basic_auth_cache_test(Config) ->
-    Login = <<"user1">>,
-    Password = <<"password1">>,
-    IncorrectPassword = <<"password2">>,
+basic_auth_authenticate_test(Config) ->
+    Username1 = <<"user1">>,
+    Pass1 = <<"password1">>,
+    {ok, U1} = oz_test_utils:create_user(Config, #{<<"username">> => Username1, <<"password">> => Pass1}),
 
-    lists:foreach(
-        % As basic auth cache is node specific,
-        % it should be tested on each node individually
-        fun(Node) ->
-            oz_test_utils:toggle_basic_auth(Config, true),
-            Nodes = [Node],
-            TempConf = lists:map(
-                fun
-                    ({oz_worker_nodes, _}) -> {oz_worker_nodes, Nodes};
-                    (Val) -> Val
-                end, Config
-            ),
+    Username2 = <<"user2">>,
+    Pass2 = <<"password2">>,
+    {ok, U2} = oz_test_utils:create_user(Config, #{<<"username">> => Username2, <<"password">> => Pass2}),
 
-            % Make sure there is no cached record for given user
-            ?assertMatch({error, not_found}, oz_test_utils:call_oz(
-                TempConf, basic_auth_cache, get, [Login, Password])
-            ),
+    Authenticate = fun(Username, Password) ->
+        oz_test_utils:call_oz(Config, basic_auth, authenticate, [Username, Password])
+    end,
 
-            % After calling authenticating function, fetched resource should be cached
-            ?assertMatch({ok, _}, oz_test_utils:call_oz(
-                TempConf, user_logic, authenticate_by_basic_credentials, [Login, Password]
-            )),
-            ?assertMatch({ok, _}, oz_test_utils:call_oz(
-                TempConf, basic_auth_cache, get, [Login, Password])
-            ),
+    ?assertMatch({ok, U1}, Authenticate(Username1, Pass1)),
+    ?assertMatch({ok, U2}, Authenticate(Username2, Pass2)),
 
-            % It should be still valid after only 2 seconds and should expire after 5 seconds overall
-            timer:sleep(timer:seconds(2)),
-            ?assertMatch({ok, _}, oz_test_utils:call_oz(
-                TempConf, basic_auth_cache, get, [Login, Password])
-            ),
-            timer:sleep(timer:seconds(3)),
-            ?assertMatch({error, not_found}, oz_test_utils:call_oz(
-                TempConf, basic_auth_cache, get, [Login, Password])
-            ),
+    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(Username1, Pass2)),
+    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(Username2, Pass1)),
+    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(<<"foo">>, <<"bar">>)),
 
-            % Authenticating with incorrect credentials should fail with nothing cached
-            ?assertMatch({error, _}, oz_test_utils:call_oz(
-                TempConf, user_logic, authenticate_by_basic_credentials, [Login, IncorrectPassword]
-            )),
-            ?assertMatch({error, not_found}, oz_test_utils:call_oz(
-                TempConf, basic_auth_cache, get, [Login, Password])
-            ),
+    oz_test_utils:call_oz(Config, user_logic, toggle_basic_auth, [?ROOT, U1, false]),
+    oz_test_utils:call_oz(Config, user_logic, toggle_basic_auth, [?ROOT, U2, false]),
+    ?assertMatch(?ERROR_BASIC_AUTH_DISABLED, Authenticate(Username1, Pass1)),
+    ?assertMatch(?ERROR_BASIC_AUTH_DISABLED, Authenticate(Username2, Pass2)),
 
-            % When basic auth is disabled in auth.config, proper error should be returned
-            oz_test_utils:toggle_basic_auth(Config, false),
-            ?assertMatch({error, onepanel_auth_disabled}, oz_test_utils:call_oz(
-                TempConf, user_logic, authenticate_by_basic_credentials, [Login, Password]
-            ))
-        end, ?config(oz_worker_nodes, Config)
-    ),
+    oz_test_utils:call_oz(Config, user_logic, toggle_basic_auth, [?ROOT, U2, true]),
+    ?assertMatch(?ERROR_BASIC_AUTH_DISABLED, Authenticate(Username1, Pass1)),
+    ?assertMatch({ok, U2}, Authenticate(Username2, Pass2)),
+
+    oz_test_utils:toggle_basic_auth(Config, false),
+    ?assertMatch(?ERROR_BASIC_AUTH_NOT_SUPPORTED, Authenticate(Username1, Pass1)),
+    ?assertMatch(?ERROR_BASIC_AUTH_NOT_SUPPORTED, Authenticate(Username2, Pass2)),
     ok.
 
 
-% Check if basic auth login endpoint works.
-basic_auth_login_test(Config) ->
-    % To resolve user details, OZ asks onepanel via a REST endpoint. In this
-    % test, onepanel is simulated by mocking http_client.
-    % now just try to log in into OZ using basic auth endpoint and
-    % check if it works correctly.
-    BasicAuthEndpoint = str_utils:format_bin(
-        "https://~s~s", [oz_test_utils:oz_domain(Config), ?LOGIN_PATH]
-    ),
-    UserPasswordB64 = base64:encode(<<"user1:password1">>),
+basic_auth_endpoint_test(Config) ->
+    Username = <<"user1">>,
+    Pass = <<"password1">>,
+    {ok, User} = oz_test_utils:create_user(Config, #{<<"username">> => Username, <<"password">> => Pass}),
+
+    Endpoint = oz_test_utils:oz_url(Config, <<?LOGIN_PATH>>),
+    UserPasswordB64 = base64:encode(<<Username/binary, ":", Pass/binary>>),
     BasicAuthHeaders = #{
         <<"authorization">> => <<"Basic ", UserPasswordB64/binary>>
     },
     Opts = [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}],
-    Response = http_client:post(
-        BasicAuthEndpoint, BasicAuthHeaders, [], Opts
-    ),
+    Response = http_client:post(Endpoint, BasicAuthHeaders, [], Opts),
     ?assertMatch({ok, 200, _, _}, Response),
     {ok, 200, RespHeaders, _} = Response,
     % Make sure response headers contain cookie with session id - which means
     % that the user has logged in.
     Cookie = maps:get(<<"set-cookie">>, RespHeaders, <<"">>),
+    % Cookie: SID=99e4557|4bec19d7; Version=1; Expires=Mon, 13-May-2019 07:46:05 GMT; ...
     CookieKey = ?SESSION_COOKIE_KEY,
     CookieLen = byte_size(?SESSION_COOKIE_KEY),
     ?assertMatch(<<CookieKey:CookieLen/binary, "=", _/binary>>, Cookie),
-    % Try some inexistent user credentials if 401 is returned
+    [CookieKeyAndValue | _] = binary:split(Cookie, <<";">>),
+    % CookieKeyAndValue: SID=99e4557|4bec19d7
+    <<CookieKey:CookieLen/binary, "=", CookieValue/binary>> = CookieKeyAndValue,
+    % CookieValue: 99e4557|4bec19d7
+    SessionId = gui_session:get_session_id(CookieValue),
+    ?assertMatch({ok, User}, oz_test_utils:call_oz(Config, session, get_user_id, [SessionId])),
+
+    % If basic auth is disabled for given user, he should not be able to authenticate
+    oz_test_utils:call_oz(Config, user_logic, toggle_basic_auth, [?ROOT, User, false]),
+    ?assertMatch({ok, 401, _, _}, http_client:post(Endpoint, BasicAuthHeaders, [], Opts)),
+
+    % Try some inexistent user credentials
     WrongUserPasswordB64 = base64:encode(<<"lol:wut">>),
     WrongBasicAuthHeaders = #{
         <<"authorization">> => <<"Basic ", WrongUserPasswordB64/binary>>
     },
-    ?assertMatch({ok, 401, _, _}, http_client:post(
-        BasicAuthEndpoint, WrongBasicAuthHeaders, [], Opts
-    )),
+    ?assertMatch({ok, 401, _, _}, http_client:post(Endpoint, WrongBasicAuthHeaders, [], Opts)),
 
     % Basic auth login should not work if basic auth is disabled in auth.config
     oz_test_utils:toggle_basic_auth(Config, false),
-    ?assertMatch({ok, 400, _, _}, http_client:post(
-        BasicAuthEndpoint, BasicAuthHeaders, [], Opts
-    )),
-    ?assertMatch({ok, 400, _, _}, http_client:post(
-        BasicAuthEndpoint, WrongBasicAuthHeaders, [], Opts
-    )),
+    ?assertMatch({ok, 400, _, _}, http_client:post(Endpoint, BasicAuthHeaders, [], Opts)),
+    ?assertMatch({ok, 400, _, _}, http_client:post(Endpoint, WrongBasicAuthHeaders, [], Opts)),
 
     ok.
 
-% Users that log in through basic auth should automatically be added to
-% groups based on 'onepanel_role_to_group_mapping' env setting.
-automatic_group_membership_test(Config) ->
-    Nodes = [Node | _] = ?config(oz_worker_nodes, Config),
-    % First make sure that groups for tests exist in the system. We can use
-    % the predefined groups mechanism here.
-    PredefinedGroups = [
-        #{
-            id => <<"group1">>,
-            name => <<"Group 1">>,
-            oz_privileges => {privileges, oz_privileges}
-        },
-        #{
-            id => <<"group2">>,
-            name => <<"Group 2">>,
-            oz_privileges => [?OZ_VIEW_PRIVILEGES, ?OZ_SET_PRIVILEGES]
-        }
-    ],
-    % Set the corresponding env variable on one of the nodes
-    test_utils:set_env(Nodes, ?APP_NAME, predefined_groups, PredefinedGroups),
-    % Call the group creation procedure
-    ok = rpc:call(Node, group_logic, create_predefined_groups, []),
-    % Now, prepare config entry for onepanel role to groups mapping. We want
-    % everyone with role "user2Role" to belong to both groups 1 and 2.
-    RoleToGroupMapping = #{
-        <<"user2Role">> => [<<"group1">>, <<"group2">>]
-    },
-    test_utils:set_env(Nodes, ?APP_NAME, onepanel_role_to_group_mapping, RoleToGroupMapping),
-    % Try to log in using credentials user2:password2 (user with id user2Id)
-    % and see if he was added to both groups.
-    BasicAuthEndpoint = str_utils:format_bin(
-        "https://~s~s", [oz_test_utils:oz_domain(Config), ?LOGIN_PATH]
-    ),
-    % See mock_onepanel_rest_get/1.
-    UserPasswordB64 = base64:encode(<<"user2:password2">>),
-    BasicAuthHeaders = #{
-        <<"authorization">> => <<"Basic ", UserPasswordB64/binary>>
-    },
-    Opts = [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}],
-    ?assertMatch({ok, 200, _, _}, http_client:post(
-        BasicAuthEndpoint, BasicAuthHeaders, [], Opts
-    )),
-    % now for the groups check
-    User2Id = oz_test_utils:call_oz(
-        Config, user_logic, onepanel_uid_to_system_uid, [<<"user2Id">>]
-    ),
-    {ok, #od_user{groups = GroupIds}} = oz_test_utils:get_user(Config, User2Id),
-    ?assertEqual([<<"group1">>, <<"group2">>], lists:sort(GroupIds)),
-    ok.
 
-% This tests checks if password changing procedure correctly follows the
-% request to onepanel.
 change_password_test(Config) ->
-    [Node | _] = ?config(oz_worker_nodes, Config),
-    % See mock_onepanel_rest_patch/1.
-    ?assertEqual({error, <<"Invalid password">>}, rpc:call(
-        Node, user_logic, change_user_password, [
-            <<"user3">>, <<"bad_password">>, <<"new_password">>
-        ]
-    )),
-    % Now with correct credentials
-    ?assertEqual(ok, rpc:call(
-        Node, user_logic, change_user_password, [
-            <<"user3">>, <<"password3">>, <<"new_password">>
-        ]
-    )),
+    Username1 = <<"user1">>,
+    OldPass1 = <<"password1">>,
+    NewPass1 = <<"newPass1">>,
+    {ok, U1} = oz_test_utils:create_user(Config, #{<<"username">> => Username1, <<"password">> => OldPass1}),
 
-    oz_test_utils:toggle_basic_auth(Config, false),
-    % Password changing should not work if basic auth is disabled in auth.config
-    ?assertEqual({error, onepanel_auth_disabled}, rpc:call(
-        Node, user_logic, change_user_password, [
-            <<"user3">>, <<"bad_password">>, <<"new_password">>
-        ]
-    )),
+    Authenticate = fun(Username, Password) ->
+        oz_test_utils:call_oz(Config, basic_auth, authenticate, [Username, Password])
+    end,
+    ChangePassword = fun(User, OldPassword, NewPassword) ->
+        oz_test_utils:call_oz(Config, user_logic, change_password, [?USER(User), User, OldPassword, NewPassword])
+    end,
 
-    % Password changing should not work if basic auth is disabled in auth.config
-    ?assertEqual({error, onepanel_auth_disabled}, rpc:call(
-        Node, user_logic, change_user_password, [
-            <<"user3">>, <<"password3">>, <<"new_password">>
-        ]
-    )),
+    ?assertMatch({ok, U1}, Authenticate(Username1, OldPass1)),
+    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(Username1, NewPass1)),
+
+    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, ChangePassword(U1, <<"asdfsdaf">>, NewPass1)),
+    ?assertMatch(?ERROR_BAD_VALUE_PASSWORD, ChangePassword(U1, OldPass1, <<"1">>)),
+
+    ?assertMatch(ok, ChangePassword(U1, OldPass1, NewPass1)),
+    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(Username1, OldPass1)),
+    ?assertMatch({ok, U1}, Authenticate(Username1, NewPass1)),
+
+    % Create second user without basic auth enabled
+    Username2 = <<"user2">>,
+    FirstPass2 = <<"password2">>,
+    SecondPass2 = <<"newPass2">>,
+    {ok, U2} = oz_test_utils:create_user(Config, #{<<"username">> => Username2}),
+
+    ?assertMatch(?ERROR_BASIC_AUTH_DISABLED, ChangePassword(U2, undefined, FirstPass2)),
+    oz_test_utils:call_oz(Config, user_logic, toggle_basic_auth, [?ROOT, U2, true]),
+    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, ChangePassword(U2, <<"123">>, FirstPass2)),
+    ?assertMatch(ok, ChangePassword(U2, undefined, FirstPass2)),
+
+    ?assertMatch({ok, U2}, Authenticate(Username2, FirstPass2)),
+    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(Username2, SecondPass2)),
+
+    ?assertMatch(ok, ChangePassword(U2, FirstPass2, SecondPass2)),
+    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(Username2, FirstPass2)),
+    ?assertMatch({ok, U2}, Authenticate(Username2, SecondPass2)),
+
     ok.
+
+
+set_password_test(Config) ->
+    Username1 = <<"user1">>,
+    NewPass1 = <<"newPass1">>,
+    {ok, U1} = oz_test_utils:create_user(Config, #{<<"username">> => Username1}),
+
+    Authenticate = fun(Username, Password) ->
+        oz_test_utils:call_oz(Config, basic_auth, authenticate, [Username, Password])
+    end,
+    SetPassword = fun(User, NewPassword) ->
+        oz_test_utils:call_oz(Config, user_logic, set_password, [?ROOT, User, NewPassword])
+    end,
+
+    ?assertMatch(?ERROR_BASIC_AUTH_DISABLED, Authenticate(Username1, NewPass1)),
+    oz_test_utils:call_oz(Config, user_logic, toggle_basic_auth, [?ROOT, U1, true]),
+    % If no password was set, ERROR_BASIC_AUTH_DISABLED is expected
+    ?assertMatch(?ERROR_BASIC_AUTH_DISABLED, Authenticate(Username1, NewPass1)),
+
+    ?assertMatch(?ERROR_BAD_VALUE_PASSWORD, SetPassword(U1, <<"1">>)),
+    ?assertMatch(ok, SetPassword(U1, NewPass1)),
+    ?assertMatch({ok, U1}, Authenticate(Username1, NewPass1)),
+    ?assertMatch(?ERROR_BAD_BASIC_CREDENTIALS, Authenticate(Username1, <<"bad-pass">>)),
+    ok.
+
+
+migrate_onepanel_user_to_onezone(Config) ->
+    Roles = [regular, admin],
+
+    lists:foreach(fun(Role) ->
+        OnepanelUserId = ?UNIQUE_STRING,
+        OnepanelUsername = str_utils:format_bin("onepanel-~s", [Role]),
+        Password = str_utils:format_bin("password-~s", [Role]),
+        PasswordHash = onedata_passwords:create_hash(Password),
+        GroupMapping = oz_test_utils:get_env(Config, onepanel_role_to_group_mapping),
+        ExpectedGroups = maps:get(atom_to_binary(Role, utf8), GroupMapping, []),
+
+        oz_test_utils:call_oz(Config, basic_auth, migrate_onepanel_user_to_onezone, [
+            OnepanelUserId, OnepanelUsername, PasswordHash, Role
+        ]),
+
+        ExpUserId = basic_auth:onepanel_uid_to_system_uid(OnepanelUserId),
+        ?assertMatch({ok, ExpUserId}, oz_test_utils:call_oz(Config, basic_auth, authenticate, [
+            OnepanelUsername, Password
+        ])),
+
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+        lists:foreach(fun(Group) ->
+            ?assert(oz_test_utils:call_oz(Config, group_logic, has_eff_user, [Group, ExpUserId]))
+        end, ExpectedGroups),
+
+        IsInCluster = oz_test_utils:call_oz(Config, cluster_logic, has_eff_user, [
+            ?ONEZONE_CLUSTER_ID, ExpUserId
+        ]),
+
+        % Only users with admin role should be added to Onezone cluster
+        case Role of
+            regular -> ?assertNot(IsInCluster);
+            admin -> ?assert(IsInCluster)
+        end
+    end, Roles).
 
 
 % Below macros use the variables Config and UserId, which appear in merge_groups_in_linked_accounts_test/1
@@ -316,14 +319,14 @@ coalesce_entitlements_test(Config) ->
 
     FirstLinkedAcc = LinkedAcc(?DUMMY_IDP, []),
     {ok, #document{key = UserId}} = oz_test_utils:call_oz(
-        Config, user_logic, create_user_by_linked_account, [FirstLinkedAcc]
+        Config, linked_accounts, acquire_user, [FirstLinkedAcc]
     ),
     ?assertHasLinkedAccount(FirstLinkedAcc),
     ?assertGroupsCount(0, 0),
     ?assertLinkedAccountsCount(1),
 
     MergeAcc = fun(IdP, Entitlements) ->
-        oz_test_utils:call_oz(Config, user_logic, merge_linked_account, [
+        oz_test_utils:call_oz(Config, linked_accounts, merge, [
             UserId, LinkedAcc(IdP, Entitlements)
         ]),
         % Make sure
@@ -506,43 +509,14 @@ coalesce_entitlements_test(Config) ->
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    Posthook = fun(NewConfig) ->
-        Nodes = ?config(oz_worker_nodes, NewConfig),
-        test_utils:set_env(Nodes, ctool, force_insecure_connections, true),
-        % Sleep a while before mocking http_client (which is done in
-        % init_per_testcase) - otherwise meck's reloading and purging the module
-        % can cause the oz-worker application to crash.
-        timer:sleep(5000),
-        NewConfig
-    end,
-    [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]} | Config].
+    [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
-init_per_testcase(Case, Config) when
-    Case =:= basic_auth_cache_test;
-    Case =:= basic_auth_login_test;
-    Case =:= automatic_group_membership_test ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, http_client, [passthrough]),
-    ok = mock_onepanel_rest_get(Nodes),
-    init_per_testcase(default, Config);
-init_per_testcase(change_password_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, http_client, [passthrough]),
-    ok = mock_onepanel_rest_get(Nodes),
-    ok = mock_onepanel_rest_patch(Nodes),
-    init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
     oz_test_utils:toggle_basic_auth(Config, true),
     Config.
 
-end_per_testcase(Case, Config) when
-    Case =:= basic_auth_cache_test;
-    Case =:= basic_auth_login_test;
-    Case =:= change_password_test;
-    Case =:= automatic_group_membership_test ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, http_client);
-end_per_testcase(_, _) ->
+end_per_testcase(_, Config) ->
+    oz_test_utils:delete_all_entities(Config),
     ok.
 
 end_per_suite(_Config) ->
@@ -553,67 +527,6 @@ end_per_suite(_Config) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-mock_onepanel_rest_get(Nodes) ->
-    ok = test_utils:mock_expect(Nodes, http_client, get,
-        fun(Url, Headers, Body, Options) ->
-            case binary:match(Url, <<"9443/api/v3/onepanel/users">>) of
-                nomatch -> meck:passthrough([Url, Headers, Body, Options]);
-                _ ->
-                    <<"Basic ", UserAndPassword/binary>> =
-                        maps:get(<<"authorization">>, Headers),
-                    [User, Passwd] =
-                        binary:split(base64:decode(UserAndPassword), <<":">>),
-                    case {User, Passwd} of
-                        {<<"user1">>, <<"password1">>} ->
-                            ResponseBody = json_utils:encode(#{
-                                <<"userId">> => <<"user1Id">>,
-                                <<"userRole">> => <<"user1Role">>
-                            }),
-                            {ok, 200, #{}, ResponseBody};
-                        {<<"user2">>, <<"password2">>} ->
-                            ResponseBody = json_utils:encode(#{
-                                <<"userId">> => <<"user2Id">>,
-                                <<"userRole">> => <<"user2Role">>
-                            }),
-                            {ok, 200, #{}, ResponseBody};
-                        _ -> {ok, 401, #{}, <<"">>}
-                    end
-            end
-        end),
-    ok.
-
-mock_onepanel_rest_patch(Nodes) ->
-    ok = test_utils:mock_expect(Nodes, http_client, patch,
-        fun(Url, Headers, Body, Options) ->
-            case binary:match(Url, <<"9443/api/v3/onepanel/users">>) of
-                nomatch -> meck:passthrough([Url, Headers, Body, Options]);
-                _ ->
-                    <<"Basic ", UserAndPassword/binary>> =
-                        maps:get(<<"authorization">>, Headers),
-                    [User, Passwd] =
-                        binary:split(base64:decode(UserAndPassword), <<":">>),
-                    case {User, Passwd} of
-                        {<<"user3">>, <<"password3">>} ->
-                            BodyMap = json_utils:decode(Body),
-                            OldPassword = maps:get(<<"currentPassword">>,
-                                BodyMap, undefined),
-                            NewPassword = maps:get(<<"newPassword">>,
-                                BodyMap, undefined),
-                            case {OldPassword, NewPassword} of
-                                {undefined, _} ->
-                                    {ok, 400, #{}, <<"">>};
-                                {_, undefined} ->
-                                    {ok, 400, #{}, <<"">>};
-                                _ ->
-                                    {ok, 204, #{}, <<"">>}
-                            end;
-                        _ -> {ok, 401, #{}, <<"">>}
-                    end
-            end
-        end),
-    ok.
-
 
 check_group_exists(Config, IdP, RawEntitlement) ->
     try

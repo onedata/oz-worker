@@ -163,7 +163,7 @@ global_groups_test(Config) ->
     % Now, creating a new user should cause him to automatically belong to
     % global groups with specified privileges.
     {ok, UserId} = oz_test_utils:create_user(
-        Config, #od_user{name = <<"User with automatic groups">>}
+        Config, #{<<"fullName">> => <<"User with automatic groups">>}
     ),
     {ok, #od_user{
         groups = UserGroups
@@ -185,7 +185,7 @@ global_groups_test(Config) ->
     % Make sure that disabling global groups has desired effects
     [test_utils:set_env(N, oz_worker, enable_global_groups, false) || N <- Nodes],
     {ok, UserNoGroupsId} = oz_test_utils:create_user(
-        Config, #od_user{name = <<"User with NO automatic groups">>}
+        Config, #{<<"fullName">> => <<"User with NO automatic groups">>}
     ),
     {ok, #od_user{
         groups = ShouldBeEmptyList
@@ -221,7 +221,7 @@ automatic_space_membership_via_global_group_test(Config) ->
     % Create a space and add the All Users group to it.
     % First, we need a dummy user for space creation.
     {ok, DummyUser} = oz_test_utils:create_user(
-        Config, #od_user{name = <<"Dummy">>}
+        Config, #{<<"fullName">> => <<"Dummy">>}
     ),
     {ok, OpenSpaceId} = oz_test_utils:create_space(
         Config, ?USER(DummyUser), <<"OpenSpace">>
@@ -232,7 +232,7 @@ automatic_space_membership_via_global_group_test(Config) ->
     % Now, every created user should belong to the All Users group and thus
     % have access to the OpenSpace.
     {ok, UserId} = oz_test_utils:create_user(
-        Config, #od_user{name = <<"User with automatic space membership">>}
+        Config, #{<<"fullName">> => <<"User with automatic space membership">>}
     ),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -248,7 +248,7 @@ automatic_space_membership_via_global_group_test(Config) ->
     % Make sure that disabling global groups has desired effects
     [test_utils:set_env(N, oz_worker, enable_global_groups, false) || N <- Nodes],
     {ok, UserIdWithoutAccess} = oz_test_utils:create_user(
-        Config, #od_user{name = <<"User with NO membership">>}
+        Config, #{<<"fullName">> => <<"User with NO membership">>}
     ),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -280,25 +280,14 @@ automatic_space_membership_via_global_group_test(Config) ->
 automatic_first_space_test(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     [test_utils:set_env(N, oz_worker, enable_automatic_first_space, false) || N <- Nodes],
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, UserRecord} = oz_test_utils:get_user(Config, UserId),
-    #od_user{
-        default_space = DefaultSpace,
-        spaces = Spaces
-    } = UserRecord,
-    ?assertEqual(DefaultSpace, undefined),
-    ?assertEqual(Spaces, []),
+    {ok, UserId} = oz_test_utils:create_user(Config),
+    ?assertMatch({ok, #od_user{spaces = []}}, oz_test_utils:get_user(Config, UserId)),
+
     % Enable automatic first space and check again
     [test_utils:set_env(N, oz_worker, enable_automatic_first_space, true) || N <- Nodes],
-    {ok, UserId2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, UserId2} = oz_test_utils:create_user(Config),
     {ok, UserRecord2} = oz_test_utils:get_user(Config, UserId2),
-    #od_user{
-        default_space = DefaultSpace2,
-        spaces = Spaces2
-    } = UserRecord2,
-    ?assertEqual(length(Spaces2), 1),
-    [SpaceId2] = Spaces2,
-    ?assertEqual(DefaultSpace2, SpaceId2),
+    [SpaceId2] = ?assertMatch([_], UserRecord2#od_user.spaces),
     {ok, #od_space{users = Users}} = oz_test_utils:get_space(Config, SpaceId2),
     ?assert(maps:is_key(UserId2, Users)).
 

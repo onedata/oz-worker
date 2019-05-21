@@ -13,6 +13,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 -module(auth_test_mode).
+-author("Lukasz Opiola").
 
 %% API
 -export([

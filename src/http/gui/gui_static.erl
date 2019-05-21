@@ -66,11 +66,11 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Reads given GUI package, and upon success, deploys the GUI package under given 
+%% Reads given GUI package, and upon success, deploys the GUI package under given
 %% GUI prefix on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec deploy_package(gui_prefix(), file:name_all()) -> 
+-spec deploy_package(gui_prefix(), file:name_all()) ->
     ok | {error, term()}.
 deploy_package(GuiPrefix, PackagePath) ->
     case gui:read_package(PackagePath) of
@@ -85,7 +85,7 @@ deploy_package(GuiPrefix, PackagePath) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Deploys a GUI package under given  GUI prefix on all cluster nodes. GuiHash must be
-%% provided manually. The operation is skipped if the GUI package already exists on all 
+%% provided manually. The operation is skipped if the GUI package already exists on all
 %% cluster nodes.
 %% @end
 %%--------------------------------------------------------------------

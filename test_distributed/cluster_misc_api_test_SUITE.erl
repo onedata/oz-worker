@@ -65,8 +65,8 @@ list_test(Config) ->
     % Make sure that clusters created in other tests are deleted.
     oz_test_utils:delete_all_entities(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ExpClusters = [?ONEZONE_CLUSTER_ID] ++ lists:map(
         fun(_) ->
@@ -119,7 +119,7 @@ list_test(Config) ->
 
 
 get_onezone_cluster_test(Config) ->
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
     GuiPackagePath = oz_test_utils:get_env(Config, gui_package_path),
     {ok, GuiHash} = oz_test_utils:call_oz(Config, gui, package_hash, [GuiPackagePath]),
     Release = oz_test_utils:call_oz(Config, oz_worker, get_version, []),
@@ -133,19 +133,24 @@ get_onezone_cluster_test(Config) ->
     ),
     get_protected_data_test_base(
         Config, ?ONEZONE_CLUSTER_ID, ?ONEZONE, VersionInfo,
-        [{user, NonAdmin}], % Every user of onezone is allowed to view protected data
+        [],
+        [{user, NonAdmin}]
+    ),
+    get_public_data_test_base(
+        Config, ?ONEZONE_CLUSTER_ID, ?ONEZONE, VersionInfo,
+        [{user, NonAdmin}], % Every user of onezone is allowed to view public data
         []
     ).
 
 
 get_oneprovider_cluster_test(Config) ->
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, ProviderAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, ProviderAdmin} = oz_test_utils:create_user(Config),
     {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
         Config, ProviderAdmin, ?PROVIDER_NAME1
     ),
     ClusterId = ProviderId,
-    {ok, EffUserOfProvider} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, EffUserOfProvider} = oz_test_utils:create_user(Config),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(EffUserOfProvider), ?UNIQUE_STRING),
     oz_test_utils:support_space(Config, ProviderId, Space),
     VersionInfo = {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH},
@@ -157,15 +162,21 @@ get_oneprovider_cluster_test(Config) ->
     ),
     get_protected_data_test_base(
         Config, ClusterId, ?ONEPROVIDER, VersionInfo,
-        [{provider, ProviderId, Macaroon}, {user, EffUserOfProvider}],
-        [{user, NonAdmin}] % Only provider/cluster effective users are allowed to view protected data
+        [{provider, ProviderId, Macaroon}],
+        [{user, NonAdmin}, {user, EffUserOfProvider}]
+    ),
+    get_public_data_test_base(
+        Config, ClusterId, ?ONEPROVIDER, VersionInfo,
+        % Every user of onezone is allowed to view public data
+        [{provider, ProviderId, Macaroon}, {user, EffUserOfProvider}, {user, NonAdmin}],
+        []
     ).
 
 
 get_private_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectClients, ForbiddenClients) ->
     AllPrivsWithoutView = privileges:cluster_privileges() -- [?CLUSTER_VIEW],
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
     {ok, U1} = oz_test_utils:cluster_add_user(Config, ClusterId, U1),
     oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U1, AllPrivsWithoutView, [?CLUSTER_VIEW]),
     {ok, U2} = oz_test_utils:cluster_add_user(Config, ClusterId, U2),
@@ -175,7 +186,7 @@ get_private_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectC
     ExpectedOnepanelProxy = false,
 
     % Get and check private data
-    GetPrivateDataApiTestSpec = #api_test_spec{
+    ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
@@ -220,12 +231,12 @@ get_private_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectC
         }
         % @todo gs
     },
-    ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 get_protected_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectClients, ForbiddenClients) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
     {ok, U1} = oz_test_utils:cluster_add_user(Config, ClusterId, U1),
     oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U1, [], [?CLUSTER_VIEW]),
     {ok, U2} = oz_test_utils:cluster_add_user(Config, ClusterId, U2),
@@ -253,7 +264,7 @@ get_protected_data_test_base(Config, ClusterId, ClusterType, VersionInfo, Correc
     },
 
     % Get and check protected data
-    GetProtectedDataApiTestSpec = #api_test_spec{
+    ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
@@ -281,13 +292,66 @@ get_protected_data_test_base(Config, ClusterId, ClusterType, VersionInfo, Correc
         }
         % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+get_public_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectClients, ForbiddenClients) ->
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, AnyUser} = oz_test_utils:create_user(Config),
+    {ok, U1} = oz_test_utils:cluster_add_user(Config, ClusterId, U1),
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U1, [], [?CLUSTER_VIEW]),
+    {ok, U2} = oz_test_utils:cluster_add_user(Config, ClusterId, U2),
+    oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U2, [?CLUSTER_VIEW], []),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {Release, Build, Gui} = VersionInfo,
+    ExpectedWorkerVersionInfoJson = #{
+        <<"release">> => Release,
+        <<"build">> => Build,
+        <<"gui">> => Gui
+    },
+    ExpectedOnepanelVersionInfoJson = #{
+        <<"release">> => ?DEFAULT_RELEASE_VERSION,
+        <<"build">> => ?DEFAULT_BUILD_VERSION,
+        <<"gui">> => ?EMPTY_GUI_HASH
+    },
+
+    ClusterDetails = #{
+        <<"type">> => ClusterType,
+        <<"workerVersion">> => ExpectedWorkerVersionInfoJson,
+        <<"onepanelVersion">> => ExpectedOnepanelVersionInfoJson
+    },
+
+    % Get and check public data
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_CLUSTERS_VIEW]},
+                {user, U1},
+                {user, U2},
+                {user, AnyUser},
+                nobody
+            ] ++ CorrectClients,
+            unauthorized = [],
+            forbidden = ForbiddenClients
+        },
+        logic_spec = #logic_spec{
+            module = cluster_logic,
+            function = get_public_data,
+            args = [client, ClusterId],
+            expected_result = ?OK_MAP_CONTAINS(ClusterDetails)
+        }
+        % TODO gs
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 update_onepanel_proxy_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllPrivs = privileges:cluster_privileges(),
 
@@ -386,9 +450,9 @@ update_version_info_test_base(Config, ClusterType, ServiceType) ->
         ?ONEPANEL -> <<"onepanelVersion">>
     end,
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllPrivs = privileges:cluster_privileges(),
 

@@ -42,7 +42,6 @@ get_models() -> [
     session,
     token,
     entity_graph_state,
-    basic_auth_cache,
     dns_state,
     provider_connection,
     user_connections,

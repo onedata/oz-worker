@@ -127,15 +127,19 @@ translate_resource(ProtocolVersion, GRI, Data) ->
     gs_protocol:data() | fun((gs_protocol:client()) -> gs_protocol:data()).
 translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, User) ->
     #od_user{
-        name = Name,
-        alias = Alias,
+        basic_auth_enabled = BasicAuthEnabled,
+        password_hash = PasswordHash,
+        full_name = FullName,
+        username = Username,
         default_space = DefaultSpace,
         default_provider = DefaultProvider
     } = User,
     #{
         <<"scope">> => <<"private">>,
-        <<"name">> => Name,
-        <<"alias">> => gs_protocol:undefined_to_null(Alias),
+        <<"basicAuthEnabled">> => BasicAuthEnabled,
+        <<"hasPassword">> => PasswordHash /= undefined,
+        <<"fullName">> => FullName,
+        <<"username">> => gs_protocol:undefined_to_null(Username),
         <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
         <<"defaultProviderId">> => gs_protocol:undefined_to_null(DefaultProvider),
         <<"clientTokenList">> => gs_protocol:gri_to_string(GRI#gri{aspect = client_tokens, scope = private}),
@@ -152,24 +156,24 @@ translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, U
 
 translate_user(#gri{aspect = instance, scope = protected}, User) ->
     #{
-        <<"name">> := Name,
-        <<"alias">> := Alias
+        <<"fullName">> := FullName,
+        <<"username">> := Username
     } = User,
     #{
         <<"scope">> => <<"protected">>,
-        <<"name">> => Name,
-        <<"alias">> => gs_protocol:undefined_to_null(Alias)
+        <<"fullName">> => FullName,
+        <<"username">> => gs_protocol:undefined_to_null(Username)
     };
 
 translate_user(#gri{aspect = instance, scope = shared}, User) ->
     #{
-        <<"name">> := Name,
-        <<"alias">> := Alias
+        <<"fullName">> := FullName,
+        <<"username">> := Username
     } = User,
     #{
         <<"scope">> => <<"shared">>,
-        <<"name">> => Name,
-        <<"alias">> => gs_protocol:undefined_to_null(Alias)
+        <<"fullName">> => FullName,
+        <<"username">> => gs_protocol:undefined_to_null(Username)
     };
 
 translate_user(GRI = #gri{aspect = client_tokens}, ClientTokens) ->
@@ -189,8 +193,8 @@ translate_user(#gri{aspect = {client_token, ClientToken}}, ClientToken) ->
 translate_user(GRI = #gri{aspect = linked_accounts}, LinkedAccounts) ->
     #{
         <<"list">> => lists:map(
-            fun(#linked_account{subject_id = UserId}) ->
-                gs_protocol:gri_to_string(GRI#gri{aspect = {linked_account, UserId}, scope = private})
+            fun(GeneratedUserId) ->
+                gs_protocol:gri_to_string(GRI#gri{aspect = {linked_account, GeneratedUserId}, scope = private})
             end, LinkedAccounts)
     };
 
@@ -782,8 +786,7 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Clus
         <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = users}),
         <<"effUserList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = eff_users}),
         <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = groups}),
-        <<"effGroupList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = eff_groups}),
-        <<"canViewPrivateData">> => cluster_logic:has_eff_privilege(Cluster, UserId, ?CLUSTER_VIEW)
+        <<"effGroupList">> => gs_protocol:gri_to_string(#gri{type = od_cluster, id = ClusterId, aspect = eff_groups})
     } end;
 
 translate_cluster(#gri{id = ClusterId, aspect = instance, scope = protected}, Cluster) ->
@@ -814,8 +817,35 @@ translate_cluster(#gri{id = ClusterId, aspect = instance, scope = protected}, Cl
         <<"onepanelProxy">> => OnepanelProxy,
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
-        }),
-        <<"canViewPrivateData">> => false
+        })
+    } end;
+
+translate_cluster(#gri{id = ClusterId, aspect = instance, scope = public}, Cluster) ->
+    #{
+        <<"type">> := Type,
+        <<"workerVersion">> := WorkerVersion,
+        <<"onepanelVersion">> := OnepanelVersion,
+        <<"creationTime">> := CreationTime
+    } = Cluster,
+
+    ProviderId = ClusterId,
+    fun(?USER(UserId)) -> #{
+        <<"scope">> => <<"public">>,
+        <<"directMembership">> => cluster_logic:has_direct_user(ClusterId, UserId),
+        <<"type">> => Type,
+        <<"provider">> => case Type of
+            ?ONEZONE ->
+                null;
+            ?ONEPROVIDER ->
+                gs_protocol:gri_to_string(#gri{
+                    type = od_provider, id = ProviderId, aspect = instance, scope = auto
+                })
+        end,
+        <<"workerVersion">> => WorkerVersion,
+        <<"onepanelVersion">> => OnepanelVersion,
+        <<"info">> => #{
+            <<"creationTime">> => CreationTime
+        }
     } end;
 
 translate_cluster(#gri{aspect = users}, Users) ->

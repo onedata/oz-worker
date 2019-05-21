@@ -148,7 +148,7 @@ authorize_by_access_token(AccessToken) when is_binary(AccessToken) ->
             case openid_protocol:authorize_by_idp_access_token(AccessToken) of
                 {true, {IdP, Attributes}} ->
                     LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
-                    {ok, #document{key = UserId}} = acquire_user_by_linked_account(LinkedAccount),
+                    {ok, #document{key = UserId}} = linked_accounts:acquire_user(LinkedAccount),
                     {true, ?USER(UserId)};
                 {error, _} = Error ->
                     Error;
@@ -311,14 +311,12 @@ authorize_by_gui_macaroon(Macaroon, ClusterType, ClusterId) ->
     {true, #client{}} | {error, term()}.
 authorize_by_basic_auth(UserPasswdB64) when is_binary(UserPasswdB64) ->
     UserPasswd = base64:decode(UserPasswdB64),
-    [User, Passwd] = binary:split(UserPasswd, <<":">>),
-    case user_logic:authenticate_by_basic_credentials(User, Passwd) of
+    [Username, Passwd] = binary:split(UserPasswd, <<":">>),
+    case basic_auth:authenticate(Username, Passwd) of
         {ok, UserId} ->
             {true, ?USER(UserId)};
-        {error, onepanel_auth_disabled} ->
-            ?ERROR_NOT_SUPPORTED;
-        _ ->
-            ?ERROR_BAD_BASIC_CREDENTIALS
+        {error, _} = Error ->
+            Error
     end;
 authorize_by_basic_auth(Req) ->
     case cowboy_req:header(<<"authorization">>, Req, undefined) of
@@ -382,7 +380,7 @@ refresh_idp_access_token(IdP, RefreshToken) ->
     try
         {ok, Attributes} = openid_protocol:refresh_idp_access_token(IdP, RefreshToken),
         LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
-        {ok, _} = acquire_user_by_linked_account(LinkedAccount),
+        {ok, _} = linked_accounts:acquire_user(LinkedAccount),
         #linked_account{access_token = {AccessToken, Expires}} = LinkedAccount,
         {ok, {AccessToken, Expires - ?NOW()}}
     catch
@@ -418,8 +416,8 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
 
     LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
     LinkedAccountMap = maps:without(
-        [<<"login">>, <<"emailList">>, <<"groups">>], % do not include deprecated fields
-        user_logic:linked_account_to_map(LinkedAccount)
+        [<<"name">>, <<"login">>, <<"alias">>, <<"emailList">>, <<"groups">>], % do not include deprecated fields
+        linked_accounts:to_map(LinkedAccount)
     ),
     ?auth_debug("Attributes from IdP '~p' (state: ~s) sucessfully mapped:~n~ts", [
         IdP, StateToken, json_utils:encode(LinkedAccountMap, [pretty])
@@ -440,33 +438,38 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
     {ok, od_user:id()}.
 validate_login_by_linked_account(LinkedAccount) ->
     {ok, #document{key = UserId, value = #od_user{
-        name = UserName
-    }}} = acquire_user_by_linked_account(LinkedAccount),
-    ?info("User '~ts' has logged in (~s)", [UserName, UserId]),
+        full_name = FullName
+    }}} = linked_accounts:acquire_user(LinkedAccount),
+    ?info("User '~ts' has logged in (~s)", [FullName, UserId]),
     {ok, UserId}.
 
 
 %% @private
 -spec validate_link_account_request(od_user:linked_account(), od_user:id()) ->
     {ok, od_user:id()} | {error, term()}.
-validate_link_account_request(LinkedAccount, UserId) ->
+validate_link_account_request(LinkedAccount, TargetUserId) ->
     % Check if this account isn't connected to other profile
-    case get_user_by_linked_account(LinkedAccount) of
-        {ok, #document{key = UserId}} ->
-            % The account is already linked to this user, report error
-            ?ERROR_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(UserId);
-        {ok, #document{key = OtherUserId}} ->
-            % The account is used on some other profile, cannot proceed
-            ?ERROR_ACCOUNT_ALREADY_LINKED_TO_ANOTHER_USER(UserId, OtherUserId);
+    case linked_accounts:find_user(LinkedAccount) of
+        {ok, #document{key = FoundUserId}} ->
+            % Synchronize the information regardless of account linking success
+            linked_accounts:merge(FoundUserId, LinkedAccount),
+            case FoundUserId of
+                TargetUserId ->
+                    % The account is already linked to this user, report error
+                    ?ERROR_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(TargetUserId);
+                OtherUserId ->
+                    % The account is used on some other profile, cannot proceed
+                    ?ERROR_ACCOUNT_ALREADY_LINKED_TO_ANOTHER_USER(TargetUserId, OtherUserId)
+            end;
         {error, not_found} ->
             % ok, add new linked account to the user
-            {ok, #document{key = UserId, value = #od_user{
-                name = UserName
-            }}} = user_logic:merge_linked_account(UserId, LinkedAccount),
+            {ok, #document{value = #od_user{
+                full_name = FullName
+            }}} = linked_accounts:merge(TargetUserId, LinkedAccount),
             ?info("User ~ts (~s) has linked his account from '~p'", [
-                UserName, UserId, LinkedAccount#linked_account.idp
+                FullName, TargetUserId, LinkedAccount#linked_account.idp
             ]),
-            {ok, UserId}
+            {ok, TargetUserId}
     end.
 
 
@@ -480,7 +483,7 @@ validate_link_account_request(LinkedAccount, UserId) ->
 -spec validate_test_login_by_linked_account(od_user:linked_account()) ->
     {ok, od_user:id()}.
 validate_test_login_by_linked_account(LinkedAccount) ->
-    {UserId, UserData} = user_logic:build_test_user_info(LinkedAccount),
+    {UserId, UserData} = linked_accounts:build_test_user_info(LinkedAccount),
     auth_test_mode:store_user_data(UserData),
     {ok, UserId}.
 
@@ -510,44 +513,6 @@ parse_payload(<<"GET">>, Req) ->
     QueryParams = cowboy_req:parse_qs(Req),
     StateToken = proplists:get_value(<<"state">>, QueryParams, <<>>),
     {StateToken, maps:from_list(QueryParams)}.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Retrieves a user based on given linked account. Merges the info received
-%% from IdP with user doc. If the account is not connected to any user, returns
-%% {error, not_found}.
-%% @end
-%%--------------------------------------------------------------------
--spec get_user_by_linked_account(od_user:linked_account()) ->
-    {ok, od_user:doc()} | {error, not_found}.
-get_user_by_linked_account(LinkedAccount) ->
-    #linked_account{idp = IdP, subject_id = SubjectId} = LinkedAccount,
-    case od_user:get_by_criterion({linked_account, {IdP, SubjectId}}) of
-        {ok, #document{key = UserId}} ->
-            user_logic:merge_linked_account(UserId, LinkedAccount);
-        {error, not_found} ->
-            {error, not_found}
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Tries to retrieve system user by given linked account, and if it does not
-%% exist, creates a new user with that account connected.
-%% @end
-%%--------------------------------------------------------------------
--spec acquire_user_by_linked_account(od_user:linked_account()) ->
-    {ok, od_user:doc()}.
-acquire_user_by_linked_account(LinkedAccount) ->
-    case get_user_by_linked_account(LinkedAccount) of
-        {ok, #document{} = Doc} ->
-            {ok, Doc};
-        {error, not_found} ->
-            user_logic:create_user_by_linked_account(LinkedAccount)
-    end.
 
 
 %%--------------------------------------------------------------------

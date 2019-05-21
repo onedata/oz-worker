@@ -55,6 +55,8 @@
     add_user/3, add_user/4,
     add_group/3, add_group/4,
 
+    get_name/2,
+
     get_parents/2, get_eff_parents/2,
     get_parent/3, get_eff_parent/3,
 
@@ -716,6 +718,15 @@ add_group(Client, GroupId, ChildGroupId, Data) ->
         gri = #gri{type = od_group, id = GroupId, aspect = {child, ChildGroupId}},
         data = Data
     })).
+
+
+-spec get_name(entity_logic:client(), od_group:id()) ->
+    {ok, od_group:name()} | {error, term()}.
+get_name(Client, GroupId) ->
+    case get(Client, GroupId) of
+        {ok, #od_group{name = Name}} -> {ok, Name};
+        {error, _} = Error -> Error
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -1781,8 +1792,9 @@ create_predefined_group(GroupId, Name, Privileges) ->
                     ?info("Created predefined group '~ts'", [NormalizedName]),
                     ok;
                 Other ->
-                    ?error("Cannot create predefined group '~ts' - ~p",
-                        [NormalizedName, Other]),
+                    ?error("Cannot create predefined group '~ts' - ~p", [
+                        NormalizedName, Other
+                    ]),
                     error
             end
     end,

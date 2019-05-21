@@ -65,6 +65,9 @@ translate(?ERROR_INTERNAL_SERVER_ERROR) ->
 translate(?ERROR_NOT_IMPLEMENTED) ->
     ?HTTP_501_NOT_IMPLEMENTED;
 
+translate(?ERROR_TEMPORARY_FAILURE) ->
+    {?HTTP_503_SERVICE_UNAVAILABLE, <<"Service unavailable: temporary failure.">>};
+
 translate(?ERROR_NOT_SUPPORTED) ->
     {?HTTP_400_BAD_REQUEST,
         <<"This operation is not supported">>
@@ -175,6 +178,10 @@ translate(?ERROR_BAD_VALUE_SUBDOMAIN) ->
     {?HTTP_400_BAD_REQUEST,
         <<"Bad value: provided subdomain is not valid">>
     };
+translate(?ERROR_BAD_VALUE_EMAIL) ->
+    {?HTTP_400_BAD_REQUEST,
+        <<"Bad value: provided e-mail is not a valid e-mail.">>
+    };
 translate(?ERROR_BAD_VALUE_TOO_LOW(Key, Threshold)) ->
     {?HTTP_400_BAD_REQUEST,
         {<<"Bad value: provided \"~s\" must be at least ~B">>, [Key, Threshold]}
@@ -223,22 +230,14 @@ translate(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key)) ->
     {?HTTP_400_BAD_REQUEST,
         {<<"Bad value: provided \"~s\" is of invalid type">>, [Key]}
     };
-translate(?ERROR_BAD_VALUE_ALIAS) ->
-    {?HTTP_400_BAD_REQUEST, <<
-        "Bad value: provided alias must be 2-15 characters long and composed of letters and digits."
-        "Dashes and underscores are allowed (but not at the beginning or the end). "
-        "Use null value to unset the alias."
-    >>};
 translate(?ERROR_BAD_VALUE_NAME) ->
-    {?HTTP_400_BAD_REQUEST, <<
-        "Bad value: Name must be 2-50 characters long and composed of UTF-8 letters, digits, brackets and underscores."
-        "Dashes, spaces and dots are allowed (but not at the beginning or the end)."
-    >>};
-translate(?ERROR_BAD_VALUE_USER_NAME) ->
-    {?HTTP_400_BAD_REQUEST, <<
-        "Bad value: User name must be 2-50 characters long and composed of UTF-8 letters and digits."
-        "Dashes, spaces, dots, commas and apostrophes are allowed (but not at the beginning or the end). "
-    >>};
+    {?HTTP_400_BAD_REQUEST, <<"Bad value: ", (?NAME_REQUIREMENTS_DESCRIPTION)/binary>>};
+translate(?ERROR_BAD_VALUE_FULL_NAME) ->
+    {?HTTP_400_BAD_REQUEST, <<"Bad value: ", (?FULL_NAME_REQUIREMENTS_DESCRIPTION)/binary>>};
+translate(?ERROR_BAD_VALUE_USERNAME) ->
+    {?HTTP_400_BAD_REQUEST, <<"Bad value: ", (?USERNAME_REQUIREMENTS_DESCRIPTION)/binary>>};
+translate(?ERROR_BAD_VALUE_PASSWORD) ->
+    {?HTTP_400_BAD_REQUEST, <<"Bad value: ", (?PASSWORD_REQUIREMENTS_DESCRIPTION)/binary>>};
 translate(?ERROR_BAD_VALUE_IDENTIFIER(Key)) ->
     {?HTTP_400_BAD_REQUEST, {
         <<"Bad value: provided \"~s\" is not a valid identifier.">>, [Key]
@@ -275,14 +274,17 @@ translate(?ERROR_CANNOT_DELETE_ENTITY(EntityType, EntityId)) ->
     }};
 translate(?ERROR_CANNOT_ADD_RELATION_TO_SELF) ->
     {?HTTP_400_BAD_REQUEST, <<"Cannot add relation to self.">>};
+
 translate(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED) ->
     {?HTTP_400_BAD_REQUEST, <<"Subdomain delegation is not supported by this Onezone.">>};
 translate(?ERROR_SUBDOMAIN_DELEGATION_DISABLED) ->
     {?HTTP_400_BAD_REQUEST, <<"Subdomain delegation is disabled for this Oneprovider.">>};
-translate(?ERROR_BAD_VALUE_EMAIL) ->
-    {?HTTP_400_BAD_REQUEST, <<"Bad value: provided e-mail is not a valid e-mail.">>};
-translate(?ERROR_TEMPORARY_FAILURE) ->
-    {?HTTP_503_SERVICE_UNAVAILABLE, <<"Service unavailable: temporary failure.">>};
+
+translate(?ERROR_BASIC_AUTH_NOT_SUPPORTED) ->
+    {?HTTP_401_UNAUTHORIZED, <<"Basic auth is not supported by this Onezone.">>};
+translate(?ERROR_BASIC_AUTH_DISABLED) ->
+    {?HTTP_400_BAD_REQUEST, <<"Basic auth is disabled for this user.">>};
+
 % Wildcard match
 translate({error, Reason}) ->
     ?error("Unexpected error: {error, ~p} in rest error translator", [Reason]),

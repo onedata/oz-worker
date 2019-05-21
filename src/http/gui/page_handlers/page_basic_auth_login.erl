@@ -18,6 +18,7 @@
 -include("http/codes.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 %% API
 -export([handle/2]).
@@ -34,23 +35,20 @@
 -spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"POST">>, Req) ->
     try
-        <<"Basic ", UserAndPassword/binary>> =
-            cowboy_req:header(<<"authorization">>, Req),
-        [User, Passwd] = binary:split(base64:decode(UserAndPassword), <<":">>),
-        case user_logic:authenticate_by_basic_credentials(User, Passwd) of
-            {ok, UserId} ->
-                {ok, #{<<"name">> := UserName}} = user_logic:get_shared_data(?ROOT, UserId),
-                ?info("User '~ts' has logged in (~s)", [UserName, UserId]),
+        case auth_logic:authorize_by_basic_auth(Req) of
+            {true, ?USER(UserId)} ->
+                {ok, FullName} = user_logic:get_full_name(?ROOT, UserId),
+                ?info("User '~ts' has logged in (~s)", [FullName, UserId]),
                 Req2 = gui_session:log_in(UserId, Req),
                 JSONHeader = #{<<"content-type">> => <<"application/json">>},
                 Body = json_utils:encode(#{<<"url">> => <<"/">>}),
                 cowboy_req:reply(?HTTP_200_OK, JSONHeader, Body, Req2);
-            {error, Binary} when is_binary(Binary) ->
-                cowboy_req:reply(?HTTP_401_UNAUTHORIZED, #{}, Binary, Req);
-            {error, onepanel_auth_disabled} ->
-                cowboy_req:reply(?HTTP_400_BAD_REQUEST, #{}, <<"Onepanel login disabled">>, Req);
-            _ ->
-                cowboy_req:reply(?HTTP_401_UNAUTHORIZED, Req)
+            ?ERROR_BAD_BASIC_CREDENTIALS ->
+                cowboy_req:reply(?HTTP_401_UNAUTHORIZED, #{}, <<"Invalid username or password">>, Req);
+            ?ERROR_BASIC_AUTH_DISABLED ->
+                cowboy_req:reply(?HTTP_401_UNAUTHORIZED, #{}, <<"Basic auth is disabled for this user">>, Req);
+            ?ERROR_BASIC_AUTH_NOT_SUPPORTED ->
+                cowboy_req:reply(?HTTP_400_BAD_REQUEST, #{}, <<"Basic auth is not supported by this Onezone">>, Req)
         end
     catch T:M ->
         ?error_stacktrace("Login by credentials failed - ~p:~p", [T, M]),

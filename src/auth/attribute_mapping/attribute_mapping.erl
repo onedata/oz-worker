@@ -11,12 +11,13 @@
 %%% rules specified in auth.config.
 %%%
 %%% Onezone collects information about users from SAML / OpenID, including:
-%%%        subjectId - user's unique identifier, mandatory
+%%%        subjectId - user's unique, permanent id assigned by the IdP, mandatory
 %%%                    (login will fail if mapping cannot be found)
-%%%             name - user's displayed name
-%%%            alias - user's short, unique identifier - used as an alternative
-%%%                    to identifying users by name, is optional and can be
-%%%                    set/unset anytime
+%%%         fullName - given names and surname, e.g. "John Doe"
+%%%         username - a human-readable identifier, unique across the system,
+%%%                    e.g. "johndoe13". Makes it easier to identify the user
+%%%                    and can be used for signing in with password
+%%%                    (if this sign-in method is enabled for given user).
 %%%           emails - a list of user's emails
 %%%     entitlements - a list of user's entitlements to groups in the IdP, which
 %%%                    can later be mapped to groups in Onedata using
@@ -29,8 +30,8 @@
 %%%
 %%%   attributeMapping => #{
 %%%       subjectId => {required, <rules>},
-%%%       name => {optional, <rules>},
-%%%       alias => undefined,
+%%%       fullName => {optional, <rules>},
+%%%       username => undefined,
 %%%       emails => {optional, <rules>},
 %%%       entitlements => undefined,
 %%%       custom => {required, <rules>},
@@ -54,8 +55,8 @@
 %%%         binaries). Module must be placed in the plugins directory
 %%%         (/etc/oz_worker/plugins) to be loaded during Onezone startup.
 %%%         Example:
-%%%             name => {plugin, my_attr_mapper}
-%%%                 would call my_attr_mapper:map_attribute(name, IdPAttributes)
+%%%             fullName => {plugin, my_attr_mapper}
+%%%                 would call my_attr_mapper:map_attribute(fullName, IdPAttributes)
 %%%
 %%% <rules> can be a complex term built from the following expressions:
 %%%
@@ -80,8 +81,8 @@
 %%%                 {"custom": {"organization": "orgName"}}
 %%%
 %%%  {str, "literal"} - the rule will be expanded to the literal string. Example:
-%%%         name => {required, {str, "John Doe"}}
-%%%             would make all users have the same name; "John Doe"
+%%%         fullName => {required, {str, "John Doe"}}
+%%%             would make all users have the same fullName; "John Doe"
 %%%
 %%%  {str_list, ["str1", "str2"]} - the rule will be expanded to a list of
 %%%     literal strings. Example:
@@ -103,10 +104,10 @@
 %%%  {replace, "regex", "replacement", <rule>} - replaces matching substring with
 %%%     given replacement. <rule> can expand to a string or a list of strings (in
 %%%     which case the operation will be repeated on every string). Underneath,
-%%%     it uses Erlang's re:replace/4 function, which means that regexes and
+%%%     it uses Erlang's re:replace/4 function, which means that regexps and
 %%%     replacements must be built according to Erlang's (slightly different)
 %%%     regex format. Example:
-%%%         name => {replace, "(.*) (.*) (.*)", "\\1 \\3", "fullName"}
+%%%         fullName => {replace, "(.*) (.*) (.*)", "\\1 \\3", "fullName"}
 %%%             would change all 3-part names to 2-part, leaving out the middle
 %%%             one (e.g. John II Doe -> John Doe). Unmatched strings are not
 %%%             modified.
@@ -141,10 +142,10 @@
 %%%  {join, "joinWith", <rule>} - joins a list of strings with given string.
 %%%     <rule> must expand to a list of strings, or a single string (in which
 %%%     case the join just return the string unchanged). Example:
-%%%         {name => {required, {join, " ", "nameTokens"}}
+%%%         {fullName => {required, {join, " ", "nameTokens"}}
 %%%             would parse the following JSON:
 %%%                 {"nameTokens": ["John", "Doe", "Junior"]}
-%%%             into the following user name:
+%%%             into the following fullName:
 %%%                 "John Doe Junior"
 %%%
 %%%  {split, "splitWith", <rule>} - splits a string into a list of strings on
@@ -190,10 +191,10 @@
 %%%  {any, [<ruleA>, <ruleB>, ...]} - tries all rules one by one until any of
 %%%     them gives a valid result. In case all of them fail, returns undefined
 %%%     value. Example:
-%%%         {name => {optional, {any, [{concat, [{str, "John "}, "surName"]}, "userName"]}}
+%%%         {fullName => {optional, {any, [{concat, [{str, "John "}, "surName"]}, "fullName"]}}
 %%%             would set all users' names to:
 %%%                 a) "John <surName>" if the attribute "surName" was found
-%%%                 b) "<userName>" if the attribute "userName" was found
+%%%                 b) "<fullName>" if the attribute "fullName" was found
 %%%                 c) undefined (displayed in GUI as "Unnamed User")
 %%%                    if none of the attributes was found (if 'optional' was
 %%%                    changed to 'required', the login would fail).
@@ -205,8 +206,8 @@
 %%%  defaultProtocolConfig => #{
 %%%      attributeMapping => #{
 %%%          subjectId => {required, "eduPersonUniqueID"},
-%%%          name => {required, ["displayName", "surName"]},
-%%%          alias => {optional, "eduPersonPrincipalName"},
+%%%          fullName => {required, ["displayName", "surName"]},
+%%%          username => {optional, "eduPersonPrincipalName"},
 %%%          emails => {optional, "mail"}
 %%%      }
 %%%  }
@@ -215,9 +216,9 @@
 %%%      protocolConfig => #{
 %%%          attributeMapping => #{
 %%%              subjectId => {required, "eduPersonTargetedID"},
-%%%              % if not explicitly set to undefined, alias rules will be
+%%%              % if not explicitly set to undefined, username rules will be
 %%%              % inherited from defaultProtocolConfig!
-%%%              alias => undefined,
+%%%              username => undefined,
 %%%              entitlements => {optional, "groups"}
 %%%          }
 %%%      }
@@ -228,8 +229,8 @@
 %%%      protocolConfig => #{
 %%%          attributeMapping => #{
 %%%              subjectId => {required, "eduPersonTargetedID"},
-%%%              name => {required, ["displayName", "surName"]},
-%%%              alias => undefined,
+%%%              fullName => {required, ["displayName", "surName"]},
+%%%              username => undefined,
 %%%              emails => {optional, "mail"},
 %%%              entitlements => {optional, "groups"}
 %%%          }
@@ -247,7 +248,7 @@
 
 % Public types
 -type idp_attributes() :: json_utils:json_term().
--type onedata_attribute() :: subjectId | name | alias | emails | entitlements | custom.
+-type onedata_attribute() :: subjectId | fullName | username | emails | entitlements | custom.
 -type attribute_mapping() :: undefined | {required, rule()} | {optional, rule()} | {plugin, module()}.
 -export_type([idp_attributes/0, onedata_attribute/0, attribute_mapping/0]).
 
@@ -294,8 +295,8 @@ map_attributes(IdP, Attributes) ->
     #linked_account{
         idp = IdP,
         subject_id = map_attribute(IdP, subjectId, binary, Attributes),
-        name = map_attribute(IdP, name, binary_or_undef, Attributes),
-        alias = map_attribute(IdP, alias, binary_or_undef, Attributes),
+        full_name = map_attribute(IdP, fullName, binary_or_undef, Attributes),
+        username = map_attribute(IdP, username, binary_or_undef, Attributes),
         emails = map_attribute(IdP, emails, list_of_binaries, Attributes),
         entitlements = map_attribute(IdP, entitlements, list_of_binaries, Attributes),
         custom = map_attribute(IdP, custom, json, Attributes),

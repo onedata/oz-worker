@@ -17,6 +17,6 @@
 # Path relative to this script, to which static GUI package will be copied.
 TARGET_PATH='_build/default/lib/gui_static.tar.gz'
 # Image which will be used by default to get the static files.
-PRIMARY_IMAGE='docker.onedata.org/onezone-gui:SHA256-802f6752edfeb8f734b68ea6bcfaa85fe321efcd8d66f0b2a99ceadeba66f40c'
+PRIMARY_IMAGE='docker.onedata.org/onezone-gui:SHA256-3a6d28653c347965a2e2e6211849a12799f463c8b4801a56a22f0b48e51cde65'
 # Image which will be used if the primary image cannot be resolved.
-SECONDARY_IMAGE='onedata/onezone-gui:SHA256-802f6752edfeb8f734b68ea6bcfaa85fe321efcd8d66f0b2a99ceadeba66f40c'
+SECONDARY_IMAGE='onedata/onezone-gui:SHA256-3a6d28653c347965a2e2e6211849a12799f463c8b4801a56a22f0b48e51cde65'

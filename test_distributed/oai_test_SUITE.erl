@@ -446,7 +446,7 @@ identify_test_base(Config, Method) ->
     Path = ?config(oai_pmh_path, Config),
     ExpectedBaseURL = string:concat(get_domain(Node), binary_to_list(Path)),
 
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
@@ -474,7 +474,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
     Path = ?config(oai_pmh_path, Config),
     ExpectedBaseURL = string:concat(get_domain(Node), binary_to_list(Path)),
 
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
     SpaceIds = create_spaces(Config, ?SPACE_NAMES(2), ?USER(User)),
     [ShareId1, ShareId2] = create_shares(Config, SpaceIds),
     HSId = create_handle_service(Config, User),
@@ -515,7 +515,7 @@ identify_change_earliest_datestamp_test_base(Config, Method) ->
 
 get_record_test_base(Config, Method) ->
 
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
@@ -567,7 +567,7 @@ get_record_test_base(Config, Method) ->
 
 get_record_with_bad_metadata_test_base(Config, Method) ->
 
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
@@ -948,7 +948,7 @@ id_not_existing_test_base(Config, Method) ->
     ?assert(check_id_not_existing_error(200, Args, Method, [], Config)).
 
 cannot_disseminate_format_test_base(Config, Method) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
@@ -966,7 +966,7 @@ no_set_hierarchy_test_base(Config, Method) ->
     ?assert(check_no_set_hierarchy_error(200, [], Method, [], Config)).
 
 list_metadata_formats_no_format_error_test_base(Config, Method) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     {ok, ?SHARE_ID} = oz_test_utils:create_share(
         Config, ?USER(User), ?SHARE_ID, ?SHARE_ID, <<"root">>, Space1
@@ -1303,7 +1303,7 @@ modify_handle_with_mocked_timestamp(Config, HId, Metadata, Timestamp) ->
     ok = test_utils:mock_validate_and_unload(Nodes, od_handle).
 
 setup_test_for_harvesting(Config, RecordsNum, BeginTime, TimeOffsets, Metadata) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
     SpaceIds = create_spaces(Config, ?SPACE_NAMES(RecordsNum), ?USER(User)),
     ShareIds = create_shares(Config, SpaceIds),
     HSId = create_handle_service(Config, User),

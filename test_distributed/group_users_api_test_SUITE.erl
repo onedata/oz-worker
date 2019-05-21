@@ -74,8 +74,8 @@ list_users_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, U3} = oz_test_utils:group_add_user(Config, G1, U3),
     ExpUsers = [U1, U2, U3],
@@ -118,7 +118,7 @@ create_user_invite_token_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_ADD_USER
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     VerifyFun = api_test_scenarios:collect_unique_tokens_fun(),
 
@@ -155,11 +155,15 @@ create_user_invite_token_test(Config) ->
 
 
 get_user_details_test(Config) ->
-    {ok, Creator} = oz_test_utils:create_user(Config, #od_user{name = <<"creator">>, alias = <<"creator">>}),
-    {ok, MemberWithViewPrivs} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, MemberWithoutViewPrivs} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Member} = oz_test_utils:create_user(Config, #od_user{name = <<"member">>, alias = <<"member">>}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Creator} = oz_test_utils:create_user(Config, #{
+        <<"fullName">> => <<"creator">>, <<"username">> => <<"creator">>}
+    ),
+    {ok, MemberWithViewPrivs} = oz_test_utils:create_user(Config),
+    {ok, MemberWithoutViewPrivs} = oz_test_utils:create_user(Config),
+    {ok, Member} = oz_test_utils:create_user(Config, #{
+        <<"fullName">> => <<"member">>, <<"username">> => <<"member">>}
+    ),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(Creator), ?GROUP_NAME1),
     {ok, _} = oz_test_utils:group_add_user(Config, Group, MemberWithViewPrivs),
@@ -174,10 +178,10 @@ get_user_details_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    lists:foreach(fun({SubjectUser, ExpName, ExpAlias}) ->
+    lists:foreach(fun({SubjectUser, ExpFullName, ExpUsername}) ->
         ExpDetails = #{
-            <<"alias">> => ExpAlias,
-            <<"name">> => ExpName
+            <<"username">> => ExpUsername,
+            <<"fullName">> => ExpFullName
         },
         ApiTestSpec = #api_test_spec{
             client_spec = #client_spec{
@@ -205,8 +209,11 @@ get_user_details_test(Config) ->
                 expected_code = ?HTTP_200_OK,
                 expected_body = ExpDetails#{
                     <<"userId">> => SubjectUser,
+
                     % TODO VFS-4506 deprecated, included for backward compatibility
-                    <<"login">> => ExpAlias
+                    <<"name">> => ExpFullName,
+                    <<"login">> => ExpUsername,
+                    <<"alias">> => ExpUsername
                 }
             },
             logic_spec = #logic_spec{
@@ -228,8 +235,11 @@ get_user_details_test(Config) ->
                             oz_test_utils:decode_gri(Config, EncodedGri)
                         )
                     end,
+
                     % TODO VFS-4506 deprecated, included for backward compatibility
-                    <<"login">> => ExpAlias
+                    <<"name">> => ExpFullName,
+                    <<"login">> => ExpUsername,
+                    <<"alias">> => ExpUsername
                 })
             }
         },
@@ -238,10 +248,10 @@ get_user_details_test(Config) ->
 
 
 add_user_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, EffectiveUser} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUser} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
 
@@ -312,10 +322,10 @@ add_user_test(Config) ->
 
 
 add_user_with_privileges_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, EffectiveUser} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUser} = oz_test_utils:create_user(Config),
+    {ok, EffectiveUserWithoutInvitePriv} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
 
@@ -403,10 +413,10 @@ remove_user_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_REMOVE_USER
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, U4} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, U4} = oz_test_utils:create_user(Config),
         {ok, U4} = oz_test_utils:group_add_user(Config, G1, U4),
         #{userId => U4}
     end,
@@ -456,12 +466,12 @@ list_user_privileges_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW_PRIVILEGES
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:group_add_user(Config, G1, U3),
 
     AllPrivs = privileges:group_privileges(),
@@ -517,12 +527,12 @@ update_user_privileges_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_SET_PRIVILEGES
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to update user privileges and sometimes not)
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:group_add_user(Config, G1, U3),
 
     AllPrivs = privileges:group_privileges(),
@@ -574,9 +584,9 @@ list_eff_users_test(Config) ->
         [{G1, _} | _Groups], [{U3, _}, {U4, _}, {U5, _}, {U6, _}] = _EffUsers
     } = api_test_scenarios:create_eff_child_groups_env(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllGroupPrivs = privileges:group_privileges(),
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
@@ -636,9 +646,9 @@ get_eff_user_details_test(Config) ->
         [{G1, _} | _Groups], EffUsers
     } = api_test_scenarios:create_eff_child_groups_env(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllGroupPrivs = privileges:group_privileges(),
     {ok, U1} = oz_test_utils:group_add_user(Config, G1, U1),
@@ -673,8 +683,11 @@ get_eff_user_details_test(Config) ->
                     expected_code = ?HTTP_200_OK,
                     expected_body = UserDetails#{
                         <<"userId">> => UserId,
+
                         % TODO VFS-4506 deprecated, included for backward compatibility
-                        <<"login">> => maps:get(<<"alias">>, UserDetails)
+                        <<"name">> => maps:get(<<"fullName">>, UserDetails),
+                        <<"login">> => maps:get(<<"username">>, UserDetails),
+                        <<"alias">> => maps:get(<<"username">>, UserDetails)
                     }
                 },
                 logic_spec = #logic_spec{
@@ -697,8 +710,11 @@ get_eff_user_details_test(Config) ->
                             ),
                             ?assertEqual(UId, UserId)
                         end,
+
                         % TODO VFS-4506 deprecated, included for backward compatibility
-                        <<"login">> => maps:get(<<"alias">>, UserDetails)
+                        <<"name">> => maps:get(<<"fullName">>, UserDetails),
+                        <<"login">> => maps:get(<<"username">>, UserDetails),
+                        <<"alias">> => maps:get(<<"username">>, UserDetails)
                     })
                 }
             },
@@ -737,10 +753,10 @@ list_eff_user_privileges_test(Config) ->
     % User whose privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get group privileges and sometimes not)
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {_G3, G2, G1} = oz_test_utils:create_3_nested_groups(Config, U1),
     {ok, G4} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
@@ -846,9 +862,9 @@ get_eff_user_membership_intermediaries(Config) ->
     %%      <<user>>
     %%      NonAdmin
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),

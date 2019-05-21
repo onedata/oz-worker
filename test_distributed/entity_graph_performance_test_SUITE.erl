@@ -222,7 +222,7 @@ group_chain_performance(Config) ->
 group_chain_performance_base(Config) ->
     GroupChainLength = ?GROUP_CHAIN_LENGTH,
     ApiType = ?API_TYPE,
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
     {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
 
 
@@ -271,7 +271,7 @@ group_chain_append_performance_base(Config) ->
     EndingGroupNum = ?ENDING_GROUP_NUM,
     ApiType = ?API_TYPE,
     ToAppendGroupNum = EndingGroupNum - StartingGroupNum,
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
     {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
 
     {_BottomGroup, TopGroup} = create_group_chain(Config, ApiType, {User, Macaroon}, StartingGroupNum),
@@ -324,20 +324,20 @@ big_group_performance_base(Config) ->
     ApiType = ?API_TYPE,
     ToAddUserNum = EndingUserNum - StartingUserNum,
 
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config),
     {ok, AdminMacaroon} = oz_test_utils:create_client_token(Config, Admin),
     oz_test_utils:user_set_oz_privileges(Config, Admin, privileges:oz_admin(), []),
 
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(User), <<"group">>),
 
     lists:foreach(fun(_) ->
-        {ok, NewUser} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, NewUser} = oz_test_utils:create_user(Config),
         oz_test_utils:group_add_user(Config, Group, NewUser)
     end, lists:seq(2, StartingUserNum)),
 
     UsersToAdd = lists:map(fun(_) ->
-        {ok, NewUser} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, NewUser} = oz_test_utils:create_user(Config),
         NewUser
     end, lists:seq(1, ToAddUserNum)),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -390,15 +390,15 @@ update_privileges_performance_base(Config) ->
     ApiType = ?API_TYPE,
     GroupPrivileges = privileges:group_privileges(),
 
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, Admin} = oz_test_utils:create_user(Config),
     {ok, AdminMacaroon} = oz_test_utils:create_client_token(Config, Admin),
     oz_test_utils:user_set_oz_privileges(Config, Admin, privileges:oz_admin(), []),
 
-    {ok, GroupCreator} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, GroupCreator} = oz_test_utils:create_user(Config),
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(GroupCreator), <<"group">>),
 
     Users = [GroupCreator] ++ lists:map(fun(_) ->
-        {ok, NewUser} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, NewUser} = oz_test_utils:create_user(Config),
         oz_test_utils:group_add_user(Config, Group, NewUser),
         NewUser
     end, lists:seq(2, UserNum)),
@@ -456,12 +456,12 @@ reconcile_privileges_in_group_chain_performance_base(Config) ->
     GroupChainLength = ?GROUP_CHAIN_LENGTH,
     UserNum = ?USER_NUM,
     GroupPrivileges = privileges:group_privileges(),
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
     {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
     {BottomGroup, TopGroup} = create_group_chain(Config, rpc, {User, Macaroon}, GroupChainLength),
 
     lists:foreach(fun(_) ->
-        {ok, NewUser} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, NewUser} = oz_test_utils:create_user(Config),
         oz_test_utils:group_add_user(Config, BottomGroup, NewUser)
     end, lists:seq(2, UserNum)),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -518,7 +518,7 @@ create_group_chain(Config, ApiType, Client, NumberOfGroups, BottomGroup) ->
 
 create_n_users(Config, Number) ->
     lists:map(fun(_) ->
-        {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, User} = oz_test_utils:create_user(Config),
         {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
         {User, Macaroon}
     end, lists:seq(1, Number)).

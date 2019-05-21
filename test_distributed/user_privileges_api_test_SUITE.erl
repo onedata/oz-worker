@@ -60,8 +60,8 @@ all() ->
 
 
 get_oz_privileges_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, User2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
+    {ok, User2} = oz_test_utils:create_user(Config),
 
     InitialPrivs = [],
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
@@ -106,7 +106,7 @@ get_oz_privileges_test(Config) ->
 
 
 get_self_oz_privileges_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -122,8 +122,8 @@ get_self_oz_privileges_test(Config) ->
 
 
 update_oz_privileges_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
@@ -168,7 +168,7 @@ update_oz_privileges_test(Config) ->
 update_self_oz_privileges_test(Config) ->
     % oz_set_privilege will be granted for user every time as const priv,
     % so he will be able to change his privileges
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
 
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
@@ -197,8 +197,8 @@ update_self_oz_privileges_test(Config) ->
 
 
 delete_oz_privileges_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
@@ -242,7 +242,7 @@ delete_oz_privileges_test(Config) ->
 
 
 delete_self_oz_privileges_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
 
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
@@ -271,8 +271,8 @@ delete_self_oz_privileges_test(Config) ->
 
 
 get_eff_oz_privileges_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, User2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
+    {ok, User2} = oz_test_utils:create_user(Config),
 
     InitialPrivs = [],
     AllPrivs = oz_test_utils:all_oz_privileges(Config),
@@ -312,7 +312,7 @@ get_eff_oz_privileges_test(Config) ->
 
 
 get_self_eff_oz_privileges_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{correct = [{user, User}]},

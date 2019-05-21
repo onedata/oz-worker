@@ -84,14 +84,14 @@ set_up_users(Users) ->
         lists:foreach(fun({UserId, Props}) ->
             DefaultSpace = proplists:get_value(<<"default_space">>, Props),
             UserInfo = #od_user{
-                name = UserId,
-                alias = UserId,
+                full_name = UserId,
+                username = UserId,
                 emails = [<<UserId/binary, "@gmail.com">>],
                 linked_accounts = [
                     #linked_account{idp = google,
                         subject_id = <<UserId/binary, "#oauth_id">>,
-                        alias = <<UserId/binary, "#oauth_login">>,
-                        name = UserId,
+                        username = <<UserId/binary, "#oauth_username">>,
+                        full_name = UserId,
                         emails = [<<UserId/binary, "@gmail.com">>]
                     }
                 ],
@@ -99,7 +99,9 @@ set_up_users(Users) ->
                 default_space = DefaultSpace,
                 groups = []
             },
-            {ok, UserId} = create_user_with_uuid(UserInfo, UserId)
+            {ok, UserInfo2} = basic_auth:toggle_basic_auth(UserInfo, true),
+            {ok, UserInfo3} = basic_auth:set_password(UserInfo2, <<"password">>),
+            {ok, UserId} = create_user_with_uuid(UserInfo3, UserId)
         end, Users)
     catch
         T:M ->

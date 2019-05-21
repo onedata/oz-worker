@@ -30,8 +30,8 @@
 -record(linked_account, {
     idp :: atom(),
     subject_id :: binary(),
-    name = undefined :: undefined | binary(),
-    alias = undefined :: undefined | binary(),
+    full_name = undefined :: undefined | binary(),
+    username = undefined :: undefined | binary(),
     emails = [] :: [binary()],
     % A list of entitlements in given IdP, they must be normalized according
     % to specification in idp_group_mapping.
@@ -103,12 +103,15 @@
 
 %% This record defines a user and is handled as a database document
 -record(od_user, {
-    name = <<"">> :: od_user:name(),
-    alias = undefined :: od_user:alias(),
-    emails = [] :: [od_user:email()],
-    % Decides if this user can login via login:password, only users created in
-    % onepanel are currently allowed to do that.
+    full_name = ?DEFAULT_FULL_NAME :: od_user:full_name(),
+    username = undefined :: undefined | od_user:username(),
+    % Decides if this user can login via login:password - this feature must be
+    % enabled by an admin, by default regular users are only allowed to sign in
+    % using their IdPs.
     basic_auth_enabled = false :: boolean(),
+    password_hash = undefined :: undefined | basic_auth:password_hash(),
+    emails = [] :: [od_user:email()],
+
     linked_accounts = [] :: [od_user:linked_account()],
     entitlements = [] :: [od_group:id()],
 
@@ -316,10 +319,10 @@
     name = <<"">> :: od_harvester:name(),
     plugin :: od_harvester:plugin(),
     endpoint :: od_harvester:endpoint(),
-    
+
     gui_plugin_config = #{} :: json_utils:json_term(),
     public = false :: boolean(),
-    
+
     indices = #{} :: od_harvester:indices(),
 
     % Direct relations to other entities
@@ -421,8 +424,8 @@
 
 -record(entity_graph_state, {
     refresh_in_progress = false :: boolean(),
-    bottom_up_dirty = [] :: [{Priority :: integer(), EntityType :: atom(), EntityId :: binary()}],
-    top_down_dirty = [] :: [{Priority :: integer(), EntityType :: atom(), EntityId :: binary()}]
+    bottom_up_dirty = ordsets:new() :: entity_graph_state:dirty_queue(),
+    top_down_dirty = ordsets:new() :: entity_graph_state:dirty_queue()
 }).
 
 %% Model that holds the last processed seq for Graph Sync server.
@@ -447,13 +450,5 @@
     timestamp = 0 :: integer(),  % In seconds since epoch
     state_info = #{} :: state_token:state_info()
 }).
-
-%% Record used to cache authorization via basic auth credentials
--record(basic_auth_cache, {
-    expires :: non_neg_integer(),
-    password_hash :: binary(),
-    props :: maps:map()
-}).
-
 
 -endif.
