@@ -297,13 +297,6 @@
 
 -define(HARVESTER_MOCKED_QUERY_DATA_MAP, #{<<"key">> => <<"mocked_query_data">>}).
 
--define(HARVESTER_ENTRY_DATA(Seq, MaxSeq, Indices), #{
-    <<"json">> => <<"{\"valid\":\"json\"}">>,
-    <<"seq">> => Seq,
-    <<"maxSeq">> => MaxSeq,
-    <<"indices">> => Indices
-}).
--define(FAILED_INDICES(Indices), #{<<"failedIndices">> := Indices}).
 -define(FAILED_INDICES(Indices, DefaultSeq), lists:foldl(
     fun({Index, Seq}, Acc) -> Acc#{Index => Seq};
        (Index, Acc) -> Acc#{Index => DefaultSeq} end,

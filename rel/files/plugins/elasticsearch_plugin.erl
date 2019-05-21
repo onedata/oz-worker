@@ -135,39 +135,6 @@ delete_index_metadata(Endpoint, HarvesterId, IndexId) ->
     ok.
 
 
-% fixme remove
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link harvester_plugin_behaviour} callback submit_entry/4.
-%% @end
-%%--------------------------------------------------------------------
--spec submit_entry(od_harvester:endpoint(), od_harvester:id(),  od_harvester:index_id(),
-    od_harvester:entry_id(), Data :: binary()) -> ok | {error, term()}.
-submit_entry(Endpoint, HarvesterId, IndexId, Id, Data) ->
-    case do_request(put, Endpoint, HarvesterId, IndexId, ?ENTRY_PATH(Id), Data, [{200,300}, 400]) of
-        {ok, 400,_, Body} ->
-            try
-                #{<<"error">> := #{<<"type">> := ErrorType}} = json_utils:decode(Body),
-                case is_es_error_ignored(ErrorType) of
-                    true -> 
-                        ?debug("Entry submit in harvester ~p in index ~p dropped because of bad schema: ~p", 
-                            [HarvesterId, IndexId, Body]);
-                    false ->
-                        ?debug("Unexpected error in harvester ~p when submiting entry for index ~p: ~p", 
-                            [HarvesterId, IndexId, Body]),
-                        ?ERROR_BAD_DATA(<<"payload">>)
-                end
-            catch
-                _:_  ->
-                    ?debug("Unrecognized resoponse from Elasticsearch in harvester ~p for index ~p: ~p", 
-                        [HarvesterId, IndexId, Body]),
-                    ?ERROR_BAD_DATA(<<"payload">>)
-            end;
-        {ok,_,_,_} -> ok;
-        {error, _} = Error -> Error
-    end.
-
-
 %%--------------------------------------------------------------------
 %% @doc
 %% {@link harvester_plugin_behaviour} callback submit_batch/4.
@@ -201,21 +168,6 @@ submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
                 {IndexId, {undefined, {FirstSeq, ErrorMsg}}}
         end
     end, Indices)}.
-
-
-% fixme remove
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link harvester_plugin_behaviour} callback delete_entry/3.
-%% @end
-%%--------------------------------------------------------------------
--spec delete_entry(od_harvester:endpoint(), od_harvester:id(),  od_harvester:index_id(),
-    od_harvester:entry_id()) -> ok | {error, term()}.
-delete_entry(Endpoint, HarvesterId, IndexId, Id) ->
-    case do_request(delete, Endpoint, HarvesterId, IndexId, ?ENTRY_PATH(Id), <<>>, [{200,300}, 404]) of
-        {ok,_,_,_} -> ok;
-        {error, _} = Error -> Error
-    end.
 
 
 %%--------------------------------------------------------------------

@@ -75,8 +75,6 @@ operation_supported(create, {space, _}, private) -> true;
 operation_supported(create, group, private) -> true;
 
 operation_supported(create, index, private) -> true;
-operation_supported(create, {submit_entry, _}, private) -> true;
-operation_supported(create, {delete_entry, _}, private) -> true;
 operation_supported(create, {submit_batch, _}, private) -> true;
 operation_supported(create, {query, _}, private) -> true;
 
@@ -361,22 +359,6 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
     case od_harvester:update(HarvesterId, UpdateFun) of
         {ok, _} -> {ok, resource, {NewGri, IndexData}};
         {error, _} = Error -> Error
-    end;
-
-% fixme remove
-create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_entry, FileId}, id = HarvesterId}, data = Data}) ->
-    fun(#od_harvester{plugin = Plugin, endpoint = Endpoint, indices = Indices}) ->
-        {ok, FailedIndices} = perform_entry_operation(submit_entry, Indices, ProviderId, 
-            Plugin, Endpoint, HarvesterId, FileId, Data),
-        {ok, value, #{<<"failedIndices">> => FailedIndices}}
-    end;
-
-% fixme remove
-create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {delete_entry, FileId}, id = HarvesterId}, data = Data}) ->
-    fun(#od_harvester{plugin = Plugin, endpoint = Endpoint, indices = Indices}) ->
-        {ok, FailedIndices} = perform_entry_operation(delete_entry, Indices, ProviderId, 
-            Plugin, Endpoint, HarvesterId, FileId, Data),
-        {ok, value, #{<<"failedIndices">> => FailedIndices}}
     end;
 
 create(#el_req{gri = #gri{aspect = {query, IndexId}, id = HarvesterId}, data = Data}) ->
@@ -799,26 +781,6 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Harvest
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = index}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_UPDATE);
 
-authorize(#el_req{operation = create, gri = #gri{aspect = {submit_entry, FileId}}, client = Client}, Harvester) ->
-    case Client of
-        ?PROVIDER(ProviderId) ->
-            {ok, Guid} = file_id:objectid_to_guid(FileId),
-            SpaceId = file_id:guid_to_space_id(Guid),
-            provider_logic:supports_space(ProviderId, SpaceId) andalso harvester_logic:has_space(Harvester, SpaceId);
-        _Other ->
-            false
-    end;
-
-authorize(#el_req{operation = create, gri = #gri{aspect = {delete_entry, FileId}}, client = Client}, Harvester) ->
-    case Client of
-        ?PROVIDER(ProviderId) ->
-            {ok, Guid} = file_id:objectid_to_guid(FileId),
-            SpaceId = file_id:guid_to_space_id(Guid),
-            provider_logic:supports_space(ProviderId, SpaceId) andalso harvester_logic:has_space(Harvester, SpaceId);
-        _Other ->
-            false
-    end;
-
 authorize(#el_req{operation = create, gri = #gri{aspect = {submit_batch, SpaceId}}, client = Client}, Harvester) ->
     case Client of
         ?PROVIDER(ProviderId) ->
@@ -1103,25 +1065,6 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     }
 };
 
-validate(#el_req{operation = create, gri = #gri{aspect = {submit_entry, _}}}) -> #{
-    required => #{
-        <<"json">> => {binary, non_empty},
-        <<"seq">> => {integer, {not_lower_than, 0}},
-        <<"maxSeq">> => {integer, {not_lower_than, 0}},
-        % index membership in given harvester is checked in perform_entry_operation/8
-        <<"indices">> => {list_of_binaries, non_empty}
-    }
-};
-
-validate(#el_req{operation = create, gri = #gri{aspect = {delete_entry, _}}}) -> #{
-    required => #{
-        <<"seq">> => {integer, {not_lower_than, 0}},
-        <<"maxSeq">> => {integer, {not_lower_than, 0}},
-        % index membership in given harvester is checked in perform_entry_operation/8
-        <<"indices">> => {list_of_binaries, non_empty}
-    }
-};
-
 validate(#el_req{operation = create, gri = #gri{aspect = {submit_batch, _}}}) -> #{
     required => #{
         <<"maxSeq">> => {integer, {not_lower_than, 0}},
@@ -1264,55 +1207,6 @@ auth_by_privilege(UserId, HarvesterOrId, Privilege) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Performs given operation regarding harvester entry by calling harvester plugin. 
-%% Updates harvester record appropriately.
-%% Returns lists of indices for which operation failed.
-%% @end
-%%--------------------------------------------------------------------
--spec perform_entry_operation(Operation :: atom(), od_harvester:indices(), 
-    od_provider:id(), od_harvester:plugin(), od_harvester:endpoint(), od_harvester:id(), 
-    FileId :: binary(), Data :: map()) -> {ok, [od_harvester:index_id()]}.
-perform_entry_operation(Operation, Indices, ProviderId, Plugin, Endpoint, HarvesterId, FileId, Data) ->
-    #{
-        <<"seq">> := Seq,
-        <<"maxSeq">> := MaxSeq,
-        <<"indices">> := SubmitIndices
-    } = Data,
-    
-    Json = maps:get(<<"json">>, Data, undefined),
-
-    {ok, Guid} = file_id:objectid_to_guid(FileId),
-    SpaceId = file_id:guid_to_space_id(Guid),
-    
-    IndicesToUpdate = lists:filtermap(
-        fun(IndexId) ->
-            case maps:find(IndexId, Indices) of
-                {ok, #harvester_index{
-                    stats = #{SpaceId := #{ProviderId := #index_stats{current_seq = S}}}}
-                } when S >= Seq ->
-                    % Ignore already harvested sequences
-                    false;
-                {ok, _} ->
-                    case call_plugin(Operation, Plugin, Endpoint, HarvesterId, IndexId, FileId, Json) of
-                        ok -> {true, {IndexId, Seq}};
-                        _ -> {true, {IndexId, undefined}}
-                    end;
-                _ ->
-                    % Ignore not found index.
-                    false
-            end
-        end, SubmitIndices),
-
-    update_indices_stats(HarvesterId, IndicesToUpdate, fun(Seqs, NewSeq) ->
-        update_seqs(Seqs, SpaceId, ProviderId, NewSeq, MaxSeq, undefined)
-    end),
-    
-    {ok, [I || {I, undefined} <- IndicesToUpdate]}.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
 %% Updates given indices stats in harvester record using given UpdateFun. 
 %% IndicesToUpdate can be given as list of indices or as list of tuples {IndexId, Mod} 
 %% in which case given value will be passed to UpdateFun for given index.
@@ -1395,20 +1289,6 @@ update_seqs(Stats, SpaceId, ProviderId, NewSeq, NewMaxSeq, ErrorMsg) ->
             }
         }
     }.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Performs given operation by calling harvester plugin.
-%% @end
-%%--------------------------------------------------------------------
--spec call_plugin(submit_entry | delete_entry, od_harvester:plugin(), od_harvester:endpoint(), od_harvester:id(), 
-    od_harvester:index_id(), FileId :: binary(), Json :: binary()) -> ok | {error, term()}.
-call_plugin(submit_entry, Plugin, Endpoint, HarvesterId, IndexId, FileId, Json) ->
-    Plugin:submit_entry(Endpoint, HarvesterId, IndexId, FileId, Json);
-call_plugin(delete_entry, Plugin, Endpoint, HarvesterId, IndexId, FileId, _) ->
-    Plugin:delete_entry(Endpoint, HarvesterId, IndexId, FileId).
 
 
 %%--------------------------------------------------------------------

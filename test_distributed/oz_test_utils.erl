@@ -2947,8 +2947,6 @@ mock_harvester_plugin(Config, Nodes, PluginName) ->
            (?HARVESTER_ENDPOINT2) -> ok;
            (_) -> ?ERROR_TEMPORARY_FAILURE
         end),
-    test_utils:mock_expect(Nodes, PluginName, submit_entry, fun(_,_,_,_,_) -> ok end),
-    test_utils:mock_expect(Nodes, PluginName, delete_entry, fun(_,_,_,_) -> ok end),
     test_utils:mock_expect(Nodes, PluginName, submit_batch, fun(_,HarvesterId,Indices, Batch) ->
         FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),
         {LastSeq, ErrorSeq} = lists:foldl(

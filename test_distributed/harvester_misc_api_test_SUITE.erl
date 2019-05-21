@@ -48,10 +48,7 @@
     delete_index_metadata_test/1,
     query_index_test/1,
     
-    submit_entry_test/1,
-    delete_entry_test/1,
     submit_batch_test/1,
-
     submit_batch_index_stats_test/1
 ]).
 
@@ -75,10 +72,7 @@ all() ->
         delete_index_metadata_test,
         query_index_test,
 
-        submit_entry_test,
-        delete_entry_test,
         submit_batch_test,
-
         submit_batch_index_stats_test
     ]).
 
@@ -1276,62 +1270,6 @@ list_indices_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec1)).
 
 
-submit_entry_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
-
-    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT,
-        ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)),
-    oz_test_utils:harvester_add_user(Config, H1, U1),
-
-    {ok, {P1, M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, P1, S1, oz_test_utils:minimum_support_size(Config)
-    ),
-    {ok, {P2, M2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-
-    oz_test_utils:harvester_add_space(Config, H1, S1),
-
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    {ok, FileId} = file_id:guid_to_objectid(file_id:pack_guid(<<"1234">>, S1)),
-
-    {ok, IndexId} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                {provider, P1,M1}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {provider, P2,M2}
-            ]
-        },
-        logic_spec = #logic_spec{
-            module = harvester_logic,
-            function = submit_entry,
-            args = [client, H1, FileId, data],
-            expected_result = ?OK_MAP(#{<<"failedIndices">> => []})
-        },
-        gs_spec = #gs_spec{
-            operation = create,
-            gri = #gri{type = od_harvester, id = H1, aspect = {submit_entry, FileId}},
-            expected_result = ?OK_MAP(#{<<"failedIndices">> => []})
-        },
-        data_spec = #data_spec{
-            required = [<<"json">>, <<"indices">>, <<"maxSeq">>, <<"seq">>],
-            correct_values = #{
-                <<"json">> => [<<"{\"example\":\"json\"}">>],
-                <<"indices">> => [[IndexId]],
-                <<"maxSeq">> => [1000],
-                <<"seq">> => [10]
-            }
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
-
-
 submit_batch_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
 
@@ -1375,61 +1313,6 @@ submit_batch_test(Config) ->
                 <<"batch">> => [?HARVESTER_BATCH(<<"fileId">>)],
                 <<"indices">> => [[IndexId]],
                 <<"maxSeq">> => [1000]
-            }
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
-
-
-delete_entry_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
-
-    {ok, H1} = oz_test_utils:create_harvester(Config, ?ROOT,
-        ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)),
-    oz_test_utils:harvester_add_user(Config, H1, U1),
-
-    {ok, {P1, M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, P1, S1, oz_test_utils:minimum_support_size(Config)
-    ),
-    {ok, {P2, M2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-
-    oz_test_utils:harvester_add_space(Config, H1, S1),
-
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    {ok, FileId} = file_id:guid_to_objectid(file_id:pack_guid(<<"1234">>, S1)),
-
-    {ok, IndexId} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                {provider, P1,M1}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {provider, P2,M2}
-            ]
-        },
-        logic_spec = #logic_spec{
-            module = harvester_logic,
-            function = delete_entry,
-            args = [client, H1, FileId, data],
-            expected_result = ?OK_MAP(#{<<"failedIndices">> => []})
-        },
-        gs_spec = #gs_spec{
-            operation = create,
-            gri = #gri{type = od_harvester, id = H1, aspect = {delete_entry, FileId}},
-            expected_result = ?OK_MAP(#{<<"failedIndices">> => []})
-        },
-        data_spec = #data_spec{
-            required = [<<"indices">>, <<"maxSeq">>, <<"seq">>],
-            correct_values = #{
-                <<"indices">> => [[IndexId]],
-                <<"maxSeq">> => [1000],
-                <<"seq">> => [1000]
             }
         }
     },

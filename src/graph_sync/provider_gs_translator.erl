@@ -271,8 +271,6 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         <<"spaces">> => Spaces,
         <<"effectiveUsers">> => entity_graph:get_relations(effective, bottom_up, od_user, Provider),
         <<"effectiveGroups">> => entity_graph:get_relations(effective, bottom_up, od_group, Provider)
-        % fixme remove
-        ,<<"effectiveHarvesters">> => entity_graph:get_relations(effective, bottom_up, od_harvester, Provider)
     };
 
 translate_resource(_, #gri{type = od_provider, aspect = instance, scope = protected}, ProviderData) ->
