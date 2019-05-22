@@ -124,7 +124,8 @@ delete_index_metadata(Endpoint, HarvesterId, IndexId) ->
             <<"match_all">> => #{}
         }
     },
-    % only schedule deletion of harvested metadata and do not wait for response because deletion could take a lot of time
+    % only schedule deletion of harvested metadata and do not wait
+    % for response because deletion could take a lot of time
     spawn(fun() -> 
         do_request(post, Endpoint, HarvesterId, IndexId,
             ?ENTRY_PATH(<<"_delete_by_query?conflicts=proceed">>),
@@ -350,7 +351,8 @@ parse_batch_result(Res, Batch, HarvesterId, IndexId) ->
 
 
 %% @private
--spec get_entry_response_error(EntryResponse :: map()) -> {ErrorType :: binary(), Error :: map()}.
+-spec get_entry_response_error(EntryResponse :: map()) ->
+    {ErrorType :: binary(), ErrorMap :: map()} | undefined.
 get_entry_response_error(EntryResponse) ->
     InnerMap = case maps:find(<<"index">>, EntryResponse) of
         {ok, M} -> M;
@@ -358,7 +360,7 @@ get_entry_response_error(EntryResponse) ->
     end,
     case maps:get(<<"error">>, InnerMap, undefined) of
         undefined -> undefined;
-        ErrorMap -> {maps:get(<<"type">>, ErrorMap), ErrorMap}
+        ErrorMap -> {maps:get(<<"type">>, ErrorMap, <<"unexpected_error">>), ErrorMap}
     end.
 
 

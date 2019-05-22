@@ -380,10 +380,10 @@ create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch
         IndicesToUpdate = [X || X <- Indices, Y <- maps:keys(ExistingIndices), X == Y],
         {ok, Res} = Plugin:submit_batch(Endpoint, HarvesterId, IndicesToUpdate, Batch),
         update_indices_stats(HarvesterId, Res, 
-            fun(Seqs, {NewCurrentSeq, undefined}) -> 
-                   update_seqs(Seqs, SpaceId, ProviderId, NewCurrentSeq, MaxSeq, undefined);
-               (Seqs, {NewCurrentSeq, {_, ErrorMsg}}) ->
-                   update_seqs(Seqs, SpaceId, ProviderId, NewCurrentSeq, MaxSeq, ErrorMsg)
+            fun(PreviousStats, {NewCurrentSeq, undefined}) ->
+                   update_seqs(PreviousStats, SpaceId, ProviderId, NewCurrentSeq, MaxSeq, undefined);
+               (PreviousStats, {NewCurrentSeq, {_, ErrorMsg}}) ->
+                   update_seqs(PreviousStats, SpaceId, ProviderId, NewCurrentSeq, MaxSeq, ErrorMsg)
             end
         ),
         FailedIndices = lists:filtermap(
@@ -391,11 +391,7 @@ create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch
                ({Index, {_, {FailedSeq, _}}}) -> {true, {Index, FailedSeq}} 
             end, Res
         ),
-        {ok, value, lists:foldl(
-            fun({Index, NewCurrentSeq}, NewRes) ->
-                NewRes#{Index => NewCurrentSeq}
-            end, #{}, FailedIndices
-        )}
+        {ok, value, maps:from_list(FailedIndices)}
     end.
 
 
