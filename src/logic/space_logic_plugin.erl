@@ -271,7 +271,7 @@ create(#el_req{client = Client, gri = #gri{id = SpaceId, aspect = harvest_metada
     
     {ok, value, lists:foldl(
         fun({HarvesterId, {error, _} = Error}, Acc) -> 
-            Acc#{HarvesterId => #{<<"error">> => gs_protocol_errors:error_to_json(0, Error)}};
+            Acc#{HarvesterId => #{<<"error">> => Error}};
            ({HarvesterId, FailedIndices}, Acc) ->
                 case maps:size(FailedIndices) of
                     0 -> Acc;

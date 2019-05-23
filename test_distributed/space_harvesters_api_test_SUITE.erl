@@ -362,10 +362,10 @@ harvest_metadata_test(Config) ->
     Guid = file_id:pack_guid(<<"file_id">>, S1), 
     {ok, FileId} = file_id:guid_to_objectid(Guid),
     
-    ExpectedResult = #{
+    ExpectedResult = fun(Error) -> #{
         H1 => #{Index2 => 1}, 
-        NotExistingHarvester => #{<<"error">> => gs_protocol_errors:error_to_json(0, ?ERROR_NOT_FOUND)}
-    },
+        NotExistingHarvester => #{<<"error">> => Error}
+    } end,
     
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -381,12 +381,12 @@ harvest_metadata_test(Config) ->
             module = space_logic,
             function = harvest_metadata,
             args = [client, S1, data],
-            expected_result = ?OK_MAP(ExpectedResult)
+            expected_result = ?OK_MAP(ExpectedResult(?ERROR_NOT_FOUND))
         },
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_space, id = S1, aspect = harvest_metadata},
-            expected_result = ?OK_MAP(ExpectedResult)
+            expected_result = ?OK_MAP(ExpectedResult(gs_protocol_errors:error_to_json(0, ?ERROR_NOT_FOUND)))
         },
         data_spec = #data_spec{
             required = [<<"destination">>, <<"maxSeq">>, <<"batch">>],

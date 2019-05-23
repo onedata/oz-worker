@@ -63,8 +63,19 @@ translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {Access
         <<"token">> => AccessToken,
         <<"ttl">> => Expires
     };
-translate_value(_, #gri{type = od_space, aspect = harvest_metadata}, Result) ->
-    Result;
+translate_value(ProtoVersion, #gri{type = od_space, aspect = harvest_metadata}, Result) ->
+    case Result of
+        {error, _} = Error ->
+            Error;
+        _ ->
+            maps:fold(fun
+                (HarvesterId, #{<<"error">> := Error}, Acc) ->
+                    Acc#{HarvesterId => #{<<"error">> => gs_protocol_errors:error_to_json(ProtoVersion, Error)}};
+                (HarvesterId, Indices, Acc) ->
+                    Acc#{HarvesterId => Indices}
+            end, #{}, Result)
+    end;
+
 translate_value(_, #gri{type = od_harvester, aspect = {submit_entry, _}}, FailedIndices) ->
     FailedIndices;
 translate_value(_, #gri{type = od_harvester, aspect = {delete_entry, _}}, FailedIndices) ->
