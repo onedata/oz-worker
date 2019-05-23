@@ -135,7 +135,8 @@
     space_invite_provider_token/3,
     space_has_effective_user/3,
 
-    space_remove_group/3
+    space_remove_group/3,
+    space_harvest_metadata/5
 ]).
 -export([
     create_share/6,
@@ -2720,6 +2721,20 @@ group_create_harvester(Config, GroupId, Data) ->
 space_remove_group(Config, SpaceId, GroupId) ->
     ?assertMatch(ok, call_oz(
         Config, space_logic, remove_group, [?ROOT, SpaceId, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Submits given batch to harvesters given in Destination.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_harvest_metadata(Config :: term(), SpaceId :: od_space:id(),
+    Destination :: map(), MaxSeq :: non_neg_integer(), Batch :: map()) ->
+    {ok, map()} | {error, term()}.
+space_harvest_metadata(Config, SpaceId, Destination, MaxSeq, Batch) ->
+    ?assertMatch(ok, call_oz(
+        Config, space_logic, harvest_metadata, [?ROOT, SpaceId, Destination, MaxSeq, Batch]
     )).
 
 

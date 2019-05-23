@@ -44,7 +44,7 @@
     list_indices/2
 ]).
 -export([
-    submit_batch/4, submit_batch/6
+    submit_batch/4, submit_batch/7
 ]).
 -export([
     create_user_invite_token/2,
@@ -442,11 +442,12 @@ update_index(Client, HarvesterId, IndexId, Data) ->
 %%--------------------------------------------------------------------
 -spec submit_batch(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
     Indices :: od_harvester:indices(), SpaceId :: od_space:id(), Batch :: od_harvester:batch(), 
-    MaxSeq :: integer()) -> {ok, map()} | {error, term()}.
-submit_batch(Client, HarvesterId, Indices, SpaceId, Batch, MaxSeq) ->
+    MaxStreamSeq :: integer(), MaxSeq :: integer()) -> {ok, map()} | {error, term()}.
+submit_batch(Client, HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq) ->
     submit_batch(Client, HarvesterId, SpaceId, #{
             <<"indices">> => Indices,
             <<"maxSeq">> => MaxSeq,
+            <<"maxStreamSeq">> => MaxStreamSeq,
             <<"batch">> => Batch
     }).
 

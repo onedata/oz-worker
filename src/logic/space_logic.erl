@@ -40,7 +40,7 @@
     create_group/3, create_group/4,
     
     join_harvester/3,
-    harvest_metadata/3,
+    harvest_metadata/3, harvest_metadata/5,
 
     get_users/2, get_eff_users/2,
     get_user/3, get_eff_user/3,
@@ -367,7 +367,25 @@ join_harvester(Client, SpaceId, Token) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Submits given batch to given harvester.
+%% Submits given batch to harvesters given in Destination.
+%% Destination, maxSeq and Batch are provider explicitly.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvest_metadata(Client :: entity_logic:client(), SpaceId :: od_space:id(),
+    Destination :: map(), MaxSeq :: non_neg_integer(), Batch :: map()) ->
+    {ok, map()} | {error, term()}.
+harvest_metadata(Client, SpaceId, Destination, MaxSeq, Batch) ->
+    harvest_metadata(Client, SpaceId, #{
+        <<"destination">> => Destination,
+        <<"maxSeq">> => MaxSeq,
+        <<"batch">> => Batch
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Submits given batch to harvesters given in Destination.
+%% Destination, maxSeq and Batch are provider in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec harvest_metadata(Client :: entity_logic:client(), SpaceId :: od_space:id(), 

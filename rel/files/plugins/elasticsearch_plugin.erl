@@ -301,13 +301,13 @@ prepare_elasticsearch_batch(Batch) ->
     Requests = lists:map(fun(BatchEntry) ->
         #{
             <<"operation">> := Operation,
-            <<"fileId">> := EntryId,
-            <<"payload">> := Payload
+            <<"fileId">> := EntryId
         } = BatchEntry,
         OperationBin = case Operation of
-            submit -> <<"index">>;
-            delete -> <<"delete">>
+            <<"submit">> -> <<"index">>;
+            <<"delete">> -> <<"delete">>
         end,
+        Payload = maps:get(<<"payload">>, BatchEntry, #{}),
         % submit only JSON, ignore other metadata
         {FinalOperation, Data} = case maps:find(<<"json">>, Payload) of
             {ok, JSON} -> {OperationBin, JSON};

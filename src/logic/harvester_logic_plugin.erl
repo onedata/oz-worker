@@ -149,6 +149,7 @@ is_subscribable({eff_group_privileges, _}, private) -> true;
 is_subscribable({eff_group_membership, _}, private) -> true;
 is_subscribable(spaces, private) -> true;
 is_subscribable({space, _}, private) -> true;
+is_subscribable(eff_providers, private) -> true;
 is_subscribable(gui_plugin_config, private) -> true;
 is_subscribable(index, _) -> true;
 is_subscribable(indices, private) -> true;
@@ -355,9 +356,12 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
         end
     end,
     NewGri = Gri#gri{aspect = {index, IndexId}, scope = private},
-    IndexData = Data#{<<"schema">> => Schema},
     case od_harvester:update(HarvesterId, UpdateFun) of
-        {ok, _} -> {ok, resource, {NewGri, IndexData}};
+        {ok, #document{value = #od_harvester{plugin = Plugin}}} ->
+            {ok, resource, {NewGri, Data#{
+                <<"schema">> => Schema,
+                <<"pluginIndexId">> => Plugin:get_plugin_index_id(HarvesterId, IndexId)
+            }}};
         {error, _} = Error -> Error
     end;
 
@@ -373,15 +377,23 @@ create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch
     #{
         <<"indices">> := Indices,
         <<"maxSeq">> := MaxSeq,
+        <<"maxStreamSeq">> := MaxStreamSeq,
         <<"batch">> := Batch
     } = Data,
     fun(#od_harvester{endpoint = Endpoint, plugin = Plugin, indices = ExistingIndices}) ->
-        % ignore indices that do not belong to this harvester
         IndicesToUpdate = [X || X <- Indices, Y <- maps:keys(ExistingIndices), X == Y],
-        {ok, Res} = Plugin:submit_batch(Endpoint, HarvesterId, IndicesToUpdate, Batch),
+        case Indices -- IndicesToUpdate of
+            [] -> ok;
+            Diff -> ?debug("Ignoring not known indices ~p in harvester ~p", [Diff, HarvesterId])
+        end,
+        {ok, Res} = case Batch of
+            % fixme
+            [] -> {ok, lists:map(fun(IndexId) -> {IndexId, {0, undefined}} end, IndicesToUpdate)};
+            _ -> Plugin:submit_batch(Endpoint, HarvesterId, IndicesToUpdate, Batch)
+        end,
         update_indices_stats(HarvesterId, Res, 
-            fun(PreviousStats, {NewCurrentSeq, undefined}) ->
-                   update_seqs(PreviousStats, SpaceId, ProviderId, NewCurrentSeq, MaxSeq, undefined);
+            fun(PreviousStats, {_, undefined}) ->
+                   update_seqs(PreviousStats, SpaceId, ProviderId, MaxStreamSeq, MaxSeq, undefined);
                (PreviousStats, {NewCurrentSeq, {_, ErrorMsg}}) ->
                    update_seqs(PreviousStats, SpaceId, ProviderId, NewCurrentSeq, MaxSeq, ErrorMsg)
             end

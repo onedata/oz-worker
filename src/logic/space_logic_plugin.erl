@@ -258,12 +258,13 @@ create(#el_req{client = Client, gri = #gri{id = SpaceId, aspect = harvest_metada
     #{
         <<"destination">> := Destination,
         <<"maxSeq">> := MaxSeq,
+        <<"maxStreamSeq">> := MaxStreamSeq,
         <<"batch">> := Batch
     } = Data,
     
     Res = utils:pmap(fun(HarvesterId) ->
         Indices = maps:get(HarvesterId, Destination),
-        case harvester_logic:submit_batch(Client, HarvesterId, Indices, SpaceId, Batch, MaxSeq) of
+        case harvester_logic:submit_batch(Client, HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq) of
             {ok, FailedIndices} -> {HarvesterId, FailedIndices};
             Error -> {HarvesterId, Error}
         end
