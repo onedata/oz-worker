@@ -1,0 +1,313 @@
+%%%-------------------------------------------------------------------
+%%% @author Lukasz Opiola
+%%% @copyright (C) 2017 ACK CYFRONET AGH
+%%% This software is released under the MIT license
+%%% cited in 'LICENSE.txt'.
+%%% @end
+%%%-------------------------------------------------------------------
+%%% @doc
+%%% This behaviour implements gs_translator_behaviour and is used to translate
+%%% Graph Sync request results into format understood by Oneprovider.
+%%% @end
+%%%-------------------------------------------------------------------
+-module(provider_gs_translator).
+-author("Lukasz Opiola").
+
+-behaviour(gs_translator_behaviour).
+
+-include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/api_errors.hrl").
+-include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
+
+%% API
+-export([handshake_attributes/1, translate_value/3, translate_resource/3]).
+
+
+%%%===================================================================
+%%% API
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link gs_translator_behaviour} callback handshake_attributes/1.
+%% @end
+%%--------------------------------------------------------------------
+-spec handshake_attributes(gs_protocol:client()) ->
+    gs_protocol:handshake_attributes().
+handshake_attributes(_) ->
+    undefined.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @doc
+%% {@link gs_translator_behaviour} callback translate_value/3.
+%% @end
+%%--------------------------------------------------------------------
+-spec translate_value(gs_protocol:protocol_version(), gs_protocol:gri(),
+    Data :: term()) -> gs_protocol:data() | gs_protocol:error().
+translate_value(ProtoVersion, #gri{aspect = invite_group_token}, Macaroon) ->
+    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
+translate_value(ProtoVersion, #gri{aspect = invite_provider_token}, Macaroon) ->
+    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
+translate_value(ProtoVersion, #gri{aspect = provider_registration_token}, Macaroon) ->
+    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
+translate_value(_, #gri{aspect = invite_user_token}, Macaroon) ->
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    Token;
+translate_value(_, #gri{type = od_provider, aspect = map_idp_group}, Id) ->
+    Id;
+translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {AccessToken, Expires}) ->
+    #{
+        <<"token">> => AccessToken,
+        <<"ttl">> => Expires
+    };
+
+translate_value(ProtocolVersion, GRI, Data) ->
+    ?error("Cannot translate graph sync create result for:~n
+    ProtocolVersion: ~p~n
+    GRI: ~p~n
+    Data: ~p~n", [
+        ProtocolVersion, GRI, Data
+    ]),
+    throw(?ERROR_INTERNAL_SERVER_ERROR).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link gs_translator_behaviour} callback translate_resource/3.
+%% @end
+%%--------------------------------------------------------------------
+-spec translate_resource(gs_protocol:protocol_version(), gs_protocol:gri(),
+    Data :: term()) ->
+    gs_protocol:data() | {gs_protocol:gri(), gs_protocol:data()} |
+    gs_protocol:error().
+translate_resource(_, #gri{type = od_provider, aspect = current_time}, TimeMillis) ->
+    #{<<"timeMillis">> => TimeMillis};
+
+translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, User) ->
+    #od_user{
+        name = Name,
+        alias = Alias,
+        emails = Emails,
+        linked_accounts = LinkedAccounts,
+        default_space = DefaultSpace,
+        space_aliases = SpaceAliases
+    } = User,
+    #{
+        <<"name">> => Name,
+        <<"alias">> => gs_protocol:undefined_to_null(Alias),
+        <<"emails">> => Emails,
+        <<"linkedAccounts">> => user_logic:linked_accounts_to_maps(LinkedAccounts),
+        <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
+        <<"spaceAliases">> => SpaceAliases,
+
+        <<"effectiveGroups">> => entity_graph:get_relations(effective, top_down, od_group, User),
+        <<"effectiveSpaces">> => entity_graph:get_relations(effective, top_down, od_space, User),
+        <<"effectiveHandles">> => entity_graph:get_relations(effective, top_down, od_handle, User),
+        <<"effectiveHandleServices">> => entity_graph:get_relations(effective, top_down, od_handle_service, User),
+
+        % TODO VFS-4506 deprecated fields, included for backward compatibility
+        <<"login">> => gs_protocol:undefined_to_null(Alias),
+        <<"emailList">> => Emails
+    };
+
+translate_resource(_, #gri{type = od_user, aspect = instance, scope = protected}, User) ->
+    #{
+        <<"name">> := Name,
+        <<"alias">> := Alias,
+        <<"emails">> := Emails,
+        <<"linkedAccounts">> := LinkedAccountMaps
+    } = User,
+    User#{
+        <<"name">> => Name,
+        <<"alias">> => gs_protocol:undefined_to_null(Alias),
+        <<"emails">> => Emails,
+        <<"linkedAccounts">> => LinkedAccountMaps,
+
+        % TODO VFS-4506 deprecated fields, included for backward compatibility
+        <<"login">> => gs_protocol:undefined_to_null(Alias),
+        <<"emailList">> => Emails
+    };
+
+translate_resource(_, #gri{type = od_user, aspect = instance, scope = shared}, User) ->
+    #{
+        <<"name">> := Name,
+        <<"alias">> := Alias
+    } = User,
+    #{
+        <<"name">> => Name,
+        <<"alias">> => gs_protocol:undefined_to_null(Alias),
+
+        % TODO VFS-4506 deprecated field, included for backward compatibility
+        <<"login">> => gs_protocol:undefined_to_null(Alias)
+    };
+
+translate_resource(_, #gri{type = od_group, aspect = instance, scope = private}, Group) ->
+    #od_group{
+        name = Name,
+        type = Type,
+
+        children = Children,
+        parents = Parents,
+
+        users = Users,
+
+        eff_spaces = EffSpaces
+    } = Group,
+    #{
+        <<"name">> => Name,
+        <<"type">> => Type,
+
+        <<"children">> => Children,
+        <<"effectiveChildren">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, Group),
+        <<"parents">> => Parents,
+
+        <<"users">> => Users,
+        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, Group),
+
+        <<"spaces">> => maps:keys(EffSpaces)
+    };
+
+% shared and protected scopes carry the same data
+translate_resource(ProtoVersion, GRI = #gri{type = od_group, aspect = instance, scope = shared}, Group) ->
+    translate_resource(ProtoVersion, GRI#gri{scope = protected}, Group);
+translate_resource(_, #gri{type = od_group, aspect = instance, scope = protected}, GroupData) ->
+    GroupData;
+
+translate_resource(_, #gri{type = od_space, aspect = instance, scope = private}, Space) ->
+    #od_space{
+        name = Name,
+
+        users = Users,
+
+        groups = Groups,
+
+        providers = Providers,
+        shares = Shares
+    } = Space,
+    #{
+        <<"name">> => Name,
+
+        <<"users">> => Users,
+        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, Space),
+
+        <<"groups">> => Groups,
+        <<"effectiveGroups">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, Space),
+
+        <<"providers">> => Providers,
+        <<"shares">> => Shares
+    };
+translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected}, SpaceData) ->
+    SpaceData;
+
+translate_resource(_, #gri{type = od_share, aspect = instance, scope = private}, Share) ->
+    #od_share{
+        name = Name,
+        public_url = PublicUrl,
+        space = SpaceId,
+        handle = HandleId,
+        root_file = RootFileId
+    } = Share,
+    #{
+        <<"name">> => Name,
+        <<"publicUrl">> => PublicUrl,
+        <<"spaceId">> => SpaceId,
+        <<"handleId">> => gs_protocol:undefined_to_null(HandleId),
+        <<"rootFileId">> => RootFileId
+    };
+
+translate_resource(_, #gri{type = od_share, aspect = instance, scope = protected}, ShareData) ->
+    ShareData;
+
+translate_resource(_, #gri{type = od_share, aspect = instance, scope = public}, ShareData) ->
+    ShareData;
+
+translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope = private}, Provider) ->
+    #od_provider{
+        name = Name,
+        subdomain_delegation = SubdomainDelegation,
+        domain = Domain,
+        subdomain = Subdomain,
+        admin_email = AdminEmail,
+        latitude = Latitude,
+        longitude = Longitude,
+
+        spaces = Spaces
+    } = Provider,
+    #{
+        <<"name">> => Name,
+        <<"subdomainDelegation">> => SubdomainDelegation,
+        <<"domain">> => Domain,
+        <<"subdomain">> => Subdomain,
+
+        <<"adminEmail">> => AdminEmail,
+
+        <<"latitude">> => Latitude,
+        <<"longitude">> => Longitude,
+
+        <<"online">> => provider_connection:is_online(Id),
+
+        <<"spaces">> => Spaces,
+        <<"effectiveUsers">> => entity_graph:get_relations(effective, bottom_up, od_user, Provider),
+        <<"effectiveGroups">> => entity_graph:get_relations(effective, bottom_up, od_group, Provider)
+
+    };
+
+
+translate_resource(_, #gri{type = od_provider, aspect = instance, scope = protected}, ProviderData) ->
+    ProviderData;
+
+translate_resource(_, #gri{type = od_provider, aspect = domain_config}, Data) ->
+    case maps:find(<<"ipList">>, Data) of
+        {ok, IPList} ->
+            IPBinaries = [list_to_binary(inet:ntoa(IP)) || IP <- IPList],
+            Data#{<<"ipList">> := IPBinaries};
+        error ->
+            Data
+    end;
+
+translate_resource(_, #gri{type = od_handle_service, aspect = instance, scope = private}, HService) ->
+    #{
+        <<"name">> => HService#od_handle_service.name,
+
+        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, HService),
+        <<"effectiveGroups">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, HService)
+    };
+
+translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}, Handle) ->
+    #od_handle{
+        public_handle = PublicHandle,
+        resource_type = ResourceType,
+        resource_id = ResourceId,
+        metadata = Metadata,
+        timestamp = Timestamp,
+        handle_service = HandleServiceId
+    } = Handle,
+    #{
+        <<"publicHandle">> => PublicHandle,
+        <<"resourceType">> => ResourceType,
+        <<"resourceId">> => ResourceId,
+        <<"metadata">> => Metadata,
+        <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp),
+        <<"handleServiceId">> => HandleServiceId,
+
+        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, Handle),
+        <<"effectiveGroups">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, Handle)
+    };
+
+translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public}, HandleData) ->
+    HandleData#{
+        <<"timestamp">> => time_utils:datetime_to_datestamp(maps:get(<<"timestamp">>, HandleData))
+    };
+
+translate_resource(ProtocolVersion, GRI, Data) ->
+    ?error("Cannot translate graph sync get result for:~n
+    ProtocolVersion: ~p~n
+    GRI: ~p~n
+    Data: ~p~n", [
+        ProtocolVersion, GRI, Data
+    ]),
+    throw(?ERROR_INTERNAL_SERVER_ERROR).
+

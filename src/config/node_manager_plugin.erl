@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Michal Zmuda
-%%% @copyright (C) 2013 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -12,27 +12,30 @@
 -module(node_manager_plugin).
 -author("Michal Zmuda").
 
--behaviour(node_manager_plugin_behaviour).
-
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
 -include_lib("cluster_worker/include/elements/node_manager/node_manager.hrl").
--include_lib("cluster_worker/include/elements/worker_host/worker_protocol.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
 
-%% node_manager_plugin_behaviour callbacks
--export([before_init/1, after_init/1, on_terminate/2, on_code_change/3, renamed_models/0,
-    handle_call_extension/3, handle_cast_extension/2, handle_info_extension/2,
-    modules_with_args/0, modules_hooks/0, listeners/0, cm_nodes/0, db_nodes/0,
-    check_node_ip_address/0, app_name/0, clear_memory/1]).
+%% node_manager_plugin_default callbacks
+-export([app_name/0, cm_nodes/0, db_nodes/0]).
+-export([listeners/0, modules_with_args/0]).
+-export([before_init/1, on_cluster_initialized/1, after_init/1]).
+-export([handle_call/3, handle_cast/2]).
+
+-export([reconcile_dns_config/0]).
+
+-type state() :: #state{}.
+
+-define(DNS_UPDATE_RETRY_INTERVAL, 5000).
 
 %%%===================================================================
-%%% node_manager_plugin_behaviour callbacks
+%%% node_manager_plugin_default callbacks
 %%%===================================================================
 
+%%--------------------------------------------------------------------
 %% @doc
-%% Returns the name of the application that bases on cluster worker.
+%% Overrides {@link node_manager_plugin_default:app_name/0}.
 %% @end
 %%--------------------------------------------------------------------
 -spec app_name() -> {ok, Name :: atom()}.
@@ -41,87 +44,53 @@ app_name() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% List ccm nodes to be used by node manager.
+%% Overrides {@link node_manager_plugin_default:cm_nodes/0}.
 %% @end
 %%--------------------------------------------------------------------
 -spec cm_nodes() -> {ok, Nodes :: [atom()]} | undefined.
 cm_nodes() ->
-    application:get_env(?APP_NAME, cm_nodes).
+    oz_worker:get_env(cm_nodes).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% List db nodes to be used by node manager.
+%% Overrides {@link node_manager_plugin_default:db_nodes/0}.
 %% @end
 %%--------------------------------------------------------------------
 -spec db_nodes() -> {ok, Nodes :: [atom()]} | undefined.
 db_nodes() ->
-    application:get_env(?APP_NAME, db_nodes).
+    oz_worker:get_env(db_nodes).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Maps old model name to new one.
-%% @end
-%%--------------------------------------------------------------------
--spec renamed_models() ->
-    #{OldName :: model_behaviour:model_type() =>
-    {RenameVersion :: datastore_json:record_version(), NewName :: model_behaviour:model_type()}}.
-renamed_models() ->
-    #{}.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link node_manager_plugin_behaviour} callback listeners/0.
+%% Overrides {@link node_manager_plugin_default:listeners/0}.
 %% @end
 %%--------------------------------------------------------------------
 -spec listeners() -> Listeners :: [atom()].
 listeners() -> [
-    oz_redirector_listener,
-    subscriptions_wss_listener,
-    rest_listener,
-    gui_listener |
-        node_manager:cluster_worker_listeners() -- [redirector_listener]
+    http_listener,
+    https_listener
 ].
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link node_manager_plugin_behaviour} callback modules_with_args/0.
+%% Overrides {@link node_manager_plugin_default:modules_with_args/0}.
 %% @end
 %%--------------------------------------------------------------------
 -spec modules_with_args() -> Models :: [{atom(), [any()]}].
 modules_with_args() ->
-    Base = node_manager:cluster_worker_modules() ++ [
-        {singleton, changes_worker, []},
-        {singleton, ozpca_worker, [
-            {supervisor_flags, ozpca_worker:supervisor_flags()},
-            {supervisor_children_spec, [ozpca_worker:supervisor_children_spec()]}
-        ]},
-        {subscriptions_worker, []}
-    ],
-    case application:get_env(?APP_NAME, location_service_enabled) of
-        {ok, false} -> Base;
-        {ok, true} -> Base ++ [
-            {location_service_worker, []},
-            {identity_publisher_worker, []}
-        ]
-    end.
+    [{gs_worker, [
+        {supervisor_flags, gs_worker:supervisor_flags()}
+    ]}].
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link node_manager_plugin_behaviour} callback modules_hooks/0.
-%% @end
-%%--------------------------------------------------------------------
--spec modules_hooks() -> Hooks :: [{{Module :: atom(), early_init | init},
-    {HookedModule :: atom(), Fun :: atom(), Args :: list()}}].
-modules_hooks() -> node_manager:modules_hooks().
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link node_manager_plugin_behaviour} callback before_init/0.
+%% Overrides {@link node_manager_plugin_default:before_init/1}.
 %% @end
 %%--------------------------------------------------------------------
 -spec before_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
 before_init([]) ->
     try
+        oz_worker_sup:start_link(),
         ok
     catch
         _:Error ->
@@ -132,23 +101,31 @@ before_init([]) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link node_manager_plugin_behaviour} callback after_init/0.
+%% This callback is executed when the cluster has been initialized, i.e. all
+%% nodes have connected to cluster manager.
+%% @end
+%%--------------------------------------------------------------------
+-spec on_cluster_initialized(Nodes :: [node()]) -> Result :: ok | {error, Reason :: term()}.
+on_cluster_initialized(_Nodes) ->
+    ok.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:after_init/1}.
 %% @end
 %%--------------------------------------------------------------------
 -spec after_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
 after_init([]) ->
     try
-        %% This cannot be started before all workers are up
-        %% and critical section is running
-        %% todo: once critical section works in worker init, move it there
-        case application:get_env(?APP_NAME, location_service_enabled) of
-            {ok, false} ->
-                ok;
-            {ok, true} ->
-                identity_publisher_worker:start_refreshing()
-        end,
+        onezone_plugins:init(),
 
         entity_graph:init_state(),
+
+        % build dns zone on one node and broadcast to others
+        case get_dns_dedicated_node() =:= node() of
+            true -> ok = broadcast_dns_config();
+            _ -> ok
+        end,
 
         %% This code will be run on every node_manager, so we need a
         %% transaction here that will prevent duplicates.
@@ -162,113 +139,97 @@ after_init([]) ->
             {error, cannot_start_node_manager_plugin}
     end.
 
+
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
-%% Handling call messages
+%% Overrides {@link node_manager_plugin_default:handle_call/3}.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_call_extension(Request :: term(), From :: {pid(), Tag :: term()}, State :: term()) -> Result when
-    Result :: {reply, Reply, NewState}
-    | {reply, Reply, NewState, Timeout}
-    | {reply, Reply, NewState, hibernate}
-    | {noreply, NewState}
-    | {noreply, NewState, Timeout}
-    | {noreply, NewState, hibernate}
-    | {stop, Reason, Reply, NewState}
-    | {stop, Reason, NewState},
-    Reply :: nagios_handler:healthcheck_response() | term(),
-    NewState :: term(),
-    Timeout :: non_neg_integer() | infinity,
-    Reason :: term().
-
-handle_call_extension(_Request, _From, State) ->
-    ?log_bad_request(_Request),
-    {reply, wrong_request, State}.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Handling cast messages
-%% @end
-%%--------------------------------------------------------------------
--spec handle_cast_extension(Request :: term(), State :: term()) -> Result when
-    Result :: {noreply, NewState}
-    | {noreply, NewState, Timeout}
-    | {noreply, NewState, hibernate}
-    | {stop, Reason :: term(), NewState},
-    NewState :: term(),
-    Timeout :: non_neg_integer() | infinity.
-
-handle_cast_extension(_Request, State) ->
-    ?log_bad_request(_Request),
+-spec handle_call(Request :: term(), From :: {pid(), Tag :: term()},
+    State :: state()) ->
+    {reply, Reply :: term(), NewState :: state()} |
+    {reply, Reply :: term(), NewState :: state(), timeout() | hibernate} |
+    {noreply, NewState :: state()} |
+    {noreply, NewState :: state(), timeout() | hibernate} |
+    {stop, Reason :: term(), Reply :: term(), NewState :: state()} |
+    {stop, Reason :: term(), NewState :: state()}.
+handle_call({update_dns_config, DnsZone}, _From, State) ->
+    Result = dns_config:insert_config(DnsZone),
+    {reply, Result, State};
+handle_call(Request, _From, State) ->
+    ?log_bad_request(Request),
     {noreply, State}.
 
+
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
-%% Handling all non call/cast messages
+%% Overrides {@link node_manager_plugin_default:handle_cast/2}.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_info_extension(Info :: timeout | term(), State :: term()) -> Result when
-    Result :: {noreply, NewState}
-    | {noreply, NewState, Timeout}
-    | {noreply, NewState, hibernate}
-    | {stop, Reason :: term(), NewState},
-    NewState :: term(),
-    Timeout :: non_neg_integer() | infinity.
-
-handle_info_extension(_Request, State) ->
-    ?log_bad_request(_Request),
+-spec handle_cast(Request :: term(), State :: state()) ->
+    {noreply, NewState :: state()} |
+    {noreply, NewState :: state(), timeout() | hibernate} |
+    {stop, Reason :: term(), NewState :: state()}.
+handle_cast(broadcast_dns_config, State) ->
+    broadcast_dns_config(),
+    {noreply, State};
+handle_cast(Request, State) ->
+    ?log_bad_request(Request),
     {noreply, State}.
 
-%%--------------------------------------------------------------------
-%% @doc
-%% This function is called by a gen_server when it is about to
-%% terminate. It should be the opposite of Module:init/1 and do any
-%% necessary cleaning up. When it returns, the gen_server terminates
-%% with Reason. The return value is ignored.
-%% @end
-%%--------------------------------------------------------------------
--spec on_terminate(Reason, State :: term()) -> Any :: term() when
-    Reason :: normal
-    | shutdown
-    | {shutdown, term()}
-    | term().
-on_terminate(_Reason, _State) ->
-    ok.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Convert process state when code is changed
+%% Trigger broadcasting dns update from this node
 %% @end
 %%--------------------------------------------------------------------
--spec on_code_change(OldVsn, State :: term(), Extra :: term()) -> Result when
-    Result :: {ok, NewState :: term()} | {error, Reason :: term()},
-    OldVsn :: Vsn | {down, Vsn},
-    Vsn :: term().
-on_code_change(_OldVsn, State, _Extra) ->
-    {ok, State}.
+-spec reconcile_dns_config() -> ok.
+reconcile_dns_config() ->
+    DedicatedNode = get_dns_dedicated_node(),
+    gen_server2:cast({?NODE_MANAGER_NAME, DedicatedNode}, broadcast_dns_config).
+
 
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
-%% Get node IP. If there is no IP info in the env, then use 127.0.0.1.
+%% Get node responsible for building dns zone to prevent race conditions.
 %% @end
 %%--------------------------------------------------------------------
--spec check_node_ip_address() -> IPV4Addr :: {A :: byte(), B :: byte(), C :: byte(), D :: byte()}.
-check_node_ip_address() ->
-    case application:get_env(?APP_NAME, external_ip, undefined) of
-        undefined ->
-            ?alert_stacktrace("Cannot check external IP of node, defaulting to 127.0.0.1"),
-            {127, 0, 0, 1};
-        Ip ->
-            {ok, Address} = inet_parse:ipv4_address(str_utils:to_list(Ip)),
-            ?info("External IP: ~p", [Address]),
-            Address
+-spec get_dns_dedicated_node() -> node().
+get_dns_dedicated_node() ->
+    consistent_hasing:get_node(build_dns_zone).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Builds up-to-date dns zone and broadcasts it to all nodes in the cluster.
+%% Returns error and schedules a retry if inserting zone does not succeed
+%% on all nodes.
+%% @end
+%%--------------------------------------------------------------------
+-spec broadcast_dns_config() -> ok | error.
+broadcast_dns_config() ->
+    try
+        DnsConfig = dns_config:build_config(),
+
+        {ok, Nodes} = node_manager:get_cluster_nodes(),
+        lists:map(fun(Node) ->
+            case Node == node() of
+                true -> ok = dns_config:insert_config(DnsConfig);
+                false -> ok = gen_server2:call({?NODE_MANAGER_NAME, Node},
+                                               {update_dns_config, DnsConfig},
+                                               timer:seconds(30))
+            end
+        end, Nodes),
+        ok
+    catch
+        Type:Message ->
+            ?error_stacktrace(
+                "Error sending dns zone update, scheduling retry after ~p seconds: ~p:~p",
+                [?DNS_UPDATE_RETRY_INTERVAL div 1000, Type, Message]),
+            erlang:send_after(?DNS_UPDATE_RETRY_INTERVAL, self(), {timer, broadcast_dns_config}),
+            error
     end.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Clears memory when node_manager sees that usage of memory is too high.
-%% @end
-%%--------------------------------------------------------------------
--spec clear_memory(HighMemUse :: boolean()) -> ok.
-clear_memory(_) ->
-    ok.

@@ -7,10 +7,6 @@
         "oz_worker": {
             "input_dir": "_build/default/rel/oz_worker",
             "target_dir": "_build/default/rel/test_cluster"
-        },
-        "appmock": {
-            "input_dir": "_build/default/rel/appmock",
-            "target_dir": "_build/default/rel/test_cluster"
         }
     },
     "zone_domains": {
@@ -60,17 +56,6 @@
                         "http_domain": {
                             "string": "127.0.0.1"
                         }
-                    }
-                }
-            }
-        }
-    },
-    "appmock_domains": {
-        "onepanel": {
-            "appmock": {
-                "node1": {
-                    "sys.config": {
-                        "app_description_file": "./onepanel_mock_description.erl.cfg"
                     }
                 }
             }

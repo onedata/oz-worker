@@ -6,114 +6,87 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This document contains info needed to calculate effective graph of entities.
-%%% Should not be used directly (see entity_graph module).
+%%% This document contains entity graph state singleton, carrying information
+%%% about dirty entities. It is used during recalculation of entity graph.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(entity_graph_state).
 -author("Lukasz Opiola").
--behaviour(model_behaviour).
 
--include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
--include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
+-include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/logging.hrl").
 
-%% model_behaviour callbacks
--export([save/1, get/1, exists/1, delete/1, update/2, create/1,
-    model_init/0, 'after'/5, before/4]).
+%% API
+-export([initialize/0, get/0, update/1]).
 
--type doc() :: datastore:document().
--type info() :: #entity_graph_state{}.
--type id() :: binary().
--export_type([doc/0, info/0, id/0]).
+%% datastore_model callbacks
+-export([init/0]).
+
+-type state() :: #entity_graph_state{}.
+-type diff() :: datastore_doc:diff(state()).
+-export_type([state/0, diff/0]).
+
+-define(STATE_KEY, <<"entity_graph_state">>).
+
+-define(CTX, #{
+    model => ?MODULE,
+    disc_driver => undefined
+}).
 
 %%%===================================================================
-%%% model_behaviour callbacks
+%%% API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link model_behaviour} callback save/1.
+%% Creates a new entity graph state singleton if it does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec save(datastore:document()) ->
-    {ok, datastore:ext_key()} | datastore:generic_error().
-save(Document) ->
-    model:execute_with_default_context(?MODULE, save, [Document]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback update/2.
-%% @end
-%%--------------------------------------------------------------------
--spec update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
-    {ok, datastore:ext_key()} | datastore:update_error().
-update(Key, Diff) ->
-    model:execute_with_default_context(?MODULE, update, [Key, Diff]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback create/1.
-%% @end
-%%--------------------------------------------------------------------
--spec create(datastore:document()) ->
-    {ok, datastore:ext_key()} | datastore:create_error().
-create(Document) ->
-    model:execute_with_default_context(?MODULE, create, [Document]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback get/1.
-%% @end
-%%--------------------------------------------------------------------
--spec get(datastore:ext_key()) -> {ok, datastore:document()} | datastore:get_error().
-get(Key) ->
-    model:execute_with_default_context(?MODULE, get, [Key]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback delete/1.
-%% @end
-%%--------------------------------------------------------------------
--spec delete(datastore:ext_key()) -> ok | datastore:generic_error().
-delete(Key) ->
-    model:execute_with_default_context(?MODULE, delete, [Key]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback exists/1.
-%% @end
-%%--------------------------------------------------------------------
--spec exists(datastore:ext_key()) -> datastore:exists_return().
-exists(Key) ->
-    ?RESPONSE(model:execute_with_default_context(?MODULE, exists, [Key])).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback model_init/0.
-%% @end
-%%--------------------------------------------------------------------
--spec model_init() -> model_behaviour:model_config().
-model_init() ->
-    ?MODEL_CONFIG(entity_graph_state_bucket, [], ?GLOBAL_ONLY_LEVEL).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback 'after'/5.
-%% @end
-%%--------------------------------------------------------------------
--spec 'after'(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
-    Level :: datastore:store_level(), Context :: term(),
-    ReturnValue :: term()) -> ok.
-'after'(_ModelName, _Method, _Level, _Context, _ReturnValue) ->
+-spec initialize() -> ok.
+initialize() ->
+    {ok, _} = datastore_model:update(?CTX, ?STATE_KEY,
+        fun(State) -> {ok, State} end,
+        #document{key = ?STATE_KEY, value = #entity_graph_state{}}
+    ),
     ok.
 
+
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link model_behaviour} callback before/4.
+%% Returns the entity graph state singleton.
 %% @end
 %%--------------------------------------------------------------------
--spec before(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
-    Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
-before(_ModelName, _Method, _Level, _Context) ->
+-spec get() -> state().
+get() ->
+    case datastore_model:get(?CTX, ?STATE_KEY) of
+        {ok, #document{value = State}} ->
+            State;
+        Error ->
+            ?error("Cannot retrieve state of effective graph: ~p", [Error]),
+            error(cannot_get_state)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates entity graph state singleton.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(diff()) -> ok | {error, term()}.
+update(Diff) ->
+    {ok, _} = datastore_model:update(?CTX, ?STATE_KEY, Diff),
     ok.
+
+
+%%%===================================================================
+%%% datastore_model callbacks
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Initializes model.
+%% @end
+%%--------------------------------------------------------------------
+-spec init() -> ok | {error, term()}.
+init() ->
+    datastore_model:init(?CTX).

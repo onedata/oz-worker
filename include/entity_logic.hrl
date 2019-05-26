@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -13,13 +13,25 @@
 -ifndef(ENTITY_LOGIC_HRL).
 -define(ENTITY_LOGIC_HRL, 1).
 
-%% A description of request client (REST and subscriptions).
+-include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
+
+% Record expressing entity logic request client (REST and Graph Sync).
 -record(client, {
     % root is allowed to do anything, it must be used with caution
-    % (should not be used in any kind of API!)
+    % (should not be used in any kind of external API!)
     type = nobody :: user | provider | root | nobody,
     id = <<"">> :: binary()
 }).
+
+% Record expressing entity logic request
+-record(el_req, {
+    client = #client{} :: entity_logic:client(),
+    gri :: entity_logic:gri(),
+    operation = create :: entity_logic:operation(),
+    data = #{} :: entity_logic:data(),
+    auth_hint = undefined :: undefined | entity_logic:auth_hint()
+}).
+
 % Convenience macros for concise code
 -define(USER, #client{type = user}).
 -define(USER(__Id), #client{type = user, id = __Id}).
@@ -28,25 +40,82 @@
 -define(NOBODY, #client{type = nobody}).
 -define(ROOT, #client{type = root}).
 
-% Macro used in entity logic modules to make sure that result of a call
-% returns success, in other case it throws an error that will be caught by
-% entity_logic and properly handled.
--define(throw_on_failure(__Result), case __Result of
-    {error, __Reason} ->
-        throw({error, __Reason});
-    __Success ->
-        __Success
-end).
+% Macros to strip results from entity_logic:create into simpler form.
+-define(CREATE_RETURN_ID(__Expr),
+    case __Expr of
+        {error, _} = __Err ->
+            __Err;
+        ok ->
+            throw(create_did_not_return_id);
+        {ok, value, __Data} ->
+            throw(create_did_not_return_id);
+        {ok, resource, {#gri{id = __Id}, __Data}} ->
+            {ok, __Id};
+        {ok, resource, {#gri{id = __Id}, _AuthHint, __Data}} ->
+            {ok, __Id}
+    end
+).
 
-% Definitions concerning aliases
-% Value in DB meaning that alias is not set.
--define(EMPTY_ALIAS, <<"">>).
+-define(CREATE_RETURN_DATA(__Expr),
+    case __Expr of
+        {error, _} = __Err ->
+            __Err;
+        ok ->
+            throw(create_did_not_return_data);
+        {ok, value, __Data} ->
+            {ok, __Data};
+        {ok, resource, {_GRI, __Data}} ->
+            {ok, __Data};
+        {ok, resource, {_GRI, _AuthHint, __Data}} ->
+            {ok, __Data}
+    end
+).
 
-% Regexp to validate aliases - at least 5 alphanumeric chars
--define(ALIAS_VALIDATION_REGEXP, <<"^[a-z0-9]{5,}$">>).
+-define(CREATE_RETURN_OK(__Expr),
+    case __Expr of
+        {error, _} = __Err ->
+            __Err;
+        ok ->
+            ok;
+        {ok, _, _} ->
+            ok
+    end
+).
 
-% String that will be put in front of uuid when a user does not have
-% an alias set. Aliases are not allowed to start with this string.
--define(NO_ALIAS_UUID_PREFIX, "uuid_").
+% Regexp to validate domain (domain, subdomain or IP)
+% Domain consists of some number of parts delimited by single dot characters.
+% Each part must start and end with an lowercase alphanum
+% and may contain a hyphen '-'.
+-define(DOMAIN_VALIDATION_REGEXP,
+    <<"^(([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])\\.)*([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$">>).
+
+-define(MAX_DOMAIN_LENGTH, 253).
+
+-define(SUBDOMAIN_VALIDATION_REGEXP,
+    <<"^([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$">>).
+
+% Regexp to validate names. Name must be 2-50 characters long and composed of
+% UTF-8 letters, digits, brackets and underscores.
+% Dashes, spaces and dots are allowed (but not at the beginning or the end).
+-define(NAME_FIRST_CHARS_ALLOWED, <<")(\\w_">>).
+-define(NAME_MIDDLE_CHARS_ALLOWED, <<">>)(\\w_ .-">>).
+-define(NAME_LAST_CHARS_ALLOWED, ?NAME_FIRST_CHARS_ALLOWED).
+-define(NAME_MAXIMUM_LENGTH, 50).
+
+% Regexp to validate user names. User name must be 2-50 characters long and
+% composed of UTF-8 letters and digits. Dashes, spaces, dots, commas and
+% apostrophes are allowed (but not at the beginning or the end).
+-define(USER_NAME_FIRST_CHARS_ALLOWED, <<"\\pL\\pNd">>).
+-define(USER_NAME_MIDDLE_CHARS_ALLOWED, <<"\\pL\\pNd ',.-">>).
+-define(USER_NAME_LAST_CHARS_ALLOWED, <<"\\pL\\pNd.">>).
+-define(USER_NAME_MAXIMUM_LENGTH, 50).
+
+% Regexp to validate aliases. Alias must be 2-20 characters long and composed of
+% letters and digits.
+% Dashes and underscores are allowed (but not at the beginning or the end).
+-define(ALIAS_FIRST_CHARS_ALLOWED, <<"a-z0-9A-Z">>).
+-define(ALIAS_MIDDLE_CHARS_ALLOWED, <<"a-z0-9A-Z._-">>).
+-define(ALIAS_LAST_CHARS_ALLOWED, ?ALIAS_FIRST_CHARS_ALLOWED).
+-define(ALIAS_MAXIMUM_LENGTH, 20).
 
 -endif.

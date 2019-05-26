@@ -2,7 +2,7 @@
 
 REPO	        ?= oz_worker
 
-# distro for package building (oneof: wily, fedora-23-x86_64)
+# distro for package building (oneof: xenial, centos-7-x86_64)
 DISTRIBUTION    ?= none
 export DISTRIBUTION
 
@@ -28,6 +28,8 @@ GIT_URL := $(shell if [ "${GIT_URL}" = "file:/" ]; then echo 'ssh://git@git.plgr
 ONEDATA_GIT_URL := $(shell if [ "${ONEDATA_GIT_URL}" = "" ]; then echo ${GIT_URL}; else echo ${ONEDATA_GIT_URL}; fi)
 export ONEDATA_GIT_URL
 
+BUILD_VERSION := $(subst $(shell git describe --tags --abbrev=0)-,,$(shell git describe --tags --long))
+
 .PHONY: test deps upgrade generate package
 
 all: test_rel
@@ -40,27 +42,31 @@ upgrade:
 	$(REBAR) upgrade
 
 deps:
-	cd location-service && npm install
 	$(LIB_DIR)/gui/pull-gui.sh gui-config.sh
 
 compile:
 	$(REBAR) compile
 
 ## Generates a production release
-generate: compile deps
+generate: template compile deps
 	$(REBAR) release $(OVERLAY_VARS)
-
-## Generates a dev release
-generate_dev: generate
-	# Try to get developer auth.config
-	./get_dev_auth_config.sh
 
 clean:
 	$(REBAR) clean
 
 distclean: clean
-	rm -rf location-service/node_modules
 	$(REBAR) clean --all
+
+template:
+	sed "s/{build_version, \".*\"}/{build_version, \"${BUILD_VERSION}\"}/" ./rel/vars.config.template > ./rel/vars.config
+
+##
+## Submodules
+##
+
+submodules:
+	git submodule sync --recursive ${submodule}
+	git submodule update --init --recursive ${submodule}
 
 ##
 ## Release targets
@@ -68,21 +74,18 @@ distclean: clean
 
 rel: generate
 
-test_rel: generate_dev cm_rel appmock_rel
+test_rel: rel cm_rel
 
 cm_rel:
 	mkdir -p cluster_manager/bamboos/gen_dev
+	make -C $(LIB_DIR)/cluster_manager/ submodules
 	cp -rf $(LIB_DIR)/cluster_manager/bamboos/gen_dev cluster_manager/bamboos
 	printf "\n{base_dir, \"$(BASE_DIR)/cluster_manager/_build\"}." >> $(LIB_DIR)/cluster_manager/rebar.config
 	make -C $(LIB_DIR)/cluster_manager/ rel
 	sed -i "s@{base_dir, \"$(PWD)/cluster_manager/_build\"}\.@@" $(LIB_DIR)/cluster_manager/rebar.config
 
-appmock_rel:
-	make -C appmock/ rel
-
 relclean:
 	rm -rf _build/rel/oz_worker
-	rm -rf appmock/_build/rel/appmock
 	rm -rf cluster_manager/_build/rel/cluster_manager
 
 ##
@@ -90,7 +93,7 @@ relclean:
 ##
 
 eunit:
-	$(REBAR) do eunit skip_deps=true suites=${SUITES}, cover
+	$(REBAR) do eunit skip_deps=true --suite=${SUITES}, cover
 ## Rename all tests in order to remove duplicated names (add _(++i) suffix to each test)
 	@for tout in `find test -name "TEST-*.xml"`; do awk '/testcase/{gsub("_[0-9]+\"", "_" ++i "\"")}1' $$tout > $$tout.tmp; mv $$tout.tmp $$tout; done
 
@@ -111,7 +114,7 @@ dialyzer:
 
 check_distribution:
 ifeq ($(DISTRIBUTION), none)
-	@echo "Please provide package distribution. Oneof: 'wily', 'fedora-23-x86_64'"
+	@echo "Please provide package distribution. Oneof: 'xenial', 'centos-7-x86_64'"
 	@exit 1
 else
 	@echo "Building package for distribution $(DISTRIBUTION)"
@@ -121,6 +124,7 @@ package/$(PKG_ID).tar.gz:
 	mkdir -p package
 	rm -rf package/$(PKG_ID)
 	git archive --format=tar --prefix=$(PKG_ID)/ $(PKG_REVISION) | (cd package && tar -xf -)
+	git submodule foreach "git archive --prefix=$(PKG_ID)/\$$path/ \$$sha1 | (cd \$$toplevel/package && tar -xf -)"
 	${MAKE} -C package/$(PKG_ID) upgrade deps
 	for dep in package/$(PKG_ID) package/$(PKG_ID)/$(LIB_DIR)/*; do \
 	     echo "Processing dependency: `basename $${dep}`"; \

@@ -14,25 +14,15 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("errors.hrl").
 -include("entity_logic.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
--type resource() :: {deprecated_user_privileges, od_user:id()} | % TODO VFS-2918
-{deprecated_group_privileges, od_group:id()} | % TODO VFS-2918
-entity | data | public_data | list |
-users | eff_users | {user, od_user:id()} | {eff_user, od_user:id()} |
-{user_privileges, od_user:id()} | {eff_user_privileges, od_user:id()} |
-groups | eff_groups | {group, od_group:id()} | {eff_group, od_group:id()} |
-{group_privileges, od_user:id()} | {eff_group_privileges, od_user:id()}.
-
--export_type([resource/0]).
-
--export([get_entity/1, create/4, get/4, update/3, delete/2]).
--export([exists/1, authorize/4, validate/2]).
--export([entity_to_string/1]).
+-export([fetch_entity/1, operation_supported/3]).
+-export([create/1, get/2, update/1, delete/1]).
+-export([exists/2, authorize/2, validate/1]).
 
 %%%===================================================================
 %%% API
@@ -44,9 +34,9 @@ groups | eff_groups | {group, od_group:id()} | {eff_group, od_group:id()} |
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
--spec get_entity(EntityId :: entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | {error, Reason :: term()}.
-get_entity(HandleId) ->
+-spec fetch_entity(entity_logic:entity_id()) ->
+    {ok, entity_logic:entity()} | entity_logic:error().
+fetch_entity(HandleId) ->
     case od_handle:get(HandleId) of
         {ok, #document{value = Handle}} ->
             {ok, Handle};
@@ -57,37 +47,54 @@ get_entity(HandleId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a resource based on EntityId, Resource identifier and Data.
+%% Determines if given operation is supported based on operation, aspect and
+%% scope (entity type is known based on the plugin itself).
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: entity_logic:client(),
-    EntityId :: entity_logic:entity_id(), Resource :: resource(),
-    entity_logic:data()) -> entity_logic:result().
-% TODO VFS-2918
-create(_Client, HandleId, {deprecated_user_privileges, UserId}, Data) ->
-    Privileges = maps:get(<<"privileges">>, Data),
-    Operation = maps:get(<<"operation">>, Data, set),
-    entity_graph:update_relation(
-        od_user, UserId,
-        od_handle, HandleId,
-        {Operation, Privileges}
-    );
-% TODO VFS-2918
-create(_Client, HandleId, {deprecated_group_privileges, GroupId}, Data) ->
-    Privileges = maps:get(<<"privileges">>, Data),
-    Operation = maps:get(<<"operation">>, Data, set),
-    entity_graph:update_relation(
-        od_group, GroupId,
-        od_handle, HandleId,
-        {Operation, Privileges}
-    );
+-spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
+    entity_logic:scope()) -> boolean().
+operation_supported(create, instance, private) -> true;
+operation_supported(create, {user, _}, private) -> true;
+operation_supported(create, {group, _}, private) -> true;
+
+operation_supported(get, list, private) -> true;
+
+operation_supported(get, instance, private) -> true;
+operation_supported(get, instance, protected) -> true;
+operation_supported(get, instance, public) -> true;
+
+operation_supported(get, users, private) -> true;
+operation_supported(get, eff_users, private) -> true;
+operation_supported(get, {user_privileges, _}, private) -> true;
+operation_supported(get, {eff_user_privileges, _}, private) -> true;
+
+operation_supported(get, groups, private) -> true;
+operation_supported(get, eff_groups, private) -> true;
+operation_supported(get, {group_privileges, _}, private) -> true;
+operation_supported(get, {eff_group_privileges, _}, private) -> true;
+
+operation_supported(update, instance, private) -> true;
+operation_supported(update, {user_privileges, _}, private) -> true;
+operation_supported(update, {group_privileges, _}, private) -> true;
+
+operation_supported(delete, instance, private) -> true;
+operation_supported(delete, {user, _}, private) -> true;
+operation_supported(delete, {group, _}, private) -> true;
+
+operation_supported(_, _, _) -> false.
 
 
-create(Client, _, entity, Data) ->
-    HandleServiceId = maps:get(<<"handleServiceId">>, Data),
-    ResourceType = maps:get(<<"resourceType">>, Data),
-    ResourceId = maps:get(<<"resourceId">>, Data),
-    Metadata = maps:get(<<"metadata">>, Data),
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a resource (aspect of entity) based on entity logic request.
+%% @end
+%%--------------------------------------------------------------------
+-spec create(entity_logic:req()) -> entity_logic:create_result().
+create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
+    HandleServiceId = maps:get(<<"handleServiceId">>, Req#el_req.data),
+    ResourceType = maps:get(<<"resourceType">>, Req#el_req.data),
+    ResourceId = maps:get(<<"resourceId">>, Req#el_req.data),
+    Metadata = maps:get(<<"metadata">>, Req#el_req.data),
     {ok, PublicHandle} = handle_proxy:register_handle(
         HandleServiceId, ResourceType, ResourceId, Metadata
     ),
@@ -98,15 +105,21 @@ create(Client, _, entity, Data) ->
         public_handle = PublicHandle,
         metadata = Metadata
     }},
-    {ok, HandleId} = od_handle:create(Handle),
+    {ok, #document{key = HandleId}} = od_handle:create(Handle),
     entity_graph:add_relation(
         od_handle, HandleId,
         od_handle_service, HandleServiceId
     ),
-    case Client of
-        ?USER(UserId) ->
+    case Req#el_req.auth_hint of
+        ?AS_USER(UserId) ->
             entity_graph:add_relation(
                 od_user, UserId,
+                od_handle, HandleId,
+                privileges:handle_admin()
+            );
+        ?AS_GROUP(GroupId) ->
+            entity_graph:add_relation(
+                od_group, GroupId,
                 od_handle, HandleId,
                 privileges:handle_admin()
             );
@@ -122,122 +135,119 @@ create(Client, _, entity, Data) ->
         _ ->
             ok
     end,
-    entity_graph:ensure_up_to_date(),
-    {ok, HandleId};
-create(?USER, HandleId, {user, UserId}, Data) ->
+    {ok, FetchedHandle} = fetch_entity(HandleId),
+    {ok, resource, {GRI#gri{id = HandleId}, FetchedHandle}};
+
+create(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:handle_user()),
     entity_graph:add_relation(
         od_user, UserId,
         od_handle, HandleId,
         Privileges
     ),
-    {ok, UserId};
-create(?USER, HandleId, {group, GroupId}, Data) ->
+    NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
+    {ok, User} = user_logic_plugin:fetch_entity(UserId),
+    {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
+    {ok, resource, {NewGRI, ?THROUGH_HANDLE(HandleId), UserData}};
+
+create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:handle_user()),
     entity_graph:add_relation(
         od_group, GroupId,
         od_handle, HandleId,
         Privileges
     ),
-    {ok, GroupId}.
+    NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
+    {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
+    {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
+    {ok, resource, {NewGRI, ?THROUGH_HANDLE(HandleId), GroupData}}.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves a resource based on EntityId and Resource identifier.
+%% Retrieves a resource (aspect of entity) based on entity logic request and
+%% prefetched entity.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: entity_logic:client(), EntityId :: entity_logic:entity_id(),
-    Entity :: entity_logic:entity(), Resource :: resource()) ->
-    entity_logic:result().
-get(_, undefined, undefined, list) ->
+-spec get(entity_logic:req(), entity_logic:entity()) ->
+    entity_logic:get_result().
+get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, HandleDocs} = od_handle:list(),
     {ok, [HandleId || #document{key = HandleId} <- HandleDocs]};
 
-get(_, _HandleId, #od_handle{} = Handle, data) ->
+get(#el_req{gri = #gri{aspect = instance, scope = private}}, Handle) ->
+    {ok, Handle};
+get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
     #od_handle{handle_service = HandleService, public_handle = PublicHandle,
         resource_type = ResourceType, resource_id = ResourceId,
         metadata = Metadata, timestamp = Timestamp
     } = Handle,
     {ok, #{
         <<"handleServiceId">> => HandleService,
-        <<"handle">> => PublicHandle,
+        <<"publicHandle">> => PublicHandle,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
         <<"metadata">> => Metadata,
         <<"timestamp">> => Timestamp
     }};
-
-get(_, _HandleId, #od_handle{} = Handle, public_data) ->
+get(#el_req{gri = #gri{aspect = instance, scope = public}}, Handle) ->
     #od_handle{
         public_handle = PublicHandle, metadata = Metadata, timestamp = Timestamp
     } = Handle,
     {ok, #{
-        <<"handle">> => PublicHandle,
+        <<"publicHandle">> => PublicHandle,
         <<"metadata">> => Metadata,
         <<"timestamp">> => Timestamp
     }};
 
-get(_, _HandleId, #od_handle{users = Users}, users) ->
-    {ok, maps:keys(Users)};
-get(_, _HandleId, #od_handle{eff_users = Users}, eff_users) ->
-    {ok, maps:keys(Users)};
-get(_, _HandleId, #od_handle{}, {user, UserId}) ->
-    {ok, User} = ?throw_on_failure(user_logic_plugin:get_entity(UserId)),
-    user_logic_plugin:get(?ROOT, UserId, User, data);
-get(_, _HandleId, #od_handle{}, {eff_user, UserId}) ->
-    {ok, User} = ?throw_on_failure(user_logic_plugin:get_entity(UserId)),
-    user_logic_plugin:get(?ROOT, UserId, User, data);
-get(_, _HandleId, #od_handle{users = Users}, {user_privileges, UserId}) ->
-    {ok, maps:get(UserId, Users)};
-get(_, _HandleId, #od_handle{eff_users = Users}, {eff_user_privileges, UserId}) ->
-    {Privileges, _} = maps:get(UserId, Users),
-    {ok, Privileges};
+get(#el_req{gri = #gri{aspect = users}}, Handle) ->
+    {ok, entity_graph:get_relations(direct, bottom_up, od_user, Handle)};
+get(#el_req{gri = #gri{aspect = eff_users}}, Handle) ->
+    {ok, entity_graph:get_relations(effective, bottom_up, od_user, Handle)};
+get(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, Handle) ->
+    {ok, entity_graph:get_privileges(direct, bottom_up, od_user, UserId, Handle)};
+get(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, Handle) ->
+    {ok, entity_graph:get_privileges(effective, bottom_up, od_user, UserId, Handle)};
 
-get(_, _HandleId, #od_handle{groups = Groups}, groups) ->
-    {ok, maps:keys(Groups)};
-get(_, _HandleId, #od_handle{eff_groups = Groups}, eff_groups) ->
-    {ok, maps:keys(Groups)};
-get(_, _HandleId, #od_handle{}, {group, GroupId}) ->
-    {ok, Group} = ?throw_on_failure(group_logic_plugin:get_entity(GroupId)),
-    group_logic_plugin:get(?ROOT, GroupId, Group, data);
-get(_, _HandleId, #od_handle{}, {eff_group, GroupId}) ->
-    {ok, Group} = ?throw_on_failure(group_logic_plugin:get_entity(GroupId)),
-    group_logic_plugin:get(?ROOT, GroupId, Group, data);
-get(_, _HandleId, #od_handle{groups = Groups}, {group_privileges, GroupId}) ->
-    {ok, maps:get(GroupId, Groups)};
-get(_, _HandleId, #od_handle{eff_groups = Groups}, {eff_group_privileges, GroupId}) ->
-    {Privileges, _} = maps:get(GroupId, Groups),
-    {ok, Privileges}.
+get(#el_req{gri = #gri{aspect = groups}}, Handle) ->
+    {ok, entity_graph:get_relations(direct, bottom_up, od_group, Handle)};
+get(#el_req{gri = #gri{aspect = eff_groups}}, Handle) ->
+    {ok, entity_graph:get_relations(effective, bottom_up, od_group, Handle)};
+get(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, Handle) ->
+    {ok, entity_graph:get_privileges(direct, bottom_up, od_group, GroupId, Handle)};
+get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Handle) ->
+    {ok, entity_graph:get_privileges(effective, bottom_up, od_group, GroupId, Handle)}.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates a resource based on EntityId, Resource identifier and Data.
+%% Updates a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
--spec update(EntityId :: entity_logic:entity_id(), Resource :: resource(),
-    entity_logic:data()) -> entity_logic:result().
-update(HandleId, entity, #{<<"metadata">> := NewMetadata}) ->
-    {ok, _} = od_handle:update(HandleId, #{
-        metadata => NewMetadata,
-        timestamp => od_handle:actual_timestamp()
-    }),
+-spec update(entity_logic:req()) -> entity_logic:update_result().
+update(#el_req{gri = #gri{id = HandleId, aspect = instance}, data = Data}) ->
+    NewMetadata = maps:get(<<"metadata">>, Data),
+    {ok, _} = od_handle:update(HandleId, fun(Handle = #od_handle{}) ->
+        {ok, Handle#od_handle{
+            metadata = NewMetadata,
+            timestamp = od_handle:actual_timestamp()
+        }}
+    end),
     handle_proxy:modify_handle(HandleId, NewMetadata),
     ok;
 
-update(HandleId, {user_privileges, UserId}, Data) ->
-    Privileges = maps:get(<<"privileges">>, Data),
-    Operation = maps:get(<<"operation">>, Data, set),
+update(Req = #el_req{gri = #gri{id = HandleId, aspect = {user_privileges, UserId}}}) ->
+    Privileges = maps:get(<<"privileges">>, Req#el_req.data),
+    Operation = maps:get(<<"operation">>, Req#el_req.data, set),
     entity_graph:update_relation(
         od_user, UserId,
         od_handle, HandleId,
         {Operation, Privileges}
     );
 
-update(HandleId, {group_privileges, GroupId}, Data) ->
-    Privileges = maps:get(<<"privileges">>, Data),
-    Operation = maps:get(<<"operation">>, Data, set),
+update(Req = #el_req{gri = #gri{id = HandleId, aspect = {group_privileges, GroupId}}}) ->
+    Privileges = maps:get(<<"privileges">>, Req#el_req.data),
+    Operation = maps:get(<<"operation">>, Req#el_req.data, set),
     entity_graph:update_relation(
         od_group, GroupId,
         od_handle, HandleId,
@@ -247,22 +257,21 @@ update(HandleId, {group_privileges, GroupId}, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes a resource based on EntityId and Resource identifier.
+%% Deletes a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(EntityId :: entity_logic:entity_id(), Resource :: resource()) ->
-    entity_logic:result().
-delete(HandleId, entity) ->
+-spec delete(entity_logic:req()) -> entity_logic:delete_result().
+delete(#el_req{gri = #gri{id = HandleId, aspect = instance}}) ->
     handle_proxy:unregister_handle(HandleId),
     entity_graph:delete_with_relations(od_handle, HandleId);
 
-delete(HandleId, {user, UserId}) ->
+delete(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}}) ->
     entity_graph:remove_relation(
         od_user, UserId,
         od_handle, HandleId
     );
 
-delete(HandleId, {group, GroupId}) ->
+delete(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}}) ->
     entity_graph:remove_relation(
         od_group, GroupId,
         od_handle, HandleId
@@ -271,171 +280,156 @@ delete(HandleId, {group, GroupId}) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns existence verificators for given Resource identifier.
-%% Existence verificators can be internal, which means they operate on the
-%% entity to which the resource corresponds, or external - independent of
-%% the entity. If there are multiple verificators, they will be checked in
-%% sequence until one of them returns true.
-%% Implicit verificators 'true' | 'false' immediately stop the verification
-%% process with given result.
+%% Determines if given resource (aspect of entity) exists, based on entity
+%% logic request and prefetched entity.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(Resource :: resource()) ->
-    entity_logic:existence_verificator()|
-    [entity_logic:existence_verificator()].
-exists({user, UserId}) ->
-    {internal, fun(#od_handle{users = Users}) ->
-        maps:is_key(UserId, Users)
-    end};
-exists({eff_user, UserId}) ->
-    {internal, fun(#od_handle{eff_users = Users}) ->
-        maps:is_key(UserId, Users)
-    end};
-exists({user_privileges, UserId}) ->
-    {internal, fun(#od_handle{users = Users}) ->
-        maps:is_key(UserId, Users)
-    end};
-exists({eff_user_privileges, UserId}) ->
-    {internal, fun(#od_handle{eff_users = Users}) ->
-        maps:is_key(UserId, Users)
-    end};
+-spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
+exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Handle) ->
+    case Req#el_req.auth_hint of
+        ?THROUGH_USER(UserId) ->
+            handle_logic:has_eff_user(Handle, UserId);
+        ?THROUGH_GROUP(GroupId) ->
+            handle_logic:has_eff_group(Handle, GroupId);
+        ?THROUGH_HANDLE_SERVICE(HServiceId) ->
+            handle_logic:has_handle_service(Handle, HServiceId);
+        undefined ->
+            true
+    end;
 
-exists({group, UserId}) ->
-    {internal, fun(#od_handle{groups = Users}) ->
-        maps:is_key(UserId, Users)
-    end};
-exists({eff_group, UserId}) ->
-    {internal, fun(#od_handle{eff_groups = Users}) ->
-        maps:is_key(UserId, Users)
-    end};
-exists({group_privileges, UserId}) ->
-    {internal, fun(#od_handle{groups = Users}) ->
-        maps:is_key(UserId, Users)
-    end};
-exists({eff_group_privileges, UserId}) ->
-    {internal, fun(#od_handle{eff_groups = Users}) ->
-        maps:is_key(UserId, Users)
-    end};
+exists(#el_req{gri = #gri{aspect = {user, UserId}}}, Handle) ->
+    maps:is_key(UserId, Handle#od_handle.users);
 
-exists(_) ->
-    % No matter the resource, return true if it belongs to a handle
-    {internal, fun(#od_handle{}) ->
-        % If the handle with HandleId can be found, it exists. If not, the
-        % verification will fail before this function is called.
-        true
-    end}.
+exists(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, Handle) ->
+    maps:is_key(UserId, Handle#od_handle.users);
+
+exists(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, Handle) ->
+    maps:is_key(UserId, Handle#od_handle.eff_users);
+
+exists(#el_req{gri = #gri{aspect = {group, GroupId}}}, Handle) ->
+    maps:is_key(GroupId, Handle#od_handle.groups);
+
+exists(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, Handle) ->
+    maps:is_key(GroupId, Handle#od_handle.groups);
+
+exists(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Handle) ->
+    maps:is_key(GroupId, Handle#od_handle.eff_groups);
+
+% All other aspects exist if handle record exists.
+exists(#el_req{gri = #gri{id = Id}}, #od_handle{}) ->
+    Id =/= undefined.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns existence verificators for given Resource identifier.
-%% Existence verificators can be internal, which means they operate on the
-%% entity to which the resource corresponds, or external - independent of
-%% the entity. If there are multiple verificators, they will be checked in
-%% sequence until one of them returns true.
-%% Implicit verificators 'true' | 'false' immediately stop the verification
-%% process with given result.
+%% Determines if requesting client is authorized to perform given operation,
+%% based on entity logic request and prefetched entity.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize(Operation :: entity_logic:operation(),
-    EntityId :: entity_logic:entity_id(), Resource :: resource(),
-    Client :: entity_logic:client()) ->
-    entity_logic:authorization_verificator() |
-    [authorization_verificator:existence_verificator()].
-% TODO VFS-2918
-authorize(create, _GroupId, {deprecated_user_privileges, _UserId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?HANDLE_UPDATE);
-% TODO VFS-2918
-authorize(create, _GroupId, {deprecated_group_privileges, _ChildGroupId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?HANDLE_UPDATE);
+-spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) ->
+    HServiceId = maps:get(<<"handleServiceId">>, Req#el_req.data, <<"">>),
+    ShareId = maps:get(<<"resourceId">>, Req#el_req.data, <<"">>),
+    SpaceId = case share_logic_plugin:fetch_entity(ShareId) of
+        {error, _} = Err ->
+            throw(Err);
+        {ok, #od_share{space = SpId}} ->
+            SpId
+    end,
+    case {Req#el_req.client, Req#el_req.auth_hint} of
+        {?USER(UserId), ?AS_USER(UserId)} ->
+            space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES) andalso
+                handle_service_logic:has_eff_privilege(HServiceId, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
 
-authorize(create, undefined, entity, ?USER(UserId)) ->
-    {data_dependent, fun(Data) ->
-        HServiceId = maps:get(<<"handleServiceId">>, Data, <<"">>),
-        ShareId = maps:get(<<"resourceId">>, Data, <<"">>),
-        {ok, #od_share{space = SpaceId}} = ?throw_on_failure(
-            share_logic_plugin:get_entity(ShareId)
-        ),
-        CanManageShares = space_logic:has_eff_privilege(
-            SpaceId, UserId, ?SPACE_MANAGE_SHARES
-        ),
-        CanRegisterHandles = handle_service_logic:user_has_eff_privilege(
-            HServiceId, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE
-        ),
-        CanManageShares andalso CanRegisterHandles
-    end};
+        {?USER(UserId), ?AS_GROUP(GroupId)} ->
+            handle_service_logic:has_eff_group(HServiceId, GroupId) andalso
+                space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES) andalso
+                handle_service_logic:has_eff_privilege(HServiceId, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
 
-authorize(create, _HandleId, {user, _UserId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?HANDLE_UPDATE);
+        _ ->
+            false
+    end;
 
-authorize(create, _HandleId, {group, _GroupId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?HANDLE_UPDATE);
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, _}}}, Handle) ->
+    auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
 
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, _}}}, Handle) ->
+    auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
 
-authorize(get, _HandleId, entity, ?USER(UserId)) -> [
-    auth_by_privilege(UserId, ?HANDLE_VIEW),
-    auth_by_oz_privilege(UserId, ?OZ_HANDLES_LIST)
-];
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = list}}, _) ->
+    user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_HANDLES_LIST);
 
-authorize(get, _HandleId, data, ?USER(UserId)) -> [
-    auth_by_privilege(UserId, ?HANDLE_VIEW),
-    auth_by_oz_privilege(UserId, ?OZ_HANDLES_LIST)
-];
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Handle) ->
+    auth_by_privilege(Req, Handle, ?HANDLE_VIEW);
 
-authorize(get, _HandleId, public_data, _Client) ->
-    % Public data is available to whomever has handle id.
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}, Handle) ->
+    case {Req#el_req.client, Req#el_req.auth_hint} of
+        {?USER(UserId), ?THROUGH_USER(UserId)} ->
+            % User's membership in this handle_service is checked in 'exists'
+            true;
+
+        {?USER(_UserId), ?THROUGH_USER(_OtherUserId)} ->
+            false;
+
+        {?USER(ClientUserId), ?THROUGH_GROUP(GroupId)} ->
+            % Groups's membership in this handle_service is checked in 'exists'
+            group_logic:has_eff_privilege(GroupId, ClientUserId, ?GROUP_VIEW);
+
+        {?USER(ClientUserId), ?THROUGH_HANDLE_SERVICE(HServiceId)} ->
+            % Handle belonging to handle_service is checked in 'exists'
+            handle_service_logic:has_eff_privilege(
+                HServiceId, ClientUserId, ?HANDLE_SERVICE_VIEW
+            );
+
+        {?USER(ClientUserId), _} ->
+            handle_logic:has_eff_user(Handle, ClientUserId) orelse
+                user_logic_plugin:auth_by_oz_privilege(ClientUserId, ?OZ_HANDLES_LIST);
+
+        _ ->
+            % Access to private data also allows access to protected data
+            authorize(Req#el_req{gri = #gri{scope = private}}, Handle)
+    end;
+
+authorize(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}}, _) ->
     true;
 
-authorize(get, undefined, list, ?USER(UserId)) ->
-    auth_by_oz_privilege(UserId, ?OZ_HANDLES_LIST);
-
-authorize(get, _HandleId, _, ?USER(UserId)) ->
+authorize(Req = #el_req{operation = get, client = ?USER}, Handle) ->
     % All other resources can be accessed with view privileges
-    auth_by_privilege(UserId, ?HANDLE_VIEW);
+    auth_by_privilege(Req, Handle, ?HANDLE_VIEW);
 
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, Handle) ->
+    auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
 
-authorize(update, _HandleId, entity, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?HANDLE_UPDATE);
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}, Handle) ->
+    auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
 
-authorize(update, _HandleId, {user_privileges, _UserId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?HANDLE_UPDATE);
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = {group_privileges, _}}}, Handle) ->
+    auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
 
-authorize(update, _HandleId, {group_privileges, _GroupId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?HANDLE_UPDATE);
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, Handle) ->
+    auth_by_privilege(Req, Handle, ?HANDLE_DELETE);
 
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {user, _}}}, Handle) ->
+    auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
 
-authorize(delete, _HandleId, entity, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?HANDLE_DELETE);
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {group, _}}}, Handle) ->
+    auth_by_privilege(Req, Handle, ?HANDLE_UPDATE);
 
-authorize(delete, _HandleId, {user, _UserId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?HANDLE_UPDATE);
-
-authorize(delete, _HandleId, {group, _GroupId}, ?USER(UserId)) ->
-    auth_by_privilege(UserId, ?HANDLE_UPDATE);
-
-authorize(_, _, _, _) ->
+authorize(_, _) ->
     false.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns validity verificators for given Operation and Resource identifier.
+%% Returns validity verificators for given request.
 %% Returns a map with 'required', 'optional' and 'at_least_one' keys.
 %% Under each of them, there is a map:
 %%      Key => {type_verificator, value_verificator}
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--spec validate(Operation :: entity_logic:operation(),
-    Resource :: resource()) ->
-    entity_logic:validity_verificator().
-% TODO VFS-2918
-validate(create, {deprecated_user_privileges, UserId}) ->
-    validate(update, {user_privileges, UserId});
-% TODO VFS-2918
-validate(create, {deprecated_group_privileges, GroupId}) ->
-    validate(update, {user_privileges, GroupId});
-validate(create, entity) -> #{
+-spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"handleServiceId">> => {binary, {exists, fun(Value) ->
             handle_service_logic:exists(Value)
@@ -444,12 +438,13 @@ validate(create, entity) -> #{
         <<"resourceId">> => {binary, {exists, fun(Value) ->
             share_logic:exists(Value) end
         }},
-        <<"metadata">> => {binary, non_empty}
+        <<"metadata">> => {binary, any}
     }
 };
-validate(create, {user, _UserId}) -> #{
+
+validate(#el_req{operation = create, gri = #gri{aspect = {user, _}}}) -> #{
     required => #{
-        resource => {any, {resource_exists, <<"User Id">>, fun({user, UserId}) ->
+        {aspect, <<"userId">>} => {any, {exists, fun(UserId) ->
             user_logic:exists(UserId) end}
         }
     },
@@ -457,9 +452,10 @@ validate(create, {user, _UserId}) -> #{
         <<"privileges">> => {list_of_atoms, privileges:handle_privileges()}
     }
 };
-validate(create, {group, _GroupId}) -> #{
+
+validate(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) -> #{
     required => #{
-        resource => {any, {resource_exists, <<"Group Id">>, fun({group, GroupId}) ->
+        {aspect, <<"groupId">>} => {any, {exists, fun(GroupId) ->
             group_logic:exists(GroupId) end}
         }
     },
@@ -467,31 +463,25 @@ validate(create, {group, _GroupId}) -> #{
         <<"privileges">> => {list_of_atoms, privileges:handle_privileges()}
     }
 };
-validate(update, entity) -> #{
+
+validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     required => #{
-        <<"metadata">> => {binary, non_empty}
+        <<"metadata">> => {binary, any}
     }
 };
-validate(update, {user_privileges, _UserId}) -> #{
-    required => #{
-        <<"privileges">> => {list_of_atoms, privileges:handle_privileges()}
-    },
-    optional => #{
-        <<"operation">> => {atom, [set, grant, revoke]}
-    }
-};
-validate(update, {group_privileges, GroupId}) ->
-    validate(update, {user_privileges, GroupId}).
 
+validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}}) ->
+    #{
+        required => #{
+            <<"privileges">> => {list_of_atoms, privileges:handle_privileges()}
+        },
+        optional => #{
+            <<"operation">> => {atom, [set, grant, revoke]}
+        }
+    };
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns readable string representing the entity with given id.
-%% @end
-%%--------------------------------------------------------------------
--spec entity_to_string(EntityId :: entity_logic:entity_id()) -> binary().
-entity_to_string(HandleId) ->
-    od_handle:to_string(HandleId).
+validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}}) ->
+    validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}}).
 
 
 %%%===================================================================
@@ -501,30 +491,17 @@ entity_to_string(HandleId) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns authorization verificator that checks if given user has specific
-%% effective privilege in the handle represented by entity.
+%% Returns if given user has specific effective privilege in the handle.
+%% UserId is either given explicitly or derived from entity logic request.
+%% Clients of type other than user are discarded.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_privilege(UserId :: od_user:id(),
-    Privilege :: privileges:handle_privilege()) ->
-    entity_logic:authorization_verificator().
-auth_by_privilege(UserId, Privilege) ->
-    {internal, fun(#od_handle{} = Handle) ->
-        handle_logic:user_has_eff_privilege(Handle, UserId, Privilege)
-    end}.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Returns authorization verificator that checks if given user has specified
-%% effective oz privilege.
-%% @end
-%%--------------------------------------------------------------------
--spec auth_by_oz_privilege(UserId :: od_user:id(),
-    Privilege :: privileges:oz_privilege()) ->
-    entity_logic:authorization_verificator().
-auth_by_oz_privilege(UserId, Privilege) ->
-    {external, fun() ->
-        user_logic:has_eff_oz_privilege(UserId, Privilege)
-    end}.
+-spec auth_by_privilege(entity_logic:req() | od_user:id(),
+    od_handle:id() | od_handle:info(), privileges:handle_privilege()) ->
+    boolean().
+auth_by_privilege(#el_req{client = ?USER(UserId)}, HandleOrId, Privilege) ->
+    auth_by_privilege(UserId, HandleOrId, Privilege);
+auth_by_privilege(#el_req{client = _OtherClient}, _HandleOrId, _Privilege) ->
+    false;
+auth_by_privilege(UserId, HandleOrId, Privilege) ->
+    handle_logic:has_eff_privilege(HandleOrId, UserId, Privilege).

@@ -13,7 +13,7 @@
 
 -include("http/handlers/oai.hrl").
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 
 -behaviour(oai_verb_behaviour).
 
@@ -79,25 +79,24 @@ optional_response_elements() ->
 %%%-------------------------------------------------------------------
 -spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"repositoryName">>, _Args) ->
-    {ok, RepositoryName} = application:get_env(?APP_NAME, oz_name),
-    list_to_binary(RepositoryName);
+    oz_worker:get_name();
 get_response(<<"baseURL">>, _Args) ->
-    {ok, Hostname} = application:get_env(oz_worker, http_domain),
-    {ok, OAI_PREFIX} = application:get_env(?APP_NAME, oai_pmh_api_prefix),
-    list_to_binary(Hostname ++ OAI_PREFIX);
+    Domain = oz_worker:get_domain(),
+    {ok, OAIPrefix} = oz_worker:get_env(oai_pmh_api_prefix),
+    str_utils:format_bin("~s~s", [Domain, OAIPrefix]);
 get_response(<<"protocolVersion">>, _Args) ->
     ?PROTOCOL_VERSION;
 get_response(<<"earliestDatestamp">>, _Args) ->
     case get_earliest_datestamp() of
         none -> <<"Repository is empty">>;
-        Datestamp ->oai_utils:datetime_to_oai_datestamp(Datestamp)
+        Datestamp -> oai_utils:datetime_to_oai_datestamp(Datestamp)
     end;
 get_response(<<"deletedRecord">>, _Args) ->
     <<"no">>;
 get_response(<<"granularity">>, _Args) ->
     <<"YYYY-MM-DDThh:mm:ssZ">>;
 get_response(<<"adminEmail">>, _Args) ->
-    {ok, AdminEmails} = application:get_env(?APP_NAME, admin_emails),
+    {ok, AdminEmails} = oz_worker:get_env(admin_emails),
     lists:map(fun(AdminEmail) ->
         list_to_binary(AdminEmail)
     end, AdminEmails);

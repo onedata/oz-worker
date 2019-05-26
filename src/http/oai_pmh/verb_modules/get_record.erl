@@ -13,7 +13,7 @@
 
 -include("http/handlers/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 
 -behaviour(oai_verb_behaviour).
 
@@ -75,22 +75,13 @@ optional_response_elements() -> [].
 %%%-------------------------------------------------------------------
 -spec get_response(binary(), [proplists:property()]) -> oai_response().
 get_response(<<"record">>, Args) ->
-    Id = proplists:get_value(<<"identifier">>, Args),
+    OaiId = proplists:get_value(<<"identifier">>, Args),
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
-    #od_handle{metadata = Metadata, timestamp = DateTime} = get_handle_safe(Id),
+    Handle = get_handle_safe(OaiId),
     %% TODO check if metadataPrefix is available for given identifier
     case lists:member(MetadataPrefix, metadata_formats:supported_formats()) of
         true ->
-            #oai_record{
-                header = #oai_header{
-                    identifier = Id,
-                    datestamp = oai_utils:datetime_to_oai_datestamp(DateTime)
-                },
-                metadata = #oai_metadata{
-                    metadata_format = #oai_metadata_format{metadataPrefix = MetadataPrefix},
-                    value = Metadata
-                }
-            };
+            oai_utils:build_oai_record(MetadataPrefix, OaiId, Handle);
         false ->
             throw({cannotDisseminateFormat, MetadataPrefix})
     end.

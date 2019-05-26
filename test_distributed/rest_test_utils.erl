@@ -11,15 +11,23 @@
 -author("Lukasz Opiola").
 
 -include("registered_names.hrl").
--include("subscriptions_test_utils.hrl").
--include("subscriptions/subscriptions.hrl").
--include_lib("datastore/oz_datastore_models_def.hrl").
+-include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
 
+% Use "Macaroon", "X-Auth-Token" and "Authorization: Bearer" headers variably,
+% as they all should be accepted.
+-define(ACCESS_TOKEN_HEADER(AccessToken), case rand:uniform(3) of
+    1 -> #{<<"Macaroon">> => AccessToken};
+    2 -> #{<<"X-Auth-Token">> => AccessToken};
+    3 -> #{<<"Authorization">> => <<"Bearer ", AccessToken/binary>>}
+end).
+
+
 %% API
 -export([get_rest_api_prefix/1, check_rest_call/2]).
+-export([get_oz_url/1]).
 -export([compare_maps/2, contains_map/2]).
 
 
@@ -45,6 +53,8 @@ get_rest_api_prefix(Config) ->
 %%          delete
 %%      path => % Mandatory
 %%          [<<"/parts">>, <<"/to/be">>, <<"/concatenated">>],
+%%      url => % Optional, default: {@link get_oz_url/1}
+%%          <<"oz-domain-with:port/and/api/prefix">>
 %%      headers => % Optional, default: content-type=app/json
 %%          [{<<"key">>, <<"value">>}]
 %%      body => % Optional, default: <<"">>
@@ -53,7 +63,8 @@ get_rest_api_prefix(Config) ->
 %%          nobody
 %%          root
 %%          {user, <<"uid">>}
-%%          {provider, <<"id">>, "KeyFile", "CertFile"}
+%%          {user, <<"uid">>, <<"macaroon">>}
+%%          {provider, <<"id">>, <<"macaroon">>}
 %%          undefined
 %%      opts => % Optional, default: []
 %%          [http_client_option]
@@ -101,10 +112,10 @@ check_rest_call(Config, ArgsMap) ->
             Bin3 when is_binary(Bin3) ->
                 Bin3;
             Map3 when is_map(Map3) ->
-                json_utils:encode_map(Map3)
+                json_utils:encode(Map3)
         end,
         ReqOpts = maps:get(opts, RequestMap, []),
-        ReqURL = maps:get(url, RequestMap, get_random_oz_url(Config)),
+        ReqURL = maps:get(url, RequestMap, get_oz_url(Config)),
 
         ExpCode = maps:get(code, ExpectMap, undefined),
         ExpHeaders = maps:get(headers, ExpectMap, undefined),
@@ -117,9 +128,8 @@ check_rest_call(Config, ArgsMap) ->
                 ReqHeaders;
             nobody ->
                 ReqHeaders;
-            {provider, _, _, _} ->
-                % Provider authorizes by certs
-                ReqHeaders;
+            {provider, _, Macaroon} ->
+                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Macaroon));
             {user, UserId} ->
                 % Cache user auth tokens, if none in cache create a new one.
                 Macaroon = case get({macaroon, UserId}) of
@@ -132,34 +142,34 @@ check_rest_call(Config, ArgsMap) ->
                     Mac ->
                         Mac
                 end,
-                % Use "macaroon" and "X-Auth-Token" headers variably, as they
-                % both should be accepted.
-                HeaderName = case rand:uniform(2) of
-                    1 -> <<"macaroon">>;
-                    2 -> <<"X-Auth-Token">>
-                end,
-                ReqHeaders#{HeaderName => Macaroon}
+                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Macaroon));
+            {user, _, Macaroon} ->
+                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Macaroon))
         end,
-        ReqOptsPlusAuth = case ReqAuth of
-            undefined ->
-                ReqOpts;
-            nobody ->
-                ReqOpts;
-            {user, _UserId} ->
-                % User authorizes by macaroon
-                ReqOpts;
-            {provider, _ProviderId, KeyFile, CertFile} ->
-                [{ssl_options, [
-                    {keyfile, KeyFile}, {certfile, CertFile}
-                ]} | ReqOpts]
-        end,
-        % Add insecure option - we do not want the OZ server cert to be checked.
+
+%%        %% Useful for debug
+%%        ct:pal("[Req]: ~n"
+%%        "   ReqMethod: ~p~n"
+%%        "   URL: ~p~n"
+%%        "   HeadersPlusAuth: ~p~n"
+%%        "   ReqBody: ~p~n"
+%%        "   Opts: ~p~n", [
+%%            ReqMethod, URL, HeadersPlusAuth, ReqBody, [{pool, false}, ReqOptsPlusAuth]
+%%        ]),
+
+        CaCerts = oz_test_utils:gui_ca_certs(Config),
+        SslOpts = proplists:get_value(ssl_options, ReqOpts, []),
+        CompleteOpts = [
+            {ssl_options, [{cacerts, CaCerts} | SslOpts]} |
+            proplists:delete(ssl_options, ReqOpts)
+        ],
+
         {ok, RespCode, RespHeaders, RespBody} = http_client:request(
             ReqMethod,
             URL,
             HeadersPlusAuth,
             ReqBody,
-            [{pool, false}, insecure | ReqOptsPlusAuth]
+            CompleteOpts
         ),
 
         % Check response code if specified
@@ -186,7 +196,7 @@ check_rest_call(Config, ArgsMap) ->
                     Fun(RespHeaders)
                 catch
                     Type1:Message1 ->
-                        ct:print(
+                        ct:pal(
                             "Headers verification function crashed - ~p:~p~n"
                             "Stacktrace: ~s", [
                                 Type1, Message1, lager:pr_stacktrace(erlang:get_stacktrace())
@@ -226,12 +236,12 @@ check_rest_call(Config, ArgsMap) ->
             undefined ->
                 ok;
             Fun2 when is_function(Fun2, 1) ->
-                ActualBodyMap = json_utils:decode_map(RespBody),
+                ActualBodyMap = json_utils:decode(RespBody),
                 Result2 = try
                     Fun2(ActualBodyMap)
                 catch
                     Type2:Message2 ->
-                        ct:print(
+                        ct:pal(
                             "Body verification function crashed - ~p:~p~n"
                             "Stacktrace: ~s", [
                                 Type2, Message2, lager:pr_stacktrace(erlang:get_stacktrace())
@@ -265,7 +275,7 @@ check_rest_call(Config, ArgsMap) ->
                         }})
                 end;
             Map4 when is_map(Map4) ->
-                ActualBodyMap = json_utils:decode_map(RespBody),
+                ActualBodyMap = json_utils:decode(RespBody),
                 case compare_maps(ActualBodyMap, ExpBody) of
                     true ->
                         ok;
@@ -275,7 +285,7 @@ check_rest_call(Config, ArgsMap) ->
                         }})
                 end;
             {contains, ExpContainsMap} when is_map(ExpContainsMap) ->
-                ActualBodyMap = json_utils:decode_map(RespBody),
+                ActualBodyMap = json_utils:decode(RespBody),
                 case contains_map(ActualBodyMap, ExpContainsMap) of
                     true ->
                         ok;
@@ -306,7 +316,7 @@ check_rest_call(Config, ArgsMap) ->
         % Something wrong, return details. If assert is used, the test will fail
         % and properly display the point of failure.
         throw:{Type, Actual, Expected, {Code, Headers, Body}} ->
-            BodyMap = try json_utils:decode_map(Body) catch _:_ -> Body end,
+            BodyMap = try json_utils:decode(Body) catch _:_ -> Body end,
             {
                 Type,
                 {got, Actual},
@@ -315,7 +325,7 @@ check_rest_call(Config, ArgsMap) ->
             };
         % Unexpected error
         Type:Message ->
-            ct:print(
+            ct:pal(
                 "~p:check_rest_call failed with unexpected result - ~p:~p~n"
                 "Stacktrace: ~s", [
                     ?MODULE, Type, Message, lager:pr_stacktrace(erlang:get_stacktrace())
@@ -324,22 +334,17 @@ check_rest_call(Config, ArgsMap) ->
     end.
 
 
-get_random_oz_url(Config) ->
+get_oz_url(Config) ->
     % Resolve REST URLs of oz-worker nodes
-    Nodes = ?config(oz_worker_nodes, Config),
-    RestURLs = lists:map(fun(Node) ->
-        NodeIP = test_utils:get_docker_ip(Node),
-        {ok, RestPort} = rpc:call(
-            Node, application, get_env, [?APP_NAME, rest_port]
-        ),
-        {ok, RestAPIPrefix} = rpc:call(
-            Node, application, get_env, [?APP_NAME, rest_api_prefix]
-        ),
-        str_utils:format_bin(
-            "https://~s:~B~s", [NodeIP, RestPort, RestAPIPrefix]
-        )
-    end, Nodes),
-    lists:nth(rand:uniform(length(RestURLs)), RestURLs).
+    [Node | _] = ?config(oz_worker_nodes, Config),
+    {ok, Domain} = test_utils:get_env(Node, ?APP_NAME, http_domain),
+    {ok, RestPort} = oz_test_utils:get_rest_port(Config),
+    {ok, RestAPIPrefix} = rpc:call(
+        Node, oz_worker, get_env, [rest_api_prefix]
+    ),
+    str_utils:format_bin(
+        "https://~s:~B~s", [Domain, RestPort, RestAPIPrefix]
+    ).
 
 
 compare_headers(ActualHeadersInput, ExpectedHeadersInput) ->

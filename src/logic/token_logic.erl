@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Konrad Zemek
-%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% @copyright (C) 2014 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -15,22 +15,23 @@
 -include("tokens.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% Atoms representing types of valid tokens.
 -type token_type() :: ?GROUP_INVITE_USER_TOKEN | ?GROUP_INVITE_GROUP_TOKEN |
 ?SPACE_INVITE_USER_TOKEN | ?SPACE_INVITE_GROUP_TOKEN |
-?SPACE_SUPPORT_TOKEN.
+?SPACE_SUPPORT_TOKEN | ?PROVIDER_REGISTRATION_TOKEN.
 
 %% Atoms representing valid resource types.
--type resource_type() :: od_user | od_group | od_space.
+-type resource_type() :: od_user | od_group | od_space | od_provider.
 
 -export_type([token_type/0, resource_type/0]).
 
 %% API
 -export([serialize/1, deserialize/1]).
--export([validate/2, create/3, get_issuer/1, consume/1, delete/1]).
+-export([validate/2, create/3, get_issuer/1, consume/2, delete/1]).
 
 %%%===================================================================
 %%% API
@@ -43,7 +44,7 @@
 %%--------------------------------------------------------------------
 -spec serialize(macaroon:macaroon()) -> {ok, Token :: binary()} | {error, term()}.
 serialize(Macaroon) ->
-    token_utils:serialize62(Macaroon).
+    onedata_macaroons:serialize(Macaroon).
 
 
 %%--------------------------------------------------------------------
@@ -52,9 +53,9 @@ serialize(Macaroon) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec deserialize(Token :: binary()) ->
-    {ok, macaroon:macaroon()} | {error, macaroon_invalid}.
+    {ok, macaroon:macaroon()} | {error, term()}.
 deserialize(Token) ->
-    token_utils:deserialize(Token).
+    onedata_macaroons:deserialize(Token).
 
 
 %%--------------------------------------------------------------------
@@ -101,7 +102,7 @@ create(Issuer, TokenType, {ResourceType, ResourceId}) ->
     TokenData = #token{secret = Secret, issuer = Issuer,
         resource = ResourceType, resource_id = ResourceId},
 
-    {ok, Identifier} = token:save(#document{value = TokenData}),
+    {ok, #document{key = Identifier}} = token:save(#document{value = TokenData}),
 
     % @todo expiration time
     M1 = macaroon:create("onezone", Secret, Identifier),
@@ -131,20 +132,31 @@ get_issuer(Macaroon) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Consumes a token, returning associated resource.
-%% Throws exception when call to the datastore fails, or token doesn't exist in db.
+%% @doc 
+%% Token is consumed only if ConsumeFun succeeds.
+%% Throws exception when call to the datastore fails or token doesn't exist in db.
+%% Returns value returned by ConsumeFun.
 %% @end
 %%--------------------------------------------------------------------
--spec consume(Macaroon :: macaroon:macaroon()) ->
-    {ok, {resource_type(), binary()}}.
-consume(M) ->
-    Identifier = macaroon:identifier(M),
-    {ok, TokenDoc} = token:get(Identifier),
-    #document{value = #token{resource = ResourceType,
-        resource_id = ResourceId}} = TokenDoc,
-
-    ok = token:delete(Identifier),
-    {ok, {ResourceType, ResourceId}}.
+-spec consume(Macaroon :: macaroon:macaroon(), 
+    ConsumeFun :: fun((entity_logic:entity_type(), entity_logic:entity_id()) -> term())) ->
+    term().
+consume(M, ConsumeFun) ->
+    case set_locked(M, true) of
+        {error, already_locked} -> throw(?ERROR_MACAROON_INVALID);
+        {ok, TokenDoc} ->
+            #document{value = #token{resource = ResourceType,
+                resource_id = ResourceId}} = TokenDoc,
+            try 
+                Result = ConsumeFun(ResourceType, ResourceId),
+                delete(M),
+                Result
+            after 
+                % Unlock token if operation failed. 
+                % If token is deleted update will silently fail.
+                set_locked(M, false)
+            end
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -156,3 +168,27 @@ consume(M) ->
 delete(M) ->
     Identifier = macaroon:identifier(M),
     ok = token:delete(Identifier).
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc 
+%% Locks token by id.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_locked(M :: macaroon:macaroon(), Value :: boolean()) -> 
+    {ok, token:doc(#token{})} | {error, term()}.
+set_locked(M, Value) ->
+    TokenId = macaroon:identifier(M),
+    token:update(TokenId, fun(Token) ->
+        case {Token#token.locked, Value} of
+            {true, true} ->
+                {error, already_locked};
+            _ ->
+                {ok, Token#token{locked = Value}}
+        end
+    end).

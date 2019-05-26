@@ -1,7 +1,7 @@
 %%%-------------------------------------------------------------------
 %%% @author Krzysztof Trzepla
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2014-2016 ACK CYFRONET AGH
+%%% @copyright (C) 2014-2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -12,98 +12,182 @@
 -module(oz_test_utils).
 
 -include("entity_logic.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("graph_sync/oz_graph_sync.hrl").
+-include("datastore/oz_datastore_models.hrl").
+-include("registered_names.hrl").
+-include("api_test_utils.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
+
+-define(OZ_NODES(Config), ?config(oz_worker_nodes, Config)).
+-define(TIME_MOCK_STARTING_TIMESTAMP, 1500000000).
 
 
 %% API
 -export([
-    call_oz/4
+    call_oz/4,
+    get_env/3,
+    get_oz_domain/1,
+    get_rest_api_prefix/1,
+    get_rest_port/1,
+    all_oz_privileges/1
 ]).
 % Operations corresponding to logic modules
 -export([
-    create_user/2,
-    create_client_token/2,
-    get_user/2,
-    get_user_oz_privileges/2,
-    get_user_eff_oz_privileges/2,
-    get_user_groups/2,
-    get_user_eff_groups/2,
     list_users/1,
-    set_user_oz_privileges/4,
-    set_user_default_space/3,
-    unset_user_default_space/2,
-    set_user_space_alias/4,
-    unset_user_space_alias/3,
-    set_user_default_provider/3,
-    unset_user_default_provider/2,
+    create_user/2, create_user/3,
+    get_user/2,
     delete_user/2,
+
+    create_client_token/2,
+    list_client_tokens/2,
+
+    user_get_oz_privileges/2,
+    user_get_eff_oz_privileges/2,
+    user_get_groups/2,
+    user_get_spaces/2,
+    user_get_eff_groups/2,
+    user_set_oz_privileges/4,
+    user_set_default_space/3,
+    user_get_default_space/2,
+    user_unset_default_space/2,
+    user_set_space_alias/4,
+    user_get_space_alias/3,
+    user_unset_space_alias/3,
+    user_set_default_provider/3,
+    user_get_default_provider/2,
+    user_unset_default_provider/2,
 
     user_leave_space/3
 ]).
 -export([
-    create_group/3,
-    get_group/2,
-    get_group_oz_privileges/2,
-    get_group_eff_oz_privileges/2,
+    all_group_privileges/1,
+
     list_groups/1,
-    set_group_oz_privileges/4,
+    create_group/3,
+    create_parent_group/4,
+    get_group/2,
+    update_group/3,
     delete_group/2,
 
-    add_user_to_group/3,
-    add_group_to_group/3,
-    group_remove_user/3,
-    group_leave_space/3,
+    group_get_children/2,
+    group_get_spaces/2,
+    group_get_users/2,
+    group_get_oz_privileges/2,
+    group_get_eff_oz_privileges/2,
+    group_set_oz_privileges/4,
 
-    get_group_user_privileges/3,
-    get_group_eff_user_privileges/3
+    group_add_user/3, group_add_user/4,
+    group_set_user_privileges/5, group_set_user_privileges/6,
+    group_add_group/3, group_add_group/4,
+    group_remove_user/3,
+    group_remove_group/3,
+    group_leave_space/3,
+    group_leave_handle_service/3,
+    group_invite_group_token/3,
+    group_invite_user_token/3,
+
+    group_get_eff_users/2,
+    group_get_user_privileges/3,
+    group_get_eff_user_privileges/3,
+
+    group_get_group_privileges/3,
+    group_set_group_privileges/5,
+
+    group_create_space/3
 ]).
 -export([
+    all_space_privileges/1,
+
     create_space/3,
     get_space/2,
     list_spaces/1,
     update_space/3,
     delete_space/2,
 
-    add_user_to_space/3,
-    add_group_to_space/3,
+    space_get_users/2,
+    space_get_groups/2,
+    space_get_providers/2,
+
+    space_leave_provider/3,
+
+    space_add_user/3,
+    space_remove_user/3,
+    space_add_group/3,
+    space_get_user_privileges/3,
     space_set_user_privileges/5,
+    space_get_group_privileges/3,
     space_set_group_privileges/5,
     space_invite_user_token/3,
     space_invite_group_token/3,
     space_invite_provider_token/3,
-    space_has_effective_user/3
+    space_has_effective_user/3,
+
+    space_remove_group/3
 ]).
 -export([
     create_share/6,
     create_share/3,
     list_shares/1,
-    delete_share/2
+    get_share/2,
+    delete_share/2,
+    get_share_public_url/2
 ]).
 -export([
-    create_provider_and_certs/2,
     create_provider/2,
+    create_provider_registration_token/2,
     get_provider/2,
     list_providers/1,
     delete_provider/2,
     support_space/4,
-    support_space/5
+    support_space/5,
+    unsupport_space/3,
+    enable_subdomain_delegation/4,
+    set_provider_domain/3
 ]).
 -export([
-    create_handle_service/5, create_handle_service/3,
+    all_handle_service_privileges/1,
+
     list_handle_services/1,
+    create_handle_service/5, create_handle_service/3,
+    get_handle_service/2,
     delete_handle_service/2,
-    add_user_to_handle_service/3,
-    add_group_to_handle_service/3
+
+    handle_service_get_groups/2,
+    handle_service_get_users/2,
+    handle_service_get_user_privileges/3,
+    handle_service_get_group_privileges/3,
+    handle_service_add_user/3,
+    handle_service_remove_user/3,
+    handle_service_set_user_privileges/5,
+    handle_service_add_group/3,
+    handle_service_remove_group/3,
+    handle_service_set_group_privileges/5
 ]).
 -export([
+    all_handle_privileges/1,
+
+    list_handles/1,
     create_handle/6, create_handle/3,
     get_handle/2,
-    list_handles/1,
     update_handle/3, update_handle/5,
     delete_handle/2,
-    add_user_to_handle/3,
-    add_group_to_handle/3
+
+    handle_get_groups/2,
+    handle_get_users/2,
+
+    handle_add_user/3,
+    handle_remove_user/3,
+    handle_set_user_privileges/5,
+    handle_get_user_privileges/3,
+
+    handle_add_group/3,
+    handle_remove_group/3,
+    handle_set_group_privileges/5,
+    handle_get_group_privileges/3
+]).
+-export([
+    assert_token_exists/2,
+    assert_token_not_exists/2
 ]).
 -export([
     delete_all_entities/1,
@@ -114,10 +198,27 @@
     create_3_nested_groups/2, create_3_nested_groups/5,
     create_and_support_3_spaces/2,
     minimum_support_size/1,
-    generate_provider_cert_files/0,
-    ensure_eff_graph_up_to_date/1,
     mock_handle_proxy/1,
-    unmock_handle_proxy/1
+    unmock_handle_proxy/1,
+    mock_time/1,
+    unmock_time/1,
+    get_mocked_time/1,
+    simulate_time_passing/2,
+    gui_ca_certs/1,
+    ensure_entity_graph_is_up_to_date/1, ensure_entity_graph_is_up_to_date/2,
+    toggle_basic_auth/2,
+    read_auth_config/1,
+    overwrite_config/3,
+    overwrite_auth_config/2,
+    overwrite_test_auth_config/2
+]).
+
+% Convenience functions for gs
+-export([
+    create_session/3,
+    get_gs_ws_url/1,
+    get_gs_supported_proto_versions/1,
+    decode_gri/2
 ]).
 
 %%%===================================================================
@@ -141,12 +242,12 @@ call_oz(Config, Module, Function, Args) ->
             {crash, Type, Reason, lager:pr_stacktrace(erlang:get_stacktrace())}
         end
     end,
-    Nodes = ?config(oz_worker_nodes, Config),
+    Nodes = ?OZ_NODES(Config),
     Node = lists:nth(rand:uniform(length(Nodes)), Nodes),
     case rpc:call(Node, erlang, apply, [FunWrapper, []]) of
         {crash, Type, Reason, Stacktrace} ->
             % Log a bad rpc - very useful when debugging tests.
-            ct:print(
+            ct:pal(
                 "RPC call in oz_test_utils crashed!~n"
                 "Module: ~p~n"
                 "Function: ~p~n"
@@ -175,6 +276,19 @@ create_user(Config, User) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Creates a user in onezone under given UserId.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_user(Config :: term(), User :: #od_user{}, od_user:id()) ->
+    {ok, od_user:id()}.
+create_user(Config, User, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, user_logic, create, [User]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a client token for given user.
 %% @end
 %%--------------------------------------------------------------------
@@ -183,6 +297,19 @@ create_user(Config, User) ->
 create_client_token(Config, UserId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, user_logic, create_client_token, [?ROOT, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves client tokens from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec list_client_tokens(Config :: term(), UserId :: od_user:id()) ->
+    {ok, Tokens :: [binary()]}.
+list_client_tokens(Config, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, user_logic, list_client_tokens, [?ROOT, UserId]
     )).
 
 
@@ -203,9 +330,9 @@ get_user(Config, UserId) ->
 %% Returns OZ privileges of a user.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_oz_privileges(Config :: term(), UserId :: od_user:id()) ->
+-spec user_get_oz_privileges(Config :: term(), UserId :: od_user:id()) ->
     {ok, [privileges:oz_privilege()]}.
-get_user_oz_privileges(Config, UserId) ->
+user_get_oz_privileges(Config, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, user_logic, get_oz_privileges, [
         ?ROOT, UserId
     ])).
@@ -216,9 +343,9 @@ get_user_oz_privileges(Config, UserId) ->
 %% Returns effective OZ privileges of a user.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_eff_oz_privileges(Config :: term(), UserId :: od_user:id()) ->
+-spec user_get_eff_oz_privileges(Config :: term(), UserId :: od_user:id()) ->
     {ok, [privileges:oz_privilege()]}.
-get_user_eff_oz_privileges(Config, UserId) ->
+user_get_eff_oz_privileges(Config, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, user_logic, get_eff_oz_privileges, [
         ?ROOT, UserId
     ])).
@@ -229,10 +356,23 @@ get_user_eff_oz_privileges(Config, UserId) ->
 %% Returns groups of a user.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_groups(Config :: term(), UserId :: od_user:id()) ->
+-spec user_get_groups(Config :: term(), UserId :: od_user:id()) ->
     {ok, [od_group:id()]}.
-get_user_groups(Config, UserId) ->
+user_get_groups(Config, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, user_logic, get_groups, [
+        ?ROOT, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns spaces of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec user_get_spaces(Config :: term(), UserId :: od_user:id()) ->
+    {ok, [od_space:id()]}.
+user_get_spaces(Config, UserId) ->
+    ?assertMatch({ok, _}, call_oz(Config, user_logic, get_spaces, [
         ?ROOT, UserId
     ])).
 
@@ -242,9 +382,9 @@ get_user_groups(Config, UserId) ->
 %% Returns effective groups of a user.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_eff_groups(Config :: term(), UserId :: od_user:id()) ->
+-spec user_get_eff_groups(Config :: term(), UserId :: od_user:id()) ->
     {ok, [od_group:id()]}.
-get_user_eff_groups(Config, UserId) ->
+user_get_eff_groups(Config, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, user_logic, get_eff_groups, [
         ?ROOT, UserId
     ])).
@@ -267,10 +407,10 @@ list_users(Config) ->
 %% Sets OZ privileges of a user.
 %% @end
 %%--------------------------------------------------------------------
--spec set_user_oz_privileges(Config :: term(), UserId :: od_user:id(),
+-spec user_set_oz_privileges(Config :: term(), UserId :: od_user:id(),
     Operation :: entity_graph:privileges_operation(),
     Privileges :: [privileges:oz_privilege()]) -> ok.
-set_user_oz_privileges(Config, UserId, Operation, Privileges) ->
+user_set_oz_privileges(Config, UserId, Operation, Privileges) ->
     ?assertMatch(ok, call_oz(Config, user_logic, update_oz_privileges, [
         ?ROOT, UserId, Operation, Privileges
     ])).
@@ -281,9 +421,9 @@ set_user_oz_privileges(Config, UserId, Operation, Privileges) ->
 %% Sets default space of a user.
 %% @end
 %%--------------------------------------------------------------------
--spec set_user_default_space(Config :: term(), UserId :: od_user:id(),
+-spec user_set_default_space(Config :: term(), UserId :: od_user:id(),
     SpaceId :: od_space:id()) -> ok.
-set_user_default_space(Config, UserId, SpaceId) ->
+user_set_default_space(Config, UserId, SpaceId) ->
     ?assertMatch(ok, call_oz(Config, user_logic, set_default_space, [
         ?ROOT, UserId, SpaceId
     ])).
@@ -291,11 +431,24 @@ set_user_default_space(Config, UserId, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieve default space of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec user_get_default_space(Config :: term(),
+    UserId :: od_user:id()) -> SpaceId :: od_space:id().
+user_get_default_space(Config, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, user_logic, get_default_space, [?ROOT, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Unsets default space of a user.
 %% @end
 %%--------------------------------------------------------------------
--spec unset_user_default_space(Config :: term(), UserId :: od_user:id()) -> ok.
-unset_user_default_space(Config, UserId) ->
+-spec user_unset_default_space(Config :: term(), UserId :: od_user:id()) -> ok.
+user_unset_default_space(Config, UserId) ->
     ?assertMatch(ok, call_oz(Config, user_logic, unset_default_space, [
         ?ROOT, UserId
     ])).
@@ -306,9 +459,9 @@ unset_user_default_space(Config, UserId) ->
 %% Sets alias for a space of a user.
 %% @end
 %%--------------------------------------------------------------------
--spec set_user_space_alias(Config :: term(), UserId :: od_user:id(),
+-spec user_set_space_alias(Config :: term(), UserId :: od_user:id(),
     SpaceId :: od_space:id(), Alias :: binary()) -> ok.
-set_user_space_alias(Config, UserId, SpaceId, Alias) ->
+user_set_space_alias(Config, UserId, SpaceId, Alias) ->
     ?assertMatch(ok, call_oz(Config, user_logic, set_space_alias, [
         ?ROOT, UserId, SpaceId, Alias
     ])).
@@ -316,12 +469,25 @@ set_user_space_alias(Config, UserId, SpaceId, Alias) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves alias for a space of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec user_get_space_alias(Config :: term(), UserId :: od_user:id(),
+    SpaceId :: od_space:id()) -> binary().
+user_get_space_alias(Config, UserId, SpaceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, user_logic, get_space_alias, [?ROOT, UserId, SpaceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Sets alias for a space of a user.
 %% @end
 %%--------------------------------------------------------------------
--spec unset_user_space_alias(Config :: term(), UserId :: od_user:id(),
+-spec user_unset_space_alias(Config :: term(), UserId :: od_user:id(),
     SpaceId :: od_space:id()) -> ok.
-unset_user_space_alias(Config, UserId, SpaceId) ->
+user_unset_space_alias(Config, UserId, SpaceId) ->
     ?assertMatch(ok, call_oz(Config, user_logic, delete_space_alias, [
         ?ROOT, UserId, SpaceId
     ])).
@@ -332,11 +498,24 @@ unset_user_space_alias(Config, UserId, SpaceId) ->
 %% Sets default provider of a user.
 %% @end
 %%--------------------------------------------------------------------
--spec set_user_default_provider(Config :: term(), UserId :: od_user:id(),
+-spec user_set_default_provider(Config :: term(), UserId :: od_user:id(),
     ProviderId :: od_provider:id()) -> ok.
-set_user_default_provider(Config, UserId, ProviderId) ->
+user_set_default_provider(Config, UserId, ProviderId) ->
     ?assertMatch(ok, call_oz(Config, user_logic, set_default_provider, [
         ?ROOT, UserId, ProviderId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets default provider of a user.
+%% @end
+%%--------------------------------------------------------------------
+-spec user_get_default_provider(Config :: term(),
+    UserId :: od_user:id()) -> {ok, ProviderId :: od_provider:id()}.
+user_get_default_provider(Config, UserId) ->
+    ?assertMatch({ok, _}, call_oz(Config, user_logic, get_default_provider, [
+        ?ROOT, UserId
     ])).
 
 
@@ -345,9 +524,9 @@ set_user_default_provider(Config, UserId, ProviderId) ->
 %% Unsets default provider of a user.
 %% @end
 %%--------------------------------------------------------------------
--spec unset_user_default_provider(Config :: term(), UserId :: od_user:id()) ->
+-spec user_unset_default_provider(Config :: term(), UserId :: od_user:id()) ->
     ok.
-unset_user_default_provider(Config, UserId) ->
+user_unset_default_provider(Config, UserId) ->
     ?assertMatch(ok, call_oz(Config, user_logic, unset_default_provider, [
         ?ROOT, UserId
     ])).
@@ -380,14 +559,38 @@ user_leave_space(Config, UserId, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Get all atoms representing group privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec all_group_privileges(Config :: term()) -> [atom()].
+all_group_privileges(Config) ->
+    call_oz(Config, privileges, group_privileges, []).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates group in onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_group(Config :: term(), Client :: entity_logic:client(),
-    Name :: od_group:name()) -> {ok, Id :: binary()}.
-create_group(Config, Client, Name) ->
+    NameOrData :: od_group:name() | #{}) -> {ok, Id :: binary()}.
+create_group(Config, Client, NameOrData) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, create, [Client, Name]
+        Config, group_logic, create, [Client, NameOrData]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a parent group for given group in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_parent_group(Config :: term(), Client :: entity_logic:client(),
+    ChildGroupId :: od_group:id(), NameOrData :: od_group:name() | #{}) ->
+    {ok, Id :: binary()}.
+create_parent_group(Config, Client, ChildGroupId, NameOrData) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, create_parent_group, [Client, ChildGroupId, NameOrData]
     )).
 
 
@@ -406,12 +609,64 @@ get_group(Config, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Updates group name.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_group(Config :: term(), GroupId :: od_group:id(),
+    Name :: od_group:name()) -> ok.
+update_group(Config, GroupId, Name) ->
+    ?assertMatch(ok, call_oz(
+        Config, group_logic, update, [?ROOT, GroupId, #{<<"name">> => Name}]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves group children groups from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_get_children(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [od_group:id()]}.
+group_get_children(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, get_children, [?ROOT, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves group spaces from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_get_spaces(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [od_space:id()]}.
+group_get_spaces(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, get_spaces, [?ROOT, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves group users from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_get_users(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [od_user:id()]}.
+group_get_users(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, get_users, [?ROOT, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Returns OZ privileges of a group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group_oz_privileges(Config :: term(), GroupId :: od_group:id()) ->
+-spec group_get_oz_privileges(Config :: term(), GroupId :: od_group:id()) ->
     {ok, [privileges:oz_privilege()]}.
-get_group_oz_privileges(Config, GroupId) ->
+group_get_oz_privileges(Config, GroupId) ->
     ?assertMatch({ok, _}, call_oz(Config, group_logic, get_oz_privileges, [
         ?ROOT, GroupId
     ])).
@@ -422,9 +677,9 @@ get_group_oz_privileges(Config, GroupId) ->
 %% Returns effective OZ privileges of a group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group_eff_oz_privileges(Config :: term(), GroupId :: od_group:id()) ->
+-spec group_get_eff_oz_privileges(Config :: term(), GroupId :: od_group:id()) ->
     {ok, [privileges:oz_privilege()]}.
-get_group_eff_oz_privileges(Config, GroupId) ->
+group_get_eff_oz_privileges(Config, GroupId) ->
     ?assertMatch({ok, _}, call_oz(Config, group_logic, get_eff_oz_privileges, [
         ?ROOT, GroupId
     ])).
@@ -445,10 +700,10 @@ list_groups(Config) ->
 %% Sets OZ privileges of a group.
 %% @end
 %%--------------------------------------------------------------------
--spec set_group_oz_privileges(Config :: term(), GroupId :: od_group:id(),
+-spec group_set_oz_privileges(Config :: term(), GroupId :: od_group:id(),
     Operation :: entity_graph:privileges_operation(),
     Privileges :: [privileges:oz_privilege()]) -> ok.
-set_group_oz_privileges(Config, GroupId, Operation, Privileges) ->
+group_set_oz_privileges(Config, GroupId, Operation, Privileges) ->
     ?assertMatch(ok, call_oz(Config, group_logic, update_oz_privileges, [
         ?ROOT, GroupId, Operation, Privileges
     ])).
@@ -468,15 +723,37 @@ delete_group(Config, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Adds a user a to group in onezone with ROOT auth.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_add_user(Config :: term(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, UserId :: od_user:id()}.
+group_add_user(Config, GroupId, UserId) ->
+    group_add_user(Config, ?ROOT, GroupId, UserId).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Adds a user a to group in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user_to_group(Config :: term(), GroupId :: od_group:id(),
+-spec group_add_user(Config :: term(), entity_logic:client(), GroupId :: od_group:id(),
     UserId :: od_user:id()) -> {ok, UserId :: od_user:id()}.
-add_user_to_group(Config, GroupId, UserId) ->
+group_add_user(Config, Client, GroupId, UserId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, add_user, [?ROOT, GroupId, UserId]
+        Config, group_logic, add_user, [Client, GroupId, UserId]
     )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Adds a group a to group in onezone with ROOT auth.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_add_group(Config :: term(), GroupId :: od_group:id(),
+    ChildGroupId :: od_group:id()) -> {ok, ChildGroupId :: od_group:id()}.
+group_add_group(Config, GroupId, ChildGroupId) ->
+    group_add_group(Config, ?ROOT, GroupId, ChildGroupId).
 
 
 %%--------------------------------------------------------------------
@@ -484,11 +761,11 @@ add_user_to_group(Config, GroupId, UserId) ->
 %% Adds a group a to group in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group_to_group(Config :: term(), GroupId :: od_group:id(),
+-spec group_add_group(Config :: term(), entity_logic:client(), GroupId :: od_group:id(),
     ChildGroupId :: od_group:id()) -> {ok, ChildGroupId :: od_group:id()}.
-add_group_to_group(Config, GroupId, ChildGroupId) ->
+group_add_group(Config, Client, GroupId, ChildGroupId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, add_group, [?ROOT, GroupId, ChildGroupId]
+        Config, group_logic, add_group, [Client, GroupId, ChildGroupId]
     )).
 
 
@@ -507,6 +784,19 @@ group_remove_user(Config, GroupId, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Removes child group from a group from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_remove_group(Config :: term(), GroupId :: od_group:id(),
+    ChildGroupId :: od_group:id()) -> ok.
+group_remove_group(Config, GroupId, ChildGroupId) ->
+    ?assertMatch(ok, call_oz(
+        Config, group_logic, remove_group, [?ROOT, GroupId, ChildGroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Leaves space as a group.
 %% @end
 %%--------------------------------------------------------------------
@@ -520,12 +810,39 @@ group_leave_space(Config, GroupId, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Leaves handle service as a group.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_leave_handle_service(Config :: term(), GroupId :: od_group:id(),
+    HandleServiceId :: od_handle_service:id()) -> ok.
+group_leave_handle_service(Config, GroupId, HandleServiceId) ->
+    ?assertMatch(ok, call_oz(
+        Config, group_logic, leave_handle_service,
+        [?ROOT, GroupId, HandleServiceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the list of effective users in given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_get_eff_users(Config :: term(), GroupId :: od_group:id()) ->
+    {ok, [privileges:group_privilege()]}.
+group_get_eff_users(Config, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(Config, group_logic, get_eff_users, [
+        ?ROOT, GroupId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Returns privileges of a user in given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group_user_privileges(Config :: term(), GroupId :: od_group:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:oz_privilege()]}.
-get_group_user_privileges(Config, GroupId, UserId) ->
+-spec group_get_user_privileges(Config :: term(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, [privileges:group_privilege()]}.
+group_get_user_privileges(Config, GroupId, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, group_logic, get_user_privileges, [
         ?ROOT, GroupId, UserId
     ])).
@@ -536,12 +853,35 @@ get_group_user_privileges(Config, GroupId, UserId) ->
 %% Returns effective privileges of a user in given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group_eff_user_privileges(Config :: term(), GroupId :: od_group:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:oz_privilege()]}.
-get_group_eff_user_privileges(Config, GroupId, UserId) ->
+-spec group_get_eff_user_privileges(Config :: term(), GroupId :: od_group:id(),
+    UserId :: od_user:id()) -> {ok, [privileges:group_privilege()]}.
+group_get_eff_user_privileges(Config, GroupId, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, group_logic, get_eff_user_privileges, [
         ?ROOT, GroupId, UserId
     ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns privileges of a subgroup in given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_get_group_privileges(Config :: term(), GroupId :: od_group:id(),
+    UserId :: od_group:id()) -> {ok, [privileges:group_privilege()]}.
+group_get_group_privileges(Config, GroupId, ChildGroupId) ->
+    ?assertMatch({ok, _}, call_oz(Config, group_logic, get_child_privileges, [
+        ?ROOT, GroupId, ChildGroupId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get all atoms representing space privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec all_space_privileges(Config :: term()) -> [atom()].
+all_space_privileges(Config) ->
+    call_oz(Config, privileges, space_privileges, []).
 
 
 %%--------------------------------------------------------------------
@@ -607,14 +947,79 @@ delete_space(Config, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves users of given space from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_get_users(Config :: term(),
+    SpaceId :: od_space:id()) -> {ok, [od_user:id()]}.
+space_get_users(Config, SpaceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, space_logic, get_users, [?ROOT, SpaceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves groups of given space from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_get_groups(Config :: term(),
+    SpaceId :: od_space:id()) -> {ok, [od_group:id()]}.
+space_get_groups(Config, SpaceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, space_logic, get_groups, [?ROOT, SpaceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves supporting providers of given space from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_get_providers(Config :: term(),
+    SpaceId :: od_space:id()) -> {ok, [od_provider:id()]}.
+space_get_providers(Config, SpaceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, space_logic, get_providers, [?ROOT, SpaceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Leave space from given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_leave_provider(Config :: term(),
+    SpaceId :: od_space:id(), ProviderId :: od_provider:id()) -> ok.
+space_leave_provider(Config, SpaceId, ProviderId) ->
+    ?assertMatch(ok, call_oz(
+        Config, space_logic, leave_provider, [?ROOT, SpaceId, ProviderId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Adds a user to a space.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user_to_space(Config :: term(), SpaceId :: od_space:id(),
+-spec space_add_user(Config :: term(), SpaceId :: od_space:id(),
     UserId :: od_user:id()) -> {ok, od_user:id()}.
-add_user_to_space(Config, SpaceId, UserId) ->
+space_add_user(Config, SpaceId, UserId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, space_logic, add_user, [?ROOT, SpaceId, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Remove user from space.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_remove_user(Config :: term(), SpaceId :: od_space:id(),
+    UserId :: od_user:id()) -> {ok, od_user:id()}.
+space_remove_user(Config, SpaceId, UserId) ->
+    ?assertMatch(ok, call_oz(
+        Config, space_logic, remove_user, [?ROOT, SpaceId, UserId]
     )).
 
 
@@ -623,11 +1028,24 @@ add_user_to_space(Config, SpaceId, UserId) ->
 %% Adds a group to a space.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group_to_space(Config :: term(), SpaceId :: od_space:id(),
+-spec space_add_group(Config :: term(), SpaceId :: od_space:id(),
     GroupId :: od_group:id()) -> {ok, od_group:id()}.
-add_group_to_space(Config, SpaceId, GroupId) ->
+space_add_group(Config, SpaceId, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, space_logic, add_group, [?ROOT, SpaceId, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves space privileges of given user from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_get_user_privileges(Config :: term(), SpaceId :: od_space:id(),
+    UserId :: od_user:id()) -> {ok, [privileges:space_privilege()]}.
+space_get_user_privileges(Config, SpaceId, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, space_logic, get_user_privileges, [?ROOT, SpaceId, UserId]
     )).
 
 
@@ -643,6 +1061,19 @@ space_set_user_privileges(Config, SpaceId, UserId, Operation, Privs) ->
     ?assertMatch(ok, call_oz(Config, space_logic, update_user_privileges, [
         ?ROOT, SpaceId, UserId, Operation, Privs
     ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves space privileges of given group from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_get_group_privileges(Config :: term(), SpaceId :: od_space:id(),
+    GroupId :: od_group:id()) -> {ok, [privileges:space_privilege()]}.
+space_get_group_privileges(Config, SpaceId, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, space_logic, get_group_privileges, [?ROOT, SpaceId, GroupId]
+    )).
 
 
 %%--------------------------------------------------------------------
@@ -753,6 +1184,19 @@ list_shares(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves share data from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_share(Config :: term(), ShareId :: od_share:id()) ->
+    {ok, #od_share{}}.
+get_share(Config, ShareId) ->
+    ?assertMatch({ok, #od_share{}}, call_oz(
+        Config, share_logic, get, [?ROOT, ShareId])
+    ).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Deletes given share from onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -763,36 +1207,51 @@ delete_share(Config, ShareId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a provider (automatically generates certificates).
+%% Get share public URL.
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider_and_certs(Config :: term(), Name :: od_provider:name()) ->
-    {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
-create_provider_and_certs(Config, Name) ->
-    {KeyFile, CSRFile, CertFile} = generate_provider_cert_files(),
-    {ok, CSR} = file:read_file(CSRFile),
-    {ok, {ProviderId, Certificate}} = ?assertMatch({ok, _}, call_oz(
-        Config, provider_logic, create, [
-            ?NOBODY,
-            Name,
-            [<<"127.0.0.1">>],
-            <<"127.0.0.1">>,
-            CSR
-        ])),
-    ok = file:write_file(CertFile, Certificate),
-    {ok, {ProviderId, KeyFile, CertFile}}.
+-spec get_share_public_url(Config :: term(), ShareId :: od_share:id()) -> binary().
+get_share_public_url(Config, ShareId) ->
+    ?assertMatch(<<_/binary>>, call_oz(
+        Config, share_logic, share_id_to_public_url, [ShareId])
+    ).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a provider.
+%% Creates a provider (automatically generates certificates).
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider(Config :: term(), Data :: maps:map()) ->
+-spec create_provider(Config :: term(),
+    NameOrData :: od_provider:name() | #{}) ->
     {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
+create_provider(Config, Name) when is_binary(Name) ->
+    create_provider(Config, #{
+        <<"name">> => Name,
+        <<"adminEmail">> => <<"admin@onezone.example.com">>,
+        <<"domain">> => ?UNIQUE_DOMAIN,
+        <<"subdomainDelegation">> => false,
+        <<"latitude">> => 0.0,
+        <<"longitude">> => 0.0
+    });
 create_provider(Config, Data) ->
-    ?assertMatch({ok, _}, call_oz(
+    {ok, {ProviderId, Macaroon}} = ?assertMatch({ok, _}, call_oz(
         Config, provider_logic, create, [?NOBODY, Data]
+    )),
+    {ok, MacaroonBin} = onedata_macaroons:serialize(Macaroon),
+    {ok, {ProviderId, MacaroonBin}}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a provider registration token.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_provider_registration_token(Config :: term(),
+    Client :: entity_logic:client()) -> {ok, macaroon:macaroon()}.
+create_provider_registration_token(Config, Client) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, provider_logic, create_provider_registration_token, [Client]
     )).
 
 
@@ -865,6 +1324,61 @@ support_space(Config, Client, ProviderId, Token, Size) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Revoke space support by given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec unsupport_space(Config :: term(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> ok.
+unsupport_space(Config, ProviderId, SpaceId) ->
+    ?assertMatch(ok, call_oz(Config, provider_logic, revoke_support, [
+        ?ROOT, ProviderId, SpaceId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get all atoms representing handle service privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec all_handle_service_privileges(Config :: term()) -> [atom()].
+all_handle_service_privileges(Config) ->
+    call_oz(Config, privileges, handle_service_privileges, []).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets provider subdomain.
+%% @end
+%%--------------------------------------------------------------------
+-spec enable_subdomain_delegation(Config :: term(),
+    ProviderId :: od_provider:id(), Subdomain :: binary(),
+    IPs :: [inet:ip4_address()]) -> ok.
+enable_subdomain_delegation(Config, ProviderId, Subdomain, IPs) ->
+    Data = #{
+        <<"subdomainDelegation">> => true,
+        <<"subdomain">> => Subdomain,
+        <<"ipList">> => IPs},
+    ?assertMatch(ok, oz_test_utils:call_oz(Config,
+        provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets provider domain (not a delegated subdomain).
+%% @end
+%%--------------------------------------------------------------------
+-spec set_provider_domain(Config :: term(), ProviderId :: od_provider:od(),
+    Domain :: binary()) -> ok.
+set_provider_domain(Config, ProviderId, Domain) ->
+    Data = #{
+        <<"subdomainDelegation">> => false,
+        <<"domain">> => Domain},
+    ?assertMatch(ok, oz_test_utils:call_oz(Config,
+        provider_logic, update_domain_config, [?ROOT, ProviderId, Data])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a handle service.
 %% @end
 %%--------------------------------------------------------------------
@@ -906,6 +1420,77 @@ list_handle_services(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves handle service data from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_handle_service(Config :: term(),
+    HandleServiceId :: od_handle_service:id()) -> {ok, #od_handle_service{}}.
+get_handle_service(Config, HandleServiceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_service_logic, get, [?ROOT, HandleServiceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves groups belonging to handle service from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_service_get_groups(Config :: term(),
+    HandleServiceId :: od_handle_service:id()) -> {ok, [od_group:id()]}.
+handle_service_get_groups(Config, HandleServiceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_service_logic, get_groups, [?ROOT, HandleServiceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves users belonging to handle service from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_service_get_users(Config :: term(),
+    HandleServiceId :: od_handle_service:id()) -> {ok, [od_user:id()]}.
+handle_service_get_users(Config, HandleServiceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_service_logic, get_users, [?ROOT, HandleServiceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves privileges of user belonging to handle service from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_service_get_user_privileges(Config :: term(),
+    HandleServiceId :: od_handle_service:id(),
+    UserId :: od_user:id()) -> {ok, [atom()]}.
+handle_service_get_user_privileges(Config, HandleServiceId, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_service_logic, get_user_privileges, [
+            ?ROOT, HandleServiceId, UserId
+        ]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves privileges of group belonging to handle service from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_service_get_group_privileges(Config :: term(),
+    HandleServiceId :: od_handle_service:id(),
+    GroupId :: od_group:id()) -> {ok, [atom()]}.
+handle_service_get_group_privileges(Config, HandleServiceId, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_service_logic, get_group_privileges, [
+            ?ROOT, HandleServiceId, GroupId
+        ]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Deletes given handle_service from onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -922,10 +1507,10 @@ delete_handle_service(Config, HandleServiceId) ->
 %% Adds a user to a handle service.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user_to_handle_service(Config :: term(),
+-spec handle_service_add_user(Config :: term(),
     HServiceId :: od_handle_service:id(), UserId :: od_user:id()) ->
     {ok, od_user:id()}.
-add_user_to_handle_service(Config, HServiceId, UserId) ->
+handle_service_add_user(Config, HServiceId, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, handle_service_logic, add_user, [
         ?ROOT, HServiceId, UserId
     ])).
@@ -933,16 +1518,86 @@ add_user_to_handle_service(Config, HServiceId, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Removes user from handle service.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_service_remove_user(Config :: term(),
+    HServiceId :: od_handle_service:id(), UserId :: od_user:id()) -> ok.
+handle_service_remove_user(Config, HServiceId, UserId) ->
+    ?assertMatch(ok, call_oz(Config, handle_service_logic, remove_user, [
+        ?ROOT, HServiceId, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges of a user in a handle service.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_service_set_user_privileges(Config :: term(),
+    HServiceId :: od_handle_service:id(), UserId :: od_user:id(),
+    Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:handle_service_privilege()]) -> ok.
+handle_service_set_user_privileges(
+    Config, HServiceId, UserId, Operation, Privs
+) ->
+    ?assertMatch(ok, call_oz(Config, handle_service_logic,
+        update_user_privileges, [?ROOT, HServiceId, UserId, Operation, Privs]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Adds a group to a handle service.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group_to_handle_service(Config :: term(),
+-spec handle_service_add_group(Config :: term(),
     HServiceId :: od_handle_service:id(), GroupId :: od_group:id()) ->
     {ok, od_group:id()}.
-add_group_to_handle_service(Config, HServiceId, GroupId) ->
+handle_service_add_group(Config, HServiceId, GroupId) ->
     ?assertMatch({ok, _}, call_oz(Config, handle_service_logic, add_group, [
         ?ROOT, HServiceId, GroupId
     ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes a group from handle service.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_service_remove_group(Config :: term(),
+    HServiceId :: od_handle_service:id(), GroupId :: od_group:id()) -> ok.
+handle_service_remove_group(Config, HServiceId, GroupId) ->
+    ?assertMatch(ok, call_oz(Config, handle_service_logic, remove_group, [
+        ?ROOT, HServiceId, GroupId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges of a group in a handle service.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_service_set_group_privileges(Config :: term(),
+    HServiceId :: od_handle_service:id(), GroupId :: od_group:id(),
+    Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:handle_service_privilege()]) -> ok.
+handle_service_set_group_privileges(
+    Config, HServiceId, GroupId, Operation, Privs
+) ->
+    ?assertMatch(ok, call_oz(Config, handle_service_logic,
+        update_group_privileges, [?ROOT, HServiceId, GroupId, Operation, Privs]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get all atoms representing handles privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec all_handle_privileges(Config :: term()) -> [atom()].
+all_handle_privileges(Config) ->
+    call_oz(Config, privileges, handle_privileges, []).
 
 
 %%--------------------------------------------------------------------
@@ -984,6 +1639,32 @@ create_handle(Config, Client, Data) ->
 get_handle(Config, HandleId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, handle_logic, get, [?ROOT, HandleId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves groups belonging to handle from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_get_groups(Config :: term(), HandleId :: od_handle:id()) ->
+    {ok, [od_group:id()]}.
+handle_get_groups(Config, HandleId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_logic, get_groups, [?ROOT, HandleId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves users belonging to handle from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_get_users(Config :: term(), HandleId :: od_handle:id()) ->
+    {ok, [od_user:id()]}.
+handle_get_users(Config, HandleId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_logic, get_users, [?ROOT, HandleId]
     )).
 
 
@@ -1044,9 +1725,9 @@ delete_handle(Config, HandleId) ->
 %% Adds a user to a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user_to_handle(Config :: term(), HServiceId :: od_handle:id(),
+-spec handle_add_user(Config :: term(), HandleId :: od_handle:id(),
     UserId :: od_user:id()) -> {ok, od_user:id()}.
-add_user_to_handle(Config, HandleId, UserId) ->
+handle_add_user(Config, HandleId, UserId) ->
     ?assertMatch({ok, _}, call_oz(Config, handle_logic, add_user, [
         ?ROOT, HandleId, UserId
     ])).
@@ -1054,16 +1735,220 @@ add_user_to_handle(Config, HandleId, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Removes user from handle.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_remove_user(Config :: term(), HandleId :: od_handle:id(),
+    UserId :: od_user:id()) -> {ok, od_user:id()}.
+handle_remove_user(Config, HandleId, UserId) ->
+    ?assertMatch(ok, call_oz(Config, handle_logic, remove_user, [
+        ?ROOT, HandleId, UserId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges of a user in a handle.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_set_user_privileges(Config :: term(),
+    HandleId :: od_handle:id(), UserId :: od_user:id(),
+    Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:handle_privilege()]) -> ok.
+handle_set_user_privileges(Config, HandleId, UserId, Operation, Privs) ->
+    ?assertMatch(ok, call_oz(Config, handle_logic,
+        update_user_privileges, [?ROOT, HandleId, UserId, Operation, Privs]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves privileges of user belonging to handle from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_get_user_privileges(Config :: term(),
+    HandleId :: od_service:id(), UserId :: od_user:id()) -> {ok, [atom()]}.
+handle_get_user_privileges(Config, HandleId, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_logic, get_user_privileges, [?ROOT, HandleId, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Adds a group to a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group_to_handle(Config :: term(), HServiceId :: od_handle:id(),
+-spec handle_add_group(Config :: term(), HandleId :: od_handle:id(),
     GroupId :: od_group:id()) -> {ok, od_group:id()}.
-add_group_to_handle(Config, HandleId, GroupId) ->
+handle_add_group(Config, HandleId, GroupId) ->
     ?assertMatch({ok, _}, call_oz(Config, handle_logic, add_group, [
         ?ROOT, HandleId, GroupId
     ])).
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes group from handle.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_remove_group(Config :: term(), HandleId :: od_handle:id(),
+    GroupId :: od_group:id()) -> {ok, od_user:id()}.
+handle_remove_group(Config, HandleId, GroupId) ->
+    ?assertMatch(ok, call_oz(Config, handle_logic, remove_group, [
+        ?ROOT, HandleId, GroupId
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges of a group in a handle.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_set_group_privileges(Config :: term(),
+    HandleId :: od_handle:id(), GroupId :: od_user:id(),
+    Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:handle_privilege()]) -> ok.
+handle_set_group_privileges(Config, HandleId, GroupId, Operation, Privs) ->
+    ?assertMatch(ok, call_oz(Config, handle_logic,
+        update_group_privileges, [?ROOT, HandleId, GroupId, Operation, Privs]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves privileges of group belonging to handle from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec handle_get_group_privileges(Config :: term(),
+    HandleId :: od_service:id(), GroupId :: od_user:id()) -> {ok, [atom()]}.
+handle_get_group_privileges(Config, HandleId, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, handle_logic, get_group_privileges, [?ROOT, HandleId, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges for group's user with ?ROOT auth.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_set_user_privileges(Config :: term(), GroupId :: od_group:id(),
+    UserId :: od_user:id(), Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:group_privilege()]) -> ok.
+group_set_user_privileges(Config, GroupId, UserId, Operation, Privs) ->
+    group_set_user_privileges(Config, ?ROOT, GroupId, UserId, Operation, Privs).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges for group's user.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_set_user_privileges(Config :: term(), entity_logic:client(),
+    GroupId :: od_group:id(), UserId :: od_user:id(),
+    Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:group_privilege()]) -> ok.
+group_set_user_privileges(Config, Client, GroupId, UserId, Operation, Privs) ->
+    ?assertMatch(ok, call_oz(Config, group_logic, update_user_privileges, [
+        Client, GroupId, UserId, Operation, Privs
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets privileges for subgroup.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_set_group_privileges(Config :: term(), GroupId :: od_group:id(),
+    ChildGroupId :: od_group:id(), Operation :: entity_graph:privileges_operation(),
+    Privileges :: [privileges:group_privilege()]) -> ok.
+group_set_group_privileges(Config, GroupId, ChildGroupId, Operation, Privs) ->
+    ?assertMatch(ok, call_oz(Config, group_logic, update_child_privileges, [
+        ?ROOT, GroupId, ChildGroupId, Operation, Privs
+    ])).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a space in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_create_space(Config :: term(), GroupId :: od_group:id(),
+    NameOrData :: od_space:name() | #{}) -> {ok, od_space:id()}.
+group_create_space(Config, GroupId, NameOrData) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, create_space, [?ROOT, GroupId, NameOrData]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes group from space in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec space_remove_group(Config :: term(), SpaceId :: od_space:id(),
+    GroupId :: od_group:id()) -> ok.
+space_remove_group(Config, SpaceId, GroupId) ->
+    ?assertMatch(ok, call_oz(
+        Config, space_logic, remove_group, [?ROOT, SpaceId, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a group invite token to given group.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_invite_group_token(Config :: term(),
+    Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, macaroon:macaroon()}.
+group_invite_group_token(Config, Client, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, create_group_invite_token, [Client, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a group invite token to given user.
+%% @end
+%%--------------------------------------------------------------------
+-spec group_invite_user_token(Config :: term(),
+    Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+    {ok, macaroon:macaroon()}.
+group_invite_user_token(Config, Client, GroupId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, group_logic, create_user_invite_token, [Client, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Asserts token not exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec assert_token_not_exists(Config :: term(),
+    TokenId :: token:id()) ->
+    ok.
+assert_token_not_exists(Config, TokenId) ->
+    ?assertMatch({error, not_found}, call_oz(
+        Config, token, get, [TokenId])),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Asserts token exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec assert_token_exists(Config :: term(),
+    TokenId :: token:id()) ->
+    ok.
+assert_token_exists(Config, TokenId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, token, get, [TokenId])),
+    ok.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -1105,7 +1990,7 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
             Groups;
         false ->
             % Filter out predefined groups
-            [Node | _] = ?config(oz_worker_nodes, Config),
+            [Node | _] = ?OZ_NODES(Config),
             {ok, PredefinedGroupsMapping} = test_utils:get_env(
                 Node, oz_worker, predefined_groups
             ),
@@ -1129,7 +2014,7 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
 %%--------------------------------------------------------------------
 -spec create_3_nested_groups(Config :: term(), TestUser :: od_user:id()) -> ok.
 create_3_nested_groups(Config, TestUser) ->
-    create_3_nested_groups(Config, TestUser, <<"gr">>, <<"gr">>, <<"gr">>).
+    create_3_nested_groups(Config, TestUser, <<"group">>, <<"group">>, <<"group">>).
 
 
 %%--------------------------------------------------------------------
@@ -1152,10 +2037,10 @@ create_3_nested_groups(Config, TestUser, BotGrName, MidGrName, TopGrName) ->
     {ok, TopGroup} = oz_test_utils:create_group(
         Config, ?ROOT, TopGrName
     ),
-    {ok, BottomGroup} = oz_test_utils:add_group_to_group(
+    {ok, BottomGroup} = oz_test_utils:group_add_group(
         Config, MiddleGroup, BottomGroup
     ),
-    {ok, MiddleGroup} = oz_test_utils:add_group_to_group(
+    {ok, MiddleGroup} = oz_test_utils:group_add_group(
         Config, TopGroup, MiddleGroup
     ),
     {BottomGroup, MiddleGroup, TopGroup}.
@@ -1203,51 +2088,27 @@ minimum_support_size(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a key/cert pair and a corresponding CSR for provider registration.
-%% @end
-%%--------------------------------------------------------------------
--spec generate_provider_cert_files() ->
-    {KeyFile :: string(), CSRFile :: string(), CertFile :: string()}.
-generate_provider_cert_files() ->
-    Prefix = "provider" ++ integer_to_list(erlang:system_time(micro_seconds)),
-    KeyFile = filename:join(?TEMP_DIR, Prefix ++ "_key.pem"),
-    CSRFile = filename:join(?TEMP_DIR, Prefix ++ "_csr.pem"),
-    CertFile = filename:join(?TEMP_DIR, Prefix ++ "_cert.pem"),
-    os:cmd("openssl genrsa -out " ++ KeyFile ++ " 2048"),
-    os:cmd("openssl req -new -batch -key " ++ KeyFile ++ " -out " ++ CSRFile),
-    {KeyFile, CSRFile, CertFile}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns when effective graph has been fully recalculated.
-%% @end
-%%--------------------------------------------------------------------
--spec ensure_eff_graph_up_to_date(Config :: term()) -> true.
-ensure_eff_graph_up_to_date(Config) ->
-    ?assert(call_oz(Config, entity_graph, ensure_up_to_date, [])).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Mocks handle proxy on all nodes of onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec mock_handle_proxy(Config :: term()) -> ok.
 mock_handle_proxy(Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
+    Nodes = ?OZ_NODES(Config),
     ok = test_utils:mock_new(Nodes, handle_proxy_client, [passthrough]),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, put,
-        fun(_, <<"/handle", _/binary>>, _, _) ->
-            {ok, 201, [{<<"location">>, <<"/test_location">>}], <<"">>}
+        fun(_, <<"/handle?hndl=", Hndl/binary>>, _, _) ->
+            ResponseBody = json_utils:encode(#{
+                <<"handle">> => <<"http://hndl.service.example.com/", Hndl/binary>>
+            }),
+            {ok, 201, #{}, ResponseBody}
         end),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, patch,
         fun(_, <<"/handle", _/binary>>, _, _) ->
-            {ok, 204, [], <<"">>}
+            {ok, 204, #{}, <<"">>}
         end),
     ok = test_utils:mock_expect(Nodes, handle_proxy_client, delete,
         fun(_, <<"/handle", _/binary>>, _, _) ->
-            {ok, 200, [], <<"">>}
+            {ok, 200, #{}, <<"">>}
         end).
 
 
@@ -1258,5 +2119,263 @@ mock_handle_proxy(Config) ->
 %%--------------------------------------------------------------------
 -spec unmock_handle_proxy(Config :: term()) -> ok.
 unmock_handle_proxy(Config) ->
+    test_utils:mock_unload(?OZ_NODES(Config), handle_proxy_client).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Mocks the time - stops the clock at one value and allows to manually
+%% simulate time passing.
+%% @end
+%%--------------------------------------------------------------------
+-spec mock_time(Config :: term()) -> ok.
+mock_time(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, handle_proxy_client).
+    simulate_time_passing(Config, 0),
+    ok = test_utils:mock_new(Nodes, time_utils, [passthrough]),
+    ok = test_utils:mock_expect(Nodes, time_utils, cluster_time_seconds, fun() ->
+        oz_worker:get_env(mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP)
+    end).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Clears the time mock.
+%% @end
+%%--------------------------------------------------------------------
+-spec unmock_time(Config :: term()) -> ok.
+unmock_time(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    ok = test_utils:mock_unload(Nodes, time_utils).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the current timestamp indicated by the mocked clock.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_mocked_time(Config :: term()) -> non_neg_integer().
+get_mocked_time(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    rpc:call(hd(Nodes), oz_worker, get_env, [mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP]).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Modifies the value returned by time mock by given amount of seconds.
+%% @end
+%%--------------------------------------------------------------------
+-spec simulate_time_passing(Config :: term(), Seconds :: non_neg_integer()) -> ok.
+simulate_time_passing(Config, Seconds) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    rpc:multicall(Nodes, oz_worker, set_env, [mocked_time, get_mocked_time(Config) + Seconds]),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the list of DER encoded ca certs used in gui server.
+%% @end
+%%--------------------------------------------------------------------
+-spec gui_ca_certs(Config :: term()) -> [public_key:der_encoded()].
+gui_ca_certs(Config) ->
+    call_oz(Config, https_listener, get_cert_chain_pems, []).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Waits for entity graph to be reconciled, with 60 retries.
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_entity_graph_is_up_to_date(Config :: term()) -> boolean().
+ensure_entity_graph_is_up_to_date(Config) ->
+    ensure_entity_graph_is_up_to_date(Config, 60).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Waits for entity graph to be reconciled, with given number of retries.
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_entity_graph_is_up_to_date(Config :: term(), Retries :: non_neg_integer()) ->
+    boolean().
+ensure_entity_graph_is_up_to_date(Config, Retries) ->
+    ?assertMatch(true, call_oz(Config, entity_graph, ensure_up_to_date, []), Retries).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Turns the onepanelAuth (login with basic credentials) on/off by overwriting
+%% auth.config.
+%% @end
+%%--------------------------------------------------------------------
+-spec toggle_basic_auth(Config :: term(), boolean()) -> ok.
+toggle_basic_auth(Config, Flag) ->
+    AuthConfigData = #{
+        onepanelAuthConfig => #{
+            enabled => Flag
+        },
+        supportedIdps => [
+            {onepanel, #{
+                protocol => onepanelAuth
+            }}
+        ]
+    },
+    overwrite_auth_config(Config, AuthConfigData).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns parsed auth.config.
+%% @end
+%%--------------------------------------------------------------------
+-spec read_auth_config(Config :: term()) -> auth_config:config_v2().
+read_auth_config(Config) ->
+    {ok, AuthConfigPath} = call_oz(Config, oz_worker, get_env, [auth_config_file]),
+    {ok, [AuthConfig]} = oz_test_utils:call_oz(Config, file, consult, [AuthConfigPath]),
+    AuthConfig.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overwrites given config file (specified by OZ env) with given data.
+%% @end
+%%--------------------------------------------------------------------
+-spec overwrite_config(TestConfig :: term(), ConfigFileEnv :: atom(), ConfigData :: term()) -> ok.
+overwrite_config(TestConfig, ConfigFileEnv, ConfigData) ->
+    {ok, ConfigPath} = call_oz(TestConfig, oz_worker, get_env, [ConfigFileEnv]),
+    rpc:multicall(?OZ_NODES(TestConfig), file, write_file, [
+        ConfigPath, io_lib:format("~tp.~n", [ConfigData])
+    ]),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overwrites auth.config with given data.
+%% @end
+%%--------------------------------------------------------------------
+-spec overwrite_auth_config(TestConfig :: term(), auth_config:config_v2()) -> ok.
+overwrite_auth_config(TestConfig, AuthConfigData) ->
+    overwrite_config(TestConfig, auth_config_file, AuthConfigData#{version => 2}),
+    rpc:multicall(?OZ_NODES(TestConfig), auth_config, force_auth_config_reload, []),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overwrites test.auth.config with given data.
+%% @end
+%%--------------------------------------------------------------------
+-spec overwrite_test_auth_config(TestConfig :: term(), auth_config:config_v2()) -> ok.
+overwrite_test_auth_config(TestConfig, AuthConfigData) ->
+    overwrite_config(TestConfig, test_auth_config_file, AuthConfigData#{version => 2}),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a session for user.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_session(Config :: term(),
+    UserId :: term(), CustomArgs :: [term()]) ->
+    {ok, SessId :: binary()}.
+create_session(Config, UserId, CustomArgs) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, gui_session_plugin, create_session, [UserId, CustomArgs]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get all atoms representing oz privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec all_oz_privileges(Config :: term()) -> [atom()].
+all_oz_privileges(Config) ->
+    call_oz(Config, privileges, oz_privileges, []).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the value of the environment variable 'Name' for 'Application'.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_env(Config :: term(), Application :: atom(), Name :: atom()) ->
+    {ok, Value :: term()}.
+get_env(Config, Application, Name) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, application, get_env, [Application, Name]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get REST listener port for zone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_rest_port(Config :: term()) -> {ok, Port :: inet:port_number()}.
+get_rest_port(Config) ->
+    get_env(Config, ?APP_NAME, https_server_port).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get zone domain.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_oz_domain(Config :: term()) -> {ok, Domain :: string()}.
+get_oz_domain(Config) ->
+    get_env(Config, ?APP_NAME, http_domain).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get rest api prefix.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_rest_api_prefix(Config :: term()) -> {ok, Prefix :: string()}.
+get_rest_api_prefix(Config) ->
+    get_env(Config, ?APP_NAME, rest_api_prefix).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get graph sync ws url for zone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_gs_ws_url(Config :: term()) -> binary().
+get_gs_ws_url(Config) ->
+    {ok, ZoneDomain} = get_oz_domain(Config),
+    {ok, GsPort} = get_rest_port(Config),
+    str_utils:format_bin(
+        "wss://~s:~B/~s",
+        [ZoneDomain, GsPort, string:strip(?PROVIDER_GRAPH_SYNC_WS_PATH, both, $/)]
+    ).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get supported graph sync protocol versions.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_gs_supported_proto_versions(Config :: term()) ->
+    SupportedVersions :: [integer()].
+get_gs_supported_proto_versions(Config) ->
+    ?assertMatch([_ | _], call_oz(
+        Config, gs_protocol, supported_versions, [])
+    ).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get supported graph sync protocol versions.
+%% @end
+%%--------------------------------------------------------------------
+-spec decode_gri(Config :: term(),
+    EncodedGri :: binary()) -> Gri :: #gri{}.
+decode_gri(Config, EncodedGri) ->
+    ?assertMatch(#gri{}, call_oz(
+        Config, gs_protocol, string_to_gri, [EncodedGri])
+    ).

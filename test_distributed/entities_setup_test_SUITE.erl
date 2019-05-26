@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2016 ACK CYFRONET AGH
+%%% @copyright (C) 2016 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -12,7 +12,7 @@
 -author("Lukasz Opiola").
 
 -include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -20,17 +20,19 @@
 -include_lib("ctool/include/test/performance.hrl").
 
 %% API
--export([all/0, init_per_suite/1]).
+-export([all/0, init_per_suite/1, end_per_suite/1]).
 -export([predefined_groups_test/1, global_groups_test/1]).
 -export([automatic_space_membership_via_global_group_test/1]).
 -export([automatic_first_space_test/1]).
+-export([default_onezone_plugins_pass_validation/1]).
 
 all() ->
     ?ALL([
         predefined_groups_test,
         global_groups_test,
         automatic_space_membership_via_global_group_test,
-        automatic_first_space_test
+        automatic_first_space_test,
+        default_onezone_plugins_pass_validation
     ]).
 
 %%%===================================================================
@@ -80,7 +82,7 @@ predefined_groups_test(Config) ->
         {ok, #document{value = #od_group{name = ActualName}}} = GroupResult,
         ?assertEqual(ExpName, ActualName),
         % Check if OZ API privileges are correct
-        {ok, PrivsResult} = oz_test_utils:get_group_oz_privileges(Config, ExpId),
+        {ok, PrivsResult} = oz_test_utils:group_get_oz_privileges(Config, ExpId),
         % Check if the privileges are correct
         ?assertEqual(lists:sort(ExpPrivileges), lists:sort(PrivsResult))
     end,
@@ -193,7 +195,7 @@ automatic_space_membership_via_global_group_test(Config) ->
     {ok, OpenSpaceId} = oz_test_utils:create_space(
         Config, ?USER(DummyUser), <<"OpenSpace">>
     ),
-    {ok, <<"all_users_group">>} = oz_test_utils:add_group_to_space(
+    {ok, <<"all_users_group">>} = oz_test_utils:space_add_group(
         Config, OpenSpaceId, <<"all_users_group">>
     ),
     % Now, every created user should belong to the All Users group and thus
@@ -201,7 +203,8 @@ automatic_space_membership_via_global_group_test(Config) ->
     {ok, UserId} = oz_test_utils:create_user(
         Config, #od_user{name = <<"User with automatic space membership">>}
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     {ok, #od_user{
         eff_spaces = EffSpaces
     }} = oz_test_utils:get_user(Config, UserId),
@@ -216,7 +219,8 @@ automatic_space_membership_via_global_group_test(Config) ->
     {ok, UserIdWithoutAccess} = oz_test_utils:create_user(
         Config, #od_user{name = <<"User with NO membership">>}
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     {ok, #od_user{
         eff_spaces = ShouldNotContainTheOpenSpace
     }} = oz_test_utils:get_user(Config, UserIdWithoutAccess),
@@ -229,7 +233,8 @@ automatic_space_membership_via_global_group_test(Config) ->
     ok = oz_test_utils:group_remove_user(
         Config, <<"all_users_group">>, UserId
     ),
-    oz_test_utils:ensure_eff_graph_up_to_date(Config),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     {ok, #od_user{
         eff_spaces = ShouldNoLongerContainTheOpenSpace
     }} = oz_test_utils:get_user(Config, UserId),
@@ -267,9 +272,15 @@ automatic_first_space_test(Config) ->
     ?assert(maps:is_key(UserId2, Users)).
 
 
+default_onezone_plugins_pass_validation(Config) ->
+    ?assert(oz_test_utils:call_oz(Config, onezone_plugins, init, [])).
+
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
 
 init_per_suite(Config) ->
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
+
+end_per_suite(_) ->
+    ok.

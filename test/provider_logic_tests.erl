@@ -12,7 +12,7 @@
 -author("Tomasz Lichon").
 
 -ifdef(TEST).
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("eunit/include/eunit.hrl").
 
 %%%===================================================================
@@ -46,12 +46,14 @@ teardown(_) ->
 test_connection() ->
     meck:expect(http_client, get,
         fun
-            (<<"https://172.16.67.194:443/test">>, #{}, <<>>, [insecure]) ->
+            (<<"https://172.16.67.194:443/test">>, #{}, <<>>,
+                [{ssl_options, [{secure, false}]}]) ->
                 {ok, 200, nothing_important, <<"gui">>};
             (<<"https://172.16.67.194:8443/rest/latest/test">>, #{}, <<>>,
-                [insecure]) ->
+                [{ssl_options, [{secure, false}]}]) ->
                 {ok, 200, nothing_important, <<"rest">>};
-            (<<"https://172.16.67.194:123/wrong_url">>, #{}, <<>>, [insecure]) ->
+            (<<"https://172.16.67.194:123/wrong_url">>, #{}, <<>>,
+                [{ssl_options, [{secure, false}]}]) ->
                 {error, {conn_failed, {error, econnrefused}}}
         end),
     Args = #{

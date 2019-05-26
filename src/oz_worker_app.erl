@@ -1,11 +1,11 @@
 %%%-------------------------------------------------------------------
 %%% @author Tomasz Lichon
-%%% @copyright (C): 2014 ACK CYFRONET AGH
+%%% @copyright (C) 2014 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc Applicatin main app file
+%%% @doc Application main app file
 %%% @end
 %%%-------------------------------------------------------------------
 -module(oz_worker_app).
@@ -38,15 +38,7 @@
     {ok, pid(), State :: term()} |
     {error, Reason :: term()}).
 start(_StartType, _StartArgs) ->
-    % DNS config needs to be loaded here as gui listener needs to access it.
-    dns_query_handler:load_config(),
-    test_node_starter:maybe_start_cover(),
-    case application:start(cluster_worker, permanent) of
-        ok ->
-             oz_worker_sup:start_link();
-        {error, Reason} ->
-            {error, {cannot_start_worker_sup, Reason}}
-    end.
+    {error, not_supported}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -57,6 +49,4 @@ start(_StartType, _StartArgs) ->
 %%--------------------------------------------------------------------
 -spec(stop(State :: term()) -> term()).
 stop(_State) ->
-    auth_logic:stop(),
-    test_node_starter:maybe_stop_cover(),
     ok.

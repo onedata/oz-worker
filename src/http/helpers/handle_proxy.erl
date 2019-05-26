@@ -12,10 +12,13 @@
 -module(handle_proxy).
 -author("Tomasz Lichon").
 
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 
 -type public_url() :: binary().
+
+-define(RANDOM_ID(), base64url:encode(crypto:strong_rand_bytes(5))).
+-define(DOI_DC_IDENTIFIER(Hndl), <<"doi:", Hndl/binary>>).
 
 %% API
 -export([register_handle/4, unregister_handle/1, modify_handle/2]).
@@ -37,24 +40,30 @@ register_handle(HandleServiceId, ResourceType, ResourceId, Metadata) ->
         service_properties = ServiceProperties}}
     } = od_handle_service:get(HandleServiceId),
     Url = get_redirect_url(ResourceType, ResourceId),
-    Body = #{
+    Body = json_utils:encode(#{
         <<"url">> => Url,
         <<"serviceProperties">> => ServiceProperties,
         <<"metadata">> => #{<<"onedata_dc">> => Metadata}
-    },
+    }),
     Headers = #{<<"content-type">> => <<"application/json">>, <<"accept">> => <<"application/json">>},
     Type = maps:get(<<"type">>, ServiceProperties),
     case Type of
         <<"DOI">> ->
             Prefix = maps:get(<<"prefix">>, ServiceProperties),
-            DoiId = base64url:encode(crypto:strong_rand_bytes(5)),
+            DoiId = ?RANDOM_ID(),
             DoiHandle = <<Prefix/binary, "/", DoiId/binary>>,
             DoiHandleEncoded = http_utils:url_encode(DoiHandle),
-            {ok, 201, _, _} = handle_proxy_client:put(ProxyEndpoint, <<"/handle?hndl=", DoiHandleEncoded/binary>>, Headers, json_utils:encode_map(Body)),
-            {ok, DoiHandle};
-        _ ->
-            {ok, 201, ResponseHeaders, _} = handle_proxy_client:put(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode_map(Body)),
-            {ok, maps:get(<<"location">>, ResponseHeaders)}
+            {ok, 201, _, _} = handle_proxy_client:put(
+                ProxyEndpoint, <<"/handle?hndl=", DoiHandleEncoded/binary>>, Headers, Body
+            ),
+            {ok, ?DOI_DC_IDENTIFIER(DoiHandle)};
+        _ -> % <<"PID">> and other types
+            DoiId = ?RANDOM_ID(),
+            {ok, 201, _, RespJSON} = handle_proxy_client:put(
+                ProxyEndpoint, <<"/handle?hndl=", DoiId/binary>>, Headers, Body
+            ),
+            PidHandle = maps:get(<<"handle">>, json_utils:decode(RespJSON)),
+            {ok, PidHandle}
     end.
 
 %%--------------------------------------------------------------------
@@ -80,9 +89,9 @@ unregister_handle(HandleId) ->
         case Type of
             <<"DOI">> ->
                 PublicHandleEncoded = http_utils:url_encode(PublicHandle),
-                handle_proxy_client:delete(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode_map(Body));
+                handle_proxy_client:delete(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body));
             _ ->
-                handle_proxy_client:delete(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode_map(Body))
+                handle_proxy_client:delete(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode(Body))
         end,
     ok.
 
@@ -114,9 +123,9 @@ modify_handle(HandleId, NewMetadata) ->
         case Type of
             <<"DOI">> ->
                 PublicHandleEncoded = http_utils:url_encode(PublicHandle),
-                handle_proxy_client:patch(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode_map(Body));
+                handle_proxy_client:patch(ProxyEndpoint, <<"/handle?hndl=", PublicHandleEncoded/binary>>, Headers, json_utils:encode(Body));
             _ ->
-                handle_proxy_client:patch(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode_map(Body))
+                handle_proxy_client:patch(ProxyEndpoint, <<"/handle">>, Headers, json_utils:encode(Body))
         end,
     ok.
 

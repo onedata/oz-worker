@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2015 ACK CYFRONET AGH
+%%% @copyright (C) 2015 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'
 %%% @end
@@ -51,15 +51,14 @@
 -module(dev_utils).
 
 -include("entity_logic.hrl").
--include("datastore/oz_datastore_models_def.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([set_up_test_entities/3, destroy_test_entities/3]).
--export([create_provider_with_uuid/6, create_provider_with_uuid/5]).
 -export([create_user_with_uuid/2]).
 -export([create_group_with_uuid/3]).
--export([create_space_with_uuid/3, create_space_with_uuid/5, create_space_with_provider/4]).
+-export([create_space_with_uuid/3, create_space_with_provider/4]).
 
 %%%===================================================================
 %%% API
@@ -80,26 +79,24 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 UserInfo = #od_user{
                     name = UserId,
                     alias = UserId,
-                    email_list = [<<UserId/binary, "@gmail.com">>],
+                    emails = [<<UserId/binary, "@gmail.com">>],
                     linked_accounts = [
-                        #linked_account{provider_id = google,
-                            user_id = <<UserId/binary, "#oauth_id">>,
-                            login = <<UserId/binary, "#oauth_login">>,
+                        #linked_account{idp = google,
+                            subject_id = <<UserId/binary, "#oauth_id">>,
+                            alias = <<UserId/binary, "#oauth_login">>,
                             name = UserId,
-                            email_list = [<<UserId/binary, "@gmail.com">>]
+                            emails = [<<UserId/binary, "@gmail.com">>]
                         }
                     ],
                     spaces = [],
                     default_space = DefaultSpace,
-                    groups = [],
-                    default_provider = undefined,
-                    chosen_provider = undefined
+                    groups = []
                 },
                 {ok, UserId} = create_user_with_uuid(UserInfo, UserId)
             end, Users),
 
         % Create groups
-        GroupCreators = lists:foldl(
+        lists:foldl(
             fun({GroupId, Props}, Acc) ->
                 UserList = proplists:get_value(<<"users">>, Props),
                 [GroupCreator | UsersToAdd] = UserList,
@@ -114,7 +111,6 @@ set_up_test_entities(Users, Groups, Spaces) ->
 
         lists:foreach(fun({GroupId, Props}) ->
             NestedGroups = proplists:get_value(<<"groups">>, Props, []),
-            GroupCreator = maps:get(GroupId, GroupCreators),
             lists:foreach(fun(NestedGroupId) ->
                 {ok, NestedGroupId} = group_logic:add_group(?ROOT, GroupId, NestedGroupId)
             end, NestedGroups)
@@ -196,49 +192,16 @@ destroy_test_entities(Users, Groups, Spaces) ->
         end, Spaces),
     ok.
 
-%%--------------------------------------------------------------------
-%% @doc Create a provider's account with implicit UUId.
-%% Throws exception when call to the datastore fails.
-%% @end
-%%--------------------------------------------------------------------
--spec create_provider_with_uuid(ClientName :: binary(), URLs :: [binary()],
-    RedirectionPoint :: binary(), CSR :: binary(), UUId :: binary()) ->
-    {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
-create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUId) ->
-    create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUId, #{}).
-
-%%--------------------------------------------------------------------
-%% @doc Create a provider's account with implicit UUId.
-%% Throws exception when call to the datastore fails.
-%% Accepts optional arguments map (which currently supports 'latitude' and
-%% 'longitude' keys)
-%% @end
-%%--------------------------------------------------------------------
--spec create_provider_with_uuid(ClientName :: binary(), URLs :: [binary()],
-    RedirectionPoint :: binary(), CSR :: binary(), UUId :: binary(),
-    OptionalArgs :: #{atom() => term()}) ->
-    {ok, ProviderId :: binary(), ProviderCertPem :: binary()}.
-create_provider_with_uuid(ClientName, URLs, RedirectionPoint, CSRBin, UUId, OptionalArgs) ->
-    {ok, {ProviderCertPem, Serial}} = ozpca:sign_provider_req(UUId, CSRBin),
-    Latitude = maps:get(latitude, OptionalArgs, undefined),
-    Longitude = maps:get(longitude, OptionalArgs, undefined),
-
-    Provider = #od_provider{name = ClientName, urls = URLs,
-        redirection_point = RedirectionPoint, serial = Serial,
-        latitude = Latitude, longitude = Longitude},
-
-    od_provider:save(#document{key = UUId, value = Provider}),
-    {ok, UUId, ProviderCertPem}.
-
 
 %%--------------------------------------------------------------------
 %% @doc Creates a user account with implicit UUId.
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec create_user_with_uuid(User :: #od_user{}, UUId :: binary()) -> {ok, UserId :: binary()}.
-create_user_with_uuid(User, UUId) ->
-    {ok, _} = od_user:save(#document{key = UUId, value = User}).
+-spec create_user_with_uuid(User :: #od_user{}, UserId :: binary()) -> {ok, UserId :: binary()}.
+create_user_with_uuid(User, UserId) ->
+    {ok, _} = od_user:save(#document{key = UserId, value = User}),
+    {ok, UserId}.
 
 
 %%--------------------------------------------------------------------
@@ -248,9 +211,9 @@ create_user_with_uuid(User, UUId) ->
 %%--------------------------------------------------------------------
 -spec create_group_with_uuid(UserId :: binary(), Name :: binary(), UUId :: binary()) ->
     {ok, GroupId :: binary()}.
-create_group_with_uuid(UserId, Name, UUId) ->
-    {ok, GroupId} = od_group:save(
-        #document{key = UUId, value = #od_group{name = Name}}
+create_group_with_uuid(UserId, Name, GroupId) ->
+    {ok, _} = od_group:save(
+        #document{key = GroupId, value = #od_group{name = Name}}
     ),
     {ok, UserId} = group_logic:add_user(
         ?ROOT, GroupId, UserId, privileges:group_admin()
@@ -270,30 +233,16 @@ create_space_with_uuid(Member, Name, UUId) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc Creates a Space for a user or group with implicit UUId, by a provider that will support it.
-%% Throws exception when call to the datastore fails, or token/member_from_token doesn't exist.
-%% @end
-%%--------------------------------------------------------------------
--spec create_space_with_uuid({provider, ProviderId :: binary()}, Name :: binary(),
-    Token :: binary(), Support :: pos_integer(), UUId :: binary()) ->
-    {ok, SpaceId :: binary()}.
-create_space_with_uuid({provider, ProviderId}, Name, Token, Support, UUId) ->
-    {ok, Macaroon} = token_utils:deserialize(Token),
-    {ok, Member} = token_logic:consume(Macaroon),
-    create_space_with_provider(Member, Name, #{ProviderId => Support}, UUId).
-
-
-%%--------------------------------------------------------------------
 %% @doc Creates a Space for a user or a group with implicit UUId, with a preexisting provider.
 %% Throws exception when call to the datastore fails, or user/group doesn't exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_space_with_provider({od_user | od_group, Id :: binary()}, Name :: binary(),
-    Support :: #{Provider :: binary() => ProvidedSize :: pos_integer()}, UUId :: binary()) ->
+    Support :: #{Provider :: binary() => ProvidedSize :: pos_integer()}, SpaceId :: binary()) ->
     {ok, SpaceId :: binary()}.
-create_space_with_provider({MemberType, MemberId}, Name, Supports, UUId) ->
-    {ok, SpaceId} = od_space:save(
-        #document{key = UUId, value = #od_space{name = Name}}
+create_space_with_provider({MemberType, MemberId}, Name, Supports, SpaceId) ->
+    {ok, _} = od_space:save(
+        #document{key = SpaceId, value = #od_space{name = Name}}
     ),
     AddFun = case MemberType of
         od_user -> add_user;

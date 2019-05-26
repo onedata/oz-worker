@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C): 2017 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -12,7 +12,6 @@
 %%% @end
 %%%-------------------------------------------------------------------
 -module(entity_logic_plugin_behaviour).
--include("datastore/oz_datastore_models_def.hrl").
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -20,100 +19,79 @@
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
--callback get_entity(EntityId :: entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | {error, Reason :: term()}.
+-callback fetch_entity(entity_logic:entity_id()) ->
+    {ok, entity_logic:entity()} | entity_logic:error().
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a resource based on EntityId, Resource identifier and Data.
+%% Determines if given operation is supported based on operation, aspect and
+%% scope (entity type is known based on the plugin itself).
 %% @end
 %%--------------------------------------------------------------------
--callback create(Client :: entity_logic:client(),
-    EntityId :: entity_logic:entity_id(), Resource :: entity_logic:resource(),
-    entity_logic:data()) -> entity_logic:result().
+-callback operation_supported(entity_logic:operation(), entity_logic:aspect(),
+    entity_logic:scope()) -> boolean().
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves a resource based on EntityId and Resource identifier.
+%% Creates a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
--callback get(Client :: entity_logic:client(), EntityId :: entity_logic:entity_id(),
-    Entity :: entity_logic:entity(), Resource :: entity_logic:resource()) ->
-    entity_logic:result().
+-callback create(entity_logic:req()) -> entity_logic:create_result().
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates a resource based on EntityId, Resource identifier and Data.
+%% Retrieves a resource (aspect of entity) based on entity logic request and
+%% prefetched entity.
 %% @end
 %%--------------------------------------------------------------------
--callback update(EntityId :: entity_logic:entity_id(),
-    Resource :: entity_logic:resource(),
-    entity_logic:data()) -> entity_logic:result().
+-callback get(entity_logic:req(), entity_logic:entity()) ->
+    entity_logic:get_result().
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes a resource based on EntityId and Resource identifier.
+%% Updates a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
--callback delete(EntityId :: entity_logic:entity_id(),
-    Resource :: entity_logic:resource()) -> entity_logic:result().
+-callback update(entity_logic:req()) -> entity_logic:update_result().
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns existence verificators for given Resource identifier.
-%% Existence verificators can be internal, which means they operate on the
-%% entity to which the resource corresponds, or external - independent of
-%% the entity. If there are multiple verificators, they will be checked in
-%% sequence until one of them returns true.
-%% Implicit verificators 'true' | 'false' immediately stop the verification
-%% process with given result.
+%% Deletes a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
--callback exists(Resource :: entity_logic:resource()) ->
-    entity_logic:existence_verificator()|
-    [entity_logic:existence_verificator()].
+-callback delete(entity_logic:req()) -> entity_logic:delete_result().
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns existence verificators for given Resource identifier.
-%% Existence verificators can be internal, which means they operate on the
-%% entity to which the resource corresponds, or external - independent of
-%% the entity. If there are multiple verificators, they will be checked in
-%% sequence until one of them returns true.
-%% Implicit verificators 'true' | 'false' immediately stop the verification
-%% process with given result.
+%% Determines if given resource (aspect of entity) exists, based on entity
+%% logic request and prefetched entity.
 %% @end
 %%--------------------------------------------------------------------
--callback authorize(Operation :: entity_logic:operation(),
-    EntityId :: entity_logic:entity_id(), Resource :: entity_logic:resource(),
-    Client :: entity_logic:client()) ->
-    entity_logic:authorization_verificator() |
-    [authorization_verificator:existence_verificator()].
+-callback exists(entity_logic:req(), entity_logic:entity()) -> boolean().
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns validity verificators for given Operation and Resource identifier.
+%% Determines if requesting client is authorized to perform given operation,
+%% based on entity logic request and prefetched entity.
+%% @end
+%%--------------------------------------------------------------------
+-callback authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns validity verificators for given request.
 %% Returns a map with 'required', 'optional' and 'at_least_one' keys.
 %% Under each of them, there is a map:
 %%      Key => {type_verificator, value_verificator}
 %% Which means how value of given Key should be validated.
 %% @end
 %%--------------------------------------------------------------------
--callback validate(Operation :: entity_logic:operation(),
-    Resource :: entity_logic:resource()) ->
-    entity_logic:validity_verificator().
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns readable string representing the entity with given id.
-%% @end
-%%--------------------------------------------------------------------
--callback entity_to_string(EntityId :: entity_logic:entity_id()) -> binary().
+-callback validate(entity_logic:req()) -> entity_logic:validity_verificator().

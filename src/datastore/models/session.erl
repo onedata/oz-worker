@@ -11,143 +11,117 @@
 %%%-------------------------------------------------------------------
 -module(session).
 -author("Michal Zmuda").
--behaviour(model_behaviour).
 
--include("datastore/oz_datastore_models_def.hrl").
--include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
+-include("datastore/oz_datastore_models.hrl").
 
--type doc() :: datastore:document().
--type info() :: #session{}.
+%% API
+-export([create/1, get/1, update/2, delete/1, list/0]).
+-export([session_ttl/0]).
+
+%% datastore_model callbacks
+-export([init/0]).
+
 -type id() :: binary().
--export_type([doc/0, info/0, id/0]).
-
-
-%% model_behaviour callbacks
--export([save/1, get/1, exists/1, delete/1, update/2, create/1,
-    model_init/0, 'after'/5, before/4]).
-
+-type record() :: #session{}.
+-type doc() :: datastore_doc:doc(record()).
+-type diff() :: datastore_doc:diff(record()).
+-export_type([id/0, record/0]).
 
 -type memory() :: maps:map().
 -export_type([memory/0]).
 
+-define(CTX, #{
+    model => ?MODULE,
+    disc_driver => undefined,
+    fold_enabled => true
+}).
+
+-define(SESSION_TTL, oz_worker:get_env(session_ttl, 604800)). % 1 week
 
 %%%===================================================================
-%%% model_behaviour callbacks
+%%% API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link model_behaviour} callback save/1.
+%% Creates a new session for given user.
 %% @end
 %%--------------------------------------------------------------------
--spec save(datastore:document()) -> {ok, datastore:key()} | datastore:generic_error().
-save(#document{value = Sess} = Document) ->
-    Timestamp = os:timestamp(),
-    model:execute_with_default_context(?MODULE, save, [
-        Document#document{value = Sess#session{
-            accessed = Timestamp
-        }}
-    ]).
+-spec create(od_user:id()) -> {ok, id()} | {error, term()}.
+create(UserId) ->
+    Doc = #document{value = #session{
+        user_id = UserId, accessed = time_utils:cluster_time_millis()
+    }},
+    case datastore_model:create(?CTX, Doc) of
+        {ok, #document{key = SessionId}} -> {ok, SessionId};
+        {error, Reason} -> {error, Reason}
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link model_behaviour} callback update/2.
+%% Returns session by ID and updates access time.
 %% @end
 %%--------------------------------------------------------------------
--spec update(datastore:key(), Diff :: datastore:document_diff()) ->
-    {ok, datastore:key()} | datastore:update_error().
-update(Key, Diff) when is_map(Diff) ->
-    model:execute_with_default_context(?MODULE, update, [Key,
-        Diff#{accessed => os:timestamp()}]);
-update(Key, Diff) when is_function(Diff) ->
-    NewDiff = fun(Sess) ->
-        case Diff(Sess) of
-            {ok, NewSess} -> {ok, NewSess#session{accessed = os:timestamp()}};
-            {error, Reason} -> {error, Reason}
-        end
-              end,
-    model:execute_with_default_context(?MODULE, update, [Key, NewDiff]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback create/1.
-%% @end
-%%--------------------------------------------------------------------
--spec create(datastore:document()) -> {ok, datastore:key()} | datastore:create_error().
-create(#document{value = Sess} = Document) ->
-    Timestamp = os:timestamp(),
-    model:execute_with_default_context(?MODULE, create, [
-        Document#document{value = Sess#session{
-            accessed = Timestamp
-        }}
-    ]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback get/1.
-%% Sets access time to current time for user session and returns old value.
-%% @end
-%%--------------------------------------------------------------------
--spec get(datastore:key()) -> {ok, datastore:document()} | datastore:get_error().
-get(Key) ->
-    case model:execute_with_default_context(?MODULE, get, [Key]) of
-        {ok, Doc} ->
-            session:update(Key, #{}),
-            {ok, Doc};
+-spec get(id()) -> {ok, doc()} | {error, term()}.
+get(SessionId) ->
+    case datastore_model:get(?CTX, SessionId) of
+        {ok, _Doc} ->
+            update(SessionId, fun(Sess) -> {ok, Sess} end);
         {error, Reason} ->
             {error, Reason}
     end.
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link model_behaviour} callback delete/1.
+%% Deletes session by ID.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(datastore:key()) -> ok | datastore:generic_error().
-delete(Key) ->
-    model:execute_with_default_context(?MODULE, delete, [Key]).
+-spec delete(id()) -> ok | {error, term()}.
+delete(SessId) ->
+    datastore_model:delete(?CTX, SessId).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link model_behaviour} callback exists/1.
+%% Updates session by ID. Updates access time as well.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(datastore:key()) -> datastore:exists_return().
-exists(Key) ->
-    case ?RESPONSE(model:execute_with_default_context(?MODULE, exists, [Key])) of
-        true ->
-            update(Key, #{}),
-            true;
-        false ->
-            false
-    end.
+-spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
+update(SessId, Diff) ->
+    datastore_model:update(?CTX, SessId, fun(Sess = #session{}) ->
+        case Diff(Sess) of
+            {ok, Sess2} -> {ok, Sess2#session{accessed = time_utils:cluster_time_millis()}};
+            {error, Reason} -> {error, Reason}
+        end
+    end).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link model_behaviour} callback model_init/0.
+%% Returns list of all sessions.
 %% @end
 %%--------------------------------------------------------------------
--spec model_init() -> model_behaviour:model_config().
-model_init() ->
-    ?MODEL_CONFIG(session_bucket, [], ?GLOBAL_ONLY_LEVEL).
+-spec list() -> {ok, [doc()]} | {error, term()}.
+list() ->
+    datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link model_behaviour} callback 'after'/5.
+%% Returns session Time To Live in seconds.
 %% @end
 %%--------------------------------------------------------------------
--spec 'after'(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
-    Level :: datastore:store_level(), Context :: term(),
-    ReturnValue :: term()) -> ok.
-'after'(_ModelName, _Method, _Level, _Context, _ReturnValue) ->
-    ok.
+-spec session_ttl() -> integer().
+session_ttl() ->
+    ?SESSION_TTL.
+
+%%%===================================================================
+%%% datastore_model callbacks
+%%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link model_behaviour} callback before/4.
+%% Initializes model.
 %% @end
 %%--------------------------------------------------------------------
--spec before(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
-    Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
-before(_ModelName, _Method, _Level, _Context) ->
-    ok.
+-spec init() -> ok | {error, term()}.
+init() ->
+    datastore_model:init(?CTX).

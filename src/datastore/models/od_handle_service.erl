@@ -1,173 +1,114 @@
 %%%-------------------------------------------------------------------
 %%% @author Tomasz Lichon
-%%% @copyright (C) 2016 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Database model representing service allowing for registration of file handles.
+%%% Database model representing service allowing for registration of file
+%%% handles.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(od_handle_service).
 -author("Tomasz Lichon").
--behaviour(model_behaviour).
 
--include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
--include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
+-include("datastore/oz_datastore_models.hrl").
 
--type doc() :: datastore:document().
--type info() :: #od_handle_service{}.
+%% API
+-export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
+-export([to_string/1]).
+-export([entity_logic_plugin/0]).
+
+%% datastore_model callbacks
+-export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
+
 -type id() :: binary().
+-type record() :: #od_handle_service{}.
+-type doc() :: datastore_doc:doc(record()).
+-type diff() :: datastore_doc:diff(record()).
 -type name() :: binary().
 -type proxy_endpoint() :: binary().
 -type service_properties() :: maps:map().
 
--export_type([doc/0, info/0, id/0]).
+-export_type([id/0, record/0]).
 -export_type([name/0, proxy_endpoint/0, service_properties/0]).
 
-%% model_behaviour callbacks
--export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
-    model_init/0, 'after'/5, before/4]).
--export([record_struct/1, record_upgrade/2]).
--export([to_string/1]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns structure of the record in specified version.
-%% @end
-%%--------------------------------------------------------------------
--spec record_struct(datastore_json:record_version()) -> datastore_json:record_struct().
-record_struct(1) ->
-    {record, [
-        {name, string},
-        {proxy_endpoint, string},
-        {service_properties, [term]},
-        {users, [{string, [atom]}]},
-        {groups, [{string, [atom]}]},
-        {eff_users, [{string, [atom]}]},
-        {eff_groups, [{string, [atom]}]},
-        {bottom_up_dirty, boolean}
-    ]};
-record_struct(2) ->
-    {record, [
-        {name, string},
-        {proxy_endpoint, string},
-        {service_properties, #{term => term}},
-        {users, #{string => [atom]}},
-        {groups, #{string => [atom]}},
-        {handles, [string]},
-        {eff_users, #{string => {[atom], [{atom, string}]}}},
-        {eff_groups, #{string => {[atom], [{atom, string}]}}},
-        {bottom_up_dirty, boolean}
-    ]}.
+-define(CTX, #{
+    model => ?MODULE,
+    fold_enabled => true,
+    sync_enabled => true
+}).
 
 %%%===================================================================
-%%% model_behaviour callbacks
+%%% API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link model_behaviour} callback save/1.
+%% Creates handle service.
 %% @end
 %%--------------------------------------------------------------------
--spec save(datastore:document()) ->
-    {ok, datastore:ext_key()} | datastore:generic_error().
-save(Document) ->
-    model:execute_with_default_context(?MODULE, save, [Document]).
+-spec create(doc()) -> {ok, doc()} | {error, term()}.
+create(Doc) ->
+    datastore_model:create(?CTX, Doc).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link model_behaviour} callback update/2.
+%% Saves handle service.
 %% @end
 %%--------------------------------------------------------------------
--spec update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
-    {ok, datastore:ext_key()} | datastore:update_error().
-update(Key, Diff) ->
-    model:execute_with_default_context(?MODULE, update, [Key, Diff]).
+-spec save(doc()) -> {ok, doc()} | {error, term()}.
+save(Doc) ->
+    datastore_model:save(?CTX, Doc).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link model_behaviour} callback create/1.
+%% Returns handle service by ID.
 %% @end
 %%--------------------------------------------------------------------
--spec create(datastore:document()) ->
-    {ok, datastore:ext_key()} | datastore:create_error().
-create(Document) ->
-    model:execute_with_default_context(?MODULE, create, [Document]).
+-spec get(id()) -> {ok, doc()} | {error, term()}.
+get(HServiceId) ->
+    datastore_model:get(?CTX, HServiceId).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link model_behaviour} callback get/1.
+%% Checks whether handle service given by ID exists.
 %% @end
 %%--------------------------------------------------------------------
--spec get(datastore:ext_key()) -> {ok, datastore:document()} | datastore:get_error().
-get(Key) ->
-    model:execute_with_default_context(?MODULE, get, [Key]).
+-spec exists(id()) -> {ok, boolean()} | {error, term()}.
+exists(HServiceId) ->
+    datastore_model:exists(?CTX, HServiceId).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns list of all records.
+%% Updates handle service by ID.
 %% @end
 %%--------------------------------------------------------------------
--spec list() -> {ok, [datastore:document()]} | datastore:generic_error() | no_return().
+-spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
+update(HServiceId, Diff) ->
+    datastore_model:update(?CTX, HServiceId, Diff).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes handle service by ID.
+%% WARNING: Must not be used directly, as deleting a handle_service that still has
+%% relations to other entities will cause serious inconsistencies in database.
+%% To safely delete a handle_service use handle_service_logic.
+%% @end
+%%--------------------------------------------------------------------
+-spec force_delete(id()) -> ok | {error, term()}.
+force_delete(HServiceId) ->
+    datastore_model:delete(?CTX, HServiceId).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns list of all handle services.
+%% @end
+%%--------------------------------------------------------------------
+-spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
-    model:execute_with_default_context(?MODULE, list, [?GET_ALL, []]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback delete/1.
-%% @end
-%%--------------------------------------------------------------------
--spec delete(datastore:ext_key()) -> ok | datastore:generic_error().
-delete(Key) ->
-    model:execute_with_default_context(?MODULE, delete, [Key]).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback exists/1.
-%% @end
-%%--------------------------------------------------------------------
--spec exists(datastore:ext_key()) -> datastore:exists_return().
-exists(Key) ->
-    ?RESPONSE(model:execute_with_default_context(?MODULE, exists, [Key])).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback model_init/0.
-%% @end
-%%--------------------------------------------------------------------
--spec model_init() -> model_behaviour:model_config().
-model_init() ->
-    Config = ?MODEL_CONFIG(handle_service_bucket, [], ?GLOBALLY_CACHED_LEVEL),
-    Config#model_config{
-        version = 2,
-        list_enabled = {true, return_errors},
-        sync_enabled = true
-    }.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback 'after'/5.
-%% @end
-%%--------------------------------------------------------------------
--spec 'after'(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
-    Level :: datastore:store_level(), Context :: term(),
-    ReturnValue :: term()) -> ok.
-'after'(_ModelName, _Method, _Level, _Context, _ReturnValue) ->
-    ok.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback before/4.
-%% @end
-%%--------------------------------------------------------------------
--spec before(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
-    Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
-before(_ModelName, _Method, _Level, _Context) ->
-    ok.
-
+    datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -178,15 +119,71 @@ before(_ModelName, _Method, _Level, _Context) ->
 to_string(HServiceId) ->
     <<"handle_service:", HServiceId/binary>>.
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the entity logic plugin module that handles model logic.
+%% @end
+%%--------------------------------------------------------------------
+-spec entity_logic_plugin() -> module().
+entity_logic_plugin() ->
+    handle_service_logic_plugin.
+
+%%%===================================================================
+%%% datastore_model callbacks
+%%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Upgrades record from specified version.
+%% Returns model's record version.
 %% @end
 %%--------------------------------------------------------------------
--spec record_upgrade(datastore_json:record_version(), tuple()) ->
-    {datastore_json:record_version(), tuple()}.
-record_upgrade(1, HandleService) ->
+-spec get_record_version() -> datastore_model:record_version().
+get_record_version() ->
+    3.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns model's record structure in provided version.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_record_struct(datastore_model:record_version()) ->
+    datastore_model:record_struct().
+get_record_struct(1) ->
+    {record, [
+        {name, string},
+        {proxy_endpoint, string},
+        {service_properties, [term]},
+        {users, [{string, [atom]}]},
+        {groups, [{string, [atom]}]},
+        {eff_users, [{string, [atom]}]},
+        {eff_groups, [{string, [atom]}]},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(2) ->
+    {record, [
+        {name, string},
+        {proxy_endpoint, string},
+        {service_properties, #{term => term}},
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {handles, [string]},
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(3) ->
+    % There are no changes, but all records must be marked dirty to recalculate
+    % effective relations (as intermediaries computing logic has changed).
+    get_record_struct(2).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades model's record from provided version to the next one.
+%% @end
+%%--------------------------------------------------------------------
+-spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
+    {datastore_model:record_version(), datastore_model:record()}.
+upgrade_record(1, HandleService) ->
     {
         od_handle_service,
         Name,
@@ -210,6 +207,13 @@ record_upgrade(1, HandleService) ->
         groups = maps:from_list(Groups),
         handles = [],
 
+        eff_users = #{},
+        eff_groups = #{},
+
+        bottom_up_dirty = true
+    }};
+upgrade_record(2, HandleService) ->
+    {3, HandleService#od_handle_service{
         eff_users = #{},
         eff_groups = #{},
 

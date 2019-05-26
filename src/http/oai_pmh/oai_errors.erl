@@ -27,7 +27,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec handle({oai_error_code(), binary()} | oai_error_code() | term()) ->
-    oai_error() | {halt, cowboy_req:req(), any()}.
+    oai_error() | {stop, cowboy_req:req(), any()}.
 handle({missing_key, <<"verb">>}) ->
     ?BAD_VERB(<<"The verb argument is missing.">>);
 handle({missing_key, Keys}) ->
@@ -75,7 +75,7 @@ handle({illegalId, Id}) ->
     ?ID_DOES_NOT_EXIST(str_utils:format_bin(
         "The value of the identifier argument \"~s\" "
         "is illegal in this repository. Identifier must "
-        "be in form oai:onedata.org:<id>", [Id]));
+        "be in form oai:<onezone-domain>:<id>", [Id]));
 handle({idDoesNotExist, Id}) ->
     ?ID_DOES_NOT_EXIST(str_utils:format_bin(
         "The value of the identifier argument \"~s\" "

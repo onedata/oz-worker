@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% @author Michal Zmuda
-%%% @copyright (C) 2015 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -11,36 +11,202 @@
 %%%-------------------------------------------------------------------
 -module(od_user).
 -author("Michal Zmuda").
--behaviour(model_behaviour).
 
--include("registered_names.hrl").
--include("datastore/oz_datastore_models_def.hrl").
--include_lib("cluster_worker/include/modules/datastore/datastore_model.hrl").
-
--type doc() :: datastore:document().
--type info() :: #od_user{}.
--type id() :: binary().
--export_type([doc/0, info/0, id/0]).
-
--type name() :: binary().
--export_type([name/0]).
-
-%% model_behaviour callbacks
--export([save/1, get/1, list/0, exists/1, delete/1, update/2, create/1,
-    model_init/0, 'after'/5, before/4]).
--export([record_struct/1, record_upgrade/2]).
+-include("datastore/oz_datastore_models.hrl").
 
 %% API
+-export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
 -export([get_by_criterion/1]).
 -export([to_string/1]).
+-export([entity_logic_plugin/0]).
+
+%% datastore_model callbacks
+-export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
+
+-type id() :: binary().
+-type record() :: #od_user{}.
+-type doc() :: datastore_doc:doc(record()).
+-type diff() :: datastore_doc:diff(record()).
+-export_type([id/0, record/0]).
+
+-type name() :: binary().
+-type alias() :: undefined | binary().
+-type email() :: binary().
+-type linked_account() :: #linked_account{}.
+-type criterion() :: {linked_account, {auth_config:idp(), SubjectId :: binary()}} |
+{email, email()} |
+{alias, alias()}.
+-export_type([name/0, alias/0]).
+
+-define(CTX, #{
+    model => ?MODULE,
+    fold_enabled => true,
+    sync_enabled => true
+}).
+
+%%%===================================================================
+%%% API
+%%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns structure of the record in specified version.
+%% Creates user.
 %% @end
 %%--------------------------------------------------------------------
--spec record_struct(datastore_json:record_version()) -> datastore_json:record_struct().
-record_struct(1) ->
+-spec create(doc()) -> {ok, doc()} | {error, term()}.
+create(Doc) ->
+    datastore_model:create(?CTX, Doc).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Saves user.
+%% @end
+%%--------------------------------------------------------------------
+-spec save(doc()) -> {ok, doc()} | {error, term()}.
+save(Doc) ->
+    datastore_model:save(?CTX, Doc).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns user by ID.
+%% @end
+%%--------------------------------------------------------------------
+-spec get(id()) -> {ok, doc()} | {error, term()}.
+get(UserId) ->
+    datastore_model:get(?CTX, UserId).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Checks whether user given by ID exists.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(id()) -> {ok, boolean()} | {error, term()}.
+exists(UserId) ->
+    datastore_model:exists(?CTX, UserId).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates user by ID.
+%% @end
+%%--------------------------------------------------------------------
+-spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
+update(UserId, Diff) ->
+    datastore_model:update(?CTX, UserId, Diff).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes user by ID.
+%% WARNING: Must not be used directly, as deleting a user that still has
+%% relations to other entities will cause serious inconsistencies in database.
+%% To safely delete a user use user_logic.
+%% @end
+%%--------------------------------------------------------------------
+-spec force_delete(id()) -> ok | {error, term()}.
+force_delete(UserId) ->
+    datastore_model:delete(?CTX, UserId).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns list of all users.
+%% @end
+%%--------------------------------------------------------------------
+-spec list() -> {ok, [doc()]} | {error, term()}.
+list() ->
+    datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Gets first user matching given criterion.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_by_criterion(criterion()) -> {ok, doc()} | {error, term()}.
+get_by_criterion({email, Value}) ->
+    Fun = fun(Doc = #document{value = #od_user{emails = EmailList}}, Acc) ->
+        case lists:member(Value, EmailList) of
+            true -> {stop, [Doc | Acc]};
+            false -> {ok, Acc}
+        end
+    end,
+    case datastore_model:fold(?CTX, Fun, []) of
+        {ok, []} ->
+            {error, not_found};
+        {ok, [Doc | _]} ->
+            {ok, Doc}
+    end;
+get_by_criterion({alias, Value}) ->
+    Fun = fun(Doc = #document{value = #od_user{alias = Alias}}, Acc) ->
+        case Alias of
+            Value -> {stop, [Doc | Acc]};
+            _ -> {ok, Acc}
+        end
+    end,
+    case datastore_model:fold(?CTX, Fun, []) of
+        {ok, []} ->
+            {error, not_found};
+        {ok, [Doc | _]} ->
+            {ok, Doc}
+    end;
+get_by_criterion({linked_account, {ProviderID, UserID}}) ->
+    Fun = fun(Doc = #document{value = #od_user{linked_accounts = Accounts}}, Acc) ->
+        Found = lists:any(fun
+            (#linked_account{idp = IDP, subject_id = UID}) ->
+                case {IDP, UID} of
+                    {ProviderID, UserID} -> true;
+                    _ -> false
+                end;
+            (_) -> false
+        end, Accounts),
+        case Found of
+            true -> {stop, [Doc | Acc]};
+            _ -> {ok, Acc}
+        end
+    end,
+    case datastore_model:fold(?CTX, Fun, []) of
+        {ok, []} ->
+            {error, not_found};
+        {ok, [Doc | _]} ->
+            {ok, Doc}
+    end.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns readable string representing the user with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec to_string(UserId :: id()) -> binary().
+to_string(UserId) ->
+    <<"user:", UserId/binary>>.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns the entity logic plugin module that handles model logic.
+%% @end
+%%--------------------------------------------------------------------
+-spec entity_logic_plugin() -> module().
+entity_logic_plugin() ->
+    user_logic_plugin.
+
+%%%===================================================================
+%%% datastore_model callbacks
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns model's record version.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_record_version() -> datastore_model:record_version().
+get_record_version() ->
+    9.
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns model's record structure in provided version.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_record_struct(datastore_model:record_version()) ->
+    datastore_model:record_struct().
+get_record_struct(1) ->
     {record, [
         {name, string},
         {login, string},
@@ -73,7 +239,7 @@ record_struct(1) ->
         {eff_handles, [string]},
         {top_down_dirty, boolean}
     ]};
-record_struct(2) ->
+get_record_struct(2) ->
     {record, [
         {name, string},
         {login, string},
@@ -105,8 +271,8 @@ record_struct(2) ->
         {eff_handles, #{string => [{atom, string}]}},
         {top_down_dirty, boolean}
     ]};
-record_struct(3) ->
-    {record, Struct} = record_struct(2),
+get_record_struct(3) ->
+    {record, Struct} = get_record_struct(2),
     LinkedAccStruct = {linked_accounts, [{record, [
         {provider_id, atom},
         {user_id, string},
@@ -115,8 +281,8 @@ record_struct(3) ->
         {email_list, [string]}
     ]}]},
     {record, lists:keyreplace(connected_accounts, 1, Struct, LinkedAccStruct)};
-record_struct(4) ->
-    {record, Struct} = record_struct(3),
+get_record_struct(4) ->
+    {record, Struct} = get_record_struct(3),
     LinkedAccStruct = {linked_accounts, [{record, [
         {provider_id, atom},
         {user_id, string},
@@ -125,214 +291,127 @@ record_struct(4) ->
         {email_list, [string]},
         {groups, [string]}
     ]}]},
-    {record, lists:keyreplace(linked_accounts, 1, Struct, LinkedAccStruct)}.
+    {record, lists:keyreplace(linked_accounts, 1, Struct, LinkedAccStruct)};
+get_record_struct(5) ->
+    {record, Struct} = get_record_struct(4),
+    LinkedAccStruct = {linked_accounts, [{record, [
+        {idp, atom},
+        {subject_id, string},
+        {login, string},
+        {name, string},
+        {email_list, [string]},
+        {groups, [string]}
+    ]}]},
+    {record, lists:keydelete(alias, 1, lists:keyreplace(linked_accounts, 1, Struct, LinkedAccStruct))};
+get_record_struct(6) ->
+    {record, Struct} = get_record_struct(5),
+    % Remove chosen_provider field, rename login to alias
+    {record, lists:keydelete(chosen_provider, 1, lists:keyreplace(login, 1, Struct, {alias, string}))};
+get_record_struct(7) ->
+    % There are no changes, but all records must be marked dirty to recalculate
+    % effective relations (as intermediaries computing logic has changed).
+    get_record_struct(6);
+get_record_struct(8) ->
+    % * added entitlements field
+    % * renamed email_list to emails
+    % * linked_account:
+    %       * modified the fields order
+    %       * renamed groups to entitlements
+    %       * renamed email_list to emails
+    %       * renamed login to alias
+    %       * added custom field
+    {record, [
+        {name, string},
+        {alias, string},
+        {emails, [string]},
+        {basic_auth_enabled, boolean},
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {name, string},
+            {alias, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, {json_utils, encode, decode}}}
+        ]}]},
+        {entitlements, [string]},
 
-%%%===================================================================
-%%% model_behaviour callbacks
-%%%===================================================================
+        {default_space, string},
+        {default_provider, string},
 
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback save/1.
-%% @end
-%%--------------------------------------------------------------------
--spec save(datastore:document()) ->
-    {ok, datastore:ext_key()} | datastore:generic_error().
-save(Document) ->
-    model:execute_with_default_context(?MODULE, save, [Document]).
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
 
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback update/2.
-%% @end
-%%--------------------------------------------------------------------
--spec update(datastore:ext_key(), Diff :: datastore:document_diff()) ->
-    {ok, datastore:ext_key()} | datastore:update_error().
-update(Key, Diff) ->
-    model:execute_with_default_context(?MODULE, update, [Key, Diff]).
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
 
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback create/1.
-%% @end
-%%--------------------------------------------------------------------
--spec create(datastore:document()) ->
-    {ok, datastore:ext_key()} | datastore:create_error().
-create(Document) ->
-    model:execute_with_default_context(?MODULE, create, [Document]).
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
 
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback get/1.
-%% @end
-%%--------------------------------------------------------------------
--spec get(datastore:ext_key()) -> {ok, datastore:document()} | datastore:get_error().
-get(Key) ->
-    model:execute_with_default_context(?MODULE, get, [Key]).
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns list of all records.
-%% @end
-%%--------------------------------------------------------------------
--spec list() -> {ok, [datastore:document()]} | datastore:generic_error() | no_return().
-list() ->
-    model:execute_with_default_context(?MODULE, list, [?GET_ALL, []]).
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(9) ->
+    % linked_account:
+    %   * added access_token field
+    %   * added refresh_token field
+    {record, [
+        {name, string},
+        {alias, string},
+        {emails, [string]},
+        {basic_auth_enabled, boolean},
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {name, string},
+            {alias, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, {json_utils, encode, decode}}},
+            {access_token, {string, integer}},
+            {refresh_token, string}
+        ]}]},
+        {entitlements, [string]},
 
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback delete/1.
-%% @end
-%%--------------------------------------------------------------------
--spec delete(datastore:ext_key()) -> ok | datastore:generic_error().
-delete(Key) ->
-    model:execute_with_default_context(?MODULE, delete, [Key]).
+        {default_space, string},
+        {default_provider, string},
 
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback exists/1.
-%% @end
-%%--------------------------------------------------------------------
--spec exists(datastore:ext_key()) -> datastore:exists_return().
-exists(Key) ->
-    ?RESPONSE(model:execute_with_default_context(?MODULE, exists, [Key])).
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
 
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback model_init/0.
-%% @end
-%%--------------------------------------------------------------------
--spec model_init() -> model_behaviour:model_config().
-model_init() ->
-    Hooks = record_location_hooks:get_hooks(),
-    Config = ?MODEL_CONFIG(od_user_bucket, Hooks, ?GLOBALLY_CACHED_LEVEL),
-    Config#model_config{
-        version = 4,
-        list_enabled = {true, return_errors},
-        sync_enabled = true
-    }.
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
 
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback 'after'/5.
-%% @end
-%%--------------------------------------------------------------------
--spec 'after'(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
-    Level :: datastore:store_level(), Context :: term(),
-    ReturnValue :: term()) -> ok.
-'after'(ModelName, Method, _Level, Context, ReturnValue) ->
-    record_location_hooks:handle_after(ModelName, Method, Context, ReturnValue).
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
 
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link model_behaviour} callback before/4.
-%% @end
-%%--------------------------------------------------------------------
--spec before(ModelName :: model_behaviour:model_type(), Method :: model_behaviour:model_action(),
-    Level :: datastore:store_level(), Context :: term()) -> ok | datastore:generic_error().
-before(ModelName, Method, _Level, Context) ->
-    record_location_hooks:handle_before(ModelName, Method, Context).
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
 
-%%%===================================================================
-%%% API
-%%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc 
-%% Gets first user matching given criterion.
-%% todo: change implementation to something fast (connected with VFS-1498)
-%% @end
-%%--------------------------------------------------------------------
-
--spec get_by_criterion(Criterion :: {linked_account, {ProviderID :: atom(), UserID :: binary()}} |
-{email, binary()} | {alias, binary()}) ->
-    {ok, #document{}} | {error, any()}.
-
-get_by_criterion({email, Value}) ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #od_user{email_list = EmailList}} = Doc, Acc) ->
-            case lists:member(Value, EmailList) of
-                true -> {abort, [Doc | Acc]};
-                false -> {next, Acc}
-            end;
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    case model:execute_with_default_context(?MODULE, list, [Filter, []]) of
-        {ok, []} ->
-            {error, {not_found, od_user}};
-        {ok, [Result | _]} ->
-            {ok, Result}
-    end;
-
-
-get_by_criterion({alias, Value}) ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #od_user{alias = Alias}} = Doc, Acc) ->
-            case Alias of
-                Value -> {abort, [Doc | Acc]};
-                _ -> {next, Acc}
-            end;
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    case model:execute_with_default_context(?MODULE, list, [Filter, []]) of
-        {ok, []} ->
-            {error, {not_found, od_user}};
-        {ok, [Result | _]} ->
-            {ok, Result}
-    end;
-
-get_by_criterion({linked_account, {ProviderID, UserID}}) ->
-    Filter = fun
-        ('$end_of_table', Acc) ->
-            {abort, Acc};
-        (#document{value = #od_user{linked_accounts = Accounts}} = Doc, Acc) ->
-            Found = lists:any(fun
-                (#linked_account{provider_id = PID, user_id = UID}) ->
-                    case {PID, UID} of
-                        {ProviderID, UserID} -> true;
-                        _ -> false
-                    end;
-                (_) -> false
-            end, Accounts),
-            case Found of
-                true -> {abort, [Doc | Acc]};
-                _ -> {next, Acc}
-            end;
-        (_, Acc) ->
-            {next, Acc}
-    end,
-    case model:execute_with_default_context(?MODULE, list, [Filter, []]) of
-        {ok, []} ->
-            {error, {not_found, od_user}};
-        {ok, [Result | _]} ->
-            {ok, Result}
-    end.
+        {top_down_dirty, boolean}
+    ]}.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns readable string representing the user with given id.
+%% Upgrades model's record from provided version to the next one.
 %% @end
 %%--------------------------------------------------------------------
--spec to_string(UserId :: id()) -> binary().
-to_string(UserId) ->
-    <<"user:", UserId/binary>>.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Upgrades record from specified version.
-%% @end
-%%--------------------------------------------------------------------
--spec record_upgrade(datastore_json:record_version(), tuple()) ->
-    {datastore_json:record_version(), tuple()}.
-record_upgrade(1, User) ->
+-spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
+    {datastore_model:record_version(), datastore_model:record()}.
+upgrade_record(1, User) ->
     {od_user,
         Name,
         Login,
@@ -394,7 +473,7 @@ record_upgrade(1, User) ->
 
         true
     }};
-record_upgrade(2, User) ->
+upgrade_record(2, User) ->
     {od_user,
         Name,
         Login,
@@ -432,37 +511,37 @@ record_upgrade(2, User) ->
         end, ConnectedAccounts
     ),
 
-    {3, #od_user{
-        name = Name,
-        login = Login,
-        alias = Alias,
-        email_list = EmailList,
-        basic_auth_enabled = BasicAuthEnabled,
-        linked_accounts = LinkedAccounts,
+    {3, {od_user,
+        Name,
+        Login,
+        Alias,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
 
-        default_space = DefaultSpace,
-        default_provider = DefaultProvider,
-        chosen_provider = ChosenProvider,
-        client_tokens = ClientTokens,
-        space_aliases = SpaceAliases,
+        DefaultSpace,
+        DefaultProvider,
+        ChosenProvider,
+        ClientTokens,
+        SpaceAliases,
 
-        oz_privileges = OzPrivileges,
-        eff_oz_privileges = EffOzPrivileges,
+        OzPrivileges,
+        EffOzPrivileges,
 
-        groups = Groups,
-        spaces = Spaces,
-        handle_services = HandleServices,
-        handles = Handles,
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
 
-        eff_groups = EffGroups,
-        eff_spaces = EffSpaces,
-        eff_providers = EffProviders,
-        eff_handle_services = EffHandleServices,
-        eff_handles = EffHandles,
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
 
-        top_down_dirty = TopDownDirty
+        TopDownDirty
     }};
-record_upgrade(3, User) ->
+upgrade_record(3, User) ->
     {od_user,
         Name,
         Login,
@@ -496,28 +575,377 @@ record_upgrade(3, User) ->
 
     LinkedAccounts = lists:map(
         fun({linked_account, ProviderId, UserId, OALogin, OAName, OAEmails}) ->
-            #linked_account{
-                provider_id = ProviderId,
-                user_id = UserId,
-                login = OALogin,
-                name = OAName,
-                email_list = OAEmails,
-                groups = []
+            {linked_account,
+                ProviderId,
+                UserId,
+                OALogin,
+                OAName,
+                OAEmails,
+                []
             }
         end, ConnectedAccounts
     ),
 
-    {4, #od_user{
+    {4, {od_user,
+        Name,
+        Login,
+        Alias,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+        ChosenProvider,
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    }};
+upgrade_record(4, User) ->
+    {od_user,
+        Name,
+        Login,
+        _Alias,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+        ChosenProvider,
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    } = User,
+
+    NewLinkedAccounts = lists:map(fun({linked_account, ProviderId, UserId, OALogin, OAName, OAEmails, OAGroups}) ->
+        {linked_account,
+            ProviderId,
+            UserId,
+            OALogin,
+            OAName,
+            OAEmails,
+            OAGroups
+        }
+    end, LinkedAccounts),
+
+    {5, {od_user,
+        Name,
+        Login,
+        EmailList,
+        BasicAuthEnabled,
+        NewLinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+        ChosenProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    }};
+upgrade_record(5, User) ->
+    {od_user,
+        Name,
+        Login,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+        _ChosenProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    } = User,
+
+    {6, {od_user,
+        Name,
+        Login,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    }};
+upgrade_record(6, User) ->
+    {od_user,
+        Name,
+        Alias,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        _EffGroups,
+        _EffSpaces,
+        _EffProviders,
+        _EffHandleServices,
+        _EffHandles,
+
+        _TopDownDirty
+    } = User,
+
+    {7, {od_user,
+        Name,
+        Alias,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        #{},
+        #{},
+        #{},
+        #{},
+        #{},
+
+        true
+    }};
+upgrade_record(7, User) ->
+    {od_user,
+        Name,
+        Alias,
+        EmailList,
+        BasicAuthEnabled,
+        LinkedAccounts,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    } = User,
+
+    TransformedLinkedAccounts = lists:map(fun(LinkedAccount) ->
+        {linked_account, IdP, SubjectId, LALogin, LAName, LAEmailList, _LAGroups} = LinkedAccount,
+
+        {linked_account,
+            IdP,
+            SubjectId,
+            LAName,
+            LALogin,
+            LAEmailList,
+            % Cannot be translated, but users will not lose their current entitlements
+            % (resulting Onedata group id is the same as before)
+            [], % entitlements
+            #{} % custom
+        }
+    end, LinkedAccounts),
+
+    {8, {od_user,
+        Name,
+        Alias,
+        EmailList,
+        BasicAuthEnabled,
+        TransformedLinkedAccounts,
+        [],
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    }};
+upgrade_record(8, User) ->
+    {od_user,
+        Name,
+        Alias,
+        Emails,
+        BasicAuthEnabled,
+        LinkedAccounts,
+        Entitlements,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+
+        TopDownDirty
+    } = User,
+
+    TransformedLinkedAccounts = lists:map(fun(LinkedAccount) ->
+        {linked_account, IdP, SubjectId, LAName, LAAlias, LAEmails, LAEntitlements, Custom} = LinkedAccount,
+
+        #linked_account{
+            idp = IdP,
+            subject_id = SubjectId,
+            name = LAName,
+            alias = LAAlias,
+            emails = LAEmails,
+            entitlements = LAEntitlements,
+            custom = Custom,
+            access_token = {undefined, 0},
+            refresh_token = undefined
+        }
+    end, LinkedAccounts),
+
+    {9, #od_user{
         name = Name,
-        login = Login,
         alias = Alias,
-        email_list = EmailList,
+        emails = Emails,
         basic_auth_enabled = BasicAuthEnabled,
-        linked_accounts = LinkedAccounts,
+        linked_accounts = TransformedLinkedAccounts,
+        entitlements = Entitlements,
 
         default_space = DefaultSpace,
         default_provider = DefaultProvider,
-        chosen_provider = ChosenProvider,
+
         client_tokens = ClientTokens,
         space_aliases = SpaceAliases,
 
