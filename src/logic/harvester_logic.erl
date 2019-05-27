@@ -86,6 +86,11 @@
     has_space/2,
     has_eff_provider/2
 ]).
+-export([
+    update_indices_stats/3,
+    prepare_index_stats/3, prepare_index_stats/4
+]).
+
 
 %%%===================================================================
 %%% API
@@ -1158,4 +1163,93 @@ has_eff_provider(Harvester, ProviderId) ->
     entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Harvester).
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates given indices stats in harvester record using given UpdateFun.
+%% IndicesToUpdate can be given as list of indices or as list of tuples {IndexId, Mod}
+%% in which case given value will be passed to UpdateFun for given index.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_indices_stats
+    (od_harvester:id(), od_harvester:indices() | all, UpdateFun) -> ok
+    when UpdateFun :: fun((od_harvester:indices_stats()) -> od_harvester:indices_stats());
+    (od_harvester:id(), [{od_harvester:index_id(), Mod}], UpdateFun) -> ok
+    when UpdateFun :: fun((od_harvester:indices_stats(), Mod) -> od_harvester:indices_stats()),
+    Mod :: term().
+update_indices_stats(HarvesterId, IndicesToUpdate, UpdateFun) ->
+    {ok, _} = od_harvester:update(HarvesterId, fun(#od_harvester{indices = Indices} = Harvester) ->
+        NewIndices = case IndicesToUpdate of
+            all -> update_indices_stats_internal(maps:keys(Indices), Indices, UpdateFun);
+            _ -> update_indices_stats_internal(IndicesToUpdate, Indices, UpdateFun)
+        end,
+        {ok, Harvester#od_harvester{indices = NewIndices}}
+    end),
+    ok.
 
+
+%% @private
+-spec update_indices_stats_internal
+    (od_harvester:indices(), od_harvester:indices_stats(), UpdateFun) -> od_harvester:indices_stats()
+    when UpdateFun :: fun((od_harvester:indices_stats()) -> od_harvester:indices_stats());
+    ([{od_harvester:index_id(), Mod}], od_harvester:indices_stats(), UpdateFun) -> od_harvester:indices_stats()
+    when UpdateFun :: fun((od_harvester:indices_stats(), Mod) -> od_harvester:indices_stats()),
+    Mod :: term().
+update_indices_stats_internal(IndicesToUpdate, ExistingIndices, UpdateFun) ->
+    lists:foldl(fun
+        ({IndexId, Mod}, AccIndices) ->
+            update_index_stats(AccIndices, IndexId,
+                fun(S) -> UpdateFun(S, Mod) end);
+        (IndexId, AccIndices) ->
+            update_index_stats(AccIndices, IndexId, UpdateFun)
+    end, ExistingIndices, IndicesToUpdate).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Updates given index stats using UpdateFun and returns updated indices stats.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_index_stats(od_harvester:indices(), od_harvester:index_id(), UpdateFun) ->
+    od_harvester:indices() when UpdateFun :: fun((od_harvester:indices_stats()) -> od_harvester:indices_stats()).
+update_index_stats(Indices, IndexId, UpdateFun) ->
+    case maps:find(IndexId, Indices) of
+        {ok, #harvester_index{stats = Stats} = IndexData} ->
+            Indices#{IndexId => IndexData#harvester_index{stats = UpdateFun(Stats)}};
+        _ ->
+            % Index have been deleted in meantime
+            Indices
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets archival flag in existing stats to given value
+%% and creates missing stats for all providers that support given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec prepare_index_stats(od_harvester:indices_stats(), od_space:id(), boolean()) ->
+    od_harvester:indices_stats().
+prepare_index_stats(ExistingStats, SpaceId, ArchivalFlagValue) ->
+    {ok, #od_space{providers = Providers}} = space_logic_plugin:fetch_entity(SpaceId),
+    prepare_index_stats(ExistingStats, SpaceId, maps:keys(Providers), ArchivalFlagValue).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets archival flag in existing stats to given value
+%% and creates missing stats for all given providers in given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec prepare_index_stats(od_harvester:indices_stats(), od_space:id(),
+    od_provider:id() | [od_provider:id()], boolean()) -> od_harvester:indices_stats().
+prepare_index_stats(ExistingStats, SpaceId, Provider, ArchivalFlagValue) when is_binary(Provider) ->
+    prepare_index_stats(ExistingStats, SpaceId, [Provider], ArchivalFlagValue);
+
+prepare_index_stats(ExistingStats, SpaceId, Providers, ArchivalFlagValue) ->
+    StatsPerProvider = maps:get(SpaceId, ExistingStats, #{}),
+    ExistingStats#{
+        SpaceId => lists:foldl(fun(ProviderId, NewStatsPerProvider) ->
+            Stats = maps:get(ProviderId, StatsPerProvider, #index_stats{archival = ArchivalFlagValue}),
+            NewStatsPerProvider#{ProviderId => Stats#index_stats{archival = ArchivalFlagValue}}
+        end, StatsPerProvider, Providers)}.

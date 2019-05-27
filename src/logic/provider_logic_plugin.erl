@@ -141,8 +141,8 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     {ok, #od_space{harvesters = Harvesters} = Space} = space_logic_plugin:fetch_entity(SpaceId),
     
     lists:foreach(fun(HarvesterId) ->
-        harvester_logic_plugin:update_indices_stats(HarvesterId, all,
-            fun(ExistingStats) -> harvester_logic_plugin:prepare_index_stats(ExistingStats, SpaceId, ProviderId, false) end)
+        harvester_logic:update_indices_stats(HarvesterId, all,
+            fun(ExistingStats) -> harvester_logic:prepare_index_stats(ExistingStats, SpaceId, ProviderId, false) end)
         end, Harvesters),
         
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
@@ -328,7 +328,7 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     ok = macaroon_auth:delete(RootMacaroon),
 
     lists:foreach(fun(HarvesterId) ->
-        harvester_logic_plugin:update_indices_stats(HarvesterId, all,
+        harvester_logic:update_indices_stats(HarvesterId, all,
             fun(ExistingStats) -> 
                 maps:fold(fun(SpaceId, V, Acc) -> Acc#{SpaceId => maps:without([ProviderId], V)} end, #{}, ExistingStats) 
             end)
@@ -354,9 +354,9 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
     {ok, #od_space{harvesters = Harvesters}} = space_logic_plugin:fetch_entity(SpaceId),
     lists:foreach(fun(HarvesterId) ->
-        harvester_logic_plugin:update_indices_stats(HarvesterId, all,
+        harvester_logic:update_indices_stats(HarvesterId, all,
             fun(ExistingStats) ->
-                harvester_logic_plugin:prepare_index_stats(ExistingStats, SpaceId, ProviderId, true)
+                harvester_logic:prepare_index_stats(ExistingStats, SpaceId, ProviderId, true)
             end)
     end, Harvesters),
     

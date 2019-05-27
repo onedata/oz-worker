@@ -26,11 +26,6 @@
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
--export([
-    update_indices_stats/3,
-    prepare_index_stats/3, prepare_index_stats/4
-]).
-
 
 %%%===================================================================
 %%% API
@@ -235,8 +230,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
                     od_harvester, HarvesterId,
                     od_space, SpaceId
                 ),
-                update_indices_stats(HarvesterId, all,
-                    fun(ExistingStats) -> prepare_index_stats(ExistingStats, SpaceId, false) end);
+                harvester_logic:update_indices_stats(HarvesterId, all,
+                    fun(ExistingStats) -> harvester_logic:prepare_index_stats(ExistingStats, SpaceId, false) end);
             _ ->
                 ok
         end,
@@ -310,8 +305,8 @@ create(#el_req{gri = #gri{id = HarvesterId, aspect = {space, SpaceId}}}) ->
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
     {ok, Space} = space_logic_plugin:fetch_entity(SpaceId),
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
-    update_indices_stats(HarvesterId, all, 
-        fun(ExistingStats) -> prepare_index_stats(ExistingStats, SpaceId, false) end),
+    harvester_logic:update_indices_stats(HarvesterId, all,
+        fun(ExistingStats) -> harvester_logic:prepare_index_stats(ExistingStats, SpaceId, false) end),
     {ok, resource, {NewGRI, ?THROUGH_SPACE(HarvesterId), SpaceData}};
 
 create(Req = #el_req{gri = GRI = #gri{id = HarvesterId, aspect = group}}) ->
@@ -336,7 +331,7 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
     GuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data, undefined)),
     
     UpdateFun = fun(#od_harvester{indices = Indices, plugin = Plugin, endpoint = Endpoint, spaces = Spaces} = Harvester) ->
-        IndexStats = lists:foldl(fun(SpaceId, ExistingStats) -> prepare_index_stats(ExistingStats, SpaceId, false) end, #{}, Spaces),
+        IndexStats = lists:foldl(fun(SpaceId, ExistingStats) -> harvester_logic:prepare_index_stats(ExistingStats, SpaceId, false) end, #{}, Spaces),
         Index = #harvester_index{
             name = Name,
             schema = Schema,
@@ -386,7 +381,7 @@ create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch
             [] -> {ok, lists:map(fun(IndexId) -> {IndexId, ok} end, IndicesToUpdate)};
             _ -> Plugin:submit_batch(Endpoint, HarvesterId, IndicesToUpdate, Batch)
         end,
-        update_indices_stats(HarvesterId, Res, 
+        harvester_logic:update_indices_stats(HarvesterId, Res,
             fun(PreviousStats, ok) ->
                    update_seqs(PreviousStats, SpaceId, ProviderId, MaxStreamSeq, MaxSeq, undefined);
                (PreviousStats, {_, undefined}) ->
@@ -630,8 +625,8 @@ delete(#el_req{gri = #gri{id = HarvesterId, aspect = {group, GroupId}}}) ->
     );
 
 delete(#el_req{gri = #gri{id = HarvesterId, aspect = {space, SpaceId}}}) ->
-    update_indices_stats(HarvesterId, all, fun(ExistingStats) ->
-        prepare_index_stats(ExistingStats, SpaceId, true)
+    harvester_logic:update_indices_stats(HarvesterId, all, fun(ExistingStats) ->
+        harvester_logic:prepare_index_stats(ExistingStats, SpaceId, true)
     end),
     entity_graph:remove_relation(
         od_harvester, HarvesterId,
@@ -1210,57 +1205,6 @@ auth_by_privilege(UserId, HarvesterOrId, Privilege) ->
 
 
 %%--------------------------------------------------------------------
-%% @doc
-%% Updates given indices stats in harvester record using given UpdateFun. 
-%% IndicesToUpdate can be given as list of indices or as list of tuples {IndexId, Mod} 
-%% in which case given value will be passed to UpdateFun for given index.
-%% @end
-%%--------------------------------------------------------------------
--spec update_indices_stats
-    (od_harvester:id(), od_harvester:indices() | all, UpdateFun) -> ok
-    when UpdateFun :: fun((od_harvester:indices_stats()) -> od_harvester:indices_stats());
-    (od_harvester:id(), [{od_harvester:index_id(), Mod}], UpdateFun) -> ok
-    when UpdateFun :: fun((od_harvester:indices_stats(), Mod) -> od_harvester:indices_stats()),
-    Mod :: term().
-update_indices_stats(HarvesterId, IndicesToUpdate, UpdateFun) ->
-    {ok, _} = od_harvester:update(HarvesterId, fun(#od_harvester{indices = Indices} = Harvester) ->
-        NewIndices = case IndicesToUpdate of
-            all -> update_indices_stats_internal(maps:keys(Indices), Indices, UpdateFun);
-            _ -> update_indices_stats_internal(IndicesToUpdate, Indices, UpdateFun)
-        end,
-        {ok, Harvester#od_harvester{indices = NewIndices}}
-    end),
-    ok.
-
-update_indices_stats_internal(IndicesToUpdate, ExistingIndices, UpdateFun) ->
-    lists:foldl(fun
-        ({IndexId, Mod}, AccIndices) ->
-            update_index_stats(AccIndices, IndexId,
-                fun(S) -> UpdateFun(S, Mod) end);
-        (IndexId, AccIndices) ->
-            update_index_stats(AccIndices, IndexId, UpdateFun)
-    end, ExistingIndices, IndicesToUpdate).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Updates given index stats using UpdateFun and returns updated indices stats.
-%% @end
-%%--------------------------------------------------------------------
--spec update_index_stats(od_harvester:indices(), od_harvester:index_id(), UpdateFun) ->
-    od_harvester:indices() when UpdateFun :: fun((od_harvester:indices_stats()) -> od_harvester:indices_stats()).
-update_index_stats(Indices, IndexId, UpdateFun) ->
-    case maps:find(IndexId, Indices) of
-        {ok, #harvester_index{stats = Stats} = IndexData} ->
-            Indices#{IndexId => IndexData#harvester_index{stats = UpdateFun(Stats)}};
-        _ ->
-            % Index have been deleted in meantime
-            Indices
-    end.
-
-
-%%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% Updates current sequence number and max sequence number for given index stats.
@@ -1312,36 +1256,3 @@ normalize_and_check_endpoint(Endpoint, Plugin) ->
         ok -> {ok, NormalizedEndpoint};
         {error, _} = Error -> Error
     end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Sets archival flag in existing stats to given value
-%% and creates missing stats for all providers that support given space.
-%% @end
-%%--------------------------------------------------------------------
--spec prepare_index_stats(od_harvester:indices_stats(), od_space:id(), boolean()) ->
-    od_harvester:indices_stats().
-prepare_index_stats(ExistingStats, SpaceId, ArchivalFlagValue) ->
-    {ok, #od_space{providers = Providers}} = space_logic_plugin:fetch_entity(SpaceId),
-    prepare_index_stats(ExistingStats, SpaceId, maps:keys(Providers), ArchivalFlagValue).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Sets archival flag in existing stats to given value
-%% and creates missing stats for all given providers in given space.
-%% @end
-%%--------------------------------------------------------------------
--spec prepare_index_stats(od_harvester:indices_stats(), od_space:id(),
-    od_provider:id() | [od_provider:id()], boolean()) -> od_harvester:indices_stats().
-prepare_index_stats(ExistingStats, SpaceId, Provider, ArchivalFlagValue) when is_binary(Provider) ->
-    prepare_index_stats(ExistingStats, SpaceId, [Provider], ArchivalFlagValue);
-
-prepare_index_stats(ExistingStats, SpaceId, Providers, ArchivalFlagValue) ->
-    StatsPerProvider = maps:get(SpaceId, ExistingStats, #{}),
-    ExistingStats#{
-        SpaceId => lists:foldl(fun(ProviderId, NewStatsPerProvider) ->
-            Stats = maps:get(ProviderId, StatsPerProvider, #index_stats{archival = ArchivalFlagValue}),
-            NewStatsPerProvider#{ProviderId => Stats#index_stats{archival = ArchivalFlagValue}}
-        end, StatsPerProvider, Providers)}.

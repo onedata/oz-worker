@@ -381,7 +381,7 @@ update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {group_privileges, GroupI
 delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
     fun(#od_space{harvesters = Harvesters}) ->
         lists:foreach(fun(HarvesterId) ->
-            harvester_logic_plugin:update_indices_stats(HarvesterId, all, 
+            harvester_logic:update_indices_stats(HarvesterId, all,
                 fun(ExistingStats) -> maps:without([SpaceId], ExistingStats) end)
             end, Harvesters),
         entity_graph:delete_with_relations(od_space, SpaceId)
@@ -402,9 +402,9 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}}) ->
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {provider, ProviderId}}}) ->
     fun(#od_space{harvesters = Harvesters}) ->
         lists:foreach(fun(HarvesterId) ->
-            harvester_logic_plugin:update_indices_stats(HarvesterId, all,
+            harvester_logic:update_indices_stats(HarvesterId, all,
                 fun(ExistingStats) -> 
-                    harvester_logic_plugin:prepare_index_stats(ExistingStats, SpaceId, ProviderId, true)
+                    harvester_logic:prepare_index_stats(ExistingStats, SpaceId, ProviderId, true)
                 end)
         end, Harvesters),
         
@@ -416,8 +416,8 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {provider, ProviderId}}}) ->
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {harvester, HarvesterId}}}) ->
     fun(#od_space{providers = Providers}) ->
-        harvester_logic_plugin:update_indices_stats(HarvesterId, all, fun(ExistingStats) ->
-            harvester_logic_plugin:prepare_index_stats(ExistingStats, SpaceId, maps:keys(Providers), true)
+        harvester_logic:update_indices_stats(HarvesterId, all, fun(ExistingStats) ->
+            harvester_logic:prepare_index_stats(ExistingStats, SpaceId, maps:keys(Providers), true)
         end),
         entity_graph:remove_relation(
             od_harvester, HarvesterId,
