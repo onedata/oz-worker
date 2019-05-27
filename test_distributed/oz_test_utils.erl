@@ -136,7 +136,7 @@
     space_has_effective_user/3,
 
     space_remove_group/3,
-    space_harvest_metadata/5
+    space_harvest_metadata/7
 ]).
 -export([
     create_share/6,
@@ -2730,12 +2730,14 @@ space_remove_group(Config, SpaceId, GroupId) ->
 %% Submits given batch to harvesters given in Destination.
 %% @end
 %%--------------------------------------------------------------------
--spec space_harvest_metadata(Config :: term(), SpaceId :: od_space:id(),
-    Destination :: map(), MaxSeq :: non_neg_integer(), Batch :: map()) ->
+-spec space_harvest_metadata(Config :: term(),
+    ClientProviderId :: od_provider:id(), SpaceId :: od_space:id(),
+    Destination :: map(), MaxStreamSeq :: non_neg_integer(),
+    MaxSeq :: non_neg_integer(), Batch :: map()) ->
     {ok, map()} | {error, term()}.
-space_harvest_metadata(Config, SpaceId, Destination, MaxSeq, Batch) ->
-    ?assertMatch(ok, call_oz(
-        Config, space_logic, harvest_metadata, [?ROOT, SpaceId, Destination, MaxSeq, Batch]
+space_harvest_metadata(Config, ClientProviderId, SpaceId, Destination, MaxStreamSeq, MaxSeq, Batch) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, space_logic, harvest_metadata, [?PROVIDER(ClientProviderId), SpaceId, Destination, MaxStreamSeq, MaxSeq, Batch]
     )).
 
 
@@ -2965,7 +2967,7 @@ mock_harvester_plugin(Config, Nodes, PluginName) ->
     test_utils:mock_expect(Nodes, PluginName, submit_batch, fun(_,HarvesterId,Indices, Batch) ->
         FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),
         {LastSeq, ErrorSeq} = lists:foldl(
-            fun(BatchEntry, {A, undefined}) -> 
+            fun(BatchEntry, {A, undefined}) ->
                 CurrentSeq = maps:get(<<"seq">>, BatchEntry),
                 case maps:get(<<"operation">>, BatchEntry) of
                     fail -> {A, {CurrentSeq, <<"error_seq">>}};
@@ -2973,10 +2975,10 @@ mock_harvester_plugin(Config, Nodes, PluginName) ->
                 end;
                 (_, Acc) -> Acc
             end, {undefined, undefined}, Batch),
-        {ok, lists:map(fun(Index) -> 
+        {ok, lists:map(fun(Index) ->
             case harvester_get_index(Config, HarvesterId, Index) of
                 {ok, #{<<"name">> := <<"fail">>}} -> {Index, {undefined, {FirstSeq, <<"error_index">>}}};
-                _ -> {Index, {LastSeq, ErrorSeq}} 
+                _ -> {Index, {LastSeq, ErrorSeq}}
             end
         end, Indices)}
     end),

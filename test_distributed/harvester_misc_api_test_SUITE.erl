@@ -1418,7 +1418,20 @@ submit_batch_index_stats_test(Config) ->
         Config, P1, H1, [<<"not_exiting_index">>], S1,
         [
             ?HARVESTER_MOCK_BATCH_ENTRY(31, submit)
-        ], 38, 40)).
+        ], 38, 40)),
+
+
+    % Empty batch updates stats
+    ?assertEqual({ok, ?NO_FAILED_INDICES}, oz_test_utils:harvester_submit_batch(
+        Config, P1, H1, [Index1, Index2, FailingIndex], S1,
+        [], 48, 50)),
+    {ok, #{S1 := #{P1 := Stats1_5}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index1),
+    {ok, #{S1 := #{P1 := Stats2_5}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index2),
+    {ok, #{S1 := #{P1 := Stats3_5}}} = oz_test_utils:harvester_get_index_stats(Config, H1, FailingIndex),
+    assert_index_stats(Stats1_5, 48, 50, null, {'not', null}),
+    assert_index_stats(Stats2_5, 48, 50, null, {'not', null}),
+    assert_index_stats(Stats3_5, 48, 50, null, {'not', null}).
+
 
 
 %%%===================================================================

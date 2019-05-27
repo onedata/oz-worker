@@ -40,7 +40,7 @@
     create_group/3, create_group/4,
     
     join_harvester/3,
-    harvest_metadata/3, harvest_metadata/5,
+    harvest_metadata/3, harvest_metadata/6,
 
     get_users/2, get_eff_users/2,
     get_user/3, get_eff_user/3,
@@ -372,11 +372,12 @@ join_harvester(Client, SpaceId, Token) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec harvest_metadata(Client :: entity_logic:client(), SpaceId :: od_space:id(),
-    Destination :: map(), MaxSeq :: non_neg_integer(), Batch :: map()) ->
+    Destination :: map(), MaxStreamSeq :: integer(), MaxSeq :: non_neg_integer(), Batch :: map()) ->
     {ok, map()} | {error, term()}.
-harvest_metadata(Client, SpaceId, Destination, MaxSeq, Batch) ->
+harvest_metadata(Client, SpaceId, Destination, MaxStreamSeq, MaxSeq, Batch) ->
     harvest_metadata(Client, SpaceId, #{
         <<"destination">> => Destination,
+        <<"maxStreamSeq">> => MaxStreamSeq,
         <<"maxSeq">> => MaxSeq,
         <<"batch">> => Batch
     }).
@@ -389,7 +390,7 @@ harvest_metadata(Client, SpaceId, Destination, MaxSeq, Batch) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec harvest_metadata(Client :: entity_logic:client(), SpaceId :: od_space:id(), 
-    Data :: binary()) -> {ok, map()} | {error, term()}.
+    Data :: map()) -> {ok, map()} | {error, term()}.
 harvest_metadata(Client, SpaceId, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,

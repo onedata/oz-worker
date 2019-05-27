@@ -451,8 +451,8 @@ update_index(Client, HarvesterId, IndexId, Data) ->
 submit_batch(Client, HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq) ->
     submit_batch(Client, HarvesterId, SpaceId, #{
             <<"indices">> => Indices,
-            <<"maxSeq">> => MaxSeq,
             <<"maxStreamSeq">> => MaxStreamSeq,
+            <<"maxSeq">> => MaxSeq,
             <<"batch">> => Batch
     }).
 
@@ -1187,13 +1187,6 @@ update_indices_stats(HarvesterId, IndicesToUpdate, UpdateFun) ->
     ok.
 
 
-%% @private
--spec update_indices_stats_internal
-    (od_harvester:indices(), od_harvester:indices_stats(), UpdateFun) -> od_harvester:indices_stats()
-    when UpdateFun :: fun((od_harvester:indices_stats()) -> od_harvester:indices_stats());
-    ([{od_harvester:index_id(), Mod}], od_harvester:indices_stats(), UpdateFun) -> od_harvester:indices_stats()
-    when UpdateFun :: fun((od_harvester:indices_stats(), Mod) -> od_harvester:indices_stats()),
-    Mod :: term().
 update_indices_stats_internal(IndicesToUpdate, ExistingIndices, UpdateFun) ->
     lists:foldl(fun
         ({IndexId, Mod}, AccIndices) ->

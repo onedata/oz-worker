@@ -568,8 +568,11 @@ harvester_index_nonempty_stats_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    ?assertEqual({ok, ?NO_FAILED_INDICES}, oz_test_utils:harvester_submit_batch(
-        Config, P1, H1, [Index1], S1, [?HARVESTER_MOCK_BATCH_ENTRY(2, submit)], 10, 10)),
+    Guid = file_id:pack_guid(<<"file_id">>, S1),
+    {ok, FileId} = file_id:guid_to_objectid(Guid),
+
+    ?assertEqual({ok, ?NO_FAILED_INDICES}, oz_test_utils:space_harvest_metadata(
+        Config, P1, S1, #{H1 => [Index1]}, 10, 10, ?HARVESTER_BATCH(FileId))),
     
     {ok, #{S1 := #{P1 := Stats1}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index1),
     ?assertEqual(false, maps:get(<<"archival">>, Stats1)),
