@@ -389,9 +389,10 @@ harvest_metadata_test(Config) ->
             expected_result = ?OK_MAP(ExpectedResult(gs_protocol_errors:error_to_json(0, ?ERROR_NOT_FOUND)))
         },
         data_spec = #data_spec{
-            required = [<<"destination">>, <<"maxSeq">>, <<"batch">>],
+            required = [<<"destination">>, <<"maxSeq">>, <<"maxStreamSeq">>, <<"batch">>],
             correct_values = #{
                 <<"destination">> => [Destination],
+                <<"maxStreamSeq">> => [10],
                 <<"maxSeq">> => [10],
                 <<"batch">> => [?HARVESTER_BATCH(FileId)]
             }
@@ -568,7 +569,7 @@ harvester_index_nonempty_stats_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ?assertEqual({ok, ?NO_FAILED_INDICES}, oz_test_utils:harvester_submit_batch(
-        Config, P1, H1, [Index1], S1, [?HARVESTER_MOCK_BATCH_ENTRY(2, submit)], 10)),
+        Config, P1, H1, [Index1], S1, [?HARVESTER_MOCK_BATCH_ENTRY(2, submit)], 10, 10)),
     
     {ok, #{S1 := #{P1 := Stats1}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index1),
     ?assertEqual(false, maps:get(<<"archival">>, Stats1)),

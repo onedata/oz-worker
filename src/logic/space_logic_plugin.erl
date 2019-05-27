@@ -817,6 +817,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = harvest_metadata}}) -> 
     required => #{
         <<"destination">> => {any, any},
         <<"maxSeq">> => {integer, {not_lower_than, 0}},
+        <<"maxStreamSeq">> => {integer, {not_lower_than, 0}},
         <<"batch">> => {any, any}
     }   
 };

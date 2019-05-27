@@ -664,9 +664,9 @@ delete_harvested_metadata_test(Config) ->
     VerifyEndFun = fun(ShouldSucceed, #{harvesterId := HarvesterId} = _Env, _Data) ->
         case ShouldSucceed of
             true ->
-                mock_assert_num_calls_sum(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index_metadata, 3, 2);
+                mock_assert_num_calls_sum(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 2, 2);
             _ ->
-                test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index_metadata, 3, 0)
+                test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 2, 0)
         end,
         lists:foreach(fun(Node) ->
             rpc:call(Node, meck, reset, [?HARVESTER_MOCK_PLUGIN])
@@ -821,8 +821,7 @@ get_index_test(Config) ->
                 <<"indexId">> => IndexId,
                 <<"name">> => ?HARVESTER_INDEX_NAME,
                 <<"schema">> => ?HARVESTER_INDEX_SCHEMA,
-                <<"guiPluginName">> => null,
-                <<"pluginIndexId">> => ?HARVESTER_PLUGIN_INDEX_ID(H1, IndexId)
+                <<"guiPluginName">> => null
             }
         },
         logic_spec = #logic_spec{
@@ -832,8 +831,7 @@ get_index_test(Config) ->
             expected_result = ?OK_MAP(#{
                 <<"name">> => ?HARVESTER_INDEX_NAME,
                 <<"schema">> => ?HARVESTER_INDEX_SCHEMA,
-                <<"guiPluginName">> => undefined,
-                <<"pluginIndexId">> => ?HARVESTER_PLUGIN_INDEX_ID(H1, IndexId)
+                <<"guiPluginName">> => undefined
             })
         }
     },
@@ -1092,9 +1090,9 @@ delete_index_metadata_test(Config) ->
         {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
         case ShouldSucceed of
             true ->
-                mock_assert_num_calls_sum(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index_metadata, 3, 1);
+                mock_assert_num_calls_sum(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 2, 1);
             _ ->
-                test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index_metadata, 3, 0)
+                test_utils:mock_assert_num_calls(OzNodes, ?HARVESTER_MOCK_PLUGIN, delete_index, 2, 0)
         end,
         % assert that index was not deleted from harvester
         ?assertEqual([IndexId], maps:keys(Harvester#od_harvester.indices))
@@ -1308,10 +1306,11 @@ submit_batch_test(Config) ->
             expected_result = ?OK_MAP(#{})
         },
         data_spec = #data_spec{
-            required = [<<"indices">>, <<"maxSeq">>, <<"batch">>],
+            required = [<<"indices">>, <<"maxSeq">>, <<"maxStreamSeq">>, <<"batch">>],
             correct_values = #{
                 <<"batch">> => [?HARVESTER_BATCH(<<"fileId">>)],
                 <<"indices">> => [[IndexId]],
+                <<"maxStreamSeq">> => [100],
                 <<"maxSeq">> => [1000]
             }
         }
@@ -1356,7 +1355,7 @@ submit_batch_index_stats_test(Config) ->
             ?HARVESTER_MOCK_BATCH_ENTRY(2, submit),
             ?HARVESTER_MOCK_BATCH_ENTRY(4, delete),
             ?HARVESTER_MOCK_BATCH_ENTRY(8, submit)
-        ], 10)),
+        ], 8, 10)),
     {ok, #{S1 := #{P1 := Stats1_1}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index1),
     {ok, #{S1 := #{P1 := Stats2_1}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index2),
     {ok, #{S1 := #{P1 := Stats3_1}}} = oz_test_utils:harvester_get_index_stats(Config, H1, FailingIndex),
@@ -1373,12 +1372,12 @@ submit_batch_index_stats_test(Config) ->
             ?HARVESTER_MOCK_BATCH_ENTRY(12, submit),
             ?HARVESTER_MOCK_BATCH_ENTRY(14, delete),
             ?HARVESTER_MOCK_BATCH_ENTRY(18, submit)
-        ], 20)),
+        ], 19, 20)),
     {ok, #{S1 := #{P1 := Stats1_2}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index1),
     {ok, #{S1 := #{P1 := Stats2_2}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index2),
     {ok, #{S1 := #{P1 := Stats3_2}}} = oz_test_utils:harvester_get_index_stats(Config, H1, FailingIndex),
-    assert_index_stats(Stats1_2, 18, 20, null, {'not', null}),
-    assert_index_stats(Stats2_2, 18, 20, null, {'not', null}),
+    assert_index_stats(Stats1_2, 19, 20, null, {'not', null}),
+    assert_index_stats(Stats2_2, 19, 20, null, {'not', null}),
     assert_index_stats(Stats3_2, 0, 20, <<"error_index">>, {'not', null}),
 
 
@@ -1390,7 +1389,7 @@ submit_batch_index_stats_test(Config) ->
             ?HARVESTER_MOCK_BATCH_ENTRY(22, submit),
             ?HARVESTER_MOCK_BATCH_ENTRY(24, fail),
             ?HARVESTER_MOCK_BATCH_ENTRY(28, submit)
-        ], 30)),
+        ], 28, 30)),
     {ok, #{S1 := #{P1 := Stats1_3}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index1),
     {ok, #{S1 := #{P1 := Stats2_3}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index2),
     assert_index_stats(Stats1_3, 22, 30, <<"error_seq">>, {'not', null}),
@@ -1405,7 +1404,7 @@ submit_batch_index_stats_test(Config) ->
             ?HARVESTER_MOCK_BATCH_ENTRY(32, submit),
             ?HARVESTER_MOCK_BATCH_ENTRY(34, fail),
             ?HARVESTER_MOCK_BATCH_ENTRY(38, submit)
-        ], 40)),
+        ], 38, 40)),
     {ok, #{S1 := #{P1 := Stats1_4}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index1),
     {ok, #{S1 := #{P1 := Stats2_4}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index2),
     {ok, #{S1 := #{P1 := Stats3_4}}} = oz_test_utils:harvester_get_index_stats(Config, H1, FailingIndex),
@@ -1419,7 +1418,7 @@ submit_batch_index_stats_test(Config) ->
         Config, P1, H1, [<<"not_exiting_index">>], S1,
         [
             ?HARVESTER_MOCK_BATCH_ENTRY(31, submit)
-        ], 40)).
+        ], 38, 40)).
 
 
 %%%===================================================================

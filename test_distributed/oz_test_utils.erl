@@ -226,7 +226,7 @@
     
     harvester_submit_entry/5,
     harvester_delete_entry/5,
-    harvester_submit_batch/7
+    harvester_submit_batch/8
 ]).
 -export([
     list_clusters/1,
@@ -2426,10 +2426,11 @@ harvester_delete_entry(Config, ProviderId, HarvesterId, FileId, Data) ->
 %%--------------------------------------------------------------------
 -spec harvester_submit_batch(Config :: term(), ProviderId :: od_provider:id(),
     HarvesterId :: od_harvester:id(), Indices :: od_harvester:indices(), 
-    SpaceId :: od_space:id(), Batch :: od_harvester:batch(), MaxSeq :: integer()) -> ok.
-harvester_submit_batch(Config, ProviderId, HarvesterId, Indices, SpaceId, Batch, MaxSeq) ->
+    SpaceId :: od_space:id(), Batch :: od_harvester:batch(), MaxSeq :: integer(), MaxStreamSeq :: integer()) -> ok.
+harvester_submit_batch(Config, ProviderId, HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, harvester_logic, submit_batch, [?PROVIDER(ProviderId), HarvesterId, Indices, SpaceId, Batch, MaxSeq]
+        Config, harvester_logic, submit_batch,
+        [?PROVIDER(ProviderId), HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq]
     )).
 
 
@@ -2956,8 +2957,7 @@ mock_harvester_plugins(Config, Plugin) ->
 mock_harvester_plugin(Config, Nodes, PluginName) ->
     test_utils:mock_new(Nodes, PluginName, [non_strict]),
     test_utils:mock_expect(Nodes, PluginName, type, fun() -> harvester_plugin end),
-    test_utils:mock_expect(Nodes, PluginName, get_plugin_index_id, fun(H, I) -> ?HARVESTER_PLUGIN_INDEX_ID(H,I) end),
-    test_utils:mock_expect(Nodes, PluginName, ping, 
+    test_utils:mock_expect(Nodes, PluginName, ping,
         fun(?HARVESTER_ENDPOINT1) -> ok;
            (?HARVESTER_ENDPOINT2) -> ok;
            (_) -> ?ERROR_TEMPORARY_FAILURE
@@ -2980,10 +2980,9 @@ mock_harvester_plugin(Config, Nodes, PluginName) ->
             end
         end, Indices)}
     end),
-    test_utils:mock_expect(Nodes, PluginName, create_index, fun(_,_,_,_) -> ok end),
-    test_utils:mock_expect(Nodes, PluginName, delete_index, fun(_,_,_) -> ok end),
-    test_utils:mock_expect(Nodes, PluginName, delete_index_metadata, fun(_,_,_) -> ok end),
-    test_utils:mock_expect(Nodes, PluginName, query_index, fun(_,_,_,_) -> {ok, ?HARVESTER_MOCKED_QUERY_DATA_MAP} end),
+    test_utils:mock_expect(Nodes, PluginName, create_index, fun(_,_,_) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, delete_index, fun(_,_) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, query_index, fun(_,_,_) -> {ok, ?HARVESTER_MOCKED_QUERY_DATA_MAP} end),
     test_utils:mock_expect(Nodes, PluginName, query_validator, fun() -> ?HARVESTER_PLUGIN:query_validator() end).
 
 

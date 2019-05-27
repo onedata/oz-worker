@@ -769,14 +769,12 @@ translate_harvester(#gri{aspect = {index, _}, scope = private}, IndexData) ->
     #{
         <<"name">> := Name,
         <<"schema">> := Schema,
-        <<"guiPluginName">> := GuiPluginName,
-        <<"pluginIndexId">> := PluginIndexId
+        <<"guiPluginName">> := GuiPluginName
     } = IndexData,
     #{
         <<"name">> => Name,
         <<"schema">> => gs_protocol:undefined_to_null(Schema),
-        <<"guiPluginName">> => gs_protocol:undefined_to_null(GuiPluginName),
-        <<"pluginIndexId">> => PluginIndexId
+        <<"guiPluginName">> => gs_protocol:undefined_to_null(GuiPluginName)
     };
 
 translate_harvester(#gri{aspect = {index, _}, scope = public}, IndexData) ->

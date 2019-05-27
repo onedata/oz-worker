@@ -20,20 +20,16 @@
 -export([type/0]).
 -export([
     get_name/0,
-    get_plugin_index_id/2,
-    ping/1, 
-    create_index/4, delete_index/3, 
-    delete_index_metadata/3,
+    ping/1,
+    create_index/3, delete_index/2,
     submit_batch/4,
-    query_index/4, 
+    query_index/3,
     query_validator/0
 ]).
 
 -behaviour(onezone_plugin_behaviour).
 -behaviour(harvester_plugin_behaviour).
 
--define(ES_INDEX_ID(HarvesterId, Index), 
-    string:lowercase(base64url:encode(<<HarvesterId/binary, "#", Index/binary>>))).
 -define(ENTRY_PATH(Path), <<"/_doc/", Path/binary>>).
 
 
@@ -58,16 +54,6 @@ get_name() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link harvester_plugin_behaviour} callback get_name/0
-%% @end
-%%--------------------------------------------------------------------
--spec get_plugin_index_id(od_harvester:id(), od_harvester:index_id()) -> binary().
-get_plugin_index_id(HarvesterId, IndexId) ->
-    ?ES_INDEX_ID(HarvesterId, IndexId).
-
-    
-%%--------------------------------------------------------------------
-%% @doc
 %% {@link harvester_plugin_behaviour} callback ping/1
 %% @end
 %%--------------------------------------------------------------------
@@ -84,14 +70,14 @@ ping(Endpoint) ->
 %% {@link harvester_plugin_behaviour} callback create_index/4.
 %% @end
 %%--------------------------------------------------------------------
--spec create_index(od_harvester:endpoint(), od_harvester:id(), od_harvester:index_id(), od_harvester:schema()) -> 
+-spec create_index(od_harvester:endpoint(), od_harvester:index_id(), od_harvester:schema()) ->
     {ok | {error, term()}}.
-create_index(Endpoint, HarvesterId, IndexId, Schema) ->
+create_index(Endpoint, IndexId, Schema) ->
     NewSchema = case Schema of
         undefined -> <<"{}">>;
         Schema -> Schema
     end,
-    case do_request(put, Endpoint, HarvesterId, IndexId, <<>>, NewSchema, [{200,300}]) of
+    case do_request(put, Endpoint, IndexId, <<>>, NewSchema, [{200,300}]) of
         {ok,_,_,_} -> ok;
         {error, _} = Error -> Error
     end.
@@ -102,38 +88,12 @@ create_index(Endpoint, HarvesterId, IndexId, Schema) ->
 %% {@link harvester_plugin_behaviour} callback delete_index/3.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_index(od_harvester:endpoint(), od_harvester:id(), od_harvester:index_id()) -> 
-    {ok | {error, term()}}.
-delete_index(Endpoint, HarvesterId, IndexId) ->
-    case do_request(delete, Endpoint, HarvesterId, IndexId, <<>>, <<>>, [{200,300}, 404]) of
+-spec delete_index(od_harvester:endpoint(), od_harvester:index_id()) -> {ok | {error, term()}}.
+delete_index(Endpoint, IndexId) ->
+    case do_request(delete, Endpoint, IndexId, <<>>, <<>>, [{200,300}, 404]) of
         {ok,_,_,_} -> ok;
         {error, _} = Error -> Error
     end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link harvester_plugin_behaviour} callback delete_index_metadata/3.
-%% @end
-%%--------------------------------------------------------------------
--spec delete_index_metadata(od_harvester:endpoint(), od_harvester:id(), od_harvester:index_id()) ->
-    {ok | {error, term()}}.
-delete_index_metadata(Endpoint, HarvesterId, IndexId) ->
-    RequestData = #{
-        <<"query">> =>#{
-            <<"match_all">> => #{}
-        }
-    },
-    % only schedule deletion of harvested metadata and do not wait
-    % for response because deletion could take a lot of time
-    spawn(fun() -> 
-        do_request(post, Endpoint, HarvesterId, IndexId,
-            ?ENTRY_PATH(<<"_delete_by_query?conflicts=proceed">>),
-            json_utils:encode(RequestData),
-            [{200,300}]
-        )
-    end),
-    ok.
 
 
 %%--------------------------------------------------------------------
@@ -147,14 +107,13 @@ delete_index_metadata(Endpoint, HarvesterId, IndexId) ->
 submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
     PreparedBatch = prepare_elasticsearch_batch(Batch),
     FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),
-    LastSeq = maps:get(<<"seq">>, lists:last(Batch)),
     {ok, utils:pmap(fun(IndexId) ->
-        case do_request(post, Endpoint, HarvesterId, IndexId, ?ENTRY_PATH(<<"_bulk">>), PreparedBatch, 
+        case do_request(post, Endpoint, IndexId, ?ENTRY_PATH(<<"_bulk">>), PreparedBatch,
             #{<<"content-type">> => <<"application/x-ndjson">>}, [{recv_timeout, 15000}], [{200,300}]) of
             {ok,_,_,Body} ->
                 Res = json_utils:decode(Body),
                 case maps:get(<<"errors">>, Res) of
-                    false -> {IndexId, {LastSeq, undefined}};
+                    false -> {IndexId, ok};
                     true -> {IndexId, parse_batch_result(Res, Batch, HarvesterId, IndexId)}
                 end;
             {error, _} = Error -> 
@@ -176,15 +135,15 @@ submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
 %% {@link harvester_plugin_behaviour} callback query/3.
 %% @end
 %%--------------------------------------------------------------------
--spec query_index(od_harvester:endpoint(), od_harvester:id(), od_harvester:index_id(), Data :: #{}) ->
+-spec query_index(od_harvester:endpoint(), od_harvester:index_id(), Data :: #{}) ->
     {ok, map()} | {error, term()}.
-query_index(Endpoint, HarvesterId, IndexId, Data) ->
+query_index(Endpoint, IndexId, Data) ->
     #{
         <<"method">> := Method,
         <<"path">> := Path
     } = Data,
     Body = maps:get(<<"body">>, Data, <<>>),
-    case do_request(Method, Endpoint, HarvesterId, IndexId, ?ENTRY_PATH(Path), Body) of
+    case do_request(Method, Endpoint, IndexId, ?ENTRY_PATH(Path), Body) of
         {ok, Code, Headers, ResponseBody} ->
             {ok, #{
                 <<"code">> => Code,
@@ -222,10 +181,10 @@ query_validator() -> #{
 %% @equiv do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, undefined).
 %% @end
 %%--------------------------------------------------------------------
--spec do_request(http_client:method(), od_harvester:endpoint(), od_harvester:id(), 
+-spec do_request(http_client:method(), od_harvester:endpoint(),
     od_harvester:index_id(), Path :: binary(), Data :: binary()) -> ok.
-do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data) ->
-    do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, undefined).
+do_request(Method, Endpoint, IndexId, Path, Data) ->
+    do_request(Method, Endpoint, IndexId, Path, Data, undefined).
 
 
 
@@ -236,11 +195,11 @@ do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data) ->
 %%          #{<<"content-type">> => <<"application/json">>}, [], ExpectedCodes).
 %% @end
 %%--------------------------------------------------------------------
--spec do_request(http_client:method(), od_harvester:endpoint(), od_harvester:id(),
+-spec do_request(http_client:method(), od_harvester:endpoint(),
     od_harvester:index_id(), Path :: binary(), Data :: binary(),
     ExpectedCodes :: [integer() | {integer(), integer()}] | undefined) -> ok.
-do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, ExpectedCodes) ->
-    do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, 
+do_request(Method, Endpoint, IndexId, Path, Data, ExpectedCodes) ->
+    do_request(Method, Endpoint, IndexId, Path, Data,
         #{<<"content-type">> => <<"application/json">>}, [], ExpectedCodes).
 
 
@@ -252,27 +211,26 @@ do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, ExpectedCodes) ->
 %% ExpectedCodes list must conform to specification in is_code_expected/2.
 %% @end
 %%--------------------------------------------------------------------
--spec do_request(http_client:method(), od_harvester:endpoint(), od_harvester:id(), 
-    od_harvester:index_id(), Path :: binary(), Data :: binary(), 
-    http_client:headers(), http_client:opts(),
+-spec do_request(http_client:method(), od_harvester:endpoint(), od_harvester:index_id(),
+    Path :: binary(), Data :: binary(), http_client:headers(), http_client:opts(),
     ExpectedCodes :: [integer() | {integer(), integer()}] | undefined) -> ok.
-do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, Headers, Opts, ExpectedCodes) ->
-    Url = <<Endpoint/binary, "/", (?ES_INDEX_ID(HarvesterId, IndexId))/binary, Path/binary>>,
+do_request(Method, Endpoint, IndexId, Path, Data, Headers, Opts, ExpectedCodes) ->
+    Url = <<Endpoint/binary, "/", IndexId/binary, Path/binary>>,
     case http_client:request(Method, Url, Headers, Data, Opts) of
         {ok, Code, RespHeaders, Body} = Response when is_list(ExpectedCodes) ->
             case is_code_expected(Code, ExpectedCodes) of
                 true -> 
                     Response;
                 _ ->
-                    ?debug("~p ~p in harvester ~p, index: ~p returned unexpected response ~p:~n ~p~n~p",
-                        [Method, Url, HarvesterId, IndexId, Code, RespHeaders, json_utils:decode(Body)]),
+                    ?debug("~p ~p returned unexpected response ~p:~n ~p~n~p",
+                        [Method, Url, Code, RespHeaders, json_utils:decode(Body)]),
                     ?ERROR_BAD_DATA(<<"payload">>)
             end;
         {ok,_,_,_} = Response ->
             Response;
         {error, _} = Error ->
-            ?error("~p in harvester ~p, index ~p was unsuccessful due to ~w", 
-                [Method, HarvesterId, IndexId, Error]),
+            ?error("~p ~p was unsuccessful due to ~w",
+                [Method, Url, Error]),
             ?ERROR_TEMPORARY_FAILURE
     end.
 
@@ -303,14 +261,14 @@ prepare_elasticsearch_batch(Batch) ->
             <<"operation">> := Operation,
             <<"fileId">> := EntryId
         } = BatchEntry,
-        OperationBin = case Operation of
+        ESOperation = case Operation of
             <<"submit">> -> <<"index">>;
             <<"delete">> -> <<"delete">>
         end,
         Payload = maps:get(<<"payload">>, BatchEntry, #{}),
-        % submit only JSON, ignore other metadata
+        % submit only JSON, ignore other metadata, delete entry when there is no JSON
         {FinalOperation, Data} = case maps:find(<<"json">>, Payload) of
-            {ok, JSON} -> {OperationBin, JSON};
+            {ok, JSON} -> {ESOperation, JSON};
             _ -> {<<"delete">>, undefined}
         end,
         Req = json_utils:encode(#{FinalOperation => #{<<"_id">> => EntryId}}),

@@ -347,7 +347,7 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
             undefined -> 
                 ?ERROR_BAD_VALUE_EMPTY(<<"endpoint">>);
             _-> 
-                case Plugin:create_index(Endpoint, HarvesterId, IndexId, Schema) of
+                case Plugin:create_index(Endpoint, IndexId, Schema) of
                     ok ->
                         {ok, Harvester#od_harvester{indices = Indices#{IndexId => Index}}};
                     {error, _} = Error ->
@@ -357,17 +357,13 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
     end,
     NewGri = Gri#gri{aspect = {index, IndexId}, scope = private},
     case od_harvester:update(HarvesterId, UpdateFun) of
-        {ok, #document{value = #od_harvester{plugin = Plugin}}} ->
-            {ok, resource, {NewGri, Data#{
-                <<"schema">> => Schema,
-                <<"pluginIndexId">> => Plugin:get_plugin_index_id(HarvesterId, IndexId)
-            }}};
+        {ok, _} -> {ok, resource, {NewGri, Data#{ <<"schema">> => Schema }}};
         {error, _} = Error -> Error
     end;
 
-create(#el_req{gri = #gri{aspect = {query, IndexId}, id = HarvesterId}, data = Data}) ->
+create(#el_req{gri = #gri{aspect = {query, IndexId}}, data = Data}) ->
     fun(#od_harvester{plugin = Plugin, endpoint = Endpoint}) ->
-        case Plugin:query_index(Endpoint, HarvesterId, IndexId, Data) of
+        case Plugin:query_index(Endpoint, IndexId, Data) of
             {ok, Value} -> {ok, value, Value};
             {error, _} = Error -> Error
         end
@@ -387,20 +383,22 @@ create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch
             Diff -> ?debug("Ignoring not known indices ~p in harvester ~p", [Diff, HarvesterId])
         end,
         {ok, Res} = case Batch of
-            % fixme
-            [] -> {ok, lists:map(fun(IndexId) -> {IndexId, {0, undefined}} end, IndicesToUpdate)};
+            [] -> {ok, lists:map(fun(IndexId) -> {IndexId, ok} end, IndicesToUpdate)};
             _ -> Plugin:submit_batch(Endpoint, HarvesterId, IndicesToUpdate, Batch)
         end,
         update_indices_stats(HarvesterId, Res, 
-            fun(PreviousStats, {_, undefined}) ->
+            fun(PreviousStats, ok) ->
+                   update_seqs(PreviousStats, SpaceId, ProviderId, MaxStreamSeq, MaxSeq, undefined);
+               (PreviousStats, {_, undefined}) ->
                    update_seqs(PreviousStats, SpaceId, ProviderId, MaxStreamSeq, MaxSeq, undefined);
                (PreviousStats, {NewCurrentSeq, {_, ErrorMsg}}) ->
                    update_seqs(PreviousStats, SpaceId, ProviderId, NewCurrentSeq, MaxSeq, ErrorMsg)
             end
         ),
         FailedIndices = lists:filtermap(
-            fun({_Index, {_, undefined}}) -> false;
-               ({Index, {_, {FailedSeq, _}}}) -> {true, {Index, FailedSeq}} 
+            fun({_IndexId, ok}) -> false;
+               ({_IndexId, {_, undefined}}) -> false;
+               ({IndexId, {_, {FailedSeq, _}}}) -> {true, {IndexId, FailedSeq}}
             end, Res
         ),
         {ok, value, maps:from_list(FailedIndices)}
@@ -486,18 +484,16 @@ get(#el_req{gri = #gri{aspect = eff_providers}}, Harvester) ->
 get(#el_req{gri = #gri{aspect = indices}}, Harvester) ->
     {ok, maps:keys(Harvester#od_harvester.indices)};
 
-get(#el_req{gri = #gri{id = HarvesterId, aspect = {index, IndexId}, scope = private}}, Harvester) ->
+get(#el_req{gri = #gri{aspect = {index, IndexId}, scope = private}}, Harvester) ->
     #harvester_index{
         name = Name,
         schema = Schema,
         guiPluginName = GuiPluginName
     } = maps:get(IndexId, Harvester#od_harvester.indices),
-    Plugin = Harvester#od_harvester.plugin,
     {ok, #{
         <<"name">> => Name,
         <<"schema">> => Schema,
-        <<"guiPluginName">> => GuiPluginName,
-        <<"pluginIndexId">> => Plugin:get_plugin_index_id(HarvesterId, IndexId)
+        <<"guiPluginName">> => GuiPluginName
     }};
 
 get(#el_req{gri = #gri{aspect = {index, IndexId}, scope = public}}, Harvester) ->
@@ -648,17 +644,17 @@ delete(#el_req{gri = #gri{id = HarvesterId, aspect = {index, IndexId}}}) ->
     end),
     ok;
 
-delete(#el_req{gri = #gri{id = HarvesterId, aspect = metadata}}) ->
+delete(#el_req{gri = #gri{aspect = metadata}}) ->
     fun(#od_harvester{indices = ExistingIndices, plugin = Plugin, endpoint = Endpoint}) ->
         IndicesIds = maps:keys(ExistingIndices),
         lists:foreach(fun(IndexId) ->
-            Plugin:delete_index_metadata(Endpoint, HarvesterId, IndexId)
+            Plugin:delete_index(Endpoint, IndexId)
         end, IndicesIds)
     end;
 
-delete(#el_req{gri = #gri{id = HarvesterId, aspect = {index_metadata, IndexId}}}) ->
+delete(#el_req{gri = #gri{aspect = {index_metadata, IndexId}}}) ->
     fun(#od_harvester{plugin = Plugin, endpoint = Endpoint}) ->
-        Plugin:delete_index_metadata(Endpoint, HarvesterId, IndexId)
+        Plugin:delete_index(Endpoint, IndexId)
     end.
 
 
@@ -1076,6 +1072,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
 validate(#el_req{operation = create, gri = #gri{aspect = {submit_batch, _}}}) -> #{
     required => #{
         <<"maxSeq">> => {integer, {not_lower_than, 0}},
+        <<"maxStreamSeq">> => {integer, {not_lower_than, 0}},
         % no need to check index membership - incorrect indices are later ignored
         <<"indices">> => {list_of_binaries, non_empty},
         <<"batch">> => {any, any}
@@ -1213,7 +1210,6 @@ auth_by_privilege(UserId, HarvesterOrId, Privilege) ->
 
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Updates given indices stats in harvester record using given UpdateFun. 
 %% IndicesToUpdate can be given as list of indices or as list of tuples {IndexId, Mod} 
@@ -1319,7 +1315,6 @@ normalize_and_check_endpoint(Endpoint, Plugin) ->
 
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Sets archival flag in existing stats to given value
 %% and creates missing stats for all providers that support given space.
@@ -1333,7 +1328,6 @@ prepare_index_stats(ExistingStats, SpaceId, ArchivalFlagValue) ->
 
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Sets archival flag in existing stats to given value
 %% and creates missing stats for all given providers in given space.
