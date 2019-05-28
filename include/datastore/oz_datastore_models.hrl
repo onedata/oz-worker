@@ -48,7 +48,7 @@
     name :: binary(),
     schema = undefined :: od_harvester:schema() | undefined,
     % mapping of index name to one recognized by gui plugin.
-    guiPluginName = undefined :: binary() | undefined,
+    gui_plugin_name = undefined :: binary() | undefined,
     stats = #{} :: od_harvester:indices_stats()
 }).
 
@@ -59,9 +59,9 @@
     current_seq = 0 :: integer(),
     % highest sequence known in given space in given provider
     max_seq = 0 :: integer(),
-    % timestamp of last harvestation
+    % timestamp of last harvesting
     last_update = undefined :: integer() | undefined,
-    % short description of encountered error if last harvestation failed
+    % short description of encountered error if last harvesting failed
     error = undefined :: binary() | undefined,
     % stats are marked archival when it is no longer possible to harvest metadata
     % in given space in given provider e.g space was removed from harvester

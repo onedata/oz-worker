@@ -376,7 +376,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, _}}}, Ha
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Handle) ->
     auth_by_privilege(Req, Handle, ?HANDLE_VIEW);
 
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}, Handle) ->
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Handle) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this handle_service is checked in 'exists'
@@ -400,7 +400,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
 
         _ ->
             % Access to private data also allows access to protected data
-            authorize(Req#el_req{gri = #gri{scope = private}}, Handle)
+            authorize(Req#el_req{gri = GRI#gri{scope = private}}, Handle)
     end;
 
 authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->

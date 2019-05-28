@@ -2975,10 +2975,14 @@ mock_harvester_plugin(Config, Nodes, PluginName) ->
                 end;
                 (_, Acc) -> Acc
             end, {undefined, undefined}, Batch),
+        Res = case ErrorSeq of
+            undefined -> ok;
+            {FailedSeq, ErrorMsg} -> {error, LastSeq, FailedSeq, ErrorMsg}
+        end,
         {ok, lists:map(fun(Index) ->
             case harvester_get_index(Config, HarvesterId, Index) of
-                {ok, #{<<"name">> := <<"fail">>}} -> {Index, {undefined, {FirstSeq, <<"error_index">>}}};
-                _ -> {Index, {LastSeq, ErrorSeq}}
+                {ok, #{<<"name">> := <<"fail">>}} -> {Index, {error, undefined, FirstSeq, <<"error_index">>}};
+                _ -> {Index, Res}
             end
         end, Indices)}
     end),

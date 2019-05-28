@@ -271,13 +271,9 @@ create(#el_req{client = Client, gri = #gri{id = SpaceId, aspect = harvest_metada
     end, maps:keys(Destination)),
     
     {ok, value, lists:foldl(
-        fun({HarvesterId, {error, _} = Error}, Acc) -> 
-            Acc#{HarvesterId => #{<<"error">> => Error}};
-           ({HarvesterId, FailedIndices}, Acc) ->
-                case maps:size(FailedIndices) of
-                    0 -> Acc;
-                    _ -> Acc#{HarvesterId => FailedIndices}
-                end 
+        fun({HarvesterId, {error, _} = Error}, Acc) -> Acc#{HarvesterId => #{<<"error">> => Error}};
+           ({HarvesterId, FailedIndices}, Acc) when map_size(FailedIndices) =/= 0 -> Acc#{HarvesterId => FailedIndices};
+           (_, Acc) -> Acc
         end, #{}, Res)}.
     
 
@@ -536,10 +532,7 @@ authorize(#el_req{operation = create, gri = #gri{id = SpaceId, aspect = harvest_
     space_logic:has_provider(Space, ProviderId) andalso 
             lists:all(fun(#{<<"fileId">> := FileId}) -> 
                 {ok, Guid} = file_id:objectid_to_guid(FileId),
-                case file_id:guid_to_space_id(Guid) of
-                    SpaceId -> true;
-                    _ -> false
-                end
+                file_id:guid_to_space_id(Guid) == SpaceId
             end, Batch);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Space) ->
@@ -559,7 +552,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
             space_logic:has_provider(Space, ProviderId)
     end;
 
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}, Space) ->
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Space) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this space is checked in 'exists'
@@ -593,7 +586,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
 
         _ ->
             % Access to private data also allows access to protected data
-            authorize(Req#el_req{gri = #gri{scope = private}}, Space)
+            authorize(Req#el_req{gri = GRI#gri{scope = private}}, Space)
     end;
 
 authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->

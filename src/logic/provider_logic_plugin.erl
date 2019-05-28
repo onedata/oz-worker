@@ -330,7 +330,7 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     lists:foreach(fun(HarvesterId) ->
         harvester_logic:update_indices_stats(HarvesterId, all,
             fun(ExistingStats) -> 
-                maps:fold(fun(SpaceId, V, Acc) -> Acc#{SpaceId => maps:without([ProviderId], V)} end, #{}, ExistingStats) 
+                maps:map(fun(_SpaceId, V) -> maps:without([ProviderId], V) end, ExistingStats)
             end)
     end, maps:keys(Harvesters)),
 
@@ -444,7 +444,7 @@ authorize(#el_req{operation = get, gri = #gri{aspect = current_time}}, _) ->
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, _) ->
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}, Provider) ->
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Provider) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this provider is checked in 'exists'
@@ -474,17 +474,17 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
 
         _ ->
             % Access to private data also allows access to protected data
-            authorize(Req#el_req{gri = #gri{scope = private}}, Provider)
+            authorize(Req#el_req{gri = GRI#gri{scope = private}}, Provider)
     end;
 
-authorize(Req = #el_req{operation = get, gri = #gri{id = ProviderId, aspect = instance, scope = shared}}, Provider) ->
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = ProviderId, aspect = instance, scope = shared}}, Provider) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_HARVESTER(HarvesterId)} ->
             provider_logic:has_eff_harvester(ProviderId, HarvesterId)
                 andalso harvester_logic:has_eff_user(HarvesterId, UserId);
         _ ->
             % Access to protected data also allows access to shared data
-            authorize(Req#el_req{gri = #gri{scope = protected}}, Provider)
+            authorize(Req#el_req{gri = GRI#gri{scope = protected}}, Provider)
     end;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_users}}, _) ->

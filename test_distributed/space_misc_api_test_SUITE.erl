@@ -287,12 +287,12 @@ get_test(Config) ->
                 root,
                 {admin, [?OZ_SPACES_VIEW]},
                 {user, U1},
-                {user, U2}
+                {user, U2},
+                {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, NonAdmin},
-                {provider, P1, P1Macaroon}
+                {user, NonAdmin}
             ]
         },
         rest_spec = #rest_spec{

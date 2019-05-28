@@ -17,7 +17,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
--export([response/1, translate/1]).
+-export([response/1]).
 
 %%%===================================================================
 %%% API
@@ -65,7 +65,7 @@ translate(?ERROR_NOT_IMPLEMENTED) ->
     ?HTTP_501_NOT_IMPLEMENTED;
 
 translate(?ERROR_TEMPORARY_FAILURE) ->
-    {?HTTP_503_SERVICE_UNAVAILABLE, <<"Service unavailable: temporary failure.">>};
+    {?HTTP_503_SERVICE_UNAVAILABLE, <<"Service unavailable: temporary failure">>};
 
 translate(?ERROR_NOT_SUPPORTED) ->
     {?HTTP_400_BAD_REQUEST,

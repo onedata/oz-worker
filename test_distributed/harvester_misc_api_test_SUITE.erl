@@ -142,7 +142,8 @@ create_test(Config) ->
                 [{<<"plugin">>, <<"not_existing_plugin">>, 
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>, 
                         rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))},
-                {<<"endpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE}
+                {<<"endpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE},
+                {<<"endpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"endpoint">>)}
                     | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)]
         }
     },
@@ -321,16 +322,19 @@ get_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, GetProtectedDataApiTestSpec)),
 
-    % No one can get public data when harvester is private
+    % Get and check public data in private harvester
     GetPublicDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
-            forbidden = [
+            correct = [
+                root,
                 {admin, [?OZ_HARVESTERS_VIEW]},
                 {user, U1},
-                {user, U2},
-                {user, NonAdmin}
+                {user, U2}
             ],
-            unauthorized = [nobody]
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin}
+            ]
         },
         logic_spec = #logic_spec{
             module = harvester_logic,
@@ -493,7 +497,8 @@ update_test(Config) ->
                 ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"plugin">>,
                     rpc:call(Node, onezone_plugins, get_plugins, [harvester_plugin]))},
              {<<"public">>, not_boolean, ?ERROR_BAD_VALUE_BOOLEAN(<<"public">>)},
-             {<<"endpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE}
+             {<<"endpoint">>, <<"bad_endpoint">>, ?ERROR_TEMPORARY_FAILURE},
+             {<<"endpoint">>, null, ?ERROR_BAD_VALUE_EMPTY(<<"endpoint">>)}
                 | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)]
         }
     },
@@ -730,10 +735,10 @@ create_index_test(Config) ->
         Index = maps:get(IndexId, Indices),
         ?assertEqual(?CORRECT_NAME, Index#harvester_index.name),
         ?assertEqual(ExpSchema, Index#harvester_index.schema),
-        ?assertEqual(ExpGuiPluginName, Index#harvester_index.guiPluginName),
+        ?assertEqual(ExpGuiPluginName, Index#harvester_index.gui_plugin_name),
         true
     end,
-        
+
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -956,7 +961,7 @@ update_index_test(Config) ->
 
         #harvester_index{
             name = ActualName,
-            guiPluginName = ActualGuiPluginName
+            gui_plugin_name = ActualGuiPluginName
         } = maps:get(IndexId, Indices),
 
         ExpName = ExpValueFun(ShouldSucceed, <<"name">>, Data, ?HARVESTER_INDEX_NAME),

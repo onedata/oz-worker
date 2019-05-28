@@ -169,7 +169,7 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, client = Client,
     Endpoint = maps:get(<<"endpoint">>, Data, undefined),
     
     
-    NormalizedEndpoint = case normalize_and_check_endpoint(Endpoint, Plugin) of
+    NormalizedEndpoint = case normalize_endpoint_and_check_connectivity(Endpoint, Plugin) of
         {ok, NewEndpoint} -> NewEndpoint;
         {error, _} = Error -> throw(Error)
     end,
@@ -335,7 +335,7 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
         Index = #harvester_index{
             name = Name,
             schema = Schema,
-            guiPluginName = GuiPluginName,
+            gui_plugin_name = GuiPluginName,
             stats = IndexStats
         },
         case Endpoint of
@@ -384,16 +384,13 @@ create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch
         harvester_logic:update_indices_stats(HarvesterId, Res,
             fun(PreviousStats, ok) ->
                    update_seqs(PreviousStats, SpaceId, ProviderId, MaxStreamSeq, MaxSeq, undefined);
-               (PreviousStats, {_, undefined}) ->
-                   update_seqs(PreviousStats, SpaceId, ProviderId, MaxStreamSeq, MaxSeq, undefined);
-               (PreviousStats, {NewCurrentSeq, {_, ErrorMsg}}) ->
+               (PreviousStats, {error, NewCurrentSeq, _, ErrorMsg}) ->
                    update_seqs(PreviousStats, SpaceId, ProviderId, NewCurrentSeq, MaxSeq, ErrorMsg)
             end
         ),
         FailedIndices = lists:filtermap(
             fun({_IndexId, ok}) -> false;
-               ({_IndexId, {_, undefined}}) -> false;
-               ({IndexId, {_, {FailedSeq, _}}}) -> {true, {IndexId, FailedSeq}}
+               ({IndexId, {error, _, FailedSeq, _}}) -> {true, {IndexId, FailedSeq}}
             end, Res
         ),
         {ok, value, maps:from_list(FailedIndices)}
@@ -483,7 +480,7 @@ get(#el_req{gri = #gri{aspect = {index, IndexId}, scope = private}}, Harvester) 
     #harvester_index{
         name = Name,
         schema = Schema,
-        guiPluginName = GuiPluginName
+        gui_plugin_name = GuiPluginName
     } = maps:get(IndexId, Harvester#od_harvester.indices),
     {ok, #{
         <<"name">> => Name,
@@ -493,7 +490,7 @@ get(#el_req{gri = #gri{aspect = {index, IndexId}, scope = private}}, Harvester) 
 
 get(#el_req{gri = #gri{aspect = {index, IndexId}, scope = public}}, Harvester) ->
     #harvester_index{
-        guiPluginName = GuiPluginName
+        gui_plugin_name = GuiPluginName
     } = maps:get(IndexId, Harvester#od_harvester.indices),
     {ok, #{
         <<"guiPluginName">> => GuiPluginName
@@ -503,8 +500,8 @@ get(#el_req{gri = #gri{aspect = {index_stats, IndexId}}}, Harvester) ->
     #harvester_index{
         stats = Stats
     } = maps:get(IndexId, Harvester#od_harvester.indices),
-    {ok, maps:fold(fun(SpaceId, P, Acc) ->
-        Acc#{SpaceId => maps:fold(fun(ProviderId, IndexStats, Acc1) ->
+    {ok, maps:map(fun(_SpaceId, Providers) ->
+        maps:map(fun(_ProviderId, IndexStats) ->
             #index_stats{
                 current_seq = CurrentSeq,
                 max_seq = MaxSeq,
@@ -512,17 +509,15 @@ get(#el_req{gri = #gri{aspect = {index_stats, IndexId}}}, Harvester) ->
                 error = Error,
                 archival = Archival
             } = IndexStats,
-            Acc1#{
-                ProviderId => #{
-                    <<"currentSeq">> => CurrentSeq,
-                    <<"maxSeq">> => MaxSeq,
-                    <<"lastUpdate">> => gs_protocol:undefined_to_null(LastUpdate),
-                    <<"error">> => gs_protocol:undefined_to_null(Error),
-                    <<"archival">> => Archival
-                }
+            #{
+                <<"currentSeq">> => CurrentSeq,
+                <<"maxSeq">> => MaxSeq,
+                <<"lastUpdate">> => gs_protocol:undefined_to_null(LastUpdate),
+                <<"error">> => gs_protocol:undefined_to_null(Error),
+                <<"archival">> => Archival
             }
-        end, #{}, P)}
-    end, #{}, Stats)}.
+        end, Providers)
+    end, Stats)}.
 
 
 %%--------------------------------------------------------------------
@@ -550,7 +545,7 @@ update(#el_req{gri = #gri{id = HarvesterId, aspect = instance}, data = Data}) ->
             public = NewPublic
         },
         
-        case normalize_and_check_endpoint(NewEndpoint, NewPlugin) of
+        case normalize_endpoint_and_check_connectivity(NewEndpoint, NewPlugin) of
             {ok, NormalizedEndpoint} -> 
                 {ok, NewHarvester#od_harvester{endpoint = NormalizedEndpoint}};
             {error, _} = Error -> 
@@ -573,13 +568,13 @@ update(#el_req{gri = #gri{id = HarvesterId, aspect = {index, IndexId}}, data = D
     {ok, _} = od_harvester:update(HarvesterId, fun(#od_harvester{indices =  Indices} = Harvester) ->
         Index = #harvester_index{
             name = Name, 
-            guiPluginName = GuiPluginName
+            gui_plugin_name = GuiPluginName
         } = maps:get(IndexId, Indices),
         NewName = maps:get(<<"name">>, Data, Name),
         NewGuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data, GuiPluginName)),
         {ok, Harvester#od_harvester{indices = Indices#{IndexId => Index#harvester_index{
             name = NewName,
-            guiPluginName = NewGuiPluginName
+            gui_plugin_name = NewGuiPluginName
         }}}}
     end),
     ok;
@@ -806,7 +801,7 @@ authorize(#el_req{operation = get, client = Client, gri = #gri{aspect = instance
                 Harvester#od_harvester.spaces)
     end;
 
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}, Harvester) ->
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Harvester) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this harvester is checked in 'exists'
@@ -828,11 +823,13 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
 
         _ ->
             % Access to private data also allows access to protected data
-            authorize(Req#el_req{gri = #gri{scope = private}}, Harvester)
+            authorize(Req#el_req{gri = GRI#gri{scope = private}}, Harvester)
     end;
 
-authorize(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}}, Harvester) ->
-    Harvester#od_harvester.public;
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = public}}, Harvester) ->
+    Harvester#od_harvester.public orelse
+        % Access to protected data also allows access to public data
+        authorize(Req#el_req{gri = GRI#gri{scope = protected}}, Harvester);
 
 authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
     true;
@@ -965,6 +962,9 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = list}}) -
     [?OZ_HARVESTERS_LIST];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}) ->
+    [?OZ_HARVESTERS_VIEW];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}}) ->
     [?OZ_HARVESTERS_VIEW];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = gui_plugin_config}}) ->
@@ -1246,11 +1246,11 @@ update_seqs(Stats, SpaceId, ProviderId, NewSeq, NewMaxSeq, ErrorMsg) ->
 %% Checks whether resulting endpoint is responding.
 %% @end
 %%--------------------------------------------------------------------
--spec normalize_and_check_endpoint(od_harvester:endpoint() | undefined, od_harvester:plugin()) -> 
+-spec normalize_endpoint_and_check_connectivity(od_harvester:endpoint() | undefined, od_harvester:plugin()) ->
     {ok, od_harvester:endpoint() | undefined} | {error, term()}.
-normalize_and_check_endpoint(undefined, _) ->
+normalize_endpoint_and_check_connectivity(undefined, _) ->
     {ok, undefined};
-normalize_and_check_endpoint(Endpoint, Plugin) ->
+normalize_endpoint_and_check_connectivity(Endpoint, Plugin) ->
     NormalizedEndpoint = re:replace(Endpoint, <<"/$">>, <<"">>, [{return, binary}]),
     case Plugin:ping(NormalizedEndpoint) of
         ok -> {ok, NormalizedEndpoint};

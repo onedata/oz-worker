@@ -8,7 +8,7 @@
 %%% @doc
 %%% This module implements onezone_plugin_behaviour and harvester_plugin_behaviour 
 %%% and is called by harvester_logic_plugin to handle operations on Elasticsearch.
-%%% This plugin conforms to Elasticsearch 6.x
+%%% This plugin is compatible with Elasticsearch 6.x and 7.x (up to 7.1).
 %%% @end
 %%%-------------------------------------------------------------------
 -module(elasticsearch_plugin).
@@ -31,6 +31,14 @@
 -behaviour(harvester_plugin_behaviour).
 
 -define(ENTRY_PATH(Path), <<"/_doc/", Path/binary>>).
+-define(REQUEST_TIMEOUT, 15000).
+
+-define(REQUEST_RETURN_OK(Response),
+    case Response of
+        {ok, _,_,_} -> ok;
+        {error, _} = Error -> Error
+    end
+).
 
 
 %%--------------------------------------------------------------------
@@ -59,10 +67,7 @@ get_name() ->
 %%--------------------------------------------------------------------
 -spec ping(od_harvester:endpoint()) -> {ok | {error, term()}}.
 ping(Endpoint) ->
-    case do_request(get, Endpoint, <<>>, <<>>, <<>>, [200]) of
-        {ok, _,_,_} -> ok;
-        {error, _} = Error -> Error
-    end.
+    ?REQUEST_RETURN_OK(do_request(get, Endpoint, <<>>, <<>>, <<>>, [200])).
 
 
 %%--------------------------------------------------------------------
@@ -77,10 +82,7 @@ create_index(Endpoint, IndexId, Schema) ->
         undefined -> <<"{}">>;
         Schema -> Schema
     end,
-    case do_request(put, Endpoint, IndexId, <<>>, NewSchema, [{200,300}]) of
-        {ok,_,_,_} -> ok;
-        {error, _} = Error -> Error
-    end.
+    ?REQUEST_RETURN_OK(do_request(put, Endpoint, IndexId, <<>>, NewSchema, [{200,300}])).
 
 
 %%--------------------------------------------------------------------
@@ -90,10 +92,7 @@ create_index(Endpoint, IndexId, Schema) ->
 %%--------------------------------------------------------------------
 -spec delete_index(od_harvester:endpoint(), od_harvester:index_id()) -> {ok | {error, term()}}.
 delete_index(Endpoint, IndexId) ->
-    case do_request(delete, Endpoint, IndexId, <<>>, <<>>, [{200,300}, 404]) of
-        {ok,_,_,_} -> ok;
-        {error, _} = Error -> Error
-    end.
+    ?REQUEST_RETURN_OK(do_request(delete, Endpoint, IndexId, <<>>, <<>>, [{200,300}, 404])).
 
 
 %%--------------------------------------------------------------------
@@ -102,14 +101,14 @@ delete_index(Endpoint, IndexId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec submit_batch(od_harvester:endpoint(), od_harvester:id(), od_harvester:indices(), od_harvester:batch()) -> 
-    {ok, [{od_harvester:index_id(), {SuccessfulSeq :: integer() | undefined, 
-        {FailedSeq :: integer(), Error :: binary()} | undefined}}]}.
+    {ok, [{od_harvester:index_id(), ok | {error, SuccessfulSeq :: integer() | undefined,
+        FailedSeq :: integer(), Error :: binary()}}]}.
 submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
     PreparedBatch = prepare_elasticsearch_batch(Batch),
     FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),
     {ok, utils:pmap(fun(IndexId) ->
         case do_request(post, Endpoint, IndexId, ?ENTRY_PATH(<<"_bulk">>), PreparedBatch,
-            #{<<"content-type">> => <<"application/x-ndjson">>}, [{recv_timeout, 15000}], [{200,300}]) of
+            #{<<"content-type">> => <<"application/x-ndjson">>}, [{recv_timeout, ?REQUEST_TIMEOUT}], [{200,300}]) of
             {ok,_,_,Body} ->
                 Res = json_utils:decode(Body),
                 case maps:get(<<"errors">>, Res) of
@@ -118,12 +117,11 @@ submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
                 end;
             {error, _} = Error -> 
                 ?debug("Error when updating index ~p in harvester ~p: ~p", [IndexId, HarvesterId, Error]),
-                ErrorMsg = case error_rest_translator:translate(Error) of
-                    {_, {MessageFormat, FormatArgs}} ->
-                        str_utils:format_bin(
-                            str_utils:to_list(MessageFormat), FormatArgs
-                        );
-                    {_, MessageBinary} -> MessageBinary
+                ErrorMsg = case Error of
+                    ?ERROR_TEMPORARY_FAILURE ->
+                        <<"Service unavailable: temporary failure">>;
+                    ?ERROR_BAD_DATA(Key) ->
+                        <<"Bad value: provided ", Key/binary, " could not be understood by the server">>
                 end,
                 {IndexId, {undefined, {FirstSeq, ErrorMsg}}}
         end
@@ -182,7 +180,7 @@ query_validator() -> #{
 %% @end
 %%--------------------------------------------------------------------
 -spec do_request(http_client:method(), od_harvester:endpoint(),
-    od_harvester:index_id(), Path :: binary(), Data :: binary()) -> ok.
+    od_harvester:index_id(), Path :: binary(), Data :: binary()) -> http_client:response().
 do_request(Method, Endpoint, IndexId, Path, Data) ->
     do_request(Method, Endpoint, IndexId, Path, Data, undefined).
 
@@ -197,7 +195,7 @@ do_request(Method, Endpoint, IndexId, Path, Data) ->
 %%--------------------------------------------------------------------
 -spec do_request(http_client:method(), od_harvester:endpoint(),
     od_harvester:index_id(), Path :: binary(), Data :: binary(),
-    ExpectedCodes :: [integer() | {integer(), integer()}] | undefined) -> ok.
+    ExpectedCodes :: [integer() | {integer(), integer()}] | undefined) -> http_client:response().
 do_request(Method, Endpoint, IndexId, Path, Data, ExpectedCodes) ->
     do_request(Method, Endpoint, IndexId, Path, Data,
         #{<<"content-type">> => <<"application/json">>}, [], ExpectedCodes).
@@ -213,7 +211,7 @@ do_request(Method, Endpoint, IndexId, Path, Data, ExpectedCodes) ->
 %%--------------------------------------------------------------------
 -spec do_request(http_client:method(), od_harvester:endpoint(), od_harvester:index_id(),
     Path :: binary(), Data :: binary(), http_client:headers(), http_client:opts(),
-    ExpectedCodes :: [integer() | {integer(), integer()}] | undefined) -> ok.
+    ExpectedCodes :: [integer() | {integer(), integer()}] | undefined) -> http_client:response().
 do_request(Method, Endpoint, IndexId, Path, Data, Headers, Opts, ExpectedCodes) ->
     Url = <<Endpoint/binary, "/", IndexId/binary, Path/binary>>,
     case http_client:request(Method, Url, Headers, Data, Opts) of
@@ -281,10 +279,10 @@ prepare_elasticsearch_batch(Batch) ->
 
 
 %% @private
--spec parse_batch_result(Res :: map(), od_harvester:batch(), od_harvester:id(), od_harvester:index_id()) -> 
-    {SuccessfulSeq :: integer() | undefined, {FailedSeq :: integer(), Error :: binary()} | undefined}.
+-spec parse_batch_result(Res :: map(), od_harvester:batch(), od_harvester:id(), od_harvester:index_id()) ->
+    ok | {error, SuccessfulSeq :: integer() | undefined, FailedSeq :: integer(), Error :: binary()}.
 parse_batch_result(Res, Batch, HarvesterId, IndexId) ->
-    lists:foldl(
+    ParsedResult = lists:foldl(
         fun({EntryResponse, BatchEntry}, {PrevSeq, undefined}) -> 
             Seq = maps:get(<<"seq">>, BatchEntry),
             case get_entry_response_error(EntryResponse) of
@@ -305,7 +303,12 @@ parse_batch_result(Res, Batch, HarvesterId, IndexId) ->
            (_, Acc) -> 
                % ignore rest of response when first error is found 
                Acc 
-        end, {undefined, undefined}, lists:zip(maps:get(<<"items">>, Res), Batch)).
+        end, {undefined, undefined}, lists:zip(maps:get(<<"items">>, Res), Batch)
+    ),
+    case ParsedResult of
+        {_, undefined} -> ok;
+        {SuccessfulSeq, {FailedSeq, Error}} -> {error, SuccessfulSeq, FailedSeq, Error}
+    end.
 
 
 %% @private

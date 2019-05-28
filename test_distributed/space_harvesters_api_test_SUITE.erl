@@ -392,13 +392,21 @@ harvest_metadata_test(Config) ->
             required = [<<"destination">>, <<"maxSeq">>, <<"maxStreamSeq">>, <<"batch">>],
             correct_values = #{
                 <<"destination">> => [Destination],
-                <<"maxStreamSeq">> => [10],
+                <<"maxStreamSeq">> => [8],
                 <<"maxSeq">> => [10],
                 <<"batch">> => [?HARVESTER_BATCH(FileId)]
             }
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % check indices stats
+    ?assertMatch({ok, #{S1 := #{P1 := #{<<"currentSeq">> := 8, <<"maxSeq">> := 10, <<"error">> := null}}}},
+        oz_test_utils:harvester_get_index_stats(Config, H1, Index1)),
+    ?assertMatch({ok, #{S1 := #{P1 := #{<<"currentSeq">> := 0, <<"maxSeq">> := 10, <<"error">> := <<"error_index">>}}}},
+        oz_test_utils:harvester_get_index_stats(Config, H1, Index2)),
+    ?assertMatch({ok, #{S1 := #{P1 := #{<<"currentSeq">> := 8, <<"maxSeq">> := 10, <<"error">> := null}}}},
+        oz_test_utils:harvester_get_index_stats(Config, H2, Index3)).
 
 
 harvester_index_empty_stats_test(Config) ->
@@ -576,8 +584,8 @@ harvester_index_nonempty_stats_test(Config) ->
     
     {ok, #{S1 := #{P1 := Stats1}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index1),
     ?assertEqual(false, maps:get(<<"archival">>, Stats1)),
-    
-    
+
+
     oz_test_utils:harvester_remove_space(Config, H1, S1),
     {ok, #{S1 := #{P1 := Stats2}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index1),
     ?assertEqual(true, maps:get(<<"archival">>, Stats2)),
