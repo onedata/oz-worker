@@ -230,8 +230,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
                     od_harvester, HarvesterId,
                     od_space, SpaceId
                 ),
-                harvester_logic:update_indices_stats(HarvesterId, all,
-                    fun(ExistingStats) -> harvester_logic:prepare_index_stats(ExistingStats, SpaceId, false) end);
+                harvester_indices:update_stats(HarvesterId, all,
+                    fun(ExistingStats) -> harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, false) end);
             _ ->
                 ok
         end,
@@ -305,8 +305,8 @@ create(#el_req{gri = #gri{id = HarvesterId, aspect = {space, SpaceId}}}) ->
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
     {ok, Space} = space_logic_plugin:fetch_entity(SpaceId),
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
-    harvester_logic:update_indices_stats(HarvesterId, all,
-        fun(ExistingStats) -> harvester_logic:prepare_index_stats(ExistingStats, SpaceId, false) end),
+    harvester_indices:update_stats(HarvesterId, all,
+        fun(ExistingStats) -> harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, false) end),
     {ok, resource, {NewGRI, ?THROUGH_SPACE(HarvesterId), SpaceData}};
 
 create(Req = #el_req{gri = GRI = #gri{id = HarvesterId, aspect = group}}) ->
@@ -331,7 +331,7 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
     GuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data, undefined)),
     
     UpdateFun = fun(#od_harvester{indices = Indices, plugin = Plugin, endpoint = Endpoint, spaces = Spaces} = Harvester) ->
-        IndexStats = lists:foldl(fun(SpaceId, ExistingStats) -> harvester_logic:prepare_index_stats(ExistingStats, SpaceId, false) end, #{}, Spaces),
+        IndexStats = lists:foldl(fun(SpaceId, ExistingStats) -> harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, false) end, #{}, Spaces),
         Index = #harvester_index{
             name = Name,
             schema = Schema,
@@ -381,11 +381,11 @@ create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch
             [] -> {ok, lists:map(fun(IndexId) -> {IndexId, ok} end, IndicesToUpdate)};
             _ -> Plugin:submit_batch(Endpoint, HarvesterId, IndicesToUpdate, Batch)
         end,
-        harvester_logic:update_indices_stats(HarvesterId, Res,
+        harvester_indices:update_stats(HarvesterId, Res,
             fun(PreviousStats, ok) ->
-                   update_seqs(PreviousStats, SpaceId, ProviderId, MaxStreamSeq, MaxSeq, undefined);
+                   harvester_indices:update_seqs(PreviousStats, SpaceId, ProviderId, MaxStreamSeq, MaxSeq, undefined);
                (PreviousStats, {error, NewCurrentSeq, _, ErrorMsg}) ->
-                   update_seqs(PreviousStats, SpaceId, ProviderId, NewCurrentSeq, MaxSeq, ErrorMsg)
+                   harvester_indices:update_seqs(PreviousStats, SpaceId, ProviderId, NewCurrentSeq, MaxSeq, ErrorMsg)
             end
         ),
         FailedIndices = lists:filtermap(
@@ -620,8 +620,8 @@ delete(#el_req{gri = #gri{id = HarvesterId, aspect = {group, GroupId}}}) ->
     );
 
 delete(#el_req{gri = #gri{id = HarvesterId, aspect = {space, SpaceId}}}) ->
-    harvester_logic:update_indices_stats(HarvesterId, all, fun(ExistingStats) ->
-        harvester_logic:prepare_index_stats(ExistingStats, SpaceId, true)
+    harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->
+        harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, true)
     end),
     entity_graph:remove_relation(
         od_harvester, HarvesterId,
@@ -1202,41 +1202,6 @@ auth_by_privilege(#el_req{client = _OtherClient}, _HarvesterOrId, _Privilege) ->
     false;
 auth_by_privilege(UserId, HarvesterOrId, Privilege) ->
     harvester_logic:has_eff_privilege(HarvesterOrId, UserId, Privilege).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Updates current sequence number and max sequence number for given index stats.
-%% When NewSeq is undefined current sequence number will not be updated.
-%% Sequence numbers are stored per space per provider.
-%% @end
-%%--------------------------------------------------------------------
--spec update_seqs(od_harvester:indices_stats(), od_space:id(), od_provider:id(),
-    NewSeq :: non_neg_integer() | undefined, NewMaxSeq :: non_neg_integer(), 
-    ErrorMsg :: binary() | undefined) -> od_harvester:indices_stats().
-update_seqs(Stats, SpaceId, ProviderId, NewSeq, NewMaxSeq, ErrorMsg) -> 
-    SeqsPerProvider = maps:get(SpaceId, Stats, #{}),
-    #index_stats{
-        current_seq = CurrentSeq, 
-        max_seq = CurrentMaxSeq
-    } = maps:get(ProviderId, SeqsPerProvider, #index_stats{}),
-    
-    NewCurrentSeq = case NewSeq of
-        undefined -> CurrentSeq;
-        _-> max(NewSeq, CurrentSeq)
-    end, 
-    
-    Stats#{
-        SpaceId => SeqsPerProvider#{
-            ProviderId => #index_stats{
-                current_seq = NewCurrentSeq, 
-                max_seq = max(CurrentMaxSeq, NewMaxSeq),
-                last_update = time_utils:cluster_time_seconds(),
-                error = ErrorMsg
-            }
-        }
-    }.
 
 
 %%--------------------------------------------------------------------
