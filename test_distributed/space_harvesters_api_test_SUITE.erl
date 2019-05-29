@@ -491,16 +491,16 @@ harvester_index_empty_stats_test(Config) ->
     ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS}}},
         oz_test_utils:harvester_get_index_stats(Config, H2, Index4)),
 
-    % removing provider results in deletion of stats entries in all effective harvesters of this provider
+    % removing provider results in marking stats entries in all effective harvesters of this provider as archival
     ok = oz_test_utils:delete_provider(Config, P2),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS(true)}}},
         oz_test_utils:harvester_get_index_stats(Config, H1, Index1)),
     ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS(true)}}},
         oz_test_utils:harvester_get_index_stats(Config, H1, Index2)),
-    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true)}}},
+    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS(true)}}},
         oz_test_utils:harvester_get_index_stats(Config, H2, Index3)),
-    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true)}}},
+    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS(true)}}},
         oz_test_utils:harvester_get_index_stats(Config, H2, Index4)),
 
     % restoring space support results in removal of archival flag in effective harvesters of this provider
@@ -510,21 +510,21 @@ harvester_index_empty_stats_test(Config) ->
         oz_test_utils:harvester_get_index_stats(Config, H1, Index1)),
     ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS(true)}}},
         oz_test_utils:harvester_get_index_stats(Config, H1, Index2)),
-    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS}}},
+    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS, P2 => ?EMPTY_INDEX_STATS(true)}}},
         oz_test_utils:harvester_get_index_stats(Config, H2, Index3)),
-    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS}}},
+    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS, P2 => ?EMPTY_INDEX_STATS(true)}}},
         oz_test_utils:harvester_get_index_stats(Config, H2, Index4)),
 
-    % removing space results in removing all stats from harvesters that belong to this space
+    % removing space results in marking as archival all stats in harvesters that belong to this space
     ok = oz_test_utils:delete_space(Config, S1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS(true)}}},
         oz_test_utils:harvester_get_index_stats(Config, H1, Index1)),
     ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS(true)}}},
         oz_test_utils:harvester_get_index_stats(Config, H1, Index2)),
-    ?assertEqual({ok, #{}}, 
+    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS(true)}}},
         oz_test_utils:harvester_get_index_stats(Config, H2, Index3)),
-    ?assertEqual({ok, #{}}, 
+    ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS(true)}}},
         oz_test_utils:harvester_get_index_stats(Config, H2, Index4)).
 
 

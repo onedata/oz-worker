@@ -99,8 +99,18 @@ coalesce_index_stats(ExistingStats, SpaceId, ArchivalFlagValue) ->
 %% and creates missing stats for all given providers in given space.
 %% @end
 %%--------------------------------------------------------------------
--spec coalesce_index_stats(od_harvester:indices_stats(), od_space:id(),
+-spec coalesce_index_stats(od_harvester:indices_stats(), od_space:id() | [od_space:id()],
     od_provider:id() | [od_provider:id()], boolean()) -> od_harvester:indices_stats().
+coalesce_index_stats(ExistingStats, Spaces, Providers, ArchivalFlagValue) when is_list(Spaces) ->
+    maps:map(fun(SpaceId, V) ->
+        case lists:member(SpaceId, Spaces) of
+            true ->
+                maps:get(SpaceId, coalesce_index_stats(ExistingStats, SpaceId, Providers, ArchivalFlagValue));
+            false ->
+                V
+        end
+    end, ExistingStats);
+
 coalesce_index_stats(ExistingStats, SpaceId, Provider, ArchivalFlagValue) when is_binary(Provider) ->
     coalesce_index_stats(ExistingStats, SpaceId, [Provider], ArchivalFlagValue);
 

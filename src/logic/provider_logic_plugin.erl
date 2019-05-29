@@ -324,13 +324,13 @@ update(Req = #el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     ok = dns_state:remove_delegation_config(ProviderId),
-    {ok, #od_provider{root_macaroon = RootMacaroon, eff_harvesters = Harvesters}} = fetch_entity(ProviderId),
+    {ok, #od_provider{root_macaroon = RootMacaroon, spaces = Spaces, eff_harvesters = Harvesters}} = fetch_entity(ProviderId),
     ok = macaroon_auth:delete(RootMacaroon),
 
     lists:foreach(fun(HarvesterId) ->
        harvester_indices:update_stats(HarvesterId, all,
-            fun(ExistingStats) -> 
-                maps:map(fun(_SpaceId, V) -> maps:without([ProviderId], V) end, ExistingStats)
+            fun(ExistingStats) ->
+                harvester_indices:coalesce_index_stats(ExistingStats, maps:keys(Spaces), ProviderId, true)
             end)
     end, maps:keys(Harvesters)),
 

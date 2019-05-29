@@ -378,7 +378,9 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
     fun(#od_space{harvesters = Harvesters}) ->
         lists:foreach(fun(HarvesterId) ->
             harvester_indices:update_stats(HarvesterId, all,
-                fun(ExistingStats) -> maps:without([SpaceId], ExistingStats) end)
+                fun(ExistingStats) ->
+                    harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, true)
+                end)
             end, Harvesters),
         entity_graph:delete_with_relations(od_space, SpaceId)
     end;
