@@ -163,11 +163,11 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, client = Client,
     auth_hint = AuthHint, data = Data}) ->
     #{
         <<"name">> := Name,
+        <<"endpoint">> := Endpoint,
         <<"plugin">> := Plugin
     } = Data,
     Config = maps:get(<<"guiPluginConfig">>, Data, #{}),
-    Endpoint = maps:get(<<"endpoint">>, Data, undefined),
-    
+
     
     NormalizedEndpoint = case normalize_endpoint_and_check_connectivity(Endpoint, Plugin) of
         {ok, NewEndpoint} -> NewEndpoint;
@@ -338,16 +338,11 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
             gui_plugin_name = GuiPluginName,
             stats = IndexStats
         },
-        case Endpoint of
-            undefined -> 
-                ?ERROR_BAD_VALUE_EMPTY(<<"endpoint">>);
-            _-> 
-                case Plugin:create_index(Endpoint, IndexId, Schema) of
-                    ok ->
-                        {ok, Harvester#od_harvester{indices = Indices#{IndexId => Index}}};
-                    {error, _} = Error ->
-                        Error
-                end
+        case Plugin:create_index(Endpoint, IndexId, Schema) of
+            ok ->
+                {ok, Harvester#od_harvester{indices = Indices#{IndexId => Index}}};
+            {error, _} = Error ->
+                Error
         end
     end,
     NewGri = Gri#gri{aspect = {index, IndexId}, scope = private},
@@ -1056,10 +1051,10 @@ required_admin_privileges(_) ->
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"name">> => {binary, name},
+        <<"endpoint">> => {binary, non_empty},
         <<"plugin">> => {atom, onezone_plugins:get_plugins(harvester_plugin)}
     },
     optional => #{
-        <<"endpoint">> => {binary, any},
         <<"guiPluginConfig">> => {json, any}
     }
 };
@@ -1151,7 +1146,7 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = group}}) ->
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"endpoint">> => {binary, any},
+        <<"endpoint">> => {binary, non_empty},
         <<"plugin">> => {atom, onezone_plugins:get_plugins(harvester_plugin)},
         <<"public">> => {boolean, any}
     }
@@ -1211,10 +1206,8 @@ auth_by_privilege(UserId, HarvesterOrId, Privilege) ->
 %% Checks whether resulting endpoint is responding.
 %% @end
 %%--------------------------------------------------------------------
--spec normalize_endpoint_and_check_connectivity(od_harvester:endpoint() | undefined, od_harvester:plugin()) ->
-    {ok, od_harvester:endpoint() | undefined} | {error, term()}.
-normalize_endpoint_and_check_connectivity(undefined, _) ->
-    {ok, undefined};
+-spec normalize_endpoint_and_check_connectivity(od_harvester:endpoint(), od_harvester:plugin()) ->
+    {ok, od_harvester:endpoint()} | {error, term()}.
 normalize_endpoint_and_check_connectivity(Endpoint, Plugin) ->
     NormalizedEndpoint = re:replace(Endpoint, <<"/$">>, <<"">>, [{return, binary}]),
     case Plugin:ping(NormalizedEndpoint) of

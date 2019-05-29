@@ -130,11 +130,11 @@ create_test(Config) ->
             end)
         },
         data_spec = #data_spec{
-            required = [<<"name">>, <<"plugin">>],
-            optional = [<<"guiPluginConfig">>, <<"endpoint">>],
+            required = [<<"name">>, <<"endpoint">>, <<"plugin">>],
+            optional = [<<"guiPluginConfig">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
-                <<"endpoint">> => [?HARVESTER_ENDPOINT1, null],
+                <<"endpoint">> => [?HARVESTER_ENDPOINT1],
                 <<"plugin">> => [?HARVESTER_MOCK_PLUGIN_BINARY],
                 <<"guiPluginConfig">> => [?HARVESTER_GUI_PLUGIN_CONFIG]
             },
@@ -488,7 +488,7 @@ update_test(Config) ->
             at_least_one = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"public">>],
             correct_values = #{
                 <<"name">> => [?CORRECT_NAME],
-                <<"endpoint">> => [Endpoint, null],
+                <<"endpoint">> => [Endpoint],
                 <<"plugin">> => [?HARVESTER_MOCK_PLUGIN2_BINARY],
                 <<"public">> => [true, false]
             },

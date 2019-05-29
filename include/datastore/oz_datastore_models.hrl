@@ -334,7 +334,7 @@
 -record(od_harvester, {
     name = <<"">> :: od_harvester:name(),
     plugin :: od_harvester:plugin(),
-    endpoint = undefined :: undefined | od_harvester:endpoint(),
+    endpoint :: od_harvester:endpoint(),
 
     gui_plugin_config = #{} :: json_utils:json_term(),
     public = false :: boolean(),

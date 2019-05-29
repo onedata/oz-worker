@@ -618,7 +618,7 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, 
         <<"scope">> => <<"private">>,
         <<"name">> => Name,
         <<"public">> => Public,
-        <<"endpoint">> => gs_protocol:undefined_to_null(Endpoint),
+        <<"endpoint">> => Endpoint,
         <<"plugin">> => atom_to_binary(Plugin, utf8),
         <<"canViewPrivileges">> => harvester_logic:has_eff_privilege(Harvester, UserId, ?HARVESTER_VIEW_PRIVILEGES),
         <<"directMembership">> => harvester_logic:has_direct_user(Harvester, UserId),
@@ -649,7 +649,7 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
         <<"name">> => Name,
         <<"public">> => Public,
         <<"plugin">> => Plugin,
-        <<"endpoint">> => gs_protocol:undefined_to_null(Endpoint),
+        <<"endpoint">> => Endpoint,
         <<"directMembership">> => harvester_logic:has_direct_user(HarvesterId, UserId),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
