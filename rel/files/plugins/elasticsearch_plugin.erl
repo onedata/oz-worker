@@ -119,9 +119,9 @@ submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
                 ?debug("Error when updating index ~p in harvester ~p: ~p", [IndexId, HarvesterId, Error]),
                 ErrorMsg = case Error of
                     ?ERROR_TEMPORARY_FAILURE ->
-                        <<"Service unavailable: temporary failure">>;
-                    ?ERROR_BAD_DATA(Key) ->
-                        <<"Bad value: provided ", Key/binary, " could not be understood by the server">>
+                        <<"Temporary failure: Elasticsearch service is currently unavailable">>;
+                    ?ERROR_BAD_DATA(<<"payload">>) ->
+                        <<"Provided payload cannot be understood by the server">>
                 end,
                 {IndexId, {undefined, {FirstSeq, ErrorMsg}}}
         end

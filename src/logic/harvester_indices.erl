@@ -44,15 +44,22 @@
 update_stats(HarvesterId, IndicesToUpdate, UpdateFun) ->
     {ok, _} = od_harvester:update(HarvesterId, fun(#od_harvester{indices = Indices} = Harvester) ->
         NewIndices = case IndicesToUpdate of
-            all -> update__stats_internal(maps:keys(Indices), Indices, UpdateFun);
-            _ -> update__stats_internal(IndicesToUpdate, Indices, UpdateFun)
+            all -> update_stats_internal(maps:keys(Indices), Indices, UpdateFun);
+            _ -> update_stats_internal(IndicesToUpdate, Indices, UpdateFun)
         end,
         {ok, Harvester#od_harvester{indices = NewIndices}}
     end),
     ok.
 
 
-update__stats_internal(IndicesToUpdate, ExistingIndices, UpdateFun) ->
+%% @private
+-spec update_stats_internal
+    ([od_harvester:index_id()], od_harvester:indices(), UpdateFun) -> od_harvester:indices()
+    when UpdateFun :: fun((od_harvester:indices_stats()) -> od_harvester:indices_stats());
+    ([{od_harvester:index_id(), Mod}], od_harvester:indices(), UpdateFun) -> od_harvester:indices()
+    when UpdateFun :: fun((od_harvester:indices_stats(), Mod) -> od_harvester:indices_stats()),
+    Mod :: term().
+update_stats_internal(IndicesToUpdate, ExistingIndices, UpdateFun) ->
     lists:foldl(fun
         ({IndexId, Mod}, AccIndices) ->
             update_index_stats(AccIndices, IndexId,
@@ -69,7 +76,8 @@ update__stats_internal(IndicesToUpdate, ExistingIndices, UpdateFun) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_index_stats(od_harvester:indices(), od_harvester:index_id(), UpdateFun) ->
-    od_harvester:indices() when UpdateFun :: fun((od_harvester:indices_stats()) -> od_harvester:indices_stats()).
+    od_harvester:indices()
+    when UpdateFun :: fun((od_harvester:indices_stats()) -> od_harvester:indices_stats()).
 update_index_stats(Indices, IndexId, UpdateFun) ->
     case maps:find(IndexId, Indices) of
         {ok, #harvester_index{stats = Stats} = IndexData} ->

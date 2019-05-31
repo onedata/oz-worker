@@ -42,12 +42,10 @@
 % Index harvesting stats are stored per space per provider.
 -type indices_stats() :: #{od_space:id() => #{od_provider:id() => #index_stats{}}}.
 
--type index_operation() :: submit | delete.
-
 %% Batch entry is a map in a following format:
 %% #{
 %%    <<"fileId">> :: binary()
-%%    <<"operation">> :: index_operation(),
+%%    <<"operation">> :: binary(), %% <<"submit">> | <<"delete">>
 %%    <<"seq">> :: integer(),
 %%    <<"payload">> :: #{
 %%        json :: binary(),
@@ -55,7 +53,7 @@
 %%        xattrs :: json_map()
 %%    }
 %%  }
--type batch_entry() :: #{binary() => binary() | index_operation() | integer() | map()}.
+-type batch_entry() :: #{binary() => binary() | integer() | map()}.
 -type batch() :: [batch_entry()].
 
 
