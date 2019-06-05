@@ -467,7 +467,7 @@ prepare_gs_client(Config, {user, UserId, _Macaroon}) ->
     prepare_gs_client(Config, {user, UserId});
 prepare_gs_client(Config, {user, UserId}) ->
     {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, UserId),
-    {ok, GuiToken} = oz_test_utils:call_gui_token_endpoint(Config, CookieValue),
+    {ok, GuiToken} = oz_test_utils:acquire_gui_token(Config, CookieValue),
     prepare_gs_client(
         Config,
         {user, UserId},

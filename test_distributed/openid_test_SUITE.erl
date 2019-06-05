@@ -109,8 +109,7 @@ init_per_testcase(offline_access_internals, Config) ->
     init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
     oz_test_utils:delete_all_entities(Config),
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:set_env(Nodes, ?APP_NAME, openid_xrds_cache_ttl, -1),
+    oz_test_utils:set_env(Config, openid_xrds_cache_ttl, -1),
     oz_test_utils:mock_time(Config),
     Config.
 
@@ -133,8 +132,7 @@ call_mocked_refresh_endpoint(IdP, RefreshToken) ->
 
 % This code is evaluated on the testmaster node (called in test code)
 mock_refresh_endpoint_response(Config, Fun) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:set_env(Nodes, oz_worker, mocked_refresh_endpoint, Fun).
+    oz_test_utils:set_env(Config, mocked_refresh_endpoint, Fun).
 
 
 %%%===================================================================

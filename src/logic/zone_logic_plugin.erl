@@ -16,6 +16,7 @@
 
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/api_errors.hrl").
@@ -83,15 +84,15 @@ create(_Req) ->
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = configuration}}, _) ->
-    CompatibleOpVersions = oz_worker:get_env(compatible_op_versions, []),
-    CompatibleOpVersionsBin = [list_to_binary(V) || V <- CompatibleOpVersions],
+    Version = oz_worker:get_release_version(),
+    {ok, CompatibleOpVersions} = compatibility:get_compatible_versions(?ONEZONE, Version, ?ONEPROVIDER),
     SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
     {ok, #{
         name => gs_protocol:undefined_to_null(oz_worker:get_name()),
-        version => oz_worker:get_version(),
+        version => Version,
         build => oz_worker:get_build_version(),
         domain => oz_worker:get_domain(),
-        compatibleOneproviderVersions => CompatibleOpVersionsBin,
+        compatibleOneproviderVersions => CompatibleOpVersions,
         subdomainDelegationSupported => SubdomainDelegationSupported,
         supportedIdPs => auth_config:get_supported_idps_in_configuration_format()
     }}.

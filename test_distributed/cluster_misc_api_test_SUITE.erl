@@ -122,7 +122,7 @@ get_onezone_cluster_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
     GuiPackagePath = oz_test_utils:get_env(Config, gui_package_path),
     {ok, GuiHash} = oz_test_utils:call_oz(Config, gui, package_hash, [GuiPackagePath]),
-    Release = oz_test_utils:call_oz(Config, oz_worker, get_version, []),
+    Release = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
     Build = oz_test_utils:call_oz(Config, oz_worker, get_build_version, []),
     VersionInfo = {Release, Build, GuiHash},
 
@@ -444,7 +444,7 @@ update_oz_panel_version_info_test(Config) ->
 
 
 update_version_info_test_base(Config, ClusterType, ServiceType) ->
-    Service = onedata:service_by_type(ClusterType, ServiceType),
+    GuiType = onedata:service_gui(onedata:service_by_type(ClusterType, ServiceType)),
     DataKey = case ServiceType of
         ?WORKER -> <<"workerVersion">>;
         ?ONEPANEL -> <<"onepanelVersion">>
@@ -481,7 +481,7 @@ update_version_info_test_base(Config, ClusterType, ServiceType) ->
         }
     end,
 
-    {ExistingGuiHash, _IndexContent} = oz_test_utils:deploy_dummy_gui(Config, onedata:service_shortname(Service)),
+    {ExistingGuiHash, _IndexContent} = oz_test_utils:deploy_dummy_gui(Config, GuiType),
     BadGuiHash = <<"abcdefg">>,
 
     ExpRelease = <<"20.07.3">>,

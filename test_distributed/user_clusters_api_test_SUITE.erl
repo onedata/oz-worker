@@ -143,8 +143,7 @@ create_provider_registration_token_for_self_test(Config) ->
 
     % Make sure that when policy is restricted, only privileged users can create
     % new provider registration tokens.
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:set_env(Nodes, ?APP_NAME, provider_registration_policy, restricted),
+    oz_test_utils:set_env(Config, provider_registration_policy, restricted),
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_PROVIDERS_INVITE], []),
 
     ApiTestSpec2 = #api_test_spec{
@@ -629,7 +628,7 @@ init_per_testcase(_, Config) ->
 
 end_per_testcase(_, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:set_env(Nodes, ?APP_NAME, provider_registration_policy, open).
+    oz_test_utils:set_env(Config, provider_registration_policy, open).
 
 
 end_per_suite(_Config) ->

@@ -28,7 +28,9 @@
 %% API
 -export([
     call_oz/4,
-    get_env/2,
+    get_env/2, get_env/3,
+    set_env/3,
+    set_app_env/4,
     oz_domain/1,
     oz_url/2, oz_url/3,
     oz_rest_url/2,
@@ -217,10 +219,10 @@
     harvester_remove_user/3,
     harvester_remove_group/3,
     harvester_remove_space/3,
-    
+
     harvester_create_index/3,
     harvester_get_index_progress/3,
-    
+
     harvester_submit_entry/5,
     harvester_delete_entry/5
 ]).
@@ -273,6 +275,7 @@
     overwrite_config/3,
     overwrite_auth_config/2,
     overwrite_test_auth_config/2,
+    overwrite_compatibility_registry/2,
     create_dummy_gui_package/0,
     deploy_dummy_gui/2,
     copy_file_to_onezone_nodes/2,
@@ -285,8 +288,8 @@
     graph_sync_url/2,
     get_gs_supported_proto_versions/1,
     decode_gri/2,
-    call_gui_token_endpoint/2,
-    call_gui_token_endpoint/4
+    acquire_gui_token/2,
+    acquire_gui_token/4
 ]).
 
 %%%===================================================================
@@ -2355,7 +2358,7 @@ harvester_remove_group(Config, HarvesterId, GroupId) ->
 %% Creates index in given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec harvester_create_index(Config :: term(), HarvesterId :: od_harvester:id(), 
+-spec harvester_create_index(Config :: term(), HarvesterId :: od_harvester:id(),
     Data :: maps:map()) -> ok.
 harvester_create_index(Config, HarvesterId, Data) ->
     ?assertMatch({ok, _}, call_oz(
@@ -2368,7 +2371,7 @@ harvester_create_index(Config, HarvesterId, Data) ->
 %% Retrieves index progress from given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec harvester_get_index_progress(Config :: term(), HarvesterId :: od_harvester:id(), 
+-spec harvester_get_index_progress(Config :: term(), HarvesterId :: od_harvester:id(),
     IndexId :: od_harvester:index_id()) -> ok.
 harvester_get_index_progress(Config, HarvesterId, IndexId) ->
     ?assertMatch({ok, _}, call_oz(
@@ -2381,7 +2384,7 @@ harvester_get_index_progress(Config, HarvesterId, IndexId) ->
 %% Submits entry in given harvester as provider.
 %% @end
 %%--------------------------------------------------------------------
--spec harvester_submit_entry(Config :: term(), ProviderId :: od_provider:id(), 
+-spec harvester_submit_entry(Config :: term(), ProviderId :: od_provider:id(),
     HarvesterId :: od_harvester:id(), FileId :: file_id:objectid(), Data :: map()) -> ok.
 harvester_submit_entry(Config, ProviderId, HarvesterId, FileId, Data) ->
     ?assertMatch({ok, _}, call_oz(
@@ -2894,9 +2897,9 @@ mock_harvester_plugins(Config, Plugins) when is_list(Plugins) ->
     Nodes = ?OZ_NODES(Config),
     lists:foreach(fun(Plugin) -> mock_harvester_plugin(Nodes, Plugin) end, Plugins),
     test_utils:mock_new(Nodes, onezone_plugins),
-    
+
     test_utils:mock_expect(Nodes, onezone_plugins, get_plugins,
-        fun(Type) -> Plugins ++  meck:passthrough([Type]) end),
+        fun(Type) -> Plugins ++ meck:passthrough([Type]) end),
     Config;
 mock_harvester_plugins(Config, Plugin) ->
     mock_harvester_plugins(Config, [Plugin]).
@@ -2910,16 +2913,17 @@ mock_harvester_plugins(Config, Plugin) ->
 mock_harvester_plugin(Nodes, PluginName) ->
     test_utils:mock_new(Nodes, PluginName, [non_strict]),
     test_utils:mock_expect(Nodes, PluginName, type, fun() -> harvester_plugin end),
-    test_utils:mock_expect(Nodes, PluginName, ping, 
+    test_utils:mock_expect(Nodes, PluginName, ping,
         fun(?HARVESTER_ENDPOINT1) -> ok;
-           (?HARVESTER_ENDPOINT2) -> ok;
-           (_) -> {error, ?ERROR_TEMPORARY_FAILURE}
+            (?HARVESTER_ENDPOINT2) -> ok;
+            (_) -> {error, ?ERROR_TEMPORARY_FAILURE}
         end),
-    test_utils:mock_expect(Nodes, PluginName, submit_entry, fun(_,_,_,_,_) -> ok end),
-    test_utils:mock_expect(Nodes, PluginName, delete_entry, fun(_,_,_,_) -> ok end),
-    test_utils:mock_expect(Nodes, PluginName, create_index, fun(_,_,_,_) -> ok end),
-    test_utils:mock_expect(Nodes, PluginName, delete_index, fun(_,_,_) -> ok end),
-    test_utils:mock_expect(Nodes, PluginName, query_index, fun(_,_,_,_) -> {ok, ?HARVESTER_MOCKED_QUERY_DATA_MAP} end),
+    test_utils:mock_expect(Nodes, PluginName, submit_entry, fun(_, _, _, _, _) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, delete_entry, fun(_, _, _, _) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, create_index, fun(_, _, _, _) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, delete_index, fun(_, _, _) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, query_index, fun(_, _, _, _) ->
+        {ok, ?HARVESTER_MOCKED_QUERY_DATA_MAP} end),
     test_utils:mock_expect(Nodes, PluginName, query_validator, fun() -> ?HARVESTER_PLUGIN:query_validator() end).
 
 
@@ -2929,7 +2933,7 @@ mock_harvester_plugin(Nodes, PluginName) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec unmock_harvester_plugins(Config :: term(), Plugins :: atom() | list()) -> ok.
-unmock_harvester_plugins(Config, PluginName) when is_atom(PluginName)->
+unmock_harvester_plugins(Config, PluginName) when is_atom(PluginName) ->
     unmock_harvester_plugins(Config, [PluginName]);
 
 unmock_harvester_plugins(Config, Plugins) ->
@@ -3017,9 +3021,7 @@ get_mocked_time(Config) ->
 %%--------------------------------------------------------------------
 -spec simulate_time_passing(Config :: term(), Seconds :: non_neg_integer()) -> ok.
 simulate_time_passing(Config, Seconds) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    rpc:multicall(Nodes, oz_worker, set_env, [mocked_time, get_mocked_time(Config) + Seconds]),
-    ok.
+    set_env(Config, mocked_time, get_mocked_time(Config) + Seconds).
 
 
 %%--------------------------------------------------------------------
@@ -3125,6 +3127,20 @@ overwrite_test_auth_config(TestConfig, AuthConfigData) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Overwrites compatibility registry with given data (first it is serialized to JSON).
+%% @end
+%%--------------------------------------------------------------------
+overwrite_compatibility_registry(TestConfig, Registry) ->
+    {ok, RegistryPath} = call_oz(TestConfig, application, get_env, [ctool, compatibility_registry_path]),
+    rpc:multicall(?OZ_NODES(TestConfig), file, write_file, [
+        RegistryPath, json_utils:encode(Registry)
+    ]),
+    rpc:multicall(?OZ_NODES(TestConfig), compatibility, clear_registry_cache, []),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a dummy GUI package on the test master node and returns path to the
 %% package tarball.
 %% @end
@@ -3144,13 +3160,14 @@ create_dummy_gui_package() ->
     {DummyPackage, IndexContent}.
 
 
--spec deploy_dummy_gui(Config :: term(), onedata:service()) -> {ok, GuiHash :: binary()}.
-deploy_dummy_gui(Config, Service) ->
+-spec deploy_dummy_gui(Config :: term(), onedata:gui_type()) -> {ok, GuiHash :: binary()}.
+deploy_dummy_gui(Config, GuiType) ->
     {GuiPackage, IndexContent} = create_dummy_gui_package(),
     copy_file_to_onezone_nodes(Config, GuiPackage),
-    {ok, GuiHash} = gui:package_hash(GuiPackage),
-    ok = call_oz(Config, gui_static, deploy_package, [
-        Service, GuiPackage
+    {ok, GuiHash} = call_oz(Config, gui_static, deploy_package, [
+        % Gui package verification is turned off in tests so valid release
+        % version doesn't have to be provided
+        GuiType, <<"dummy-version">>, GuiPackage
     ]),
     {GuiHash, IndexContent}.
 
@@ -3244,6 +3261,29 @@ get_env(Config, Name) ->
 -spec get_env(Config :: term(), Name :: atom(), Default :: term()) -> term().
 get_env(Config, Name, Default) ->
     call_oz(Config, oz_worker, get_env, [Name, Default]).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets oz_worker's environment variable to desired value on all cluster nodes.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_env(Config :: term(), Name :: atom(), Value :: term()) -> ok.
+set_env(Config, Name, Value) ->
+    {_, []} = rpc:multicall(?OZ_NODES(Config), oz_worker, set_env, [Name, Value]),
+    ok.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Sets applications's environment variable to desired value on all cluster nodes.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_app_env(Config :: term(), App :: atom(), Name :: atom(), Value :: term()) -> ok.
+set_app_env(Config, App, Name, Value) ->
+    {_, []} = rpc:multicall(?OZ_NODES(Config), application, set_env, [App, Name, Value]),
+    ok.
+
 
 
 %%--------------------------------------------------------------------
@@ -3354,10 +3394,10 @@ decode_gri(Config, EncodedGri) ->
 %% Acquires a Onezone gui token issued for the session denoted by given cookie.
 %% @end
 %%--------------------------------------------------------------------
--spec call_gui_token_endpoint(Config :: term(), Cookie :: binary()) ->
+-spec acquire_gui_token(Config :: term(), Cookie :: binary()) ->
     {ok, Token :: binary()} | {error, term()}.
-call_gui_token_endpoint(Config, Cookie) ->
-    call_gui_token_endpoint(Config, Cookie, ?ONEZONE, ?ONEZONE_CLUSTER_ID).
+acquire_gui_token(Config, Cookie) ->
+    acquire_gui_token(Config, Cookie, ?OZ_WORKER_GUI, ?ONEZONE_CLUSTER_ID).
 
 
 %%--------------------------------------------------------------------
@@ -3366,20 +3406,18 @@ call_gui_token_endpoint(Config, Cookie) ->
 %% for use by given service (defined via cluster type and id).
 %% @end
 %%--------------------------------------------------------------------
--spec call_gui_token_endpoint(Config :: term(), Cookie :: binary(),
+-spec acquire_gui_token(Config :: term(), Cookie :: binary(),
     od_cluster:id(), od_cluster:type()) ->
     {ok, Token :: binary()} | {error, term()}.
-call_gui_token_endpoint(Config, Cookie, ClusterType, ClusterId) ->
+acquire_gui_token(Config, Cookie, GuiType, ClusterId) ->
+    GuiPrefix = onedata:gui_prefix(GuiType),
     Result = http_client:post(
-        str_utils:format("https://~s/gui-token", [oz_domain(Config)]),
+        oz_url(Config, str_utils:format_bin("/~s/~s/gui-preauthorize", [GuiPrefix, ClusterId])),
         #{
             <<"content-type">> => <<"application/json">>,
             <<"cookie">> => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
         },
-        json_utils:encode(#{
-            <<"clusterType">> => ClusterType,
-            <<"clusterId">> => ClusterId
-        }),
+        <<"">>,
         [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
     ),
     case Result of

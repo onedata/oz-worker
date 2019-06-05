@@ -212,7 +212,7 @@ migrate_onepanel_user_to_onezone(Config) ->
     Roles = [regular, admin],
 
     lists:foreach(fun(Role) ->
-        OnepanelUserId = ?UNIQUE_STRING,
+        OnepanelUserId = datastore_utils:gen_key(),
         OnepanelUsername = str_utils:format_bin("onepanel-~s", [Role]),
         Password = str_utils:format_bin("password-~s", [Role]),
         PasswordHash = onedata_passwords:create_hash(Password),
@@ -243,7 +243,32 @@ migrate_onepanel_user_to_onezone(Config) ->
             regular -> ?assertNot(IsInCluster);
             admin -> ?assert(IsInCluster)
         end
-    end, Roles).
+    end, Roles),
+
+    % Migration should make sure username is not occupied, or change it for
+    % the conflicting user (it is more important to migrate onepanel username
+    % than retain an alias, as the username is used for signing in).
+    oz_test_utils:delete_all_entities(Config),
+    {ok, ConflictingUser} = oz_test_utils:create_user(Config, #{<<"username">> => <<"admin">>}),
+
+    {ok, AdminUserId} = oz_test_utils:call_oz(Config, basic_auth, migrate_onepanel_user_to_onezone, [
+        datastore_utils:gen_key(), <<"admin">>, onedata_passwords:create_hash(<<"1234">>), admin
+    ]),
+
+    {ok, AllUsers} = oz_test_utils:list_users(Config),
+    ?assertEqual(lists:sort(ConflictingUser, AdminUserId), lists:sort(AllUsers)),
+
+    ?assertMatch(
+        {ok, #document{key = AdminUserId, value = #od_user{username = <<"admin">>}}},
+        oz_test_utils:call_oz(Config, od_user, get_by_username, [<<"admin">>])
+    ),
+
+    ?assertMatch(
+        {ok, #document{key = ConflictingUser, value = #od_user{username = undefined}}},
+        oz_test_utils:call_oz(Config, od_user, get, [ConflictingUser])
+    ),
+
+    ok.
 
 
 % Below macros use the variables Config and UserId, which appear in merge_groups_in_linked_accounts_test/1
