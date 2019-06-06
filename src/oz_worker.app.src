@@ -12,7 +12,7 @@
 {application, oz_worker, [
     {description, "OneZone worker node."},
     % @TODO temporarily bumping the OZ version to indicate new, incompatible
-    % functionalities. REVISE before releasing an official version.
+    % features. REVISE before releasing an official version.
     {vsn, "19.02.0-beta1"},
     {registered, [oz_worker_sup]},
     {applications, [
