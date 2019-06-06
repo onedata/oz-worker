@@ -109,13 +109,13 @@ expected_configuration(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
 
     SubdomainDelegationSupported = false,
-    OZDomainString = oz_test_utils:oz_domain(Config),
+    OZDomain = oz_test_utils:oz_domain(Config),
     OZName = case oz_test_utils:get_env(Config, oz_name) of
         undefined -> null;
         OZNameString -> list_to_binary(OZNameString)
     end,
 
-    OZVersionString = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
+    OZVersion = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
 
     OZBuild = case oz_test_utils:get_env(Config, build_version) of
         "" -> <<"unknown">>;
@@ -155,17 +155,17 @@ expected_configuration(Config) ->
     MockedCompatibleVersions = [<<"18.02.0-rc13">>, <<"18.02.1">>, <<"18.02.2">>],
     oz_test_utils:overwrite_compatibility_registry(Config, #{
         <<"revision">> => 1,
-        <<"compatiblity">> => #{
+        <<"compatibility">> => #{
             <<"onezone-oneprovider">> => #{
-                str_utils:to_binary(OZVersionString) => MockedCompatibleVersions
+                OZVersion => MockedCompatibleVersions
             }
         }
     }),
 
     #{
         <<"name">> => OZName,
-        <<"domain">> => str_utils:to_binary(OZDomainString),
-        <<"version">> => str_utils:to_binary(OZVersionString),
+        <<"domain">> => OZDomain,
+        <<"version">> => OZVersion,
         <<"build">> => OZBuild,
         <<"compatibleOneproviderVersions">> => MockedCompatibleVersions,
         <<"subdomainDelegationSupported">> => SubdomainDelegationSupported,

@@ -256,7 +256,7 @@ migrate_onepanel_user_to_onezone(Config) ->
     ]),
 
     {ok, AllUsers} = oz_test_utils:list_users(Config),
-    ?assertEqual(lists:sort(ConflictingUser, AdminUserId), lists:sort(AllUsers)),
+    ?assertEqual(lists:sort([ConflictingUser, AdminUserId]), lists:sort(AllUsers)),
 
     ?assertMatch(
         {ok, #document{key = AdminUserId, value = #od_user{username = <<"admin">>}}},

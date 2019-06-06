@@ -165,23 +165,21 @@ stream_and_deploy_package(Req, GuiType, GuiId, ServiceReleaseVersion) ->
     TempDir = mochitemp:mkdtemp(),
     UploadPath = filename:join([TempDir, ?UPLOADED_PACKAGE_NAME]),
 
-    Req2 = try
-        process_multipart(Req, UploadPath)
+    try
+        Req2 = process_multipart(Req, UploadPath),
+        case gui_static:deploy_package(GuiType, ServiceReleaseVersion, UploadPath) of
+            {error, _} = Error ->
+                throw(Error);
+            {ok, GuiHash} ->
+                {GuiHash, Req2}
+        end
     catch Type:Message ->
         ?error_stacktrace("Error while streaming GUI upload for ~s:~s - ~p:~p", [
             GuiPrefix, GuiId, Type, Message
         ]),
         throw(?HTTP_500_INTERNAL_SERVER_ERROR)
-    end,
-
-    Result = gui_static:deploy_package(GuiType, ServiceReleaseVersion, UploadPath),
-    mochitemp:rmtempdir(TempDir),
-
-    case Result of
-        {error, _} = Error ->
-            throw(Error);
-        {ok, GuiHash} ->
-            {GuiHash, Req2}
+    after
+        mochitemp:rmtempdir(TempDir)
     end.
 
 
@@ -242,6 +240,3 @@ stream_file(Req, IoDevice, Opts) ->
             ok = file:write(IoDevice, Body),
             stream_file(Req2, IoDevice, Opts)
     end.
-
-
-

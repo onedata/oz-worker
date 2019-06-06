@@ -353,17 +353,20 @@ create_gui_macaroons(Config) ->
 
 
 create_gui_macaroons_via_endpoint(Config) ->
+    AcquireGuiToken = fun(Cookie, GuiType, ClusterId) ->
+        oz_test_utils:acquire_gui_token(Config, Cookie, GuiType, ClusterId)
+    end,
+
+    VerifyToken = fun(Macaroon, ClusterType, ClusterId) ->
+        oz_test_utils:call_oz(Config, session, verify_gui_macaroon, [Macaroon, ClusterType, ClusterId])
+    end,
+
     {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, {Session, Cookie}} = oz_test_utils:log_in(Config, UserId),
 
-    {ok, Token1} = ?assertMatch(
-        {ok, _},
-        oz_test_utils:acquire_gui_token(Config, Cookie, ?OZ_WORKER_GUI, ?ONEZONE_CLUSTER_ID)
-    ),
+    {ok, Token1} = ?assertMatch({ok, _}, AcquireGuiToken(Cookie, ?OZ_WORKER_GUI, ?ONEZONE_CLUSTER_ID)),
     {ok, Macaroon1} = onedata_macaroons:deserialize(Token1),
-    ?assertMatch({ok, UserId, Session}, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEZONE, ?ONEZONE_CLUSTER_ID]
-    )),
+    ?assertMatch({ok, UserId, Session}, VerifyToken(Macaroon1, ?ONEZONE, ?ONEZONE_CLUSTER_ID)),
 
     % The user will belong to the cluster as the provider admin
     {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, UserId, <<"provider">>),
@@ -371,46 +374,39 @@ create_gui_macaroons_via_endpoint(Config) ->
     % acquire_gui_token takes ClusterId
     % verify_gui_macaroon takes ProviderId
 
-    {ok, Token2} = ?assertMatch(
-        {ok, _},
-        oz_test_utils:acquire_gui_token(Config, Cookie, ?OP_WORKER_GUI, ClusterId)
-    ),
+    % The user is a member of provider cluster, but is not supported by the provider,
+    % so he can't generate a token for the provider GUI.
+    ?assertMatch({ok, _}, AcquireGuiToken(Cookie, ?ONEPANEL_GUI, ClusterId)),
+    ?assertMatch(?ERROR_FORBIDDEN, AcquireGuiToken(Cookie, ?OP_WORKER_GUI, ClusterId)),
+
+    {ok, Space1} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
+    oz_test_utils:support_space(Config, ProviderId, Space1),
+
+    % Now it should be possible for the user to generate a token
+    {ok, Token2} = ?assertMatch({ok, _}, AcquireGuiToken(Cookie, ?OP_WORKER_GUI, ClusterId)),
     {ok, Macaroon2} = onedata_macaroons:deserialize(Token2),
 
-    ?assertMatch({ok, UserId, Session}, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEPROVIDER, ProviderId]
-    )),
-    ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon2, ?ONEZONE, ?ONEZONE_CLUSTER_ID]
-    )),
-    ?assertMatch(?ERROR_MACAROON_INVALID, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon1, ?ONEPROVIDER, ProviderId]
-    )),
+    ?assertMatch({ok, UserId, Session}, VerifyToken(Macaroon2, ?ONEPROVIDER, ProviderId)),
+    ?assertMatch(?ERROR_MACAROON_INVALID, VerifyToken(Macaroon2, ?ONEZONE, ?ONEZONE_CLUSTER_ID)),
+    ?assertMatch(?ERROR_MACAROON_INVALID, VerifyToken(Macaroon1, ?ONEPROVIDER, ProviderId)),
 
     % A user not belonging to the provider/cluster cannot generate GUI tokens for it
     {ok, User2} = oz_test_utils:create_user(Config),
     {ok, {Session2, Cookie2}} = oz_test_utils:log_in(Config, User2),
-    ?assertMatch(
-        ?ERROR_FORBIDDEN, oz_test_utils:acquire_gui_token(Config, Cookie2, ?OP_WORKER_GUI, ClusterId)
-    ),
+    ?assertMatch(?ERROR_FORBIDDEN, AcquireGuiToken(Cookie2, ?OP_WORKER_GUI, ClusterId)),
 
-    % But after becoming an effective member, he can
-    {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(User2), <<"space">>),
-    oz_test_utils:support_space(Config, ProviderId, SpaceId),
+    % After becoming an effective member of the provider, he can
+    {ok, Space2} = oz_test_utils:create_space(Config, ?USER(User2), <<"space">>),
+    oz_test_utils:support_space(Config, ProviderId, Space2),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    {ok, Token3} = ?assertMatch(
-        {ok, _},
-        oz_test_utils:acquire_gui_token(Config, Cookie2, ?OP_WORKER_GUI, ClusterId)
-    ),
+    {ok, Token3} = ?assertMatch({ok, _}, AcquireGuiToken(Cookie2, ?OP_WORKER_GUI, ClusterId)),
+    % ... but not for the Onepanel GUI
+    ?assertMatch(?ERROR_FORBIDDEN, AcquireGuiToken(Cookie2, ?ONEPANEL_GUI, ClusterId)),
     {ok, Macaroon3} = onedata_macaroons:deserialize(Token3),
-    ?assertMatch({ok, User2, Session2}, oz_test_utils:call_oz(
-        Config, session, verify_gui_macaroon, [Macaroon3, ?ONEPROVIDER, ProviderId]
-    )),
+    ?assertMatch({ok, User2, Session2}, VerifyToken(Macaroon3, ?ONEPROVIDER, ProviderId)),
 
     % Tokens can be generated only for existing clusters
-    ?assertMatch(
-        ?ERROR_MALFORMED_DATA, oz_test_utils:acquire_gui_token(Config, Cookie2, ?OP_WORKER_GUI, <<"bad-cluster">>)
-    ),
+    ?assertMatch(?ERROR_MALFORMED_DATA, AcquireGuiToken(Cookie2, ?OP_WORKER_GUI, <<"bad-cluster">>)),
 
     % Make sure provider gui tokens are properly accepted in REST
     {ok, _, _, UserData} = ?assertMatch({ok, 200, _, _}, http_client:get(

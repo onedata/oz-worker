@@ -63,7 +63,7 @@
 -define(CUSTOM_STATIC_ROOT, oz_worker:get_env(gui_custom_static_root)).
 -define(LEGACY_CUSTOM_STATIC_ROOT, oz_worker:get_env(legacy_gui_custom_static_root)).
 
--define(CLUSTER_NODES, begin {ok, __Nodes} = node_manager:get_cluster_nodes(), __Nodes end).
+-define(CLUSTER_NODES, element(2, {ok, _} = node_manager:get_cluster_nodes())).
 
 -define(CRITICAL_SECTION(GuiHash, Fun), critical_section:run({gui_static, GuiHash}, Fun)).
 
@@ -270,7 +270,7 @@ remove_unused_packages(on_node, GuiType) ->
         UnusedPkgPath = filename:join(StaticRoot, UnusedPkg),
         case file_utils:seconds_since_modification(UnusedPkgPath) of
             {ok, Seconds} when Seconds > ?CLEANING_AGE_THRESHOLD ->
-                ?debug("Removed unused GUI package: ~s/~s", [GuiPrefix, UnusedPkg]),
+                ?debug("Removing unused GUI package: ~s/~s", [GuiPrefix, UnusedPkg]),
                 ok = file_utils:recursive_del(UnusedPkgPath);
             _ ->
                 ok

@@ -119,9 +119,8 @@ set_password(User, NewPass) ->
 %% @doc
 %% Creates a user account in Onezone based on OZ panel user data - dedicated for
 %% migration between versions 18.02 and 19.02.
-%% Makes sure username is not occupied, or changes it for the conflicting user
-%% (it is more important to migrate onepanel username than retain an alias,
-%% as the username is used for signing in).
+%% Makes sure username is not occupied, or nullifies it for the conflicting user
+%% (onepanel users have higher priority during upgrade).
 %% @end
 %%--------------------------------------------------------------------
 -spec migrate_onepanel_user_to_onezone(OnepanelUserId :: binary(),
