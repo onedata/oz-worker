@@ -368,7 +368,7 @@ join_harvester(Client, SpaceId, Token) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Submits given batch to harvesters given in Destination.
-%% Destination, maxSeq and Batch are provider explicitly.
+%% Destination, maxSeq and Batch are given explicitly.
 %% @end
 %%--------------------------------------------------------------------
 -spec harvest_metadata(Client :: entity_logic:client(), SpaceId :: od_space:id(),
@@ -386,7 +386,7 @@ harvest_metadata(Client, SpaceId, Destination, MaxStreamSeq, MaxSeq, Batch) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Submits given batch to harvesters given in Destination.
-%% Destination, maxSeq and Batch are provider in a proper Data object.
+%% Destination, maxSeq and Batch are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec harvest_metadata(Client :: entity_logic:client(), SpaceId :: od_space:id(), 

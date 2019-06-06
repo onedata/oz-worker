@@ -251,6 +251,7 @@ is_code_expected(Code, ExpectedCodes) ->
     end, ExpectedCodes).
 
 
+%%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% Prepares elasticsearch bulk request in format:
@@ -261,6 +262,7 @@ is_code_expected(Code, ExpectedCodes) ->
 %% { "field1" : "value1" }
 %% Each line ends with literal '\n'
 %% @end
+%%--------------------------------------------------------------------
 -spec prepare_elasticsearch_batch(od_harvester:batch()) -> binary().
 prepare_elasticsearch_batch(Batch) ->
     Requests = lists:map(fun(BatchEntry) ->
@@ -287,6 +289,7 @@ prepare_elasticsearch_batch(Batch) ->
     <<(str_utils:join_binary(Requests, <<"\n">>))/binary, "\n">>.
 
 
+%%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% Parses elasticsearch bulk result in format:
@@ -313,6 +316,7 @@ prepare_elasticsearch_batch(Batch) ->
 %%    }
 %%  ]
 %% @end
+%%--------------------------------------------------------------------
 -spec parse_batch_result(Res :: map(), od_harvester:batch(), od_harvester:id(), od_harvester:index_id()) ->
     ok | {error, SuccessfulSeq :: integer() | undefined, FailedSeq :: integer(), Error :: binary()}.
 parse_batch_result(Res, Batch, HarvesterId, IndexId) ->
