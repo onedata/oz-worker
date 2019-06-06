@@ -123,7 +123,7 @@ submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
                     ?ERROR_BAD_DATA(<<"payload">>) ->
                         <<"Provided payload cannot be understood by the server">>
                 end,
-                {IndexId, {undefined, {FirstSeq, ErrorMsg}}}
+                {IndexId, {error, undefined, FirstSeq, ErrorMsg}}
         end
     end, Indices)}.
 
