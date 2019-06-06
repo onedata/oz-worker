@@ -3429,5 +3429,7 @@ acquire_gui_token(Config, Cookie, GuiType, ClusterId) ->
         {ok, 401, _, _} ->
             ?ERROR_UNAUTHORIZED;
         {ok, 403, _, _} ->
-            ?ERROR_FORBIDDEN
+            ?ERROR_FORBIDDEN;
+        {ok, 404, _, _} ->
+            ?ERROR_NOT_FOUND
     end.

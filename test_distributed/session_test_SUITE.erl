@@ -406,7 +406,7 @@ create_gui_macaroons_via_endpoint(Config) ->
     ?assertMatch({ok, User2, Session2}, VerifyToken(Macaroon3, ?ONEPROVIDER, ProviderId)),
 
     % Tokens can be generated only for existing clusters
-    ?assertMatch(?ERROR_MALFORMED_DATA, AcquireGuiToken(Cookie2, ?OP_WORKER_GUI, <<"bad-cluster">>)),
+    ?assertMatch(?ERROR_NOT_FOUND, AcquireGuiToken(Cookie2, ?OP_WORKER_GUI, <<"bad-cluster">>)),
 
     % Make sure provider gui tokens are properly accepted in REST
     {ok, _, _, UserData} = ?assertMatch({ok, 200, _, _}, http_client:get(
