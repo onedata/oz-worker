@@ -2,7 +2,7 @@
 
 REPO	        ?= oz_worker
 
-# distro for package building (oneof: wily, fedora-23-x86_64)
+# distro for package building (oneof: xenial, centos-7-x86_64)
 DISTRIBUTION    ?= none
 export DISTRIBUTION
 
