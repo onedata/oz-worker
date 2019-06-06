@@ -65,7 +65,7 @@
 
 -define(CLUSTER_NODES, element(2, {ok, _} = node_manager:get_cluster_nodes())).
 
--define(CRITICAL_SECTION(GuiHash, Fun), critical_section:run({gui_static, GuiHash}, Fun)).
+-define(CRITICAL_SECTION(LockId, Fun), critical_section:run({gui_static, LockId}, Fun)).
 
 
 %%%===================================================================
@@ -135,7 +135,7 @@ ensure_package(on_cluster, GuiType, PackageBin, GuiHash) ->
     end, ?CLUSTER_NODES);
 
 ensure_package(on_node, GuiType, PackageBin, GuiHash) ->
-    ?info("Deploying GUI package for ~s: ~s", [GuiType, GuiHash]),
+    ?info("Deploying GUI package: ~s", [gui_path(GuiType, GuiHash)]),
     TempDir = mochitemp:mkdtemp(),
     {ok, ExtractedPackagePath} = gui:extract_package({binary, PackageBin}, TempDir),
     PackageStaticRoot = static_root(GuiType, GuiHash),
@@ -458,7 +458,9 @@ link_exists(Path) ->
 -spec schedule_removal_of_unused_packages() -> ok.
 schedule_removal_of_unused_packages() ->
     spawn(fun() ->
-        [remove_unused_packages(GuiType) || GuiType <- ?GUI_TYPES]
+        ?CRITICAL_SECTION(remove_unused_packages, fun() ->
+            [remove_unused_packages(GuiType) || GuiType <- ?GUI_TYPES]
+        end)
     end),
     ok.
 

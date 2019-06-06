@@ -25,6 +25,7 @@
 -include("http/rest.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
@@ -57,7 +58,7 @@ handle(<<"POST">>, Req) ->
     catch
         throw:{error, _} = Error ->
             EncodedError = gs_protocol_errors:error_to_json(1, Error),
-            cowboy_req:reply(400, #{}, json_utils:encode(EncodedError), Req);
+            cowboy_req:reply(?HTTP_400_BAD_REQUEST, #{}, json_utils:encode(EncodedError), Req);
         throw:Code when is_integer(Code) ->
             cowboy_req:reply(Code, Req);
         Type:Reason ->
@@ -81,18 +82,18 @@ handle_gui_upload(Req) ->
         throw(?HTTP_404_NOT_FOUND)
     end,
 
-    {ok, ServiceReleaseVersion} = validate_and_authorize(GuiType, GuiId, Req),
+    ServiceReleaseVersion = validate_and_authorize(GuiType, GuiId, Req),
 
-    {GuiHash, Req2} = stream_and_deploy_package(Req, GuiType, GuiId, ServiceReleaseVersion),
-
-    case GuiType of
-        ?HARVESTER_GUI ->
-            ok = gui_static:link_gui(GuiPrefix, GuiId, GuiHash);
-        _ ->
-            ok
-    end,
-
-    cowboy_req:reply(?HTTP_200_OK, Req2).
+    case stream_and_deploy_package(Req, GuiType, GuiId, ServiceReleaseVersion) of
+        {ok, GuiHash, Req2} ->
+            % Harvester GUIs are linked during upload, service GUIs are linked
+            % during cluster version update
+            GuiType =:= ?HARVESTER_GUI andalso gui_static:link_gui(GuiPrefix, GuiId, GuiHash),
+            cowboy_req:reply(?HTTP_200_OK, Req2);
+        {error, _} = Error ->
+            EncodedError = gs_protocol_errors:error_to_json(1, Error),
+            cowboy_req:reply(?HTTP_400_BAD_REQUEST, #{}, json_utils:encode(EncodedError), Req)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -102,7 +103,7 @@ handle_gui_upload(Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate_and_authorize(onedata:gui_type(), gui_static:gui_id(), cowboy_req:req()) ->
-    {ok, onedata:release_version()} | no_return().
+    onedata:release_version() | no_return().
 validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
     harvester_logic:exists(HarvesterId) orelse throw(?HTTP_404_NOT_FOUND),
 
@@ -117,7 +118,7 @@ validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
                 orelse user_logic:has_eff_oz_privilege(UserId, ?OZ_HARVESTERS_UPDATE) of
                 true ->
                     % Harvester packages are versioned along with Onezone
-                    {ok, oz_worker:get_release_version()};
+                    oz_worker:get_release_version();
                 _ ->
                     throw(?HTTP_403_FORBIDDEN)
             end;
@@ -142,7 +143,7 @@ validate_and_authorize(GuiType, ClusterId, Req) ->
 
     case auth_logic:authorize_by_macaroons(Req) of
         {true, ?PROVIDER(ClusterId)} ->
-            {ok, ReleaseVersion};
+            ReleaseVersion;
         {true, _} ->
             throw(?HTTP_403_FORBIDDEN);
         _ ->
@@ -158,7 +159,7 @@ validate_and_authorize(GuiType, ClusterId, Req) ->
 %%--------------------------------------------------------------------
 -spec stream_and_deploy_package(cowboy_req:req(), onedata:gui_type(),
     gui_static:gui_id(), onedata:release_version()) ->
-    {onedata:gui_hash(), cowboy_req:req()} | no_return().
+    {ok, onedata:gui_hash(), cowboy_req:req()} | {error, term()}.
 stream_and_deploy_package(Req, GuiType, GuiId, ServiceReleaseVersion) ->
     GuiPrefix = onedata:gui_prefix(GuiType),
     ?debug("Received GUI upload for ~s:~s", [GuiPrefix, GuiId]),
@@ -168,16 +169,16 @@ stream_and_deploy_package(Req, GuiType, GuiId, ServiceReleaseVersion) ->
     try
         Req2 = process_multipart(Req, UploadPath),
         case gui_static:deploy_package(GuiType, ServiceReleaseVersion, UploadPath) of
-            {error, _} = Error ->
-                throw(Error);
             {ok, GuiHash} ->
-                {GuiHash, Req2}
+                {ok, GuiHash, Req2};
+            {error, _} = Error ->
+                Error
         end
     catch Type:Message ->
         ?error_stacktrace("Error while streaming GUI upload for ~s:~s - ~p:~p", [
             GuiPrefix, GuiId, Type, Message
         ]),
-        throw(?HTTP_500_INTERNAL_SERVER_ERROR)
+        ?ERROR_INTERNAL_SERVER_ERROR
     after
         mochitemp:rmtempdir(TempDir)
     end.

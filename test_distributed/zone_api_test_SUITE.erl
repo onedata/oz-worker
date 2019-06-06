@@ -156,7 +156,7 @@ expected_configuration(Config) ->
     oz_test_utils:overwrite_compatibility_registry(Config, #{
         <<"revision">> => 1,
         <<"compatibility">> => #{
-            <<"onezone-oneprovider">> => #{
+            <<"onezone:oneprovider">> => #{
                 OZVersion => MockedCompatibleVersions
             }
         }
