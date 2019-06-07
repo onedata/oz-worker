@@ -53,10 +53,10 @@ handle(<<"GET">>, Req) ->
 
         ServiceType = onedata:service_type(Service),
         {ok, Domain} = cluster_logic:get_domain(ClusterId),
-        Origin = case ServiceType of
-            ?WORKER -> str_utils:format_bin("https://~s", [Domain]);
+        ApiOrigin = case ServiceType of
+            ?WORKER -> Domain;
             % @TODO VFS-4698 Should depend on Onepanel proxy
-            ?ONEPANEL -> str_utils:format_bin("https://~s:9443", [Domain])
+            ?ONEPANEL -> str_utils:format_bin("~s:9443", [Domain])
         end,
 
         cowboy_req:reply(
@@ -66,7 +66,7 @@ handle(<<"GET">>, Req) ->
                 <<"clusterType">> => ClusterType,
                 <<"clusterId">> => ClusterId,
                 <<"serviceType">> => ServiceType,
-                <<"origin">> => Origin,
+                <<"apiOrigin">> => ApiOrigin,
                 <<"guiMode">> => ?UNIFIED
             }),
             Req

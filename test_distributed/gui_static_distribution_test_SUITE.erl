@@ -17,6 +17,7 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
+-include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
@@ -44,6 +45,7 @@
     gui_upload_with_too_large_package_returns_proper_error/1,
     gui_upload_page_deploys_op_worker_gui_on_all_nodes/1,
     gui_upload_page_deploys_op_panel_gui_on_all_nodes/1,
+    gui_upload_page_deploys_harvester_gui_on_all_nodes/1,
     gui_package_verification_works/1,
     unused_packages_are_cleaned/1,
     empty_gui_is_linked_after_failed_op_worker_version_update/1,
@@ -67,6 +69,7 @@ all() ->
         gui_upload_with_too_large_package_returns_proper_error,
         gui_upload_page_deploys_op_worker_gui_on_all_nodes,
         gui_upload_page_deploys_op_panel_gui_on_all_nodes,
+        gui_upload_page_deploys_harvester_gui_on_all_nodes,
         gui_package_verification_works,
         unused_packages_are_cleaned,
         empty_gui_is_linked_after_failed_op_worker_version_update,
@@ -390,6 +393,32 @@ gui_upload_page_deploys_op_panel_gui_on_all_nodes(Config) ->
     ?assert(version_info_is_set(Config, ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build">>, OppGuiHash})).
 
 
+gui_upload_page_deploys_harvester_gui_on_all_nodes(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
+    oz_test_utils:harvester_add_user(Config, HarvesterId, U1),
+    oz_test_utils:harvester_set_user_privileges(Config, HarvesterId, U1, [?HARVESTER_UPDATE], []),
+
+    {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, U1),
+    {ok, GuiToken} = oz_test_utils:acquire_gui_token(Config, CookieValue),
+
+    {HrvGuiPackage, HrvIndexContent} = oz_test_utils:create_dummy_gui_package(),
+    {ok, HrvGuiHash} = gui:package_hash(HrvGuiPackage),
+
+    ?assertNot(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?HARVESTER_GUI, HrvGuiHash])),
+
+    ?assertMatch({ok, 200, _, _}, perform_upload(
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage, #{<<"x-auth-token">> => GuiToken}
+    )),
+
+    ?assert(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?HARVESTER_GUI, HrvGuiHash])),
+
+    ?assert(static_directory_exists(Config, [<<"./hrv/">>, HrvGuiHash])),
+    ?assert(link_exists(Config, [<<"./hrv/">>, HarvesterId], HrvGuiHash)),
+    ?assert(file_is_served(Config, HrvIndexContent, [<<"/hrv/">>, HarvesterId, <<"/i">>])),
+    ?assert(file_is_served(Config, HrvIndexContent, [<<"/hrv/">>, HarvesterId, <<"/index.html">>])).
+
+
 gui_package_verification_works(Config) ->
     oz_test_utils:set_env(Config, disable_gui_package_verification, false),
     oz_test_utils:set_app_env(Config, ctool, compatibility_registry_mirrors, []),
@@ -409,7 +438,7 @@ gui_package_verification_works(Config) ->
 
     % Whitelist the GUI hash:
     oz_test_utils:overwrite_compatibility_registry(Config, #{
-        <<"revision">> => 1,
+        <<"revision">> => 2019010100,
         <<"gui-sha256">> => #{
             <<"op-worker">> => #{
                 ?DEFAULT_RELEASE_VERSION => [OpGuiHash]
@@ -434,6 +463,70 @@ gui_package_verification_works(Config) ->
     )),
     ?assertMatch({ok, 200, _, _}, perform_upload(
         Config, <<"onp">>, ClusterId, OpGuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+    )),
+
+    % Harvester GUI package verification can be turned off using a separate env
+    oz_test_utils:set_env(Config, disable_gui_package_verification, false),
+    oz_test_utils:set_env(Config, disable_harvester_gui_package_verification, false),
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
+    oz_test_utils:harvester_add_user(Config, HarvesterId, U1),
+    oz_test_utils:harvester_set_user_privileges(Config, HarvesterId, U1, [?HARVESTER_UPDATE], []),
+    {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, U1),
+    {ok, GuiToken} = oz_test_utils:acquire_gui_token(Config, CookieValue),
+
+    {HrvGuiPackage1, _HrvIndexContent} = oz_test_utils:create_dummy_gui_package(),
+    {ok, HrvGuiHash1} = gui:package_hash(HrvGuiPackage1),
+
+    % GUI hash is not whitelisted
+    ?assertMatch({ok, 400, _, ExpError}, perform_upload(
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage1, #{<<"x-auth-token">> => GuiToken}
+    )),
+
+    % Whitelist the GUI hash:
+    oz_test_utils:overwrite_compatibility_registry(Config, #{
+        <<"revision">> => 2019010100,
+        <<"gui-sha256">> => #{
+            %% Harvester GUI entries have another nesting level with human-readable labels
+            <<"harvester">> => #{
+                ?DEFAULT_RELEASE_VERSION => #{
+                    <<"ecrin">> => [HrvGuiHash1]
+                }
+            }
+        }
+    }),
+    ?assertMatch({ok, 200, _, ExpError}, perform_upload(
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage1, #{<<"x-auth-token">> => GuiToken}
+    )),
+
+    % Unknown hash should not be accepted
+    {HrvGuiPackage2, _HrvIndexContent} = oz_test_utils:create_dummy_gui_package(),
+
+    ?assertMatch({ok, 400, _, ExpError}, perform_upload(
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage2, #{<<"x-auth-token">> => GuiToken}
+    )),
+
+    % Disable GUI package verification for harvesters only
+    oz_test_utils:set_env(Config, disable_harvester_gui_package_verification, true),
+    ?assertMatch({ok, 200, _, ExpError}, perform_upload(
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage2, #{<<"x-auth-token">> => GuiToken}
+    )),
+
+    % It should not work for other services
+    ?assertMatch({ok, 400, _, ExpError}, perform_upload(
+        Config, <<"onp">>, ClusterId, HrvGuiPackage2, #{<<"macaroon">> => ProviderMacaroon}
+    )),
+
+    % When verification is disabled, any package for any service should be accepted
+    oz_test_utils:set_env(Config, disable_gui_package_verification, true),
+    ?assertMatch({ok, 200, _, ExpError}, perform_upload(
+        Config, <<"onp">>, ClusterId, HrvGuiPackage2, #{<<"macaroon">> => ProviderMacaroon}
+    )),
+
+    {HrvGuiPackage3, _HrvIndexContent} = oz_test_utils:create_dummy_gui_package(),
+    ?assertMatch({ok, 200, _, ExpError}, perform_upload(
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage3, #{<<"x-auth-token">> => GuiToken}
     )).
 
 

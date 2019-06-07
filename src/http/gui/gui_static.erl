@@ -58,6 +58,7 @@
 -define(CLEANING_AGE_THRESHOLD, 86400). % 1 day
 
 -define(DISABLE_VERIFICATION, oz_worker:get_env(disable_gui_package_verification, false)).
+-define(DISABLE_HARVESTER_VERIFICATION, oz_worker:get_env(disable_harvester_gui_package_verification, false)).
 
 -define(GUI_STATIC_ROOT, oz_worker:get_env(gui_static_root)).
 -define(CUSTOM_STATIC_ROOT, oz_worker:get_env(gui_custom_static_root)).
@@ -355,16 +356,19 @@ mimetype(Path) ->
 %% @private
 %% @doc
 %% Checks if given GUI checksum (SHA-256) is whitelisted in the compatibility file.
-%% The check can be turned off using the disable_gui_package_verification env.
+%% The check can be turned off using the disable_gui_package_verification env
+%% (or disable_harvester_gui_package_verification in case of harvester GUI).
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_gui_package(onedata:gui_type(), onedata:release_version(), onedata:gui_hash()) ->
     boolean().
 verify_gui_package(GuiType, ReleaseVersion, GuiHash) ->
-    case ?DISABLE_VERIFICATION of
-        true ->
+    case {?DISABLE_VERIFICATION, ?DISABLE_HARVESTER_VERIFICATION, GuiType} of
+        {true, _, _} ->
             true;
-        false ->
+        {false, true, ?HARVESTER_GUI} ->
+            true;
+        {_, _, _} ->
             case compatibility:verify_gui_hash(GuiType, ReleaseVersion, GuiHash) of
                 true ->
                     true;
