@@ -88,7 +88,7 @@ handle_gui_upload(Req) ->
         {ok, GuiHash, Req2} ->
             % Harvester GUIs are linked during upload, service GUIs are linked
             % during cluster version update
-            GuiType =:= ?HARVESTER_GUI andalso gui_static:link_gui(GuiPrefix, GuiId, GuiHash),
+            GuiType =:= ?HARVESTER_GUI andalso gui_static:link_gui(GuiType, GuiId, GuiHash),
             cowboy_req:reply(?HTTP_200_OK, Req2);
         {error, _} = Error ->
             EncodedError = gs_protocol_errors:error_to_json(1, Error),
