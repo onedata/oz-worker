@@ -118,7 +118,7 @@ get(Client, HandleId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_protected_data(Client :: entity_logic:client(), HandleId :: od_handle:id()) ->
-    {ok, maps:map()} | {error, term()}.
+    {ok, map()} | {error, term()}.
 get_protected_data(Client, HandleId) ->
     entity_logic:handle(#el_req{
         operation = get,

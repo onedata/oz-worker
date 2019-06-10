@@ -36,7 +36,10 @@
     create_space_invite_token_test/1,
     remove_space_test/1,
     list_spaces_test/1,
-    get_space_test/1
+    get_space_test/1,
+
+    list_eff_providers_test/1,
+    get_eff_provider_test/1
 ]).
 
 all() ->
@@ -45,7 +48,10 @@ all() ->
         create_space_invite_token_test,
         remove_space_test,
         list_spaces_test,
-        get_space_test
+        get_space_test,
+
+        list_eff_providers_test,
+        get_eff_provider_test
     ]).
 
 
@@ -344,6 +350,77 @@ get_space_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+list_eff_providers_test(Config) ->
+    {H1, [{P1, _}, {P2, P2Details}, {P3, _}], _Spaces, {U1, NonAdmin}} =
+        api_test_scenarios:create_harvester_eff_providers_env(Config),
+
+    ExpProviders = [P1, P2, P3],
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_HARVESTERS_LIST_RELATIONSHIPS]},
+                {user, U1}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {provider, P2, maps:get(<<"macaroon">>, P2Details)}
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = harvester_logic,
+            function = get_eff_providers,
+            args = [client, H1],
+            expected_result = ?OK_LIST(ExpProviders)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % check also harvester_logic:has_eff_provider function
+    lists:foreach(
+        fun(ProviderId) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, harvester_logic, has_eff_provider, [H1, ProviderId])
+            )
+        end, ExpProviders
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, harvester_logic, has_eff_provider, [H1, <<"asdiucyaie827346w">>])
+    ).
+
+
+get_eff_provider_test(Config) ->
+    {H1, Providers, _Spaces, {U1, NonAdmin}} =
+        api_test_scenarios:create_harvester_eff_providers_env(Config),
+
+    lists:foreach(fun({ProviderId, ProviderDetails}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_PROVIDERS_VIEW]},
+                    {user, U1}
+                ],
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, NonAdmin}
+                ]
+            },
+            logic_spec = #logic_spec{
+                module = harvester_logic,
+                function = get_eff_provider,
+                args = [client, H1, ProviderId],
+                expected_result = ?OK_MAP(#{
+                    <<"name">> => maps:get(<<"name">>, ProviderDetails)
+                })
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end, Providers).
 
 %%%===================================================================
 %%% Setup/teardown functions

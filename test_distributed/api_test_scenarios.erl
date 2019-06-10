@@ -50,6 +50,7 @@
     create_cluster_eff_users_env/1,
     create_eff_spaces_env/1,
     create_eff_providers_env/1,
+    create_harvester_eff_providers_env/1,
     create_eff_handle_services_env/1,
     create_eff_handles_env/1,
     create_eff_harvesters_env/1
@@ -1277,6 +1278,52 @@ create_eff_providers_env(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     {Providers, Spaces, Groups, Users}.
+
+
+create_harvester_eff_providers_env(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%  Provider1   Provider2  Provider3
+    %%          \    /    \    /
+    %%           \  /      \  /
+    %%           Space1   Space2
+    %%               \    /
+    %%                \  /
+    %%             Harvester1
+    %%                 |
+    %%               User1
+    %%      <<user>>
+    %%      NonAdmin
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    Providers = [{P1, _}, {P2, _}, {P3, _}] = lists:map(fun(_) ->
+        Name = ?UNIQUE_STRING,
+        {ok, {P, PMacaroon}} = oz_test_utils:create_provider(Config, Name),
+        {P, #{
+            <<"name">> => Name,
+            <<"macaroon">> => PMacaroon
+        }}
+    end, lists:seq(1,3)),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+
+    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space(Config, P2, S1),
+    oz_test_utils:support_space(Config, P2, S2),
+    oz_test_utils:support_space(Config, P3, S2),
+
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
+
+    oz_test_utils:harvester_add_space(Config, H1, S1),
+    oz_test_utils:harvester_add_space(Config, H1, S2),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {H1, Providers, [S1, S2], {U1, NonAdmin}}.
 
 
 create_eff_handle_services_env(Config) ->

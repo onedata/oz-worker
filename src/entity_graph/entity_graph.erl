@@ -1688,8 +1688,13 @@ gather_eff_from_neighbours(bottom_up, #od_harvester{} = Harvester) ->
             EffRelations = get_all_eff_relations(bottom_up, od_group, GroupId),
             override_eff_relations(EffRelations, [od_user, od_group], {Privileges, [{od_group, GroupId}]})
         end, maps:to_list(Groups));
-gather_eff_from_neighbours(top_down, #od_harvester{}) ->
-    [];
+gather_eff_from_neighbours(top_down, #od_harvester{} = Harvester) ->
+    #od_harvester{spaces = Spaces} = Harvester,
+    lists:map(
+        fun(SpaceId) ->
+            EffRelations = get_all_eff_relations(top_down, od_space, SpaceId),
+            override_eff_relations(EffRelations, [od_provider], [{od_space, SpaceId}])
+        end, Spaces);
 gather_eff_from_neighbours(top_down, #od_user{} = User) ->
     #od_user{groups = Groups, spaces = Spaces} = User,
     FromGroups = lists:map(
@@ -1806,8 +1811,10 @@ update_eff_relations(top_down, #od_space{} = Space, EffNeighbours) ->
     Space#od_space{
         eff_providers = maps:get(od_provider, EffNeighbours, #{})
     };
-update_eff_relations(top_down, #od_harvester{} = Harvester, _EffNeighbours) ->
-    Harvester.
+update_eff_relations(top_down, #od_harvester{} = Harvester, EffNeighbours) ->
+    Harvester#od_harvester{
+        eff_providers = maps:get(od_provider, EffNeighbours, #{})
+    }.
 
 
 %%--------------------------------------------------------------------
@@ -2036,8 +2043,9 @@ get_all_eff_relations(top_down, #od_space{} = Space) ->
     #od_space{eff_providers = EffProviders} = Space,
     #{od_provider => EffProviders};
 
-get_all_eff_relations(top_down, #od_harvester{}) ->
-    #{}.
+get_all_eff_relations(top_down, #od_harvester{} = Harvester) ->
+    #od_harvester{eff_providers = EffProviders} = Harvester,
+    #{od_provider => EffProviders}.
 
 
 

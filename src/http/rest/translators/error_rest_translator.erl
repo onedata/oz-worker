@@ -50,7 +50,6 @@ response({error, Type}) ->
 
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Translates an entity logic error into HTTP code, headers and body.
 %% @end
@@ -66,7 +65,7 @@ translate(?ERROR_NOT_IMPLEMENTED) ->
     ?HTTP_501_NOT_IMPLEMENTED;
 
 translate(?ERROR_TEMPORARY_FAILURE) ->
-    {?HTTP_503_SERVICE_UNAVAILABLE, <<"Service unavailable: temporary failure.">>};
+    {?HTTP_503_SERVICE_UNAVAILABLE, <<"Service unavailable: temporary failure">>};
 
 translate(?ERROR_NOT_SUPPORTED) ->
     {?HTTP_400_BAD_REQUEST,

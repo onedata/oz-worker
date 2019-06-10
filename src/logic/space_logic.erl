@@ -40,6 +40,7 @@
     create_group/3, create_group/4,
     
     join_harvester/3,
+    harvest_metadata/3, harvest_metadata/6,
 
     get_users/2, get_eff_users/2,
     get_user/3, get_eff_user/3,
@@ -122,7 +123,7 @@ get(Client, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_protected_data(Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
-    {ok, maps:map()} | {error, term()}.
+    {ok, map()} | {error, term()}.
 get_protected_data(Client, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -362,6 +363,41 @@ join_harvester(Client, SpaceId, Data) when is_map(Data) ->
     }));
 join_harvester(Client, SpaceId, Token) ->
     join_harvester(Client, SpaceId, #{<<"token">> => Token}).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Submits given batch to harvesters given in Destination.
+%% Destination, maxSeq and Batch are given explicitly.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvest_metadata(Client :: entity_logic:client(), SpaceId :: od_space:id(),
+    Destination :: map(), MaxStreamSeq :: integer(), MaxSeq :: non_neg_integer(), Batch :: map()) ->
+    {ok, map()} | {error, term()}.
+harvest_metadata(Client, SpaceId, Destination, MaxStreamSeq, MaxSeq, Batch) ->
+    harvest_metadata(Client, SpaceId, #{
+        <<"destination">> => Destination,
+        <<"maxStreamSeq">> => MaxStreamSeq,
+        <<"maxSeq">> => MaxSeq,
+        <<"batch">> => Batch
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Submits given batch to harvesters given in Destination.
+%% Destination, maxSeq and Batch are provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec harvest_metadata(Client :: entity_logic:client(), SpaceId :: od_space:id(), 
+    Data :: map()) -> {ok, map()} | {error, term()}.
+harvest_metadata(Client, SpaceId, Data) ->
+    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
+        operation = create,
+        client = Client,
+        gri = #gri{type = od_space, id = SpaceId, aspect = harvest_metadata},
+        data = Data
+    })).
 
 
 %%--------------------------------------------------------------------

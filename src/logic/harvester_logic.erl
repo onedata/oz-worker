@@ -22,6 +22,7 @@
 -export([
     get/2,
     get_protected_data/2,
+    get_public_data/2,
     list/1,
     get_all_plugins/0,
     get_gui_plugin_config/2
@@ -35,14 +36,15 @@
 ]).
 -export([
     create_index/3, create_index/4, create_index/5, 
-    get_index/3, get_index_progress/3, 
+    get_index/3, get_public_index/3, 
+    get_index_stats/3, 
     update_index/4,
     delete_index/3, delete_index_metadata/3,
     query_index/4,
     list_indices/2
 ]).
 -export([
-    submit_entry/4, delete_entry/4
+    submit_batch/4, submit_batch/7
 ]).
 -export([
     create_user_invite_token/2,
@@ -66,6 +68,8 @@
 
     get_spaces/2, get_space/3,
 
+    get_eff_providers/2, get_eff_provider/3,
+
     update_user_privileges/5, update_user_privileges/4,
     update_group_privileges/5, update_group_privileges/4,
 
@@ -79,8 +83,10 @@
     has_direct_user/2,
     has_eff_user/2,
     has_eff_group/2,
-    has_space/2
+    has_space/2,
+    has_eff_provider/2
 ]).
+
 
 %%%===================================================================
 %%% API
@@ -147,6 +153,20 @@ get_protected_data(Client, HarvesterId) ->
         operation = get,
         client = Client,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = protected}
+    }).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves public harvester data from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_public_data(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+    {ok, map()} | {error, term()}.
+get_public_data(Client, HarvesterId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = public}
     }).
 
 %%--------------------------------------------------------------------
@@ -364,22 +384,37 @@ get_index(Client, HarvesterId, IndexId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}}
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}, scope = private}
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves a harvester index progress from database.
+%% Retrieves a public harvester index data from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_index_progress(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
-    IndexId :: od_harvester:index_id()) -> {ok, od_harvester:index_progress()} | {error, term()}.
-get_index_progress(Client, HarvesterId, IndexId) ->
+-spec get_public_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+    IndexId :: od_harvester:index_id()) -> {ok, #od_harvester{}} | {error, term()}.
+get_public_index(Client, HarvesterId, IndexId) ->
     entity_logic:handle(#el_req{
         operation = get,
         client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index_progress, IndexId}}
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}, scope = public}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves a harvester index stats from database.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_index_stats(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+    IndexId :: od_harvester:index_id()) -> {ok, od_harvester:indices_stats()} | {error, term()}.
+get_index_stats(Client, HarvesterId, IndexId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index_stats, IndexId}}
     }).
 
 
@@ -402,32 +437,35 @@ update_index(Client, HarvesterId, IndexId, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Submits given data to harvesters backend.
+%% Submits given batch to harvesters backend.
+%% Indices, MaxSeq and Batch are given explicitly.
 %% @end
 %%--------------------------------------------------------------------
--spec submit_entry(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
-    FileId :: binary(), Data :: binary()) -> {ok, map()} | {error, term()}.
-submit_entry(Client, HarvesterId, FileId, Data) ->
-    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
-        operation = create,
-        client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {submit_entry, FileId}},
-        data = Data
-    })).
+-spec submit_batch(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+    Indices :: od_harvester:indices(), SpaceId :: od_space:id(), Batch :: od_harvester:batch(), 
+    MaxStreamSeq :: integer(), MaxSeq :: integer()) -> {ok, map()} | {error, term()}.
+submit_batch(Client, HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq) ->
+    submit_batch(Client, HarvesterId, SpaceId, #{
+            <<"indices">> => Indices,
+            <<"maxStreamSeq">> => MaxStreamSeq,
+            <<"maxSeq">> => MaxSeq,
+            <<"batch">> => Batch
+    }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Removes given FileId from harvesters backend.
+%% Submits given batch to harvesters backend.
+%% Indices, MaxSeq and Batch are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_entry(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
-    FileId :: binary(), Data :: map()) -> {ok, map()} | {error, term()}.
-delete_entry(Client, HarvesterId, FileId, Data) ->
+-spec submit_batch(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+    SpaceId :: od_space:id(), Data :: map()) -> {ok, map()} | {error, term()}.
+submit_batch(Client, HarvesterId, SpaceId, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
         client = Client,
-        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {delete_entry, FileId}},
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = {submit_batch, SpaceId}},
         data = Data
     })).
 
@@ -890,6 +928,38 @@ get_space(Client, HarvesterId, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves the list of effective providers of given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_providers(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+    {ok, [od_provider:id()]} | {error, term()}.
+get_eff_providers(Client, HarvesterId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_harvester, id = HarvesterId, aspect = eff_providers}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the information about specific effective provider among
+%% effective providers of given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_provider(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+    ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
+get_eff_provider(Client, HarvesterId, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = instance, scope = shared},
+        auth_hint = ?THROUGH_HARVESTER(HarvesterId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Updates privileges of specified user of given harvester.
 %% Allows to specify privileges to grant and to revoke.
 %% @end
@@ -1074,3 +1144,18 @@ has_space(HarvesterId, SpaceId) when is_binary(HarvesterId) ->
     entity_graph:has_relation(direct, top_down, od_space, SpaceId, od_harvester, HarvesterId);
 has_space(Harvester, SpaceId) ->
     entity_graph:has_relation(direct, top_down, od_space, SpaceId, Harvester).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether specified provider is an effective provider of given harvester.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_provider(HarvesterOrId :: od_harvester:id() | #od_harvester{},
+    ProviderId :: od_provider:id()) -> boolean().
+has_eff_provider(HarvesterId, ProviderId) when is_binary(HarvesterId) ->
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, od_harvester, HarvesterId);
+has_eff_provider(Harvester, ProviderId) ->
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Harvester).
+
+

@@ -302,7 +302,7 @@ resolve_endpoint(_IdP, Url) ->
 
 
 %% @private
--spec get_xrds(auth_config:idp()) -> maps:map().
+-spec get_xrds(auth_config:idp()) -> map().
 get_xrds(IdP) ->
     {ok, Xrds} = simple_cache:get({cached_xrds, IdP}, fun() ->
         {true, fetch_xrds(IdP), ?XRDS_CACHE_TTL}
@@ -311,7 +311,7 @@ get_xrds(IdP) ->
 
 
 %% @private
--spec fetch_xrds(auth_config:idp()) -> maps:map().
+-spec fetch_xrds(auth_config:idp()) -> map().
 fetch_xrds(IdP) ->
     XrdsEndpoint = ?CFG_XRDS_ENDPOINT(IdP),
     Params = parameters_append_custom(#{}, IdP, xrds),

@@ -920,6 +920,8 @@ get_eff_group_membership_intermediaries(Config) ->
     oz_test_utils:harvester_add_group(Config, H3, G4),
     oz_test_utils:harvester_set_group_privileges(Config, H3, G4, [], [?HARVESTER_VIEW]),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     % {HarvesterId, SubjectUser, CorrectUsers, ExpIntermediariesRaw}
     ExpectedMembershipIntermediaries = [
         {H1, UserGroup, [U1], ordsets:from_list([

@@ -14,9 +14,11 @@
 -author("Lukasz Opiola").
 
 -include("http/rest.hrl").
+-include("http/gui_paths.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
+-include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
@@ -43,6 +45,7 @@
     gui_upload_with_invalid_package_returns_bad_request/1,
     gui_upload_page_deploys_op_worker_gui_on_all_nodes/1,
     gui_upload_page_deploys_op_panel_gui_on_all_nodes/1,
+    gui_upload_page_deploys_harvester_gui_on_all_nodes/1,
     empty_gui_is_linked_after_failed_op_worker_version_update/1,
     empty_gui_is_linked_after_failed_op_panel_version_update/1,
     custom_static_files_are_served/1,
@@ -63,6 +66,7 @@ all() ->
         gui_upload_with_invalid_package_returns_bad_request,
         gui_upload_page_deploys_op_worker_gui_on_all_nodes,
         gui_upload_page_deploys_op_panel_gui_on_all_nodes,
+        gui_upload_page_deploys_harvester_gui_on_all_nodes,
         empty_gui_is_linked_after_failed_op_worker_version_update,
         empty_gui_is_linked_after_failed_op_panel_version_update,
         custom_static_files_are_served,
@@ -417,6 +421,35 @@ gui_upload_page_deploys_op_panel_gui_on_all_nodes(Config) ->
     ?assert(version_info_is_set(Config, ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build">>, OppGuiHash})).
 
 
+gui_upload_page_deploys_harvester_gui_on_all_nodes(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
+    oz_test_utils:harvester_add_user(Config, HarvesterId, U1),
+    oz_test_utils:harvester_set_user_privileges(Config, HarvesterId, U1, [?HARVESTER_UPDATE], []),
+
+    {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, U1),
+    {ok, GuiToken} = oz_test_utils:call_gui_token_endpoint(Config, CookieValue),
+
+    {HrvGuiPackage, HrvIndexContent} = oz_test_utils:create_dummy_gui_package(),
+    {ok, HrvGuiHash} = gui:package_hash(HrvGuiPackage),
+
+    ?assertNot(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?HARVESTER_GUI_PATH_PREFIX, HrvGuiHash])),
+
+    ?assertMatch({ok, 200, _, _}, http_client:post(
+        oz_test_utils:oz_url(Config, [<<"/hrv/">>, HarvesterId, <<"/gui-upload">>]),
+        #{<<"x-auth-token">> => GuiToken},
+        {multipart, [{file, list_to_binary(HrvGuiPackage)}]},
+        [?SSL_OPTS(Config)]
+    )),
+
+    ?assert(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?HARVESTER_GUI_PATH_PREFIX, HrvGuiHash])),
+
+    ?assert(static_directory_exists(Config, [<<"./hrv/">>, HrvGuiHash])),
+    ?assert(link_exists(Config, [<<"./hrv/">>, HarvesterId], HrvGuiHash)),
+    ?assert(file_is_served(Config, HrvIndexContent, [<<"/hrv/">>, HarvesterId, <<"/i">>])),
+    ?assert(file_is_served(Config, HrvIndexContent, [<<"/hrv/">>, HarvesterId, <<"/index.html">>])).
+
+
 empty_gui_is_linked_after_failed_op_worker_version_update(Config) ->
     {ok, {ProviderId, _ProviderMacaroon}} = oz_test_utils:create_provider(Config, <<"pr">>),
     ClusterId = ProviderId,
@@ -520,11 +553,14 @@ end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
-
+init_per_testcase(gui_upload_page_deploys_harvester_gui_on_all_nodes, Config) ->
+    oz_test_utils:mock_harvester_plugins(Config, [?HARVESTER_MOCK_PLUGIN]);
 init_per_testcase(_, Config) ->
     Config.
 
 
+end_per_testcase(gui_upload_page_deploys_harvester_gui_on_all_nodes, Config) ->
+    oz_test_utils:unmock_harvester_plugins(Config, [?HARVESTER_MOCK_PLUGIN]);
 end_per_testcase(_, _Config) ->
     ok.
 

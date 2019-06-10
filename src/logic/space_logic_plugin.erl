@@ -64,6 +64,7 @@ operation_supported(create, join, private) -> true;
 operation_supported(create, {user, _}, private) -> true;
 operation_supported(create, {group, _}, private) -> true;
 operation_supported(create, group, private) -> true;
+operation_supported(create, harvest_metadata, private) -> true;
 
 operation_supported(get, list, private) -> true;
 
@@ -251,8 +252,30 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}, data = Data}
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
     {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
     {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
-    {ok, resource, {NewGRI, ?THROUGH_GROUP(SpaceId), GroupData}}.
+    {ok, resource, {NewGRI, ?THROUGH_GROUP(SpaceId), GroupData}};
 
+create(#el_req{client = Client, gri = #gri{id = SpaceId, aspect = harvest_metadata}, data = Data}) ->
+    #{
+        <<"destination">> := Destination,
+        <<"maxSeq">> := MaxSeq,
+        <<"maxStreamSeq">> := MaxStreamSeq,
+        <<"batch">> := Batch
+    } = Data,
+    
+    Res = utils:pmap(fun(HarvesterId) ->
+        Indices = maps:get(HarvesterId, Destination),
+        case harvester_logic:submit_batch(Client, HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq) of
+            {ok, FailedIndices} -> {HarvesterId, FailedIndices};
+            Error -> {HarvesterId, Error}
+        end
+    end, maps:keys(Destination)),
+    
+    {ok, value, lists:foldl(
+        fun({HarvesterId, {error, _} = Error}, Acc) -> Acc#{HarvesterId => #{<<"error">> => Error}};
+           ({HarvesterId, FailedIndices}, Acc) when map_size(FailedIndices) =/= 0 -> Acc#{HarvesterId => FailedIndices};
+           (_, Acc) -> Acc
+        end, #{}, Res)}.
+    
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -352,7 +375,15 @@ update(Req = #el_req{gri = #gri{id = SpaceId, aspect = {group_privileges, GroupI
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
-    entity_graph:delete_with_relations(od_space, SpaceId);
+    fun(#od_space{harvesters = Harvesters}) ->
+        lists:foreach(fun(HarvesterId) ->
+            harvester_indices:update_stats(HarvesterId, all,
+                fun(ExistingStats) ->
+                    harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, true)
+                end)
+            end, Harvesters),
+        entity_graph:delete_with_relations(od_space, SpaceId)
+    end;
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}}) ->
     entity_graph:remove_relation(
@@ -367,16 +398,30 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}}) ->
     );
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {provider, ProviderId}}}) ->
-    entity_graph:remove_relation(
-        od_space, SpaceId,
-        od_provider, ProviderId
-    );
+    fun(#od_space{harvesters = Harvesters}) ->
+        lists:foreach(fun(HarvesterId) ->
+            harvester_indices:update_stats(HarvesterId, all,
+                fun(ExistingStats) -> 
+                    harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, true)
+                end)
+        end, Harvesters),
+        
+        entity_graph:remove_relation(
+            od_space, SpaceId,
+            od_provider, ProviderId
+        )
+    end;
 
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {harvester, HarvesterId}}}) ->
-    entity_graph:remove_relation(
-        od_harvester, HarvesterId,
-        od_space, SpaceId
-    ).
+    fun(#od_space{providers = Providers}) ->
+        harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->
+            harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, maps:keys(Providers), true)
+        end),
+        entity_graph:remove_relation(
+            od_harvester, HarvesterId,
+            od_space, SpaceId
+        )
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -483,6 +528,15 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Space) 
             false
     end;
 
+authorize(#el_req{operation = create, gri = #gri{id = SpaceId, aspect = harvest_metadata}, 
+    client = ?PROVIDER(ProviderId), data = #{<<"batch">> := Batch}}, Space) ->
+    
+    space_logic:has_provider(Space, ProviderId) andalso 
+            lists:all(fun(#{<<"fileId">> := FileId}) -> 
+                {ok, Guid} = file_id:objectid_to_guid(FileId),
+                file_id:guid_to_space_id(Guid) == SpaceId
+            end, Batch);
+
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_USER);
 
@@ -500,7 +554,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
             space_logic:has_provider(Space, ProviderId)
     end;
 
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}, Space) ->
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Space) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this space is checked in 'exists'
@@ -534,7 +588,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
 
         _ ->
             % Access to private data also allows access to protected data
-            authorize(Req#el_req{gri = #gri{scope = private}}, Space)
+            authorize(Req#el_req{gri = GRI#gri{scope = private}}, Space)
     end;
 
 authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
@@ -752,6 +806,15 @@ validate(#el_req{operation = create, gri = #gri{aspect = {group, _}}}) -> #{
     optional => #{
         <<"privileges">> => {list_of_atoms, privileges:space_privileges()}
     }
+};
+
+validate(#el_req{operation = create, gri = #gri{aspect = harvest_metadata}}) -> #{
+    required => #{
+        <<"destination">> => {any, any},
+        <<"maxSeq">> => {integer, {not_lower_than, 0}},
+        <<"maxStreamSeq">> => {integer, {not_lower_than, 0}},
+        <<"batch">> => {any, any}
+    }   
 };
 
 validate(Req = #el_req{operation = create, gri = #gri{aspect = group}}) ->

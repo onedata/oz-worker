@@ -29,7 +29,7 @@
 -type diff() :: datastore_doc:diff(record()).
 -type name() :: binary().
 -type proxy_endpoint() :: binary().
--type service_properties() :: maps:map().
+-type service_properties() :: map().
 
 -export_type([id/0, record/0]).
 -export_type([name/0, proxy_endpoint/0, service_properties/0]).
