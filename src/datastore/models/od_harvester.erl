@@ -39,14 +39,26 @@
 -type index_id() :: binary().
 -type index() :: #harvester_index{}.
 -type indices() :: #{index_id() => #harvester_index{}}.
-% Index harvesting progress is stored per space per provider and is a list containing two values: 
-%   current seq - sequence harvested in this index
-%   max_seq - highest sequence known in given space in given provider
--type index_progress() :: #{od_space:id() => #{od_provider:id() => [non_neg_integer()]}}.
+% Index harvesting stats are stored per space per provider.
+-type indices_stats() :: #{od_space:id() => #{od_provider:id() => #index_stats{}}}.
+
+%% Batch entry is a map in a following format:
+%% #{
+%%    <<"fileId">> :: binary()
+%%    <<"operation">> :: binary(), %% <<"submit">> | <<"delete">>
+%%    <<"seq">> :: integer(),
+%%    <<"payload">> :: #{
+%%        json :: binary(),
+%%        rdf :: binary(),
+%%        xattrs :: json_map()
+%%    }
+%%  }
+-type batch_entry() :: #{binary() => binary() | integer() | map()}.
+-type batch() :: [batch_entry()].
 
 
 -export_type([name/0, plugin/0, endpoint/0, schema/0, entry_id/0,
-    index_id/0, index/0, indices/0, index_progress/0]).
+    index_id/0, index/0, indices/0, indices_stats/0, batch/0, batch_entry/0]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -176,7 +188,13 @@ get_record_struct(1) ->
                 {name, string},
                 {schema, string},
                 {guiPluginName, string},
-                {progress, #{string => #{string => [integer, integer]}}}
+                {stats, #{string => #{string => {record, [
+                    {current_seq, integer},
+                    {max_seq, integer},
+                    {last_update, integer},
+                    {error, string},
+                    {archival, boolean}
+                ]}}}}
             ]}
         }},
 
@@ -186,6 +204,7 @@ get_record_struct(1) ->
 
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => [{atom, string}]}}, 
 
         {creation_time, integer}, 
         {creator, {record, [ 

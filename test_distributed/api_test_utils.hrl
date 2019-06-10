@@ -271,11 +271,11 @@
 
 -define(HARVESTER_INDEX_NAME, <<"index_name">>).
 -define(HARVESTER_INDEX_SCHEMA, <<"{ \"mappings\": { \"properties\": { \"foo\": { \"type\": \"keyword\" } } } }">>).
--define(HARVESTER_INDEX_CREATE_DATA, #{
-    <<"name">> => ?HARVESTER_INDEX_NAME,
+-define(HARVESTER_INDEX_CREATE_DATA(Name), #{
+    <<"name">> => Name,
     <<"schema">> => ?HARVESTER_INDEX_SCHEMA
 }).
--define(HARVESTER_INDEX_PROGRESS, #{}).
+-define(HARVESTER_INDEX_CREATE_DATA, ?HARVESTER_INDEX_CREATE_DATA(?HARVESTER_INDEX_NAME)).
 
 -define(HARVESTER_PROTECTED_DATA(HarvesterName),
     #{
@@ -297,14 +297,33 @@
 
 -define(HARVESTER_MOCKED_QUERY_DATA_MAP, #{<<"key">> => <<"mocked_query_data">>}).
 
--define(HARVESTER_ENTRY_DATA(Seq, MaxSeq, Indices), #{
-    <<"json">> => <<"{\"valid\":\"json\"}">>,
-    <<"seq">> => Seq,
-    <<"maxSeq">> => MaxSeq,
-    <<"indices">> => Indices
+-define(FAILED_INDICES(Indices, DefaultSeq), lists:foldl(
+    fun({Index, Seq}, Acc) -> Acc#{Index => Seq};
+       (Index, Acc) -> Acc#{Index => DefaultSeq} end,
+    #{}, Indices)).
+-define(NO_FAILED_INDICES, ?FAILED_INDICES([], 0)).
+
+-define(HARVESTER_BATCH(FileId), [
+    #{<<"seq">> => 1, <<"operation">> => submit, <<"fileId">> => FileId, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 2, <<"operation">> => delete, <<"fileId">> => FileId, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 3, <<"operation">> => submit, <<"fileId">> => FileId, <<"payload">> => <<"invalid_json">>},
+    #{<<"seq">> => 4, <<"operation">> => delete, <<"fileId">> => FileId, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 5, <<"operation">> => submit, <<"fileId">> => FileId, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 6, <<"operation">> => submit, <<"fileId">> => FileId, <<"payload">> => #{}}
+]).
+
+-define(EMPTY_INDEX_STATS, ?EMPTY_INDEX_STATS(false)).
+-define(EMPTY_INDEX_STATS(Archival), #{
+    <<"currentSeq">> => 0,
+    <<"maxSeq">> => 0,
+    <<"lastUpdate">> => null,
+    <<"error">> => null,
+    <<"archival">> => Archival
 }).
--define(FAILED_INDICES(Indices), #{<<"failedIndices">> := Indices}).
--define(NO_FAILED_INDICES, ?FAILED_INDICES([])).
+
+-define(HARVESTER_PLUGIN_INDEX_ID(H, I), <<H/binary, I/binary>>).
+
+-define(HARVESTER_MOCK_BATCH_ENTRY(Seq, Operation), #{<<"seq">> => Seq, <<"operation">> => Operation}).
 
 -define(BAD_VALUES_NAME(Error), [
     {<<"name">>, <<"">>, Error},

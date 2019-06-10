@@ -63,6 +63,19 @@ translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {Access
         <<"token">> => AccessToken,
         <<"ttl">> => Expires
     };
+translate_value(ProtoVersion, #gri{type = od_space, aspect = harvest_metadata}, Result) ->
+    case Result of
+        {error, _} = Error ->
+            Error;
+        _ ->
+            maps:fold(fun
+                (HarvesterId, #{<<"error">> := Error}, Acc) ->
+                    Acc#{HarvesterId => #{<<"error">> => gs_protocol_errors:error_to_json(ProtoVersion, Error)}};
+                (HarvesterId, Indices, Acc) ->
+                    Acc#{HarvesterId => Indices}
+            end, #{}, Result)
+    end;
+
 translate_value(_, #gri{type = od_harvester, aspect = {submit_entry, _}}, FailedIndices) ->
     FailedIndices;
 translate_value(_, #gri{type = od_harvester, aspect = {delete_entry, _}}, FailedIndices) ->
@@ -195,7 +208,8 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
         groups = Groups,
 
         providers = Providers,
-        shares = Shares
+        shares = Shares,
+        harvesters = Harvesters
     } = Space,
     #{
         <<"name">> => Name,
@@ -207,7 +221,8 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
         <<"effectiveGroups">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, Space),
 
         <<"providers">> => Providers,
-        <<"shares">> => Shares
+        <<"shares">> => Shares,
+        <<"harvesters">> => Harvesters
     };
 translate_resource(_, #gri{type = od_space, aspect = instance, scope = protected}, SpaceData) ->
     #{<<"name">> := Name, <<"providers">> := Providers} = SpaceData,
@@ -266,11 +281,8 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
 
         <<"spaces">> => Spaces,
         <<"effectiveUsers">> => entity_graph:get_relations(effective, bottom_up, od_user, Provider),
-        <<"effectiveGroups">> => entity_graph:get_relations(effective, bottom_up, od_group, Provider),
-        <<"effectiveHarvesters">> => entity_graph:get_relations(effective, bottom_up, od_harvester, Provider)
-
+        <<"effectiveGroups">> => entity_graph:get_relations(effective, bottom_up, od_group, Provider)
     };
-
 
 translate_resource(_, #gri{type = od_provider, aspect = instance, scope = protected}, ProviderData) ->
     #{

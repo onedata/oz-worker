@@ -567,6 +567,16 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = protected}, Pr
         }
     } end;
 
+translate_provider(#gri{aspect = instance, scope = shared}, Provider) ->
+    #{
+        <<"name">> := Name
+    } = Provider,
+
+    #{
+        <<"scope">> => <<"shared">>,
+        <<"name">> => Name
+    };
+
 translate_provider(#gri{aspect = {eff_user_membership, _UserId}}, Intermediaries) ->
     format_intermediaries(Intermediaries);
 
@@ -602,21 +612,24 @@ translate_provider(#gri{aspect = spaces}, Spaces) ->
 translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, Harvester) ->
     #od_harvester{
         name = Name, endpoint = Endpoint,
-        plugin = Plugin
+        plugin = Plugin, public = Public
     } = Harvester,
     fun(?USER(UserId)) -> #{
-        <<"name">> => Name,
         <<"scope">> => <<"private">>,
+        <<"name">> => Name,
+        <<"public">> => Public,
         <<"endpoint">> => Endpoint,
         <<"plugin">> => atom_to_binary(Plugin, utf8),
-        <<"indexList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = indices}),
         <<"canViewPrivileges">> => harvester_logic:has_eff_privilege(Harvester, UserId, ?HARVESTER_VIEW_PRIVILEGES),
         <<"directMembership">> => harvester_logic:has_direct_user(Harvester, UserId),
+        <<"guiPluginConfig">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
+        <<"indexList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = indices}),
         <<"userList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = users}),
         <<"effUserList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = eff_users}),
         <<"groupList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = groups}),
         <<"effGroupList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = eff_groups}),
         <<"spaceList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = spaces}),
+        <<"effProviderList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = eff_providers}),
         <<"info">> => maps:merge(translate_creator(Harvester#od_harvester.creator), #{
             <<"creationTime">> => Harvester#od_harvester.creation_time
         })
@@ -631,17 +644,42 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator
     } = HarvesterData,
-    fun(?USER(UserId)) -> #{
+    fun(?USER(UserId)) -> ProtectedData = #{
+        <<"scope">> => <<"protected">>,
         <<"name">> => Name,
         <<"public">> => Public,
         <<"plugin">> => Plugin,
         <<"endpoint">> => Endpoint,
-        <<"scope">> => <<"protected">>,
         <<"directMembership">> => harvester_logic:has_direct_user(HarvesterId, UserId),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime
+        })},
+        case Public of
+            true -> 
+                ProtectedData#{
+                    <<"guiPluginConfig">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
+                    <<"indexList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = indices})
+                };
+            _ ->
+                ProtectedData
+        end
+    end;
+
+translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = public}, HarvesterData) ->
+    #{
+        <<"name">> := Name,
+        <<"creationTime">> := CreationTime,
+        <<"creator">> := Creator
+    } = HarvesterData,
+    #{
+        <<"scope">> => <<"public">>,
+        <<"name">> => Name,
+        <<"guiPluginConfig">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
+        <<"indexList">> => gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = indices}),
+        <<"info">> => maps:merge(translate_creator(Creator), #{
+            <<"creationTime">> => CreationTime
         })
-    } end;
+    };
 
 translate_harvester(#gri{aspect = gui_plugin_config}, Config) ->
     #{
@@ -688,6 +726,14 @@ translate_harvester(#gri{aspect = spaces}, Spaces) ->
             end, Spaces)
     };
 
+translate_harvester(#gri{aspect = eff_providers}, Groups) ->
+    #{
+        <<"list">> => lists:map(
+            fun(ProviderId) ->
+                gs_protocol:gri_to_string(#gri{type = od_provider, id = ProviderId, aspect = instance, scope = auto})
+            end, Groups)
+    };
+
 translate_harvester(#gri{aspect = {user_privileges, _UserId}}, Privileges) ->
     #{
         <<"privileges">> => Privileges
@@ -719,7 +765,7 @@ translate_harvester(#gri{aspect = all_plugins}, Plugins) ->
         <<"allPlugins">> => Plugins
     };
 
-translate_harvester(#gri{aspect = {index, _}}, IndexData) ->
+translate_harvester(#gri{aspect = {index, _}, scope = private}, IndexData) ->
     #{
         <<"name">> := Name,
         <<"schema">> := Schema,
@@ -731,17 +777,25 @@ translate_harvester(#gri{aspect = {index, _}}, IndexData) ->
         <<"guiPluginName">> => gs_protocol:undefined_to_null(GuiPluginName)
     };
 
+translate_harvester(#gri{aspect = {index, _}, scope = public}, IndexData) ->
+    #{
+        <<"guiPluginName">> := GuiPluginName
+    } = IndexData,
+    #{
+        <<"guiPluginName">> => gs_protocol:undefined_to_null(GuiPluginName)
+    };
+
 translate_harvester(#gri{aspect = indices, id = HarvesterId}, Indices) ->
     #{
         <<"list">> => lists:map(
             fun(IndexId) ->
-                gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}, scope = private})
+                gs_protocol:gri_to_string(#gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}, scope = auto})
             end, Indices)
     };
 
-translate_harvester(#gri{aspect = {index_progress, _}}, IndexProgress) ->
+translate_harvester(#gri{aspect = {index_stats, _}}, IndexStats) ->
     #{
-        <<"indexProgress">> => IndexProgress
+        <<"indexStats">> => IndexStats
     }.
 
 

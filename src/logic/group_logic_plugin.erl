@@ -621,7 +621,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_tok
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_VIEW);
 
-authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = protected}}, Group) ->
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Group) ->
     case {Req#el_req.client, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this group is checked in 'exists'
@@ -651,7 +651,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
 
         _ ->
             % Access to private data also allows access to protected data
-            authorize(Req#el_req{gri = #gri{scope = private}}, Group)
+            authorize(Req#el_req{gri = GRI#gri{scope = private}}, Group)
     end;
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = shared}}, Group) ->

@@ -71,7 +71,7 @@
 %%--------------------------------------------------------------------
 -spec get_login_endpoint(auth_config:idp(), LinkAccount :: false | {true, od_user:id()},
     RedirectAfterLogin :: binary(), TestMode :: boolean()) ->
-    {ok, maps:map()} | {error, term()}.
+    {ok, map()} | {error, term()}.
 get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
     TestMode andalso auth_test_mode:process_enable_test_mode(),
     try

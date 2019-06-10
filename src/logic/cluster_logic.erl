@@ -152,7 +152,7 @@ get(Client, ClusterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_protected_data(Client :: entity_logic:client(), ClusterId :: od_cluster:id()) ->
-    {ok, maps:map()} | {error, term()}.
+    {ok, map()} | {error, term()}.
 get_protected_data(Client, ClusterId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -828,7 +828,7 @@ get_domain(ProviderId) ->
     end.
 
 
--spec version_info_to_json(od_cluster:version_info()) -> maps:map().
+-spec version_info_to_json(od_cluster:version_info()) -> map().
 version_info_to_json({Release, Build, GuiHash}) ->
     #{
         <<"release">> => Release,
@@ -837,7 +837,7 @@ version_info_to_json({Release, Build, GuiHash}) ->
     }.
 
 
--spec json_to_version_info(maps:map()) -> od_cluster:version_info().
+-spec json_to_version_info(map()) -> od_cluster:version_info().
 json_to_version_info(Data) ->
     Release = maps:get(<<"release">>, Data),
     Build = maps:get(<<"build">>, Data),

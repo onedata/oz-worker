@@ -348,13 +348,13 @@ routes() -> [
         method = 'POST',
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {query, ?BINDING(idx)}}
     }},
-    %% Get harvester index progress
+    %% Get harvester index stats
     %% This operation requires one of the following privileges:
     %% - harvester_view
     %% - oz_harvesters_view
-    {<<"/harvesters/:id/indices/:idx/progress">>, #rest_req{
+    {<<"/harvesters/:id/indices/:idx/stats">>, #rest_req{
         method = 'GET',
-        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {index_progress, ?BINDING(idx)}, scope = private}
+        b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {index_stats, ?BINDING(idx)}, scope = private}
     }},
     %% Get harvester index details
     %% This operation requires one of the following privileges:

@@ -175,7 +175,7 @@ get(Client, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_protected_data(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
-    {ok, maps:map()} | {error, term()}.
+    {ok, map()} | {error, term()}.
 get_protected_data(Client, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -452,7 +452,7 @@ create_handle(Client, GroupId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_harvester(Client :: entity_logic:client(), GroupId :: od_group:id(), Name :: binary(),
-    Endpoint :: binary(), Plugin :: binary(), Config :: maps:map()) -> {ok, od_harvester:id()} | {error, term()}.
+    Endpoint :: binary(), Plugin :: binary(), Config :: map()) -> {ok, od_harvester:id()} | {error, term()}.
 create_harvester(Client, GroupId, Name, Endpoint, Plugin, Config) ->
     create_harvester(Client, GroupId, #{
         <<"name">> => Name,

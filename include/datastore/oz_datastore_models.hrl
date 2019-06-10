@@ -48,8 +48,24 @@
     name :: binary(),
     schema = undefined :: od_harvester:schema() | undefined,
     % mapping of index name to one recognized by gui plugin.
-    guiPluginName = undefined :: binary() | undefined,
-    progress = #{} :: od_harvester:index_progress()
+    gui_plugin_name = undefined :: binary() | undefined,
+    stats = #{} :: od_harvester:indices_stats()
+}).
+
+
+%% This record must be defined here as od_harvester depends on it.
+-record(index_stats, {
+    % sequence harvested in this index
+    current_seq = 0 :: integer(),
+    % highest sequence known in given space in given provider
+    max_seq = 0 :: integer(),
+    % timestamp of last harvesting
+    last_update = undefined :: integer() | undefined,
+    % short description of encountered error if last harvesting failed
+    error = undefined :: binary() | undefined,
+    % stats are marked archival when it is no longer possible to harvest metadata
+    % in given space in given provider e.g space was removed from harvester
+    archival = false :: boolean()
 }).
 
 
@@ -263,7 +279,7 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations(od_user:id()),
     eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
-    eff_harvesters = #{} :: entity_graph:eff_relations(od_group:id()),
+    eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
 
@@ -333,6 +349,7 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
+    eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | entity_logic:client(),
