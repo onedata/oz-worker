@@ -6,11 +6,11 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module implements dynamic_page_behaviour and is called to create
+%%% This module implements dynamic_page_behaviour and is called to acquire
 %%% access tokens dedicated for GUI.
 %%% @end
 %%%-------------------------------------------------------------------
--module(page_gui_token).
+-module(page_gui_preauthorize).
 -author("Lukasz Opiola").
 
 -behaviour(dynamic_page_behaviour).
@@ -35,15 +35,33 @@
 -spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"POST">>, Req) ->
     case gui_session:validate(Req) of
+        {error, no_session_cookie} ->
+            cowboy_req:reply(?HTTP_401_UNAUTHORIZED, Req);
+        {error, invalid} ->
+            cowboy_req:reply(?HTTP_401_UNAUTHORIZED, Req);
         {ok, _, Cookie, Req2} ->
             try
+                GuiPrefix = cowboy_req:binding(gui_prefix, Req2),
+                ClusterId = cowboy_req:binding(gui_id, Req2),
+
+                Service = try
+                    onedata:service_by_gui(onedata:gui_by_prefix(GuiPrefix), ClusterId)
+                catch error:badarg ->
+                    throw(?HTTP_404_NOT_FOUND)
+                end,
+
+                ClusterType = onedata:service_to_cluster_type(Service),
+                case cluster_logic:get(?ROOT, ClusterId) of
+                    {ok, #od_cluster{type = ClusterType}} -> ok;
+                    _ -> throw(?HTTP_404_NOT_FOUND)
+                end,
+
                 SessionId = gui_session:get_session_id(Cookie),
-                {ok, RequestBody, Req3} = cowboy_req:read_body(Req2),
                 cowboy_req:reply(
                     ?HTTP_200_OK,
                     #{<<"content-type">> => <<"application/json">>},
-                    generate_gui_token(SessionId, RequestBody),
-                    Req3
+                    generate_gui_token(SessionId, Service, ClusterId),
+                    Req2
                 )
             catch
                 throw:HttpCode when is_integer(HttpCode) ->
@@ -51,11 +69,7 @@ handle(<<"POST">>, Req) ->
                 Type:Message ->
                     ?debug_stacktrace("Bad request in ~p - ~p:~p", [?MODULE, Type, Message]),
                     cowboy_req:reply(?HTTP_400_BAD_REQUEST, Req2)
-            end;
-        {error, no_session_cookie} ->
-            cowboy_req:reply(?HTTP_401_UNAUTHORIZED, Req);
-        {error, invalid} ->
-            cowboy_req:reply(?HTTP_401_UNAUTHORIZED, Req)
+            end
     end.
 
 %%%===================================================================
@@ -63,37 +77,32 @@ handle(<<"POST">>, Req) ->
 %%%===================================================================
 
 %% @private
--spec generate_gui_token(session:id(), RequestBody :: binary()) ->
+-spec generate_gui_token(session:id(), onedata:service(), od_cluster:id()) ->
     Response :: binary() | no_return().
-generate_gui_token(SessionId, RequestBody) ->
+generate_gui_token(SessionId, Service, ClusterId) ->
+    ClusterType = onedata:service_to_cluster_type(Service),
     {ok, UserId} = session:get_user_id(SessionId),
-    #{
-        <<"clusterType">> := ClusterTypeBin,
-        <<"clusterId">> := ClusterId
-    } = json_utils:decode(RequestBody),
-    ClusterType = binary_to_existing_atom(ClusterTypeBin, utf8),
-    % Ensure request correctness or crash with a badmatch
-    {ok, Cluster = #od_cluster{type = ClusterType}} = cluster_logic:get(?ROOT, ClusterId),
-    can_generate_gui_token(UserId, ClusterId, Cluster) orelse throw(?HTTP_403_FORBIDDEN),
+
+    can_generate_gui_token(UserId, Service, ClusterId) orelse throw(?HTTP_403_FORBIDDEN),
 
     {ok, {Macaroon, Expires}} = session:acquire_gui_macaroon(
         SessionId, ClusterType, ClusterId
     ),
     {ok, Token} = onedata_macaroons:serialize(Macaroon),
-    {ok, Domain} = cluster_logic:get_domain(ClusterId),
     json_utils:encode(#{
         <<"token">> => Token,
-        <<"ttl">> => Expires - time_utils:cluster_time_seconds(),
-        <<"domain">> => Domain
+        <<"ttl">> => Expires - time_utils:cluster_time_seconds()
     }).
 
 
 %% @private
--spec can_generate_gui_token(od_user:id(), od_cluster:id(), od_cluster:record()) -> boolean().
-can_generate_gui_token(_UserId, ?ONEZONE_CLUSTER_ID, _) ->
+-spec can_generate_gui_token(od_user:id(), onedata:service(), od_cluster:id()) -> boolean().
+can_generate_gui_token(_UserId, ?OZ_WORKER, ?ONEZONE_CLUSTER_ID) ->
     % All users can generate a token for Onezone
     true;
-can_generate_gui_token(UserId, ProviderId, Cluster) ->
-    % Only members of provider/cluster can generate a token for Oneprovider
-    provider_logic:has_eff_user(ProviderId, UserId) orelse
-        cluster_logic:has_eff_user(Cluster, UserId).
+can_generate_gui_token(UserId, ?OZ_PANEL, ?ONEZONE_CLUSTER_ID) ->
+    cluster_logic:has_eff_user(?ONEZONE_CLUSTER_ID, UserId);
+can_generate_gui_token(UserId, ?OP_WORKER, ProviderId) ->
+    provider_logic:has_eff_user(ProviderId, UserId);
+can_generate_gui_token(UserId, ?OP_PANEL, ProviderId) ->
+    cluster_logic:has_eff_user(ProviderId, UserId).

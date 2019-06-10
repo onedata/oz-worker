@@ -45,7 +45,7 @@ handshake_attributes(_Client) ->
     #{
         <<"zoneName">> => gs_protocol:undefined_to_null(oz_worker:get_name()),
         <<"zoneDomain">> => oz_worker:get_domain(),
-        <<"serviceVersion">> => oz_worker:get_version(),
+        <<"serviceVersion">> => oz_worker:get_release_version(),
         <<"serviceBuildVersion">> => oz_worker:get_build_version(),
         <<"brandSubtitle">> => str_utils:unicode_list_to_binary(BrandSubtitle),
         <<"loginNotification">> => str_utils:unicode_list_to_binary(LoginNotification)

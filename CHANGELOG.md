@@ -4,6 +4,11 @@
 CHANGELOG
 ---------
 
+### 18.02.2
+
+* VFS-5194 Rewritten model upgrade tests to use datastore
+
+
 ### 18.02.1
 
 * VFS-5189 Add support for owner role in EGI group parser

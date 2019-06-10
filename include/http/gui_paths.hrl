@@ -33,15 +33,12 @@
 % Endpoint serving custom, user defined static files
 -define(CUSTOM_STATIC_GUI_PATH, "/custom/[...]").
 
-% Endpoint for harvester GUI upload 
--define(HARVESTER_GUI_UPLOAD_PATH, "/hrv/:harvester_id/gui-upload").
-
-% Endpoint for GUI upload (used by OP_WORKER and OP_PANEL services)
--define(SERVICE_GUI_UPLOAD_PATH, "/:service/:cluster_id/gui-upload").
+% Endpoint for GUI upload (used tu upload OP_WORKER, ONEPANEL or harvester GUI)
+-define(GUI_UPLOAD_PATH, "/:gui_prefix/:gui_id/gui-upload").
 
 % Endpoints for GUI scripts to discover and preauthorize GUIs of different services
--define(GUI_TOKEN_PATH, "/gui-token").
--define(GUI_ORIGIN_PATH, "/gui-origin").
+-define(GUI_CONTEXT_PATH, "/:gui_prefix/:gui_id/gui-context").
+-define(GUI_PREAUTHORIZE_PATH, "/:gui_prefix/:gui_id/gui-preauthorize").
 
 % Endpoint to perform basic auth login
 -define(LOGIN_PATH, "/login").
@@ -77,8 +74,5 @@
 
 % URL (relative) to redirect to after login.
 -define(AFTER_LOGIN_PAGE_PATH, "/#/onezone").
-
-% Path prefix to where harvester gui is stored.
--define(HARVESTER_GUI_PATH_PREFIX, <<"hrv">>).
 
 -endif.

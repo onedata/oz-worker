@@ -187,8 +187,7 @@ create_test(Config) ->
     end,
 
     %% Create provider with subdomain delegation turned off
-    Nodes = ?config(oz_worker_nodes, Config),
-    rpc:multicall(Nodes, oz_worker, set_env, [subdomain_delegation_supported, false]),
+    oz_test_utils:set_env(Config, subdomain_delegation_supported, false),
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [root, nobody]
@@ -265,7 +264,7 @@ create_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
     %% Create provider with subdomain delegation turned on
-    rpc:multicall(Nodes, oz_worker, set_env, [subdomain_delegation_supported, true]),
+    oz_test_utils:set_env(Config, subdomain_delegation_supported, true),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         data_spec = #data_spec{
             required = [
@@ -305,8 +304,8 @@ create_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
     %% Check if registration token requirement is enforced by env variable
-    rpc:multicall(Nodes, oz_worker, set_env, [subdomain_delegation_supported, false]),
-    rpc:multicall(Nodes, oz_worker, set_env, [require_token_for_provider_registration, true]),
+    oz_test_utils:set_env(Config, subdomain_delegation_supported, false),
+    oz_test_utils:set_env(Config, require_token_for_provider_registration, true),
     ApiTestSpec3 = ApiTestSpec#api_test_spec{
         data_spec = DataSpec#data_spec{
             required = [
@@ -1365,7 +1364,7 @@ list_eff_harvesters_test(Config) ->
     %%               User1   
     %%      <<user>>
     %%      NonAdmin
-    
+
     {ok, U1} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -1391,9 +1390,9 @@ list_eff_harvesters_test(Config) ->
     oz_test_utils:harvester_add_space(Config, H2, S1),
     oz_test_utils:harvester_add_space(Config, H2, S2),
     oz_test_utils:harvester_add_space(Config, H3, S2),
-    
+
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    
+
     ExpHarvesters = [H1, H2, H3],
 
     ApiTestSpec = #api_test_spec{
@@ -2175,9 +2174,7 @@ update_domain_test(Config) ->
 
         % Disable subdomain delegation in onezone to test
         % ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED
-        rpc:multicall(Nodes, application, set_env, [
-            ?APP_NAME, subdomain_delegation_supported, false
-        ]),
+        oz_test_utils:set_env(Config, subdomain_delegation_supported, false),
 
         #{
             providerId => P1, providerClient => {provider, P1, P1Macaroon},
@@ -2185,9 +2182,7 @@ update_domain_test(Config) ->
         }
     end,
     EnvTearDownFun = fun(#{providerId := ProviderId} = _Env) ->
-        rpc:multicall(Nodes, application, set_env, [
-            ?APP_NAME, subdomain_delegation_supported, true
-        ]),
+        oz_test_utils:set_env(Config, subdomain_delegation_supported, true),
         % delete provider to avoid "subdomain occupied" errors
         oz_test_utils:delete_provider(Config, ProviderId)
     end,
@@ -2607,9 +2602,8 @@ end_per_testcase(list_eff_harvesters_test, Config) ->
     oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
     end_per_testcase(default, Config);
 end_per_testcase(_, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    rpc:multicall(Nodes, oz_worker, set_env, [require_token_for_provider_registration, false]),
-    rpc:multicall(Nodes, oz_worker, set_env, [subdomain_delegation_supported, true]),
+    oz_test_utils:set_env(Config, require_token_for_provider_registration, false),
+    oz_test_utils:set_env(Config, subdomain_delegation_supported, true),
     ok.
 
 

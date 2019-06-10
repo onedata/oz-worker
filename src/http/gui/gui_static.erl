@@ -9,11 +9,10 @@
 %%% This module is responsible for storing and distribution of static GUI files.
 %%%
 %%% GUI path under which files are stored consists of GUI prefix and GUI id.
-%%% GUI prefix is shortname of service or harvester:
+%%% GUI prefix is gui prefix of service or harvester:
 %%%     * ozw
-%%%     * ozp
 %%%     * opw
-%%%     * opp
+%%%     * onp
 %%%     * hrv
 %%% GUI id is equal to id of corresponding service or harvester.
 %%%
@@ -37,28 +36,38 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include("http/gui_paths.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
 
--type gui_prefix() :: binary().
 -type gui_id() :: od_cluster:id() | od_harvester:id().
+-export_type([gui_id/0]).
 
 %% API
--export([deploy_package/2, deploy_package/4]).
+-export([deploy_package/3, ensure_package/4]).
 -export([link_gui/3, link_gui/4]).
 -export([unlink_gui/2, unlink_gui/3]).
 -export([gui_exists/2]).
+-export([remove_unused_packages/1, remove_unused_packages/2]).
 -export([routes/0]).
 -export([oz_worker_gui_path/1]).
 -export([mimetype/1]).
+
+-define(GUI_TYPES, [?OZ_WORKER_GUI, ?OP_WORKER_GUI, ?ONEPANEL_GUI, ?HARVESTER_GUI]).
+% Only packages older than that will be cleaned (in seconds)
+-define(CLEANING_AGE_THRESHOLD, 86400). % 1 day
+
+-define(DISABLE_VERIFICATION, oz_worker:get_env(disable_gui_package_verification, false)).
+-define(DISABLE_HARVESTER_VERIFICATION, oz_worker:get_env(disable_harvester_gui_package_verification, false)).
 
 -define(GUI_STATIC_ROOT, oz_worker:get_env(gui_static_root)).
 -define(CUSTOM_STATIC_ROOT, oz_worker:get_env(gui_custom_static_root)).
 -define(LEGACY_CUSTOM_STATIC_ROOT, oz_worker:get_env(legacy_gui_custom_static_root)).
 
--define(CLUSTER_NODES, begin {ok, __Nodes} = node_manager:get_cluster_nodes(), __Nodes end).
+-define(CLUSTER_NODES, element(2, {ok, _} = node_manager:get_cluster_nodes())).
 
--define(CRITICAL_SECTION(GuiHash, Fun), critical_section:run({gui_static, GuiHash}, Fun)).
+-define(CRITICAL_SECTION(LockId, Fun), critical_section:run({gui_static, LockId}, Fun)).
+
 
 %%%===================================================================
 %%% API
@@ -70,31 +79,40 @@
 %% GUI prefix on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec deploy_package(gui_prefix(), file:name_all()) ->
-    ok | {error, term()}.
-deploy_package(GuiPrefix, PackagePath) ->
+-spec deploy_package(onedata:gui_type(), onedata:release_version(), file:name_all()) ->
+    {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE |
+    ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED.
+deploy_package(GuiType, ReleaseVersion, PackagePath) ->
     case gui:read_package(PackagePath) of
         {ok, _, PackageBin} ->
             {ok, GuiHash} = gui:package_hash({binary, PackageBin}),
-            deploy_package(GuiPrefix, PackageBin, GuiHash);
+            case verify_gui_package(GuiType, ReleaseVersion, GuiHash) of
+                true ->
+                    ensure_package(GuiType, PackageBin, GuiHash),
+                    {ok, GuiHash};
+                false ->
+                    ?ERROR_GUI_PACKAGE_UNVERIFIED
+            end;
         {error, _} = Error ->
             Error
     end.
 
 
 %%--------------------------------------------------------------------
+%% @private
 %% @doc
-%% Deploys a GUI package under given  GUI prefix on all cluster nodes. GuiHash must be
-%% provided manually. The operation is skipped if the GUI package already exists on all
-%% cluster nodes.
+%% Deploys a GUI package under given GUI prefix on all cluster nodes. GuiHash
+%% must be provided manually. The operation is skipped if the GUI package
+%% already exists on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec deploy_package(gui_prefix(), PackageBin :: binary(), gui:package_hash()) -> ok.
-deploy_package(GuiPrefix, PackageBin, GuiHash) ->
+-spec ensure_package(onedata:gui_type(), PackageBin :: binary(), onedata:gui_hash()) ->
+    ok.
+ensure_package(GuiType, PackageBin, GuiHash) ->
     ?CRITICAL_SECTION(GuiHash, fun() ->
-        case gui_exists_unsafe(GuiPrefix, GuiHash) of
+        case gui_exists_unsafe(GuiType, GuiHash) of
             true -> ok;
-            false -> deploy_package(on_cluster, GuiPrefix, PackageBin, GuiHash)
+            false -> ensure_package(on_cluster, GuiType, PackageBin, GuiHash)
         end
     end).
 
@@ -110,18 +128,18 @@ deploy_package(GuiPrefix, PackageBin, GuiHash) ->
 %%  on_node - performs the operation only on the local node
 %% @end
 %%--------------------------------------------------------------------
--spec deploy_package(on_cluster | on_node, gui_prefix(), PackageBin :: binary(),
-    gui:package_hash()) -> ok.
-deploy_package(on_cluster, GuiPrefix, PackageBin, GuiHash) ->
+-spec ensure_package(on_cluster | on_node, onedata:gui_type(), PackageBin :: binary(),
+    onedata:gui_hash()) -> ok.
+ensure_package(on_cluster, GuiType, PackageBin, GuiHash) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, deploy_package, [on_node, GuiPrefix, PackageBin, GuiHash])
+        ok = rpc:call(Node, ?MODULE, ensure_package, [on_node, GuiType, PackageBin, GuiHash])
     end, ?CLUSTER_NODES);
 
-deploy_package(on_node, GuiPrefix, PackageBin, GuiHash) ->
-    ?info("Deploying GUI package for ~s: ~s", [GuiPrefix, GuiHash]),
+ensure_package(on_node, GuiType, PackageBin, GuiHash) ->
+    ?info("Deploying GUI package: ~s", [gui_path(GuiType, GuiHash)]),
     TempDir = mochitemp:mkdtemp(),
     {ok, ExtractedPackagePath} = gui:extract_package({binary, PackageBin}, TempDir),
-    PackageStaticRoot = static_root(GuiPrefix, GuiHash),
+    PackageStaticRoot = static_root(GuiType, GuiHash),
     ok = file_utils:recursive_del(PackageStaticRoot),
     ok = file_utils:move(ExtractedPackagePath, PackageStaticRoot),
     mochitemp:rmtempdir(TempDir).
@@ -129,12 +147,13 @@ deploy_package(on_node, GuiPrefix, PackageBin, GuiHash) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @equiv link_gui(on_cluster, GuiPrefix, GuiId, GuiHash).
+%% @equiv link_gui(on_cluster, GuiType, GuiId, GuiHash).
 %% @end
 %%--------------------------------------------------------------------
--spec link_gui(gui_prefix(), gui_id(), gui:package_hash()) -> ok.
-link_gui(GuiPrefix, GuiId, GuiHash) ->
-    link_gui(on_cluster, GuiPrefix, GuiId, GuiHash).
+-spec link_gui(onedata:gui_type(), gui_id(), onedata:gui_hash()) -> ok.
+link_gui(GuiType, GuiId, GuiHash) ->
+    link_gui(on_cluster, GuiType, GuiId, GuiHash),
+    schedule_removal_of_unused_packages().
 
 
 %%--------------------------------------------------------------------
@@ -150,21 +169,21 @@ link_gui(GuiPrefix, GuiId, GuiHash) ->
 %%  on_node - performs the operation only on the local node
 %% @end
 %%--------------------------------------------------------------------
--spec link_gui(on_cluster | on_node, gui_prefix(), gui_id(),
-    gui:package_hash()) -> ok.
-link_gui(on_cluster, GuiPrefix, GuiId, GuiHash) ->
+-spec link_gui(on_cluster | on_node, onedata:gui_type(), gui_id(),
+    onedata:gui_hash()) -> ok.
+link_gui(on_cluster, GuiType, GuiId, GuiHash) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, link_gui, [on_node, GuiPrefix, GuiId, GuiHash])
+        ok = rpc:call(Node, ?MODULE, link_gui, [on_node, GuiType, GuiId, GuiHash])
     end, ?CLUSTER_NODES);
 
-link_gui(on_node, GuiPrefix, GuiId, GuiHash) ->
+link_gui(on_node, GuiType, GuiId, GuiHash) ->
     case GuiHash of
         ?EMPTY_GUI_HASH ->
-            ?debug("Linking empty GUI for ~s", [gui_path(GuiPrefix, GuiId)]);
+            ?debug("Linking empty GUI for ~s", [gui_path(GuiType, GuiId)]);
         _ ->
-            ?info("Linking gui for ~s -> ~s", [gui_path(GuiPrefix, GuiId), GuiHash])
+            ?info("Linking gui for ~s -> ~s", [gui_path(GuiType, GuiId), GuiHash])
     end,
-    StaticRoot = static_root(GuiPrefix, GuiId),
+    StaticRoot = static_root(GuiType, GuiId),
     link_exists(StaticRoot) andalso (ok = file:delete(StaticRoot)),
     file:make_symlink(GuiHash, StaticRoot),
     ensure_link_to_index_html(StaticRoot).
@@ -172,12 +191,13 @@ link_gui(on_node, GuiPrefix, GuiId, GuiHash) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @equiv unlink_gui(on_cluster, GuiPrefix, GuiId).
+%% @equiv unlink_gui(on_cluster, GuiType, GuiId).
 %% @end
 %%--------------------------------------------------------------------
--spec unlink_gui(gui_prefix(), gui_id()) -> ok.
-unlink_gui(GuiPrefix, GuiId) ->
-    unlink_gui(on_cluster, GuiPrefix, GuiId).
+-spec unlink_gui(onedata:gui_type(), gui_id()) -> ok.
+unlink_gui(GuiType, GuiId) ->
+    unlink_gui(on_cluster, GuiType, GuiId),
+    schedule_removal_of_unused_packages().
 
 
 %%--------------------------------------------------------------------
@@ -190,15 +210,15 @@ unlink_gui(GuiPrefix, GuiId) ->
 %%  on_node - performs the operation only on the local node
 %% @end
 %%--------------------------------------------------------------------
--spec unlink_gui(on_cluster | on_node, gui_prefix(), gui_id()) -> ok.
-unlink_gui(on_cluster, GuiPrefix, GuiId) ->
+-spec unlink_gui(on_cluster | on_node, onedata:gui_type(), gui_id()) -> ok.
+unlink_gui(on_cluster, GuiType, GuiId) ->
     lists:foreach(fun(Node) ->
-        ok = rpc:call(Node, ?MODULE, unlink_gui, [on_node, GuiPrefix, GuiId])
+        ok = rpc:call(Node, ?MODULE, unlink_gui, [on_node, GuiType, GuiId])
     end, ?CLUSTER_NODES);
 
-unlink_gui(on_node, GuiPrefix, GuiId) ->
-    ?info("Unlinking gui for ~s", [gui_path(GuiPrefix, GuiId)]),
-    StaticRoot = static_root(GuiPrefix, GuiId),
+unlink_gui(on_node, GuiType, GuiId) ->
+    ?info("Unlinking gui for ~s", [gui_path(GuiType, GuiId)]),
+    StaticRoot = static_root(GuiType, GuiId),
     link_exists(StaticRoot) andalso (ok = file:delete(StaticRoot)).
 
 
@@ -207,11 +227,56 @@ unlink_gui(on_node, GuiPrefix, GuiId) ->
 %% Checks on all cluster nodes if given GUI hash exists.
 %% @end
 %%--------------------------------------------------------------------
--spec gui_exists(gui_prefix(), gui:package_hash()) -> boolean().
-gui_exists(GuiPrefix, GuiHash) ->
+-spec gui_exists(onedata:gui_type(), onedata:gui_hash()) -> boolean().
+gui_exists(GuiType, GuiHash) ->
     ?CRITICAL_SECTION(GuiHash, fun() ->
-        gui_exists_unsafe(GuiPrefix, GuiHash)
+        gui_exists_unsafe(GuiType, GuiHash)
     end).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Finds and removes unused GUI packages of all GUI types on all cluster nodes.
+%% A GUI package is considered unused when it both:
+%%  * is not referenced by any service/harvester
+%%  * hasn't been modified for more than ?CLEANING_AGE_THRESHOLD seconds
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_unused_packages(onedata:gui_type()) -> ok.
+remove_unused_packages(GuiType) ->
+    remove_unused_packages(on_cluster, GuiType).
+
+-spec remove_unused_packages(on_cluster | on_node, onedata:gui_type()) -> ok.
+remove_unused_packages(on_cluster, GuiType) ->
+    lists:foreach(fun(Node) ->
+        ok = rpc:call(Node, ?MODULE, remove_unused_packages, [on_node, GuiType])
+    end, ?CLUSTER_NODES);
+
+remove_unused_packages(on_node, GuiType) ->
+    StaticRoot = static_root(GuiType, <<"">>),
+    GuiPrefix = onedata:gui_prefix(GuiType),
+    {ok, Files} = file:list_dir(StaticRoot),
+
+    {AllPackages, UsedPackages} = lists:foldl(fun(File, {AccAllPackages, AccUsedPackages}) ->
+        case file:read_link(filename:join(StaticRoot, File)) of
+            {ok, LinkTarget} -> {AccAllPackages, [LinkTarget | AccUsedPackages]};
+            _ -> {[File | AccAllPackages], AccUsedPackages}
+        end
+    end, {[], []}, Files),
+
+
+    UnusedPackages = (AllPackages -- UsedPackages) -- [binary_to_list(?EMPTY_GUI_HASH)],
+
+    lists:foreach(fun(UnusedPkg) ->
+        UnusedPkgPath = filename:join(StaticRoot, UnusedPkg),
+        case file_utils:seconds_since_modification(UnusedPkgPath) of
+            {ok, Seconds} when Seconds > ?CLEANING_AGE_THRESHOLD ->
+                ?debug("Removing unused GUI package: ~s/~s", [GuiPrefix, UnusedPkg]),
+                ok = file_utils:recursive_del(UnusedPkgPath);
+            _ ->
+                ok
+        end
+    end, UnusedPackages).
 
 
 %%--------------------------------------------------------------------
@@ -256,7 +321,7 @@ routes() ->
 %%--------------------------------------------------------------------
 -spec oz_worker_gui_path(binary()) -> binary().
 oz_worker_gui_path(<<"/", _/binary>> = AbsPath) ->
-    <<(gui_path(onedata:service_shortname(?OZ_WORKER), ?ONEZONE_CLUSTER_ID))/binary, AbsPath/binary>>;
+    <<(gui_path(?OZ_WORKER_GUI, ?ONEZONE_CLUSTER_ID))/binary, AbsPath/binary>>;
 oz_worker_gui_path(RelPath) ->
     oz_worker_gui_path(<<"/", RelPath/binary>>).
 
@@ -290,13 +355,49 @@ mimetype(Path) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
+%% Checks if given GUI checksum (SHA-256) is whitelisted in the compatibility file.
+%% The check can be turned off using the disable_gui_package_verification env
+%% (or disable_harvester_gui_package_verification in case of harvester GUI).
+%% @end
+%%--------------------------------------------------------------------
+-spec verify_gui_package(onedata:gui_type(), onedata:release_version(), onedata:gui_hash()) ->
+    boolean().
+verify_gui_package(GuiType, ReleaseVersion, GuiHash) ->
+    case {?DISABLE_VERIFICATION, ?DISABLE_HARVESTER_VERIFICATION, GuiType} of
+        {true, _, _} ->
+            true;
+        {false, true, ?HARVESTER_GUI} ->
+            true;
+        {_, _, _} ->
+            case compatibility:verify_gui_hash(GuiType, ReleaseVersion, GuiHash) of
+                true ->
+                    true;
+                {false, CorrectHashes} ->
+                    ?debug(
+                        "Declining unverified GUI package (~p, ver. ~s): ~s. Correct hashes: ~p",
+                        [GuiType, ReleaseVersion, GuiHash, CorrectHashes]
+                    ),
+                    false;
+                {error, _} = Error ->
+                    ?debug(
+                        "Declining unverified GUI package (~p, ver. ~s): ~s due to ~w",
+                        [GuiType, ReleaseVersion, GuiHash, Error]
+                    ),
+                    false
+            end
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
 %% Checks on all cluster nodes if given GUI hash exists.
 %% NOTE: This function must be run in a critical section to avoid race conditions.
 %% @end
 %%--------------------------------------------------------------------
--spec gui_exists_unsafe(gui_prefix(), gui:package_hash()) -> boolean().
-gui_exists_unsafe(GuiPrefix, GuiHash) ->
-    PackageStaticRoot = static_root(GuiPrefix, GuiHash),
+-spec gui_exists_unsafe(onedata:gui_type(), onedata:gui_hash()) -> boolean().
+gui_exists_unsafe(GuiType, GuiHash) ->
+    PackageStaticRoot = static_root(GuiType, GuiHash),
     lists:all(fun(Node) ->
         rpc:call(Node, filelib, is_file, [PackageStaticRoot])
     end, ?CLUSTER_NODES).
@@ -309,14 +410,14 @@ gui_exists_unsafe(GuiPrefix, GuiHash) ->
 %% or gui package.
 %% Examples:
 %%      /etc/oz_worker/gui_static/ozw/74afc09f584276186894b82caf466886
-%%      /etc/oz_worker/gui_static/opp/4fc98577cee89c3dfb7817b11c0027ec3084f8ba455a162c9038ed568b9d3b7d
+%%      /etc/oz_worker/gui_static/onp/4fc98577cee89c3dfb7817b11c0027ec3084f8ba455a162c9038ed568b9d3b7d
 %% Identifier can be a GuiId or a GuiHash.
 %% @end
 %%--------------------------------------------------------------------
--spec static_root(gui_prefix(), gui_id() | gui:package_hash()) -> binary().
-static_root(GuiPrefix, Identifier) ->
+-spec static_root(onedata:gui_type(), gui_id() | onedata:gui_hash()) -> binary().
+static_root(GuiType, Identifier) ->
     GuiStaticRoot = list_to_binary(?GUI_STATIC_ROOT),
-    <<GuiStaticRoot/binary, (gui_path(GuiPrefix, Identifier))/binary>>.
+    <<GuiStaticRoot/binary, (gui_path(GuiType, Identifier))/binary>>.
 
 
 %%--------------------------------------------------------------------
@@ -325,12 +426,12 @@ static_root(GuiPrefix, Identifier) ->
 %% Returns the path (URN) to the web GUI root of given  GUI prefix or gui package.
 %% Examples:
 %%      /ozw/74afc09f584276186894b82caf466886
-%%      /opp/4fc98577cee89c3dfb7817b11c0027ec3084f8ba455a162c9038ed568b9d3b7d
+%%      /onp/4fc98577cee89c3dfb7817b11c0027ec3084f8ba455a162c9038ed568b9d3b7d
 %% @end
 %%--------------------------------------------------------------------
--spec gui_path(gui_prefix(), gui_id() | gui:package_hash()) -> binary().
-gui_path(GuiPrefix, Identifier) ->
-    <<"/", GuiPrefix/binary, "/", Identifier/binary>>.
+-spec gui_path(onedata:gui_type(), gui_id() | onedata:gui_hash()) -> binary().
+gui_path(GuiType, Identifier) ->
+    <<"/", (onedata:gui_prefix(GuiType))/binary, "/", Identifier/binary>>.
 
 
 %%--------------------------------------------------------------------
@@ -355,6 +456,17 @@ link_exists(Path) ->
         {ok, _} -> true;
         _ -> false
     end.
+
+
+%% @private
+-spec schedule_removal_of_unused_packages() -> ok.
+schedule_removal_of_unused_packages() ->
+    spawn(fun() ->
+        ?CRITICAL_SECTION(remove_unused_packages, fun() ->
+            [remove_unused_packages(GuiType) || GuiType <- ?GUI_TYPES]
+        end)
+    end),
+    ok.
 
 
 %% @private

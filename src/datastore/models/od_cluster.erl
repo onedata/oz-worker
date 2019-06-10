@@ -36,9 +36,9 @@
 -export_type([id/0, record/0]).
 
 -type version_info() :: {
-    Release :: binary(),
+    Release :: onedata:release_version(),
     Build :: binary(),
-    GuiHash :: binary()
+    GuiHash :: onedata:gui_hash()
 }.
 -export_type([version_info/0]).
 

@@ -15,6 +15,7 @@
 
 -include("http/rest.hrl").
 -include("registered_names.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
@@ -108,25 +109,27 @@ expected_configuration(Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
 
     SubdomainDelegationSupported = false,
-    OZDomainString = oz_test_utils:oz_domain(Config),
+    OZDomain = oz_test_utils:oz_domain(Config),
     OZName = case oz_test_utils:get_env(Config, oz_name) of
         undefined -> null;
         OZNameString -> list_to_binary(OZNameString)
     end,
 
-    OZVersionString = oz_test_utils:call_oz(Config, oz_worker, get_version, []),
+    OZVersion = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
 
     OZBuild = case oz_test_utils:get_env(Config, build_version) of
         "" -> <<"unknown">>;
         Build -> list_to_binary(Build)
     end,
 
-    OZCompatibleOneproviders = oz_test_utils:get_env(Config, compatible_op_versions),
-
     {_, []} = rpc:multicall(Nodes, application, set_env, [
         ?APP_NAME, subdomain_delegation_supported, SubdomainDelegationSupported
     ]),
 
+    MockedSupportedIdPs = [
+        #{<<"id">> => <<"idp1">>, <<"offlineAccess">> => false},
+        #{<<"id">> => <<"idp2">>, <<"offlineAccess">> => true}
+    ],
     oz_test_utils:overwrite_auth_config(Config, #{
         openidConfig => #{
             enabled => true
@@ -148,18 +151,23 @@ expected_configuration(Config) ->
             }}
         ]
     }),
-    SupportedIdPs = [
-        #{<<"id">> =>  <<"idp1">>, <<"offlineAccess">> =>  false},
-        #{<<"id">> =>  <<"idp2">>, <<"offlineAccess">> =>  true}
-    ],
+
+    MockedCompatibleVersions = [<<"18.02.0-rc13">>, <<"18.02.1">>, <<"18.02.2">>],
+    oz_test_utils:overwrite_compatibility_registry(Config, #{
+        <<"revision">> => 1,
+        <<"compatibility">> => #{
+            <<"onezone:oneprovider">> => #{
+                OZVersion => MockedCompatibleVersions
+            }
+        }
+    }),
 
     #{
         <<"name">> => OZName,
-        <<"domain">> => str_utils:to_binary(OZDomainString),
-        <<"version">> => str_utils:to_binary(OZVersionString),
+        <<"domain">> => OZDomain,
+        <<"version">> => OZVersion,
         <<"build">> => OZBuild,
-        <<"compatibleOneproviderVersions">> =>
-        [str_utils:to_binary(V) || V <- OZCompatibleOneproviders],
+        <<"compatibleOneproviderVersions">> => MockedCompatibleVersions,
         <<"subdomainDelegationSupported">> => SubdomainDelegationSupported,
-        <<"supportedIdPs">> => SupportedIdPs
+        <<"supportedIdPs">> => MockedSupportedIdPs
     }.

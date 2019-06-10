@@ -42,7 +42,7 @@ upgrade:
 	$(REBAR) upgrade
 
 deps:
-	$(LIB_DIR)/gui/pull-gui.sh gui-config.sh
+	$(LIB_DIR)/gui/pull-gui.sh gui-image.conf
 
 compile:
 	$(REBAR) compile

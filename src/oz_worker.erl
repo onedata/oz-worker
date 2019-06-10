@@ -20,7 +20,7 @@
 -export([get_env/1, get_env/2, set_env/2]).
 -export([get_name/0]).
 -export([get_domain/0, get_url/0, get_uri/1]).
--export([get_version/0, get_build_version/0]).
+-export([get_release_version/0, get_build_version/0]).
 -export([get_config/0]).
 -export([entity_logic_plugin/0]).
 
@@ -115,8 +115,8 @@ get_uri(PathWithSlash) when is_list(PathWithSlash) ->
 %% Returns Onezone release version.
 %% @end
 %%--------------------------------------------------------------------
--spec get_version() -> binary().
-get_version() ->
+-spec get_release_version() -> binary().
+get_release_version() ->
     {_AppId, _AppName, AppVersion} = lists:keyfind(
         ?APP_NAME, 1, application:loaded_applications()
     ),

@@ -104,8 +104,8 @@ create_oneprovider_cluster(CreatorUserId, ProviderId) ->
     CreatorUserId /= undefined andalso
         add_user(?ROOT, ClusterId, CreatorUserId, privileges:cluster_admin()),
 
-    gui_static:link_gui(onedata:service_shortname(?OP_WORKER), ClusterId, ?EMPTY_GUI_HASH),
-    gui_static:link_gui(onedata:service_shortname(?OP_PANEL), ClusterId, ?EMPTY_GUI_HASH),
+    gui_static:link_gui(?OP_WORKER_GUI, ClusterId, ?EMPTY_GUI_HASH),
+    gui_static:link_gui(?ONEPANEL_GUI, ClusterId, ?EMPTY_GUI_HASH),
 
     ok.
 
@@ -125,8 +125,8 @@ delete_oneprovider_cluster(ProviderId) ->
 
     entity_graph:delete_entity(od_cluster, ClusterId),
 
-    gui_static:unlink_gui(onedata:service_shortname(?OP_WORKER), ClusterId),
-    gui_static:unlink_gui(onedata:service_shortname(?OP_PANEL), ClusterId),
+    gui_static:unlink_gui(?OP_WORKER_GUI, ClusterId),
+    gui_static:unlink_gui(?ONEPANEL_GUI, ClusterId),
 
     ok.
 
@@ -792,11 +792,11 @@ is_provider_cluster(ClusterId, ProviderId) ->
 -spec set_up_oz_worker_service() -> ok.
 set_up_oz_worker_service() ->
     ?info("Setting up Onezone worker service"),
+    Version = oz_worker:get_release_version(),
     ok = od_cluster:ensure_onezone_cluster(),
-    {ok, GuiHash} = gui:package_hash(?GUI_PACKAGE_PATH),
-    ok = gui_static:deploy_package(onedata:service_shortname(?OZ_WORKER), ?GUI_PACKAGE_PATH),
+    {ok, GuiHash} = gui_static:deploy_package(?OZ_WORKER_GUI, Version, ?GUI_PACKAGE_PATH),
     ok = update_version_info(?ROOT, ?ONEZONE_CLUSTER_ID, ?WORKER, {
-        oz_worker:get_version(),
+        Version,
         oz_worker:get_build_version(),
         GuiHash
     }),
