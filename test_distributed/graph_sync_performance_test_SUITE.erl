@@ -453,12 +453,13 @@ ssl_opts(Config) ->
 %%% Setup / teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
+    hackney:start(),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
+    hackney:stop(),
     ssl:stop(),
     ok.
