@@ -11,7 +11,7 @@
 -module(error_rest_translator).
 -author("Lukasz Opiola").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -30,21 +30,26 @@
 %%--------------------------------------------------------------------
 -spec response({error, term()}) -> #rest_resp{}.
 response({error, Type}) ->
+    IdAndDetails = gs_protocol_errors:error_to_json(?BASIC_PROTOCOL, {error, Type}),
+
     case translate({error, Type}) of
         Code when is_integer(Code) ->
-            #rest_resp{code = Code};
+            #rest_resp{code = Code, body = #{<<"error">> => IdAndDetails}};
         {Code, {MessageFormat, FormatArgs}} ->
             MessageBinary = str_utils:format_bin(
                 str_utils:to_list(MessageFormat), FormatArgs
             ),
-            #rest_resp{code = Code, body = #{<<"error">> => MessageBinary}};
+            #rest_resp{code = Code, body = #{<<"error">> => IdAndDetails#{
+                <<"description">> => MessageBinary
+            }}};
         {Code, MessageBinary} ->
-            #rest_resp{code = Code, body = #{<<"error">> =>  MessageBinary}}
+            #rest_resp{code = Code, body = #{<<"error">> =>  IdAndDetails#{
+                <<"description">> => MessageBinary
+            }}}
     end.
 
 
 %%--------------------------------------------------------------------
-%% @private
 %% @doc
 %% Translates an entity logic error into HTTP code, headers and body.
 %% @end
@@ -58,6 +63,9 @@ translate(?ERROR_INTERNAL_SERVER_ERROR) ->
 
 translate(?ERROR_NOT_IMPLEMENTED) ->
     ?HTTP_501_NOT_IMPLEMENTED;
+
+translate(?ERROR_TEMPORARY_FAILURE) ->
+    {?HTTP_503_SERVICE_UNAVAILABLE, <<"Service unavailable: temporary failure">>};
 
 translate(?ERROR_NOT_SUPPORTED) ->
     {?HTTP_400_BAD_REQUEST,
@@ -101,7 +109,8 @@ translate(?ERROR_BAD_BASIC_CREDENTIALS) ->
     {?HTTP_401_UNAUTHORIZED,
         <<"Provided basic authorization credentials are not valid">>
     };
-translate(?ERROR_BAD_EXTERNAL_ACCESS_TOKEN(OAuthProviderId)) ->
+
+translate(?ERROR_BAD_IDP_ACCESS_TOKEN(OAuthProviderId)) ->
     {?HTTP_401_UNAUTHORIZED,
         {<<"Provided access token for \"~p\" is not valid">>, [OAuthProviderId]}
     };
@@ -112,7 +121,7 @@ translate(?ERROR_MISSING_REQUIRED_VALUE(Key)) ->
 translate(?ERROR_MISSING_AT_LEAST_ONE_VALUE(Keys)) ->
     KeysList = str_utils:join_binary(Keys, <<", ">>),
     {?HTTP_400_BAD_REQUEST,
-        {<<"Missing data, you must provide at least one of: ">>, [KeysList]}
+        {<<"Missing data, you must provide at least one of: ~p">>, [KeysList]}
     };
 translate(?ERROR_BAD_DATA(Key)) ->
     {?HTTP_400_BAD_REQUEST,
@@ -168,6 +177,10 @@ translate(?ERROR_BAD_VALUE_SUBDOMAIN) ->
     {?HTTP_400_BAD_REQUEST,
         <<"Bad value: provided subdomain is not valid">>
     };
+translate(?ERROR_BAD_VALUE_EMAIL) ->
+    {?HTTP_400_BAD_REQUEST,
+        <<"Bad value: provided e-mail is not a valid e-mail.">>
+    };
 translate(?ERROR_BAD_VALUE_TOO_LOW(Key, Threshold)) ->
     {?HTTP_400_BAD_REQUEST,
         {<<"Bad value: provided \"~s\" must be at least ~B">>, [Key, Threshold]}
@@ -216,26 +229,22 @@ translate(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key)) ->
     {?HTTP_400_BAD_REQUEST,
         {<<"Bad value: provided \"~s\" is of invalid type">>, [Key]}
     };
-translate(?ERROR_BAD_VALUE_ALIAS) ->
-    {?HTTP_400_BAD_REQUEST, <<
-        "Bad value: provided alias must be 2-15 characters long and composed of letters and digits."
-        "Dashes and underscores are allowed (but not at the beginning or the end). "
-        "Use null value to unset the alias."
-    >>};
 translate(?ERROR_BAD_VALUE_NAME) ->
-    {?HTTP_400_BAD_REQUEST, <<
-        "Bad value: Name must be 2-50 characters long and composed of UTF-8 letters, digits, brackets and underscores."
-        "Dashes, spaces and dots are allowed (but not at the beginning or the end)."
-    >>};
-translate(?ERROR_BAD_VALUE_USER_NAME) ->
-    {?HTTP_400_BAD_REQUEST, <<
-        "Bad value: User name must be 2-50 characters long and composed of UTF-8 letters and digits."
-        "Dashes, spaces, dots, commas and apostrophes are allowed (but not at the beginning or the end). "
-    >>};
+    {?HTTP_400_BAD_REQUEST, <<"Bad value: ", (?NAME_REQUIREMENTS_DESCRIPTION)/binary>>};
+translate(?ERROR_BAD_VALUE_FULL_NAME) ->
+    {?HTTP_400_BAD_REQUEST, <<"Bad value: ", (?FULL_NAME_REQUIREMENTS_DESCRIPTION)/binary>>};
+translate(?ERROR_BAD_VALUE_USERNAME) ->
+    {?HTTP_400_BAD_REQUEST, <<"Bad value: ", (?USERNAME_REQUIREMENTS_DESCRIPTION)/binary>>};
+translate(?ERROR_BAD_VALUE_PASSWORD) ->
+    {?HTTP_400_BAD_REQUEST, <<"Bad value: ", (?PASSWORD_REQUIREMENTS_DESCRIPTION)/binary>>};
 translate(?ERROR_BAD_VALUE_IDENTIFIER(Key)) ->
     {?HTTP_400_BAD_REQUEST, {
         <<"Bad value: provided \"~s\" is not a valid identifier.">>, [Key]
     }};
+translate(?ERROR_PROTECTED_GROUP) ->
+    {?HTTP_403_FORBIDDEN,
+        <<"Forbidden: this group is protected and cannot be deleted.">>
+    };
 % Errors connected with relations between entities
 translate(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId)) ->
     RelationToString = case {ChType, ParType} of
@@ -249,7 +258,7 @@ translate(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId)) ->
     ]}};
 translate(?ERROR_RELATION_ALREADY_EXISTS(ChType, ChId, ParType, ParId)) ->
     RelationToString = case {ChType, ParType} of
-        {od_space, od_provider} -> <<"is alraedy supported by">>;
+        {od_space, od_provider} -> <<"is already supported by">>;
         {_, _} -> <<"is already a member of">>
     end,
     {?HTTP_400_BAD_REQUEST, {<<"Bad value: ~s ~s ~s">>, [
@@ -262,12 +271,19 @@ translate(?ERROR_CANNOT_DELETE_ENTITY(EntityType, EntityId)) ->
         <<"Cannot delete ~s, failed to delete some dependent relations">>,
         [EntityType:to_string(EntityId)]
     }};
-translate(?ERROR_CANNOT_JOIN_GROUP_TO_ITSELF) ->
-    {?HTTP_400_BAD_REQUEST, <<"Groups cannot join themselves.">>};
+translate(?ERROR_CANNOT_ADD_RELATION_TO_SELF) ->
+    {?HTTP_400_BAD_REQUEST, <<"Cannot add relation to self.">>};
+
+translate(?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED) ->
+    {?HTTP_400_BAD_REQUEST, <<"Subdomain delegation is not supported by this Onezone.">>};
 translate(?ERROR_SUBDOMAIN_DELEGATION_DISABLED) ->
-    {?HTTP_400_BAD_REQUEST, <<"Subdomain delegation is currently disabled.">>};
-translate(?ERROR_BAD_VALUE_EMAIL) ->
-    {?HTTP_400_BAD_REQUEST, <<"Bad value: provided e-mail is not a valid e-mail.">>};
+    {?HTTP_400_BAD_REQUEST, <<"Subdomain delegation is disabled for this Oneprovider.">>};
+
+translate(?ERROR_BASIC_AUTH_NOT_SUPPORTED) ->
+    {?HTTP_401_UNAUTHORIZED, <<"Basic auth is not supported by this Onezone.">>};
+translate(?ERROR_BASIC_AUTH_DISABLED) ->
+    {?HTTP_400_BAD_REQUEST, <<"Basic auth is disabled for this user.">>};
+
 % Wildcard match
 translate({error, Reason}) ->
     ?error("Unexpected error: {error, ~p} in rest error translator", [Reason]),

@@ -12,7 +12,7 @@
 -module(space_misc_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -70,8 +70,7 @@ all() ->
 
 
 create_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
 
     VerifyFun = fun(SpaceId) ->
         {ok, Space} = oz_test_utils:get_space(Config, SpaceId),
@@ -83,16 +82,19 @@ create_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {admin, [?OZ_SPACES_CREATE]}
             ],
-            unauthorized = [nobody]
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1}
+            ]
         },
         rest_spec = #rest_spec{
             method = post,
             path = <<"/spaces">>,
             expected_code = ?HTTP_201_CREATED,
             expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                BaseURL = ?URL(Config, [<<"/user/spaces/">>]),
+                BaseURL = ?URL(Config, [<<"/spaces/">>]),
                 [SpaceId] = binary:split(Location, [BaseURL], [global, trim_all]),
                 VerifyFun(SpaceId)
             end
@@ -103,27 +105,9 @@ create_test(Config) ->
             args = [client, data],
             expected_result = ?OK_TERM(VerifyFun)
         },
-        data_spec = #data_spec{
-            required = [<<"name">>],
-            correct_values = #{<<"name">> => [?CORRECT_NAME]},
-            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    % Check that regular client can't make request on behalf of other client
-    ApiTestSpec2 = ApiTestSpec#api_test_spec{
-        client_spec = #client_spec{
-            correct = [{user, U1}],
-            unauthorized = [nobody],
-            forbidden = [{user, U2}]
-        },
-        rest_spec = undefined,
-        logic_spec = undefined,
         gs_spec = #gs_spec{
             operation = create,
             gri = #gri{type = od_space, aspect = instance},
-            auth_hint = ?AS_USER(U1),
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?CORRECT_NAME,
                 <<"gri">> => fun(EncodedGri) ->
@@ -133,21 +117,22 @@ create_test(Config) ->
                     VerifyFun(Id)
                 end
             })
+        },
+        data_spec = #data_spec{
+            required = [<<"name">>],
+            correct_values = #{<<"name">> => [?CORRECT_NAME]},
+            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 list_test(Config) ->
     % Make sure that spaces created in other tests are deleted.
     oz_test_utils:delete_all_entities(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_SPACES_LIST
-    ]),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
@@ -160,7 +145,7 @@ list_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_SPACES_LIST]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -198,22 +183,19 @@ list_test(Config) ->
 
 
 get_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_SPACES_LIST
-    ]),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    AllPrivs = privileges:space_privileges(),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
-        ?SPACE_VIEW
-    ]),
+    oz_test_utils:space_set_user_privileges(Config, S1, U1,
+        AllPrivs -- [?SPACE_VIEW], [?SPACE_VIEW]
+    ),
     oz_test_utils:space_add_user(Config, S1, U2),
-    oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
-        ?SPACE_VIEW
-    ]),
+    oz_test_utils:space_set_user_privileges(Config, S1, U2,
+        [?SPACE_VIEW], AllPrivs -- [?SPACE_VIEW]
+    ),
 
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
@@ -225,7 +207,6 @@ get_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    AllPrivs = oz_test_utils:all_space_privileges(Config),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     % Get and check private data
@@ -238,7 +219,7 @@ get_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, Admin},
+                {admin, [?OZ_SPACES_VIEW]},
                 {user, NonAdmin},
                 {user, U1}
             ]
@@ -251,6 +232,7 @@ get_test(Config) ->
                 fun(#od_space{
                     name = Name, users = Users, groups = #{},
                     providers = Providers, shares = [],
+                    harvesters = [],
                     eff_users = EffUsers, eff_groups = #{},
                     eff_providers = EffProviders,
                     top_down_dirty = false, bottom_up_dirty = false
@@ -281,6 +263,7 @@ get_test(Config) ->
                 <<"groups">> => #{},
                 <<"shares">> => [],
                 <<"providers">> => #{P1 => SupportSize},
+                <<"harvesters">> => [],
                 <<"effectiveUsers">> => #{
                     U1 => AllPrivsBin -- [<<"space_view">>],
                     U2 => [<<"space_view">>]
@@ -302,14 +285,14 @@ get_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {admin, [?OZ_SPACES_VIEW]},
                 {user, U1},
-                {user, U2}
+                {user, U2},
+                {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, NonAdmin},
-                {provider, P1, P1Macaroon}
+                {user, NonAdmin}
             ]
         },
         rest_spec = #rest_spec{
@@ -326,7 +309,7 @@ get_test(Config) ->
             module = space_logic,
             function = get_protected_data,
             args = [client, S1],
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?SPACE_NAME1,
                 <<"providers">> => #{P1 => SupportSize}
             })
@@ -352,19 +335,19 @@ get_test(Config) ->
 
 
 update_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?CORRECT_NAME),
-        oz_test_utils:space_set_user_privileges(Config, S1, U1, revoke, [
+        oz_test_utils:space_set_user_privileges(Config, S1, U1, [], [
             ?SPACE_UPDATE
         ]),
         oz_test_utils:space_add_user(Config, S1, U2),
-        oz_test_utils:space_set_user_privileges(Config, S1, U2, set, [
+        oz_test_utils:space_set_user_privileges(Config, S1, U2, [
             ?SPACE_UPDATE
-        ]),
+        ], []),
         #{spaceId => S1}
     end,
     VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, Data) ->
@@ -380,6 +363,7 @@ update_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_SPACES_UPDATE]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -418,18 +402,18 @@ update_test(Config) ->
 
 
 delete_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
         oz_test_utils:space_set_user_privileges(
-            Config, S1, U1, revoke, [?SPACE_DELETE]
+            Config, S1, U1, [], [?SPACE_DELETE]
         ),
         oz_test_utils:space_add_user(Config, S1, U2),
         oz_test_utils:space_set_user_privileges(
-            Config, S1, U2, set, [?SPACE_DELETE]
+            Config, S1, U2, [?SPACE_DELETE], []
         ),
         #{spaceId => S1}
     end,
@@ -445,6 +429,7 @@ delete_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_SPACES_DELETE]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -476,11 +461,11 @@ delete_test(Config) ->
 
 
 list_shares_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, User, set, []),
+    oz_test_utils:space_set_user_privileges(Config, S1, User, [?SPACE_VIEW], []),
 
     ExpShares = lists:map(
         fun(_) ->
@@ -496,6 +481,7 @@ list_shares_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]},
                 {user, User}
             ],
             unauthorized = [nobody],
@@ -521,11 +507,11 @@ list_shares_test(Config) ->
 
 
 get_share_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, User} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, User, set, []),
+    oz_test_utils:space_set_user_privileges(Config, S1, User, [?SPACE_VIEW], []),
 
     ShareName = <<"Share">>,
     ShareId = ?UNIQUE_STRING,
@@ -533,20 +519,21 @@ get_share_test(Config) ->
         Config, ?ROOT, ShareId, ShareName, ?ROOT_FILE_ID, S1
     ),
 
-    {ok, ZoneDomain} = oz_test_utils:get_oz_domain(Config),
-    SharePublicUrl = ?SHARE_PUBLIC_URL(ZoneDomain, ShareId),
+    OzDomain = oz_test_utils:oz_domain(Config),
+    SharePublicUrl = ?SHARE_PUBLIC_URL(OzDomain, ShareId),
 
     ExpShareDetails = #{
         <<"name">> => ShareName,
         <<"spaceId">> => S1,
         <<"rootFileId">> => ?ROOT_FILE_ID,
-        <<"handleId">> => <<"undefined">>,
+        <<"handleId">> => null,
         <<"publicUrl">> => SharePublicUrl
     },
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_SHARES_VIEW]},
                 {user, User}
             ],
             unauthorized = [nobody],
@@ -606,11 +593,7 @@ list_providers_test(Config) ->
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [
-        ?OZ_SPACES_LIST_PROVIDERS
-    ]),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     SupportSize = oz_test_utils:minimum_support_size(Config),
     ExpProviders = lists:map(
@@ -629,7 +612,7 @@ list_providers_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -672,9 +655,9 @@ create_provider_support_token(Config) ->
     %   U2 gets the SPACE_INVITE_PROVIDER privilege
     %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
-        Config, ?SPACE_INVITE_PROVIDER
+        Config, ?SPACE_ADD_PROVIDER
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     VerifyFun = api_test_scenarios:collect_unique_tokens_fun(),
 
@@ -682,6 +665,7 @@ create_provider_support_token(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_SPACES_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -708,12 +692,8 @@ create_provider_support_token(Config) ->
 
 
 get_provider_test(Config) ->
-    {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [
-        ?OZ_SPACES_LIST_PROVIDERS
-    ]),
+    {ok, User} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ProviderDetails = ?PROVIDER_DETAILS(?PROVIDER_NAME1),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
@@ -726,8 +706,9 @@ get_provider_test(Config) ->
         Config, ?PROVIDER_NAME2
     ),
 
+    SpacePrivs = privileges:space_privileges(),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    oz_test_utils:space_set_user_privileges(Config, S1, User, set, []),
+    oz_test_utils:space_set_user_privileges(Config, S1, User, [], SpacePrivs),
     {ok, S1} = oz_test_utils:support_space(
         Config, P1, S1, oz_test_utils:minimum_support_size(Config)
     ),
@@ -742,7 +723,7 @@ get_provider_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {admin, [?OZ_PROVIDERS_VIEW]},
                 {user, User},
                 {provider, P2, P2Macaroon}
             ],
@@ -764,7 +745,7 @@ get_provider_test(Config) ->
             module = space_logic,
             function = get_provider,
             args = [client, S1, P1],
-            expected_result = ?OK_MAP(ExpDetails)
+            expected_result = ?OK_MAP_CONTAINS(ExpDetails)
         },
         gs_spec = GsSpec = #gs_spec{
             operation = get,
@@ -812,7 +793,7 @@ leave_provider_test(Config) ->
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_REMOVE_PROVIDER
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, {ProviderId, _}} = oz_test_utils:create_provider(
@@ -835,6 +816,7 @@ leave_provider_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_SPACES_REMOVE_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],

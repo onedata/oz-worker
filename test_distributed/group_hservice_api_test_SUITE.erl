@@ -13,7 +13,7 @@
 -module(group_hservice_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -63,7 +63,7 @@ list_handle_services_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ExpHServices = lists:map(
         fun(_) ->
@@ -81,7 +81,8 @@ list_handle_services_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_GROUPS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -108,17 +109,23 @@ list_handle_services_test(Config) ->
 
 create_handle_service_test(Config) ->
     % create group with 2 users:
-    %   U1 gets all privileges
-    %   U2 gets none privileges
+    %   U2 gets ?GROUP_CREATE_HANDLE_SERVICE privilege
+    %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, oz_test_utils:all_group_privileges(Config)
+        Config, ?GROUP_CREATE_HANDLE_SERVICE
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U2, grant, [
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    % Both users get the privilege, but U1 should be forbidden to create a
+    % handle service on behalf of the group as he lacks the
+    % ?GROUP_CREATE_HANDLE_SERVICE privilege.
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
+    ], []),
+    oz_test_utils:user_set_oz_privileges(Config, U2, [
+        ?OZ_HANDLE_SERVICES_CREATE
+    ], []),
 
-    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
+    AllPrivs = privileges:handle_service_privileges(),
 
     VerifyFun = fun(HServiceId) ->
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -146,6 +153,7 @@ create_handle_service_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_CREATE, ?OZ_GROUPS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -216,10 +224,7 @@ get_handle_service_details_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, NonAdmin, grant, [
-        ?OZ_HANDLE_SERVICES_LIST
-    ]),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, HService} = oz_test_utils:create_handle_service(
         Config, ?ROOT, ?DOI_SERVICE
@@ -230,6 +235,7 @@ get_handle_service_details_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_VIEW]},
                 {user, U1},
                 {user, U2}
             ],
@@ -250,7 +256,7 @@ get_handle_service_details_test(Config) ->
             module = group_logic,
             function = get_handle_service,
             args = [client, G1, HService],
-            expected_result = ?OK_MAP(?DOI_SERVICE)
+            expected_result = ?OK_MAP_CONTAINS(?DOI_SERVICE)
         }
         % TODO gs
     },
@@ -259,12 +265,12 @@ get_handle_service_details_test(Config) ->
 
 leave_handle_service_test(Config) ->
     % create group with 2 users:
-    %   U2 gets the GROUP_UPDATE privilege
+    %   U2 gets the GROUP_LEAVE_HANDLE_SERVICE privilege
     %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_UPDATE
+        Config, ?GROUP_LEAVE_HANDLE_SERVICE
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, HService} = oz_test_utils:create_handle_service(
@@ -289,7 +295,8 @@ leave_handle_service_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_HANDLE_SERVICES_REMOVE_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -326,7 +333,8 @@ list_eff_handle_services_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_GROUPS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -375,7 +383,8 @@ get_eff_handle_service_details_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, U1}
+                        {user, U1},
+                        {admin, [?OZ_HANDLE_SERVICES_VIEW]}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
@@ -397,7 +406,7 @@ get_eff_handle_service_details_test(Config) ->
                     module = group_logic,
                     function = get_eff_handle_service,
                     args = [client, G1, HService],
-                    expected_result = ?OK_MAP(HSDetails)
+                    expected_result = ?OK_MAP_CONTAINS(HSDetails)
                 }
                 % TODO gs
             },

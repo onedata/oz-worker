@@ -13,10 +13,10 @@
 -include("registered_names.hrl").
 -include("api_test_utils.hrl").
 -include("graph_sync/oz_graph_sync.hrl").
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
--include_lib("gui/include/new_gui.hrl").
--include_lib("datastore/oz_datastore_models.hrl").
+-include("datastore/oz_datastore_models.hrl").
+-include_lib("gui/include/gui_session.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/api_errors.hrl").
@@ -132,6 +132,7 @@ run_rest_tests(
 
 run_rest_test(Config, RestSpec, Client, Data, Description, Env, undefined) ->
     NewRestSpec = prepare_rest_spec(Config, RestSpec, Data, Env),
+    ResolvedClient = resolve_client(Client, Env),
 
     Result = rest_test_utils:check_rest_call(Config, #{
         request => #{
@@ -139,7 +140,7 @@ run_rest_test(Config, RestSpec, Client, Data, Description, Env, undefined) ->
             path => NewRestSpec#rest_spec.path,
             headers => NewRestSpec#rest_spec.headers,
             body => Data,
-            auth => Client
+            auth => ResolvedClient
         },
         expect => #{
             code => NewRestSpec#rest_spec.expected_code,
@@ -148,7 +149,7 @@ run_rest_test(Config, RestSpec, Client, Data, Description, Env, undefined) ->
         }
     }),
 
-    log_rest_test_result(NewRestSpec, Client, Data, Description, Result);
+    log_rest_test_result(NewRestSpec, ResolvedClient, Data, Description, Result);
 
 run_rest_test(Config, RestSpec, Client, Data, Description, Env, ExpError) ->
     {ExpCode, ExpHeaders, ExpBody} = error_to_rest_expectations(
@@ -202,7 +203,10 @@ error_to_rest_expectations(Config, ErrorType) ->
     end,
     ExpBody = case Body of
         {binary, <<"">>} -> undefined;
-        _ -> Body
+        _ ->
+            %% Encoding to json transforms all atoms in response to binary strings
+            EncodedBody = json_utils:encode(Body),
+            json_utils:decode(EncodedBody)
     end,
     {ExpCode, ExpHeaders, ExpBody}.
 
@@ -266,7 +270,7 @@ run_logic_tests(
 
 
 run_logic_test(Config, LogicSpec, Client, Data, Description, Env, undefined) ->
-    LogicClient = prepare_logic_client(Client),
+    LogicClient = prepare_logic_client(resolve_client(Client, Env)),
     NewLogicSpec = prepare_logic_spec(LogicSpec, LogicClient, Data, Env),
     Result = check_logic_call(Config, NewLogicSpec),
     log_logic_test_result(NewLogicSpec, LogicClient, Description, Result);
@@ -428,10 +432,11 @@ run_gs_tests(
 run_gs_test(_Config, _GsSpec, nobody, _Data, _DescFmt, _Env, undefined) ->
     ok;
 run_gs_test(Config, GsSpec, Client, Data, Description, Env, undefined) ->
-    GsClient = prepare_gs_client(Config, Client),
-    NewGsSpec = prepare_gs_spec(Config, GsSpec, Client, Data, Env),
+    ResolvedClient = resolve_client(Client, Env),
+    GsClient = prepare_gs_client(Config, ResolvedClient),
+    NewGsSpec = prepare_gs_spec(Config, GsSpec, ResolvedClient, Data, Env),
     Result = check_gs_call(NewGsSpec, GsClient, Data),
-    log_gs_test_result(NewGsSpec, Client, Data, Description, Result);
+    log_gs_test_result(NewGsSpec, ResolvedClient, Data, Description, Result);
 
 run_gs_test(Config, GsSpec, Client, Data, DescFmt, Env, ExpError) ->
     NewGsSpec = GsSpec#gs_spec{
@@ -461,11 +466,12 @@ error_to_gs_expectations(Config, ErrorType) ->
 prepare_gs_client(Config, {user, UserId, _Macaroon}) ->
     prepare_gs_client(Config, {user, UserId});
 prepare_gs_client(Config, {user, UserId}) ->
-    {ok, SessionId} = oz_test_utils:create_session(Config, UserId, []),
+    {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, UserId),
+    {ok, GuiToken} = oz_test_utils:acquire_gui_token(Config, CookieValue),
     prepare_gs_client(
         Config,
         {user, UserId},
-        {cookie, {?SESSION_COOKIE_KEY, SessionId}},
+        {macaroon, GuiToken, []},
         [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
     );
 prepare_gs_client(_Config, nobody) ->
@@ -474,17 +480,21 @@ prepare_gs_client(Config, {provider, ProviderId, Macaroon}) ->
     prepare_gs_client(
         Config,
         {provider, ProviderId},
-        {macaroon, Macaroon},
+        {macaroon, Macaroon, []},
         [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
     ).
 
 
-% Authorization :: {cookie, Cookie} | {macaroon, Macaroon}.
+% Authorization :: {urlToken, Token} | {macaroon, Macaroon}.
+% Provider   - {macaroon, Macaroon} - macaroon is sent in headers
+% User (GUI) - {urlToken, Token} - macaroon is retrieved from /gui-token
+%              endpoint based on cookie and sent in QueryString
 prepare_gs_client(Config, ExpIdentity, Authorization, Opts) ->
     {ok, GsClient, #gs_resp_handshake{
         identity = ExpIdentity
     }} = gs_client:start_link(
-        oz_test_utils:get_gs_ws_url(Config),
+        % @todo VFS-4520 Currently only provider endpoint is tested
+        oz_test_utils:graph_sync_url(Config, provider),
         Authorization,
         oz_test_utils:get_gs_supported_proto_versions(Config),
         fun(_) -> ok end,
@@ -505,6 +515,8 @@ prepare_gs_spec(_Config, GsSpec, Client, Data, Env) ->
 
 
 % Convert placeholders in gri into real data
+prepare_gri(#gri{aspect = {A, Id}} = Gri, Env) when is_atom(Id) ->
+    prepare_gri(Gri#gri{aspect = {A, maps:get(Id, Env, Id)}}, Env);
 prepare_gri(#gri{id = Id} = Gri, Env) when is_atom(Id) ->
     Gri#gri{id = maps:get(Id, Env, Id)};
 prepare_gri(Gri, _Env) ->
@@ -662,7 +674,7 @@ run_test_combinations(
         fun({Clients, DataSets, DescFmt, Error}) ->
             lists:foreach(
                 fun(Client) ->
-                    PreparedClient = prepare_client(Client, Environment),
+                    PreparedClient = prepare_client(Client, Environment, Config),
                     lists:foreach(
                         fun
                         % get and delete operations cannot
@@ -704,7 +716,7 @@ run_test_combinations(
                     Env = EnvSetUpFun(),
                     PreparedData = prepare_data(DataSet, Env),
                     RunTestFun(
-                        Config, Spec, prepare_client(Client, Env),
+                        Config, Spec, prepare_client(Client, Env, Config),
                         PreparedData, Description, Env, undefined
                     ),
                     VerifyFun(true, Env, PreparedData),
@@ -726,15 +738,19 @@ prepare_error(Data, Description, ExpError) ->
 
 
 % Converts placeholders in client into real data
-prepare_client({user, User}, Env) when is_atom(User) ->
+prepare_client({user, User}, Env, _Config) when is_atom(User) ->
     {user, maps:get(User, Env, User)};
-prepare_client({user, User, Macaroon}, Env) when is_atom(User) ->
+prepare_client({user, User, Macaroon}, Env, _Config) when is_atom(User) ->
     {user, maps:get(User, Env, User), Macaroon};
-prepare_client({provider, Provider, Macaroon}, Env) when is_atom(Provider) orelse is_atom(Macaroon) ->
+prepare_client({provider, Provider, Macaroon}, Env, _Config) when is_atom(Provider) orelse is_atom(Macaroon) ->
     {provider, maps:get(Provider, Env, Provider), maps:get(Macaroon, Env, Macaroon)};
-prepare_client(Client, Env) when is_atom(Client) ->
+prepare_client({admin, Privs}, _Env, Config) ->
+    {ok, Admin} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, Admin, Privs, []),
+    {user, Admin};
+prepare_client(Client, Env, _Config) when is_atom(Client) ->
     maps:get(Client, Env, Client);
-prepare_client(Client, _Env) ->
+prepare_client(Client, _Env, _Config) ->
     Client.
 
 
@@ -932,3 +948,17 @@ prepare_exp_result(?OK_ENV(PrepareFun), Env, Data) ->
     PrepareFun(Env, Data);
 prepare_exp_result(Expectation, _Env, _Data) ->
     Expectation.
+
+
+resolve_client(nobody, _Env) ->
+    nobody;
+resolve_client(root, _Env) ->
+    root;
+resolve_client({user, UserId}, _Env) ->
+    {user, UserId};
+resolve_client({user, UserId, Macaroon}, _Env) ->
+    {user, UserId, Macaroon};
+resolve_client({provider, ProviderId, Macaroon}, _Env) ->
+    {provider, ProviderId, Macaroon};
+resolve_client(Arg, Env) ->
+    maps:get(Arg, Env).

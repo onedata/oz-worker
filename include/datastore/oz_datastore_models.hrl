@@ -13,9 +13,13 @@
 -define(OZ_DATASTORE_MODELS_HRL, 1).
 
 -include("entity_logic.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("cluster_worker/include/modules/datastore/datastore_models.hrl").
 
 -define(DEFAULT_GROUP_TYPE, team).
+-define(DEFAULT_RELEASE_VERSION, <<"18.02.*">>).
+-define(DEFAULT_BUILD_VERSION, <<"unknown">>).
+-define(EMPTY_GUI_HASH, <<"empty">>).
 
 %%%===================================================================
 %%% DB records definitions
@@ -26,8 +30,8 @@
 -record(linked_account, {
     idp :: atom(),
     subject_id :: binary(),
-    name = undefined :: undefined | binary(),
-    alias = undefined :: undefined | binary(),
+    full_name = undefined :: undefined | binary(),
+    username = undefined :: undefined | binary(),
     emails = [] :: [binary()],
     % A list of entitlements in given IdP, they must be normalized according
     % to specification in idp_group_mapping.
@@ -37,6 +41,33 @@
     access_token = {undefined, 0} :: {undefined | binary(), Expires :: non_neg_integer()},
     refresh_token = undefined :: undefined | binary()
 }).
+
+
+%% This record must be defined here as od_harvester depends on it.
+-record(harvester_index, {
+    name :: binary(),
+    schema = undefined :: od_harvester:schema() | undefined,
+    % mapping of index name to one recognized by gui plugin.
+    gui_plugin_name = undefined :: binary() | undefined,
+    stats = #{} :: od_harvester:indices_stats()
+}).
+
+
+%% This record must be defined here as od_harvester depends on it.
+-record(index_stats, {
+    % sequence harvested in this index
+    current_seq = 0 :: integer(),
+    % highest sequence known in given space in given provider
+    max_seq = 0 :: integer(),
+    % timestamp of last harvesting
+    last_update = undefined :: integer() | undefined,
+    % short description of encountered error if last harvesting failed
+    error = undefined :: binary() | undefined,
+    % stats are marked archival when it is no longer possible to harvest metadata
+    % in given space in given provider e.g space was removed from harvester
+    archival = false :: boolean()
+}).
+
 
 %%%===================================================================
 %%% Records synchronized via Graph Sync
@@ -54,25 +85,28 @@
 %
 % The below ASCII visual shows possible relations in entities graph.
 %
-%       provider
-%           ^
-%           |
-%           |
-%         space    handle_service     handle
-%        ^ ^  ^       ^         ^       ^   ^
-%       /  |   \     /          |      /    |
-%      /   |    \   /           |     /     |
-%  share  user   group           user     group
-%                  ^                        ^
-%                  |                        |
-%                  |                        |
-%                group                     user
-%                ^   ^
-%               /     \
-%              /       \
-%            user     user
+%           provider------------------------------------------>cluster
+%              ^                                                ^  ^
+%              |                                 share          |  |
+%              |                                   ^           /   |
+%              |                                   |          /    |
+%            space            handle_service<----handle      /     |
+%           ^ ^ ^ ^             ^         ^       ^  ^      /     /
+%          /  | |  \           /          |      /   |     /     /
+%         /   | |   \         /           |     /    |    /     /
+%        /   /   \   \       /            |    /     |   /     /
+%       /   /     \   \     /             |   /      |  /     /
+% share user harvester group             user      group     /
+%              ^    ^     ^                          ^      /
+%             /      \    |                          |     /
+%            /        \   |                          |    /
+%          user        group                        user-'
+%                      ^   ^
+%                     /     \
+%                    /       \
+%                  user      user
 %
-% Members of groups, spaces, providers, handle_services and handles are
+% Members of groups, spaces, providers, handle_services, handles and harvesters are
 % calculated bottom-up.
 %
 % Memberships of users, groups and spaces are calculated top-down.
@@ -85,14 +119,19 @@
 
 %% This record defines a user and is handled as a database document
 -record(od_user, {
-    name = <<"">> :: od_user:name(),
-    alias = undefined :: od_user:alias(),
-    emails = [] :: [od_user:email()],
-    % Decides if this user can login via login:password, only users created in
-    % onepanel are currently allowed to do that.
+    full_name = ?DEFAULT_FULL_NAME :: od_user:full_name(),
+    username = undefined :: undefined | od_user:username(),
+    % Decides if this user can login via login:password - this feature must be
+    % enabled by an admin, by default regular users are only allowed to sign in
+    % using their IdPs.
     basic_auth_enabled = false :: boolean(),
+    password_hash = undefined :: undefined | basic_auth:password_hash(),
+    emails = [] :: [od_user:email()],
+
     linked_accounts = [] :: [od_user:linked_account()],
     entitlements = [] :: [od_group:id()],
+
+    active_sessions = [] :: [session:id()],
 
     default_space = undefined :: undefined | binary(),
     default_provider = undefined :: undefined | binary(),
@@ -111,6 +150,8 @@
     spaces = [] :: entity_graph:relations(od_space:id()),
     handle_services = [] :: entity_graph:relations(od_handle_service:id()),
     handles = [] :: entity_graph:relations(od_handle:id()),
+    harvesters = [] :: entity_graph:relations(od_harvester:id()),
+    clusters = [] :: entity_graph:relations(od_cluster:id()),
 
     % Effective relations to other entities
     eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
@@ -118,6 +159,10 @@
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
     eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
+    eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
+    eff_clusters = #{} :: entity_graph:eff_relations(od_cluster:id()),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
 
     % Marks that the record's effective relations are not up to date.
     top_down_dirty = true :: boolean()
@@ -128,6 +173,8 @@
 -record(od_group, {
     name = <<"">> :: od_group:name(),
     type = ?DEFAULT_GROUP_TYPE :: od_group:type(),
+    % if group is protected it cannot be deleted
+    protected = false :: boolean(),
 
     % Privileges of this group in admin's OZ API
     oz_privileges = [] :: [privileges:oz_privilege()],
@@ -144,6 +191,8 @@
     spaces = [] :: entity_graph:relations(od_space:id()),
     handle_services = [] :: entity_graph:relations(od_handle_service:id()),
     handles = [] :: entity_graph:relations(od_handle:id()),
+    harvesters = [] :: entity_graph:relations(od_harvester:id()),
+    clusters = [] :: entity_graph:relations(od_cluster:id()),
 
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:group_privilege()]),
@@ -151,6 +200,11 @@
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
     eff_handle_services = #{} :: entity_graph:eff_relations(od_handle_service:id()),
     eff_handles = #{} :: entity_graph:eff_relations(od_handle:id()),
+    eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
+    eff_clusters = #{} :: entity_graph:eff_relations(od_cluster:id()),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
 
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.
@@ -168,6 +222,7 @@
     providers = #{} :: entity_graph:relations_with_attrs(od_provider:id(), Size :: pos_integer()),
     % All shares that belong to this space.
     shares = [] :: entity_graph:relations(od_share:id()),
+    harvesters = [] :: entity_graph:relations(od_harvester:id()),
 
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
@@ -175,6 +230,12 @@
     % Effective providers contain only direct providers, but this is needed to
     % track changes in spaces and propagate them top-down.
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
+    % Effective harvesters contain only direct harvesters, but this is needed to
+    % track changes in spaces and propagate them bottom-up.
+    eff_harvesters = #{} :: entity_graph:eff_relations(od_provider:id()),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
 
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.
@@ -193,14 +254,18 @@
     % Direct relations to other entities
     space = undefined :: undefined | od_space:id(),
     handle = undefined :: undefined | od_handle:id(),
-    root_file = undefined :: undefined | binary()
+    root_file = undefined :: undefined | binary(),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client()
 }).
 
 %% This record defines a provider who supports spaces and can be reached via url
 -record(od_provider, {
     name = <<"">> :: od_provider:name(),
-    admin_email :: undefined | binary(),
-    root_macaroon :: undefined | macaroon_auth:id(),
+    admin_email = undefined :: undefined | binary(),
+    root_macaroon = undefined :: undefined | macaroon_logic:id(),
+
     subdomain_delegation = false :: boolean(),
     domain :: binary(),
     subdomain = undefined :: undefined | binary(),
@@ -214,6 +279,9 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations(od_user:id()),
     eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
+    eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -232,6 +300,9 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_service_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_service_privilege()]),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -253,6 +324,62 @@
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:handle_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_privilege()]),
 
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
+
+    % Marks that the record's effective relations are not up to date.
+    bottom_up_dirty = true :: boolean()
+}).
+
+-record(od_harvester, {
+    name = <<"">> :: od_harvester:name(),
+    plugin :: od_harvester:plugin(),
+    endpoint :: od_harvester:endpoint(),
+
+    gui_plugin_config = #{} :: json_utils:json_term(),
+    public = false :: boolean(),
+
+    indices = #{} :: od_harvester:indices(),
+
+    % Direct relations to other entities
+    users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
+    groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
+    spaces = [] :: entity_graph:relations(od_space:id()),
+
+    % Effective relations to other entities
+    eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
+    eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
+    eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
+
+    % Marks that the record's effective relations are not up to date.
+    bottom_up_dirty = true :: boolean(),
+    top_down_dirty = true :: boolean()
+}).
+
+%% This record defines a Onezone/Oneprovider cluster.
+-record(od_cluster, {
+    type = ?ONEZONE :: onedata:cluster_type(),
+
+    % Version 18.02.* is default for legacy providers
+    worker_version = {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH} :: od_cluster:version_info(),
+    onepanel_version = {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH} :: od_cluster:version_info(),
+    % If enabled, onepanel is served on port 443 by oneprovider/onezone (rather than 9443)
+    onepanel_proxy = false :: boolean(),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | entity_logic:client(),
+
+    % Direct relations to other entities
+    users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:cluster_privilege()]),
+    groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:cluster_privilege()]),
+
+    % Effective relations to other entities
+    eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:cluster_privilege()]),
+    eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:cluster_privilege()]),
+
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
 }).
@@ -264,7 +391,10 @@
 %% This record defines a GUI session
 -record(session, {
     user_id :: od_user:id(),
-    accessed = 0 :: non_neg_integer()
+    last_refresh = 0 :: non_neg_integer(),
+    nonce = <<"">> :: binary(),
+    previous_nonce = <<"">> :: binary(),
+    gui_macaroons = #{} :: session:gui_macaroons_cache()
 }).
 
 %% This record defines a token that can be used by user to do something
@@ -286,9 +416,17 @@
 %% Stores information about authorization correlated with a macaroon.
 %% Record id serves as macaroon identifier.
 -record(macaroon_auth, {
-    secret :: macaroon_auth:secret(),
-    type :: macaroon_auth:type(),
-    issuer :: macaroon_auth:issuer()
+    secret :: macaroon_logic:secret(),
+    type :: macaroon_logic:type(),
+    issuer :: macaroon_logic:issuer()
+}).
+
+%% Stores information about the issuer of a macaroon.
+%% Record id serves as macaroon identifier.
+%% Stored in memory only.
+-record(volatile_macaroon, {
+    secret :: macaroon_logic:secret(),
+    issuer :: macaroon_logic:issuer()
 }).
 
 
@@ -296,14 +434,15 @@
     subdomain_to_provider = #{} :: #{dns_state:subdomain() => od_provider:id()},
     provider_to_subdomain = #{} :: #{od_provider:id() => dns_state:subdomain()},
     provider_to_ips = #{} :: #{od_provider:id() => [inet:ipv4_address()]},
-    provider_to_txt_records = #{} :: #{od_provider:id() =>
-        [{binary(), binary(), integer() | undefined}]}
+    provider_to_txt_records = #{} :: #{
+        od_provider:id() => [{binary(), binary(), integer() | undefined}]
+    }
 }).
 
 -record(entity_graph_state, {
     refresh_in_progress = false :: boolean(),
-    bottom_up_dirty = [] :: [{Priority :: integer(), EntityType :: atom(), EntityId :: binary()}],
-    top_down_dirty = [] :: [{Priority :: integer(), EntityType :: atom(), EntityId :: binary()}]
+    bottom_up_dirty = ordsets:new() :: entity_graph_state:dirty_queue(),
+    top_down_dirty = ordsets:new() :: entity_graph_state:dirty_queue()
 }).
 
 %% Model that holds the last processed seq for Graph Sync server.
@@ -316,19 +455,17 @@
     connection_ref :: gs_server:conn_ref()
 }).
 
+%% Stores information about active user connections per session id
+-record(user_connections, {
+    connections = [] :: [gs_server:conn_ref()]
+}).
+
 % Token used to match together OIDC/SAML requests and responses and protect
 % against replay attacks. It is correlated with some state, defining for example
 % to which IdP the client was redirected.
 -record(state_token, {
     timestamp = 0 :: integer(),  % In seconds since epoch
     state_info = #{} :: state_token:state_info()
-}).
-
-%% Record used to cache authorization via basic auth credentials
--record(basic_auth_cache, {
-    expires :: non_neg_integer(),
-    password_hash :: binary(),
-    props :: maps:map()
 }).
 
 -endif.

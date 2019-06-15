@@ -12,7 +12,7 @@
 -module(group_parents_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -64,7 +64,7 @@ list_parents_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ExpGroups = lists:map(
         fun(_) ->
@@ -80,7 +80,8 @@ list_parents_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_GROUPS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -107,14 +108,14 @@ list_parents_test(Config) ->
 
 create_parent_test(Config) ->
     % create group with 2 users:
-    %   U2 has no privileges
-    %   U1 has all group privileges
+    %   U2 gets ?GROUP_ADD_PARENT privilege
+    %   U1 gets all remaining privileges
     {Child, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, []
+        Config, ?GROUP_ADD_PARENT
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    AllPrivs = oz_test_utils:all_group_privileges(Config),
+    AllPrivs = privileges:group_privileges(),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(ParentId, Data) ->
@@ -146,10 +147,13 @@ create_parent_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                {user, U1},
+                {admin, [?OZ_GROUPS_CREATE, ?OZ_GROUPS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
-            forbidden = [{user, NonAdmin}]
+            forbidden = [
+                {user, U1},
+                {user, NonAdmin}
+            ]
         },
         rest_spec = #rest_spec{
             method = post,
@@ -213,12 +217,12 @@ create_parent_test(Config) ->
 
 join_parent_test(Config) ->
     % create group with 2 users:
-    %   U2 gets the GROUP_JOIN_GROUP privilege
+    %   U2 gets the GROUP_ADD_PARENT privilege
     %   U1 gets all remaining privileges
     {Child, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_JOIN_GROUP
+        Config, ?GROUP_ADD_PARENT
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     CreateTokenForItselfFun = fun() ->
         {ok, Macaroon} = oz_test_utils:group_invite_group_token(
@@ -254,6 +258,7 @@ join_parent_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -295,7 +300,7 @@ join_parent_test(Config) ->
             bad_values = [
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
                 {<<"token">>, CreateTokenForItselfFun,
-                    ?ERROR_CANNOT_JOIN_GROUP_TO_ITSELF},
+                    ?ERROR_CANNOT_ADD_RELATION_TO_SELF},
                 {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
                 {<<"token">>, <<"123qwe">>,
                     ?ERROR_BAD_VALUE_TOKEN(<<"token">>)}
@@ -353,7 +358,7 @@ join_parent_test(Config) ->
     {ok, Token2} = onedata_macaroons:serialize(Macaroon2),
     ApiTestSpec2 = ApiTestSpec1#api_test_spec{
         logic_spec = LogicSpec#logic_spec{
-            expected_result = ?ERROR_REASON(?ERROR_CANNOT_JOIN_GROUP_TO_ITSELF)
+            expected_result = ?ERROR_REASON(?ERROR_CANNOT_ADD_RELATION_TO_SELF)
         },
         data_spec = #data_spec{
         required = [<<"token">>],
@@ -367,13 +372,12 @@ join_parent_test(Config) ->
 
 leave_parent_test(Config) ->
     % create group with 2 users:
-    %   U2 gets the GROUP_UPDATE privilege
+    %   U2 gets the GROUP_LEAVE_PARENT privilege
     %   U1 gets all remaining privileges
     {Child, U1, U2} = api_test_scenarios:create_basic_group_env(
-        % TODO VFS-3351 ?GROUP_LEAVE_GROUP
-        Config, ?GROUP_UPDATE
+        Config, ?GROUP_LEAVE_PARENT
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, Group} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME2),
@@ -392,7 +396,8 @@ leave_parent_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_GROUPS_REMOVE_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -426,7 +431,7 @@ get_parent_details_test(Config) ->
     {Group, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, ParentGroup} = oz_test_utils:create_group(Config, ?ROOT,
         #{<<"name">> => ?GROUP_NAME2, <<"type">> => ?GROUP_TYPE2}
@@ -438,7 +443,8 @@ get_parent_details_test(Config) ->
             correct = [
                 root,
                 {user, U1},
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_GROUPS_VIEW]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -459,7 +465,7 @@ get_parent_details_test(Config) ->
             module = group_logic,
             function = get_parent,
             args = [client, Group, ParentGroup],
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME2,
                 <<"type">> => ?GROUP_TYPE2
             })
@@ -491,22 +497,17 @@ list_eff_parents_test(Config) ->
         [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}], {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_parent_groups_env(Config),
 
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_GROUPS_LIST_GROUPS
-    ]),
-
     ExpGroups = [G2, G3, G4, G5],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_GROUPS_LIST_RELATIONSHIPS]},
                 {user, U1}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U2},
-                {user, Admin},
                 {user, NonAdmin}
             ]
         },
@@ -544,11 +545,6 @@ get_eff_parent_details_test(Config) ->
         [{G1, _} | EffParents], {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_parent_groups_env(Config),
 
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_GROUPS_LIST_GROUPS
-    ]),
-
     lists:foreach(
         fun({GroupId, GroupDetails}) ->
             ExpType = maps:get(<<"type">>, GroupDetails, ?DEFAULT_GROUP_TYPE),
@@ -558,11 +554,11 @@ get_eff_parent_details_test(Config) ->
                     correct = [
                         root,
                         {user, U1},
-                        {user, U2}
+                        {user, U2},
+                        {admin, [?OZ_GROUPS_VIEW]}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
-                        {user, Admin},
                         {user, NonAdmin}
                     ]
                 },
@@ -583,7 +579,7 @@ get_eff_parent_details_test(Config) ->
                     module = group_logic,
                     function = get_eff_parent,
                     args = [client, G1, GroupId],
-                    expected_result = ?OK_MAP(GroupDetails)
+                    expected_result = ?OK_MAP_CONTAINS(GroupDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,

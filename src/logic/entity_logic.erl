@@ -32,11 +32,11 @@
 -type el_plugin() :: module().
 -type operation() :: gs_protocol:operation().
 -type entity_id() :: undefined | od_user:id() | od_group:id() | od_space:id() |
-od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id().
+od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id() | od_cluster:id().
 -type entity_type() :: od_user | od_group | od_space | od_share | od_provider |
-od_handle_service | od_handle | oz_privileges.
+od_handle_service | od_handle | od_harvester | od_cluster | oz_privileges.
 -type entity() :: undefined | #od_user{} | #od_group{} | #od_space{} |
-#od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}.
+#od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{} | #od_harvester{} | #od_cluster{}.
 -type aspect() :: gs_protocol:aspect().
 -type scope() :: gs_protocol:scope().
 -type data_format() :: gs_protocol:data_format().
@@ -51,7 +51,7 @@ od_handle_service | od_handle | oz_privileges.
 -type result() :: create_result() | get_result() | update_result() | delete_result().
 -type error() :: gs_protocol:error().
 
--type type_validator() :: any | atom | list_of_atoms | binary | alias |
+-type type_validator() :: any | atom | list_of_atoms | binary |
 list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
@@ -64,9 +64,8 @@ fun((term()) -> boolean()) |
 {relation_exists, atom(), binary(), atom(), binary(), fun((entity_id()) -> boolean())} |
 token_logic:token_type() | % Compatible only with 'token' type validator
 subdomain | domain |
-email |
-alias |
-name | user_name.
+email | name |
+full_name | username | password.
 
 % The 'aspect' key word allows to validate the data provided in aspect
 % identifier.
@@ -75,6 +74,9 @@ required => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
 at_least_one => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_validator()}},
 optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_validator()}}
 }.
+
+% Common fields for all records
+-type creation_time() :: non_neg_integer().  % UNIX timestamp in seconds
 
 -export_type([
     client/0,
@@ -97,7 +99,8 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
     result/0,
     type_validator/0,
     value_validator/0,
-    validity_verificator/0
+    validity_verificator/0,
+    creation_time/0
 ]).
 
 % Internal record containing the request data and state.
@@ -112,6 +115,7 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
 -export([handle/1, handle/2]).
 -export([is_authorized/2]).
 -export([client_to_string/1]).
+-export([root_client/0, user_client/1, provider_client/1]).
 -export([validate_name/1, validate_name/5, normalize_name/1, normalize_name/9]).
 
 
@@ -159,17 +163,17 @@ handle(#el_req{gri = #gri{type = EntityType}} = ElReq, Entity) ->
 %% in the #el_req{} record. Entity can be provided if it was prefetched.
 %% @end
 %%--------------------------------------------------------------------
--spec is_authorized(req(), entity()) -> boolean().
+-spec is_authorized(req(), entity()) -> {true, gs_protocol:gri()} | false.
 is_authorized(#el_req{gri = #gri{type = EntityType}} = ElReq, Entity) ->
     try
         ElPlugin = EntityType:entity_logic_plugin(),
         % Existence must be checked too, as sometimes authorization depends
         % on that.
-        ensure_authorized(
+        NewState = ensure_authorized(
             ensure_exists(#state{
                 req = ElReq, plugin = ElPlugin, entity = Entity
             })),
-        true
+        {true, NewState#state.req#el_req.gri}
     catch
         _:_ ->
             false
@@ -186,6 +190,36 @@ client_to_string(?NOBODY) -> "nobody (unauthenticated client)";
 client_to_string(?ROOT) -> "root";
 client_to_string(?USER(UId)) -> str_utils:format("user:~s", [UId]);
 client_to_string(?PROVIDER(PId)) -> str_utils:format("provider:~s", [PId]).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns root client record.
+%% @end
+%%--------------------------------------------------------------------
+-spec root_client() -> client().
+root_client() ->
+    ?ROOT.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns user client record for given UserId.
+%% @end
+%%--------------------------------------------------------------------
+-spec user_client(od_user:id()) -> client().
+user_client(UserId) ->
+    ?USER(UserId).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns provider client record for given ProviderId.
+%% @end
+%%--------------------------------------------------------------------
+-spec provider_client(od_provider:id()) -> client().
+provider_client(ProviderId) ->
+    ?PROVIDER(ProviderId).
 
 
 %%--------------------------------------------------------------------
@@ -303,19 +337,25 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = create}}) ->
             ?debug("~s has been created by client: ~s", [
                 EntType:to_string(EntId),
                 client_to_string(Cl)
-            ]),
-            Result;
+            ]);
         _ ->
-            Result
-    end;
+            ok
+    end,
+    Result;
 
 handle_unsafe(State = #state{req = #el_req{operation = get}}) ->
-    call_get(
-        ensure_authorized(
-            ensure_exists(
-                fetch_entity(
-                    ensure_operation_supported(
-                        State)))));
+    NewState = ensure_authorized(
+        ensure_exists(
+            fetch_entity(
+                ensure_operation_supported(
+                    State)))),
+    {ok, Data} = call_get(NewState),
+    % Return the new GRI if auto scope was requested
+    case State#state.req#el_req.gri#gri.scope of
+        auto -> {ok, NewState#state.req#el_req.gri, Data};
+        _ -> {ok, Data}
+    end;
+
 
 handle_unsafe(State = #state{req = #el_req{operation = update}}) ->
     call_update(
@@ -360,10 +400,13 @@ fetch_entity(State = #state{entity = Entity}) when Entity /= undefined ->
     State;
 fetch_entity(State = #state{req = #el_req{gri = #gri{id = undefined}}}) ->
     State;
-fetch_entity(St = #state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}) ->
-    case Plugin:fetch_entity(Id) of
+fetch_entity(State = #state{req = #el_req{operation = create, gri = #gri{aspect = instance}}}) ->
+    % Skip when creating an instance with predefined Id
+    State;
+fetch_entity(State) ->
+    case call_plugin(fetch_entity, State) of
         {ok, Entity} ->
-            St#state{entity = Entity};
+            State#state{entity = Entity};
         ?ERROR_NOT_FOUND ->
             throw(?ERROR_NOT_FOUND)
     end.
@@ -377,13 +420,8 @@ fetch_entity(St = #state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}) -
 %% @end
 %%--------------------------------------------------------------------
 -spec call_create(State :: #state{}) -> create_result().
-call_create(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
-    case Plugin:create(ElReq) of
-        Fun when is_function(Fun, 1) ->
-            Fun(Entity);
-        Result ->
-            Result
-    end.
+call_create(State) ->
+    call_plugin(create, State).
 
 
 %%--------------------------------------------------------------------
@@ -394,8 +432,8 @@ call_create(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_get(State :: #state{}) -> get_result().
-call_get(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
-    Plugin:get(ElReq, Entity).
+call_get(State) ->
+    call_plugin(get, State).
 
 
 %%--------------------------------------------------------------------
@@ -406,8 +444,8 @@ call_get(#state{req = ElReq, plugin = Plugin, entity = Entity}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_update(State :: #state{}) -> update_result().
-call_update(#state{req = ElReq, plugin = Plugin}) ->
-    Plugin:update(ElReq).
+call_update(State) ->
+    call_plugin(update, State).
 
 
 %%--------------------------------------------------------------------
@@ -418,8 +456,8 @@ call_update(#state{req = ElReq, plugin = Plugin}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_delete(State :: #state{}) -> delete_result().
-call_delete(#state{req = ElReq, plugin = Plugin}) ->
-    Plugin:delete(ElReq).
+call_delete(State) ->
+    call_plugin(delete, State).
 
 
 %%--------------------------------------------------------------------
@@ -430,18 +468,24 @@ call_delete(#state{req = ElReq, plugin = Plugin}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec ensure_operation_supported(#state{}) -> #state{}.
-ensure_operation_supported(State = #state{req = Req, plugin = Plugin}) ->
-    Result = try
-        #el_req{operation = Op, gri = #gri{aspect = Asp, scope = Scp}} = Req,
-        Plugin:operation_supported(Op, Asp, Scp)
+ensure_operation_supported(State = #state{req = #el_req{gri = #gri{scope = auto}}}) ->
+    % If auto scope is requested, defer the check until ensure_authorized
+    State;
+ensure_operation_supported(State) ->
+    case ensure_operation_supported_internal(State) of
+        true -> State;
+        false -> throw(?ERROR_NOT_SUPPORTED)
+    end.
+
+
+-spec ensure_operation_supported_internal(#state{}) -> boolean().
+ensure_operation_supported_internal(State) ->
+    try
+        call_plugin(operation_supported, State)
     catch _:_ ->
         % No need for log here, 'operation_supported' may crash depending on
         % what the request contains and this is expected.
         false
-    end,
-    case Result of
-        true -> State;
-        false -> throw(?ERROR_NOT_SUPPORTED)
     end.
 
 
@@ -451,23 +495,25 @@ ensure_operation_supported(State = #state{req = Req, plugin = Plugin}) ->
 %% Ensures aspect of entity specified in request exists, throws on error.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_exists(State :: #state{}) -> #state{}.
-ensure_exists(#state{req = #el_req{gri = #gri{id = undefined}}} = State) ->
-    % Aspects where entity id is undefined always exist.
-    State;
-ensure_exists(State = #state{req = ElReq, plugin = Plugin, entity = Entity}) ->
-    Result = try
-        Plugin:exists(ElReq, Entity)
-    catch _:_ ->
-        % No need for log here, 'exists' may crash depending on what the
-        % request contains and this is expected.
-        false
-    end,
-    case Result of
+-spec ensure_exists(#state{}) -> #state{}.
+ensure_exists(State) ->
+    case ensure_exists_internal(State) of
         true -> State;
         false -> throw(?ERROR_NOT_FOUND)
     end.
 
+
+-spec ensure_exists_internal(#state{}) -> boolean().
+ensure_exists_internal(#state{req = #el_req{gri = #gri{id = undefined}}}) ->
+    true;
+ensure_exists_internal(State) ->
+    try
+        call_plugin(exists, State)
+    catch _:_ ->
+        % No need for log here, 'exists' may crash depending on what the
+        % request contains and this is expected.
+        false
+    end.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -477,32 +523,79 @@ ensure_exists(State = #state{req = ElReq, plugin = Plugin, entity = Entity}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec ensure_authorized(State :: #state{}) -> #state{}.
-ensure_authorized(State = #state{req = #el_req{client = ?ROOT}}) ->
+ensure_authorized(State = #state{req = #el_req{gri = #gri{scope = auto}}}) ->
+    % Resolve auto scope - maximum scope allowed for given client and place it
+    % in state, which will result in specific scope being used in the operation.
+    case resolve_auto_scope(State) of
+        {true, NewState} -> NewState;
+        false -> report_unauthorized(State)
+    end;
+ensure_authorized(State) ->
+    case ensure_authorized_internal(State) of
+        true -> State;
+        false -> report_unauthorized(State)
+    end.
+
+
+-spec ensure_authorized_internal(#state{}) -> boolean().
+ensure_authorized_internal(#state{req = #el_req{client = ?ROOT}}) ->
     % Root client is authorized to do everything (that client is only available
     % internally).
-    State;
-ensure_authorized(State = #state{req = ElReq, plugin = Plugin, entity = Entity}) ->
-    Result = try
-        Plugin:authorize(ElReq, Entity)
-    catch _:_ ->
-        % No need for log here, 'authorize' may crash depending on what the
-        % request contains and this is expected.
-        false
-    end,
-    case Result of
-        true ->
-            State;
-        false ->
-            case ElReq#el_req.client of
-                ?NOBODY ->
-                    % The client was not authenticated -> unauthorized
-                    throw(?ERROR_UNAUTHORIZED);
-                _ ->
-                    % The client was authenticated but cannot access the
-                    % aspect -> forbidden
-                    throw(?ERROR_FORBIDDEN)
-            end
+    true;
+ensure_authorized_internal(State) ->
+    is_client_authorized(State) orelse is_authorized_as_admin(State).
+
+
+-spec resolve_auto_scope(#state{}) -> false | {true, #state{}}.
+resolve_auto_scope(State) ->
+    resolve_auto_scope([private, protected, shared, public], State).
+
+-spec resolve_auto_scope([gs_protocol:scope()], #state{}) -> false | {true, #state{}}.
+resolve_auto_scope([], _State) ->
+    false;
+resolve_auto_scope([Scope | Rest], State = #state{req = Req = #el_req{operation = Operation, gri = GRI}}) ->
+    StateWithScope = State#state{req = Req#el_req{gri = GRI#gri{scope = Scope}}},
+    Authorized = ensure_operation_supported_internal(StateWithScope) andalso
+        (Operation == create orelse ensure_exists_internal(StateWithScope)) andalso
+        ensure_authorized_internal(StateWithScope),
+    case Authorized of
+        true -> {true, StateWithScope};
+        false -> resolve_auto_scope(Rest, State)
     end.
+
+
+-spec is_client_authorized(#state{}) -> boolean().
+is_client_authorized(State) ->
+    try
+        call_plugin(authorize, State)
+    catch _:_ ->
+        false
+    end.
+
+
+-spec is_authorized_as_admin(#state{}) -> boolean().
+is_authorized_as_admin(#state{req = ElReq} = State) ->
+    try
+        case call_plugin(required_admin_privileges, State) of
+            forbidden ->
+                false;
+            Privileges ->
+                lists:all(fun(Privilege) ->
+                    user_logic_plugin:auth_by_oz_privilege(ElReq, Privilege)
+                end, Privileges)
+        end
+    catch _:_ ->
+        false
+    end.
+
+
+-spec report_unauthorized(#state{}) -> no_return().
+report_unauthorized(#state{req = #el_req{client = ?NOBODY}}) ->
+    % The client was not authenticated -> unauthorized
+    throw(?ERROR_UNAUTHORIZED);
+report_unauthorized(_) ->
+    % The client was authenticated but cannot access the aspect -> forbidden
+    throw(?ERROR_FORBIDDEN).
 
 
 %%--------------------------------------------------------------------
@@ -514,10 +607,9 @@ ensure_authorized(State = #state{req = ElReq, plugin = Plugin, entity = Entity})
 -spec ensure_valid(State :: #state{}) -> #state{}.
 ensure_valid(State) ->
     #state{
-        req = #el_req{gri = #gri{aspect = Aspect}, data = Data} = Req,
-        plugin = Plugin
+        req = #el_req{gri = #gri{aspect = Aspect}, data = Data} = Req
     } = State,
-    ValidatorsMap = Plugin:validate(Req),
+    ValidatorsMap = call_plugin(validate, State),
     % Get all types of validators
     Required = maps:get(required, ValidatorsMap, #{}),
     Optional = maps:get(optional, ValidatorsMap, #{}),
@@ -558,7 +650,7 @@ ensure_valid(State) ->
         fun(Key, {DataAcc, HasAtLeastOneAcc}) ->
             case transform_and_check_value(Key, DataAcc, AtLeastOne) of
                 false ->
-                    {DataAcc, HasAtLeastOneAcc orelse false};
+                    {DataAcc, HasAtLeastOneAcc};
                 {true, NewData} ->
                     {NewData, true}
             end
@@ -596,10 +688,10 @@ transform_and_check_value({aspect, Key}, Data, Validator) ->
     transform_and_check_value(TypeRule, ValueRule, Key, Value),
     {true, Data};
 transform_and_check_value(Key, Data, Validator) ->
-    case maps:get(Key, Data, undefined) of
-        undefined ->
+    case maps:find(Key, Data) of
+        error ->
             false;
-        Value ->
+        {ok, Value} ->
             {TypeRule, ValueRule} = maps:get(Key, Validator),
             NewValue = transform_and_check_value(TypeRule, ValueRule, Key, Value),
             {true, Data#{Key => NewValue}}
@@ -618,9 +710,8 @@ transform_and_check_value(Key, Data, Validator) ->
     {true, NewData :: data()} | false.
 transform_and_check_value(TypeRule, ValueRule, Key, Value) ->
     try
-        NewValue = check_type(TypeRule, Key, Value),
-        check_value(TypeRule, ValueRule, Key, NewValue),
-        NewValue
+        TransformedType = check_type(TypeRule, Key, Value),
+        check_value(TypeRule, ValueRule, Key, TransformedType)
     catch
         throw:Error ->
             throw(Error);
@@ -671,6 +762,10 @@ check_type(list_of_atoms, Key, Values) ->
     end;
 check_type(binary, _Key, Binary) when is_binary(Binary) ->
     Binary;
+check_type(binary, _Key, null) ->
+    undefined;
+check_type(binary, _Key, undefined) ->
+    undefined;
 check_type(binary, _Key, Atom) when is_atom(Atom) ->
     atom_to_binary(Atom, utf8);
 check_type(binary, Key, _) ->
@@ -729,14 +824,6 @@ check_type(token, Key, Macaroon) ->
         true -> Macaroon;
         false -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
     end;
-check_type(alias, _Key, null) ->
-    undefined;
-check_type(alias, _Key, undefined) ->
-    undefined;
-check_type(alias, _Key, Binary) when is_binary(Binary) ->
-    Binary;
-check_type(alias, _Key, _) ->
-    throw(?ERROR_BAD_VALUE_ALIAS);
 check_type(list_of_ipv4_addresses, Key, ListOfIPs) ->
     try
         lists:map(fun(IP) ->
@@ -766,39 +853,41 @@ check_type(Rule, Key, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec check_value(type_validator(), value_validator(), Key :: binary(),
-    Value :: term()) -> ok.
-check_value(_, any, _Key, _) ->
-    ok;
+    Value :: term()) -> TransformedValue :: term().
+check_value(_, any, _Key, Value) ->
+    Value;
 check_value(atom, non_empty, Key, '') ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(list_of_atoms, non_empty, Key, []) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(binary, non_empty, Key, <<"">>) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
+check_value(binary, non_empty, Key, undefined) ->
+    throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(list_of_binaries, non_empty, Key, []) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(json, non_empty, Key, Map) when map_size(Map) == 0 ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
-check_value(_, non_empty, _Key, _) ->
-    ok;
+check_value(_, non_empty, _Key, Value) ->
+    Value;
 check_value(_, {not_lower_than, Threshold}, Key, Value) ->
     case Value >= Threshold of
         true ->
-            ok;
+            Value;
         false ->
             throw(?ERROR_BAD_VALUE_TOO_LOW(Key, Threshold))
     end;
 check_value(_, {not_greater_than, Threshold}, Key, Value) ->
     case Value =< Threshold of
         true ->
-            ok;
+            Value;
         false ->
             throw(?ERROR_BAD_VALUE_TOO_HIGH(Key, Threshold))
     end;
 check_value(_, {between, Low, High}, Key, Value) ->
     case Value >= Low andalso Value =< High of
         true ->
-            ok;
+            Value;
         false ->
             throw(?ERROR_BAD_VALUE_NOT_IN_RANGE(Key, Low, High))
     end;
@@ -808,7 +897,7 @@ check_value(binary, domain, Key, Value) ->
     case size(Value) =< ?MAX_DOMAIN_LENGTH of
         true ->
             case re:run(Value, ?DOMAIN_VALIDATION_REGEXP, [{capture, none}]) of
-                match -> ok;
+                match -> Value;
                 _ -> throw(?ERROR_BAD_VALUE_DOMAIN(Key))
             end;
         _ -> throw(?ERROR_BAD_VALUE_DOMAIN(Key))
@@ -822,7 +911,7 @@ check_value(binary, subdomain, _Key, Value) ->
             % + 1 for the dot between subdomain and domain
             DomainLength = size(Value) + byte_size(oz_worker:get_domain()) + 1,
             case DomainLength =< ?MAX_DOMAIN_LENGTH of
-                true -> ok;
+                true -> Value;
                 _ -> throw(?ERROR_BAD_VALUE_SUBDOMAIN)
             end;
         _ -> throw(?ERROR_BAD_VALUE_SUBDOMAIN)
@@ -832,35 +921,46 @@ check_value(binary, email, Key, <<"">>) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(binary, email, _Key, Value) ->
     case http_utils:validate_email(Value) of
-        true -> ok;
+        true -> Value;
         false -> throw(?ERROR_BAD_VALUE_EMAIL)
     end;
+
+check_value(json, JsonValidator, Key, Map) ->
+    maps:map(fun(NestedKey, {NestedTypeRule, NestedValueRule}) ->
+        FullKey = <<Key/binary, ".", NestedKey/binary>>,
+        case maps:find(NestedKey, Map) of
+            error ->
+                throw(?ERROR_BAD_VALUE_EMPTY(FullKey));
+            {ok, Value} ->
+                transform_and_check_value(NestedTypeRule, NestedValueRule, FullKey, Value)
+        end
+    end, JsonValidator);
 
 check_value(_, AllowedVals, Key, Vals) when is_list(AllowedVals) andalso is_list(Vals) ->
     case ordsets:subtract(ordsets:from_list(Vals), ordsets:from_list(AllowedVals)) of
         [] ->
-            ok;
+            Vals;
         _ ->
             throw(?ERROR_BAD_VALUE_LIST_NOT_ALLOWED(Key, AllowedVals))
     end;
 check_value(_, AllowedVals, Key, Val) when is_list(AllowedVals) ->
     case lists:member(Val, AllowedVals) of
         true ->
-            ok;
+            Val;
         _ ->
             throw(?ERROR_BAD_VALUE_NOT_ALLOWED(Key, AllowedVals))
     end;
 check_value(_, VerifyFun, Key, Vals) when is_function(VerifyFun, 1) andalso is_list(Vals) ->
     case lists:all(VerifyFun, Vals) of
         true ->
-            ok;
+            Vals;
         false ->
             throw(?ERROR_BAD_DATA(Key))
     end;
 check_value(_, VerifyFun, Key, Val) when is_function(VerifyFun, 1) ->
     case VerifyFun(Val) of
         true ->
-            ok;
+            Val;
         false ->
             throw(?ERROR_BAD_DATA(Key))
     end;
@@ -868,7 +968,7 @@ check_value(Type, {exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) 
     check_value(Type, non_empty, Key, Val),
     case VerifyFun(Val) of
         true ->
-            ok;
+            Val;
         false ->
             throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(Key))
     end;
@@ -876,14 +976,14 @@ check_value(Type, {not_exists, VerifyFun}, Key, Val) when is_function(VerifyFun,
     check_value(Type, non_empty, Key, Val),
     case VerifyFun(Val) of
         true ->
-            ok;
+            Val;
         false ->
             throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(Key))
     end;
 check_value(_, {relation_exists, ChType, ChId, ParType, ParId, VerifyFun}, _Key, Val) when is_function(VerifyFun, 1) ->
     case VerifyFun(Val) of
         true ->
-            ok;
+            Val;
         false ->
             throw(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId))
     end;
@@ -892,7 +992,7 @@ check_value(token, any, _Key, _Macaroon) ->
 check_value(token, TokenType, Key, Macaroon) ->
     case token_logic:validate(Macaroon, TokenType) of
         ok ->
-            ok;
+            Macaroon;
         inexistent ->
             throw(?ERROR_BAD_VALUE_TOKEN(Key));
         bad_macaroon ->
@@ -900,21 +1000,26 @@ check_value(token, TokenType, Key, Macaroon) ->
         bad_type ->
             throw(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key))
     end;
-check_value(alias, alias, _Key, undefined) ->
-    ok;
-check_value(alias, alias, _Key, Value) ->
-    case user_logic:validate_alias(Value) of
-        true -> ok;
-        false -> throw(?ERROR_BAD_VALUE_ALIAS)
+check_value(binary, username, _Key, Value) ->
+    case user_logic:validate_username(Value) of
+        true -> Value;
+        false -> throw(?ERROR_BAD_VALUE_USERNAME)
     end;
-check_value(binary, user_name, _Key, Value) ->
-    case user_logic:validate_name(Value) of
-        true -> ok;
-        false -> throw(?ERROR_BAD_VALUE_USER_NAME)
+check_value(binary, full_name, _Key, Value) ->
+    case user_logic:validate_full_name(Value) of
+        true -> Value;
+        false -> throw(?ERROR_BAD_VALUE_FULL_NAME)
+    end;
+check_value(binary, password, _Key, undefined) ->
+    throw(?ERROR_BAD_VALUE_PASSWORD);
+check_value(binary, password, _Key, Value) ->
+    case size(Value) >= ?PASSWORD_MIN_LENGTH of
+        true -> Value;
+        false -> throw(?ERROR_BAD_VALUE_PASSWORD)
     end;
 check_value(binary, name, _Key, Value) ->
     case validate_name(Value) of
-        true -> ok;
+        true -> Value;
         false -> throw(?ERROR_BAD_VALUE_NAME)
     end;
 check_value(TypeRule, ValueRule, Key, _) ->
@@ -922,3 +1027,37 @@ check_value(TypeRule, ValueRule, Key, _) ->
         TypeRule, ValueRule, Key
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Performs operation on proper entity logic plugin.
+%% @end
+%%--------------------------------------------------------------------
+-spec call_plugin(Operation :: atom(), #state{}) -> term().
+call_plugin(fetch_entity, #state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}) when is_binary(Id)->
+    Plugin:fetch_entity(Id);
+call_plugin(fetch_entity, _) ->
+    ?ERROR_NOT_FOUND;
+call_plugin(operation_supported,  #state{plugin = Plugin, req = #el_req{operation = Operation,
+    gri =#gri{aspect = Aspect, scope = Scope}}}) ->
+    Plugin:operation_supported(Operation, Aspect, Scope);
+call_plugin(exists, #state{plugin = Plugin, req = ElReq, entity = Entity}) ->
+    Plugin:exists(ElReq, Entity);
+call_plugin(authorize, #state{plugin = Plugin, req = ElReq, entity = Entity}) ->
+    Plugin:authorize(ElReq, Entity);
+call_plugin(required_admin_privileges, #state{plugin = Plugin, req = ElReq}) ->
+    Plugin:required_admin_privileges(ElReq);
+call_plugin(get, #state{plugin = Plugin, req = ElReq, entity = Entity}) ->
+    Plugin:get(ElReq, Entity);
+call_plugin(update, #state{plugin = Plugin, req = ElReq}) ->
+    Plugin:update(ElReq);
+call_plugin(Operation, #state{plugin = Plugin, req = ElReq, entity = Entity}) ->
+    % covers create, delete, validate
+    case Plugin:Operation(ElReq) of
+        Fun when is_function(Fun, 1) ->
+            Fun(Entity);
+        Result ->
+            Result
+    end.

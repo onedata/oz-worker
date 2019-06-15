@@ -19,10 +19,12 @@
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 
+-include("api_test_utils.hrl").
 
--define(CORRECT_LOGIN, <<"user-login">>).
+
+-define(CORRECT_USERNAME, <<"user-username">>).
 -define(CORRECT_PASSWORD, <<"user-passwd">>).
--define(BAD_LOGIN, <<"bad-login">>).
+-define(BAD_USERNAME, <<"bad-username">>).
 -define(BAD_PASSWORD, <<"bad-passwd">>).
 
 
@@ -34,14 +36,16 @@
 -export([
     macaroon_test/1,
     basic_auth_test/1,
-    external_access_token_test/1
+    external_access_token_test/1,
+    gui_macaroon_test/1
 ]).
 
 all() ->
     ?ALL([
         macaroon_test,
         basic_auth_test,
-        external_access_token_test
+        external_access_token_test,
+        gui_macaroon_test
     ]).
 
 %%%===================================================================
@@ -50,7 +54,7 @@ all() ->
 
 % Check macaroon based authorization
 macaroon_test(Config) ->
-    {ok, UserId} = oz_test_utils:create_user(Config, #od_user{name = <<"U1">>}),
+    {ok, UserId} = oz_test_utils:create_user(Config, #{<<"fullName">> => <<"U1">>}),
 
     {ok, Macaroon} = oz_test_utils:create_client_token(
         Config, UserId
@@ -60,11 +64,11 @@ macaroon_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"Macaroon">> => Macaroon}
+            headers => #{<<"macaroon">> => Macaroon}
         },
         expect => #{
             code => 200,
-            body => {contains, #{<<"name">> => <<"U1">>}}
+            body => {contains, #{<<"fullName">> => <<"U1">>}}
         }
     })),
 
@@ -72,11 +76,11 @@ macaroon_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => Macaroon}
+            headers => #{<<"x-auth-token">> => Macaroon}
         },
         expect => #{
             code => 200,
-            body => {contains, #{<<"name">> => <<"U1">>}}
+            body => {contains, #{<<"fullName">> => <<"U1">>}}
         }
     })),
 
@@ -95,21 +99,23 @@ macaroon_test(Config) ->
 
 
 basic_auth_test(Config) ->
-    % Basic auth procedure is mocked in init_per_testcase,
-    % and user is initialized there
-    UserId = ?config(user_id, Config),
+    {ok, UserId} = oz_test_utils:create_user(Config, #{
+        <<"username">> => ?CORRECT_USERNAME,
+        <<"password">> => ?CORRECT_PASSWORD
+    }),
+
     oz_test_utils:toggle_basic_auth(Config, true),
 
     ?assert(rest_test_utils:check_rest_call(Config, #{
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => basic_auth_header(?CORRECT_LOGIN, ?CORRECT_PASSWORD)
+            headers => basic_auth_header(?CORRECT_USERNAME, ?CORRECT_PASSWORD)
         },
         expect => #{
             code => 200,
             body => {contains, #{
-                <<"userId">> => UserId, <<"name">> => ?CORRECT_LOGIN
+                <<"userId">> => UserId, <<"username">> => ?CORRECT_USERNAME
             }}
         }
     })),
@@ -117,7 +123,7 @@ basic_auth_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => basic_auth_header(?BAD_LOGIN, ?BAD_PASSWORD)
+            headers => basic_auth_header(?BAD_USERNAME, ?BAD_PASSWORD)
         },
         expect => #{
             code => 401
@@ -130,20 +136,20 @@ basic_auth_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => basic_auth_header(?CORRECT_LOGIN, ?CORRECT_PASSWORD)
+            headers => basic_auth_header(?CORRECT_USERNAME, ?CORRECT_PASSWORD)
         },
         expect => #{
-            code => 400
+            code => 401
         }
     })),
     ?assert(rest_test_utils:check_rest_call(Config, #{
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => basic_auth_header(?BAD_LOGIN, ?BAD_PASSWORD)
+            headers => basic_auth_header(?BAD_USERNAME, ?BAD_PASSWORD)
         },
         expect => #{
-            code => 400
+            code => 401
         }
     })),
 
@@ -156,12 +162,12 @@ external_access_token_test(Config) ->
     AnotherIdP = ?config(anotherIdP, Config),
     DisabledIdP = ?config(disabledIdP, Config),
     UserSubjectIdFun = ?config(user_subject_id_fun, Config),
-    UserNameFun = ?config(user_name_fun, Config),
+    UserFullNameFun = ?config(user_full_name_fun, Config),
     CorrectAccessTokenFun = ?config(correct_access_token_fun, Config),
     PrefixFun = ?config(prefix_fun, Config),
 
     UserIdFun = fun(IdP) ->
-        user_logic:idp_uid_to_system_uid(IdP, UserSubjectIdFun(IdP))
+        linked_accounts:gen_user_id(IdP, UserSubjectIdFun(IdP))
     end,
 
     XAuthTokenFun = fun(IdP) ->
@@ -172,13 +178,13 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => XAuthTokenFun(DummyIdP)}
+            headers => #{<<"x-auth-token">> => XAuthTokenFun(DummyIdP)}
         },
         expect => #{
             code => 200,
             body => {contains, #{
                 <<"userId">> => UserIdFun(DummyIdP),
-                <<"name">> => UserNameFun(DummyIdP)
+                <<"fullName">> => UserFullNameFun(DummyIdP)
             }}
         }
     })),
@@ -187,13 +193,13 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => XAuthTokenFun(AnotherIdP)}
+            headers => #{<<"x-auth-token">> => XAuthTokenFun(AnotherIdP)}
         },
         expect => #{
             code => 200,
             body => {contains, #{
                 <<"userId">> => UserIdFun(AnotherIdP),
-                <<"name">> => UserNameFun(AnotherIdP)
+                <<"fullName">> => UserFullNameFun(AnotherIdP)
             }}
         }
     })),
@@ -203,7 +209,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => XAuthTokenFun(DisabledIdP)}
+            headers => #{<<"x-auth-token">> => XAuthTokenFun(DisabledIdP)}
         },
         expect => #{
             code => 401
@@ -215,7 +221,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => <<
+            headers => #{<<"x-auth-token">> => <<
                 (PrefixFun(DummyIdP))/binary, (CorrectAccessTokenFun(AnotherIdP))/binary
             >>}
         },
@@ -228,7 +234,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"X-Auth-Token">> => <<"completely-bad-token">>}
+            headers => #{<<"x-auth-token">> => <<"completely-bad-token">>}
         },
         expect => #{
             code => 401
@@ -238,10 +244,92 @@ external_access_token_test(Config) ->
     ok.
 
 
-basic_auth_header(Login, Password) ->
-    UserAndPassword = base64:encode(<<Login/binary, ":", Password/binary>>),
-    #{<<"Authorization">> => <<"Basic ", UserAndPassword/binary>>}.
+gui_macaroon_test(Config) ->
+    {ok, {Provider1, Provider1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?UNIQUE_STRING
+    ),
+    {ok, {_Provider2, Provider2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?UNIQUE_STRING
+    ),
+    {ok, UserId} = oz_test_utils:create_user(Config, #{<<"fullName">> => <<"U1">>}),
+    {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, UserId),
 
+    ClusterType = ?ONEPROVIDER,
+    ClusterId = Provider1,
+
+    {ok, {Macaroon, Expires}} = oz_test_utils:call_oz(Config, session, acquire_gui_macaroon, [
+        SessionId, ClusterType, ClusterId
+    ]),
+    {ok, MacaroonBin} = onedata_macaroons:serialize(Macaroon),
+
+    ?assert(rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            path => <<"/user">>,
+            headers => #{
+                <<"Subject-Token">> => MacaroonBin,
+                <<"Audience-Token">> => Provider1Macaroon
+            }
+        },
+        expect => #{
+            code => 200, % correct audience
+            body => {contains, #{<<"fullName">> => <<"U1">>}}
+        }
+    })),
+
+    ?assert(rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            path => <<"/user">>,
+            headers => #{
+                <<"Subject-Token">> => MacaroonBin,
+                <<"Audience-Token">> => Provider2Macaroon
+            }
+        },
+        expect => #{
+            code => 401 % invalid audience
+        }
+    })),
+
+    ?assert(rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            path => <<"/user">>,
+            headers => #{
+                <<"Subject-Token">> => MacaroonBin
+            }
+        },
+        expect => #{
+            code => 401 % missing audience token
+        }
+    })),
+
+    CurrentTime = oz_test_utils:get_mocked_time(Config),
+    oz_test_utils:simulate_time_passing(Config, Expires - CurrentTime + 1),
+
+    ?assert(rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            path => <<"/user">>,
+            headers => #{
+                <<"Subject-Token">> => MacaroonBin,
+                <<"Audience-Token">> => Provider1Macaroon
+            }
+        },
+        expect => #{
+            code => 401 % expired token
+        }
+    })),
+
+    ok.
+
+%%%===================================================================
+%%% Helper functions
+%%%===================================================================
+
+basic_auth_header(Username, Password) ->
+    UserPasswdB64 = base64:encode(<<Username/binary, ":", Password/binary>>),
+    #{<<"authorization">> => <<"Basic ", UserPasswdB64/binary>>}.
 
 %%%===================================================================
 %%% Setup/teardown functions
@@ -250,49 +338,13 @@ basic_auth_header(Login, Password) ->
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    Posthook = fun(NewConfig) ->
-        % Sleep a while before mocking http_client (which is done in
-        % init_per_testcase) - otherwise meck's reloading and purging the module
-        % can cause the oz-worker application to crash.
-        timer:sleep(5000),
-        NewConfig
-    end,
-    [{env_up_posthook, Posthook}, {?LOAD_MODULES, [oz_test_utils]} | Config].
+    [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
-
-init_per_testcase(basic_auth_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    OnepanelUserId = <<"user1Id">>,
-    UserId = user_logic:onepanel_uid_to_system_uid(OnepanelUserId),
-
-    ok = test_utils:mock_new(Nodes, http_client, [passthrough]),
-    test_utils:mock_expect(Nodes, http_client, get, fun(Url, Headers, Body, Options) ->
-        case binary:match(Url, <<"9443/api/v3/onepanel/users">>) of
-            nomatch ->
-                meck:passthrough([Url, Headers, Body, Options]);
-            _ ->
-                <<"Basic ", UserAndPassword/binary>> =
-                    maps:get(<<"Authorization">>, Headers),
-                [User, Passwd] =
-                    binary:split(base64:decode(UserAndPassword), <<":">>),
-                case {User, Passwd} of
-                    {?CORRECT_LOGIN, ?CORRECT_PASSWORD} ->
-                        ResponseBody = json_utils:encode(#{
-                            <<"userId">> => OnepanelUserId,
-                            <<"userRole">> => <<"user1Role">>
-                        }),
-                        {ok, 200, #{}, ResponseBody};
-                    _ ->
-                        {ok, 401, #{}, <<"">>}
-                end
-        end
-    end),
-    [{user_id, UserId} | Config];
 
 init_per_testcase(external_access_token_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
@@ -315,7 +367,7 @@ init_per_testcase(external_access_token_test, Config) ->
         (anotherIdP) -> <<"user2subjectId">>;
         (disabledIdP) -> <<"user3subjectId">>
     end,
-    UserNameFun = fun
+    UserFullNameFun = fun
         (dummyIdP) -> <<"User1">>;
         (anotherIdP) -> <<"User2">>;
         (disabledIdP) -> <<"User3">>
@@ -336,7 +388,7 @@ init_per_testcase(external_access_token_test, Config) ->
                     },
                     attributeMapping => #{
                         subjectId => {required, "id"},
-                        name => {required, "name"}
+                        fullName => {required, "name"}
                     }
                 }
             }},
@@ -350,7 +402,7 @@ init_per_testcase(external_access_token_test, Config) ->
                     },
                     attributeMapping => #{
                         subjectId => {required, "id"},
-                        name => {required, "name"}
+                        fullName => {required, "name"}
                     }
                 }
             }},
@@ -364,7 +416,7 @@ init_per_testcase(external_access_token_test, Config) ->
                     },
                     attributeMapping => #{
                         subjectId => {required, "id"},
-                        name => {required, "name"}
+                        fullName => {required, "name"}
                     }
                 }
             }}
@@ -375,7 +427,7 @@ init_per_testcase(external_access_token_test, Config) ->
     ok = test_utils:mock_expect(Nodes, default_oidc_plugin, get_user_info, fun(IdP, AccessToken) ->
         case AccessToken =:= CorrectAccessTokenFun(IdP) of
             true ->
-                {ok, #{<<"id">> => UserSubjectIdFun(IdP), <<"name">> => UserNameFun(IdP)}};
+                {ok, #{<<"id">> => UserSubjectIdFun(IdP), <<"name">> => UserFullNameFun(IdP)}};
             false ->
                 throw(?ERROR_BAD_IDP_RESPONSE(IdP, 401, #{}, <<>>))
 
@@ -387,23 +439,26 @@ init_per_testcase(external_access_token_test, Config) ->
         {anotherIdP, AnotherIdP},
         {disabledIdP, DisabledIdP},
         {user_subject_id_fun, UserSubjectIdFun},
-        {user_name_fun, UserNameFun},
+        {user_full_name_fun, UserFullNameFun},
         {correct_access_token_fun, CorrectAccessTokenFun},
         {prefix_fun, PrefixFun} |
         Config
     ];
 
+init_per_testcase(gui_macaroon_test, Config) ->
+    oz_test_utils:mock_time(Config),
+    Config;
+
 init_per_testcase(_, Config) ->
     Config.
 
 
-end_per_testcase(basic_auth_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, http_client);
-
 end_per_testcase(external_access_token_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_unload(Nodes, default_oidc_plugin);
+
+end_per_testcase(gui_macaroon_test, Config) ->
+    oz_test_utils:unmock_time(Config);
 
 end_per_testcase(_, _) ->
     ok.

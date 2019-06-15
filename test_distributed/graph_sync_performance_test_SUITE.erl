@@ -13,10 +13,11 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("gui/include/gui_session.hrl").
 -include_lib("cluster_worker/include/global_definitions.hrl").
 -include_lib("cluster_worker/test_distributed/performance_test_utils.hrl").
--include_lib("gui/include/new_gui.hrl").
 
 %% API
 -export([
@@ -216,7 +217,7 @@ privileges_in_a_big_space_performance_base(Config) ->
     UserNum = ?USER_NUM,
     UpdateNum = ?UPDATE_NUM,
     ProviderNum = ?PROVIDER_NUM,
-    SpacePrivileges = oz_test_utils:all_space_privileges(Config),
+    SpacePrivileges = privileges:space_privileges(),
     PrivsNum = length(SpacePrivileges),
     [Creator | Rest] = Users = create_n_users(Config, UserNum),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(Creator), <<"space">>),
@@ -277,7 +278,9 @@ privileges_in_a_big_space_performance_base(Config) ->
             _ -> lists:sublist(SpacePrivileges, PrivsNum - 2 + (Seq rem 3))
         end,
         utils:pforeach(fun(User) ->
-            oz_test_utils:space_set_user_privileges(Config, Space, User, set, NewPrivileges)
+            oz_test_utils:space_set_user_privileges(
+                Config, Space, User, NewPrivileges, SpacePrivileges -- NewPrivileges
+            )
         end, Users)
     end, lists:seq(1, UpdateNum)),
     ?end_measurement(privileges_update_time),
@@ -374,17 +377,18 @@ concurrent_active_clients_spawning_performance_base(Config) ->
 %%%===================================================================
 
 spawn_clients(Config, Type, Clients, RetryFlag, CallbackFunction, OnSuccessFun) ->
-    URL = oz_test_utils:get_gs_ws_url(Config),
+    URL = oz_test_utils:graph_sync_url(Config, Type),
     AuthsAndIdentities = lists:map(fun(Client) ->
         case Type of
             gui ->
-                {ok, SessionId} = oz_test_utils:create_session(Config, Client, []),
-                Auth = {cookie, {?SESSION_COOKIE_KEY, SessionId}},
+                {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, Client),
+                {ok, GuiToken} = oz_test_utils:acquire_gui_token(Config, CookieValue),
+                Auth = {macaroon, GuiToken, []},
                 Identity = {user, Client},
                 {Auth, Identity};
             provider ->
                 {ProviderId, Macaroon} = Client,
-                Auth = {macaroon, Macaroon},
+                Auth = {macaroon, Macaroon, []},
                 Identity = {provider, ProviderId},
                 {Auth, Identity}
         end
@@ -404,7 +408,7 @@ terminate_clients(Config, SupervisorPid) ->
 
 create_n_users(Config, Number) ->
     lists:map(fun(_) ->
-        {ok, User} = oz_test_utils:create_user(Config, #od_user{}),
+        {ok, User} = oz_test_utils:create_user(Config),
         User
     end, lists:seq(1, Number)).
 
@@ -449,12 +453,13 @@ ssl_opts(Config) ->
 %%% Setup / teardown functions
 %%%===================================================================
 
-
 init_per_suite(Config) ->
     ssl:start(),
+    hackney:start(),
     [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
 
 end_per_suite(_Config) ->
+    hackney:stop(),
     ssl:stop(),
     ok.

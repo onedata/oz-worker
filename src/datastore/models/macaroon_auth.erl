@@ -16,21 +16,10 @@
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
--export([create/3, get/1, delete/1]).
+-export([create/2, get/1, delete/1]).
 
 %% datastore_model callbacks
 -export([get_record_struct/1]).
-
--type id() :: binary().
--type record() :: #macaroon_auth{}.
--type doc() :: datastore_doc:doc(record()).
-
--type secret() :: binary().
--type type() :: authorization.
--type issuer() :: entity_logic:client().
-
--export_type([id/0, record/0, doc/0]).
--export_type([secret/0, type/0, issuer/0]).
 
 -define(CTX, #{
     model => ?MODULE
@@ -45,12 +34,13 @@
 %% Creates a macaroon_auth record in database.
 %% @end
 %%--------------------------------------------------------------------
--spec create(secret(), type(), issuer()) -> {ok, id()}.
-create(Secret, Type, Issuer) ->
+-spec create(macaroon_logic:secret(), macaroon_logic:issuer()) ->
+    {ok, macaroon_logic:id()}.
+create(Secret, Issuer) ->
     {ok, #document{key = Id}} = datastore_model:save(?CTX, #document{
         value = #macaroon_auth{
             secret = Secret,
-            type = Type,
+            type = authorization,
             issuer = Issuer
         }
     }),
@@ -58,14 +48,15 @@ create(Secret, Type, Issuer) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves a macaroon_auth record from database.
+%% Retrieves the secret and issuer of given macaroon from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get(id()) -> {ok, record()} | {error, term()}.
+-spec get(macaroon_logic:id()) ->
+    {ok, macaroon_logic:secret(), macaroon_logic:issuer()} | {error, term()}.
 get(Id) ->
     case datastore_model:get(?CTX, Id) of
-        {ok, #document{value = MacaroonAuth}} ->
-            {ok, MacaroonAuth};
+        {ok, #document{value = #macaroon_auth{secret = Secret, type = authorization, issuer = Issuer}}} ->
+            {ok, Secret, Issuer};
         Error = {error, _} ->
             Error
     end.
@@ -75,7 +66,7 @@ get(Id) ->
 %% Deletes a macaroon_auth record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(id()) -> ok | {error, term()}.
+-spec delete(macaroon_logic:id()) -> ok | {error, term()}.
 delete(Id) ->
     datastore_model:delete(?CTX, Id).
 

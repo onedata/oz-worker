@@ -13,7 +13,7 @@
 -behaviour(rest_translator_behaviour).
 -author("Wojciech Geisler").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
 -export([create_response/4, get_response/2]).

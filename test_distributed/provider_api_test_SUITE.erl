@@ -12,7 +12,7 @@
 -module(provider_api_test_SUITE).
 -author("Lukasz Opiola").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -24,6 +24,7 @@
 -include_lib("ctool/include/test/performance.hrl").
 -include_lib("ctool/include/auth/onedata_macaroons.hrl").
 -include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/global_definitions.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -44,17 +45,19 @@
     update_test/1,
     delete_test/1,
     delete_self_test/1,
-    create_provider_registration_token_test/1,
 
     list_eff_users_test/1,
     get_eff_user_test/1,
+    get_eff_user_membership_intermediaries/1,
     list_eff_groups_test/1,
     get_eff_group_test/1,
+    get_eff_group_membership_intermediaries/1,
+    list_eff_harvesters_test/1,
 
     list_spaces_test/1,
     list_self_spaces_test/1,
     get_space_test/1,
-    get_self_space_test/1,
+    get_own_space_test/1,
     support_space_test/1,
     update_support_size_test/1,
     revoke_support_test/1,
@@ -66,6 +69,7 @@
     update_domain_test/1,
     update_domain_is_idempotent_test/1,
     get_domain_config_test/1,
+    get_own_domain_config_test/1,
     get_current_time_test/1,
     verify_provider_identity_test/1
 ]).
@@ -79,17 +83,19 @@ all() ->
         update_test,
         delete_test,
         delete_self_test,
-        create_provider_registration_token_test,
 
         list_eff_users_test,
         get_eff_user_test,
+        get_eff_user_membership_intermediaries,
         list_eff_groups_test,
         get_eff_group_test,
+        get_eff_group_membership_intermediaries,
+        list_eff_harvesters_test,
 
         list_spaces_test,
         list_self_spaces_test,
         get_space_test,
-        get_self_space_test,
+        get_own_space_test,
         support_space_test,
         update_support_size_test,
         revoke_support_test,
@@ -101,7 +107,9 @@ all() ->
         update_domain_test,
         update_domain_is_idempotent_test,
         get_domain_config_test,
-        get_current_time_test
+        get_own_domain_config_test,
+        get_current_time_test,
+        verify_provider_identity_test
     ]).
 
 %%%===================================================================
@@ -110,15 +118,20 @@ all() ->
 
 create_test(Config) ->
     ExpName = ?CORRECT_NAME,
+    {ok, CreatorUserId} = oz_test_utils:create_user(Config),
+    % Create invalid tokens to verify error codes
+    {ok, ClientToken} = oz_test_utils:create_client_token(Config, CreatorUserId),
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(CreatorUserId), ?UNIQUE_STRING),
+    {ok, SpaceInviteMacaroon} = oz_test_utils:space_invite_user_token(Config, ?USER(CreatorUserId), Space),
+    {ok, SpaceInviteToken} = onedata_macaroons:serialize(SpaceInviteMacaroon),
 
-    {ok, OZDomainString} = oz_test_utils:get_oz_domain(Config),
-    OZDomain = list_to_binary(OZDomainString),
+    OZDomain = oz_test_utils:oz_domain(Config),
 
     VerifyFun = fun(ProviderId, Macaroon, Data) ->
+        ExpSubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
+        ExpAdminEmail = maps:get(<<"adminEmail">>, Data),
         ExpLatitude = maps:get(<<"latitude">>, Data, 0.0),
         ExpLongitude = maps:get(<<"longitude">>, Data, 0.0),
-        ExpAdminEmail = maps:get(<<"adminEmail">>, Data),
-        ExpSubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
         {ExpSubdomain, ExpDomain} = case ExpSubdomainDelegation of
             true ->
                 Subdomain = maps:get(<<"subdomain">>, Data),
@@ -126,6 +139,7 @@ create_test(Config) ->
             false ->
                 {undefined, maps:get(<<"domain">>, Data)}
         end,
+        ExpClusterId = ProviderId,
 
         % Logic returns the macaroon in deserialized format, and REST in serialized
         MacaroonBin = case is_binary(Macaroon) of
@@ -144,8 +158,13 @@ create_test(Config) ->
         ?assertEqual(ExpSubdomainDelegation, Provider#od_provider.subdomain_delegation),
         ?assertEqual(ExpSubdomain, Provider#od_provider.subdomain),
         ?assertEqual(ExpAdminEmail, Provider#od_provider.admin_email),
+        ?assertEqual(ExpClusterId, ProviderId),
         ?assertEqual(ExpLatitude, Provider#od_provider.latitude),
         ?assertEqual(ExpLongitude, Provider#od_provider.longitude),
+
+        {ok, Cluster} = oz_test_utils:get_cluster(Config, ExpClusterId),
+        ?assertEqual(ProviderId, ExpClusterId),
+        ?assertEqual(?ONEPROVIDER, Cluster#od_cluster.type),
 
         % check also provider_logic:get_url function
         ExpProviderURL = str_utils:format_bin("https://~s", [ExpDomain]),
@@ -154,16 +173,21 @@ create_test(Config) ->
         ),
         ?assertEqual(ProviderURL, ExpProviderURL),
 
+        case Data of
+            #{<<"token">> := _} ->
+                {ok, UserClusters} = oz_test_utils:user_get_clusters(Config, CreatorUserId),
+                ?assert(lists:member(ExpClusterId, UserClusters));
+            _ ->
+                ok
+        end,
+
         % delete provider to avoid "subdomain occupied" errors
         oz_test_utils:delete_provider(Config, ProviderId),
         true
     end,
 
     %% Create provider with subdomain delegation turned off
-    Nodes = ?config(oz_worker_nodes, Config),
-    rpc:multicall(Nodes, application, set_env, [
-        ?APP_NAME, subdomain_delegation_enabled, false
-    ]),
+    oz_test_utils:set_env(Config, subdomain_delegation_supported, false),
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [root, nobody]
@@ -191,12 +215,17 @@ create_test(Config) ->
             end)
         },
         % TODO gs
-        data_spec = #data_spec{
+        data_spec = DataSpec = #data_spec{
             required = [
                 <<"name">>, <<"adminEmail">>, <<"domain">>, <<"subdomainDelegation">>
             ],
-            optional = [<<"latitude">>, <<"longitude">>],
-            correct_values = CorrectValues = #{
+            optional = [<<"token">>, <<"latitude">>, <<"longitude">>],
+            correct_values = #{
+                <<"token">> => [fun() ->
+                    {ok, Token} = oz_test_utils:create_provider_registration_token(Config, ?USER(CreatorUserId), CreatorUserId),
+                    {ok, Macaroon} = onedata_macaroons:serialize(Token),
+                    Macaroon
+                end],
                 <<"name">> => [ExpName],
                 <<"domain">> => [<<"multilevel.provider-domain.org">>],
                 <<"subdomainDelegation">> => [false],
@@ -210,7 +239,7 @@ create_test(Config) ->
                 {<<"domain">>, <<"domain.com:443">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
                 {<<"domain">>, <<".leadingdot">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
                 {<<"domain">>, <<"trailing-.hyphen">>, ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)},
-                {<<"subdomainDelegation">>, true, ?ERROR_SUBDOMAIN_DELEGATION_DISABLED},
+                {<<"subdomainDelegation">>, true, ?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED},
                 {<<"subdomainDelegation">>, <<"binary">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
                 {<<"subdomainDelegation">>, bad_bool, ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
                 {<<"adminEmail">>, <<"adminwithoutdomain">>, ?ERROR_BAD_VALUE_EMAIL},
@@ -223,58 +252,32 @@ create_test(Config) ->
                 {<<"longitude">>, -1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
                 {<<"longitude">>, -180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
                 {<<"longitude">>, 180.1, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
-                {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)}
+                {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
+                {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"token">>, <<"zxvcsadfgasdfasdf">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
+                {<<"token">>, ClientToken, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
+                {<<"token">>, SpaceInviteToken, ?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(<<"token">>)}
                 | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-    %% Create provider with provider registration policy set to strict
-    rpc:multicall(Nodes, application, set_env, [
-        ?APP_NAME, provider_registration_policy, restricted
-    ]),
-    ApiTestSpec2 = #api_test_spec{
-        data_spec = #data_spec{
-            required = [
-                <<"name">>, <<"token">>, <<"adminEmail">>,
-                <<"domain">>, <<"subdomainDelegation">>
-            ],
-            optional = [<<"latitude">>, <<"longitude">>],
-            correct_values = CorrectValues#{
-                <<"token">> => [fun(_Env) ->
-                    {ok, Macaroon} = oz_test_utils:create_provider_registration_token(
-                        Config, ?ROOT
-                    ),
-                    {ok, Token} = onedata_macaroons:serialize(Macaroon),
-                    Token
-                end]
-            },
-            bad_values = [
-                {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
-                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
-                {<<"token">>, <<"123qwe">>,
-                    ?ERROR_BAD_VALUE_TOKEN(<<"token">>)}
-            ]
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
-    rpc:multicall(Nodes, application, set_env, [
-        ?APP_NAME, provider_registration_policy, open
-    ]),
-
     %% Create provider with subdomain delegation turned on
-    rpc:multicall(Nodes, application, set_env, [
-        ?APP_NAME, subdomain_delegation_enabled, true
-    ]),
-    ApiTestSpec3 = ApiTestSpec#api_test_spec{
+    oz_test_utils:set_env(Config, subdomain_delegation_supported, true),
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
         data_spec = #data_spec{
             required = [
                 <<"name">>, <<"subdomain">>, <<"ipList">>, <<"adminEmail">>,
                 <<"subdomainDelegation">>
             ],
-            optional = [<<"latitude">>, <<"longitude">>],
+            optional = [<<"token">>, <<"latitude">>, <<"longitude">>],
             correct_values = #{
+                <<"token">> => [fun() ->
+                    {ok, Token} = oz_test_utils:create_provider_registration_token(Config, ?USER(CreatorUserId), CreatorUserId),
+                    {ok, Macaroon} = onedata_macaroons:serialize(Token),
+                    Macaroon
+                end],
                 <<"name">> => [ExpName],
                 <<"subdomainDelegation">> => [true],
                 <<"subdomain">> => [<<"prov-sub">>],
@@ -298,6 +301,19 @@ create_test(Config) ->
             ]
         }
     },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+    %% Check if registration token requirement is enforced by env variable
+    oz_test_utils:set_env(Config, subdomain_delegation_supported, false),
+    oz_test_utils:set_env(Config, require_token_for_provider_registration, true),
+    ApiTestSpec3 = ApiTestSpec#api_test_spec{
+        data_spec = DataSpec#data_spec{
+            required = [
+                <<"name">>, <<"adminEmail">>, <<"domain">>, <<"subdomainDelegation">>, <<"token">>
+            ],
+            optional = [<<"latitude">>, <<"longitude">>]
+        }
+    },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
 
 
@@ -314,19 +330,19 @@ get_test(Config) ->
         <<"latitude">> => ExpLatitude,
         <<"longitude">> => ExpLongitude
     },
+    {ok, P1Creator} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-        Config, PrivateProviderDetails#{<<"subdomainDelegation">> => false}
+        Config, P1Creator, PrivateProviderDetails#{<<"subdomainDelegation">> => false}
     ),
+    {ok, P2Creator} = oz_test_utils:create_user(Config),
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_NAME2
+        Config, P2Creator, ?PROVIDER_NAME2
     ),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST
-    ]),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     SupportSize = oz_test_utils:minimum_support_size(Config),
@@ -339,12 +355,15 @@ get_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {provider, P1, P1Macaroon}
+                {user, P1Creator},
+                {provider, P1, P1Macaroon},
+                {admin, [?OZ_PROVIDERS_VIEW]}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
-                {user, Admin},
+                {user, Cluster1MemberNoViewPrivs},
+                {user, P2Creator},
                 {user, NonAdmin},
                 {provider, P2, P2Macaroon}
             ]
@@ -374,8 +393,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_provider, id = P1, aspect = instance},
-            expected_result = ?OK_MAP(#{
-                <<"online">> => true,
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ExpName, <<"domain">> => ExpDomain,
                 <<"effectiveGroups">> => [], <<"effectiveUsers">> => [U1],
                 <<"latitude">> => ExpLatitude, <<"longitude">> => ExpLongitude,
@@ -404,11 +422,14 @@ get_test(Config) ->
             correct = [
                 root,
                 {user, U1},
-                {user, Admin},
+                {user, P1Creator},
+                {user, Cluster1MemberNoViewPrivs},
+                {admin, [?OZ_PROVIDERS_VIEW]},
                 {provider, P2, P2Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
+                {user, P2Creator},
                 {user, NonAdmin}
             ]
         },
@@ -423,7 +444,7 @@ get_test(Config) ->
             module = provider_logic,
             function = get_protected_data,
             args = [client, P1],
-            expected_result = ?OK_MAP(ExpProtectedDetails)
+            expected_result = ?OK_MAP_CONTAINS(ExpProtectedDetails)
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -499,17 +520,13 @@ list_test(Config) ->
     ExpProviders = [P1, P2, P3, P4, P5],
 
     % Create two users, grant one of them the privilege to list providers.
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST
-    ]),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_PROVIDERS_LIST]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -559,10 +576,15 @@ update_test(Config) ->
     },
 
     EnvSetUpFun = fun() ->
+        {ok, Cluster1Member} = oz_test_utils:create_user(Config),
         {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-            Config, ProviderDetails#{<<"domain">> => ?UNIQUE_DOMAIN}
+            Config, Cluster1Member, ProviderDetails#{<<"domain">> => ?UNIQUE_DOMAIN}
         ),
-        #{providerId => P1, providerClient => {provider, P1, P1Macaroon}}
+        Cluster1MemberNoUpdatePrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_UPDATE]),
+        #{
+            providerId => P1, providerClient => {provider, P1, P1Macaroon},
+            clusterMember => {user, Cluster1Member}, clusterMemberNoDeletePrivs => {user, Cluster1MemberNoUpdatePrivs}
+        }
     end,
     VerifyEndFun = fun(ShouldSucceed, #{providerId := ProvId} = _Env, Data) ->
         {ok, Provider} = oz_test_utils:get_provider(Config, ProvId),
@@ -625,18 +647,28 @@ update_test(Config) ->
     )),
 
     % Check that clients can't make request on behalf of other client
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_PROVIDERS_LIST
-    ]),
+    ], []),
+
+    {ok, Cluster2Member} = oz_test_utils:create_user(Config),
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_NAME2
+        Config, Cluster2Member, ?PROVIDER_NAME2
     ),
+    Cluster2MemberNoUpdatePrivs = new_cluster_member_with_privs(Config, P2, [], [?CLUSTER_UPDATE]),
+
     ApiTestSpec2 = #api_test_spec{
         client_spec = ClientSpec#client_spec{
+            correct = [
+                clusterMember,
+                {admin, [?OZ_PROVIDERS_UPDATE]}
+            ],
             unauthorized = [nobody],
             forbidden = [
-                {user, Admin},
+                clusterMemberNoDeletePrivs,
+                {user, U1},
+                {user, Cluster2MemberNoUpdatePrivs},
                 {provider, P2, P2Macaroon}
             ]
         },
@@ -662,34 +694,40 @@ delete_test(Config) ->
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_DELETE
-    ]),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
+        {ok, Cluster1Member} = oz_test_utils:create_user(Config),
         {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-            Config, ?PROVIDER_NAME1
+            Config, Cluster1Member, ?PROVIDER_NAME1
         ),
-        #{providerId => P1, providerClient => {provider, P1, P1Macaroon}}
+        Cluster1MemberNoDeletePrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_DELETE]),
+        #{
+            providerId => P1, providerClient => {provider, P1, P1Macaroon},
+            clusterId => P1,
+            clusterMember => {user, Cluster1Member}, clusterMemberNoDeletePrivs => {user, Cluster1MemberNoDeletePrivs}
+        }
     end,
     DeleteEntityFun = fun(#{providerId := ProviderId} = _Env) ->
         oz_test_utils:delete_provider(Config, ProviderId)
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId, clusterId := ClusterId} = _Env, _) ->
         {ok, Providers} = oz_test_utils:list_providers(Config),
-        ?assertEqual(lists:member(ProviderId, Providers), not ShouldSucceed)
+        {ok, Clusters} = oz_test_utils:list_clusters(Config),
+        ?assertEqual(not ShouldSucceed, lists:member(ProviderId, Providers)),
+        ?assertEqual(not ShouldSucceed, lists:member(ClusterId, Clusters))
     end,
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
+                clusterMember,
                 root,
-                {user, Admin}
+                {admin, [?OZ_PROVIDERS_DELETE]}
             ],
             unauthorized = [nobody],
             forbidden = [
+                clusterMemberNoDeletePrivs,
                 {user, NonAdmin},
                 {provider, P2, P2Macaroon}
             ]
@@ -756,43 +794,6 @@ delete_self_test(Config) ->
     )).
 
 
-create_provider_registration_token_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [?OZ_PROVIDERS_INVITE]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-
-    VerifyFun = api_test_scenarios:collect_unique_tokens_fun(),
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U1}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U2},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = post,
-            path = <<"/providers/token">>,
-            expected_code = ?HTTP_200_OK,
-            expected_body = fun(#{<<"token">> := Token}) -> VerifyFun(Token) end
-        },
-        logic_spec = #logic_spec{
-            module = provider_logic,
-            function = create_provider_registration_token,
-            args = [client],
-            expected_result = ?OK_TERM(VerifyFun)
-        }
-        % TODO gs
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
-
-
 list_eff_users_test(Config) ->
     {
         {P1, P1Macaroon}, _S1, _Groups, Users, {U1, U2, NonAdmin}
@@ -801,10 +802,9 @@ list_eff_users_test(Config) ->
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_USERS
-    ]),
+
+    Cluster1Member = new_cluster_member_with_privs(Config, P1, [?CLUSTER_VIEW], []),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
 
     [{U3, _}, {U4, _}, {U5, _}, {U6, _}] = Users,
     ExpUsers = [U1, U2, U3, U4, U5, U6],
@@ -813,11 +813,13 @@ list_eff_users_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {user, Cluster1Member},
+                {admin, [?OZ_PROVIDERS_LIST_RELATIONSHIPS]},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
+                {user, Cluster1MemberNoViewPrivs},
                 {user, U1},
                 {user, U2},
                 {user, NonAdmin},
@@ -861,14 +863,12 @@ get_eff_user_test(Config) ->
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
+    Cluster1Member = new_cluster_member_with_privs(Config, P1, [?CLUSTER_VIEW], []),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
+
     {ok, S1} = oz_test_utils:support_space(
         Config, P2, S1, oz_test_utils:minimum_support_size(Config)
     ),
-
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_USERS
-    ]),
 
     lists:foreach(
         fun({UserId, UserDetails}) ->
@@ -881,11 +881,13 @@ get_eff_user_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, Admin},
+                        {user, Cluster1Member},
+                        {admin, [?OZ_USERS_VIEW]},
                         {provider, P1, P1Macaroon}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
+                        {user, Cluster1MemberNoViewPrivs},
                         {user, U1},
                         {user, U2},
                         {user, NonAdmin},
@@ -900,8 +902,12 @@ get_eff_user_test(Config) ->
                     expected_code = ?HTTP_200_OK,
                     expected_body = ExpDetails#{
                         <<"userId">> => UserId,
+                        <<"basicAuthEnabled">> => false,
+
                         % TODO VFS-4506 deprecated, included for backward compatibility
-                        <<"login">> => maps:get(<<"alias">>, ExpDetails),
+                        <<"name">> => maps:get(<<"fullName">>, UserDetails),
+                        <<"login">> => maps:get(<<"username">>, UserDetails),
+                        <<"alias">> => maps:get(<<"username">>, UserDetails),
                         <<"emailList">> => maps:get(<<"emails">>, ExpDetails)
                     }
                 },
@@ -909,7 +915,7 @@ get_eff_user_test(Config) ->
                     module = provider_logic,
                     function = get_eff_user,
                     args = [client, P1, UserId],
-                    expected_result = ?OK_MAP(ExpDetails)
+                    expected_result = ?OK_MAP_CONTAINS(ExpDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -925,8 +931,11 @@ get_eff_user_test(Config) ->
                             ),
                             ?assertEqual(Id, UserId)
                         end,
+
                         % TODO VFS-4506 deprecated, included for backward compatibility
-                        <<"login">> => maps:get(<<"alias">>, ExpDetails),
+                        <<"name">> => maps:get(<<"fullName">>, UserDetails),
+                        <<"login">> => maps:get(<<"username">>, UserDetails),
+                        <<"alias">> => maps:get(<<"username">>, UserDetails),
                         <<"emailList">> => maps:get(<<"emails">>, ExpDetails)
                     })
                 }
@@ -937,6 +946,121 @@ get_eff_user_test(Config) ->
     ).
 
 
+get_eff_user_membership_intermediaries(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%          Provider1    Provider2    Provider3
+    %%            |     \    /       \    /
+    %%       Space1      Space2     Space3
+    %%      /  |  \     /   |  \     /
+    %%  User2  |   \   /    |   \   /
+    %%          \   Group2  |   Group3
+    %%           \   /      |   /  |
+    %%            \ /       |  /   |
+    %%            Group1----|-'    |
+    %%                \     |     /
+    %%                 \    |    /
+    %%                  \   |   /
+    %%                    User1
+    %%      <<user>>
+    %%      NonAdmin
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+    {ok, G3} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config),
+    {ok, Cluster2Member} = oz_test_utils:create_user(Config),
+    {ok, Cluster3Member} = oz_test_utils:create_user(Config),
+    {ok, {P1, P1Auth}} = oz_test_utils:create_provider(Config, Cluster1Member, ?PROVIDER_NAME1),
+    {ok, {P2, P2Auth}} = oz_test_utils:create_provider(Config, Cluster2Member, ?PROVIDER_NAME1),
+    {ok, {P3, P3Auth}} = oz_test_utils:create_provider(Config, Cluster3Member, ?PROVIDER_NAME1),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
+    Cluster2MemberNoViewPrivs = new_cluster_member_with_privs(Config, P2, [], [?CLUSTER_VIEW]),
+    Cluster3MemberNoViewPrivs = new_cluster_member_with_privs(Config, P3, [], [?CLUSTER_VIEW]),
+
+    oz_test_utils:space_add_user(Config, S1, U2),
+
+    oz_test_utils:group_add_group(Config, G2, G1),
+    oz_test_utils:group_add_group(Config, G3, G1),
+
+    oz_test_utils:space_add_group(Config, S1, G1),
+    oz_test_utils:space_add_group(Config, S1, G2),
+    oz_test_utils:space_add_group(Config, S2, G2),
+    oz_test_utils:space_add_group(Config, S2, G3),
+    oz_test_utils:space_add_group(Config, S3, G3),
+
+    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space(Config, P1, S2),
+    oz_test_utils:support_space(Config, P2, S2),
+    oz_test_utils:support_space(Config, P2, S3),
+    oz_test_utils:support_space(Config, P3, S3),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    % {ProviderId, SubjectUser, CorrectClients, ExpIntermediariesRaw}
+    ExpectedMembershipIntermediaries = [
+        {P1, U1, [{provider, P1, P1Auth}, {user, Cluster1Member}, {user, U1}], ordsets:from_list([
+            {od_space, S1},
+            {od_space, S2}
+        ])},
+        {P1, U2, [{provider, P1, P1Auth}, {user, Cluster1Member}, {user, U2}], ordsets:from_list([
+            {od_space, S1}
+        ])},
+
+        {P2, U1, [{provider, P2, P2Auth}, {user, Cluster2Member}, {user, U1}], ordsets:from_list([
+            {od_space, S2},
+            {od_space, S3}
+        ])},
+
+        {P3, U1, [{provider, P3, P3Auth}, {user, Cluster3Member}, {user, U1}], ordsets:from_list([
+            {od_space, S3}
+        ])}
+    ],
+
+    lists:foreach(fun({ProviderId, SubjectUser, CorrectClients, ExpIntermediariesRaw}) ->
+        ExpIntermediaries = lists:map(fun({Type, Id}) ->
+            #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+        end, ExpIntermediariesRaw),
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_PROVIDERS_VIEW]}
+                ] ++ CorrectClients,
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, NonAdmin}, {user, U1}, {user, U2},
+                    {provider, P1, P1Auth}, {provider, P2, P2Auth}, {provider, P3, P3Auth},
+                    {user, Cluster1Member}, {user, Cluster2Member}, {user, Cluster3Member},
+                    {user, Cluster1MemberNoViewPrivs}, {user, Cluster2MemberNoViewPrivs}, {user, Cluster3MemberNoViewPrivs}
+                ] -- CorrectClients
+            },
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/providers/">>, ProviderId, <<"/effective_users/">>, SubjectUser, <<"/membership">>],
+                expected_code = ?HTTP_200_OK,
+                expected_body = #{<<"intermediaries">> => ExpIntermediaries}
+            },
+            logic_spec = #logic_spec{
+                module = provider_logic,
+                function = get_eff_user_membership_intermediaries,
+                args = [client, ProviderId, SubjectUser],
+                expected_result = ?OK_LIST(ExpIntermediariesRaw)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end, ExpectedMembershipIntermediaries).
+
+
 list_eff_groups_test(Config) ->
     {
         {P1, P1Macaroon}, _S1, Groups, _Users, {U1, U2, NonAdmin}
@@ -945,10 +1069,8 @@ list_eff_groups_test(Config) ->
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_GROUPS
-    ]),
+    Cluster1Member = new_cluster_member_with_privs(Config, P1, [?CLUSTER_VIEW], []),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
 
     [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _}, {G6, _}] = Groups,
     ExpGroups = [G1, G2, G3, G4, G5, G6],
@@ -957,11 +1079,13 @@ list_eff_groups_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {user, Cluster1Member},
+                {admin, [?OZ_PROVIDERS_LIST_RELATIONSHIPS]},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
+                {user, Cluster1MemberNoViewPrivs},
                 {user, U1},
                 {user, U2},
                 {user, NonAdmin},
@@ -1005,14 +1129,12 @@ get_eff_group_test(Config) ->
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
+    Cluster1Member = new_cluster_member_with_privs(Config, P1, [?CLUSTER_VIEW], []),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
+
     {ok, S1} = oz_test_utils:support_space(
         Config, P2, S1, oz_test_utils:minimum_support_size(Config)
     ),
-
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_GROUPS
-    ]),
 
     lists:foreach(
         fun({GroupId, GroupDetails}) ->
@@ -1026,11 +1148,13 @@ get_eff_group_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, Admin},
+                        {user, Cluster1Member},
+                        {admin, [?OZ_GROUPS_VIEW]},
                         {provider, P1, P1Macaroon}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
+                        {user, Cluster1MemberNoViewPrivs},
                         {user, U1},
                         {user, U2},
                         {user, NonAdmin},
@@ -1051,7 +1175,7 @@ get_eff_group_test(Config) ->
                     module = provider_logic,
                     function = get_eff_group,
                     args = [client, P1, GroupId],
-                    expected_result = ?OK_MAP(GroupDetails)
+                    expected_result = ?OK_MAP_CONTAINS(GroupDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -1076,28 +1200,259 @@ get_eff_group_test(Config) ->
     ).
 
 
+get_eff_group_membership_intermediaries(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%          Provider1    Provider2    Provider3
+    %%            |     \    /       \    /     \
+    %%       Space1      Space2     Space3     Space4
+    %%      /  |  \     /   |  \     /            \
+    %%  User2  |   \   /    |   \   /            Group4
+    %%          \   Group2  |   Group3              \
+    %%           \   /      |   /  |               User2
+    %%            \ /       |  /   |        (the same as in Space1)
+    %%            Group1----|-'    |
+    %%                \     |     /
+    %%                 \    |    /
+    %%                  \   |   /
+    %%                  UserGroup
+    %%                      |
+    %%                    User1
+    %%
+    %%      <<user>>
+    %%      NonAdmin
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    {ok, UserGroup} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
+    {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+    {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+    {ok, G3} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+    {ok, G4} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S4} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config),
+    {ok, Cluster2Member} = oz_test_utils:create_user(Config),
+    {ok, Cluster3Member} = oz_test_utils:create_user(Config),
+    {ok, {P1, P1Auth}} = oz_test_utils:create_provider(Config, Cluster1Member, ?PROVIDER_NAME1),
+    {ok, {P2, P2Auth}} = oz_test_utils:create_provider(Config, Cluster2Member, ?PROVIDER_NAME1),
+    {ok, {P3, P3Auth}} = oz_test_utils:create_provider(Config, Cluster3Member, ?PROVIDER_NAME1),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
+    Cluster2MemberNoViewPrivs = new_cluster_member_with_privs(Config, P2, [], [?CLUSTER_VIEW]),
+    Cluster3MemberNoViewPrivs = new_cluster_member_with_privs(Config, P3, [], [?CLUSTER_VIEW]),
+
+    oz_test_utils:group_add_user(Config, G4, U2),
+    oz_test_utils:space_add_user(Config, S1, U2),
+
+    oz_test_utils:group_add_group(Config, G1, UserGroup),
+    oz_test_utils:group_add_group(Config, G2, G1),
+    oz_test_utils:group_add_group(Config, G3, G1),
+    oz_test_utils:group_add_group(Config, G3, UserGroup),
+
+    oz_test_utils:space_add_group(Config, S1, G1),
+    oz_test_utils:space_add_group(Config, S1, G2),
+    oz_test_utils:space_add_group(Config, S2, UserGroup),
+    oz_test_utils:space_add_group(Config, S2, G2),
+    oz_test_utils:space_add_group(Config, S2, G3),
+    oz_test_utils:space_add_group(Config, S3, G3),
+    oz_test_utils:space_add_group(Config, S4, G4),
+
+    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space(Config, P1, S2),
+    oz_test_utils:support_space(Config, P2, S2),
+    oz_test_utils:support_space(Config, P2, S3),
+    oz_test_utils:support_space(Config, P3, S3),
+    oz_test_utils:support_space(Config, P3, S4),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    ExpectedMembershipIntermediaries = [
+        {P1, UserGroup, [{provider, P1, P1Auth}, {user, Cluster1Member}, {user, U1}], ordsets:from_list([
+            {od_space, S1},
+            {od_space, S2}
+        ])},
+        {P1, G1, [{provider, P1, P1Auth}, {user, Cluster1Member}, {user, U1}], ordsets:from_list([
+            {od_space, S1},
+            {od_space, S2}
+        ])},
+        {P1, G2, [{provider, P1, P1Auth}, {user, Cluster1Member}, {user, U1}], ordsets:from_list([
+            {od_space, S1},
+            {od_space, S2}
+        ])},
+        {P1, G3, [{provider, P1, P1Auth}, {user, Cluster1Member}, {user, U1}], ordsets:from_list([
+            {od_space, S2}
+        ])},
+
+        {P2, UserGroup, [{provider, P2, P2Auth}, {user, Cluster2Member}, {user, U1}], ordsets:from_list([
+            {od_space, S2},
+            {od_space, S3}
+        ])},
+        {P2, G1, [{provider, P2, P2Auth}, {user, Cluster2Member}, {user, U1}], ordsets:from_list([
+            {od_space, S2},
+            {od_space, S3}
+        ])},
+        {P2, G2, [{provider, P2, P2Auth}, {user, Cluster2Member}, {user, U1}], ordsets:from_list([
+            {od_space, S2}
+        ])},
+        {P2, G3, [{provider, P2, P2Auth}, {user, Cluster2Member}, {user, U1}], ordsets:from_list([
+            {od_space, S2},
+            {od_space, S3}
+        ])},
+
+        {P3, UserGroup, [{provider, P3, P3Auth}, {user, Cluster3Member}, {user, U1}], ordsets:from_list([
+            {od_space, S3}
+        ])},
+        {P3, G3, [{provider, P3, P3Auth}, {user, Cluster3Member}, {user, U1}], ordsets:from_list([
+            {od_space, S3}
+        ])},
+        {P3, G4, [{provider, P3, P3Auth}, {user, Cluster3Member}, {user, U2}], ordsets:from_list([
+            {od_space, S4}
+        ])}
+    ],
+
+    lists:foreach(fun({ProviderId, SubjectGroup, CorrectClients, ExpIntermediariesRaw}) ->
+        ExpIntermediaries = lists:map(fun({Type, Id}) ->
+            #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+        end, ExpIntermediariesRaw),
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_PROVIDERS_VIEW]}
+                ] ++ CorrectClients,
+                unauthorized = [nobody],
+                forbidden = [
+                    {user, NonAdmin}, {user, U1}, {user, U2},
+                    {provider, P1, P1Auth}, {provider, P2, P2Auth}, {provider, P3, P3Auth},
+                    {user, Cluster1Member}, {user, Cluster2Member}, {user, Cluster3Member},
+                    {user, Cluster1MemberNoViewPrivs}, {user, Cluster2MemberNoViewPrivs}, {user, Cluster3MemberNoViewPrivs}
+                ] -- CorrectClients
+            },
+            rest_spec = #rest_spec{
+                method = get,
+                path = [<<"/providers/">>, ProviderId, <<"/effective_groups/">>, SubjectGroup, <<"/membership">>],
+                expected_code = ?HTTP_200_OK,
+                expected_body = #{<<"intermediaries">> => ExpIntermediaries}
+            },
+            logic_spec = #logic_spec{
+                module = provider_logic,
+                function = get_eff_group_membership_intermediaries,
+                args = [client, ProviderId, SubjectGroup],
+                expected_result = ?OK_LIST(ExpIntermediariesRaw)
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end, ExpectedMembershipIntermediaries).
+
+
+list_eff_harvesters_test(Config) ->
+    %% Create environment with the following relations:
+    %%
+    %%             Provider1   
+    %%              /      \  
+    %%           Space1   Space2      
+    %%           /   \    /    \      
+    %% Harvester1     \  /      Harvester3         
+    %%     |       Harvester2       |
+    %%   User1         |          User1
+    %%               User1   
+    %%      <<user>>
+    %%      NonAdmin
+
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME1
+    ),
+    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+
+    {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+
+    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space(Config, P1, S2),
+
+    {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
+    {ok, H2} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
+    {ok, H3} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
+
+    oz_test_utils:harvester_add_space(Config, H1, S1),
+    oz_test_utils:harvester_add_space(Config, H2, S1),
+    oz_test_utils:harvester_add_space(Config, H2, S2),
+    oz_test_utils:harvester_add_space(Config, H3, S2),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    ExpHarvesters = [H1, H2, H3],
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_PROVIDERS_LIST_RELATIONSHIPS]},
+                {provider, P1, P1Macaroon}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {user, U1},
+                {provider, P2, P2Macaroon}
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = provider_logic,
+            function = get_eff_harvesters,
+            args = [client, P1],
+            expected_result = ?OK_LIST(ExpHarvesters)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % check also provider_logic:has_eff_harvester function
+    lists:foreach(
+        fun(HarvesterId) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, provider_logic, has_eff_harvester, [P1, HarvesterId])
+            )
+        end, ExpHarvesters
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, provider_logic, has_eff_harvester, [P1, <<"asdiucyaie827346w">>])
+    ).
+
+
 list_spaces_test(Config) ->
     {
         {P1, P1Macaroon}, {P2, P2Macaroon},
         [{S1, _}, {S2, _}, {S3, _}, {S4, _}, {S5, _}]
     } = create_2_providers_and_5_supported_spaces(Config),
+    Cluster1Member = new_cluster_member_with_privs(Config, P1, [?CLUSTER_VIEW], []),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
 
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_SPACES
-    ]),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ExpSpaces = [S1, S2, S3, S4, S5],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
+                {user, Cluster1Member},
+                {admin, [?OZ_PROVIDERS_LIST_RELATIONSHIPS]},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
+                {user, Cluster1MemberNoViewPrivs},
                 {user, NonAdmin},
                 {provider, P2, P2Macaroon}
             ]
@@ -1145,12 +1500,10 @@ get_space_test(Config) ->
     {
         {P1, P1Macaroon}, {P2, P2Macaroon}, Spaces
     } = create_2_providers_and_5_supported_spaces(Config),
+    Cluster1Member = new_cluster_member_with_privs(Config, P1, [?CLUSTER_VIEW], []),
+    Cluster1MemberNoViewPrivs = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
 
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST_SPACES
-    ]),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     lists:foreach(
         fun({SpaceId, SpaceDetails}) ->
@@ -1158,11 +1511,13 @@ get_space_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
-                        {user, Admin},
+                        {user, Cluster1Member},
+                        {admin, [?OZ_SPACES_VIEW]},
                         {provider, P1, P1Macaroon}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
+                        {user, Cluster1MemberNoViewPrivs},
                         {user, NonAdmin},
                         {provider, P2, P2Macaroon}
                     ]
@@ -1178,7 +1533,7 @@ get_space_test(Config) ->
                     module = provider_logic,
                     function = get_space,
                     args = [client, P1, SpaceId],
-                    expected_result = ?OK_MAP(SpaceDetails)
+                    expected_result = ?OK_MAP_CONTAINS(SpaceDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,
@@ -1203,7 +1558,7 @@ get_space_test(Config) ->
     ).
 
 
-get_self_space_test(Config) ->
+get_own_space_test(Config) ->
     {
         {P1, P1Macaroon}, _, Spaces
     } = create_2_providers_and_5_supported_spaces(Config),
@@ -1229,13 +1584,15 @@ get_self_space_test(Config) ->
 
 support_space_test(Config) ->
     MinSupportSize = oz_test_utils:minimum_support_size(Config),
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_NAME1
+        Config, Cluster1Member, ?PROVIDER_NAME1
     ),
+    Cluster1MemberNoUpdatePriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_UPDATE]),
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, BadMacaroon1} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
     {ok, BadTokenType1} = token_logic:serialize(BadMacaroon1),
@@ -1320,11 +1677,13 @@ support_space_test(Config) ->
             % behalf of provider 1.
             correct = [
                 root,
+                {user, Cluster1Member},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
+                {user, Cluster1MemberNoUpdatePriv},
                 {provider, P2, P2Macaroon}
             ]
         },
@@ -1372,13 +1731,15 @@ support_space_test(Config) ->
 
 update_support_size_test(Config) ->
     MinSupportSize = oz_test_utils:minimum_support_size(Config),
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_NAME1
+        Config, Cluster1Member, ?PROVIDER_NAME1
     ),
+    Cluster1MemberNoUpdatePriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_UPDATE]),
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
@@ -1431,11 +1792,13 @@ update_support_size_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {user, Cluster1Member},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
+                {user, Cluster1MemberNoUpdatePriv},
                 {provider, P2, P2Macaroon}
             ]
         },
@@ -1455,13 +1818,15 @@ update_support_size_test(Config) ->
 
 revoke_support_test(Config) ->
     MinSupportSize = oz_test_utils:minimum_support_size(Config),
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_NAME1
+        Config, Cluster1Member, ?PROVIDER_NAME1
     ),
+    Cluster1MemberNoUpdatePriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_UPDATE]),
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U1} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
@@ -1503,11 +1868,13 @@ revoke_support_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {user, Cluster1Member},
                 {provider, P1, P1Macaroon}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
+                {user, Cluster1MemberNoUpdatePriv},
                 {provider, P2, P2Macaroon}
             ]
         },
@@ -1671,12 +2038,11 @@ map_group_test(Config) ->
 
 
 update_subdomain_test(Config) ->
-    {ok, OZDomainString} = oz_test_utils:get_oz_domain(Config),
-    OZDomain = list_to_binary(OZDomainString),
+    OZDomain = oz_test_utils:oz_domain(Config),
     Subdomain = <<"proper-subdomain">>,
     IPs = [<<"1.2.3.4">>, <<"5.6.7.8">>],
 
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
@@ -1684,10 +2050,15 @@ update_subdomain_test(Config) ->
     Domain = ?UNIQUE_DOMAIN,
 
     EnvSetUpFun = fun() ->
+        {ok, Cluster1Member} = oz_test_utils:create_user(Config),
         {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-            Config, ?PROVIDER_DETAILS(?PROVIDER_NAME1, Domain)#{<<"subdomainDelegation">> => false}
+            Config, Cluster1Member, ?PROVIDER_DETAILS(?PROVIDER_NAME1, Domain)#{<<"subdomainDelegation">> => false}
         ),
-        #{providerId => P1, providerClient => {provider, P1, P1Macaroon}}
+        Cluster1MemberNoUpdatePriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_UPDATE]),
+        #{
+            providerId => P1, providerClient => {provider, P1, P1Macaroon},
+            clusterMember => {user, Cluster1Member}, clusterMemberNoUpdatePriv => {user, Cluster1MemberNoUpdatePriv}
+        }
     end,
     EnvTearDownFun = fun(#{providerId := ProviderId} = _Env) ->
         % delete provider to avoid "subdomain occupied" errors
@@ -1709,10 +2080,12 @@ update_subdomain_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                clusterMember,
                 providerClient
             ],
             unauthorized = [nobody],
             forbidden = [
+                clusterMemberNoUpdatePriv,
                 {user, NonAdmin},
                 {provider, P2, P2Macaroon}
             ]
@@ -1785,8 +2158,7 @@ update_domain_test(Config) ->
         <<"ipList">> => [<<"2.4.6.8">>, <<"255.253.251.2">>],
         <<"subdomainDelegation">> => true
     },
-    {ok, OZDomainString} = oz_test_utils:get_oz_domain(Config),
-    OZDomain = list_to_binary(OZDomainString),
+    OZDomain = oz_test_utils:oz_domain(Config),
     Nodes = ?config(oz_worker_nodes, Config),
 
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
@@ -1794,22 +2166,23 @@ update_domain_test(Config) ->
     ),
 
     EnvSetUpFun = fun() ->
+        {ok, Cluster1Member} = oz_test_utils:create_user(Config),
         {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-            Config, ProviderDetails
+            Config, Cluster1Member, ProviderDetails
         ),
+        Cluster1MemberNoUpdatePriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_UPDATE]),
 
         % Disable subdomain delegation in onezone to test
-        % ERROR_SUBDOMAIN_DELEGATON_DISABLED
-        rpc:multicall(Nodes, application, set_env, [
-            ?APP_NAME, subdomain_delegation_enabled, false
-        ]),
+        % ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED
+        oz_test_utils:set_env(Config, subdomain_delegation_supported, false),
 
-        #{providerId => P1, providerClient => {provider, P1, P1Macaroon}}
+        #{
+            providerId => P1, providerClient => {provider, P1, P1Macaroon},
+            clusterMember => {user, Cluster1Member}, clusterMemberNoUpdatePriv => {user, Cluster1MemberNoUpdatePriv}
+        }
     end,
     EnvTearDownFun = fun(#{providerId := ProviderId} = _Env) ->
-        rpc:multicall(Nodes, application, set_env, [
-            ?APP_NAME, subdomain_delegation_enabled, true
-        ]),
+        oz_test_utils:set_env(Config, subdomain_delegation_supported, true),
         % delete provider to avoid "subdomain occupied" errors
         oz_test_utils:delete_provider(Config, ProviderId)
     end,
@@ -1829,10 +2202,12 @@ update_domain_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                clusterMember,
                 providerClient
             ],
             unauthorized = [nobody],
             forbidden = [
+                clusterMemberNoUpdatePriv,
                 {provider, P2, P2Macaroon}
             ]
         },
@@ -1859,7 +2234,7 @@ update_domain_test(Config) ->
                 {<<"subdomainDelegation">>, bad_bool,
                     ?ERROR_BAD_VALUE_BOOLEAN(<<"subdomainDelegation">>)},
                 {<<"subdomainDelegation">>, true,
-                    ?ERROR_SUBDOMAIN_DELEGATION_DISABLED},
+                    ?ERROR_SUBDOMAIN_DELEGATION_NOT_SUPPORTED},
                 {<<"domain">>, <<"https://hasprotocol">>,
                     ?ERROR_BAD_VALUE_DOMAIN(<<"domain">>)}
             ]
@@ -1885,8 +2260,9 @@ update_domain_is_idempotent_test(Config) ->
         <<"domain">> => Domain,
         <<"subdomainDelegation">> => false
     },
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-        Config, ProviderDetails
+        Config, Cluster1Member, ProviderDetails
     ),
 
     EnvSetUpFun = fun() ->
@@ -1904,6 +2280,7 @@ update_domain_is_idempotent_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {user, Cluster1Member},
                 providerClient
             ],
             unauthorized = [],
@@ -1942,35 +2319,35 @@ get_domain_config_test(Config) ->
 
     ExpDomain = ?UNIQUE_DOMAIN,
 
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_DETAILS(?PROVIDER_NAME1, ExpDomain)#{<<"subdomainDelegation">> => false}
+        Config, Cluster1Member, ?PROVIDER_DETAILS(?PROVIDER_NAME1, ExpDomain)#{<<"subdomainDelegation">> => false}
     ),
+    Cluster1MemberNoViewPriv = new_cluster_member_with_privs(Config, P1, [], [?CLUSTER_VIEW]),
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_DETAILS(?PROVIDER_NAME2, ?UNIQUE_DOMAIN)#{<<"subdomainDelegation">> => false}
     ),
 
-    % Create two users, grant one of them the privilege to list providers.
-    % They still shouldn't be able to read domain aspect
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, grant, [
-        ?OZ_PROVIDERS_LIST
-    ]),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ExpBody = #{
         <<"subdomainDelegation">> => false,
-        <<"domain">> => ExpDomain
+        <<"domain">> => ExpDomain,
+        <<"ipList">> => [],
+        <<"subdomain">> => null
     },
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {provider, P1, P1Macaroon}
+                {user, Cluster1Member},
+                {provider, P1, P1Macaroon},
+                {admin, [?OZ_PROVIDERS_VIEW]}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, Admin},
                 {user, NonAdmin},
+                {user, Cluster1MemberNoViewPriv},
                 {provider, P2, P2Macaroon}
             ]
         },
@@ -1978,7 +2355,13 @@ get_domain_config_test(Config) ->
             module = provider_logic,
             function = get_domain_config,
             args = [client, P1],
-            expected_result = ?OK_MAP(ExpBody)
+            expected_result = ?OK_MAP_CONTAINS(ExpBody)
+        },
+        rest_spec = RestSpec = #rest_spec{
+            method = get,
+            path = [<<"/providers/">>, P1, <<"/domain_config">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = {contains, ExpBody}
         },
         gs_spec = GsSpec = #gs_spec{
             operation = get,
@@ -1999,8 +2382,8 @@ get_domain_config_test(Config) ->
     ExpSubdomain = <<"subdomain">>,
     ExpIPs = [{5, 8, 2, 4}, {10, 12, 255, 255}],
     ExpIPsBin = [<<"5.8.2.4">>, <<"10.12.255.255">>],
-    {ok, OZDomain} = oz_test_utils:get_oz_domain(Config),
-    ExpDomain2 = <<ExpSubdomain/binary, ".", (list_to_binary(OZDomain))/binary>>,
+    OZDomain = oz_test_utils:oz_domain(Config),
+    ExpDomain2 = <<ExpSubdomain/binary, ".", OZDomain/binary>>,
 
     oz_test_utils:enable_subdomain_delegation(Config, P1, ExpSubdomain, ExpIPs),
 
@@ -2010,11 +2393,12 @@ get_domain_config_test(Config) ->
         <<"ipList">> => ExpIPs,
         <<"subdomain">> => ExpSubdomain
     },
+    ExpBody2Bin = ExpBody2#{<<"ipList">> => ExpIPsBin},
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         logic_spec = LogicSpec#logic_spec{expected_result = ?OK_MAP(ExpBody2)},
+        rest_spec = RestSpec#rest_spec{expected_body = {contains, ExpBody2Bin}},
         gs_spec = GsSpec#gs_spec{
-            expected_result = ?OK_MAP(ExpBody2#{
-                <<"ipList">> => ExpIPsBin,
+            expected_result = ?OK_MAP(ExpBody2Bin#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -2025,6 +2409,45 @@ get_domain_config_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+
+
+get_own_domain_config_test(Config) ->
+    ExpDomain = ?UNIQUE_DOMAIN,
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_DETAILS(?PROVIDER_NAME1, ExpDomain)#{<<"subdomainDelegation">> => false}
+    ),
+    ExpBody = #{
+        <<"subdomainDelegation">> => false,
+        <<"domain">> => ExpDomain,
+        <<"ipList">> => [],
+        <<"subdomain">> => null
+    },
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {provider, P1, P1Macaroon}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/provider/domain_config">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = {contains, ExpBody}
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = od_provider, id = ?SELF, aspect = domain_config},
+            expected_result = ?OK_MAP_CONTAINS(ExpBody#{
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = oz_test_utils:decode_gri(
+                        Config, EncodedGri
+                    ),
+                    ?assertEqual(Id, P1)
+                end
+            })
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 get_current_time_test(Config) ->
@@ -2102,7 +2525,7 @@ verify_provider_identity_test(Config) ->
         logic_spec = #logic_spec{
             module = provider_logic,
             function = verify_provider_identity,
-            args = [client, P1, data],
+            args = [client, data],
             expected_result = ?OK
         },
         % TODO gs
@@ -2120,9 +2543,9 @@ verify_provider_identity_test(Config) ->
                 {<<"providerId">>, <<"sdfagh2345qwefg">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
                 {<<"providerId">>, P2, ?ERROR_BAD_MACAROON},
 
-                {<<"macaroon">>, <<"">>, ?ERROR_BAD_VALUE_TOKEN(<<"macaroon">>)},
+                {<<"macaroon">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"macaroon">>)},
                 {<<"macaroon">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"macaroon">>)},
-                {<<"macaroon">>, MacaroonExpiredBin, ?ERROR_BAD_MACAROON}
+                {<<"macaroon">>, MacaroonExpiredBin, ?ERROR_MACAROON_EXPIRED}
             ]
         }
     },
@@ -2164,6 +2587,9 @@ init_per_testcase(check_my_ports_test, Config) ->
             end
         end),
     init_per_testcase(default, Config);
+init_per_testcase(list_eff_harvesters_test, Config) ->
+    oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
+    init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
     Config.
 
@@ -2172,7 +2598,12 @@ end_per_testcase(check_my_ports_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_unload(Nodes, http_client),
     end_per_testcase(default, Config);
-end_per_testcase(_, _Config) ->
+end_per_testcase(list_eff_harvesters_test, Config) ->
+    oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
+    end_per_testcase(default, Config);
+end_per_testcase(_, Config) ->
+    oz_test_utils:set_env(Config, require_token_for_provider_registration, false),
+    oz_test_utils:set_env(Config, subdomain_delegation_supported, true),
     ok.
 
 
@@ -2209,3 +2640,13 @@ create_2_providers_and_5_supported_spaces(Config) ->
     ),
 
     {{P1, P1Macaroon}, {P2, P2Macaroon}, Spaces}.
+
+
+new_cluster_member_with_privs(Config, ProviderId, ToGrant, ToRevoke) ->
+    ClusterId = ProviderId,
+    {ok, NewMember} = oz_test_utils:create_user(Config),
+    oz_test_utils:cluster_add_user(Config, ClusterId, NewMember),
+    oz_test_utils:cluster_set_user_privileges(
+        Config, ClusterId, NewMember, ToGrant, ToRevoke
+    ),
+    NewMember.

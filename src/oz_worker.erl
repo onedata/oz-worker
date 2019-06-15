@@ -14,12 +14,13 @@
 
 -include("registered_names.hrl").
 -include("entity_logic.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([get_env/1, get_env/2, set_env/2]).
 -export([get_name/0]).
 -export([get_domain/0, get_url/0, get_uri/1]).
--export([get_version/0, get_build_version/0]).
+-export([get_release_version/0, get_build_version/0]).
 -export([get_config/0]).
 -export([entity_logic_plugin/0]).
 
@@ -32,9 +33,15 @@
 %% Wrapper function to get oz_worker env variable.
 %% @end
 %%--------------------------------------------------------------------
--spec get_env(Key :: atom()) -> undefined | {ok, term()}.
+-spec get_env(Key :: atom()) -> term() | no_return().
 get_env(Key) ->
-    application:get_env(?APP_NAME, Key).
+    case application:get_env(?APP_NAME, Key) of
+        {ok, Value} ->
+            Value;
+        undefined ->
+            ?alert("Could not find required env variable: ~p", [Key]),
+            error({missing_env_variable, Key})
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -62,10 +69,12 @@ set_env(Key, Value) ->
 %% Returns Onezone name.
 %% @end
 %%--------------------------------------------------------------------
--spec get_name() -> binary().
+-spec get_name() -> undefined | binary().
 get_name() ->
-    {ok, Name} = get_env(oz_name),
-    list_to_binary(Name).
+    case get_env(oz_name, undefined) of
+        undefined -> undefined;
+        Str when is_list(Str) -> list_to_binary(Str)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -75,8 +84,7 @@ get_name() ->
 %%--------------------------------------------------------------------
 -spec get_domain() -> binary().
 get_domain() ->
-    {ok, Domain} = get_env(http_domain),
-    list_to_binary(Domain).
+    list_to_binary(get_env(http_domain)).
 
 
 %%--------------------------------------------------------------------
@@ -104,11 +112,11 @@ get_uri(PathWithSlash) when is_list(PathWithSlash) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns Onezone version.
+%% Returns Onezone release version.
 %% @end
 %%--------------------------------------------------------------------
--spec get_version() -> binary().
-get_version() ->
+-spec get_release_version() -> binary().
+get_release_version() ->
     {_AppId, _AppName, AppVersion} = lists:keyfind(
         ?APP_NAME, 1, application:loaded_applications()
     ),
@@ -117,12 +125,15 @@ get_version() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns Onezone build_version.
+%% Returns Onezone build version.
 %% @end
 %%--------------------------------------------------------------------
--spec get_build_version() -> binary().
+-spec get_build_version() -> undefined | binary().
 get_build_version() ->
-    str_utils:to_binary(get_env(build_version, <<"unknown">>)).
+    case get_env(build_version, "unknown") of
+        "" -> <<"unknown">>;
+        Build -> list_to_binary(Build)
+    end.
 
 
 %%--------------------------------------------------------------------

@@ -15,7 +15,7 @@
 
 -behaviour(dynamic_page_behaviour).
 
--include("registered_names.hrl").
+-include("http/codes.hrl").
 
 -export([handle/2]).
 
@@ -28,15 +28,13 @@
 %% {@link dynamic_page_behaviour} callback handle/2.
 %% @end
 %%--------------------------------------------------------------------
--spec handle(new_gui:method(), cowboy_req:req()) -> cowboy_req:req().
+-spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"GET">>, Req) ->
     case auth_config:get_saml_cert_pem() of
         {error, saml_disabled} ->
-            cowboy_req:reply(404, Req);
-        Cert ->
-            cowboy_req:reply(200,
-                #{<<"content-type">> => <<"application/x-pem-file">>},
-                Cert,
-                Req
-            )
+            cowboy_req:reply(?HTTP_404_NOT_FOUND, Req);
+        {ok, Cert} ->
+            cowboy_req:reply(?HTTP_200_OK, #{
+                <<"content-type">> => <<"application/x-pem-file">>
+            }, Cert, Req)
     end.

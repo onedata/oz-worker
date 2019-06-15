@@ -16,6 +16,7 @@
 -include("auth/auth_errors.hrl").
 -include("http/gui_paths.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
@@ -48,6 +49,8 @@
 -export([get_login_endpoint/4, validate_login/2]).
 -export([authorize_by_access_token/1]).
 -export([authorize_by_macaroons/1, authorize_by_macaroons/2]).
+-export([authorize_by_oneprovider_gui_macaroon/1, authorize_by_onezone_gui_macaroon/1]).
+-export([authorize_by_gui_macaroon/3]).
 -export([authorize_by_basic_auth/1]).
 -export([acquire_idp_access_token/2, refresh_idp_access_token/2]).
 
@@ -68,7 +71,7 @@
 %%--------------------------------------------------------------------
 -spec get_login_endpoint(auth_config:idp(), LinkAccount :: false | {true, od_user:id()},
     RedirectAfterLogin :: binary(), TestMode :: boolean()) ->
-    {ok, maps:map()} | {error, term()}.
+    {ok, map()} | {error, term()}.
 get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
     TestMode andalso auth_test_mode:process_enable_test_mode(),
     try
@@ -99,7 +102,7 @@ get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
 %% Validates an incoming login request based on received data payload.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login(new_gui:method(), cowboy_req:req()) ->
+-spec validate_login(gui:method(), cowboy_req:req()) ->
     {ok, od_user:id(), RedirectPage :: binary()} |
     {auth_error, {error, term()}, state_token:id(), RedirectPage :: binary()}.
 validate_login(Method, Req) ->
@@ -117,7 +120,7 @@ validate_login(Method, Req) ->
                     log_error({error, Reason}, IdP, StateToken, []),
                     {auth_error, {error, Reason}, StateToken, RedirectAfterLogin}
             catch
-                throw:Error ->
+                throw:{error, _} = Error ->
                     log_error(Error, IdP, StateToken, erlang:get_stacktrace()),
                     {auth_error, Error, StateToken, RedirectAfterLogin};
                 Type:Reason ->
@@ -145,7 +148,7 @@ authorize_by_access_token(AccessToken) when is_binary(AccessToken) ->
             case openid_protocol:authorize_by_idp_access_token(AccessToken) of
                 {true, {IdP, Attributes}} ->
                     LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
-                    {ok, #document{key = UserId}} = acquire_user_by_linked_account(LinkedAccount),
+                    {ok, #document{key = UserId}} = linked_accounts:acquire_user(LinkedAccount),
                     {true, ?USER(UserId)};
                 {error, _} = Error ->
                     Error;
@@ -154,9 +157,9 @@ authorize_by_access_token(AccessToken) when is_binary(AccessToken) ->
             end
     end;
 authorize_by_access_token(Req) ->
-    case cowboy_req:header(<<"x-auth-token">>, Req) of
+    case cowboy_req:header(<<"x-auth-token">>, Req, undefined) of
         undefined ->
-            case cowboy_req:header(<<"authorization">>, Req) of
+            case cowboy_req:header(<<"authorization">>, Req, undefined) of
                 <<"Bearer ", AccessToken/binary>> ->
                     authorize_by_access_token(AccessToken);
                 _ ->
@@ -190,7 +193,7 @@ authorize_by_macaroons(Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize_by_macaroons(Macaroon :: binary() | macaroon:macaroon(),
-    DischargeMacaroons :: binary() | [macaroon:macaroon()]) ->
+    DischargeMacaroons :: binary() | [binary()] | [macaroon:macaroon()]) ->
     {true, entity_logic:client()} | {error, term()}.
 authorize_by_macaroons(Macaroon, DischargeMacaroons) when is_binary(Macaroon) ->
     case onedata_macaroons:deserialize(Macaroon) of
@@ -217,14 +220,85 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
     %% (this is an authorization code for client).
     case auth_tokens:validate_token(<<>>, Macaroon, DischargeMacaroons, <<"">>, undefined) of
         {ok, UserId} ->
-            {true, #client{type = user, id = UserId}};
+            {true, ?USER(UserId)};
         _ ->
             case macaroon_logic:verify_provider_auth(Macaroon) of
-                {ok, IdP} ->
-                    {true, #client{type = provider, id = IdP}};
+                {ok, ProviderId} ->
+                    {true, ?PROVIDER(ProviderId)};
                 {error, _} ->
                     ?ERROR_BAD_MACAROON
             end
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Tries to a authorize a client by a GUI macaroon issued for a
+%% op_worker or op_panel service.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_oneprovider_gui_macaroon(cowboy_req:req()) ->
+    false | {true, entity_logic:client(), session:id()} | {error, term()}.
+authorize_by_oneprovider_gui_macaroon(Req) ->
+    SubjectToken = cowboy_req:header(<<"subject-token">>, Req, undefined),
+    AudienceToken = cowboy_req:header(<<"audience-token">>, Req, undefined),
+    case {SubjectToken, AudienceToken} of
+        {undefined, undefined} ->
+            false;
+        {_, undefined} ->
+            ?ERROR_UNAUTHORIZED;
+        {undefined, _} ->
+            ?ERROR_UNAUTHORIZED;
+        {_, _} ->
+            authorize_by_oneprovider_gui_macaroon(SubjectToken, AudienceToken)
+    end.
+
+%% @private
+-spec authorize_by_oneprovider_gui_macaroon(binary(), binary()) ->
+    {true, entity_logic:client(), session:id()} | {error, term()}.
+authorize_by_oneprovider_gui_macaroon(SubjectToken, AudienceToken) ->
+    try
+        {ok, SubjectMacaroon} = onedata_macaroons:deserialize(SubjectToken),
+        {ok, AudienceMacaroon} = onedata_macaroons:deserialize(AudienceToken),
+        case macaroon_logic:verify_provider_auth(AudienceMacaroon) of
+            {ok, ProviderId} ->
+                authorize_by_gui_macaroon(SubjectMacaroon, ?ONEPROVIDER, ProviderId);
+            {error, _} ->
+                ?ERROR_MACAROON_INVALID
+        end
+    catch
+        _:_ ->
+            ?ERROR_BAD_MACAROON
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Tries to a authorize a client by a GUI macaroon issued for the
+%% oz_worker or oz_panel service.
+%% @end
+%%--------------------------------------------------------------------
+-spec authorize_by_onezone_gui_macaroon(macaroon:macaroon() | binary()) ->
+    {true, entity_logic:client(), session:id()} | {error, term()}.
+authorize_by_onezone_gui_macaroon(Macaroon) ->
+    authorize_by_gui_macaroon(Macaroon, ?ONEZONE, ?ONEZONE_CLUSTER_ID).
+
+
+%% @private
+-spec authorize_by_gui_macaroon(macaroon:macaroon() | binary(),
+    onedata:cluster_type(), od_cluster:id()) ->
+    {true, entity_logic:client(), session:id()} | {error, term()}.
+authorize_by_gui_macaroon(Token, ClusterType, ClusterId) when is_binary(Token) ->
+    case onedata_macaroons:deserialize(Token) of
+        {ok, Macaroon} ->
+            authorize_by_gui_macaroon(Macaroon, ClusterType, ClusterId);
+        {error, _} = Error ->
+            Error
+    end;
+authorize_by_gui_macaroon(Macaroon, ClusterType, ClusterId) ->
+    case session:verify_gui_macaroon(Macaroon, ClusterType, ClusterId) of
+        {ok, UserId, SessionId} -> {true, ?USER(UserId), SessionId};
+        {error, _} = Error -> Error
     end.
 
 
@@ -237,17 +311,15 @@ authorize_by_macaroons(Macaroon, DischargeMacaroons) ->
     {true, #client{}} | {error, term()}.
 authorize_by_basic_auth(UserPasswdB64) when is_binary(UserPasswdB64) ->
     UserPasswd = base64:decode(UserPasswdB64),
-    [User, Passwd] = binary:split(UserPasswd, <<":">>),
-    case user_logic:authenticate_by_basic_credentials(User, Passwd) of
-        {ok, #document{key = UserId}} ->
+    [Username, Passwd] = binary:split(UserPasswd, <<":">>),
+    case basic_auth:authenticate(Username, Passwd) of
+        {ok, UserId} ->
             {true, ?USER(UserId)};
-        {error, onepanel_auth_disabled} ->
-            ?ERROR_NOT_SUPPORTED;
-        _ ->
-            ?ERROR_BAD_BASIC_CREDENTIALS
+        {error, _} = Error ->
+            Error
     end;
 authorize_by_basic_auth(Req) ->
-    case cowboy_req:header(<<"authorization">>, Req) of
+    case cowboy_req:header(<<"authorization">>, Req, undefined) of
         <<"Basic ", UserPasswdB64/binary>> ->
             authorize_by_basic_auth(UserPasswdB64);
         _ ->
@@ -308,7 +380,7 @@ refresh_idp_access_token(IdP, RefreshToken) ->
     try
         {ok, Attributes} = openid_protocol:refresh_idp_access_token(IdP, RefreshToken),
         LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
-        {ok, _} = acquire_user_by_linked_account(LinkedAccount),
+        {ok, _} = linked_accounts:acquire_user(LinkedAccount),
         #linked_account{access_token = {AccessToken, Expires}} = LinkedAccount,
         {ok, {AccessToken, Expires - ?NOW()}}
     catch
@@ -344,8 +416,8 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
 
     LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
     LinkedAccountMap = maps:without(
-        [<<"login">>, <<"emailList">>, <<"groups">>], % do not include deprecated fields
-        user_logic:linked_account_to_map(LinkedAccount)
+        [<<"name">>, <<"login">>, <<"alias">>, <<"emailList">>, <<"groups">>], % do not include deprecated fields
+        linked_accounts:to_map(LinkedAccount)
     ),
     ?auth_debug("Attributes from IdP '~p' (state: ~s) sucessfully mapped:~n~ts", [
         IdP, StateToken, json_utils:encode(LinkedAccountMap, [pretty])
@@ -366,33 +438,38 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
     {ok, od_user:id()}.
 validate_login_by_linked_account(LinkedAccount) ->
     {ok, #document{key = UserId, value = #od_user{
-        name = UserName
-    }}} = acquire_user_by_linked_account(LinkedAccount),
-    ?info("User ~ts (~s) has logged in", [UserName, UserId]),
+        full_name = FullName
+    }}} = linked_accounts:acquire_user(LinkedAccount),
+    ?info("User '~ts' has logged in (~s)", [FullName, UserId]),
     {ok, UserId}.
 
 
 %% @private
 -spec validate_link_account_request(od_user:linked_account(), od_user:id()) ->
     {ok, od_user:id()} | {error, term()}.
-validate_link_account_request(LinkedAccount, UserId) ->
+validate_link_account_request(LinkedAccount, TargetUserId) ->
     % Check if this account isn't connected to other profile
-    case get_user_by_linked_account(LinkedAccount) of
-        {ok, #document{key = UserId}} ->
-            % The account is already linked to this user, report error
-            ?ERROR_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(UserId);
-        {ok, #document{key = OtherUserId}} ->
-            % The account is used on some other profile, cannot proceed
-            ?ERROR_ACCOUNT_ALREADY_LINKED_TO_ANOTHER_USER(UserId, OtherUserId);
+    case linked_accounts:find_user(LinkedAccount) of
+        {ok, #document{key = FoundUserId}} ->
+            % Synchronize the information regardless of account linking success
+            linked_accounts:merge(FoundUserId, LinkedAccount),
+            case FoundUserId of
+                TargetUserId ->
+                    % The account is already linked to this user, report error
+                    ?ERROR_ACCOUNT_ALREADY_LINKED_TO_CURRENT_USER(TargetUserId);
+                OtherUserId ->
+                    % The account is used on some other profile, cannot proceed
+                    ?ERROR_ACCOUNT_ALREADY_LINKED_TO_ANOTHER_USER(TargetUserId, OtherUserId)
+            end;
         {error, not_found} ->
             % ok, add new linked account to the user
-            {ok, #document{key = UserId, value = #od_user{
-                name = UserName
-            }}} = user_logic:merge_linked_account(UserId, LinkedAccount),
+            {ok, #document{value = #od_user{
+                full_name = FullName
+            }}} = linked_accounts:merge(TargetUserId, LinkedAccount),
             ?info("User ~ts (~s) has linked his account from '~p'", [
-                UserName, UserId, LinkedAccount#linked_account.idp
+                FullName, TargetUserId, LinkedAccount#linked_account.idp
             ]),
-            {ok, UserId}
+            {ok, TargetUserId}
     end.
 
 
@@ -406,7 +483,7 @@ validate_link_account_request(LinkedAccount, UserId) ->
 -spec validate_test_login_by_linked_account(od_user:linked_account()) ->
     {ok, od_user:id()}.
 validate_test_login_by_linked_account(LinkedAccount) ->
-    {UserId, UserData} = user_logic:build_test_user_info(LinkedAccount),
+    {UserId, UserData} = linked_accounts:build_test_user_info(LinkedAccount),
     auth_test_mode:store_user_data(UserData),
     {ok, UserId}.
 
@@ -426,7 +503,7 @@ get_protocol_handler(IdP) ->
 %% Parses OIDC / SAML payload and returns it as a map, along with resolved state token.
 %% @end
 %%--------------------------------------------------------------------
--spec parse_payload(new_gui:method(), cowboy_req:req()) ->
+-spec parse_payload(gui:method(), cowboy_req:req()) ->
     {state_token:id(), Payload :: #{}}.
 parse_payload(<<"POST">>, Req) ->
     {ok, PostBody, _} = cowboy_req:read_urlencoded_body(Req, #{length => 128000}),
@@ -436,44 +513,6 @@ parse_payload(<<"GET">>, Req) ->
     QueryParams = cowboy_req:parse_qs(Req),
     StateToken = proplists:get_value(<<"state">>, QueryParams, <<>>),
     {StateToken, maps:from_list(QueryParams)}.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Retrieves a user based on given linked account. Merges the info received
-%% from IdP with user doc. If the account is not connected to any user, returns
-%% {error, not_found}.
-%% @end
-%%--------------------------------------------------------------------
--spec get_user_by_linked_account(od_user:linked_account()) ->
-    {ok, od_user:doc()} | {error, not_found}.
-get_user_by_linked_account(LinkedAccount) ->
-    #linked_account{idp = IdP, subject_id = SubjectId} = LinkedAccount,
-    case od_user:get_by_criterion({linked_account, {IdP, SubjectId}}) of
-        {ok, #document{key = UserId}} ->
-            user_logic:merge_linked_account(UserId, LinkedAccount);
-        {error, not_found} ->
-            {error, not_found}
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Tries to retrieve system user by given linked account, and if it does not
-%% exist, creates a new user with that account connected.
-%% @end
-%%--------------------------------------------------------------------
--spec acquire_user_by_linked_account(od_user:linked_account()) ->
-    {ok, od_user:doc()}.
-acquire_user_by_linked_account(LinkedAccount) ->
-    case get_user_by_linked_account(LinkedAccount) of
-        {ok, #document{} = Doc} ->
-            {ok, Doc};
-        {error, not_found} ->
-            user_logic:create_user_by_linked_account(LinkedAccount)
-    end.
 
 
 %%--------------------------------------------------------------------

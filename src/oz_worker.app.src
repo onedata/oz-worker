@@ -11,7 +11,9 @@
 
 {application, oz_worker, [
     {description, "OneZone worker node."},
-    {vsn, "18.02.2"},
+    % @TODO temporarily bumping the OZ version to indicate new, incompatible
+    % features. REVISE before releasing an official version.
+    {vsn, "19.02.0-beta1"},
     {registered, [oz_worker_sup]},
     {applications, [
         kernel,

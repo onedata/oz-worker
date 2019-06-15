@@ -28,10 +28,12 @@
 -define(ACCEPTORS_NUM, oz_worker:get_env(http_acceptors, 10)).
 -define(REQUEST_TIMEOUT, oz_worker:get_env(http_request_timeout, timer:seconds(30))).
 
--define(LE_CHALLENGE_PATH, application:get_env(?APP_NAME, letsencrypt_challenge_api_prefix,
-    "/.well-known/acme-challenge")).
--define(LE_CHALLENGE_ROOT, application:get_env(?APP_NAME, letsencrypt_challenge_static_root,
-    "/tmp/oz_worker/http/.well-known/acme-challenge/")).
+-define(LE_CHALLENGE_PATH, oz_worker:get_env(
+    letsencrypt_challenge_api_prefix, "/.well-known/acme-challenge"
+)).
+-define(LE_CHALLENGE_ROOT, oz_worker:get_env(
+    letsencrypt_challenge_static_root, "/tmp/oz_worker/http/.well-known/acme-challenge/"
+)).
 
 %% listener_behaviour callbacks
 -export([port/0, start/0, stop/0, healthcheck/0]).
@@ -58,7 +60,7 @@ port() ->
 %%--------------------------------------------------------------------
 -spec start() -> ok | {error, Reason :: term()}.
 start() ->
-    {ok, OAI_PMH_PATH} = oz_worker:get_env(oai_pmh_api_prefix),
+    OAI_PMH_PATH = oz_worker:get_env(oai_pmh_api_prefix),
 
     Dispatch = cowboy_router:compile([
         {'_', [

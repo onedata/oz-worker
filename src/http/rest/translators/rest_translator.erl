@@ -12,7 +12,7 @@
 -module(rest_translator).
 -author("Lukasz Opiola").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("registered_names.hrl").
 
 -export([response/2]).
@@ -23,7 +23,8 @@
     ok_no_content_reply/0,
     ok_body_reply/1,
     updated_reply/0,
-    deleted_reply/0
+    deleted_reply/0,
+    ok_encoded_intermediaries_reply/1
 ]).
 
 %%%===================================================================
@@ -40,8 +41,8 @@ response(#el_req{operation = create} = ElReq, {ok, DataFormat, Result}) ->
     Translator = entity_type_to_translator(Model),
     Translator:create_response(GRI, AuthHint, DataFormat, Result);
 response(#el_req{operation = get} = ElReq, {ok, Data}) ->
-    #el_req{gri = GRI = #gri{type = Model}} = ElReq,
-    Translator = entity_type_to_translator(Model),
+    #el_req{gri = GRI = #gri{type = EntityType}} = ElReq,
+    Translator = entity_type_to_translator(EntityType),
     Translator:get_response(GRI, Data);
 response(#el_req{operation = update}, ok) ->
     updated_reply();
@@ -82,7 +83,7 @@ ok_no_content_reply() ->
 created_reply([<<"/", Path/binary>> | Tail]) ->
     created_reply([Path | Tail]);
 created_reply(PathTokens) ->
-    {ok, RestPrefix} = oz_worker:get_env(rest_api_prefix),
+    RestPrefix = oz_worker:get_env(rest_api_prefix),
     Path = filename:join([RestPrefix | PathTokens]),
     LocationHeader = #{<<"Location">> => oz_worker:get_uri(Path)},
     #rest_resp{code = ?HTTP_201_CREATED, headers = LocationHeader}.
@@ -107,6 +108,19 @@ updated_reply() ->
 deleted_reply() ->
     #rest_resp{code = ?HTTP_204_NO_CONTENT}.
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% REST reply that should be used for successful REST operations returning
+%% membership intermediaries.
+%% @end
+%%--------------------------------------------------------------------
+-spec ok_encoded_intermediaries_reply(entity_graph:intermediaries()) -> #rest_resp{}.
+ok_encoded_intermediaries_reply(Intermediaries) ->
+    ok_body_reply(#{<<"intermediaries">> => lists:map(fun({Type, Id}) ->
+        #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+    end, Intermediaries)}).
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -125,4 +139,6 @@ entity_type_to_translator(od_share) -> share_rest_translator;
 entity_type_to_translator(od_provider) -> provider_rest_translator;
 entity_type_to_translator(od_handle_service) -> handle_service_rest_translator;
 entity_type_to_translator(od_handle) -> handle_rest_translator;
+entity_type_to_translator(od_harvester) -> harvester_rest_translator;
+entity_type_to_translator(od_cluster) -> cluster_rest_translator;
 entity_type_to_translator(oz_worker) -> zone_rest_translator.

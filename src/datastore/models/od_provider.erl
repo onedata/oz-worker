@@ -13,10 +13,11 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
--export([to_string/1]).
+-export([to_string/1, print_summary/0, print_summary/1]).
 -export([entity_logic_plugin/0]).
 
 %% datastore_model callbacks
@@ -118,6 +119,55 @@ to_string(ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Prints all provider records to the console in a nicely-formatted manner.
+%% Sorts the records in a default manner.
+%% @end
+%%--------------------------------------------------------------------
+-spec print_summary() -> ok.
+print_summary() ->
+    print_summary(name).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Prints all provider records to the console in a nicely-formatted manner.
+%% Sorts the records by given attribute (specified by name or position).
+%% @end
+%%--------------------------------------------------------------------
+-spec print_summary(id | name | domain | spaces | support | users | groups | pos_integer()) -> ok.
+print_summary(id) -> print_summary(1);
+print_summary(name) -> print_summary(2);
+print_summary(domain) -> print_summary(3);
+print_summary(spaces) -> print_summary(4);
+print_summary(support) -> print_summary(5);
+print_summary(users) -> print_summary(6);
+print_summary(groups) -> print_summary(7);
+print_summary(SortPos) when is_integer(SortPos) ->
+    {ok, Providers} = list(),
+    ProviderAttrs = lists:map(fun(#document{key = Id, value = P}) ->
+        {
+            Id,
+            P#od_provider.name,
+            P#od_provider.domain,
+            maps:size(P#od_provider.spaces),
+            lists:sum(maps:values(P#od_provider.spaces)),
+            maps:size(P#od_provider.eff_users),
+            maps:size(P#od_provider.eff_groups)
+        }
+    end, Providers),
+    Sorted = lists:keysort(SortPos, ProviderAttrs),
+    io:format("-----------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("Id                                Name                      Domain                         Spaces   Tot. support   Eff users   Eff groups~n"),
+    io:format("-----------------------------------------------------------------------------------------------------------------------------------------~n"),
+    lists:foreach(fun({Id, Name, Domain, Spaces, Support, EffUsers, EffGroups}) ->
+        io:format("~-33s ~-25ts ~-30ts ~-8B ~-14s ~-11B ~-12B~n", [
+            Id, Name, Domain, Spaces, str_utils:format_byte_size(Support), EffUsers, EffGroups
+        ])
+    end, Sorted),
+    io:format("-----------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("~B providers in total~n", [length(Sorted)]).
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Returns the entity logic plugin module that handles model logic.
 %% @end
 %%--------------------------------------------------------------------
@@ -136,7 +186,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    4.
+    5.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -190,7 +240,32 @@ get_record_struct(3) ->
 get_record_struct(4) ->
     % There are no changes, but all records must be marked dirty to recalculate
     % effective relations (as intermediaries computing logic has changed).
-    get_record_struct(3).
+    get_record_struct(3);
+get_record_struct(5) ->
+    % * new field - creation_time
+    % * new field - eff harvesters
+    {record, [
+        {name, string},
+        {admin_email, string},
+        {root_macaroon, string},
+
+        {subdomain_delegation, boolean},
+        {domain, string},
+        {subdomain, string},
+
+        {latitude, float},
+        {longitude, float},
+
+        {spaces, #{string => integer}},
+
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}}, % New field
+
+        {creation_time, integer}, % New field
+
+        {bottom_up_dirty, boolean}
+    ]}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -251,13 +326,88 @@ upgrade_record(2, Provider) ->
         BottomUpDirty
     } = Provider,
     #{host := Domain} = url_utils:parse(RedirectionPoint),
-    {3, #od_provider{
+    {3, {od_provider,
+        Name,
+        undefined,
+        undefined,
+        false,
+        Domain,
+        undefined,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+
+        BottomUpDirty
+    }};
+upgrade_record(3, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        _EffUsers,
+        _EffGroups,
+
+        _BottomUpDirty
+    } = Provider,
+
+    {4, {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        #{},
+        #{},
+
+        true
+    }};
+upgrade_record(4, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+
+        BottomUpDirty
+    } = Provider,
+    {5, #od_provider{
         name = Name,
-        admin_email = undefined,
-        root_macaroon = undefined,
-        subdomain_delegation = false,
-        subdomain = undefined,
+        admin_email = AdminEmail,
+        root_macaroon = RootMacaroon,
+        subdomain_delegation = SubdomainDelegation,
         domain = Domain,
+        subdomain = Subdomain,
 
         latitude = Latitude,
         longitude = Longitude,
@@ -266,13 +416,9 @@ upgrade_record(2, Provider) ->
 
         eff_users = EffUsers,
         eff_groups = EffGroups,
+        eff_harvesters = #{},
+
+        creation_time = time_utils:system_time_seconds(),
 
         bottom_up_dirty = BottomUpDirty
-    }};
-upgrade_record(3, Provider) ->
-    {4, Provider#od_provider{
-        eff_users = #{},
-        eff_groups = #{},
-
-        bottom_up_dirty = true
     }}.

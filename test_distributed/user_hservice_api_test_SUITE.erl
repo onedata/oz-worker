@@ -13,7 +13,7 @@
 -module(user_hservice_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -59,12 +59,12 @@ all() ->
 
 
 list_handle_services_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ], []),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ExpHServices = lists:map(
         fun(_) ->
@@ -99,7 +99,8 @@ list_handle_services_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -119,22 +120,21 @@ list_handle_services_test(Config) ->
 
 
 create_handle_service_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, grant, [
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U2, grant, [
+    ], []),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U2, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ], []),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ExpName = ?HANDLE_SERVICE_NAME1,
     ExpProxyEndPoint = ?PROXY_ENDPOINT,
     ExpProperties = ?DOI_SERVICE_PROPERTIES,
 
-    AllPrivs = oz_test_utils:all_handle_service_privileges(Config),
-    AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
+    AllPrivs = privileges:handle_service_privileges(),
 
     VerifyFun = fun(HServiceId) ->
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -202,6 +202,7 @@ create_handle_service_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_CREATE, ?OZ_USERS_ADD_RELATIONSHIPS]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -236,12 +237,12 @@ create_handle_service_test(Config) ->
 
 
 get_handle_service_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ], []),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, HService} = oz_test_utils:create_handle_service(Config, ?USER(U1),
         ?HANDLE_SERVICE_NAME1, ?PROXY_ENDPOINT, ?DOI_SERVICE_PROPERTIES
@@ -276,6 +277,7 @@ get_handle_service_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_VIEW]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -288,7 +290,7 @@ get_handle_service_test(Config) ->
             module = user_logic,
             function = get_handle_service,
             args = [client, U1, HService],
-            expected_result = ?OK_MAP(ExpHServiceDetails)
+            expected_result = ?OK_MAP_CONTAINS(ExpHServiceDetails)
         }
         % TODO gs
     },
@@ -296,12 +298,12 @@ get_handle_service_test(Config) ->
 
 
 leave_handle_service_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, U1, set, [
+    {ok, U1} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, U1, [
         ?OZ_HANDLE_SERVICES_CREATE
-    ]),
-    {ok, U2} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ], []),
+    {ok, U2} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, HService} = oz_test_utils:create_handle_service(
@@ -343,6 +345,7 @@ leave_handle_service_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_HANDLE_SERVICES_REMOVE_RELATIONSHIPS, ?OZ_USERS_REMOVE_RELATIONSHIPS]},
                 {user, U1}
             ],
             unauthorized = [nobody],
@@ -398,7 +401,8 @@ list_eff_handle_services_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_USERS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -470,6 +474,7 @@ get_eff_handle_service_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
+                        {admin, [?OZ_HANDLE_SERVICES_VIEW]},
                         {user, U1}
                     ],
                     unauthorized = [nobody],
@@ -482,7 +487,7 @@ get_eff_handle_service_test(Config) ->
                     module = user_logic,
                     function = get_eff_handle_service,
                     args = [client, U1, HServiceId],
-                    expected_result = ?OK_MAP(HServiceDetails)
+                    expected_result = ?OK_MAP_CONTAINS(HServiceDetails)
                 }
                 % TODO gs
             },

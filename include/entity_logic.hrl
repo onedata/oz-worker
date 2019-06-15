@@ -15,6 +15,8 @@
 
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
+-define(SELF_INTERMEDIARY, <<"self">>).
+
 % Record expressing entity logic request client (REST and Graph Sync).
 -record(client, {
     % root is allowed to do anything, it must be used with caution
@@ -94,28 +96,45 @@
 -define(SUBDOMAIN_VALIDATION_REGEXP,
     <<"^([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$">>).
 
-% Regexp to validate names. Name must be 2-50 characters long and composed of
-% UTF-8 letters, digits, brackets and underscores.
-% Dashes, spaces and dots are allowed (but not at the beginning or the end).
+
+-define(NAME_REQUIREMENTS_DESCRIPTION, <<
+    "Name must be 2-50 characters long and composed only of UTF-8 letters, digits, brackets and underscores. "
+    "Dashes, spaces and dots are allowed (but not at the beginning or the end)."
+>>).
 -define(NAME_FIRST_CHARS_ALLOWED, <<")(\\w_">>).
 -define(NAME_MIDDLE_CHARS_ALLOWED, <<">>)(\\w_ .-">>).
 -define(NAME_LAST_CHARS_ALLOWED, ?NAME_FIRST_CHARS_ALLOWED).
 -define(NAME_MAXIMUM_LENGTH, 50).
 
-% Regexp to validate user names. User name must be 2-50 characters long and
-% composed of UTF-8 letters and digits. Dashes, spaces, dots, commas and
-% apostrophes are allowed (but not at the beginning or the end).
--define(USER_NAME_FIRST_CHARS_ALLOWED, <<"\\pL\\pNd">>).
--define(USER_NAME_MIDDLE_CHARS_ALLOWED, <<"\\pL\\pNd ',.-">>).
--define(USER_NAME_LAST_CHARS_ALLOWED, <<"\\pL\\pNd.">>).
--define(USER_NAME_MAXIMUM_LENGTH, 50).
 
-% Regexp to validate aliases. Alias must be 2-20 characters long and composed of
-% letters and digits.
-% Dashes and underscores are allowed (but not at the beginning or the end).
--define(ALIAS_FIRST_CHARS_ALLOWED, <<"a-z0-9A-Z">>).
--define(ALIAS_MIDDLE_CHARS_ALLOWED, <<"a-z0-9A-Z._-">>).
--define(ALIAS_LAST_CHARS_ALLOWED, ?ALIAS_FIRST_CHARS_ALLOWED).
--define(ALIAS_MAXIMUM_LENGTH, 20).
+-define(FULL_NAME_REQUIREMENTS_DESCRIPTION, <<
+    "Full name must be 2-50 characters long and composed only of UTF-8 letters and digits. "
+    "Dashes, spaces, dots, commas and apostrophes are allowed (but not at the beginning or the end)."
+>>).
+-define(FULL_NAME_FIRST_CHARS_ALLOWED, <<"\\pL\\pNd">>).
+-define(FULL_NAME_MIDDLE_CHARS_ALLOWED, <<"\\pL\\pNd ',.-">>).
+-define(FULL_NAME_LAST_CHARS_ALLOWED, <<"\\pL\\pNd.">>).
+-define(FULL_NAME_MAXIMUM_LENGTH, 50).
+-define(DEFAULT_FULL_NAME, <<"Unnamed User">>).
+
+
+-define(USERNAME_REQUIREMENTS_DESCRIPTION, <<
+    "Username must be 2-20 characters long and composed only of letters and digits. "
+    "Dashes and underscores are allowed (but not at the beginning or the end). "
+>>).
+-define(USERNAME_FIRST_CHARS_ALLOWED, <<"a-z0-9A-Z">>).
+-define(USERNAME_MIDDLE_CHARS_ALLOWED, <<"a-z0-9A-Z._-">>).
+-define(USERNAME_LAST_CHARS_ALLOWED, ?USERNAME_FIRST_CHARS_ALLOWED).
+-define(USERNAME_MAXIMUM_LENGTH, 20).
+
+
+-define(PASSWORD_REQUIREMENTS_DESCRIPTION, <<
+    "Password must be at least 8 characters long."
+>>).
+-define(PASSWORD_MIN_LENGTH, 8).
+
+
+% Used when enable_automatic_first_space is set to true
+-define(FIRST_SPACE_NAME, <<"Personal Space">>).
 
 -endif.

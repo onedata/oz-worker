@@ -13,7 +13,7 @@
 -behaviour(rest_translator_behaviour).
 -author("Lukasz Opiola").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
 -export([create_response/4, get_response/2]).
@@ -33,6 +33,9 @@
 create_response(#gri{aspect = authorize}, _, value, DischargeMacaroon) ->
     rest_translator:ok_body_reply({binary, DischargeMacaroon});
 
+create_response(#gri{aspect = instance}, _, resource, {#gri{id = UserId}, _}) ->
+    rest_translator:created_reply([<<"users">>, UserId]);
+
 create_response(#gri{aspect = client_tokens}, _, resource, {_, Token}) ->
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 
@@ -40,7 +43,11 @@ create_response(#gri{aspect = {idp_access_token, _}}, _, value, {AccessToken, Ex
     rest_translator:ok_body_reply(#{
         <<"token">> => AccessToken,
         <<"ttl">> => Expires
-    }).
+    });
+
+create_response(#gri{aspect = provider_registration_token}, _, value, Macaroon) ->
+    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    rest_translator:ok_body_reply(#{<<"token">> => Token}).
 
 
 %%--------------------------------------------------------------------
@@ -53,23 +60,40 @@ get_response(#gri{id = undefined, aspect = list}, Users) ->
     rest_translator:ok_body_reply(#{<<"users">> => Users});
 
 get_response(#gri{id = UserId, aspect = instance, scope = protected}, UserData) ->
-    Alias = gs_protocol:undefined_to_null(maps:get(<<"alias">>, UserData)),
-    rest_translator:ok_body_reply(UserData#{
+    #{
+        <<"basicAuthEnabled">> := BasicAuthEnabled,
+        <<"fullName">> := FullName, <<"username">> := Username,
+        <<"emails">> := Emails,
+        <<"linkedAccounts">> := LinkedAccounts
+    } = UserData,
+    rest_translator:ok_body_reply(#{
+        <<"basicAuthEnabled">> => BasicAuthEnabled,
         <<"userId">> => UserId,
-        <<"alias">> => Alias,
+        <<"fullName">> => FullName,
+        <<"username">> => gs_protocol:undefined_to_null(Username),
+        <<"emails">> => Emails,
+        <<"linkedAccounts">> => LinkedAccounts,
+
         % TODO VFS-4506 deprecated fields, included for backward compatibility
-        <<"login">> => Alias,
-        <<"emailList">> => maps:get(<<"emails">>, UserData)
+        <<"name">> => FullName,
+        <<"login">> => gs_protocol:undefined_to_null(Username),
+        <<"alias">> => gs_protocol:undefined_to_null(Username),
+        <<"emailList">> => Emails
     });
 
 get_response(#gri{id = UserId, aspect = instance, scope = shared}, UserData) ->
-    % scope can be protected or shared
-    Alias = gs_protocol:undefined_to_null(maps:get(<<"alias">>, UserData)),
-    rest_translator:ok_body_reply(UserData#{
+    #{
+        <<"fullName">> := FullName, <<"username">> := Username
+    } = UserData,
+    rest_translator:ok_body_reply(#{
         <<"userId">> => UserId,
-        <<"alias">> => Alias,
+        <<"fullName">> => FullName,
+        <<"username">> => gs_protocol:undefined_to_null(Username),
+
         % TODO VFS-4506 deprecated fields, included for backward compatibility
-        <<"login">> => Alias
+        <<"name">> => FullName,
+        <<"login">> => gs_protocol:undefined_to_null(Username),
+        <<"alias">> => gs_protocol:undefined_to_null(Username)
     });
 
 get_response(#gri{aspect = oz_privileges}, Privileges) ->
@@ -119,4 +143,17 @@ get_response(#gri{aspect = handles}, Handles) ->
     rest_translator:ok_body_reply(#{<<"handles">> => Handles});
 
 get_response(#gri{aspect = eff_handles}, Handles) ->
-    rest_translator:ok_body_reply(#{<<"handles">> => Handles}).
+    rest_translator:ok_body_reply(#{<<"handles">> => Handles});
+
+get_response(#gri{aspect = harvesters}, Harvesters) ->
+    rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters});
+
+get_response(#gri{aspect = eff_harvesters}, Harvesters) ->
+    rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters});
+
+
+get_response(#gri{aspect = clusters}, Clusters) ->
+    rest_translator:ok_body_reply(#{<<"clusters">> => Clusters});
+
+get_response(#gri{aspect = eff_clusters}, Clusters) ->
+    rest_translator:ok_body_reply(#{<<"clusters">> => Clusters}).

@@ -13,10 +13,11 @@
 -author("Michal Zmuda").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
--export([to_string/1]).
+-export([to_string/1, print_summary/0, print_summary/1]).
 -export([entity_logic_plugin/0]).
 
 %% datastore_model callbacks
@@ -118,6 +119,57 @@ to_string(SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Prints all space records to the console in a nicely-formatted manner.
+%% Sorts the records in a default manner.
+%% @end
+%%--------------------------------------------------------------------
+-spec print_summary() -> ok.
+print_summary() ->
+    print_summary(name).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Prints all space records to the console in a nicely-formatted manner.
+%% Sorts the records by given attribute (specified by name or position).
+%% @end
+%%--------------------------------------------------------------------
+-spec print_summary(id | name | users | groups | shares | providers | support | pos_integer()) -> ok.
+print_summary(id) -> print_summary(1);
+print_summary(name) -> print_summary(2);
+print_summary(users) -> print_summary(3);
+print_summary(groups) -> print_summary(4);
+print_summary(shares) -> print_summary(5);
+print_summary(providers) -> print_summary(6);
+print_summary(support) -> print_summary(7);
+print_summary(SortPos) when is_integer(SortPos) ->
+    {ok, Spaces} = list(),
+    SpaceAttrs = lists:map(fun(#document{key = Id, value = S}) ->
+        {
+            Id,
+            S#od_space.name,
+            {maps:size(S#od_space.users), maps:size(S#od_space.eff_users)},
+            {maps:size(S#od_space.groups), maps:size(S#od_space.eff_groups)},
+            length(S#od_space.shares),
+            maps:size(S#od_space.providers),
+            lists:sum(maps:values(S#od_space.providers))
+        }
+    end, Spaces),
+    Sorted = lists:keysort(SortPos, SpaceAttrs),
+    io:format("---------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("Id                                Name                      Users (eff)    Groups (eff)   Shares   Providers   Tot. support~n"),
+    io:format("---------------------------------------------------------------------------------------------------------------------------~n"),
+    lists:foreach(fun({Id, Name, {Users, EffUsers}, {Groups, EffGroups}, Shares, Providers, Support}) ->
+        UsersStr = str_utils:format("~B (~B)", [Users, EffUsers]),
+        GroupsStr = str_utils:format("~B (~B)", [Groups, EffGroups]),
+        io:format("~-33s ~-25ts ~-14s ~-14s ~-8B ~-11B ~-14s~n", [
+            Id, Name, UsersStr, GroupsStr, Shares, Providers, str_utils:format_byte_size(Support)
+        ])
+    end, Sorted),
+    io:format("---------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("~B spaces in total~n", [length(Sorted)]).
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Returns the entity logic plugin module that handles model logic.
 %% @end
 %%--------------------------------------------------------------------
@@ -136,7 +188,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    3.
+    4.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -171,9 +223,38 @@ get_record_struct(2) ->
         {bottom_up_dirty, boolean}
     ]};
 get_record_struct(3) ->
-    % There are no changes, but all records must be marked dirty to recalculate
-    % effective relations (as intermediaries computing logic has changed).
-    get_record_struct(2).
+    % The structure does not change, but all records must be marked dirty to
+    % recalculate effective relations (as intermediaries computing logic has changed).
+    get_record_struct(2);
+get_record_struct(4) ->
+    % * new field - creation_time
+    % * new field - creator
+    % * new field - harvesters       
+    % * new field - eff harvesters
+    % * privileges are translated
+    {record, [
+        {name, string},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {providers, #{string => integer}},
+        {shares, [string]},
+        {harvesters, [string]}, % New field
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}}, % New field
+
+        {creation_time, integer}, % New field
+        {creator, {record, [ % New field
+            {type, atom},
+            {id, string}
+        ]}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -198,26 +279,112 @@ upgrade_record(1, Space) ->
         _TopDownDirty,
         _BottomUpDirty
     } = Space,
-    {2, #od_space{
-        name = Name,
+    {2, {od_space,
+        Name,
 
-        users = maps:from_list(Users),
-        groups = maps:from_list(Groups),
-        providers = maps:from_list(ProviderSupports),
-        shares = Shares,
+        maps:from_list(Users),
+        maps:from_list(Groups),
+        maps:from_list(ProviderSupports),
+        Shares,
 
-        eff_users = #{},
-        eff_groups = #{},
-        eff_providers = #{},
+        #{},
+        #{},
+        #{},
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        true,
+        true
     }};
 upgrade_record(2, Space) ->
-    {3, Space#od_space{
-        eff_users = #{},
-        eff_groups = #{},
-        eff_providers = #{},
+    {od_space,
+        Name,
+
+        Users,
+        Groups,
+        ProviderSupports,
+        Shares,
+
+        _EffUsers,
+        _EffGroups,
+        _EffProviders,
+
+        _TopDownDirty,
+        _BottomUpDirty
+    } = Space,
+    {3, {od_space,
+        Name,
+
+        Users,
+        Groups,
+        ProviderSupports,
+        Shares,
+
+        #{},
+        #{},
+        #{},
+
+        true,
+        true
+    }};
+upgrade_record(3, Space) ->
+    {
+        od_space,
+        Name,
+
+        Users,
+        Groups,
+        Providers,
+        Shares,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+
+        _TopDownDirty,
+        _BottomUpDirty
+
+    } = Space,
+
+    % These new privileges are given to all users and groups, because before
+    % introduction they all were allowed to perform related operations
+    NewPrivileges = [
+        ?SPACE_READ_DATA,
+        ?SPACE_MANAGE_INDEXES, ?SPACE_QUERY_INDEXES,
+        ?SPACE_VIEW_STATISTICS
+    ],
+
+    TranslatePrivileges = fun(Privileges) ->
+        privileges:union(NewPrivileges, lists:flatten(lists:map(fun
+            (space_view) -> [?SPACE_VIEW, ?SPACE_VIEW_PRIVILEGES];
+            (space_invite_user) -> [?SPACE_ADD_USER];
+            (space_invite_group) -> [?SPACE_ADD_GROUP];
+            (space_invite_provider) -> [?SPACE_ADD_PROVIDER];
+            (Other) -> Other
+        end, Privileges)))
+    end,
+
+    TranslateField = fun(Field) ->
+        maps:map(fun
+            (_, {Privs, Relation}) -> {TranslatePrivileges(Privs), Relation};
+            (_, Privs) -> TranslatePrivileges(Privs)
+        end, Field)
+    end,
+
+    {4, #od_space{
+        name = Name,
+
+        users = TranslateField(Users),
+        groups = TranslateField(Groups),
+        providers = Providers,
+        shares = Shares,
+        harvesters = [],
+
+        eff_users = TranslateField(EffUsers),
+        eff_groups = TranslateField(EffGroups),
+        eff_providers = EffProviders,
+        eff_harvesters = #{},
+
+        creation_time = time_utils:system_time_seconds(),
+        creator = undefined,
 
         top_down_dirty = true,
         bottom_up_dirty = true

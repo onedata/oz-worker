@@ -6,14 +6,13 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This file contains tests concerning group spaces and providers
-%%% API (REST + logic + gs).
+%%% This file contains tests concerning group spaces API (REST + logic + gs).
 %%% @end
 %%%-------------------------------------------------------------------
 -module(group_spaces_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -65,7 +64,7 @@ list_spaces_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:group_create_space(Config, G1, ?SPACE_NAME1),
     {ok, S2} = oz_test_utils:group_create_space(Config, G1, ?SPACE_NAME1),
@@ -77,7 +76,8 @@ list_spaces_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_GROUPS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -109,7 +109,7 @@ get_space_details_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:group_create_space(Config, G1, ?SPACE_NAME1),
     ExpDetails = #{<<"name">> => ?SPACE_NAME1, <<"providers">> => #{}},
@@ -118,7 +118,8 @@ get_space_details_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_SPACES_VIEW]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -136,7 +137,7 @@ get_space_details_test(Config) ->
             module = group_logic,
             function = get_space,
             args = [client, G1, S1],
-            expected_result = ?OK_MAP(ExpDetails)
+            expected_result = ?OK_MAP_CONTAINS(ExpDetails)
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -159,14 +160,14 @@ get_space_details_test(Config) ->
 
 create_space_test(Config) ->
     % create group with 2 users:
-    %   U2 gets the GROUP_CREATE_SPACE privilege
+    %   U2 gets the GROUP_ADD_SPACE privilege
     %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_CREATE_SPACE
+        Config, ?GROUP_ADD_SPACE
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    AllPrivs = oz_test_utils:all_space_privileges(Config),
+    AllPrivs = privileges:space_privileges(),
     AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     VerifyFun = fun(SpaceId) ->
@@ -191,6 +192,7 @@ create_space_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_SPACES_CREATE, ?OZ_GROUPS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -244,12 +246,12 @@ create_space_test(Config) ->
 
 join_space_test(Config) ->
     % create group with 2 users:
-    %   U2 gets the GROUP_JOIN_SPACE privilege
+    %   U2 gets the GROUP_ADD_SPACE privilege
     %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
-        Config, ?GROUP_JOIN_SPACE
+        Config, ?GROUP_ADD_SPACE
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, SpaceId} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
@@ -277,6 +279,7 @@ join_space_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -375,7 +378,7 @@ leave_space_test(Config) ->
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_LEAVE_SPACE
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         {ok, S1} = oz_test_utils:group_create_space(
@@ -395,7 +398,8 @@ leave_space_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U2}
+                {user, U2},
+                {admin, [?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_SPACES_REMOVE_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -433,7 +437,8 @@ list_eff_spaces_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1}
+                {user, U1},
+                {admin, [?OZ_GROUPS_LIST_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -482,6 +487,7 @@ get_eff_space_details_test(Config) ->
                 client_spec = #client_spec{
                     correct = [
                         root,
+                        {admin, [?OZ_SPACES_VIEW]},
                         {user, U1}
                     ],
                     unauthorized = [nobody],
@@ -502,7 +508,7 @@ get_eff_space_details_test(Config) ->
                     module = group_logic,
                     function = get_eff_space,
                     args = [client, G1, SpaceId],
-                    expected_result = ?OK_MAP(SpaceDetails)
+                    expected_result = ?OK_MAP_CONTAINS(SpaceDetails)
                 },
                 gs_spec = #gs_spec{
                     operation = get,

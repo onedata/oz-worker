@@ -19,7 +19,6 @@
 -include_lib("hackney/include/hackney_lib.hrl").
 
 -export([
-    create_provider_registration_token/1,
     create/4, create/6, create/2, create_dev/2
 ]).
 -export([
@@ -35,7 +34,10 @@
 ]).
 -export([
     get_eff_users/2, get_eff_user/3,
+    get_eff_user_membership_intermediaries/3,
     get_eff_groups/2, get_eff_group/3,
+    get_eff_group_membership_intermediaries/3,
+    get_eff_harvesters/2,
     get_spaces/2, get_space/3,
     support_space/4, support_space/3,
     update_support_size/4,
@@ -57,6 +59,7 @@
     exists/1,
     has_eff_user/2,
     has_eff_group/2,
+    has_eff_harvester/2,
     supports_space/2
 ]).
 -export([
@@ -108,13 +111,12 @@ create(Client, Name, Domain, AdminEmail, Latitude, Longitude) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new provider document in database. Name, URLs, Domain and
-%% CSR (Certificate Signing Request) are provided in a
+%% Creates a new provider document in database. Required data is provided in a
 %% proper Data object, Latitude and Longitude are optional.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Client :: entity_logic:client(), Data :: #{}) ->
-    {ok, od_provider:id()} | {error, term()}.
+    {ok, {od_provider:id(), ProviderMacaroon :: macaroon:macaroon()}} | {error, term()}.
 create(Client, Data) ->
     Res = entity_logic:handle(#el_req{
         operation = create,
@@ -125,8 +127,8 @@ create(Client, Data) ->
     case Res of
         Error = {error, _} ->
             Error;
-        {ok, resource, {#gri{id = ProviderId}, {_, Certificate}}} ->
-            {ok, {ProviderId, Certificate}}
+        {ok, resource, {#gri{id = ProviderId}, {_, Macaroon}}} ->
+            {ok, {ProviderId, Macaroon}}
     end.
 
 
@@ -177,7 +179,7 @@ get(Client, ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_protected_data(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
-    {ok, maps:map()} | {error, term()}.
+    {ok, map()} | {error, term()}.
 get_protected_data(Client, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -231,22 +233,6 @@ delete(Client, ProviderId) ->
         client = Client,
         gri = #gri{type = od_provider, id = ProviderId, aspect = instance}
     }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates a provider registration token,
-%% which can be used by any provider to join Onezone.
-%% @end
-%%--------------------------------------------------------------------
--spec create_provider_registration_token(Client :: entity_logic:client()) ->
-    {ok, macaroon:macaroon()} | {error, term()}.
-create_provider_registration_token(Client) ->
-    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
-        operation = create,
-        client = Client,
-        gri = #gri{type = od_provider, aspect = provider_registration_token}
-    })).
 
 
 %%--------------------------------------------------------------------
@@ -319,7 +305,10 @@ set_dns_txt_record(Client, ProviderId, Name, Content, TTL) ->
         operation = create,
         client = Client,
         gri = #gri{type = od_provider, id = ProviderId, aspect = {dns_txt_record, Name}},
-        data = #{<<"content">> => Content, <<"ttl">> => TTL}
+        data = case TTL of
+            undefined -> #{<<"content">> => Content};
+            _ -> #{<<"content">> => Content, <<"ttl">> => TTL}
+        end
     }).
 
 %%--------------------------------------------------------------------
@@ -385,6 +374,23 @@ get_eff_user(Client, ProviderId, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Retrieves the membership intermediaries of specific effective user
+%% among effective users of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_user_membership_intermediaries(Client :: entity_logic:client(),
+    ProviderId :: od_provider:id(), UserId :: od_user:id()) ->
+    {ok, entity_graph:intermediaries()} | {error, term()}.
+get_eff_user_membership_intermediaries(Client, ProviderId, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {eff_user_membership, UserId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Retrieves the list of effective groups of given provider.
 %% @end
 %%--------------------------------------------------------------------
@@ -412,6 +418,38 @@ get_eff_group(Client, ProviderId, GroupId) ->
         client = Client,
         gri = #gri{type = od_group, id = GroupId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_PROVIDER(ProviderId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the membership intermediaries of specific effective group
+%% among effective groups of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_group_membership_intermediaries(Client :: entity_logic:client(),
+    ProviderId :: od_provider:id(), GroupId :: od_group:id()) ->
+    {ok, entity_graph:intermediaries()} | {error, term()}.
+get_eff_group_membership_intermediaries(Client, ProviderId, GroupId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {eff_group_membership, GroupId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of effective harvesters of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_eff_harvesters(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+    {ok, [od_harvester:id()]} | {error, term()}.
+get_eff_harvesters(Client, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        client = Client,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = eff_harvesters}
     }).
 
 
@@ -588,6 +626,19 @@ has_eff_group(Provider, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Predicate saying whether specified harvester is an effective harvester of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_harvester(ProviderOrId :: od_provider:id() | #od_provider{},
+    HarvesterId :: od_provider:id()) -> boolean().
+has_eff_harvester(ProviderId, HarvesterId) when is_binary(ProviderId) ->
+    entity_graph:has_relation(effective, bottom_up, od_harvester, HarvesterId, od_provider, ProviderId);
+has_eff_harvester(Provider, HarvesterId) ->
+    entity_graph:has_relation(effective, bottom_up, od_harvester, HarvesterId, Provider).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Predicate saying whether specified space is supported by given provider.
 %% @end
 %%--------------------------------------------------------------------
@@ -604,10 +655,12 @@ supports_space(Provider, SpaceId) ->
 %% Returns full provider URL.
 %% @end
 %%--------------------------------------------------------------------
--spec get_url(ProviderId :: od_provider:id()) -> {ok, ProviderURL :: binary()}.
+-spec get_url(od_provider:id() | od_provider:record()) -> {ok, ProviderURL :: binary()}.
+get_url(#od_provider{domain = Domain}) ->
+    {ok, str_utils:format_bin("https://~s", [Domain])};
 get_url(ProviderId) ->
-    {ok, #od_provider{domain = Domain}} = get(?ROOT, ProviderId),
-    {ok, str_utils:format_bin("https://~s", [Domain])}.
+    {ok, Provider} = get(?ROOT, ProviderId),
+    get_url(Provider).
 
 
 %%--------------------------------------------------------------------

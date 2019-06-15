@@ -12,6 +12,8 @@
 -ifndef(API_TEST_UTILS_HRL).
 -define(API_TEST_UTILS_HRL, 1).
 
+-include_lib("gui/include/gui_session.hrl").
+
 %% @formatter:off
 -type client() :: nobody | root | {user, UserId :: binary()} |
     {provider, ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}.
@@ -100,28 +102,19 @@
 %% Example test data
 -define(UNIQUE_STRING,
     <<
-        "unique",
+        "uniquestr",
         (integer_to_binary(erlang:unique_integer([positive])))/binary
     >>
 ).
 
--define(URL(__Config, __PathTokens),
-    begin
-        {ok, __Domain} = oz_test_utils:get_oz_domain(__Config),
-        {ok, __RestAPIPrefix} = oz_test_utils:get_rest_api_prefix(__Config),
-        __OzURL = str_utils:format_bin(
-            "https://~s~s", [__Domain, __RestAPIPrefix]
-        ),
-        str_utils:join_binary([__OzURL | __PathTokens], <<"">>)
-    end
-).
+-define(URL(Config, PathTokens), oz_test_utils:oz_rest_url(Config, PathTokens)).
 
 %% Example test data for users
--define(USER_NAME1, <<"user1">>).
--define(USER_NAME2, <<"user2">>).
--define(USER_NAME3, <<"user3">>).
--define(USER_ALIAS1, <<"alias1">>).
--define(USER_ALIAS2, <<"alias2">>).
+-define(USER_FULL_NAME1, <<"user1">>).
+-define(USER_FULL_NAME2, <<"user2">>).
+-define(USER_FULL_NAME3, <<"user3">>).
+-define(USER_USERNAME1, <<"username1">>).
+-define(USER_USERNAME2, <<"username2">>).
 
 %% Example test data for groups
 -define(GROUP_NAME1, <<"group1">>).
@@ -263,8 +256,77 @@
     }
 ).
 
--define(BAD_VALUES_NAME(Error),
-    [{<<"name">>, <<"">>, Error},
+%% Example test data for harvesters
+-define(HARVESTER_NAME1, <<"harvester1">>).
+-define(HARVESTER_NAME2, <<"harvester2">>).
+-define(HARVESTER_ENDPOINT1, <<"test.endpoint1:9200">>).
+-define(HARVESTER_ENDPOINT2, <<"test.endpoint2">>).
+-define(HARVESTER_MOCK_PLUGIN_BINARY, <<"harvester_mock_plugin">>).
+-define(HARVESTER_MOCK_PLUGIN, binary_to_atom(?HARVESTER_MOCK_PLUGIN_BINARY, utf8)).
+-define(HARVESTER_MOCK_PLUGIN2_BINARY, <<"harvester_mock_plugin2">>).
+-define(HARVESTER_MOCK_PLUGIN2, binary_to_atom(?HARVESTER_MOCK_PLUGIN2_BINARY, utf8)).
+-define(HARVESTER_PLUGIN, elasticsearch_plugin).
+-define(HARVESTER_PLUGIN_BINARY, atom_to_binary(?HARVESTER_PLUGIN, utf8)).
+-define(HARVESTER_GUI_PLUGIN_CONFIG, #{<<"a">>=><<"b">>}).
+
+-define(HARVESTER_INDEX_NAME, <<"index_name">>).
+-define(HARVESTER_INDEX_SCHEMA, <<"{ \"mappings\": { \"properties\": { \"foo\": { \"type\": \"keyword\" } } } }">>).
+-define(HARVESTER_INDEX_CREATE_DATA(Name), #{
+    <<"name">> => Name,
+    <<"schema">> => ?HARVESTER_INDEX_SCHEMA
+}).
+-define(HARVESTER_INDEX_CREATE_DATA, ?HARVESTER_INDEX_CREATE_DATA(?HARVESTER_INDEX_NAME)).
+
+-define(HARVESTER_PROTECTED_DATA(HarvesterName),
+    #{
+        <<"name">> => HarvesterName,
+        <<"endpoint">> => ?HARVESTER_ENDPOINT1,
+        <<"plugin">> => ?HARVESTER_MOCK_PLUGIN_BINARY,
+        <<"public">> => false
+    }).
+
+-define(HARVESTER_CREATE_DATA(HarvesterName, HarvesterPlugin),
+    #{
+        <<"name">> => HarvesterName,
+        <<"endpoint">> => ?HARVESTER_ENDPOINT1,
+        <<"plugin">> => HarvesterPlugin,
+        <<"guiPluginConfig">> => ?HARVESTER_GUI_PLUGIN_CONFIG
+    }).
+-define(HARVESTER_CREATE_DATA(HarvesterName), ?HARVESTER_CREATE_DATA(HarvesterName, ?HARVESTER_MOCK_PLUGIN_BINARY)).
+-define(HARVESTER_CREATE_DATA, ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)).
+
+-define(HARVESTER_MOCKED_QUERY_DATA_MAP, #{<<"key">> => <<"mocked_query_data">>}).
+
+-define(FAILED_INDICES(Indices, DefaultSeq), lists:foldl(
+    fun({Index, Seq}, Acc) -> Acc#{Index => Seq};
+       (Index, Acc) -> Acc#{Index => DefaultSeq} end,
+    #{}, Indices)).
+-define(NO_FAILED_INDICES, ?FAILED_INDICES([], 0)).
+
+-define(HARVESTER_BATCH(FileId), [
+    #{<<"seq">> => 1, <<"operation">> => submit, <<"fileId">> => FileId, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 2, <<"operation">> => delete, <<"fileId">> => FileId, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 3, <<"operation">> => submit, <<"fileId">> => FileId, <<"payload">> => <<"invalid_json">>},
+    #{<<"seq">> => 4, <<"operation">> => delete, <<"fileId">> => FileId, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 5, <<"operation">> => submit, <<"fileId">> => FileId, <<"payload">> => <<"{\"valid\":\"json\"}">>},
+    #{<<"seq">> => 6, <<"operation">> => submit, <<"fileId">> => FileId, <<"payload">> => #{}}
+]).
+
+-define(EMPTY_INDEX_STATS, ?EMPTY_INDEX_STATS(false)).
+-define(EMPTY_INDEX_STATS(Archival), #{
+    <<"currentSeq">> => 0,
+    <<"maxSeq">> => 0,
+    <<"lastUpdate">> => null,
+    <<"error">> => null,
+    <<"archival">> => Archival
+}).
+
+-define(HARVESTER_PLUGIN_INDEX_ID(H, I), <<H/binary, I/binary>>).
+
+-define(HARVESTER_MOCK_BATCH_ENTRY(Seq, Operation), #{<<"seq">> => Seq, <<"operation">> => Operation}).
+
+-define(BAD_VALUES_NAME(Error), [
+    {<<"name">>, <<"">>, Error},
     {<<"name">>, <<"a">>, Error},
     {<<"name">>, <<"-asd">>, Error},
     {<<"name">>, <<"/asd">>, Error},
@@ -274,7 +336,26 @@
     {<<"name">>, <<"very_very_very_long_name_with_at_lest_50_characters">>, Error},
     {<<"name">>, <<".asd">>, Error},
     {<<"name">>, <<"asd ">>, Error},
-    {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)}]).
+    {<<"name">>, <<" asd ">>, Error},
+    {<<"name">>, <<" asd">>, Error},
+    {<<"name">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"name">>)}
+]).
+
+-define(BAD_VALUES_FULL_NAME(Error), [
+    {<<"fullName">>, <<"">>, Error},
+    {<<"fullName">>, <<"T">>, Error},
+    {<<"fullName">>, <<"-Tom">>, Error},
+    {<<"fullName">>, <<"/Tom">>, Error},
+    {<<"fullName">>, <<":Tom">>, Error},
+    {<<"fullName">>, <<"Tom★">>, Error},
+    {<<"fullName">>, <<"Tom-">>, Error},
+    {<<"fullName">>, <<"very_very_very_long_fullName_with_at_lest_50_characters">>, Error},
+    {<<"fullName">>, <<".Tom">>, Error},
+    {<<"fullName">>, <<"Tom ">>, Error},
+    {<<"fullName">>, <<" Tom ">>, Error},
+    {<<"fullName">>, <<" Tom">>, Error},
+    {<<"fullName">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"fullName">>)}
+]).
 
 -define(CORRECT_NAME, <<"_πœę ßþą_śðæŋ-əłżź.ćńµジ(ャパル)パスで 日本を- 旅す.る()"/utf8>>).
 

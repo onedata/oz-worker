@@ -12,7 +12,7 @@
 -module(share_api_test_SUITE).
 -author("Bartosz Walkowicz").
 
--include("rest.hrl").
+-include("http/rest.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -35,7 +35,8 @@
     create_test/1,
     get_test/1,
     update_test/1,
-    delete_test/1
+    delete_test/1,
+    public_share_page_test/1
 ]).
 
 all() ->
@@ -44,7 +45,8 @@ all() ->
         list_test,
         get_test,
         update_test,
-        delete_test
+        delete_test,
+        public_share_page_test
     ]).
 
 
@@ -57,12 +59,8 @@ list_test(Config) ->
     % Make sure that shares created in other tests are deleted.
     oz_test_utils:delete_all_entities(Config),
 
-    {ok, U1} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [
-        ?OZ_SHARES_LIST
-    ]),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME2),
@@ -81,7 +79,7 @@ list_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin}
+                {admin, [?OZ_SHARES_LIST]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -126,20 +124,20 @@ create_test(Config) ->
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_MANAGE_SHARES
     ),
-    {ok, U3} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
-    oz_test_utils:space_set_user_privileges(Config, S1, U3, set, [
+    oz_test_utils:space_set_user_privileges(Config, S1, U3, [
         ?SPACE_MANAGE_SHARES
-    ]),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    ], []),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    ExpShareDetails = #od_share{
-        name = ?CORRECT_NAME, space = S1, root_file = ?ROOT_FILE_ID
-    },
     VerifyFun = fun(ShareId) ->
         {ok, Share} = oz_test_utils:get_share(Config, ShareId),
         PublicURL = oz_test_utils:get_share_public_url(Config, ShareId),
-        ?assertEqual(ExpShareDetails#od_share{public_url = PublicURL}, Share),
+        ?assertMatch(#od_share{
+            name = ?CORRECT_NAME, space = S1,
+            root_file = ?ROOT_FILE_ID, public_url = PublicURL
+        }, Share),
         true
     end,
 
@@ -171,7 +169,7 @@ create_test(Config) ->
                 VerifyFun(ShareId)
             end
         },
-        logic_spec = LogicSpec = #logic_spec{
+        logic_spec = #logic_spec{
             module = share_logic,
             function = create,
             args = [client, data],
@@ -205,7 +203,7 @@ create_test(Config) ->
             },
             bad_values = lists:append([
                 [{<<"spaceId">>, <<"">>, ?ERROR_FORBIDDEN},
-                {<<"spaceId">>, <<"asdq4ewfs">>, ?ERROR_FORBIDDEN}],
+                    {<<"spaceId">>, <<"asdq4ewfs">>, ?ERROR_FORBIDDEN}],
                 BadDataValues,
                 ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)])
         }
@@ -215,17 +213,19 @@ create_test(Config) ->
     % Root client bypasses authorization checks,
     % hence wrong values of handleServiceId or resourceId
     % cause validation errors rather than authorization errors.
-    RootApiTestSpec = #api_test_spec{
+    RootApiTestSpec = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
-            correct = [root]
-        },
-        logic_spec = LogicSpec,
-        data_spec = DataSpec#data_spec{
-            bad_values = [
-                {<<"spaceId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"spaceId">>)},
-                {<<"spaceId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"spaceId">>)}
-                | BadDataValues
+            correct = [
+                {admin, [?OZ_SHARES_CREATE]},
+                root
             ]
+        },
+        data_spec = DataSpec#data_spec{
+            bad_values = lists:append([
+                [{<<"spaceId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"spaceId">>)},
+                    {<<"spaceId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"spaceId">>)}],
+                BadDataValues,
+                ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)])
         }
     },
     ?assert(api_test_utils:run_tests(Config, RootApiTestSpec)).
@@ -236,13 +236,9 @@ get_test(Config) ->
     %   U2 gets the SPACE_MANAGE_SHARES privilege
     %   U1 gets all remaining privileges
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
-        Config, ?SPACE_MANAGE_SHARES
+        Config, ?SPACE_VIEW
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
-    {ok, Admin} = oz_test_utils:create_user(Config, #od_user{}),
-    oz_test_utils:user_set_oz_privileges(Config, Admin, set, [
-        ?OZ_SHARES_LIST
-    ]),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, ShareId} = oz_test_utils:create_share(
         Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
@@ -250,7 +246,7 @@ get_test(Config) ->
     SharePublicURL = oz_test_utils:get_share_public_url(Config, ShareId),
     SharePublicDetails = #{
         <<"name">> => ?SHARE_NAME1, <<"publicUrl">> => SharePublicURL,
-        <<"rootFileId">> => ?ROOT_FILE_ID, <<"handleId">> => undefined
+        <<"rootFileId">> => ?ROOT_FILE_ID, <<"handleId">> => null
     },
     SharePrivateDetails = SharePublicDetails#{<<"spaceId">> => S1},
 
@@ -259,12 +255,12 @@ get_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, Admin},
-                {user, U2},
-                {user, U1}
+                {admin, [?OZ_SHARES_VIEW]},
+                {user, U2}
             ],
             unauthorized = [nobody],
             forbidden = [
+                {user, U1},
                 {user, NonAdmin}
             ]
         },
@@ -273,8 +269,7 @@ get_test(Config) ->
             path = [<<"/shares/">>, ShareId],
             expected_code = ?HTTP_200_OK,
             expected_body = SharePrivateDetails#{
-                % TODO VFS-3922
-                <<"handleId">> => <<"undefined">>,
+                <<"handleId">> => null,
                 <<"shareId">> => ShareId
             }
         },
@@ -311,12 +306,12 @@ get_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
 
     % Get and check public data
-    GetSharedDataApiTestSpec = #api_test_spec{
+    GetPublicDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
                 nobody,
-                {user, Admin},
+                {admin, [?OZ_SHARES_VIEW]},
                 {user, NonAdmin},
                 {user, U1},
                 {user, U2}
@@ -326,11 +321,23 @@ get_test(Config) ->
             module = share_logic,
             function = get_public_data,
             args = [client, ShareId],
-            expected_result = ?OK_MAP(SharePublicDetails)
+            expected_result = ?OK_MAP_CONTAINS(SharePublicDetails)
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = od_share, id = ShareId, aspect = instance, scope = public},
+            expected_result = ?OK_MAP_CONTAINS(SharePublicDetails#{
+                <<"handleId">> => null,
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = oz_test_utils:decode_gri(
+                        Config, EncodedGri
+                    ),
+                    ?assertEqual(ShareId, Id)
+                end
+            })
         }
-        % TODO gs
     },
-    ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec)).
 
 
 update_test(Config) ->
@@ -340,7 +347,7 @@ update_test(Config) ->
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_MANAGE_SHARES
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         ShareId = ?UNIQUE_STRING,
@@ -362,6 +369,7 @@ update_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_SHARES_UPDATE]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -404,7 +412,7 @@ delete_test(Config) ->
     {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
         Config, ?SPACE_MANAGE_SHARES
     ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config, #od_user{}),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
         ShareId = ?UNIQUE_STRING,
@@ -425,6 +433,7 @@ delete_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {admin, [?OZ_SHARES_DELETE]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -453,6 +462,49 @@ delete_test(Config) ->
     ?assert(api_test_scenarios:run_scenario(delete_entity,
         [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
     )).
+
+
+public_share_page_test(Config) ->
+    Domain = <<"oneprovider.example.com">>,
+    ProviderData = #{
+        <<"name">> => ?PROVIDER_NAME1,
+        <<"adminEmail">> => <<"admin@oneprovider.example.com">>,
+        <<"domain">> => Domain,
+        <<"subdomainDelegation">> => false
+    },
+    {ok, {NewProvider, _}} = oz_test_utils:create_provider(
+        Config, ProviderData
+    ),
+    NewClusterId = NewProvider,
+    {DummyGuiHash, _IndexContent} = oz_test_utils:deploy_dummy_gui(Config, ?OP_WORKER_GUI),
+    ok = oz_test_utils:call_oz(Config, cluster_logic, update_version_info, [
+        ?PROVIDER(NewProvider), NewClusterId, ?WORKER, {<<"19.02.1">>, <<"build-123">>, DummyGuiHash}
+    ]),
+
+    % Providers without updated version info are treated as legacy
+    {ok, {LegacyProvider, _}} = oz_test_utils:create_provider(
+        Config, ProviderData
+    ),
+
+    {ok, User} = oz_test_utils:create_user(Config),
+
+    {ok, NewSpace} = oz_test_utils:create_space(Config, ?USER(User), ?UNIQUE_STRING),
+    oz_test_utils:support_space(Config, NewProvider, NewSpace),
+    {ok, NewShare} = oz_test_utils:create_share(
+        Config, ?USER(User), ?UNIQUE_STRING, <<"share1">>, <<"rootFile1">>, NewSpace
+    ),
+
+    {ok, LegacySpace} = oz_test_utils:create_space(Config, ?USER(User), ?UNIQUE_STRING),
+    oz_test_utils:support_space(Config, LegacyProvider, LegacySpace),
+    {ok, LegacyShare} = oz_test_utils:create_share(
+        Config, ?USER(User), ?UNIQUE_STRING, <<"share1">>, <<"rootFile1">>, LegacySpace
+    ),
+
+    NewRedirectURl = oz_test_utils:call_oz(Config, share_logic, share_id_to_redirect_url, [NewShare]),
+    LegacyRedirectURl = oz_test_utils:call_oz(Config, share_logic, share_id_to_redirect_url, [LegacyShare]),
+
+    ?assertEqual(NewRedirectURl, str_utils:format_bin("https://~s/share/~s", [Domain, NewShare])),
+    ?assertEqual(LegacyRedirectURl, str_utils:format_bin("https://~s/#/public/shares/~s", [Domain, LegacyShare])).
 
 
 %%%===================================================================

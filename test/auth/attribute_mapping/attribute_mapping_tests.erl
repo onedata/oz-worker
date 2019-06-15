@@ -43,7 +43,7 @@ setup() ->
 
     meck:new(my_attr_mapper, [non_strict]),
     meck:expect(my_attr_mapper, map_attribute, fun
-        (?DUMMY_IDP, name, IdPAttributes) ->
+        (?DUMMY_IDP, fullName, IdPAttributes) ->
             {ok, maps:get(<<"displayName">>, IdPAttributes, <<"">>)};
         (?DUMMY_IDP, emails, _IdPAttributes) ->
             {ok, []};
@@ -61,11 +61,11 @@ teardown(_) ->
 
 
 get_mocked_attribute_mapping_cfg() ->
-    application:get_env(oz_worker, mocked_attribute_mapping_cfg, #{}).
+    oz_worker:get_env(mocked_attribute_mapping_cfg, #{}).
 
 
 set_mocked_attribute_mapping_cfg(Cfg) ->
-    application:set_env(oz_worker, mocked_attribute_mapping_cfg, Cfg).
+    oz_worker:set_env(mocked_attribute_mapping_cfg, Cfg).
 
 
 %%%===================================================================
@@ -104,7 +104,7 @@ run_test_cases(CaseNum) ->
 
 test_case(1, config) -> #{
     subjectId => {required, "id"},
-    name => {optional, {any, ["name", "surName"]}},
+    fullName => {optional, {any, ["name", "surName"]}},
     emails => {required, "mail"},
     entitlements => {optional, "groups"},
     custom => {optional, {keyValue, "custom"}}
@@ -114,7 +114,7 @@ test_case(1, attributes) -> #{
     <<"name">> => <<"John">>,
     <<"surName">> => <<"Doe">>,
     <<"fullName">> => <<"John Doe">>,
-    <<"login">> => <<"jodoe">>,
+    <<"username">> => <<"jodoe">>,
     <<"mail">> => <<"jodoe@example.com">>,
     <<"groups">> => [<<"some/nested/structure">>],
     <<"roles">> => <<"admins">>,
@@ -123,8 +123,8 @@ test_case(1, attributes) -> #{
 test_case(1, expected) -> #linked_account{
     idp = ?DUMMY_IDP,
     subject_id = <<"abcdef">>,
-    name = <<"John">>,
-    alias = undefined,
+    full_name = <<"John">>,
+    username = undefined,
     emails = [<<"jodoe@example.com">>],
     entitlements = [<<"some/nested/structure">>],
     custom = #{<<"custom">> => [1, 2, 3, <<"a">>, <<"b">>, <<"c">>]}
@@ -133,8 +133,8 @@ test_case(1, expected) -> #linked_account{
 %% ------------------------------------
 test_case(2, config) -> #{
     subjectId => {required, {any, ["id", "uid", "eduPersonUniqueName"]}},
-    name => {optional, {any, ["name", "surName"]}},
-    alias => undefined,
+    fullName => {optional, {any, ["name", "surName"]}},
+    username => undefined,
     emails => {required, "mail"},
     entitlements => {optional, "groups"},
     custom => {optional, {keyValue, "custom"}}
@@ -144,7 +144,7 @@ test_case(2, attributes) -> #{
     <<"name">> => <<"John">>,
     <<"surName">> => <<"Doe">>,
     <<"fullName">> => <<"John Doe">>,
-    <<"login">> => <<"jodoe">>,
+    <<"username">> => <<"jodoe">>,
     <<"mail">> => <<"jodoe@example.com">>,
     <<"groups">> => [<<"some/nested/structure">>],
     <<"roles">> => <<"admins">>,
@@ -155,8 +155,8 @@ test_case(2, expected) -> ?ERROR_CANNOT_RESOLVE_REQUIRED_ATTRIBUTE(subjectId);
 %% ------------------------------------
 test_case(3, config) -> #{
     subjectId => {required, "id"},
-    name => {required, {any, ["name", "surName"]}},
-    alias => undefined,
+    fullName => {required, {any, ["name", "surName"]}},
+    username => undefined,
     emails => {required, "mail"},
     entitlements => {optional, "groups"},
     custom => {optional, {keyValue, "custom"}}
@@ -164,20 +164,20 @@ test_case(3, config) -> #{
 test_case(3, attributes) -> #{
     <<"id">> => <<"abcdef">>,
     <<"surName">> => [12345, <<"abc">>],
-    <<"login">> => <<"jodoe">>,
+    <<"username">> => <<"jodoe">>,
     <<"mail">> => <<"jodoe@example.com">>,
     <<"groups">> => [<<"some/nested/structure">>],
     <<"roles">> => <<"admins">>,
     <<"custom">> => [1, 2, 3, <<"a">>, <<"b">>, <<"c">>]
 };
-test_case(3, expected) -> ?ERROR_BAD_ATTRIBUTE_TYPE(name, binary_or_undef);
+test_case(3, expected) -> ?ERROR_BAD_ATTRIBUTE_TYPE(fullName, binary_or_undef);
 %% ------------------------------------
 %% ------------------------------------
 test_case(4, config) -> #{
     subjectId => {required, "id"},
     % string cannot be appended to JSON
-    name => {required, {append, ["name", {keyValue, "jsonKey", "custom"}]}},
-    alias => undefined,
+    fullName => {required, {append, ["name", {keyValue, "jsonKey", "custom"}]}},
+    username => undefined,
     emails => {required, "mail"},
     entitlements => {optional, "groups"},
     custom => {optional, {keyValue, "custom"}}
@@ -187,14 +187,14 @@ test_case(4, attributes) -> #{
     <<"name">> => <<"John">>,
     <<"surName">> => <<"Doe">>,
     <<"fullName">> => <<"John Doe">>,
-    <<"login">> => <<"jodoe">>,
+    <<"username">> => <<"jodoe">>,
     <<"mail">> => <<"jodoe@example.com">>,
     <<"groups">> => [<<"some/nested/structure">>],
     <<"roles">> => <<"admins">>,
     <<"custom">> => [1, 2, 3, <<"a">>, <<"b">>, <<"c">>]
 };
 test_case(4, expected) -> fun
-    (?ERROR_ATTRIBUTE_MAPPING_ERROR(name, _, _, _, _)) -> true;
+    (?ERROR_ATTRIBUTE_MAPPING_ERROR(fullName, _, _, _, _)) -> true;
     (_) -> false
 end;
 %% ------------------------------------
@@ -227,7 +227,7 @@ test_case(5, expected) ->
 %% ------------------------------------
 test_case(6, config) -> #{
     subjectId => {required, "id"},
-    alias => undefined,
+    username => undefined,
     emails => {required, {any, [{concat, [{str, "dummy-idp:"}, "mail"]}, "validMail"]}},
     custom => {required, {keyValue, "customAttrs", "custom"}}
 };
@@ -236,7 +236,7 @@ test_case(6, attributes) -> #{
     <<"name">> => <<"John">>,
     <<"surName">> => <<"Doe">>,
     <<"fullName">> => <<"John Doe">>,
-    <<"login">> => <<"jodoe">>,
+    <<"username">> => <<"jodoe">>,
     <<"mail">> => #{<<"emailFormatThatWouldCrashTheMappingRules">> => 12345},
     <<"validMail">> => <<"jodoe@example.com">>,
     <<"groups">> => [<<"some/nested/structure">>],
@@ -246,8 +246,8 @@ test_case(6, attributes) -> #{
 test_case(6, expected) -> #linked_account{
     idp = ?DUMMY_IDP,
     subject_id = <<"abcdef">>,
-    name = undefined,
-    alias = undefined,
+    full_name = undefined,
+    username = undefined,
     emails = [<<"jodoe@example.com">>],
     entitlements = [],
     custom = #{<<"customAttrs">> => [1, 2, 3, <<"a">>, <<"b">>, <<"c">>]}
@@ -256,8 +256,8 @@ test_case(6, expected) -> #linked_account{
 %% ------------------------------------
 test_case(7, config) -> #{
     subjectId => {required, {any, ["sub", "id"]}},
-    name => {optional, {concat, [{str, "Prefix "}, "name", {str, " "}, "surName"]}},
-    alias => {required, {str, "literal-alias"}},
+    fullName => {optional, {concat, [{str, "Prefix "}, "name", {str, " "}, "surName"]}},
+    username => {required, {str, "literal-username"}},
     emails => {required, {append, ["emails", "mainEmail"]}},
     entitlements => {optional, {filter, "^#.*", "groups"}}
 };
@@ -266,7 +266,7 @@ test_case(7, attributes) -> #{
     <<"name">> => <<"John">>,
     <<"surName">> => <<"Doe">>,
     <<"fullName">> => <<"John Doe">>,
-    <<"login">> => <<"jodoe">>,
+    <<"username">> => <<"jodoe">>,
     <<"emails">> => [<<"j@example.com">>, <<"doe@example.com">>],
     <<"mainEmail">> => <<"jodoe@example.com">>,
     <<"groups">> => [
@@ -281,8 +281,8 @@ test_case(7, attributes) -> #{
 test_case(7, expected) -> #linked_account{
     idp = ?DUMMY_IDP,
     subject_id = <<"abcdef">>,
-    name = <<"Prefix John Doe">>,
-    alias = <<"literal-alias">>,
+    full_name = <<"Prefix John Doe">>,
+    username = <<"literal-username">>,
     emails = [<<"j@example.com">>, <<"doe@example.com">>, <<"jodoe@example.com">>],
     entitlements = [<<"#g1-with-hash">>, <<"#g2-with-hash">>],
     custom = #{}
@@ -291,8 +291,8 @@ test_case(7, expected) -> #linked_account{
 %% ------------------------------------
 test_case(8, config) -> #{
     subjectId => {required, {any, ["sub", "id"]}},
-    name => {optional, {replace, "'", "", "fullName"}},
-    alias => {optional, {nested, ["alias", "value"]}},
+    fullName => {optional, {replace, "'", "", "fullName"}},
+    username => {optional, {nested, ["username", "value"]}},
     entitlements => {optional, {replace, "#", "", {filter, "^#.*", "groups"}}},
     custom => {required, {append, ["custom", "organization"]}}
 };
@@ -301,7 +301,7 @@ test_case(8, attributes) -> #{
     <<"name">> => <<"John">>,
     <<"surName">> => <<"Mc'Donald">>,
     <<"fullName">> => <<"John Mc'Donald">>,
-    <<"alias">> => #{
+    <<"username">> => #{
         <<"value">> => <<"jodoe">>
     },
     <<"emails">> => [<<"j@example.com">>, <<"doe@example.com">>],
@@ -324,8 +324,8 @@ test_case(8, attributes) -> #{
 test_case(8, expected) -> #linked_account{
     idp = ?DUMMY_IDP,
     subject_id = <<"abcdef">>,
-    name = <<"John McDonald">>,
-    alias = <<"jodoe">>,
+    full_name = <<"John McDonald">>,
+    username = <<"jodoe">>,
     emails = [],
     entitlements = [<<"g1-with-hash">>, <<"g2-with-hash">>],
     custom = #{
@@ -339,8 +339,8 @@ test_case(8, expected) -> #linked_account{
 test_case(9, config) -> #{
     subjectId => {required, {any, ["uid", {concat, [{str, "dummy-idp:"}, "eduPersonUniqueId"]}]}},
     % Custom mapper (simply picks "displayName"), see the setup/1 function
-    name => {plugin, my_attr_mapper},
-    alias => {required, "eduPersonPrincipalName"},
+    fullName => {plugin, my_attr_mapper},
+    username => {required, "eduPersonPrincipalName"},
     % Custom mapper (always returns an empty list), see the setup/1 function
     emails => {plugin, my_attr_mapper},
     entitlements => {optional, {append, [
@@ -378,8 +378,8 @@ test_case(9, attributes) -> #{
 test_case(9, expected) -> #linked_account{
     idp = ?DUMMY_IDP,
     subject_id = <<"dummy-idp:abcdef">>,
-    name = <<"John">>,
-    alias = <<"jodoe">>,
+    full_name = <<"John">>,
+    username = <<"jodoe">>,
     emails = [],
     entitlements = [<<"group#g1-with-hash">>, <<"group#g2-with-hash">>, <<"role#admin">>, <<"role#CTO">>],
     custom = #{
@@ -396,8 +396,8 @@ test_case(9, expected) -> #linked_account{
 %% ------------------------------------
 test_case(10, config) -> #{
     subjectId => {required, {any, ["sub", "id"]}},
-    name => {required, {join, " ", {str_list, ["John", "Doe,", "Jr."]}}},
-    alias => undefined,
+    fullName => {required, {join, " ", {str_list, ["John", "Doe,", "Jr."]}}},
+    username => undefined,
     emails => {optional, "emails"},
     entitlements => {required, {append, [
         {concat, [
@@ -428,8 +428,8 @@ test_case(10, attributes) -> #{
 test_case(10, expected) -> #linked_account{
     idp = ?DUMMY_IDP,
     subject_id = <<"abcdef">>,
-    name = <<"John Doe, Jr.">>,
-    alias = undefined,
+    full_name = <<"John Doe, Jr.">>,
+    username = undefined,
     emails = [],
     entitlements = [
         <<"team:team1#76">>,
@@ -449,8 +449,8 @@ test_case(10, expected) -> #linked_account{
 %% ------------------------------------
 test_case(11, config) -> #{
     subjectId => {required, {any, ["sub", "id"]}},
-    name => {required, {join, " ", "name"}},
-    alias => undefined,
+    fullName => {required, {join, " ", "name"}},
+    username => undefined,
     emails => {optional, "emails"},
     entitlements => undefined,
     custom => {required, {nested, ["attr1", "nestedAttrs", {list, "nestedListAttr"}, "value"]}}
@@ -470,8 +470,8 @@ test_case(11, attributes) -> #{
 test_case(11, expected) -> #linked_account{
     idp = ?DUMMY_IDP,
     subject_id = <<"abcdef">>,
-    name = <<"John Doe">>,
-    alias = undefined,
+    full_name = <<"John Doe">>,
+    username = undefined,
     emails = [],
     entitlements = [],
     custom = [<<"value1">>, <<"value2">>, <<"value3">>]
@@ -508,8 +508,8 @@ test_case(12, attributes) -> #{
 test_case(12, expected) -> #linked_account{
     idp = ?DUMMY_IDP,
     subject_id = <<"abddef">>,
-    name = undefined,
-    alias = undefined,
+    full_name = undefined,
+    username = undefined,
     emails = [],
     entitlements = [
         <<"a:some/1">>,
@@ -523,8 +523,8 @@ test_case(12, expected) -> #linked_account{
 %% ------------------------------------
 test_case(13, config) -> #{
     subjectId => {required, {replace, "c", "x", "id"}},
-    name => {optional, {any, ["fullName", {join, " ", "nameTokens"}]}},
-    alias => undefined,
+    fullName => {optional, {any, ["fullName", {join, " ", "nameTokens"}]}},
+    username => undefined,
     emails => {required, {filter, ".*@my.org", {split, ",", "emails"}}},
     entitlements => {optional, {concat, [
         {str_list, ["a", "b", "c", "d"]},
@@ -542,7 +542,7 @@ test_case(13, config) -> #{
 test_case(13, attributes) -> #{
     <<"id">> => <<"abcdef1c2c3c4c">>,
     <<"nameTokens">> => [<<"John">>, <<"Doe">>, <<"Jr">>],
-    <<"alias">> => <<"jodoe">>,
+    <<"username">> => <<"jodoe">>,
     <<"groups">> => [
         <<"some">>,
         <<"entitlement">>,
@@ -568,8 +568,8 @@ test_case(13, attributes) -> #{
 test_case(13, expected) -> #linked_account{
     idp = ?DUMMY_IDP,
     subject_id = <<"abxdef1x2x3x4x">>,
-    name = <<"John Doe Jr">>,
-    alias = undefined,
+    full_name = <<"John Doe Jr">>,
+    username = undefined,
     emails = [<<"john.doe@my.org">>],
     entitlements = [
         <<"a:some/1">>,

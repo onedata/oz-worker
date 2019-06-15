@@ -16,13 +16,14 @@
 
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
--export([fetch_entity/1, operation_supported/3]).
+-export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
--export([exists/2, authorize/2, validate/1]).
+-export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
 
 %%%===================================================================
 %%% API
@@ -55,6 +56,17 @@ operation_supported(_, _, _) -> false.
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Determines if given {Aspect, Scope} pair is subscribable, i.e. clients can
+%% subscribe to receive updates concerning the aspect of entity.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
+    boolean().
+is_subscribable(_, _) -> false.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
@@ -72,16 +84,16 @@ create(_Req) ->
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = configuration}}, _) ->
-    CompatibleOpVersions = oz_worker:get_env(compatible_op_versions, []),
-    CompatibleOpVersionsBin = [list_to_binary(V) || V <- CompatibleOpVersions],
-    SubdomainDelegationEnabled = oz_worker:get_env(subdomain_delegation_enabled, true),
+    Version = oz_worker:get_release_version(),
+    {ok, CompatibleOpVersions} = compatibility:get_compatible_versions(?ONEZONE, Version, ?ONEPROVIDER),
+    SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
     {ok, #{
-        name => oz_worker:get_name(),
-        version => oz_worker:get_version(),
+        name => gs_protocol:undefined_to_null(oz_worker:get_name()),
+        version => Version,
         build => oz_worker:get_build_version(),
         domain => oz_worker:get_domain(),
-        compatibleOneproviderVersions => CompatibleOpVersionsBin,
-        subdomainDelegationSupported => SubdomainDelegationEnabled,
+        compatibleOneproviderVersions => CompatibleOpVersions,
+        subdomainDelegationSupported => SubdomainDelegationSupported,
         supportedIdPs => auth_config:get_supported_idps_in_configuration_format()
     }}.
 
@@ -132,6 +144,15 @@ authorize(#el_req{operation = get, gri = #gri{aspect = configuration}}, _) ->
 
 authorize(_Req = #el_req{}, _) ->
     false.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns list of admin privileges needed to perform given operation.
+%% @end
+%%--------------------------------------------------------------------
+-spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
+required_admin_privileges(_) -> [].
 
 
 %%--------------------------------------------------------------------

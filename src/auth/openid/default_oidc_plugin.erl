@@ -175,7 +175,7 @@ get_user_info(IdP, AccessToken) ->
 
     Headers1 = case Parameters2 of
         Map when map_size(Map) == 0 -> #{};
-        _ -> #{<<"Content-Type">> => <<"application/x-www-form-urlencoded">>}
+        _ -> #{<<"content-type">> => <<"application/x-www-form-urlencoded">>}
     end,
     Headers2 = headers_append_access_token(Headers1, IdP, AccessToken),
     Headers3 = headers_append_custom(Headers2, IdP, userInfo),
@@ -209,32 +209,32 @@ acquire_access_token(IdP, Parameters) ->
     Parameters3 = parameters_append_custom(Parameters2, IdP, accessToken),
 
     Headers1 = #{
-        <<"Content-Type">> => <<"application/x-www-form-urlencoded">>
+        <<"content-type">> => <<"application/x-www-form-urlencoded">>
     },
     Headers2 = headers_append_auth(Headers1, IdP),
     Headers3 = headers_append_custom(Headers2, IdP, accessToken),
 
     AccessTokenEndpoint = idp_endpoint(IdP, accessToken),
     Method = ?CFG_ACCESS_TOKEN_ACQUIRE_METHOD(IdP),
-    {ResponseHeaders, ResponseBinary} = openid_protocol:request_idp(
+    {RespHeaders, RespBinary} = openid_protocol:request_idp(
         Method, 200, AccessTokenEndpoint, Headers3, Parameters3
     ),
 
-    case maps:get(<<"Content-Type">>, ResponseHeaders, undefined) of
-        <<"application/x-www-form-urlencoded", _/binary>> ->
-            Response = cow_qs:parse_qs(ResponseBinary),
+    case maps:get(<<"content-type">>, RespHeaders, maps:get(<<"Content-Type">>, RespHeaders, undefined)) of
+        <<"application/json", _/binary>> ->
+            Response = json_utils:decode(RespBinary),
+            AccessToken = maps:get(<<"access_token">>, Response, undefined),
+            ExpiresIn = maps:get(<<"expires_in">>, Response, ?ASSUMED_TOKEN_LIFESPAN),
+            RefreshToken = maps:get(<<"refresh_token">>, Response, undefined),
+            {AccessToken, time_utils:cluster_time_seconds() + ExpiresIn, RefreshToken};
+        _ ->
+            Response = cow_qs:parse_qs(RespBinary),
             AccessToken = proplists:get_value(<<"access_token">>, Response, undefined),
             ExpiresIn = case proplists:get_value(<<"expires_in">>, Response, undefined) of
                 undefined -> ?ASSUMED_TOKEN_LIFESPAN;
                 ValueBin -> binary_to_integer(ValueBin)
             end,
             RefreshToken = proplists:get_value(<<"refresh_token">>, Response, undefined),
-            {AccessToken, time_utils:cluster_time_seconds() + ExpiresIn, RefreshToken};
-        _ ->
-            Response = json_utils:decode(ResponseBinary),
-            AccessToken = maps:get(<<"access_token">>, Response, undefined),
-            ExpiresIn = maps:get(<<"expires_in">>, Response, ?ASSUMED_TOKEN_LIFESPAN),
-            RefreshToken = maps:get(<<"refresh_token">>, Response, undefined),
             {AccessToken, time_utils:cluster_time_seconds() + ExpiresIn, RefreshToken}
     end.
 
@@ -302,7 +302,7 @@ resolve_endpoint(_IdP, Url) ->
 
 
 %% @private
--spec get_xrds(auth_config:idp()) -> maps:map().
+-spec get_xrds(auth_config:idp()) -> map().
 get_xrds(IdP) ->
     {ok, Xrds} = simple_cache:get({cached_xrds, IdP}, fun() ->
         {true, fetch_xrds(IdP), ?XRDS_CACHE_TTL}
@@ -311,7 +311,7 @@ get_xrds(IdP) ->
 
 
 %% @private
--spec fetch_xrds(auth_config:idp()) -> maps:map().
+-spec fetch_xrds(auth_config:idp()) -> map().
 fetch_xrds(IdP) ->
     XrdsEndpoint = ?CFG_XRDS_ENDPOINT(IdP),
     Params = parameters_append_custom(#{}, IdP, xrds),
@@ -331,7 +331,7 @@ headers_append_auth(Headers, IdP) ->
             ClientId = ?CFG_CLIENT_ID(IdP),
             ClientSecret = ?CFG_CLIENT_SECRET(IdP),
             B64 = base64:encode(<<ClientId/binary, ":", ClientSecret/binary>>),
-            Headers#{<<"Authorization">> => <<"Basic ", B64/binary>>};
+            Headers#{<<"authorization">> => <<"Basic ", B64/binary>>};
         urlencoded ->
             Headers
     end.
@@ -343,7 +343,7 @@ headers_append_auth(Headers, IdP) ->
 headers_append_access_token(Headers, IdP, AccessToken) ->
     case ?CFG_ACCESS_TOKEN_PASS_METHOD(IdP) of
         inAuthHeader ->
-            Headers#{<<"Authorization">> => <<"Bearer ", AccessToken/binary>>};
+            Headers#{<<"authorization">> => <<"Bearer ", AccessToken/binary>>};
         urlencoded ->
             Headers
     end.

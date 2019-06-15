@@ -35,7 +35,7 @@
 -spec get_login_endpoint(auth_config:idp(), state_token:id()) ->
     {ok, #{binary() => binary() | null}}.
 get_login_endpoint(IdP, State) ->
-    SPConfig = auth_config:get_saml_sp_config(),
+    {ok, SPConfig} = auth_config:get_saml_sp_config(),
     IdpConfig = auth_config:get_saml_idp_config(IdP),
     LoginLocation = case IdpConfig#esaml_idp.preferred_sso_binding of
         http_redirect ->
@@ -77,7 +77,7 @@ get_login_endpoint(IdP, State) ->
 -spec validate_login(auth_config:idp(), auth_logic:query_params()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
 validate_login(IdP, QueryParams) ->
-    SPConfig = auth_config:get_saml_sp_config(),
+    {ok, SPConfig} = auth_config:get_saml_sp_config(),
     IdPConfig = auth_config:get_saml_idp_config(IdP),
 
     % Check url params for state parameter and validate it

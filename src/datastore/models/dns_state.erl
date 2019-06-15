@@ -58,7 +58,7 @@
 set_delegation_config(ProviderId, Subdomain, IPs) ->
     Result = case is_subdomain_reserved(Subdomain) of
         true ->
-            ?info("Refusing to register provider subdomain ~s as it is reserved", [Subdomain]),
+            ?info("Refusing to register provider subdomain '~s' as it is reserved", [Subdomain]),
             {error, subdomain_exists};
         false ->
             Diff = fun(DnsState) ->

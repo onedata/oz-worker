@@ -19,7 +19,7 @@
 -include_lib("ctool/include/logging.hrl").
 
 % String that will be placed in macaroons' location field
--define(MACAROONS_LOCATION, <<"onezone">>).
+-define(MACAROONS_LOCATION, oz_worker:get_domain()).
 
 %% API
 -export([get_redirection_uri/2, get_redirection_uri/3]).
@@ -44,11 +44,9 @@ authenticate_user(Identifier) ->
     case onedata_auth:get(Identifier) of
         {ok, #document{value = #onedata_auth{secret = Secret}}} ->
 
-            {ok, ExpirationSecs} = oz_worker:get_env(
-                authentication_macaroon_expiration_seconds),
+            ExpirationSecs = oz_worker:get_env(authentication_macaroon_expiration_seconds),
 
-            Location = ?MACAROONS_LOCATION,
-            M = macaroon:create(Location, Secret, Identifier),
+            M = macaroon:create(?MACAROONS_LOCATION, Secret, Identifier),
             M2 = macaroon:add_first_party_caveat(M,
                 ["time < ", integer_to_binary(time_utils:cluster_time_seconds() + ExpirationSecs)]),
 
@@ -220,6 +218,7 @@ generate_state_token(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
 lookup_state_token(Token) ->
     state_token:lookup(Token).
 
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -234,17 +233,14 @@ lookup_state_token(Token) ->
 -spec create_macaroon(Secret :: iodata(), Identifier :: iodata(),
     Caveats :: [iodata()]) -> macaroon:macaroon().
 create_macaroon(Secret, Identifier, Caveats) ->
-    {ok, ExpirationSeconds} = oz_worker:get_env(
-        authorization_macaroon_expiration_seconds),
+    ExpirationSeconds = oz_worker:get_env(authorization_macaroon_expiration_seconds),
     ExpirationTime = time_utils:cluster_time_seconds() + ExpirationSeconds,
-
-    Location = ?MACAROONS_LOCATION,
 
     lists:foldl(
         fun(Caveat, Macaroon) ->
             macaroon:add_first_party_caveat(Macaroon, Caveat)
         end,
-        macaroon:create(Location, Secret, Identifier),
+        macaroon:create(?MACAROONS_LOCATION, Secret, Identifier),
         [["time < ", integer_to_binary(ExpirationTime)] | Caveats]).
 
 %%--------------------------------------------------------------------
