@@ -98,7 +98,7 @@ list_parents_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_parents,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_LIST(ExpGroups)
         }
         % TODO gs
@@ -170,7 +170,7 @@ create_parent_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = create_parent_group,
-            args = [client, Child, data],
+            args = [auth, Child, data],
             expected_result = ?OK_ENV(fun(_, Data) ->
                 ?OK_TERM(fun(ParentId) -> VerifyFun(ParentId, Data) end)
             end)
@@ -228,7 +228,7 @@ join_parent_test(Config) ->
         {ok, Macaroon} = oz_test_utils:group_invite_group_token(
             Config, ?ROOT, Child
         ),
-        {ok, Token} = onedata_macaroons:serialize(Macaroon),
+        {ok, Token} = macaroons:serialize(Macaroon),
         Token
     end,
 
@@ -237,7 +237,7 @@ join_parent_test(Config) ->
         {ok, Macaroon} = oz_test_utils:group_invite_group_token(
             Config, ?ROOT, Group
         ),
-        {ok, Token} = onedata_macaroons:serialize(Macaroon),
+        {ok, Token} = macaroons:serialize(Macaroon),
         #{
             groupId => Group,
             macaroonId => macaroon:identifier(Macaroon),
@@ -284,7 +284,7 @@ join_parent_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = join_group,
-            args = [client, Child, data],
+            args = [auth, Child, data],
             expected_result = ?OK_ENV(fun(#{groupId := GroupId} = _Env, _) ->
                 ?OK_BINARY(GroupId)
             end)
@@ -318,7 +318,7 @@ join_parent_test(Config) ->
     {ok, Macaroon1} = oz_test_utils:group_invite_group_token(
         Config, ?ROOT, Group
     ),
-    {ok, Token} = onedata_macaroons:serialize(Macaroon1),
+    {ok, Token} = macaroons:serialize(Macaroon1),
     oz_test_utils:group_add_group(Config, Group, Child),
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
@@ -334,7 +334,7 @@ join_parent_test(Config) ->
         logic_spec = LogicSpec = #logic_spec{
             module = group_logic,
             function = join_group,
-            args = [client, Child, data],
+            args = [auth, Child, data],
             expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_group, Child, od_group, Group))
         },
         % TODO gs
@@ -355,7 +355,7 @@ join_parent_test(Config) ->
     {ok, Macaroon2} = oz_test_utils:group_invite_group_token(
         Config, ?ROOT, Child
     ),
-    {ok, Token2} = onedata_macaroons:serialize(Macaroon2),
+    {ok, Token2} = macaroons:serialize(Macaroon2),
     ApiTestSpec2 = ApiTestSpec1#api_test_spec{
         logic_spec = LogicSpec#logic_spec{
             expected_result = ?ERROR_REASON(?ERROR_CANNOT_ADD_RELATION_TO_SELF)
@@ -413,7 +413,7 @@ leave_parent_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = leave_group,
-            args = [client, Child, groupId],
+            args = [auth, Child, groupId],
             expected_result = ?OK
         }
         % TODO gs
@@ -464,7 +464,7 @@ get_parent_details_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_parent,
-            args = [client, Group, ParentGroup],
+            args = [auth, Group, ParentGroup],
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME2,
                 <<"type">> => ?GROUP_TYPE2
@@ -520,7 +520,7 @@ list_eff_parents_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_eff_parents,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_LIST(ExpGroups)
         }
         % TODO gs
@@ -578,7 +578,7 @@ get_eff_parent_details_test(Config) ->
                 logic_spec = #logic_spec{
                     module = group_logic,
                     function = get_eff_parent,
-                    args = [client, G1, GroupId],
+                    args = [auth, G1, GroupId],
                     expected_result = ?OK_MAP_CONTAINS(GroupDetails)
                 },
                 gs_spec = #gs_spec{

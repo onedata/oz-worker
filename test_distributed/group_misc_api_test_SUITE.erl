@@ -106,7 +106,7 @@ create_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = create,
-            args = [client, data],
+            args = [auth, data],
             expected_result = ?OK_ENV(fun(_, DataSet) ->
                 ExpType = maps:get(<<"type">>, DataSet, ?DEFAULT_GROUP_TYPE),
                 ?OK_TERM(fun(GroupId) -> VerifyFun(GroupId, ExpType) end)
@@ -182,7 +182,7 @@ list_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = list,
-            args = [client],
+            args = [auth],
             expected_result = ?OK_LIST(ExpGroups)
         }
         % TODO gs
@@ -240,7 +240,7 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_TERM(
                 fun(#od_group{
                     name = Name, type = Type,
@@ -312,7 +312,7 @@ get_test(Config) ->
         logic_spec = LogicSpec = #logic_spec{
             module = group_logic,
             function = get_shared_data,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1
@@ -409,7 +409,7 @@ update_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = update,
-            args = [client, groupId, data],
+            args = [auth, groupId, data],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -479,7 +479,7 @@ delete_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = delete,
-            args = [client, groupId],
+            args = [auth, groupId],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -517,7 +517,7 @@ protected_group_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = delete,
-            args = [client, GroupId],
+            args = [auth, GroupId],
             expected_result = ?ERROR_REASON(?ERROR_PROTECTED_GROUP)
         },
         gs_spec = #gs_spec{
@@ -568,7 +568,7 @@ get_oz_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_oz_privileges,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -619,7 +619,7 @@ update_oz_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = update_oz_privileges,
-            args = [client, G1, data],
+            args = [auth, G1, data],
             expected_result = ?OK
         }
         % TODO gs
@@ -667,7 +667,7 @@ delete_oz_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = delete_oz_privileges,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK
         }
         % TODO gs
@@ -732,7 +732,7 @@ get_eff_oz_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_eff_oz_privileges,
-            args = [client, Bottom],
+            args = [auth, Bottom],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -774,7 +774,7 @@ list_eff_providers_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_eff_providers,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_LIST(ExpProviders)
         }
         % TODO gs
@@ -826,7 +826,7 @@ get_eff_provider_test(Config) ->
                 logic_spec = #logic_spec{
                     module = group_logic,
                     function = get_eff_provider,
-                    args = [client, G1, ProvId],
+                    args = [auth, G1, ProvId],
                     expected_result = ?OK_MAP_CONTAINS(ProvDetails)
                 }
                 % @todo gs
@@ -889,7 +889,7 @@ get_spaces_in_eff_provider_test(Config) ->
                 logic_spec = #logic_spec{
                     module = group_logic,
                     function = get_spaces_in_eff_provider,
-                    args = [client, GroupId, ProviderId],
+                    args = [auth, GroupId, ProviderId],
                     expected_result = ?OK_LIST(GroupSpaces)
                 }
                 % @todo gs

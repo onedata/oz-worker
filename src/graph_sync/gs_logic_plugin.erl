@@ -24,8 +24,7 @@
 
 %% API
 -export([verify_handshake_auth/1]).
--export([client_to_identity/1, root_client/0]).
--export([client_connected/3, client_disconnected/3]).
+-export([client_connected/2, client_disconnected/2]).
 -export([verify_auth_override/2]).
 -export([is_authorized/5]).
 -export([handle_rpc/4]).
@@ -41,17 +40,17 @@
 %% {@link gs_logic_plugin_behaviour} callback verify_handshake_auth/1.
 %% @end
 %%--------------------------------------------------------------------
--spec verify_handshake_auth(gs_protocol:auth()) ->
-    {ok, gs_protocol:client(), gs_server:connection_info()} | gs_protocol:error().
+-spec verify_handshake_auth(gs_protocol:client_auth()) ->
+    {ok, aai:auth()} | gs_protocol:error().
 verify_handshake_auth(undefined) ->
-    {ok, ?NOBODY, undefined};
+    {ok, ?NOBODY};
 verify_handshake_auth({macaroon, Macaroon, DischargeMacaroons}) ->
-    case auth_logic:authorize_by_onezone_gui_macaroon(Macaroon) of
-        {true, Client, SessionId} ->
-            {ok, Client, SessionId};
+    case auth_logic:authorize_by_oz_worker_gui_token(Macaroon) of
+        {true, Auth} ->
+            {ok, Auth};
         {error, _} ->
             case auth_logic:authorize_by_macaroons(Macaroon, DischargeMacaroons) of
-                {true, Client} -> {ok, Client, undefined};
+                {true, Auth} -> {ok, Auth};
                 {error, _} -> ?ERROR_UNAUTHORIZED
             end
     end.
@@ -59,33 +58,12 @@ verify_handshake_auth({macaroon, Macaroon, DischargeMacaroons}) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link gs_logic_plugin_behaviour} callback client_to_identity/1.
-%% @end
-%%--------------------------------------------------------------------
--spec client_to_identity(gs_protocol:client()) -> gs_protocol:identity().
-client_to_identity(?NOBODY) -> nobody;
-client_to_identity(?USER(UserId)) -> {user, UserId};
-client_to_identity(?PROVIDER(ProviderId)) -> {provider, ProviderId}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% {@link gs_logic_plugin_behaviour} callback root_client/0.
-%% @end
-%%--------------------------------------------------------------------
--spec root_client() -> gs_protocol:client().
-root_client() ->
-    ?ROOT.
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% {@link gs_logic_plugin_behaviour} callback client_connected/2.
 %% @end
 %%--------------------------------------------------------------------
--spec client_connected(gs_protocol:client(), gs_server:connection_info(), gs_server:conn_ref()) ->
+-spec client_connected(aai:auth(), gs_server:conn_ref()) ->
     ok.
-client_connected(?PROVIDER(ProvId), _, ConnectionRef) ->
+client_connected(?PROVIDER(ProvId), ConnectionRef) ->
     {ok, ProviderRecord} = provider_logic:get(?ROOT, ProvId),
     ?info("Provider '~ts' has connected (~s)", [ProviderRecord#od_provider.name, ProvId]),
     provider_connection:add_connection(ProvId, ConnectionRef),
@@ -96,9 +74,9 @@ client_connected(?PROVIDER(ProvId), _, ConnectionRef) ->
         ProvId,
         ProviderRecord
     );
-client_connected(?USER, SessionId, ConnectionRef) ->
+client_connected(?USER = #auth{session_id = SessionId}, ConnectionRef) ->
     user_connections:add(SessionId, ConnectionRef);
-client_connected(_, _, _) ->
+client_connected(_, _) ->
     ok.
 
 
@@ -107,9 +85,9 @@ client_connected(_, _, _) ->
 %% {@link gs_logic_plugin_behaviour} callback client_disconnected/2.
 %% @end
 %%--------------------------------------------------------------------
--spec client_disconnected(gs_protocol:client(), gs_server:connection_info(), gs_server:conn_ref()) ->
+-spec client_disconnected(aai:auth(), gs_server:conn_ref()) ->
     ok.
-client_disconnected(?PROVIDER(ProvId), _, _ConnectionRef) ->
+client_disconnected(?PROVIDER(ProvId), _ConnectionRef) ->
     case provider_logic:get(?ROOT, ProvId) of
         {ok, ProviderRecord = #od_provider{name = Name}} ->
             ?info("Provider '~ts' went offline (~s)", [Name, ProvId]),
@@ -126,9 +104,9 @@ client_disconnected(?PROVIDER(ProvId), _, _ConnectionRef) ->
             ?info("Provider '~s' went offline", [ProvId])
     end,
     provider_connection:remove_connection(ProvId);
-client_disconnected(?USER, SessionId, ConnectionRef) ->
+client_disconnected(?USER = #auth{session_id = SessionId}, ConnectionRef) ->
     user_connections:remove(SessionId, ConnectionRef);
-client_disconnected(_, _, _) ->
+client_disconnected(_, _) ->
     ok.
 
 
@@ -137,18 +115,18 @@ client_disconnected(_, _, _) ->
 %% {@link gs_logic_plugin_behaviour} callback verify_auth_override/2.
 %% @end
 %%--------------------------------------------------------------------
--spec verify_auth_override(gs_protocol:client(), gs_protocol:auth_override()) ->
-    {ok, gs_protocol:client()} | gs_protocol:error().
-verify_auth_override(Client, {macaroon, Macaroon, DischMacaroons}) ->
+-spec verify_auth_override(aai:auth(), gs_protocol:auth_override()) ->
+    {ok, aai:auth()} | gs_protocol:error().
+verify_auth_override(Auth, {macaroon, Macaroon, DischMacaroons}) ->
     case auth_logic:authorize_by_macaroons(Macaroon, DischMacaroons) of
-        {true, OverrideClient1} ->
-            {ok, OverrideClient1};
+        {true, OverridenAuth1} ->
+            {ok, OverridenAuth1};
         {error, _} = Error1 ->
-            case Client of
+            case Auth of
                 ?PROVIDER(ProviderId) ->
-                    case auth_logic:authorize_by_gui_macaroon(Macaroon, ?ONEPROVIDER, ProviderId) of
-                        {true, OverrideClient2, _SessionId} ->
-                            {ok, OverrideClient2};
+                    case auth_logic:authorize_by_gui_token(Macaroon, ?AUD(?OP_WORKER, ProviderId)) of
+                        {true, OverridenAuth2} ->
+                            {ok, OverridenAuth2};
                         {error, _} = Error2 ->
                             Error2
                     end;
@@ -166,12 +144,12 @@ verify_auth_override(_, _) ->
 %% {@link gs_logic_plugin_behaviour} callback is_authorized/5.
 %% @end
 %%--------------------------------------------------------------------
--spec is_authorized(gs_protocol:client(), gs_protocol:auth_hint(),
+-spec is_authorized(aai:auth(), gs_protocol:auth_hint(),
     gs_protocol:gri(), gs_protocol:operation(), gs_protocol:data()) ->
     {true, gs_protocol:gri()} | false.
-is_authorized(Client, AuthHint, GRI, Operation, Entity) ->
+is_authorized(Auth, AuthHint, GRI, Operation, Entity) ->
     ElReq = #el_req{
-        client = Client,
+        auth = Auth,
         operation = Operation,
         gri = GRI,
         auth_hint = AuthHint
@@ -184,7 +162,7 @@ is_authorized(Client, AuthHint, GRI, Operation, Entity) ->
 %% {@link gs_logic_plugin_behaviour} callback handle_rpc/4.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_rpc(gs_protocol:protocol_version(), gs_protocol:client(),
+-spec handle_rpc(gs_protocol:protocol_version(), aai:auth(),
     gs_protocol:rpc_function(), gs_protocol:rpc_args()) ->
     gs_protocol:rpc_result().
 handle_rpc(_, _, <<"authorizeUser">>, Args) ->
@@ -220,7 +198,7 @@ handle_rpc(_, _, <<"getSupportedIdPs">>, Data) ->
                 <<"idps">> => auth_config:get_supported_idps_in_gui_format()
             }}
     end;
-handle_rpc(_, Client, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
+handle_rpc(_, Auth, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
     case oz_worker:get_env(dev_mode, false) of
         true ->
             {ok, #{
@@ -234,7 +212,7 @@ handle_rpc(_, Client, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
                 false ->
                     false;
                 true ->
-                    ?USER(UserId) = Client,
+                    ?USER(UserId) = Auth,
                     {true, UserId}
             end,
             RedirectAfterLogin = maps:get(<<"redirectUrl">>, Data, <<?AFTER_LOGIN_PAGE_PATH>>),
@@ -258,12 +236,12 @@ handle_rpc(_, _, _, _) ->
 %% {@link gs_logic_plugin_behaviour} callback handle_graph_request/6.
 %% @end
 %%--------------------------------------------------------------------
--spec handle_graph_request(gs_protocol:client(), gs_protocol:auth_hint(),
+-spec handle_graph_request(aai:auth(), gs_protocol:auth_hint(),
     gs_protocol:gri(), gs_protocol:operation(), gs_protocol:data(),
     gs_protocol:entity()) -> gs_protocol:graph_request_result().
-handle_graph_request(Client, AuthHint, GRI, Operation, Data, Entity) ->
+handle_graph_request(Auth, AuthHint, GRI, Operation, Data, Entity) ->
     ElReq = #el_req{
-        client = Client,
+        auth = Auth,
         operation = Operation,
         gri = GRI,
         data = Data,

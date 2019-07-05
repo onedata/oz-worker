@@ -30,24 +30,24 @@
 -spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
     {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
-create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id = ProvId}, {_, Macaroon}}) ->
-    {ok, MacaroonBin} = onedata_macaroons:serialize(Macaroon),
+create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id = ProvId}, {_, Token}}) ->
+    {ok, Serialized} = tokens:serialize(Token),
 
     rest_translator:ok_body_reply(#{
         <<"providerId">> => ProvId,
-        <<"macaroon">> => MacaroonBin
+        <<"macaroon">> => Serialized
     });
 
-create_response(#gri{id = undefined, aspect = instance_dev}, _, resource, {#gri{id = ProvId}, {_, Macaroon}}) ->
-    {ok, MacaroonBin} = onedata_macaroons:serialize(Macaroon),
+create_response(#gri{id = undefined, aspect = instance_dev}, _, resource, {#gri{id = ProvId}, {_, Token}}) ->
+    {ok, Serialized} = tokens:serialize(Token),
     rest_translator:ok_body_reply(#{
         <<"providerId">> => ProvId,
-        <<"macaroon">> => MacaroonBin
+        <<"macaroon">> => Serialized
     });
 
-create_response(#gri{aspect = provider_registration_token}, _, value, Macaroon) ->
-    {ok, Token} = onedata_macaroons:serialize(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
+create_response(#gri{aspect = provider_registration_token}, _, value, Token) ->
+    {ok, Serialized} = macaroons:serialize(Token),
+    rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
 create_response(#gri{aspect = support}, _, resource, {#gri{id = SpaceId}, _}) ->
     rest_translator:created_reply([<<"provider">>, <<"spaces">>, SpaceId]);

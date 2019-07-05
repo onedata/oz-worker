@@ -108,7 +108,7 @@ create_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = create,
-            args = [client, data],
+            args = [auth, data],
             expected_result = ?OK_ENV(fun(_Env, Data) ->
                 ExpProperties = maps:get(<<"serviceProperties">>, Data),
                 ?OK_TERM(fun(Result) -> VerifyFun(Result, ExpProperties) end)
@@ -213,7 +213,7 @@ list_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = list,
-            args = [client],
+            args = [auth],
             expected_result = ?OK_LIST(ExpHServices)
         }
         % TODO gs
@@ -262,7 +262,7 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get,
-            args = [client, HService],
+            args = [auth, HService],
             expected_result = ?OK_TERM(
                 fun(#od_handle_service{
                     name = Name, proxy_endpoint = ProxyEndpoint,
@@ -333,7 +333,7 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_protected_data,
-            args = [client, HService],
+            args = [auth, HService],
             expected_result = ?OK_MAP_CONTAINS(?DOI_SERVICE)
         }
         % TODO gs
@@ -394,7 +394,7 @@ update_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = update,
-            args = [client, hserviceId, data],
+            args = [auth, hserviceId, data],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -481,7 +481,7 @@ delete_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = delete,
-            args = [client, hserviceId],
+            args = [auth, hserviceId],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -548,7 +548,7 @@ list_handles_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_handles,
-            args = [client, HService],
+            args = [auth, HService],
             expected_result = ?OK_LIST(ExpHandles)
         }
         % TODO gs
@@ -597,7 +597,7 @@ get_handle_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_handle,
-            args = [client, HService, HandleId],
+            args = [auth, HService, HandleId],
             expected_result = ?OK_MAP_CONTAINS(HandleDetails)
         }
         % TODO gs

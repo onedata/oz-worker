@@ -19,18 +19,16 @@
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
--export([create/1]).
+-export([create/4]).
 -export([lookup/1]).
 -export([ttl/0]).
 
 %% model_behaviour callbacks
 -export([init/0]).
 
--type id() :: binary().
--type record() :: #state_token{}.
--type doc() :: datastore_doc:doc(record()).
+-type state_token() :: binary(). % Used as id in the database
 -type state_info() :: map().
--export_type([doc/0, record/0, id/0, state_info/0]).
+-export_type([state_token/0, state_info/0]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -43,19 +41,32 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new state token with current timestamp and saves state info
-%% connected with it.
+%% Creates a new state token with current timestamp and associates some login
+%% info, that can be later retrieved given the token.
+%%  IdP:                id of the IdentityProvider to which the login process is related
+%%  LinkAccount:        whether this is a linking account flow
+%%                      (if so, includes UserId of the subject user)
+%%  RedirectAfterLogin: the URL to which the user will be redirected after successful login
+%%  TestMode:           specifies whether this is a test login flow
 %% @end
 %%--------------------------------------------------------------------
--spec create(state_info()) -> {ok, id()} | datastore:create_error().
-create(StateInfo) ->
-    {ok, #document{key = Token}} = datastore_model:create(?CTX, #document{
+-spec create(auth_config:idp(), LinkAccount :: false | {true, od_user:id()},
+    RedirectAfterLogin :: binary(), TestMode :: boolean()) ->
+    {ok, state_token()}.
+create(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
+    StateInfo = #{
+        idp => IdP,
+        link_account => LinkAccount,
+        redirect_after_login => RedirectAfterLogin,
+        test_mode => TestMode
+    },
+    {ok, #document{key = StateToken}} = datastore_model:create(?CTX, #document{
         value = #state_token{
             timestamp = time_utils:cluster_time_seconds(),
             state_info = StateInfo
         }
     }),
-    {ok, Token}.
+    {ok, StateToken}.
 
 
 %%--------------------------------------------------------------------
@@ -66,12 +77,12 @@ create(StateInfo) ->
 %% The token (if present) is immediately consumed as it is a one-shot token.
 %% @end
 %%--------------------------------------------------------------------
--spec lookup(id()) -> {ok, state_info()} | error.
-lookup(Token) ->
-    case datastore_model:get(?CTX, Token) of
+-spec lookup(state_token()) -> {ok, state_info()} | error.
+lookup(StateToken) ->
+    case datastore_model:get(?CTX, StateToken) of
         {ok, #document{value = #state_token{timestamp = T, state_info = Info}}} ->
             % The token is consumed immediately
-            datastore_model:delete(?CTX, Token),
+            datastore_model:delete(?CTX, StateToken),
             % Check if the token is still valid
             case time_utils:cluster_time_seconds() - T =< ttl() of
                 true -> {ok, Info};

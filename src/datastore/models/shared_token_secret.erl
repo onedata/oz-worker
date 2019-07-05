@@ -1,23 +1,24 @@
 %%%-------------------------------------------------------------------
 %%% @author Lukasz Opiola
-%%% @copyright (C) 2017 ACK CYFRONET AGH
+%%% @copyright (C) 2019 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% API for macaroon_auth record - used to store information about authorization
-%%% carried by macaroons. Record id is used as macaroon identifier.
-%%% @todo VFS-5554 This module is deprecated, kept for backward compatibility
+%%% API for singleton record that stores a global, shared token secret for
+%%% temporary tokens. The secret can be regenerated, in such ase all existing
+%%% temporary tokens become invalid.
 %%% @end
 %%%-------------------------------------------------------------------
--module(macaroon_auth).
+-module(shared_token_secret).
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
--export([create/2, get/1, delete/1]).
+-export([init/0, get/0, regenerate/0]).
 
 %% datastore_model callbacks
 -export([get_record_struct/1]).
@@ -26,48 +27,61 @@
     model => ?MODULE
 }).
 
+-define(SINGLETON_DB_KEY, <<"secret">>).
+-define(CACHE_KEY, shared_token_secret).
+
+-define(CLUSTER_NODES, element(2, {ok, _} = node_manager:get_cluster_nodes())).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a macaroon_auth record in database.
+%% Ensures that shared token secret exists - creates a new one if there is none.
 %% @end
 %%--------------------------------------------------------------------
--spec create(tokens:secret(), aai:auth()) -> {ok, tokens:nonce()}.
-create(Secret, Auth) ->
-    {ok, #document{key = Id}} = datastore_model:save(?CTX, #document{
-        value = #macaroon_auth{
-            secret = Secret,
-            type = authorization,
-            issuer = Auth#auth.subject
-        }
-    }),
-    {ok, Id}.
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves the secret and issuer of given macaroon from database.
-%% @end
-%%--------------------------------------------------------------------
--spec get(tokens:nonce()) -> {ok, tokens:secret(), aai:auth()} | {error, term()}.
-get(Id) ->
-    case datastore_model:get(?CTX, Id) of
-        {ok, #document{value = #macaroon_auth{secret = Secret, type = authorization, issuer = Issuer}}} ->
-            {ok, Secret, #auth{subject = Issuer}};
-        Error = {error, _} ->
-            Error
+-spec init() -> ok.
+init() ->
+    case datastore_model:get(?CTX, ?SINGLETON_DB_KEY) of
+        {ok, _} -> ok;
+        {error, not_found} -> regenerate()
     end.
 
+
 %%--------------------------------------------------------------------
 %% @doc
-%% Deletes a macaroon_auth record from database.
+%% Retrieves the shared token secret.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(tokens:nonce()) -> ok | {error, term()}.
-delete(Id) ->
-    datastore_model:delete(?CTX, Id).
+-spec get() -> tokens:secret().
+get() ->
+    {ok, Secret} = simple_cache:get(?CACHE_KEY, fun() ->
+        {ok, Doc} = datastore_model:get(?CTX, ?SINGLETON_DB_KEY),
+        {true, Doc#document.value#shared_token_secret.secret}
+    end),
+    Secret.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Regenerates the .
+%% @end
+%%--------------------------------------------------------------------
+-spec regenerate() -> ok.
+regenerate() ->
+    datastore_model:save(?CTX, #document{
+        key = ?SINGLETON_DB_KEY,
+        value = #shared_token_secret{secret = tokens:generate_secret()}
+    }),
+    lists:foreach(fun(Node) ->
+        ok = rpc:call(Node, simple_cache, clear, [?CACHE_KEY])
+    end, ?CLUSTER_NODES),
+    ?warning(
+        "Generated a new shared token secret. "
+        "All existing temporary tokens have been invalidated."
+    ),
+    ok.
 
 %%%===================================================================
 %%% datastore_model callbacks
@@ -82,10 +96,5 @@ delete(Id) ->
     datastore_model:record_struct().
 get_record_struct(1) ->
     {record, [
-        {secret, string},
-        {type, atom},
-        {issuer, {record, [
-            {type, atom},
-            {id, string}
-        ]}}
+        {secret, binary}
     ]}.

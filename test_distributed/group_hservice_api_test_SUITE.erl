@@ -99,7 +99,7 @@ list_handle_services_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_handle_services,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_LIST(ExpHServices)
         }
         % TODO gs
@@ -175,7 +175,7 @@ create_handle_service_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = create_handle_service,
-            args = [client, G1, data],
+            args = [auth, G1, data],
             expected_result = ?OK_TERM(VerifyFun)
         },
         gs_spec = #gs_spec{
@@ -255,7 +255,7 @@ get_handle_service_details_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_handle_service,
-            args = [client, G1, HService],
+            args = [auth, G1, HService],
             expected_result = ?OK_MAP_CONTAINS(?DOI_SERVICE)
         }
         % TODO gs
@@ -312,7 +312,7 @@ leave_handle_service_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = leave_handle_service,
-            args = [client, G1, hsid],
+            args = [auth, G1, hsid],
             expected_result = ?OK
         }
         % TODO gs
@@ -351,7 +351,7 @@ list_eff_handle_services_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_eff_handle_services,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_LIST(ExpHServices)
         }
         % TODO gs
@@ -405,7 +405,7 @@ get_eff_handle_service_details_test(Config) ->
                 logic_spec = #logic_spec{
                     module = group_logic,
                     function = get_eff_handle_service,
-                    args = [client, G1, HService],
+                    args = [auth, G1, HService],
                     expected_result = ?OK_MAP_CONTAINS(HSDetails)
                 }
                 % TODO gs

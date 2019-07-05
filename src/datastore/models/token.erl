@@ -7,6 +7,7 @@
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% API for token record - used to store token data.
+%%% @todo VFS-5554 This module is deprecated, kept for backward compatibility
 %%% @end
 %%%-------------------------------------------------------------------
 -module(token).

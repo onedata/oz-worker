@@ -120,7 +120,7 @@ add_user_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_logic,
             function = add_user,
-            args = [client, HandleId, U3, data],
+            args = [auth, HandleId, U3, data],
             expected_result = ?OK_BINARY(U3)
         },
         % TODO gs
@@ -188,7 +188,7 @@ remove_user_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_logic,
             function = remove_user,
-            args = [client, HandleId, userId],
+            args = [auth, HandleId, userId],
             expected_result = ?OK
         }
         % TODO gs
@@ -233,7 +233,7 @@ list_users_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_logic,
             function = get_users,
-            args = [client, HandleId],
+            args = [auth, HandleId],
             expected_result = ?OK_LIST(ExpUsers)
         }
         % TODO gs
@@ -317,7 +317,7 @@ get_user_test(Config) ->
             logic_spec = #logic_spec{
                 module = handle_logic,
                 function = get_user,
-                args = [client, Handle, SubjectUser],
+                args = [auth, Handle, SubjectUser],
                 expected_result = ?OK_MAP_CONTAINS(ExpUserDetails)
             },
             gs_spec = #gs_spec{
@@ -395,7 +395,7 @@ get_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_logic,
             function = get_user_privileges,
-            args = [client, HandleId, U3],
+            args = [auth, HandleId, U3],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -458,7 +458,7 @@ update_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_logic,
             function = update_user_privileges,
-            args = [client, HandleId, U3, data],
+            args = [auth, HandleId, U3, data],
             expected_result = ?OK
         }
         % TODO gs
@@ -499,7 +499,7 @@ list_eff_users_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_logic,
             function = get_eff_users,
-            args = [client, HandleId],
+            args = [auth, HandleId],
             expected_result = ?OK_LIST(ExpUsers)
         }
         % TODO gs
@@ -559,7 +559,7 @@ get_eff_user_test(Config) ->
                 logic_spec = #logic_spec{
                     module = handle_logic,
                     function = get_eff_user,
-                    args = [client, HandleId, UserId],
+                    args = [auth, HandleId, UserId],
                     expected_result = ?OK_MAP_CONTAINS(UserDetails)
                 },
                 gs_spec = #gs_spec{
@@ -690,7 +690,7 @@ get_eff_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_logic,
             function = get_eff_user_privileges,
-            args = [client, HandleId, U3],
+            args = [auth, HandleId, U3],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs

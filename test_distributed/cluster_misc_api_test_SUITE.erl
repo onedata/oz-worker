@@ -98,7 +98,7 @@ list_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = list,
-            args = [client],
+            args = [auth],
             expected_result = ?OK_LIST(ExpClusters)
         }
         % TODO gs
@@ -201,7 +201,7 @@ get_private_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectC
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = get,
-            args = [client, ClusterId],
+            args = [auth, ClusterId],
             expected_result = ?OK_TERM(
                 fun(Cluster) ->
                     ?assertMatch(
@@ -287,7 +287,7 @@ get_protected_data_test_base(Config, ClusterId, ClusterType, VersionInfo, Correc
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = get_protected_data,
-            args = [client, ClusterId],
+            args = [auth, ClusterId],
             expected_result = ?OK_MAP_CONTAINS(ClusterDetails)
         }
         % TODO gs
@@ -340,7 +340,7 @@ get_public_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectCl
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = get_public_data,
-            args = [client, ClusterId],
+            args = [auth, ClusterId],
             expected_result = ?OK_MAP_CONTAINS(ClusterDetails)
         }
         % TODO gs
@@ -405,7 +405,7 @@ update_onepanel_proxy_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = update,
-            args = [client, clusterId, data],
+            args = [auth, clusterId, data],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -543,7 +543,7 @@ update_version_info_test_base(Config, ClusterType, ServiceType) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = update,
-            args = [client, clusterId, data],
+            args = [auth, clusterId, data],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{

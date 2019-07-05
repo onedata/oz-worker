@@ -14,7 +14,7 @@
 -author("Michal Stanisz").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("tokens.hrl").
+-include("invite_tokens.hrl").
 -include("entity_logic.hrl").
 -include("http/gui_paths.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -160,7 +160,7 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(#el_req{gri = #gri{aspect = instance} = GRI, client = Client,
+create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
     auth_hint = AuthHint, data = Data}) ->
     #{
         <<"name">> := Name,
@@ -182,7 +182,7 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, client = Client,
             endpoint = NormalizedEndpoint, 
             plugin = Plugin, 
             gui_plugin_config = Config,
-            creator = Client
+            creator = Auth#auth.subject
         }
     }),
     
@@ -236,7 +236,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
         end,
         HarvesterId
     end,
-    HarvesterId = token_logic:consume(Macaroon, JoinHarvesterFun),
+    HarvesterId = invite_tokens:consume(Macaroon, JoinHarvesterFun),
 
     NewGRI = #gri{type = od_harvester, id = HarvesterId, aspect = instance,
         scope = case lists:member(?HARVESTER_VIEW, Privileges) of
@@ -249,24 +249,24 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     {ok, resource, {NewGRI, HarvesterData}};
 
 create(Req = #el_req{gri = #gri{id = HarvesterId, aspect = invite_user_token}}) ->
-    {ok, Macaroon} = token_logic:create(
-        Req#el_req.client,
+    {ok, Macaroon} = invite_tokens:create(
+        Req#el_req.auth,
         ?HARVESTER_INVITE_USER_TOKEN,
         {od_harvester, HarvesterId}
     ),
     {ok, value, Macaroon};
 
 create(Req = #el_req{gri = #gri{id = HarvesterId, aspect = invite_group_token}}) ->
-    {ok, Macaroon} = token_logic:create(
-        Req#el_req.client,
+    {ok, Macaroon} = invite_tokens:create(
+        Req#el_req.auth,
         ?HARVESTER_INVITE_GROUP_TOKEN,
         {od_harvester, HarvesterId}
     ),
     {ok, value, Macaroon};
 
 create(Req = #el_req{gri = #gri{id = HarvesterId, aspect = invite_space_token}}) ->
-    {ok, Macaroon} = token_logic:create(
-        Req#el_req.client,
+    {ok, Macaroon} = invite_tokens:create(
+        Req#el_req.auth,
         ?HARVESTER_INVITE_SPACE_TOKEN,
         {od_harvester, HarvesterId}
     ),
@@ -358,7 +358,7 @@ create(#el_req{gri = #gri{aspect = {query, IndexId}}, data = Data}) ->
         end
     end;
 
-create(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch, SpaceId}, id = HarvesterId}, data = Data}) ->
+create(#el_req{auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch, SpaceId}, id = HarvesterId}, data = Data}) ->
     #{
         <<"indices">> := Indices,
         <<"maxSeq">> := MaxSeq,
@@ -709,7 +709,7 @@ exists(#el_req{gri = #gri{id = Id}}, #od_harvester{}) ->
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
 authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = instance, scope = private}}, _) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             user_logic_plugin:auth_by_oz_privilege(UserId, ?OZ_HARVESTERS_CREATE);
 
@@ -722,7 +722,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = 
     end;
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             true;
         {?USER(UserId), ?AS_GROUP(GroupId)} ->
@@ -733,19 +733,19 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
             false
     end;
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, client = ?USER(UserId), data = #{<<"privileges">> := _}}, Harvester) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, auth = ?USER(UserId), data = #{<<"privileges">> := _}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_ADD_USER) andalso auth_by_privilege(Req, Harvester, ?HARVESTER_SET_PRIVILEGES);
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, client = ?USER(UserId), data = _}, Harvester) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, auth = ?USER(UserId), data = _}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_ADD_USER);
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, GroupId}}, client = ?USER(UserId), data = #{<<"privileges">> := _}}, Harvester) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, GroupId}}, auth = ?USER(UserId), data = #{<<"privileges">> := _}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_ADD_GROUP) andalso
         auth_by_privilege(Req, Harvester, ?HARVESTER_SET_PRIVILEGES) andalso
         group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_ADD_HARVESTER);
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, GroupId}}, client = ?USER(UserId), data = _}, Harvester) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, GroupId}}, auth = ?USER(UserId), data = _}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_ADD_GROUP) andalso
         group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_ADD_HARVESTER);
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {space, SpaceId}}, client = ?USER(UserId), data = _}, Harvester) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {space, SpaceId}}, auth = ?USER(UserId), data = _}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_ADD_SPACE) andalso
         space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_ADD_HARVESTER);
 
@@ -759,7 +759,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_space_tok
     auth_by_privilege(Req, Harvester, ?HARVESTER_ADD_SPACE);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Harvester) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             auth_by_privilege(Req, Harvester, ?HARVESTER_ADD_GROUP);
         _ ->
@@ -769,16 +769,16 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Harvest
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = index}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_UPDATE);
 
-authorize(#el_req{operation = create, gri = #gri{aspect = {submit_batch, SpaceId}}, client = Client}, Harvester) ->
-    case Client of
+authorize(#el_req{operation = create, gri = #gri{aspect = {submit_batch, SpaceId}}, auth = Auth}, Harvester) ->
+    case Auth of
         ?PROVIDER(ProviderId) ->
             provider_logic:supports_space(ProviderId, SpaceId) andalso harvester_logic:has_space(Harvester, SpaceId);
         _Other ->
             false
     end;
 
-authorize(#el_req{operation = create, gri = #gri{aspect = {query, _}}, client = Client}, Harvester) ->
-    case Client of
+authorize(#el_req{operation = create, gri = #gri{aspect = {query, _}}, auth = Auth}, Harvester) ->
+    case Auth of
         ?USER(UserId) -> Harvester#od_harvester.public orelse
             entity_graph:has_relation(effective, bottom_up, od_user, UserId, Harvester);
         _ ->
@@ -786,8 +786,8 @@ authorize(#el_req{operation = create, gri = #gri{aspect = {query, _}}, client = 
             Harvester#od_harvester.public
     end;
 
-authorize(#el_req{operation = get, client = Client, gri = #gri{aspect = instance, scope = private}}, Harvester) ->
-    case Client of
+authorize(#el_req{operation = get, auth = Auth, gri = #gri{aspect = instance, scope = private}}, Harvester) ->
+    case Auth of
         ?USER(UserId) ->
             auth_by_privilege(UserId, Harvester, ?HARVESTER_VIEW);
         ?PROVIDER(ProviderId) ->
@@ -796,7 +796,7 @@ authorize(#el_req{operation = get, client = Client, gri = #gri{aspect = instance
     end;
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Harvester) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this harvester is checked in 'exists'
             true;
@@ -825,19 +825,19 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
         % Access to protected data also allows access to public data
         authorize(Req#el_req{gri = GRI#gri{scope = protected}}, Harvester);
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_VIEW_PRIVILEGES);
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_privileges, _}}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_VIEW_PRIVILEGES);
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_membership, UserId}}}, _) ->
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_membership, UserId}}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_membership, _}}}, Harvester) ->
@@ -849,7 +849,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = {group_privileges, 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_group_privileges, _}}}, Harvester) ->
     auth_by_privilege(Req, Harvester, ?HARVESTER_VIEW_PRIVILEGES);
 
-authorize(Req = #el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, Harvester) ->
+authorize(Req = #el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, Harvester) ->
     group_logic:has_eff_user(GroupId, UserId) orelse auth_by_privilege(Req, Harvester, ?HARVESTER_VIEW);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = {index, _}, scope = public}}, Harvester) ->
@@ -861,7 +861,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = indices}}, Harveste
 authorize(#el_req{operation = get, gri = #gri{aspect = all_plugins}}, _) ->
     true;
 
-authorize(Req = #el_req{operation = get, client = ?USER}, Harvester) ->
+authorize(Req = #el_req{operation = get, auth = ?USER}, Harvester) ->
     % All other resources can be accessed with view privileges
     auth_by_privilege(Req, Harvester, ?HARVESTER_VIEW);
 
@@ -1091,7 +1091,7 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
     end,
     #{
         required => #{
-            <<"token">> => {token, TokenType}
+            <<"token">> => {invite_token, TokenType}
         }
     };
 
@@ -1185,14 +1185,14 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 %% @doc
 %% Returns if given user has specific effective privilege in the harvester.
 %% UserId is either given explicitly or derived from entity logic request.
-%% Clients of type other than user are discarded.
+%% Auths of type other than user are discarded.
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_privilege(entity_logic:req() | od_user:id(),
     od_harvester:id() | od_harvester:info(), privileges:harvester_privilege()) -> boolean().
-auth_by_privilege(#el_req{client = ?USER(UserId)}, HarvesterOrId, Privilege) ->
+auth_by_privilege(#el_req{auth = ?USER(UserId)}, HarvesterOrId, Privilege) ->
     auth_by_privilege(UserId, HarvesterOrId, Privilege);
-auth_by_privilege(#el_req{client = _OtherClient}, _HarvesterOrId, _Privilege) ->
+auth_by_privilege(#el_req{auth = _OtherAuth}, _HarvesterOrId, _Privilege) ->
     false;
 auth_by_privilege(UserId, HarvesterOrId, Privilege) ->
     harvester_logic:has_eff_privilege(HarvesterOrId, UserId, Privilege).

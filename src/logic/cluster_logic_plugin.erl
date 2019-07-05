@@ -14,7 +14,7 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("tokens.hrl").
+-include("invite_tokens.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
@@ -148,7 +148,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
         end,
         ClusterId
     end,
-    ClusterId = token_logic:consume(Macaroon, JoinClusterFun),
+    ClusterId = invite_tokens:consume(Macaroon, JoinClusterFun),
 
     NewGRI = #gri{type = od_cluster, id = ClusterId, aspect = instance,
         scope = case lists:member(?CLUSTER_VIEW, Privileges) of
@@ -161,16 +161,16 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     {ok, resource, {NewGRI, ClusterData}};
 
 create(Req = #el_req{gri = #gri{id = ClusterId, aspect = invite_user_token}}) ->
-    {ok, Macaroon} = token_logic:create(
-        Req#el_req.client,
+    {ok, Macaroon} = invite_tokens:create(
+        Req#el_req.auth,
         ?CLUSTER_INVITE_USER_TOKEN,
         {od_cluster, ClusterId}
     ),
     {ok, value, Macaroon};
 
 create(Req = #el_req{gri = #gri{id = ClusterId, aspect = invite_group_token}}) ->
-    {ok, Macaroon} = token_logic:create(
-        Req#el_req.client,
+    {ok, Macaroon} = invite_tokens:create(
+        Req#el_req.auth,
         ?CLUSTER_INVITE_GROUP_TOKEN,
         {od_cluster, ClusterId}
     ),
@@ -387,7 +387,7 @@ exists(#el_req{gri = #gri{id = Id}}, #od_cluster{}) ->
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             true;
         {?USER(UserId), ?AS_GROUP(GroupId)} ->
@@ -396,21 +396,21 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
             false
     end;
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, client = ?USER(UserId), data = #{<<"privileges">> := _}}, Cluster) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, auth = ?USER(UserId), data = #{<<"privileges">> := _}}, Cluster) ->
     auth_by_privilege(Req, Cluster, ?CLUSTER_ADD_USER) andalso auth_by_privilege(Req, Cluster, ?CLUSTER_SET_PRIVILEGES);
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, client = ?USER(UserId), data = _}, Cluster) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, auth = ?USER(UserId), data = _}, Cluster) ->
     auth_by_privilege(Req, Cluster, ?CLUSTER_ADD_USER);
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, GroupId}}, client = ?USER(UserId), data = #{<<"privileges">> := _}}, Cluster) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, GroupId}}, auth = ?USER(UserId), data = #{<<"privileges">> := _}}, Cluster) ->
     auth_by_privilege(Req, Cluster, ?CLUSTER_ADD_GROUP) andalso
         auth_by_privilege(Req, Cluster, ?CLUSTER_SET_PRIVILEGES) andalso
         group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_ADD_CLUSTER);
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, GroupId}}, client = ?USER(UserId), data = _}, Cluster) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, GroupId}}, auth = ?USER(UserId), data = _}, Cluster) ->
     auth_by_privilege(Req, Cluster, ?CLUSTER_ADD_GROUP) andalso
         group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_ADD_CLUSTER);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Cluster) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             auth_by_privilege(Req, Cluster, ?CLUSTER_ADD_GROUP);
         _ ->
@@ -418,7 +418,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Cluster
     end;
 
 % A provider can perform all operations within its cluster
-authorize(#el_req{client = ?PROVIDER(ProviderId), gri = #gri{id = ClusterId}}, _Cluster) ->
+authorize(#el_req{auth = ?PROVIDER(ProviderId), gri = #gri{id = ClusterId}}, _Cluster) ->
     cluster_logic:is_provider_cluster(ClusterId, ProviderId);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Cluster) ->
@@ -427,11 +427,11 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_toke
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_token}}, Cluster) ->
     auth_by_privilege(Req, Cluster, ?CLUSTER_ADD_GROUP);
 
-authorize(#el_req{client = ?USER(UserId), operation = get, gri = #gri{aspect = instance, scope = private}}, Cluster) ->
+authorize(#el_req{auth = ?USER(UserId), operation = get, gri = #gri{aspect = instance, scope = private}}, Cluster) ->
     auth_by_privilege(UserId, Cluster, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Cluster) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this cluster is checked in 'exists'
             true;
@@ -456,17 +456,17 @@ authorize(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}
     true;
 
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
     true;
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}, Cluster) ->
     auth_by_privilege(Req, Cluster, ?CLUSTER_VIEW_PRIVILEGES);
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
     true;
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_privileges, _}}}, Cluster) ->
     auth_by_privilege(Req, Cluster, ?CLUSTER_VIEW_PRIVILEGES);
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_membership, UserId}}}, _) ->
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_membership, UserId}}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_membership, _}}}, Cluster) ->
@@ -478,15 +478,15 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = {group_privileges, 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_group_privileges, _}}}, Cluster) ->
     auth_by_privilege(Req, Cluster, ?CLUSTER_VIEW_PRIVILEGES);
 
-authorize(Req = #el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, Cluster) ->
+authorize(Req = #el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, Cluster) ->
     group_logic:has_eff_user(GroupId, UserId) orelse auth_by_privilege(Req, Cluster, ?CLUSTER_VIEW);
 
-authorize(Req = #el_req{operation = get, client = ?USER}, Cluster) ->
+authorize(Req = #el_req{operation = get, auth = ?USER}, Cluster) ->
     % All other resources can be accessed with view privileges
     auth_by_privilege(Req, Cluster, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = update, gri = #gri{id = ClusterId, aspect = instance}}, Cluster) ->
-    case Req#el_req.client of
+    case Req#el_req.auth of
         ?USER(UserId) ->
             auth_by_privilege(UserId, Cluster, ?CLUSTER_UPDATE);
         ?PROVIDER(ProviderId) ->
@@ -600,7 +600,7 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
     end,
     #{
         required => #{
-            <<"token">> => {token, TokenType}
+            <<"token">> => {invite_token, TokenType}
         }
     };
 
@@ -674,14 +674,14 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 %% @doc
 %% Returns if given user has specific effective privilege in the cluster.
 %% UserId is either given explicitly or derived from entity logic request.
-%% Clients of type other than user are discarded.
+%% Auths of type other than user are discarded.
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_privilege(entity_logic:req() | od_user:id(),
     od_cluster:id() | od_cluster:info(), privileges:cluster_privilege()) -> boolean().
-auth_by_privilege(#el_req{client = ?USER(UserId)}, ClusterOrId, Privilege) ->
+auth_by_privilege(#el_req{auth = ?USER(UserId)}, ClusterOrId, Privilege) ->
     auth_by_privilege(UserId, ClusterOrId, Privilege);
-auth_by_privilege(#el_req{client = _OtherClient}, _ClusterOrId, _Privilege) ->
+auth_by_privilege(#el_req{auth = _OtherAuth}, _ClusterOrId, _Privilege) ->
     false;
 auth_by_privilege(UserId, ClusterOrId, Privilege) ->
     cluster_logic:has_eff_privilege(ClusterOrId, UserId, Privilege).

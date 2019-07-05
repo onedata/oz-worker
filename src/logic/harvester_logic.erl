@@ -98,10 +98,10 @@
 %% Harvester name, endpoint plugin and config are given explicitly.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: entity_logic:client(), Name :: binary(), Endpoint :: binary(), 
+-spec create(Auth :: aai:auth(), Name :: binary(), Endpoint :: binary(),
     Plugin :: binary(), Config :: #{}) -> {ok, od_harvester:id()} | {error, term()}.
-create(Client, Name, Endpoint, Plugin, Config) ->
-    create(Client, #{
+create(Auth, Name, Endpoint, Plugin, Config) ->
+    create(Auth, #{
         <<"name">> => Name,
         <<"endpoint">> => Endpoint,
         <<"plugin">> => Plugin,
@@ -115,12 +115,12 @@ create(Client, Name, Endpoint, Plugin, Config) ->
 %% Harvester name, endpoint plugin and config are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: entity_logic:client(), Data :: #{}) -> 
+-spec create(Auth :: aai:auth(), Data :: #{}) ->
     {ok, od_harvester:id()} | {error, term()}.
-create(Client, Data) ->
+create(Auth, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = undefined, aspect = instance},
         data = Data
     })).
@@ -131,12 +131,12 @@ create(Client, Data) ->
 %% Retrieves a harvester record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec get(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, #od_harvester{}} | {error, term()}.
-get(Client, HarvesterId) ->
+get(Auth, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance}
     }).
 
@@ -146,12 +146,12 @@ get(Client, HarvesterId) ->
 %% Retrieves protected harvester data from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_protected_data(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec get_protected_data(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, map()} | {error, term()}.
-get_protected_data(Client, HarvesterId) ->
+get_protected_data(Auth, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = protected}
     }).
 
@@ -160,12 +160,12 @@ get_protected_data(Client, HarvesterId) ->
 %% Retrieves public harvester data from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_public_data(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec get_public_data(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, map()} | {error, term()}.
-get_public_data(Client, HarvesterId) ->
+get_public_data(Auth, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = public}
     }).
 
@@ -174,12 +174,12 @@ get_public_data(Client, HarvesterId) ->
 %% Retrieves a harvester config from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_gui_plugin_config(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec get_gui_plugin_config(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, #od_harvester{}} | {error, term()}.
-get_gui_plugin_config(Client, HarvesterId) ->
+get_gui_plugin_config(Auth, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}
     }).
 
@@ -189,12 +189,12 @@ get_gui_plugin_config(Client, HarvesterId) ->
 %% Lists all harvesters (their ids) in database.
 %% @end
 %%--------------------------------------------------------------------
--spec list(Client :: entity_logic:client()) ->
+-spec list(Auth :: aai:auth()) ->
     {ok, [od_harvester:id()]} | {error, term()}.
-list(Client) ->
+list(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = undefined, aspect = list}
     }).
 
@@ -205,10 +205,10 @@ list(Client) ->
 %% Harvester name, endpoint and plugin are given explicitly.
 %% @end
 %%--------------------------------------------------------------------
--spec update(Client :: entity_logic:client(), Name :: binary(), HarvesterId :: od_harvester:id(), 
+-spec update(Auth :: aai:auth(), Name :: binary(), HarvesterId :: od_harvester:id(),
     Endpoint :: binary(), Plugin :: binary()) -> {ok, od_harvester:id()} | {error, term()}.
-update(Client, HarvesterId, Name, Endpoint, Plugin) ->
-    update(Client, HarvesterId, #{
+update(Auth, HarvesterId, Name, Endpoint, Plugin) ->
+    update(Auth, HarvesterId, #{
         <<"name">> => Name,
         <<"endpoint">> => Endpoint,
         <<"plugin">> => Plugin
@@ -221,12 +221,12 @@ update(Client, HarvesterId, Name, Endpoint, Plugin) ->
 %% Harvester name, endpoint and plugin are provided in proper data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec update(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     Data :: #{}) -> ok | {error, term()}.
-update(Client, HarvesterId, Data) ->
+update(Auth, HarvesterId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance},
         data = Data
     }).
@@ -238,12 +238,12 @@ update(Client, HarvesterId, Data) ->
 %% Config is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update_gui_plugin_config(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+-spec update_gui_plugin_config(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     Data :: #{}) -> ok | {error, term()}.
-update_gui_plugin_config(Client, HarvesterId, Data) ->
+update_gui_plugin_config(Auth, HarvesterId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config},
         data = Data
     }).
@@ -254,12 +254,12 @@ update_gui_plugin_config(Client, HarvesterId, Data) ->
 %% Deletes given harvester from database.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec delete(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     ok | {error, term()}.
-delete(Client, HarvesterId) ->
+delete(Auth, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance}
     }).
 
@@ -269,12 +269,12 @@ delete(Client, HarvesterId) ->
 %% Deletes harvested metadata in all indices in given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_harvested_metadata(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec delete_harvested_metadata(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     ok | {error, term()}.
-delete_harvested_metadata(Client, HarvesterId) ->
+delete_harvested_metadata(Auth, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = metadata}
     }).
 
@@ -284,10 +284,10 @@ delete_harvested_metadata(Client, HarvesterId) ->
 %% Creates index in given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec create_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec create_index(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     Name :: binary(), GuiPluginName :: binary()) -> ok | {error, term()}.
-create_index(Client, HarvesterId, Name, GuiPluginName) ->
-    create_index(Client, HarvesterId, #{
+create_index(Auth, HarvesterId, Name, GuiPluginName) ->
+    create_index(Auth, HarvesterId, #{
         <<"name">> => Name,
         <<"guiPluginName">> => GuiPluginName
     }).
@@ -297,10 +297,10 @@ create_index(Client, HarvesterId, Name, GuiPluginName) ->
 %% Creates index in given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec create_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+-spec create_index(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     Name :: binary(), Schema :: od_harvester:schema(), GuiPluginName :: binary()) -> ok | {error, term()}.
-create_index(Client, HarvesterId, Name, Schema, GuiPluginName) ->
-    create_index(Client, HarvesterId, #{
+create_index(Auth, HarvesterId, Name, Schema, GuiPluginName) ->
+    create_index(Auth, HarvesterId, #{
         <<"name">> => Name,
         <<"schema">> => Schema,
         <<"guiPluginName">> => GuiPluginName
@@ -311,12 +311,12 @@ create_index(Client, HarvesterId, Name, Schema, GuiPluginName) ->
 %% Creates index in given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec create_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+-spec create_index(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     Data :: map()) -> {ok, od_harvester:index_id()} | {error, term()}.
-create_index(Client, HarvesterId, Data) ->
+create_index(Auth, HarvesterId, Data) ->
     Res = entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = index},
         data = Data
     }),
@@ -333,12 +333,12 @@ create_index(Client, HarvesterId, Data) ->
 %% Deletes given index in given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec delete_index(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     IndexId :: od_harvester:index_id()) -> ok | {error, term()}.
-delete_index(Client, HarvesterId, IndexId) ->
+delete_index(Auth, HarvesterId, IndexId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}}
     }).
 
@@ -348,12 +348,12 @@ delete_index(Client, HarvesterId, IndexId) ->
 %% Deletes harvested metadata in given index.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_index_metadata(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec delete_index_metadata(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     IndexId :: od_harvester:index_id()) -> ok | {error, term()}.
-delete_index_metadata(Client, HarvesterId, IndexId) ->
+delete_index_metadata(Auth, HarvesterId, IndexId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index_metadata, IndexId}}
     }).
 
@@ -363,12 +363,12 @@ delete_index_metadata(Client, HarvesterId, IndexId) ->
 %% Lists all indices in given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec list_indices(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) -> 
+-spec list_indices(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     ok | {error, term()}.
-list_indices(Client, HarvesterId) ->
+list_indices(Auth, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = indices}
     }).
 
@@ -378,12 +378,12 @@ list_indices(Client, HarvesterId) ->
 %% Retrieves a harvester index from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+-spec get_index(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     IndexId :: od_harvester:index_id()) -> {ok, #od_harvester{}} | {error, term()}.
-get_index(Client, HarvesterId, IndexId) ->
+get_index(Auth, HarvesterId, IndexId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}, scope = private}
     }).
 
@@ -393,12 +393,12 @@ get_index(Client, HarvesterId, IndexId) ->
 %% Retrieves a public harvester index data from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_public_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec get_public_index(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     IndexId :: od_harvester:index_id()) -> {ok, #od_harvester{}} | {error, term()}.
-get_public_index(Client, HarvesterId, IndexId) ->
+get_public_index(Auth, HarvesterId, IndexId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}, scope = public}
     }).
 
@@ -408,12 +408,12 @@ get_public_index(Client, HarvesterId, IndexId) ->
 %% Retrieves a harvester index stats from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_index_stats(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec get_index_stats(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     IndexId :: od_harvester:index_id()) -> {ok, od_harvester:indices_stats()} | {error, term()}.
-get_index_stats(Client, HarvesterId, IndexId) ->
+get_index_stats(Auth, HarvesterId, IndexId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index_stats, IndexId}}
     }).
 
@@ -424,12 +424,12 @@ get_index_stats(Client, HarvesterId, IndexId) ->
 %% Name and/or guiPluginName are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+-spec update_index(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     IndexId :: od_harvester:index_id(), Data :: map()) -> ok | {error, term()}.
-update_index(Client, HarvesterId, IndexId, Data) ->
+update_index(Auth, HarvesterId, IndexId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {index, IndexId}},
         data = Data
     }).
@@ -441,11 +441,11 @@ update_index(Client, HarvesterId, IndexId, Data) ->
 %% Indices, MaxSeq and Batch are given explicitly.
 %% @end
 %%--------------------------------------------------------------------
--spec submit_batch(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+-spec submit_batch(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     Indices :: od_harvester:indices(), SpaceId :: od_space:id(), Batch :: od_harvester:batch(), 
     MaxStreamSeq :: integer(), MaxSeq :: integer()) -> {ok, map()} | {error, term()}.
-submit_batch(Client, HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq) ->
-    submit_batch(Client, HarvesterId, SpaceId, #{
+submit_batch(Auth, HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq) ->
+    submit_batch(Auth, HarvesterId, SpaceId, #{
             <<"indices">> => Indices,
             <<"maxStreamSeq">> => MaxStreamSeq,
             <<"maxSeq">> => MaxSeq,
@@ -459,12 +459,12 @@ submit_batch(Client, HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq)
 %% Indices, MaxSeq and Batch are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec submit_batch(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec submit_batch(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     SpaceId :: od_space:id(), Data :: map()) -> {ok, map()} | {error, term()}.
-submit_batch(Client, HarvesterId, SpaceId, Data) ->
+submit_batch(Auth, HarvesterId, SpaceId, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {submit_batch, SpaceId}},
         data = Data
     })).
@@ -475,12 +475,12 @@ submit_batch(Client, HarvesterId, SpaceId, Data) ->
 %% Query harvester backend using given data.
 %% @end
 %%--------------------------------------------------------------------
--spec query_index(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(), 
+-spec query_index(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     IndexId :: od_harvester:index_id(), Data :: map()) -> ok | {error, term()}.
-query_index(Client, HarvesterId, IndexId, Data) ->
+query_index(Auth, HarvesterId, IndexId, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {query, IndexId}},
         data = Data
     })).
@@ -495,7 +495,7 @@ query_index(Client, HarvesterId, IndexId, Data) ->
 get_all_plugins() ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = ?ROOT,
+        auth = ?ROOT,
         gri = #gri{type = od_harvester, aspect = all_plugins}
     }).
 
@@ -506,12 +506,12 @@ get_all_plugins() ->
 %% given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec create_user_invite_token(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec create_user_invite_token(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, macaroon:macaroon()} | {error, term()}.
-create_user_invite_token(Client, HarvesterId) ->
+create_user_invite_token(Auth, HarvesterId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = invite_user_token},
         data = #{}
     })).
@@ -523,12 +523,12 @@ create_user_invite_token(Client, HarvesterId) ->
 %% given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec create_group_invite_token(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec create_group_invite_token(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, macaroon:macaroon()} | {error, term()}.
-create_group_invite_token(Client, HarvesterId) ->
+create_group_invite_token(Auth, HarvesterId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = invite_group_token},
         data = #{}
     })).
@@ -540,12 +540,12 @@ create_group_invite_token(Client, HarvesterId) ->
 %% given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec create_space_invite_token(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec create_space_invite_token(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, macaroon:macaroon()} | {error, term()}.
-create_space_invite_token(Client, HarvesterId) ->
+create_space_invite_token(Auth, HarvesterId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = invite_space_token},
         data = #{}
     })).
@@ -556,11 +556,11 @@ create_space_invite_token(Client, HarvesterId) ->
 %% Adds specified user to given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(Client :: entity_logic:client(),
+-spec add_user(Auth :: aai:auth(),
     HarvesterId :: od_harvester:id(), UserId :: od_user:id()) ->
     {ok, od_user:id()} | {error, term()}.
-add_user(Client, HarvesterId, UserId) ->
-    add_user(Client, HarvesterId, UserId, #{}).
+add_user(Auth, HarvesterId, UserId) ->
+    add_user(Auth, HarvesterId, UserId, #{}).
 
 
 %%--------------------------------------------------------------------
@@ -571,18 +571,18 @@ add_user(Client, HarvesterId, UserId) ->
 %% 2) Privileges are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(Client :: entity_logic:client(),
+-spec add_user(Auth :: aai:auth(),
     HarvesterId :: od_harvester:id(), UserId :: od_user:id(),
     PrivilegesPrivilegesOrData :: [privileges:harvester_privileges()] | #{}) ->
     {ok, od_user:id()} | {error, term()}.
-add_user(Client, HarvesterId, UserId, Privileges) when is_list(Privileges) ->
-    add_user(Client, HarvesterId, UserId, #{
+add_user(Auth, HarvesterId, UserId, Privileges) when is_list(Privileges) ->
+    add_user(Auth, HarvesterId, UserId, #{
         <<"privileges">> => Privileges
     });
-add_user(Client, HarvesterId, UserId, Data) ->
+add_user(Auth, HarvesterId, UserId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {user, UserId}},
         data = Data
     })).
@@ -593,11 +593,11 @@ add_user(Client, HarvesterId, UserId, Data) ->
 %% Adds specified group to given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(Client :: entity_logic:client(),
+-spec add_group(Auth :: aai:auth(),
     HarvesterId :: od_harvester:id(), GroupId :: od_group:id()) ->
     {ok, od_group:id()} | {error, term()}.
-add_group(Client, HarvesterId, GroupId) ->
-    add_group(Client, HarvesterId, GroupId, #{}).
+add_group(Auth, HarvesterId, GroupId) ->
+    add_group(Auth, HarvesterId, GroupId, #{}).
 
 
 %%--------------------------------------------------------------------
@@ -608,18 +608,18 @@ add_group(Client, HarvesterId, GroupId) ->
 %% 2) Privileges are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(Client :: entity_logic:client(),
+-spec add_group(Auth :: aai:auth(),
     HarvesterId :: od_harvester:id(), GroupId :: od_group:id(),
     PrivilegesOrData :: [privileges:harvester_privileges()] | #{}) ->
     {ok, od_group:id()} | {error, term()}.
-add_group(Client, HarvesterId, GroupId, Privileges) when is_list(Privileges) ->
-    add_group(Client, HarvesterId, GroupId, #{
+add_group(Auth, HarvesterId, GroupId, Privileges) when is_list(Privileges) ->
+    add_group(Auth, HarvesterId, GroupId, #{
         <<"privileges">> => Privileges
     });
-add_group(Client, HarvesterId, GroupId, Data) ->
+add_group(Auth, HarvesterId, GroupId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {group, GroupId}},
         data = Data
     })).
@@ -630,10 +630,10 @@ add_group(Client, HarvesterId, GroupId, Data) ->
 %% Creates a new group in the harvester based on group name and type.
 %% @end
 %%--------------------------------------------------------------------
--spec create_group(Client :: entity_logic:client(), od_harvester:id(), od_group:name(),
+-spec create_group(Auth :: aai:auth(), od_harvester:id(), od_group:name(),
     od_group:type()) -> {ok, od_group:id()} | {error, term()}.
-create_group(Client, HarvesterId, Name, Type) ->
-    create_group(Client, HarvesterId, #{<<"name">> => Name, <<"type">> => Type}).
+create_group(Auth, HarvesterId, Name, Type) ->
+    create_group(Auth, HarvesterId, #{<<"name">> => Name, <<"type">> => Type}).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -642,18 +642,18 @@ create_group(Client, HarvesterId, Name, Type) ->
 %% 2) Group name is provided in a proper Data object, group type is optional.
 %% @end
 %%--------------------------------------------------------------------
--spec create_group(Client :: entity_logic:client(), od_harvester:id(),
+-spec create_group(Auth :: aai:auth(), od_harvester:id(),
     NameOrData :: od_group:name() | #{}) -> {ok, od_group:id()} | {error, term()}.
-create_group(Client, HarvesterId, Name) when is_binary(Name) ->
-    create_group(Client, HarvesterId, #{<<"name">> => Name});
-create_group(Client, HarvesterId, Data) ->
-    AuthHint = case Client of
+create_group(Auth, HarvesterId, Name) when is_binary(Name) ->
+    create_group(Auth, HarvesterId, #{<<"name">> => Name});
+create_group(Auth, HarvesterId, Data) ->
+    AuthHint = case Auth of
         ?USER(UserId) -> ?AS_USER(UserId);
         _ -> undefined
     end,
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = group},
         data = Data,
         auth_hint = AuthHint
@@ -665,10 +665,10 @@ create_group(Client, HarvesterId, Data) ->
 %% Adds specified space to given harvester.
 %% @end
 %%--------------------------------------------------------------------
-add_space(Client, HarvesterId, SpaceId) ->
+add_space(Auth, HarvesterId, SpaceId) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {space, SpaceId}}
     })).
 
@@ -679,12 +679,12 @@ add_space(Client, HarvesterId, SpaceId) ->
 %% Retrieves the list of users of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_users(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec get_users(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
-get_users(Client, HarvesterId) ->
+get_users(Auth, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = users}
     }).
 
@@ -694,12 +694,12 @@ get_users(Client, HarvesterId) ->
 %% Retrieves the list of effective users of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_users(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec get_eff_users(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
-get_eff_users(Client, HarvesterId) ->
+get_eff_users(Auth, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = eff_users}
     }).
 
@@ -709,12 +709,12 @@ get_eff_users(Client, HarvesterId) ->
 %% Retrieves the information about specific user among users of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec get_user(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
-get_user(Client, HarvesterId, UserId) ->
+get_user(Auth, HarvesterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
         auth_hint = ?THROUGH_HARVESTER(HarvesterId)
     }).
@@ -726,12 +726,12 @@ get_user(Client, HarvesterId, UserId) ->
 %% effective users of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec get_eff_user(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
-get_eff_user(Client, HarvesterId, UserId) ->
+get_eff_user(Auth, HarvesterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
         auth_hint = ?THROUGH_HARVESTER(HarvesterId)
     }).
@@ -742,12 +742,12 @@ get_eff_user(Client, HarvesterId, UserId) ->
 %% Retrieves the privileges of specific user among users of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_privileges(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec get_user_privileges(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     UserId :: od_user:id()) -> {ok, [privileges:harvester_privileges()]} | {error, term()}.
-get_user_privileges(Client, HarvesterId, UserId) ->
+get_user_privileges(Auth, HarvesterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {user_privileges, UserId}}
     }).
 
@@ -758,12 +758,12 @@ get_user_privileges(Client, HarvesterId, UserId) ->
 %% among effective users of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user_privileges(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec get_eff_user_privileges(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     UserId :: od_user:id()) -> {ok, [privileges:harvester_privileges()]} | {error, term()}.
-get_eff_user_privileges(Client, HarvesterId, UserId) ->
+get_eff_user_privileges(Auth, HarvesterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {eff_user_privileges, UserId}}
     }).
 
@@ -774,13 +774,13 @@ get_eff_user_privileges(Client, HarvesterId, UserId) ->
 %% among effective users of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user_membership_intermediaries(Client :: entity_logic:client(),
+-spec get_eff_user_membership_intermediaries(Auth :: aai:auth(),
     HarvesterId :: od_harvester:id(), UserId :: od_user:id()) ->
     {ok, entity_graph:intermediaries()} | {error, term()}.
-get_eff_user_membership_intermediaries(Client, HarvesterId, UserId) ->
+get_eff_user_membership_intermediaries(Auth, HarvesterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {eff_user_membership, UserId}}
     }).
 
@@ -790,12 +790,12 @@ get_eff_user_membership_intermediaries(Client, HarvesterId, UserId) ->
 %% Retrieves the list of groups of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_groups(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec get_groups(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
-get_groups(Client, HarvesterId) ->
+get_groups(Auth, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = groups}
     }).
 
@@ -805,12 +805,12 @@ get_groups(Client, HarvesterId) ->
 %% Retrieves the list of effective groups of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_groups(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec get_eff_groups(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
-get_eff_groups(Client, HarvesterId) ->
+get_eff_groups(Auth, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = eff_groups}
     }).
 
@@ -820,12 +820,12 @@ get_eff_groups(Client, HarvesterId) ->
 %% Retrieves the information about specific group among groups of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec get_group(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
-get_group(Client, HarvesterId, GroupId) ->
+get_group(Auth, HarvesterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
         auth_hint = ?THROUGH_HARVESTER(HarvesterId)
     }).
@@ -837,12 +837,12 @@ get_group(Client, HarvesterId, GroupId) ->
 %% effective groups of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_group(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec get_eff_group(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
-get_eff_group(Client, HarvesterId, GroupId) ->
+get_eff_group(Auth, HarvesterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
         auth_hint = ?THROUGH_HARVESTER(HarvesterId)
     }).
@@ -853,12 +853,12 @@ get_eff_group(Client, HarvesterId, GroupId) ->
 %% Retrieves the privileges of specific group among groups of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group_privileges(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec get_group_privileges(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     GroupId :: od_group:id()) -> {ok, [privileges:harvester_privileges()]} | {error, term()}.
-get_group_privileges(Client, HarvesterId, GroupId) ->
+get_group_privileges(Auth, HarvesterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {group_privileges, GroupId}}
     }).
 
@@ -869,12 +869,12 @@ get_group_privileges(Client, HarvesterId, GroupId) ->
 %% among effective groups of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_group_privileges(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec get_eff_group_privileges(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     GroupId :: od_group:id()) -> {ok, [privileges:harvester_privileges()]} | {error, term()}.
-get_eff_group_privileges(Client, HarvesterId, GroupId) ->
+get_eff_group_privileges(Auth, HarvesterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {eff_group_privileges, GroupId}}
     }).
 
@@ -885,13 +885,13 @@ get_eff_group_privileges(Client, HarvesterId, GroupId) ->
 %% among effective groups of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_group_membership_intermediaries(Client :: entity_logic:client(),
+-spec get_eff_group_membership_intermediaries(Auth :: aai:auth(),
     HarvesterId :: od_harvester:id(), GroupId :: od_group:id()) ->
     {ok, entity_graph:intermediaries()} | {error, term()}.
-get_eff_group_membership_intermediaries(Client, HarvesterId, GroupId) ->
+get_eff_group_membership_intermediaries(Auth, HarvesterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {eff_group_membership, GroupId}}
     }).
 
@@ -901,12 +901,12 @@ get_eff_group_membership_intermediaries(Client, HarvesterId, GroupId) ->
 %% Retrieves the list of spaces of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_spaces(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec get_spaces(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, [od_space:id()]} | {error, term()}.
-get_spaces(Client, HarvesterId) ->
+get_spaces(Auth, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = spaces}
     }).
 
@@ -916,12 +916,12 @@ get_spaces(Client, HarvesterId) ->
 %% Retrieves the information about specific space among spaces of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_space(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec get_space(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     SpaceId :: od_space:id()) -> {ok, #{}} | {error, term()}.
-get_space(Client, HarvesterId, SpaceId) ->
+get_space(Auth, HarvesterId, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_HARVESTER(HarvesterId)
     }).
@@ -931,12 +931,12 @@ get_space(Client, HarvesterId, SpaceId) ->
 %% Retrieves the list of effective providers of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_providers(Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+-spec get_eff_providers(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, [od_provider:id()]} | {error, term()}.
-get_eff_providers(Client, HarvesterId) ->
+get_eff_providers(Auth, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = eff_providers}
     }).
 
@@ -947,12 +947,12 @@ get_eff_providers(Client, HarvesterId) ->
 %% effective providers of given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_provider(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec get_eff_provider(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
-get_eff_provider(Client, HarvesterId, ProviderId) ->
+get_eff_provider(Auth, HarvesterId, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = instance, scope = shared},
         auth_hint = ?THROUGH_HARVESTER(HarvesterId)
     }).
@@ -964,11 +964,11 @@ get_eff_provider(Client, HarvesterId, ProviderId) ->
 %% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
--spec update_user_privileges(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec update_user_privileges(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     UserId :: od_user:id(), PrivsToGrant :: [privileges:harvester_privilege()],
     PrivsToRevoke :: [privileges:harvester_privilege()]) -> ok | {error, term()}.
-update_user_privileges(Client, HarvesterId, UserId, PrivsToGrant, PrivsToRevoke) ->
-    update_user_privileges(Client, HarvesterId, UserId, #{
+update_user_privileges(Auth, HarvesterId, UserId, PrivsToGrant, PrivsToRevoke) ->
+    update_user_privileges(Auth, HarvesterId, UserId, #{
         <<"grant">> => PrivsToGrant,
         <<"revoke">> => PrivsToRevoke
     }).
@@ -980,12 +980,12 @@ update_user_privileges(Client, HarvesterId, UserId, PrivsToGrant, PrivsToRevoke)
 %% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update_user_privileges(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec update_user_privileges(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     UserId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
-update_user_privileges(Client, HarvesterId, UserId, Data) ->
+update_user_privileges(Auth, HarvesterId, UserId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {user_privileges, UserId}},
         data = Data
     }).
@@ -997,11 +997,11 @@ update_user_privileges(Client, HarvesterId, UserId, Data) ->
 %% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
--spec update_group_privileges(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec update_group_privileges(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     GroupId :: od_group:id(), PrivsToGrant :: [privileges:harvester_privilege()],
     PrivsToRevoke :: [privileges:harvester_privilege()]) -> ok | {error, term()}.
-update_group_privileges(Client, HarvesterId, GroupId, PrivsToGrant, PrivsToRevoke) ->
-    update_group_privileges(Client, HarvesterId, GroupId, #{
+update_group_privileges(Auth, HarvesterId, GroupId, PrivsToGrant, PrivsToRevoke) ->
+    update_group_privileges(Auth, HarvesterId, GroupId, #{
         <<"grant">> => PrivsToGrant,
         <<"revoke">> => PrivsToRevoke
     }).
@@ -1013,12 +1013,12 @@ update_group_privileges(Client, HarvesterId, GroupId, PrivsToGrant, PrivsToRevok
 %% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update_group_privileges(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec update_group_privileges(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     GroupId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
-update_group_privileges(Client, HarvesterId, GroupId, Data) ->
+update_group_privileges(Auth, HarvesterId, GroupId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {group_privileges, GroupId}},
         data = Data
     }).
@@ -1029,12 +1029,12 @@ update_group_privileges(Client, HarvesterId, GroupId, Data) ->
 %% Removes specified space from given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_space(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec remove_space(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     SpaceId :: od_space:id()) -> ok | {error, term()}.
-remove_space(Client, HarvesterId, SpaceId) ->
+remove_space(Auth, HarvesterId, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {space, SpaceId}}
     }).
 
@@ -1044,12 +1044,12 @@ remove_space(Client, HarvesterId, SpaceId) ->
 %% Removes specified user from given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_user(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec remove_user(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     UserId :: od_user:id()) -> ok | {error, term()}.
-remove_user(Client, HarvesterId, UserId) ->
+remove_user(Auth, HarvesterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {user, UserId}}
     }).
 
@@ -1059,12 +1059,12 @@ remove_user(Client, HarvesterId, UserId) ->
 %% Removes specified group from given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_group(Client :: entity_logic:client(), HarvesterId :: od_harvester:id(),
+-spec remove_group(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
     GroupId :: od_group:id()) -> ok | {error, term()}.
-remove_group(Client, HarvesterId, GroupId) ->
+remove_group(Auth, HarvesterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = {group, GroupId}}
     }).
 

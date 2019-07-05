@@ -49,11 +49,11 @@
 %% RootFileId and parent SpaceId.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: entity_logic:client(), ShareId :: od_share:id(),
+-spec create(Auth :: aai:auth(), ShareId :: od_share:id(),
     Name :: binary(), RootFileId :: binary(), SpaceId :: od_space:id()) ->
     {ok, od_share:id()} | {error, term()}.
-create(Client, ShareId, Name, RootFileId, SpaceId) ->
-    create(Client, #{
+create(Auth, ShareId, Name, RootFileId, SpaceId) ->
+    create(Auth, #{
         <<"shareId">> => ShareId,
         <<"name">> => Name,
         <<"rootFileId">> => RootFileId,
@@ -67,12 +67,12 @@ create(Client, ShareId, Name, RootFileId, SpaceId) ->
 %% RootFileId and parent SpaceId are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: entity_logic:client(), Data :: #{}) ->
+-spec create(Auth :: aai:auth(), Data :: #{}) ->
     {ok, od_share:id()} | {error, term()}.
-create(Client, Data) ->
+create(Auth, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_share, id = undefined, aspect = instance},
         data = Data
     })).
@@ -83,12 +83,12 @@ create(Client, Data) ->
 %% Retrieves a share record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
+-spec get(Auth :: aai:auth(), ShareId :: od_share:id()) ->
     {ok, #od_share{}} | {error, term()}.
-get(Client, ShareId) ->
+get(Auth, ShareId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_share, id = ShareId, aspect = instance}
     }).
 
@@ -98,12 +98,12 @@ get(Client, ShareId) ->
 %% Retrieves public share data from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_public_data(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
+-spec get_public_data(Auth :: aai:auth(), ShareId :: od_share:id()) ->
     {ok, map()} | {error, term()}.
-get_public_data(Client, ShareId) ->
+get_public_data(Auth, ShareId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_share, id = ShareId, aspect = instance, scope = public}
     }).
 
@@ -113,12 +113,12 @@ get_public_data(Client, ShareId) ->
 %% Lists all shares (their ids) in database.
 %% @end
 %%--------------------------------------------------------------------
--spec list(Client :: entity_logic:client()) ->
+-spec list(Auth :: aai:auth()) ->
     {ok, [od_share:id()]} | {error, term()}.
-list(Client) ->
+list(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_share, id = undefined, aspect = list}
     }).
 
@@ -131,14 +131,14 @@ list(Client) ->
 %% 2) Share name is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update(Client :: entity_logic:client(), ShareId :: od_share:id(),
+-spec update(Auth :: aai:auth(), ShareId :: od_share:id(),
     Data :: #{}) -> ok | {error, term()}.
-update(Client, ShareId, NewName) when is_binary(NewName) ->
-    update(Client, ShareId, #{<<"name">> => NewName});
-update(Client, ShareId, Data) ->
+update(Auth, ShareId, NewName) when is_binary(NewName) ->
+    update(Auth, ShareId, #{<<"name">> => NewName});
+update(Auth, ShareId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_share, id = ShareId, aspect = instance},
         data = Data
     }).
@@ -149,12 +149,12 @@ update(Client, ShareId, Data) ->
 %% Deletes given share from database.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(Client :: entity_logic:client(), ShareId :: od_share:id()) ->
+-spec delete(Auth :: aai:auth(), ShareId :: od_share:id()) ->
     ok | {error, term()}.
-delete(Client, ShareId) ->
+delete(Auth, ShareId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_share, id = ShareId, aspect = instance}
     }).
 

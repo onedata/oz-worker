@@ -14,7 +14,7 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("tokens.hrl").
+-include("invite_tokens.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -135,7 +135,7 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
         ),
         SpaceId
     end,
-    SpaceId = token_logic:consume(Macaroon, SupportSpaceFun),
+    SpaceId = invite_tokens:consume(Macaroon, SupportSpaceFun),
 
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
     {ok, #od_space{harvesters = Harvesters} = Space} = space_logic_plugin:fetch_entity(SpaceId),
@@ -184,7 +184,7 @@ create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
 create(#el_req{gri = #gri{aspect = verify_provider_identity}, data = Data}) ->
     ProviderId = maps:get(<<"providerId">>, Data),
     Macaroon = maps:get(<<"macaroon">>, Data),
-    case macaroon_logic:verify_provider_identity(Macaroon) of
+    case access_tokens:verify_provider_identity(Macaroon) of
         {ok, ProviderId} -> ok;
         {ok, _OtherProvider} -> ?ERROR_BAD_MACAROON;
         Error -> Error
@@ -325,7 +325,7 @@ update(Req = #el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
 delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     ok = dns_state:remove_delegation_config(ProviderId),
     {ok, #od_provider{root_macaroon = RootMacaroon, spaces = Spaces, eff_harvesters = Harvesters}} = fetch_entity(ProviderId),
-    ok = macaroon_auth:delete(RootMacaroon),
+    ok = access_tokens:invalidate_provider_root_macaroon(RootMacaroon),
 
     lists:foreach(fun(HarvesterId) ->
        harvester_indices:update_stats(HarvesterId, all,
@@ -445,7 +445,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Provider) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this provider is checked in 'exists'
             true;
@@ -478,7 +478,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
     end;
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = ProviderId, aspect = instance, scope = shared}}, Provider) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_HARVESTER(HarvesterId)} ->
             provider_logic:has_eff_harvester(ProviderId, HarvesterId)
                 andalso harvester_logic:has_eff_user(HarvesterId, UserId);
@@ -490,7 +490,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = ProviderId, aspec
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_users}}, _) ->
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_membership, UserId}}}, _) ->
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_membership, UserId}}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_membership, _}}}, _) ->
@@ -499,7 +499,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_membershi
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_groups}}, _) ->
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
-authorize(Req = #el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, _) ->
+authorize(Req = #el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, _) ->
     group_logic:has_eff_user(GroupId, UserId) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_group_membership, _}}}, _) ->
@@ -511,10 +511,10 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_harvesters}}, _
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = spaces}}, _) ->
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
-authorize(#el_req{client = ?USER(UserId), operation = get, gri = #gri{aspect = {user_spaces, UserId}}}, _) ->
+authorize(#el_req{auth = ?USER(UserId), operation = get, gri = #gri{aspect = {user_spaces, UserId}}}, _) ->
     true;
 
-authorize(#el_req{client = ?USER(UserId), operation = get, gri = #gri{aspect = {group_spaces, GroupId}}}, _) ->
+authorize(#el_req{auth = ?USER(UserId), operation = get, gri = #gri{aspect = {group_spaces, GroupId}}}, _) ->
     group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = domain_config}}, _) ->
@@ -625,11 +625,11 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}
         false ->
             #{
                 required => Required,
-                optional => Optional#{<<"token">> => {token, ?PROVIDER_REGISTRATION_TOKEN}}
+                optional => Optional#{<<"token">> => {invite_token, ?PROVIDER_REGISTRATION_TOKEN}}
             };
         true ->
             #{
-                required => Required#{<<"token">> => {token, ?PROVIDER_REGISTRATION_TOKEN}},
+                required => Required#{<<"token">> => {invite_token, ?PROVIDER_REGISTRATION_TOKEN}},
                 optional => Optional
             }
     end;
@@ -644,7 +644,7 @@ validate(Req = #el_req{operation = create, gri = GRI = #gri{aspect = instance_de
 
 validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     required => #{
-        <<"token">> => {token, ?SPACE_SUPPORT_TOKEN},
+        <<"token">> => {invite_token, ?SPACE_SUPPORT_TOKEN},
         <<"size">> => {integer, {not_lower_than, ?MINIMUM_SUPPORT_SIZE}}
     }
 };
@@ -739,7 +739,7 @@ auth_by_membership(UserId, Provider) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_self(entity_logic:req()) -> boolean().
-auth_by_self(#el_req{client = ?PROVIDER(ProvId), gri = #gri{id = ProvId}}) ->
+auth_by_self(#el_req{auth = ?PROVIDER(ProvId), gri = #gri{id = ProvId}}) ->
     true;
 auth_by_self(_) ->
     false.
@@ -752,7 +752,7 @@ auth_by_self(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_cluster_membership(entity_logic:req()) -> boolean().
-auth_by_cluster_membership(#el_req{client = ?USER(UserId), gri = #gri{id = ProviderId}}) ->
+auth_by_cluster_membership(#el_req{auth = ?USER(UserId), gri = #gri{id = ProviderId}}) ->
     ClusterId = ProviderId,
     cluster_logic:has_eff_user(ClusterId, UserId);
 auth_by_cluster_membership(_) ->
@@ -768,7 +768,7 @@ auth_by_cluster_membership(_) ->
 %%--------------------------------------------------------------------
 -spec auth_by_cluster_privilege(entity_logic:req(), oprivileges:cluster_privilege()) ->
     boolean().
-auth_by_cluster_privilege(#el_req{client = ?USER(UserId), gri = #gri{id = ProviderId}}, Privilege) ->
+auth_by_cluster_privilege(#el_req{auth = ?USER(UserId), gri = #gri{id = ProviderId}}, Privilege) ->
     ClusterId = ProviderId,
     cluster_logic:has_eff_privilege(ClusterId, UserId, Privilege);
 auth_by_cluster_privilege(_, _) ->
@@ -895,7 +895,7 @@ create_provider(Data, ProviderId, GRI) ->
     AdminEmail = maps:get(<<"adminEmail">>, Data),
 
     CreateProviderFun = fun(od_user, CreatorUserId) ->
-        {ok, {Macaroon, Identity}} = macaroon_logic:create_provider_root_macaroon(ProviderId),
+        {ok, Macaroon, Identity} = access_tokens:create_provider_root_macaroon(ProviderId),
 
         {Domain, Subdomain} = case SubdomainDelegation of
             false ->
@@ -934,5 +934,5 @@ create_provider(Data, ProviderId, GRI) ->
     % @TODO VFS-5207 Registration token is not required for compatibility with legacy providers
     case Token of
         undefined -> CreateProviderFun(od_user, undefined);
-        _ -> token_logic:consume(Token, CreateProviderFun)
+        _ -> invite_tokens:consume(Token, CreateProviderFun)
     end.

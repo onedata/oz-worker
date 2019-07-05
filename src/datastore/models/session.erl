@@ -20,11 +20,10 @@
 -export([
     create/2,
     get/1, get_user_id/1,
+    exists/1,
     update/2,
     delete/1, delete/2, delete/3,
-    list/0,
-    acquire_gui_macaroon/3,
-    verify_gui_macaroon/3
+    list/0
 ]).
 
 %% datastore_model callbacks
@@ -35,15 +34,6 @@
 -type doc() :: datastore_doc:doc(record()).
 -type diff() :: datastore_doc:diff(record()).
 -export_type([id/0, record/0]).
-
-%% @formatter:off
--type gui_macaroons_cache() :: #{
-    onedata:cluster_type() => #{
-        od_cluster:id() => macaroon_logic:gui_macaroon()
-    }
-}.
-%% @formatter:on
--export_type([gui_macaroons_cache/0]).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -56,11 +46,6 @@
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates a new session.
-%% @end
-%%--------------------------------------------------------------------
 -spec create(id(), record()) -> ok | {error, term()}.
 create(SessionId, Session) ->
     case datastore_model:create(?CTX, #document{key = SessionId, value = Session}) of
@@ -72,14 +57,14 @@ create(SessionId, Session) ->
     end.
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves session by Id.
-%% @end
-%%--------------------------------------------------------------------
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(Id) ->
     datastore_model:get(?CTX, Id).
+
+
+-spec exists(id()) -> {ok, doc()} | {error, term()}.
+exists(Id) ->
+    datastore_model:exists(?CTX, Id).
 
 
 %%--------------------------------------------------------------------
@@ -97,11 +82,6 @@ get_user_id(Id) ->
     end.
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates session by Id.
-%% @end
-%%--------------------------------------------------------------------
 -spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
 update(Id, Diff) ->
     datastore_model:update(?CTX, Id, Diff).
@@ -139,9 +119,8 @@ delete(SessionId, GracePeriod) ->
     ClearExpiredUserSessions :: boolean()) -> ok | {error, term()}.
 delete(SessionId, GracePeriod, ClearExpiredUserSessions) ->
     case ?MODULE:get(SessionId) of
-        {ok, #document{value = #session{user_id = UserId, gui_macaroons = GuiMacaroons}}} ->
+        {ok, #document{value = #session{user_id = UserId}}} ->
             delete_user_session(SessionId, UserId, GracePeriod, ClearExpiredUserSessions),
-            delete_gui_macaroons(GuiMacaroons),
             datastore_model:delete(?CTX, SessionId);
         {error, _} = Error ->
             Error
@@ -156,53 +135,6 @@ delete(SessionId, GracePeriod, ClearExpiredUserSessions) ->
 -spec list() -> {ok, [doc()]} | {error, term()}.
 list() ->
     datastore_model:fold(?CTX, fun(Doc, Acc) -> {ok, [Doc | Acc]} end, []).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates or reuses an existing GUI macaroon. The macaroon is valid only for
-%% given SessionId, ClusterType (?ONEPROVIDER or ?ONEZONE) and ClusterId
-%% (?ONEZONE_CLUSTER_ID or ProviderId).
-%% @end
-%%--------------------------------------------------------------------
--spec acquire_gui_macaroon(session:id(), onedata:cluster_type(), od_cluster:id()) ->
-    {ok, {macaroon:macaroon(), macaroon_logic:expires()}} | {error, term()}.
-acquire_gui_macaroon(SessionId, ClusterType, ClusterId) ->
-    case ?MODULE:get(SessionId) of
-        {error, _} = Error ->
-            Error;
-        {ok, #document{value = #session{gui_macaroons = GuiMacaroons, user_id = UserId}}} ->
-            case reuse_gui_macaroon(GuiMacaroons, ClusterType, ClusterId) of
-                {true, {_Identifier, Macaroon, Expires}} ->
-                    {ok, {Macaroon, Expires}};
-                false ->
-                    {ok, {Identifier, Macaroon, Expires}} = macaroon_logic:create_gui_macaroon(
-                        UserId, SessionId, ClusterType, ClusterId
-                    ),
-                    update(SessionId, fun(Session = #session{gui_macaroons = OldGuiMacaroons}) ->
-                        {ok, Session#session{gui_macaroons = add_gui_macaroon(
-                            OldGuiMacaroons, ClusterType, ClusterId, Identifier, Macaroon, Expires
-                        )}}
-                    end),
-                    {ok, {Macaroon, Expires}}
-            end
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Verifies given GUI macaroon against ClusterType and ClusterId.
-%% The session id is one of the caveats in the macaroon. During verification, it
-%% is checked if given macaroon was actually created within the session.
-%% @end
-%%--------------------------------------------------------------------
--spec verify_gui_macaroon(macaroon:macaroon(), onedata:cluster_type(),
-    od_cluster:id()) -> {ok, od_user:id(), session:id()} | {error, term()}.
-verify_gui_macaroon(SubjectMacaroon, ClusterType, ClusterId) ->
-    SessionVerifyFun = fun(CaveatSessionId, Identifier) ->
-        has_gui_macaroon(CaveatSessionId, ClusterType, ClusterId, Identifier)
-    end,
-    macaroon_logic:verify_gui_macaroon(SubjectMacaroon, ClusterType, ClusterId, SessionVerifyFun).
 
 %%%===================================================================
 %%% datastore_model callbacks
@@ -262,67 +194,3 @@ clear_expired_sessions(UserId, GracePeriod) ->
                 delete_user_session(UserSessionId, UserId, GracePeriod, false)
         end
     end, ActiveUserSessions).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Deletes all gui macaroons issued for this session.
-%% @end
-%%--------------------------------------------------------------------
--spec delete_gui_macaroons(gui_macaroons_cache()) -> ok.
-delete_gui_macaroons(GuiMacaroons) ->
-    maps:fold(fun(_ClusterType, Clusters, _) ->
-        maps:fold(fun(_ClusterId, {_, Macaroon, _}, _) ->
-            macaroon_logic:delete_gui_macaroon(Macaroon)
-        end, ok, Clusters)
-    end, ok, GuiMacaroons).
-
-
--spec add_gui_macaroon(gui_macaroons_cache(), onedata:cluster_type(), od_cluster:id(),
-    macaroon_logic:id(), macaroon:macaroon(), macaroon_logic:expires()) -> gui_macaroons_cache().
-add_gui_macaroon(GuiMacaroons, ClusterType, ClusterId, Identifier, Macaroon, Expires) ->
-    MacaroonPerClusterType = maps:get(ClusterType, GuiMacaroons, #{}),
-    GuiMacaroons#{ClusterType => MacaroonPerClusterType#{
-        ClusterId => {Identifier, Macaroon, Expires}
-    }}.
-
-
--spec get_gui_macaroon(gui_macaroons_cache(), onedata:cluster_type(), od_cluster:id()) ->
-    undefined | macaroon_logic:gui_macaroon().
-get_gui_macaroon(GuiMacaroons, ClusterType, ClusterId) ->
-    MacaroonPerClusterType = maps:get(ClusterType, GuiMacaroons, #{}),
-    maps:get(ClusterId, MacaroonPerClusterType, undefined).
-
-
--spec has_gui_macaroon(session:id() | gui_macaroons_cache(), onedata:cluster_type(),
-    od_cluster:id(), macaroon_logic:id()) -> boolean().
-has_gui_macaroon(SessionId, ClusterType, ClusterId, Identifier) when is_binary(SessionId) ->
-    case ?MODULE:get(SessionId) of
-        {error, _} ->
-            false;
-        {ok, #document{value = #session{gui_macaroons = GuiMacaroons}}} ->
-            has_gui_macaroon(GuiMacaroons, ClusterType, ClusterId, Identifier)
-    end;
-has_gui_macaroon(GuiMacaroons, ClusterType, ClusterId, Identifier) ->
-    case get_gui_macaroon(GuiMacaroons, ClusterType, ClusterId) of
-        {Identifier, _, _} -> true;
-        _ -> false
-    end.
-
-
--spec reuse_gui_macaroon(gui_macaroons_cache(), onedata:cluster_type(), od_cluster:id()) ->
-    false | {true, macaroon_logic:gui_macaroon()}.
-reuse_gui_macaroon(GuiMacaroons, ClusterType, ClusterId) ->
-    case get_gui_macaroon(GuiMacaroons, ClusterType, ClusterId) of
-        undefined ->
-            false;
-        {Identifier, Macaroon, Expires} ->
-            case macaroon_logic:should_refresh_gui_macaroon(Expires) of
-                true -> false;
-                false -> {true, {Identifier, Macaroon, Expires}}
-            end
-    end.
-
-
-

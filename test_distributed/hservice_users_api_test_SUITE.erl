@@ -124,7 +124,7 @@ add_user_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = add_user,
-            args = [client, HService, U3, data],
+            args = [auth, HService, U3, data],
             expected_result = ?OK_BINARY(U3)
         },
         % TODO gs
@@ -194,7 +194,7 @@ remove_user_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = remove_user,
-            args = [client, HService, userId],
+            args = [auth, HService, userId],
             expected_result = ?OK
         }
         % TODO gs
@@ -240,7 +240,7 @@ list_users_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_users,
-            args = [client, HService],
+            args = [auth, HService],
             expected_result = ?OK_LIST(ExpUsers)
         }
         % TODO gs
@@ -320,7 +320,7 @@ get_user_test(Config) ->
             logic_spec = #logic_spec{
                 module = handle_service_logic,
                 function = get_user,
-                args = [client, HService, SubjectUser],
+                args = [auth, HService, SubjectUser],
                 expected_result = ?OK_MAP_CONTAINS(ExpUserDetails)
             },
             gs_spec = #gs_spec{
@@ -399,7 +399,7 @@ get_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_user_privileges,
-            args = [client, HService, U3],
+            args = [auth, HService, U3],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -463,7 +463,7 @@ update_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = update_user_privileges,
-            args = [client, HService, U3, data],
+            args = [auth, HService, U3, data],
             expected_result = ?OK
         }
         % TODO gs
@@ -504,7 +504,7 @@ list_eff_users_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_eff_users,
-            args = [client, HService],
+            args = [auth, HService],
             expected_result = ?OK_LIST(ExpUsers)
         }
         % TODO gs
@@ -566,7 +566,7 @@ get_eff_user_test(Config) ->
                 logic_spec = #logic_spec{
                     module = handle_service_logic,
                     function = get_eff_user,
-                    args = [client, HService, UserId],
+                    args = [auth, HService, UserId],
                     expected_result = ?OK_MAP_CONTAINS(UserDetails)
                 },
                 gs_spec = #gs_spec{
@@ -695,7 +695,7 @@ get_eff_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_service_logic,
             function = get_eff_user_privileges,
-            args = [client, HService, U3],
+            args = [auth, HService, U3],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs

@@ -125,7 +125,7 @@ add_space_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = add_space,
-            args = [client, H1, S1],
+            args = [auth, H1, S1],
             expected_result = ?OK_BINARY(S1)
         },
         % TODO gs
@@ -173,7 +173,7 @@ create_space_invite_token_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = create_space_invite_token,
-            args = [client, H1],
+            args = [auth, H1],
             expected_result = ?OK_TERM(VerifyFun)
         }
         % TODO gs
@@ -225,7 +225,7 @@ remove_space_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = remove_space,
-            args = [client, H1, spaceId],
+            args = [auth, H1, spaceId],
             expected_result = ?OK
         }
         % TODO gs
@@ -277,7 +277,7 @@ list_spaces_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_spaces,
-            args = [client, H1],
+            args = [auth, H1],
             expected_result = ?OK_LIST(ExpSpaces)
         }
         % TODO gs
@@ -325,7 +325,7 @@ get_space_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_space,
-            args = [client, H1, S1],
+            args = [auth, H1, S1],
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?SPACE_NAME1,
                 <<"providers">> => #{}
@@ -374,7 +374,7 @@ list_eff_providers_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_eff_providers,
-            args = [client, H1],
+            args = [auth, H1],
             expected_result = ?OK_LIST(ExpProviders)
         }
     },
@@ -413,7 +413,7 @@ get_eff_provider_test(Config) ->
             logic_spec = #logic_spec{
                 module = harvester_logic,
                 function = get_eff_provider,
-                args = [client, H1, ProviderId],
+                args = [auth, H1, ProviderId],
                 expected_result = ?OK_MAP(#{
                     <<"name">> => maps:get(<<"name">>, ProviderDetails)
                 })

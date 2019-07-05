@@ -13,6 +13,7 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("gui/include/gui_session.hrl").
@@ -382,14 +383,14 @@ spawn_clients(Config, Type, Clients, RetryFlag, CallbackFunction, OnSuccessFun) 
         case Type of
             gui ->
                 {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, Client),
-                {ok, GuiToken} = oz_test_utils:acquire_gui_token(Config, CookieValue),
+                {ok, GuiToken} = oz_test_utils:request_gui_token(Config, CookieValue),
                 Auth = {macaroon, GuiToken, []},
-                Identity = {user, Client},
+                Identity = ?SUB(user, Client),
                 {Auth, Identity};
             provider ->
                 {ProviderId, Macaroon} = Client,
                 Auth = {macaroon, Macaroon, []},
-                Identity = {provider, ProviderId},
+                Identity = ?SUB(?ONEPROVIDER, ProviderId),
                 {Auth, Identity}
         end
     end, Clients),

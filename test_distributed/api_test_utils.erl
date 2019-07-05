@@ -117,7 +117,7 @@ run_rest_tests(
     Config, RestSpec, ClientSpec, DataSpec,
     EnvSetUpFun, EnvTearDownFun, VerifyFun
 ) ->
-    % Remove 'root' client not used in rest
+    % Remove 'root' auth, which is not applicable in rest
     NewClientSpec = #client_spec{
         correct = ClientSpec#client_spec.correct -- [root],
         unauthorized = ClientSpec#client_spec.unauthorized -- [root],
@@ -132,7 +132,7 @@ run_rest_tests(
 
 run_rest_test(Config, RestSpec, Client, Data, Description, Env, undefined) ->
     NewRestSpec = prepare_rest_spec(Config, RestSpec, Data, Env),
-    ResolvedClient = resolve_client(Client, Env),
+    ResolvedClient = resolve_auth(Client, Env),
 
     Result = rest_test_utils:check_rest_call(Config, #{
         request => #{
@@ -247,7 +247,7 @@ log_rest_test_result(RestSpec, Client, Data, Description,
         RestSpec#rest_spec.method,
         RestSpec#rest_spec.path,
         Data,
-        entity_logic:client_to_string(prepare_logic_client(Client)),
+        aai:auth_to_string(prepare_logic_auth(Client)),
         UnmetExp, Got, Expected, Code, Headers, Body
     ]),
     throw(fail).
@@ -270,7 +270,7 @@ run_logic_tests(
 
 
 run_logic_test(Config, LogicSpec, Client, Data, Description, Env, undefined) ->
-    LogicClient = prepare_logic_client(resolve_client(Client, Env)),
+    LogicClient = prepare_logic_auth(resolve_auth(Client, Env)),
     NewLogicSpec = prepare_logic_spec(LogicSpec, LogicClient, Data, Env),
     Result = check_logic_call(Config, NewLogicSpec),
     log_logic_test_result(NewLogicSpec, LogicClient, Description, Result);
@@ -284,16 +284,16 @@ run_logic_test(Config, LogicSpec, Client, Data, DescFmt, Env, ExpError) ->
     ).
 
 
-% Converts client used in tests into logic client
-prepare_logic_client(nobody) ->
+% Converts auth used in tests into logic auth
+prepare_logic_auth(nobody) ->
     ?NOBODY;
-prepare_logic_client(root) ->
+prepare_logic_auth(root) ->
     ?ROOT;
-prepare_logic_client({user, UserId}) ->
+prepare_logic_auth({user, UserId}) ->
     ?USER(UserId);
-prepare_logic_client({user, UserId, _Macaroon}) ->
+prepare_logic_auth({user, UserId, _Macaroon}) ->
     ?USER(UserId);
-prepare_logic_client({provider, ProviderId, _Macaroon}) ->
+prepare_logic_auth({provider, ProviderId, _Macaroon}) ->
     ?PROVIDER(ProviderId).
 
 
@@ -314,7 +314,7 @@ prepare_logic_spec(LogicSpec, Client, Data, Env) ->
 prepare_logic_args(Args, Client, Data, Env) ->
     lists:map(
         fun
-            (client) -> Client;
+            (auth) -> Client;
             (data) -> Data;
             (Arg) -> maps:get(Arg, Env, Arg)
         end, Args
@@ -398,7 +398,7 @@ log_logic_test_result(LogicSpec, Client, Description, {result, Result}) ->
         LogicSpec#logic_spec.module,
         LogicSpec#logic_spec.function,
         LogicSpec#logic_spec.args,
-        entity_logic:client_to_string(Client),
+        aai:auth_to_string(Client),
         LogicSpec#logic_spec.expected_result,
         Result
     ]),
@@ -415,7 +415,7 @@ run_gs_tests(
     Config, GsSpec, ClientSpec, DataSpec,
     EnvSetUpFun, EnvTearDownFun, VerifyFun
 ) ->
-    % Remove 'root' client not used in graph sync
+    % Remove 'root' auth, which is not applicable in graph sync
     NewClientSpec = #client_spec{
         correct = ClientSpec#client_spec.correct -- [root],
         unauthorized = ClientSpec#client_spec.unauthorized -- [root],
@@ -428,11 +428,11 @@ run_gs_tests(
     ).
 
 
-% TODO rm clause after it will be possible to test gs unauthorized client
+% TODO rm clause after it will be possible to test gs nobody auth
 run_gs_test(_Config, _GsSpec, nobody, _Data, _DescFmt, _Env, undefined) ->
     ok;
 run_gs_test(Config, GsSpec, Client, Data, Description, Env, undefined) ->
-    ResolvedClient = resolve_client(Client, Env),
+    ResolvedClient = resolve_auth(Client, Env),
     GsClient = prepare_gs_client(Config, ResolvedClient),
     NewGsSpec = prepare_gs_spec(Config, GsSpec, ResolvedClient, Data, Env),
     Result = check_gs_call(NewGsSpec, GsClient, Data),
@@ -467,10 +467,10 @@ prepare_gs_client(Config, {user, UserId, _Macaroon}) ->
     prepare_gs_client(Config, {user, UserId});
 prepare_gs_client(Config, {user, UserId}) ->
     {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, UserId),
-    {ok, GuiToken} = oz_test_utils:acquire_gui_token(Config, CookieValue),
+    {ok, GuiToken} = oz_test_utils:request_gui_token(Config, CookieValue),
     prepare_gs_client(
         Config,
-        {user, UserId},
+        ?SUB(user, UserId),
         {macaroon, GuiToken, []},
         [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
     );
@@ -479,16 +479,12 @@ prepare_gs_client(_Config, nobody) ->
 prepare_gs_client(Config, {provider, ProviderId, Macaroon}) ->
     prepare_gs_client(
         Config,
-        {provider, ProviderId},
+        ?SUB(?ONEPROVIDER, ProviderId),
         {macaroon, Macaroon, []},
         [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
     ).
 
 
-% Authorization :: {urlToken, Token} | {macaroon, Macaroon}.
-% Provider   - {macaroon, Macaroon} - macaroon is sent in headers
-% User (GUI) - {urlToken, Token} - macaroon is retrieved from /gui-token
-%              endpoint based on cookie and sent in QueryString
 prepare_gs_client(Config, ExpIdentity, Authorization, Opts) ->
     {ok, GsClient, #gs_resp_handshake{
         identity = ExpIdentity
@@ -526,7 +522,7 @@ prepare_gri(Gri, _Env) ->
 % Convert placeholders in auth hint into real data
 prepare_auth_hint(undefined, _, _Env) ->
     undefined;
-prepare_auth_hint(?THROUGH_USER(client), {user, UserId}, _Env) ->
+prepare_auth_hint(?THROUGH_USER(auth), {user, UserId}, _Env) ->
     ?THROUGH_USER(UserId);
 prepare_auth_hint(?THROUGH_USER(UserId), _, Env) when is_atom(UserId) ->
     ?THROUGH_USER(maps:get(UserId, Env, UserId));
@@ -540,7 +536,7 @@ prepare_auth_hint(?THROUGH_HANDLE_SERVICE(HSId), _, Env) when is_atom(HSId) ->
     ?THROUGH_HANDLE_SERVICE(maps:get(HSId, Env, HSId));
 prepare_auth_hint(?THROUGH_HANDLE(HandleId), _, Env) when is_atom(HandleId) ->
     ?THROUGH_HANDLE(maps:get(HandleId, Env, HandleId));
-prepare_auth_hint(?AS_USER(client), {user, UserId}, _Env) ->
+prepare_auth_hint(?AS_USER(auth), {user, UserId}, _Env) ->
     ?AS_USER(UserId);
 prepare_auth_hint(?AS_USER(UserId), _, Env) when is_atom(UserId) ->
     ?AS_USER(maps:get(UserId, Env, UserId));
@@ -632,7 +628,7 @@ log_gs_test_result(GsSpec, Client, Data, Description, {result, Result}) ->
     "Expected: ~p~n"
     "Got: ~p", [
         Description,
-        entity_logic:client_to_string(prepare_logic_client(Client)),
+        aai:auth_to_string(prepare_logic_auth(Client)),
         GsSpec#gs_spec.operation,
         GsSpec#gs_spec.gri,
         Data,
@@ -674,7 +670,7 @@ run_test_combinations(
         fun({Clients, DataSets, DescFmt, Error}) ->
             lists:foreach(
                 fun(Client) ->
-                    PreparedClient = prepare_client(Client, Environment, Config),
+                    PreparedClient = prepare_auth(Client, Environment, Config),
                     lists:foreach(
                         fun
                         % get and delete operations cannot
@@ -716,7 +712,7 @@ run_test_combinations(
                     Env = EnvSetUpFun(),
                     PreparedData = prepare_data(DataSet, Env),
                     RunTestFun(
-                        Config, Spec, prepare_client(Client, Env, Config),
+                        Config, Spec, prepare_auth(Client, Env, Config),
                         PreparedData, Description, Env, undefined
                     ),
                     VerifyFun(true, Env, PreparedData),
@@ -737,20 +733,20 @@ prepare_error(Data, Description, ExpError) ->
     {Data, Description, ExpError}.
 
 
-% Converts placeholders in client into real data
-prepare_client({user, User}, Env, _Config) when is_atom(User) ->
+% Converts placeholders in auth into real data
+prepare_auth({user, User}, Env, _Config) when is_atom(User) ->
     {user, maps:get(User, Env, User)};
-prepare_client({user, User, Macaroon}, Env, _Config) when is_atom(User) ->
+prepare_auth({user, User, Macaroon}, Env, _Config) when is_atom(User) ->
     {user, maps:get(User, Env, User), Macaroon};
-prepare_client({provider, Provider, Macaroon}, Env, _Config) when is_atom(Provider) orelse is_atom(Macaroon) ->
+prepare_auth({provider, Provider, Macaroon}, Env, _Config) when is_atom(Provider) orelse is_atom(Macaroon) ->
     {provider, maps:get(Provider, Env, Provider), maps:get(Macaroon, Env, Macaroon)};
-prepare_client({admin, Privs}, _Env, Config) ->
+prepare_auth({admin, Privs}, _Env, Config) ->
     {ok, Admin} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, Admin, Privs, []),
     {user, Admin};
-prepare_client(Client, Env, _Config) when is_atom(Client) ->
+prepare_auth(Client, Env, _Config) when is_atom(Client) ->
     maps:get(Client, Env, Client);
-prepare_client(Client, _Env, _Config) ->
+prepare_auth(Client, _Env, _Config) ->
     Client.
 
 
@@ -950,15 +946,15 @@ prepare_exp_result(Expectation, _Env, _Data) ->
     Expectation.
 
 
-resolve_client(nobody, _Env) ->
+resolve_auth(nobody, _Env) ->
     nobody;
-resolve_client(root, _Env) ->
+resolve_auth(root, _Env) ->
     root;
-resolve_client({user, UserId}, _Env) ->
+resolve_auth({user, UserId}, _Env) ->
     {user, UserId};
-resolve_client({user, UserId, Macaroon}, _Env) ->
+resolve_auth({user, UserId, Macaroon}, _Env) ->
     {user, UserId, Macaroon};
-resolve_client({provider, ProviderId, Macaroon}, _Env) ->
+resolve_auth({provider, ProviderId, Macaroon}, _Env) ->
     {provider, ProviderId, Macaroon};
-resolve_client(Arg, Env) ->
+resolve_auth(Arg, Env) ->
     maps:get(Arg, Env).

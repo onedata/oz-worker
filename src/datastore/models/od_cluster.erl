@@ -162,7 +162,7 @@ ensure_onezone_cluster() ->
         fun(Cluster) -> {ok, Cluster} end,
         #document{key = ?ONEZONE_CLUSTER_ID, value = #od_cluster{
             type = ?ONEZONE,
-            creator = ?ROOT
+            creator = ?SUB(root)
         }}
     ),
     ok.

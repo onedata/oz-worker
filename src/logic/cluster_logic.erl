@@ -96,8 +96,8 @@ create_oneprovider_cluster(CreatorUserId, ProviderId) ->
     {ok, _} = od_cluster:create(#document{key = ClusterId, value = #od_cluster{
         type = ?ONEPROVIDER,
         creator = case CreatorUserId of
-            undefined -> ?ROOT;
-            _ -> ?USER(CreatorUserId)
+            undefined -> ?SUB(root);
+            _ -> ?SUB(user, CreatorUserId)
         end
     }}),
 
@@ -136,12 +136,12 @@ delete_oneprovider_cluster(ProviderId) ->
 %% Retrieves a cluster record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: entity_logic:client(), ClusterId :: od_cluster:id()) ->
+-spec get(Auth :: aai:auth(), ClusterId :: od_cluster:id()) ->
     {ok, #od_cluster{}} | {error, term()}.
-get(Client, ClusterId) ->
+get(Auth, ClusterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = instance}
     }).
 
@@ -151,12 +151,12 @@ get(Client, ClusterId) ->
 %% Retrieves protected cluster data from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_protected_data(Client :: entity_logic:client(), ClusterId :: od_cluster:id()) ->
+-spec get_protected_data(Auth :: aai:auth(), ClusterId :: od_cluster:id()) ->
     {ok, map()} | {error, term()}.
-get_protected_data(Client, ClusterId) ->
+get_protected_data(Auth, ClusterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = instance, scope = protected}
     }).
 
@@ -166,12 +166,12 @@ get_protected_data(Client, ClusterId) ->
 %% Retrieves public cluster data from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_public_data(Client :: entity_logic:client(), ClusterId :: od_cluster:id()) ->
+-spec get_public_data(Auth :: aai:auth(), ClusterId :: od_cluster:id()) ->
     {ok, maps:map()} | {error, term()}.
-get_public_data(Client, ClusterId) ->
+get_public_data(Auth, ClusterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = instance, scope = public}
     }).
 
@@ -181,12 +181,12 @@ get_public_data(Client, ClusterId) ->
 %% Lists all clusters (their ids) in database.
 %% @end
 %%--------------------------------------------------------------------
--spec list(Client :: entity_logic:client()) ->
+-spec list(Auth :: aai:auth()) ->
     {ok, [od_cluster:id()]} | {error, term()}.
-list(Client) ->
+list(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = undefined, aspect = list}
     }).
 
@@ -196,17 +196,17 @@ list(Client) ->
 %% Updates the version info of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec update_version_info(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec update_version_info(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     onedata:service_type(), VersionInfo :: od_cluster:version_info()) ->
     ok | {error, term()}.
-update_version_info(Client, ClusterId, ?WORKER, {Release, Build, GuiHash}) ->
-    update(Client, ClusterId, #{<<"workerVersion">> => #{
+update_version_info(Auth, ClusterId, ?WORKER, {Release, Build, GuiHash}) ->
+    update(Auth, ClusterId, #{<<"workerVersion">> => #{
         <<"release">> => Release,
         <<"build">> => Build,
         <<"gui">> => GuiHash
     }});
-update_version_info(Client, ClusterId, ?ONEPANEL, {Release, Build, GuiHash}) ->
-    update(Client, ClusterId, #{<<"onepanelVersion">> => #{
+update_version_info(Auth, ClusterId, ?ONEPANEL, {Release, Build, GuiHash}) ->
+    update(Auth, ClusterId, #{<<"onepanelVersion">> => #{
         <<"release">> => Release,
         <<"build">> => Build,
         <<"gui">> => GuiHash
@@ -218,10 +218,10 @@ update_version_info(Client, ClusterId, ?ONEPANEL, {Release, Build, GuiHash}) ->
 %% Toggles onepanelProxy on/off in given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec update_onepanel_proxy(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec update_onepanel_proxy(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     OnepanelProxy :: boolean()) -> ok | {error, term()}.
-update_onepanel_proxy(Client, ClusterId, OnepanelProxy) when is_boolean(OnepanelProxy) ->
-    update(Client, ClusterId, #{<<"onepanelProxy">> => OnepanelProxy}).
+update_onepanel_proxy(Auth, ClusterId, OnepanelProxy) when is_boolean(OnepanelProxy) ->
+    update(Auth, ClusterId, #{<<"onepanelProxy">> => OnepanelProxy}).
 
 
 %%--------------------------------------------------------------------
@@ -232,12 +232,12 @@ update_onepanel_proxy(Client, ClusterId, OnepanelProxy) when is_boolean(Onepanel
 %%  * <<"onepanelProxy">>
 %% @end
 %%--------------------------------------------------------------------
--spec update(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec update(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     Data :: #{}) -> ok | {error, term()}.
-update(Client, ClusterId, Data) ->
+update(Auth, ClusterId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = instance},
         data = Data
     }).
@@ -249,12 +249,12 @@ update(Client, ClusterId, Data) ->
 %% given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec create_user_invite_token(Client :: entity_logic:client(), ClusterId :: od_cluster:id()) ->
+-spec create_user_invite_token(Auth :: aai:auth(), ClusterId :: od_cluster:id()) ->
     {ok, macaroon:macaroon()} | {error, term()}.
-create_user_invite_token(Client, ClusterId) ->
+create_user_invite_token(Auth, ClusterId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = invite_user_token},
         data = #{}
     })).
@@ -266,12 +266,12 @@ create_user_invite_token(Client, ClusterId) ->
 %% given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec create_group_invite_token(Client :: entity_logic:client(), ClusterId :: od_cluster:id()) ->
+-spec create_group_invite_token(Auth :: aai:auth(), ClusterId :: od_cluster:id()) ->
     {ok, macaroon:macaroon()} | {error, term()}.
-create_group_invite_token(Client, ClusterId) ->
+create_group_invite_token(Auth, ClusterId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = invite_group_token},
         data = #{}
     })).
@@ -282,11 +282,11 @@ create_group_invite_token(Client, ClusterId) ->
 %% Adds specified user to given cluster with default member privileges.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(Client :: entity_logic:client(),
+-spec add_user(Auth :: aai:auth(),
     ClusterId :: od_cluster:id(), UserId :: od_user:id()) ->
     {ok, od_user:id()} | {error, term()}.
-add_user(Client, ClusterId, UserId) ->
-    add_user(Client, ClusterId, UserId, #{}).
+add_user(Auth, ClusterId, UserId) ->
+    add_user(Auth, ClusterId, UserId, #{}).
 
 
 %%--------------------------------------------------------------------
@@ -297,18 +297,18 @@ add_user(Client, ClusterId, UserId) ->
 %% 2) Privileges are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(Client :: entity_logic:client(),
+-spec add_user(Auth :: aai:auth(),
     ClusterId :: od_cluster:id(), UserId :: od_user:id(),
     PrivilegesPrivilegesOrData :: [privileges:cluster_privileges()] | #{}) ->
     {ok, od_user:id()} | {error, term()}.
-add_user(Client, ClusterId, UserId, Privileges) when is_list(Privileges) ->
-    add_user(Client, ClusterId, UserId, #{
+add_user(Auth, ClusterId, UserId, Privileges) when is_list(Privileges) ->
+    add_user(Auth, ClusterId, UserId, #{
         <<"privileges">> => Privileges
     });
-add_user(Client, ClusterId, UserId, Data) ->
+add_user(Auth, ClusterId, UserId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = {user, UserId}},
         data = Data
     })).
@@ -319,11 +319,11 @@ add_user(Client, ClusterId, UserId, Data) ->
 %% Adds specified group to given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(Client :: entity_logic:client(),
+-spec add_group(Auth :: aai:auth(),
     ClusterId :: od_cluster:id(), GroupId :: od_group:id()) ->
     {ok, od_group:id()} | {error, term()}.
-add_group(Client, ClusterId, GroupId) ->
-    add_group(Client, ClusterId, GroupId, #{}).
+add_group(Auth, ClusterId, GroupId) ->
+    add_group(Auth, ClusterId, GroupId, #{}).
 
 
 %%--------------------------------------------------------------------
@@ -334,18 +334,18 @@ add_group(Client, ClusterId, GroupId) ->
 %% 2) Privileges are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(Client :: entity_logic:client(),
+-spec add_group(Auth :: aai:auth(),
     ClusterId :: od_cluster:id(), GroupId :: od_group:id(),
     PrivilegesOrData :: [privileges:cluster_privileges()] | #{}) ->
     {ok, od_group:id()} | {error, term()}.
-add_group(Client, ClusterId, GroupId, Privileges) when is_list(Privileges) ->
-    add_group(Client, ClusterId, GroupId, #{
+add_group(Auth, ClusterId, GroupId, Privileges) when is_list(Privileges) ->
+    add_group(Auth, ClusterId, GroupId, #{
         <<"privileges">> => Privileges
     });
-add_group(Client, ClusterId, GroupId, Data) ->
+add_group(Auth, ClusterId, GroupId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = {group, GroupId}},
         data = Data
     })).
@@ -355,10 +355,10 @@ add_group(Client, ClusterId, GroupId, Data) ->
 %% Creates a new group in the cluster based on group name and type.
 %% @end
 %%--------------------------------------------------------------------
--spec create_group(Client :: entity_logic:client(), od_cluster:id(), od_group:name(),
+-spec create_group(Auth :: aai:auth(), od_cluster:id(), od_group:name(),
     od_group:type()) -> {ok, od_group:id()} | {error, term()}.
-create_group(Client, ClusterId, Name, Type) ->
-    create_group(Client, ClusterId, #{<<"name">> => Name, <<"type">> => Type}).
+create_group(Auth, ClusterId, Name, Type) ->
+    create_group(Auth, ClusterId, #{<<"name">> => Name, <<"type">> => Type}).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -367,18 +367,18 @@ create_group(Client, ClusterId, Name, Type) ->
 %% 2) Group name is provided in a proper Data object, group type is optional.
 %% @end
 %%--------------------------------------------------------------------
--spec create_group(Client :: entity_logic:client(), od_cluster:id(),
+-spec create_group(Auth :: aai:auth(), od_cluster:id(),
     NameOrData :: od_group:name() | #{}) -> {ok, od_group:id()} | {error, term()}.
-create_group(Client, ClusterId, Name) when is_binary(Name) ->
-    create_group(Client, ClusterId, #{<<"name">> => Name});
-create_group(Client, ClusterId, Data) ->
-    AuthHint = case Client of
+create_group(Auth, ClusterId, Name) when is_binary(Name) ->
+    create_group(Auth, ClusterId, #{<<"name">> => Name});
+create_group(Auth, ClusterId, Data) ->
+    AuthHint = case Auth of
         ?USER(UserId) -> ?AS_USER(UserId);
         _ -> undefined
     end,
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = group},
         data = Data,
         auth_hint = AuthHint
@@ -390,12 +390,12 @@ create_group(Client, ClusterId, Data) ->
 %% Retrieves the list of users of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec get_users(Client :: entity_logic:client(), ClusterId :: od_cluster:id()) ->
+-spec get_users(Auth :: aai:auth(), ClusterId :: od_cluster:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
-get_users(Client, ClusterId) ->
+get_users(Auth, ClusterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = users}
     }).
 
@@ -405,12 +405,12 @@ get_users(Client, ClusterId) ->
 %% Retrieves the list of effective users of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_users(Client :: entity_logic:client(), ClusterId :: od_cluster:id()) ->
+-spec get_eff_users(Auth :: aai:auth(), ClusterId :: od_cluster:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
-get_eff_users(Client, ClusterId) ->
+get_eff_users(Auth, ClusterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = eff_users}
     }).
 
@@ -420,12 +420,12 @@ get_eff_users(Client, ClusterId) ->
 %% Retrieves the information about specific user among users of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec get_user(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
-get_user(Client, ClusterId, UserId) ->
+get_user(Auth, ClusterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
         auth_hint = ?THROUGH_CLUSTER(ClusterId)
     }).
@@ -437,12 +437,12 @@ get_user(Client, ClusterId, UserId) ->
 %% effective users of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec get_eff_user(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
-get_eff_user(Client, ClusterId, UserId) ->
+get_eff_user(Auth, ClusterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
         auth_hint = ?THROUGH_CLUSTER(ClusterId)
     }).
@@ -453,12 +453,12 @@ get_eff_user(Client, ClusterId, UserId) ->
 %% Retrieves the privileges of specific user among users of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_privileges(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec get_user_privileges(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     UserId :: od_user:id()) -> {ok, [privileges:cluster_privileges()]} | {error, term()}.
-get_user_privileges(Client, ClusterId, UserId) ->
+get_user_privileges(Auth, ClusterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = {user_privileges, UserId}}
     }).
 
@@ -469,12 +469,12 @@ get_user_privileges(Client, ClusterId, UserId) ->
 %% among effective users of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user_privileges(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec get_eff_user_privileges(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     UserId :: od_user:id()) -> {ok, [privileges:cluster_privileges()]} | {error, term()}.
-get_eff_user_privileges(Client, ClusterId, UserId) ->
+get_eff_user_privileges(Auth, ClusterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = {eff_user_privileges, UserId}}
     }).
 
@@ -485,13 +485,13 @@ get_eff_user_privileges(Client, ClusterId, UserId) ->
 %% among effective users of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user_membership_intermediaries(Client :: entity_logic:client(),
+-spec get_eff_user_membership_intermediaries(Auth :: aai:auth(),
     ClusterId :: od_cluster:id(), UserId :: od_user:id()) ->
     {ok, entity_graph:intermediaries()} | {error, term()}.
-get_eff_user_membership_intermediaries(Client, ClusterId, UserId) ->
+get_eff_user_membership_intermediaries(Auth, ClusterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = {eff_user_membership, UserId}}
     }).
 
@@ -501,12 +501,12 @@ get_eff_user_membership_intermediaries(Client, ClusterId, UserId) ->
 %% Retrieves the list of groups of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec get_groups(Client :: entity_logic:client(), ClusterId :: od_cluster:id()) ->
+-spec get_groups(Auth :: aai:auth(), ClusterId :: od_cluster:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
-get_groups(Client, ClusterId) ->
+get_groups(Auth, ClusterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = groups}
     }).
 
@@ -516,12 +516,12 @@ get_groups(Client, ClusterId) ->
 %% Retrieves the list of effective groups of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_groups(Client :: entity_logic:client(), ClusterId :: od_cluster:id()) ->
+-spec get_eff_groups(Auth :: aai:auth(), ClusterId :: od_cluster:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
-get_eff_groups(Client, ClusterId) ->
+get_eff_groups(Auth, ClusterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = eff_groups}
     }).
 
@@ -531,12 +531,12 @@ get_eff_groups(Client, ClusterId) ->
 %% Retrieves the information about specific group among groups of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec get_group(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
-get_group(Client, ClusterId, GroupId) ->
+get_group(Auth, ClusterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
         auth_hint = ?THROUGH_CLUSTER(ClusterId)
     }).
@@ -548,12 +548,12 @@ get_group(Client, ClusterId, GroupId) ->
 %% effective groups of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_group(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec get_eff_group(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
-get_eff_group(Client, ClusterId, GroupId) ->
+get_eff_group(Auth, ClusterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
         auth_hint = ?THROUGH_CLUSTER(ClusterId)
     }).
@@ -564,12 +564,12 @@ get_eff_group(Client, ClusterId, GroupId) ->
 %% Retrieves the privileges of specific group among groups of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec get_group_privileges(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec get_group_privileges(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     GroupId :: od_group:id()) -> {ok, [privileges:cluster_privileges()]} | {error, term()}.
-get_group_privileges(Client, ClusterId, GroupId) ->
+get_group_privileges(Auth, ClusterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = {group_privileges, GroupId}}
     }).
 
@@ -580,12 +580,12 @@ get_group_privileges(Client, ClusterId, GroupId) ->
 %% among effective groups of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_group_privileges(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec get_eff_group_privileges(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     GroupId :: od_group:id()) -> {ok, [privileges:cluster_privileges()]} | {error, term()}.
-get_eff_group_privileges(Client, ClusterId, GroupId) ->
+get_eff_group_privileges(Auth, ClusterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = {eff_group_privileges, GroupId}}
     }).
 
@@ -596,13 +596,13 @@ get_eff_group_privileges(Client, ClusterId, GroupId) ->
 %% among effective groups of given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_group_membership_intermediaries(Client :: entity_logic:client(),
+-spec get_eff_group_membership_intermediaries(Auth :: aai:auth(),
     ClusterId :: od_cluster:id(), GroupId :: od_group:id()) ->
     {ok, entity_graph:intermediaries()} | {error, term()}.
-get_eff_group_membership_intermediaries(Client, ClusterId, GroupId) ->
+get_eff_group_membership_intermediaries(Auth, ClusterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = {eff_group_membership, GroupId}}
     }).
 
@@ -613,11 +613,11 @@ get_eff_group_membership_intermediaries(Client, ClusterId, GroupId) ->
 %% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
--spec update_user_privileges(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec update_user_privileges(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     UserId :: od_user:id(), PrivsToGrant :: [privileges:cluster_privilege()],
     PrivsToRevoke :: [privileges:cluster_privilege()]) -> ok | {error, term()}.
-update_user_privileges(Client, ClusterId, UserId, PrivsToGrant, PrivsToRevoke) ->
-    update_user_privileges(Client, ClusterId, UserId, #{
+update_user_privileges(Auth, ClusterId, UserId, PrivsToGrant, PrivsToRevoke) ->
+    update_user_privileges(Auth, ClusterId, UserId, #{
         <<"grant">> => PrivsToGrant,
         <<"revoke">> => PrivsToRevoke
     }).
@@ -629,12 +629,12 @@ update_user_privileges(Client, ClusterId, UserId, PrivsToGrant, PrivsToRevoke) -
 %% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update_user_privileges(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec update_user_privileges(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     UserId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
-update_user_privileges(Client, ClusterId, UserId, Data) ->
+update_user_privileges(Auth, ClusterId, UserId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = {user_privileges, UserId}},
         data = Data
     }).
@@ -646,11 +646,11 @@ update_user_privileges(Client, ClusterId, UserId, Data) ->
 %% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
--spec update_group_privileges(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec update_group_privileges(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     GroupId :: od_group:id(), PrivsToGrant :: [privileges:cluster_privilege()],
     PrivsToRevoke :: [privileges:cluster_privilege()]) -> ok | {error, term()}.
-update_group_privileges(Client, ClusterId, GroupId, PrivsToGrant, PrivsToRevoke) ->
-    update_group_privileges(Client, ClusterId, GroupId, #{
+update_group_privileges(Auth, ClusterId, GroupId, PrivsToGrant, PrivsToRevoke) ->
+    update_group_privileges(Auth, ClusterId, GroupId, #{
         <<"grant">> => PrivsToGrant,
         <<"revoke">> => PrivsToRevoke
     }).
@@ -662,12 +662,12 @@ update_group_privileges(Client, ClusterId, GroupId, PrivsToGrant, PrivsToRevoke)
 %% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update_group_privileges(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec update_group_privileges(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     GroupId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
-update_group_privileges(Client, ClusterId, GroupId, Data) ->
+update_group_privileges(Auth, ClusterId, GroupId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = {group_privileges, GroupId}},
         data = Data
     }).
@@ -678,12 +678,12 @@ update_group_privileges(Client, ClusterId, GroupId, Data) ->
 %% Removes specified user from given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_user(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec remove_user(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     UserId :: od_user:id()) -> ok | {error, term()}.
-remove_user(Client, ClusterId, UserId) ->
+remove_user(Auth, ClusterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = {user, UserId}}
     }).
 
@@ -693,12 +693,12 @@ remove_user(Client, ClusterId, UserId) ->
 %% Removes specified group from given cluster.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_group(Client :: entity_logic:client(), ClusterId :: od_cluster:id(),
+-spec remove_group(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
     GroupId :: od_group:id()) -> ok | {error, term()}.
-remove_group(Client, ClusterId, GroupId) ->
+remove_group(Auth, ClusterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = {group, GroupId}}
     }).
 

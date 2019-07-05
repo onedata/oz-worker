@@ -33,7 +33,7 @@
 %% {@link gs_translator_behaviour} callback handshake_attributes/1.
 %% @end
 %%--------------------------------------------------------------------
--spec handshake_attributes(gs_protocol:client()) ->
+-spec handshake_attributes(aai:auth()) ->
     gs_protocol:handshake_attributes().
 handshake_attributes(_) ->
     undefined.
@@ -45,7 +45,7 @@ handshake_attributes(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_value(gs_protocol:protocol_version(), gs_protocol:gri(),
-    Value :: term()) -> Result | fun((gs_protocol:client()) -> Result) when
+    Value :: term()) -> Result | fun((aai:auth()) -> Result) when
     Result :: gs_protocol:data() | gs_protocol:error().
 translate_value(ProtoVersion, #gri{aspect = invite_group_token}, Macaroon) ->
     translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
@@ -54,7 +54,7 @@ translate_value(ProtoVersion, #gri{aspect = invite_provider_token}, Macaroon) ->
 translate_value(ProtoVersion, #gri{aspect = provider_registration_token}, Macaroon) ->
     translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
 translate_value(_, #gri{aspect = invite_user_token}, Macaroon) ->
-    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    {ok, Token} = macaroons:serialize(Macaroon),
     Token;
 translate_value(_, #gri{type = od_provider, aspect = map_idp_group}, Id) ->
     Id;
@@ -97,7 +97,7 @@ translate_value(ProtocolVersion, GRI, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_resource(gs_protocol:protocol_version(), gs_protocol:gri(),
-    ResourceData :: term()) -> Result | fun((gs_protocol:client()) -> Result) when
+    ResourceData :: term()) -> Result | fun((aai:auth()) -> Result) when
     Result :: gs_protocol:data() | gs_protocol:error().
 translate_resource(_, #gri{type = od_provider, aspect = current_time}, TimeMillis) ->
     #{<<"timeMillis">> => TimeMillis};

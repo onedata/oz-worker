@@ -400,7 +400,7 @@ gui_upload_page_deploys_harvester_gui_on_all_nodes(Config) ->
     oz_test_utils:harvester_set_user_privileges(Config, HarvesterId, U1, [?HARVESTER_UPDATE], []),
 
     {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, U1),
-    {ok, GuiToken} = oz_test_utils:acquire_gui_token(Config, CookieValue),
+    {ok, GuiToken} = oz_test_utils:request_gui_token(Config, CookieValue),
 
     {HrvGuiPackage, HrvIndexContent} = oz_test_utils:create_dummy_gui_package(),
     {ok, HrvGuiHash} = gui:package_hash(HrvGuiPackage),
@@ -475,7 +475,7 @@ gui_package_verification_works(Config) ->
     oz_test_utils:harvester_add_user(Config, HarvesterId, U1),
     oz_test_utils:harvester_set_user_privileges(Config, HarvesterId, U1, [?HARVESTER_UPDATE], []),
     {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, U1),
-    {ok, GuiToken} = oz_test_utils:acquire_gui_token(Config, CookieValue),
+    {ok, GuiToken} = oz_test_utils:request_gui_token(Config, CookieValue),
 
     {HrvGuiPackage1, _HrvIndexContent1} = oz_test_utils:create_dummy_gui_package(),
     {ok, HrvGuiHash1} = gui:package_hash(HrvGuiPackage1),

@@ -110,7 +110,7 @@ list_harvesters_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_harvesters,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?OK_LIST(ExpHarvesters)
         }
         % TODO gs
@@ -193,7 +193,7 @@ create_harvester_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = create_harvester,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?OK_TERM(VerifyFun)
         }
     },
@@ -209,7 +209,7 @@ join_harvester_test(Config) ->
         {ok, Macaroon} = oz_test_utils:harvester_invite_user_token(
             Config, ?ROOT, HarvesterId
         ),
-        {ok, Token} = onedata_macaroons:serialize(Macaroon),
+        {ok, Token} = macaroons:serialize(Macaroon),
         #{
             harvesterId => HarvesterId,
             token => Token,
@@ -271,7 +271,7 @@ join_harvester_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = join_harvester,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?OK_ENV(fun(#{harvesterId := HarvesterId} = _Env, _) ->
                 ?OK_BINARY(HarvesterId)
             end)
@@ -288,7 +288,7 @@ join_harvester_test(Config) ->
     {ok, Macaroon} = oz_test_utils:harvester_invite_user_token(
         Config, ?ROOT, Harvester
     ),
-    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    {ok, Token} = macaroons:serialize(Macaroon),
 
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
@@ -304,7 +304,7 @@ join_harvester_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = join_harvester,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_user, U1, od_harvester, Harvester))
         },
         % TODO gs
@@ -367,7 +367,7 @@ get_harvester_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_harvester,
-            args = [client, U1, H1],
+            args = [auth, U1, H1],
             expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"plugin">> => ?HARVESTER_MOCK_PLUGIN})
         }
     },
@@ -422,7 +422,7 @@ leave_harvester_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = leave_harvester,
-            args = [client, U1, harvesterId],
+            args = [auth, U1, harvesterId],
             expected_result = ?OK
         }
         % TODO gs
@@ -476,7 +476,7 @@ list_eff_harvesters_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_eff_harvesters,
-            args = [client, U2],
+            args = [auth, U2],
             expected_result = ?OK_LIST(ExpHarvesters)
         }
         % TODO gs
@@ -543,7 +543,7 @@ get_eff_harvester_test(Config) ->
                 logic_spec = #logic_spec{
                     module = user_logic,
                     function = get_eff_harvester,
-                    args = [client, U1, HarvesterId],
+                    args = [auth, U1, HarvesterId],
                     expected_result = ?OK_MAP_CONTAINS(HarvesterDetails#{<<"plugin">> => ?HARVESTER_MOCK_PLUGIN})
                 }
             },

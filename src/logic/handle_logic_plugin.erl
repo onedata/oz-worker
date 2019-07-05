@@ -102,7 +102,7 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, client = Client}) ->
+create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     HandleServiceId = maps:get(<<"handleServiceId">>, Req#el_req.data),
     ResourceType = maps:get(<<"resourceType">>, Req#el_req.data),
     ResourceId = maps:get(<<"resourceId">>, Req#el_req.data),
@@ -116,7 +116,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, client
         resource_id = ResourceId,
         public_handle = PublicHandle,
         metadata = Metadata,
-        creator = Client
+        creator = Auth#auth.subject
     }},
     {ok, #document{key = HandleId}} = od_handle:create(Handle),
     entity_graph:add_relation(
@@ -352,7 +352,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = 
         {ok, #od_share{space = SpId}} ->
             SpId
     end,
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES) andalso
                 handle_service_logic:has_eff_privilege(HServiceId, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
@@ -377,7 +377,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
     auth_by_privilege(Req, Handle, ?HANDLE_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Handle) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this handle_service is checked in 'exists'
             true;
@@ -403,16 +403,16 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             authorize(Req#el_req{gri = GRI#gri{scope = private}}, Handle)
     end;
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
     true;
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
     true;
 
 authorize(#el_req{operation = get, gri = #gri{aspect = instance, scope = public}}, _) ->
     true;
 
-authorize(Req = #el_req{operation = get, client = ?USER}, Handle) ->
+authorize(Req = #el_req{operation = get, auth = ?USER}, Handle) ->
     % All other resources can be accessed with view privileges
     auth_by_privilege(Req, Handle, ?HANDLE_VIEW);
 
@@ -570,15 +570,15 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 %% @doc
 %% Returns if given user has specific effective privilege in the handle.
 %% UserId is either given explicitly or derived from entity logic request.
-%% Clients of type other than user are discarded.
+%% Auths of type other than user are discarded.
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_privilege(entity_logic:req() | od_user:id(),
     od_handle:id() | od_handle:info(), privileges:handle_privilege()) ->
     boolean().
-auth_by_privilege(#el_req{client = ?USER(UserId)}, HandleOrId, Privilege) ->
+auth_by_privilege(#el_req{auth = ?USER(UserId)}, HandleOrId, Privilege) ->
     auth_by_privilege(UserId, HandleOrId, Privilege);
-auth_by_privilege(#el_req{client = _OtherClient}, _HandleOrId, _Privilege) ->
+auth_by_privilege(#el_req{auth = _OtherAuth}, _HandleOrId, _Privilege) ->
     false;
 auth_by_privilege(UserId, HandleOrId, Privilege) ->
     handle_logic:has_eff_privilege(HandleOrId, UserId, Privilege).

@@ -77,11 +77,11 @@
 %% Domain and AdminEmail.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: entity_logic:client(), Name :: binary(),
+-spec create(Auth :: aai:auth(), Name :: binary(),
     Domain :: binary(), AdminEmail :: binary()) ->
     {ok, od_provider:id()} | {error, term()}.
-create(Client, Name, Domain, AdminEmail) ->
-    create(Client, #{
+create(Auth, Name, Domain, AdminEmail) ->
+    create(Auth, #{
         <<"name">> => Name,
         <<"domain">> => Domain,
         <<"subdomainDelegation">> => false,
@@ -95,11 +95,11 @@ create(Client, Name, Domain, AdminEmail) ->
 %% Domain, AdminEmail, Latitude and Longitude.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: entity_logic:client(), Name :: binary(),
+-spec create(Auth :: aai:auth(), Name :: binary(),
     Domain :: binary(), AdminEmail :: binary(), Latitude :: float(),
     Longitude :: float()) -> {ok, od_provider:id()} | {error, term()}.
-create(Client, Name, Domain, AdminEmail, Latitude, Longitude) ->
-    create(Client, #{
+create(Auth, Name, Domain, AdminEmail, Latitude, Longitude) ->
+    create(Auth, #{
         <<"name">> => Name,
         <<"domain">> => Domain,
         <<"subdomainDelegation">> => false,
@@ -115,12 +115,12 @@ create(Client, Name, Domain, AdminEmail, Latitude, Longitude) ->
 %% proper Data object, Latitude and Longitude are optional.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: entity_logic:client(), Data :: #{}) ->
+-spec create(Auth :: aai:auth(), Data :: #{}) ->
     {ok, {od_provider:id(), ProviderMacaroon :: macaroon:macaroon()}} | {error, term()}.
-create(Client, Data) ->
+create(Auth, Data) ->
     Res = entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = undefined, aspect = instance},
         data = Data
     }),
@@ -141,12 +141,12 @@ create(Client, Data) ->
 %% proper Data object, Latitude and Longitude are optional.
 %% @end
 %%--------------------------------------------------------------------
--spec create_dev(Client :: entity_logic:client(), Data :: #{}) ->
+-spec create_dev(Auth :: aai:auth(), Data :: #{}) ->
     {ok, od_provider:id()} | {error, term()}.
-create_dev(Client, Data) ->
+create_dev(Auth, Data) ->
     Res = entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = undefined, aspect = instance_dev},
         data = Data
     }),
@@ -163,12 +163,12 @@ create_dev(Client, Data) ->
 %% Retrieves a provider record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+-spec get(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
     {ok, #od_provider{}} | {error, term()}.
-get(Client, ProviderId) ->
+get(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = instance}
     }).
 
@@ -178,12 +178,12 @@ get(Client, ProviderId) ->
 %% Retrieves protected provider data from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_protected_data(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+-spec get_protected_data(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
     {ok, map()} | {error, term()}.
-get_protected_data(Client, ProviderId) ->
+get_protected_data(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected}
     }).
 
@@ -193,12 +193,12 @@ get_protected_data(Client, ProviderId) ->
 %% Lists all providers (their ids) in database.
 %% @end
 %%--------------------------------------------------------------------
--spec list(Client :: entity_logic:client()) ->
+-spec list(Auth :: aai:auth()) ->
     {ok, [od_provider:id()]} | {error, term()}.
-list(Client) ->
+list(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = undefined, aspect = list}
     }).
 
@@ -209,12 +209,12 @@ list(Client) ->
 %% Supports updating name, latitude, longitude and adminEmail.
 %% @end
 %%--------------------------------------------------------------------
--spec update(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+-spec update(Auth :: aai:auth(), ProviderId :: od_provider:id(),
     Data :: #{}) -> ok | {error, term()}.
-update(Client, ProviderId, Data) ->
+update(Auth, ProviderId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = instance},
         data = Data
     }).
@@ -225,12 +225,12 @@ update(Client, ProviderId, Data) ->
 %% Deletes given provider from database.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+-spec delete(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
     ok | {error, term()}.
-delete(Client, ProviderId) ->
+delete(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = instance}
     }).
 
@@ -240,11 +240,11 @@ delete(Client, ProviderId) ->
 %% Supports a space based on support_space_token and support size.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+-spec support_space(Auth :: aai:auth(), ProviderId :: od_provider:id(),
     Token :: token:id() | macaroon:macaroon(), SupportSize :: integer()) ->
     {ok, od_space:id()} | {error, term()}.
-support_space(Client, ProviderId, Token, SupportSize) ->
-    support_space(Client, ProviderId, #{
+support_space(Auth, ProviderId, Token, SupportSize) ->
+    support_space(Auth, ProviderId, #{
         <<"token">> => Token, <<"size">> => SupportSize
     }).
 
@@ -255,12 +255,12 @@ support_space(Client, ProviderId, Token, SupportSize) ->
 %% are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+-spec support_space(Auth :: aai:auth(), ProviderId :: od_provider:id(),
     Data :: #{}) -> {ok, od_space:id()} | {error, term()}.
-support_space(Client, ProviderId, Data) ->
+support_space(Auth, ProviderId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = support},
         data = Data
     })).
@@ -271,12 +271,12 @@ support_space(Client, ProviderId, Data) ->
 %% Update data related to domain config and subdomain delegation.
 %% @end
 %%--------------------------------------------------------------------
--spec update_domain_config(Client :: entity_logic:client(),
+-spec update_domain_config(Auth :: aai:auth(),
     ProviderId :: od_provider:id(), Data :: #{}) -> ok | {error, term()}.
-update_domain_config(Client, ProviderId, Data) ->
+update_domain_config(Auth, ProviderId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = domain_config},
         data = Data}).
 
@@ -285,25 +285,25 @@ update_domain_config(Client, ProviderId, Data) ->
 %% Sets txt record for provider's subdomain with default TTL.
 %% @end
 %%--------------------------------------------------------------------
--spec set_dns_txt_record(Client :: entity_logic:client(),
+-spec set_dns_txt_record(Auth :: aai:auth(),
     ProviderId :: od_provider:id(), Name :: binary(), Content :: binary()) ->
     ok | {error, term()}.
-set_dns_txt_record(Client, ProviderId, Name, Content) ->
-    set_dns_txt_record(Client, ProviderId, Name, Content, undefined).
+set_dns_txt_record(Auth, ProviderId, Name, Content) ->
+    set_dns_txt_record(Auth, ProviderId, Name, Content, undefined).
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Sets txt record for provider's subdomain with given TTL.
 %% @end
 %%--------------------------------------------------------------------
--spec set_dns_txt_record(Client :: entity_logic:client(),
+-spec set_dns_txt_record(Auth :: aai:auth(),
     ProviderId :: od_provider:id(), Name :: binary(), Content :: binary(),
     TTL :: dns_state:ttl()) ->
     ok | {error, term()}.
-set_dns_txt_record(Client, ProviderId, Name, Content, TTL) ->
+set_dns_txt_record(Auth, ProviderId, Name, Content, TTL) ->
     entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = {dns_txt_record, Name}},
         data = case TTL of
             undefined -> #{<<"content">> => Content};
@@ -316,13 +316,13 @@ set_dns_txt_record(Client, ProviderId, Name, Content, TTL) ->
 %% Remove txt record for provider's subdomain
 %% @end
 %%--------------------------------------------------------------------
--spec remove_dns_txt_record(Client :: entity_logic:client(),
+-spec remove_dns_txt_record(Auth :: aai:auth(),
     ProviderId :: od_provider:id(), Name :: binary()) ->
     ok | {error, term()}.
-remove_dns_txt_record(Client, ProviderId, Name) ->
+remove_dns_txt_record(Auth, ProviderId, Name) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = {dns_txt_record, Name}}
     }).
 
@@ -331,12 +331,12 @@ remove_dns_txt_record(Client, ProviderId, Name) ->
 %% Retrieve data related to domain config and subdomain delegation.
 %% @end
 %%--------------------------------------------------------------------
--spec get_domain_config(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+-spec get_domain_config(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
     {ok, map()} | {error, term()}.
-get_domain_config(Client, ProviderId) ->
+get_domain_config(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = domain_config}}).
 
 
@@ -345,12 +345,12 @@ get_domain_config(Client, ProviderId) ->
 %% Retrieves the list of effective users of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_users(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+-spec get_eff_users(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
-get_eff_users(Client, ProviderId) ->
+get_eff_users(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = eff_users}
     }).
 
@@ -361,12 +361,12 @@ get_eff_users(Client, ProviderId) ->
 %% effective users of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+-spec get_eff_user(Auth :: aai:auth(), ProviderId :: od_provider:id(),
     UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
-get_eff_user(Client, ProviderId, UserId) ->
+get_eff_user(Auth, ProviderId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_PROVIDER(ProviderId)
     }).
@@ -378,13 +378,13 @@ get_eff_user(Client, ProviderId, UserId) ->
 %% among effective users of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user_membership_intermediaries(Client :: entity_logic:client(),
+-spec get_eff_user_membership_intermediaries(Auth :: aai:auth(),
     ProviderId :: od_provider:id(), UserId :: od_user:id()) ->
     {ok, entity_graph:intermediaries()} | {error, term()}.
-get_eff_user_membership_intermediaries(Client, ProviderId, UserId) ->
+get_eff_user_membership_intermediaries(Auth, ProviderId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = {eff_user_membership, UserId}}
     }).
 
@@ -394,12 +394,12 @@ get_eff_user_membership_intermediaries(Client, ProviderId, UserId) ->
 %% Retrieves the list of effective groups of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_groups(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+-spec get_eff_groups(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
-get_eff_groups(Client, ProviderId) ->
+get_eff_groups(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = eff_groups}
     }).
 
@@ -410,12 +410,12 @@ get_eff_groups(Client, ProviderId) ->
 %% effective groups of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_group(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+-spec get_eff_group(Auth :: aai:auth(), ProviderId :: od_provider:id(),
     GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
-get_eff_group(Client, ProviderId, GroupId) ->
+get_eff_group(Auth, ProviderId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_PROVIDER(ProviderId)
     }).
@@ -427,13 +427,13 @@ get_eff_group(Client, ProviderId, GroupId) ->
 %% among effective groups of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_group_membership_intermediaries(Client :: entity_logic:client(),
+-spec get_eff_group_membership_intermediaries(Auth :: aai:auth(),
     ProviderId :: od_provider:id(), GroupId :: od_group:id()) ->
     {ok, entity_graph:intermediaries()} | {error, term()}.
-get_eff_group_membership_intermediaries(Client, ProviderId, GroupId) ->
+get_eff_group_membership_intermediaries(Auth, ProviderId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = {eff_group_membership, GroupId}}
     }).
 
@@ -443,12 +443,12 @@ get_eff_group_membership_intermediaries(Client, ProviderId, GroupId) ->
 %% Retrieves the list of effective harvesters of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_harvesters(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+-spec get_eff_harvesters(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
     {ok, [od_harvester:id()]} | {error, term()}.
-get_eff_harvesters(Client, ProviderId) ->
+get_eff_harvesters(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = eff_harvesters}
     }).
 
@@ -458,12 +458,12 @@ get_eff_harvesters(Client, ProviderId) ->
 %% Retrieves the list of spaces of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_spaces(Client :: entity_logic:client(), ProviderId :: od_provider:id()) ->
+-spec get_spaces(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
     {ok, [od_space:id()]} | {error, term()}.
-get_spaces(Client, ProviderId) ->
+get_spaces(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = spaces}
     }).
 
@@ -473,12 +473,12 @@ get_spaces(Client, ProviderId) ->
 %% Retrieves the information about specific space among spaces of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_space(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+-spec get_space(Auth :: aai:auth(), ProviderId :: od_provider:id(),
     SpaceId :: od_space:id()) -> {ok, #{}} | {error, term()}.
-get_space(Client, ProviderId, SpaceId) ->
+get_space(Auth, ProviderId, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_PROVIDER(ProviderId)
     }).
@@ -491,16 +491,16 @@ get_space(Client, ProviderId, SpaceId) ->
 %% 2) New support size is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update_support_size(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+-spec update_support_size(Auth :: aai:auth(), ProviderId :: od_provider:id(),
     SpaceId :: od_space:id(), SupSizeOrData :: integer() | #{}) -> ok | {error, term()}.
-update_support_size(Client, ProviderId, SpaceId, SupSize) when is_integer(SupSize) ->
-    update_support_size(Client, ProviderId, SpaceId, #{
+update_support_size(Auth, ProviderId, SpaceId, SupSize) when is_integer(SupSize) ->
+    update_support_size(Auth, ProviderId, SpaceId, #{
         <<"size">> => SupSize
     });
-update_support_size(Client, ProviderId, SpaceId, Data) ->
+update_support_size(Auth, ProviderId, SpaceId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = {space, SpaceId}},
         data = Data
     }).
@@ -511,12 +511,12 @@ update_support_size(Client, ProviderId, SpaceId, Data) ->
 %% Revokes support for specified space on behalf of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec revoke_support(Client :: entity_logic:client(), ProviderId :: od_provider:id(),
+-spec revoke_support(Auth :: aai:auth(), ProviderId :: od_provider:id(),
     SpaceId :: od_space:id()) -> ok | {error, term()}.
-revoke_support(Client, ProviderId, SpaceId) ->
+revoke_support(Auth, ProviderId, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = {space, SpaceId}}
     }).
 
@@ -527,12 +527,12 @@ revoke_support(Client, ProviderId, SpaceId) ->
 %% whether the requests succeeded.
 %% @end
 %%--------------------------------------------------------------------
--spec check_my_ports(Client :: entity_logic:client(), Data :: #{}) ->
+-spec check_my_ports(Auth :: aai:auth(), Data :: #{}) ->
     ok | {error, term()}.
-check_my_ports(Client, Data) ->
+check_my_ports(Auth, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = undefined, aspect = check_my_ports},
         data = Data
     })).
@@ -545,12 +545,12 @@ check_my_ports(Client, Data) ->
 %% Used to by providers to synchronize clocks with onezone (and thus each other).
 %% @end
 %%--------------------------------------------------------------------
--spec get_current_time(Client :: entity_logic:client()) ->
+-spec get_current_time(Auth :: aai:auth()) ->
     {ok, non_neg_integer()} | {error, term()}.
-get_current_time(Client) ->
+get_current_time(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = undefined, aspect = current_time}
     }).
 
@@ -561,10 +561,10 @@ get_current_time(Client) ->
 %% provider id.
 %% @end
 %%--------------------------------------------------------------------
--spec verify_provider_identity(Client :: entity_logic:client(), od_provider:id(),
+-spec verify_provider_identity(Auth :: aai:auth(), od_provider:id(),
     Macaroon :: token:id() | macaroon:macaroon()) -> ok | {error, term()}.
-verify_provider_identity(Client, ProviderId, Macaroon) ->
-    verify_provider_identity(Client, #{
+verify_provider_identity(Auth, ProviderId, Macaroon) ->
+    verify_provider_identity(Auth, #{
         <<"providerId">> => ProviderId,
         <<"macaroon">> => Macaroon
     }).
@@ -576,12 +576,12 @@ verify_provider_identity(Client, ProviderId, Macaroon) ->
 %% provider id. The macaroon and ProviderId are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec verify_provider_identity(Client :: entity_logic:client(), entity_logic:data()) ->
+-spec verify_provider_identity(Auth :: aai:auth(), entity_logic:data()) ->
     ok | {error, term()}.
-verify_provider_identity(Client, Data) ->
+verify_provider_identity(Auth, Data) ->
     ?CREATE_RETURN_OK(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = undefined, aspect = verify_provider_identity},
         data = Data
     })).

@@ -28,7 +28,6 @@
 % Some of the types are just aliases for types from gs_protocol, this is
 % for better readability of logic modules.
 -type req() :: #el_req{}.
--type client() :: #client{}.
 -type el_plugin() :: module().
 -type operation() :: gs_protocol:operation().
 -type entity_id() :: undefined | od_user:id() | od_group:id() | od_space:id() |
@@ -52,7 +51,8 @@ od_handle_service | od_handle | od_harvester | od_cluster | oz_privileges.
 -type error() :: gs_protocol:error().
 
 -type type_validator() :: any | atom | list_of_atoms | binary |
-list_of_binaries | integer | float | json | token | boolean | list_of_ipv4_addresses.
+list_of_binaries | integer | float | json | token | invite_token |
+boolean | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
 fun((term()) -> boolean()) |
@@ -62,7 +62,7 @@ fun((term()) -> boolean()) |
 {exists, fun((entity_id()) -> boolean())} |
 {not_exists, fun((entity_id()) -> boolean())} |
 {relation_exists, atom(), binary(), atom(), binary(), fun((entity_id()) -> boolean())} |
-token_logic:token_type() | % Compatible only with 'token' type validator
+invite_tokens:token_type() | % Compatible only with 'invite_token' type validator
 subdomain | domain |
 email | name |
 full_name | username | password.
@@ -79,7 +79,6 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
 -type creation_time() :: non_neg_integer().  % UNIX timestamp in seconds
 
 -export_type([
-    client/0,
     el_plugin/0,
     operation/0,
     entity_id/0,
@@ -114,8 +113,6 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
 
 -export([handle/1, handle/2]).
 -export([is_authorized/2]).
--export([client_to_string/1]).
--export([root_client/0, user_client/1, provider_client/1]).
 -export([validate_name/1, validate_name/5, normalize_name/1, normalize_name/9]).
 
 
@@ -178,48 +175,6 @@ is_authorized(#el_req{gri = #gri{type = EntityType}} = ElReq, Entity) ->
         _:_ ->
             false
     end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns a readable string representing provided client.
-%% @end
-%%--------------------------------------------------------------------
--spec client_to_string(Client :: client()) -> string().
-client_to_string(?NOBODY) -> "nobody (unauthenticated client)";
-client_to_string(?ROOT) -> "root";
-client_to_string(?USER(UId)) -> str_utils:format("user:~s", [UId]);
-client_to_string(?PROVIDER(PId)) -> str_utils:format("provider:~s", [PId]).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns root client record.
-%% @end
-%%--------------------------------------------------------------------
--spec root_client() -> client().
-root_client() ->
-    ?ROOT.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns user client record for given UserId.
-%% @end
-%%--------------------------------------------------------------------
--spec user_client(od_user:id()) -> client().
-user_client(UserId) ->
-    ?USER(UserId).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns provider client record for given ProviderId.
-%% @end
-%%--------------------------------------------------------------------
--spec provider_client(od_provider:id()) -> client().
-provider_client(ProviderId) ->
-    ?PROVIDER(ProviderId).
 
 
 %%--------------------------------------------------------------------
@@ -327,7 +282,7 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = create}}) ->
                     ensure_operation_supported(
                         State))))),
     case {Result, Req} of
-        {{ok, resource, Resource}, #el_req{gri = #gri{aspect = instance}, client = Cl}} ->
+        {{ok, resource, Resource}, #el_req{gri = #gri{aspect = instance}, auth = Auth}} ->
             % If an entity instance is created, log an information about it
             % (it's a significant operation and this information might be useful).
             {EntType, EntId} = case Resource of
@@ -336,7 +291,7 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = create}}) ->
             end,
             ?debug("~s has been created by client: ~s", [
                 EntType:to_string(EntId),
-                client_to_string(Cl)
+                aai:auth_to_string(Auth)
             ]);
         _ ->
             ok
@@ -374,12 +329,12 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = delete}}) ->
                     ensure_operation_supported(
                         State))))),
     case {Result, Req} of
-        {ok, #el_req{gri = #gri{type = Type, id = Id, aspect = instance}, client = Cl}} ->
+        {ok, #el_req{gri = #gri{type = Type, id = Id, aspect = instance}, auth = Auth}} ->
             % If an entity instance is deleted, log an information about it
             % (it's a significant operation and this information might be useful).
             ?debug("~s has been deleted by client: ~s", [
                 Type:to_string(Id),
-                client_to_string(Cl)
+                aai:auth_to_string(Auth)
             ]),
             ok;
         _ ->
@@ -538,7 +493,7 @@ ensure_authorized(State) ->
 
 
 -spec ensure_authorized_internal(#state{}) -> boolean().
-ensure_authorized_internal(#state{req = #el_req{client = ?ROOT}}) ->
+ensure_authorized_internal(#state{req = #el_req{auth = ?ROOT}}) ->
     % Root client is authorized to do everything (that client is only available
     % internally).
     true;
@@ -590,7 +545,7 @@ is_authorized_as_admin(#state{req = ElReq} = State) ->
 
 
 -spec report_unauthorized(#state{}) -> no_return().
-report_unauthorized(#state{req = #el_req{client = ?NOBODY}}) ->
+report_unauthorized(#state{req = #el_req{auth = ?NOBODY}}) ->
     % The client was not authenticated -> unauthorized
     throw(?ERROR_UNAUTHORIZED);
 report_unauthorized(_) ->
@@ -814,12 +769,24 @@ check_type(json, Key, _) ->
     throw(?ERROR_BAD_VALUE_JSON(Key));
 check_type(token, Key, <<>>) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
-check_type(token, Key, Token) when is_binary(Token) ->
-    case token_logic:deserialize(Token) of
+check_type(token, Key, Serialized) when is_binary(Serialized) ->
+    case tokens:deserialize(Serialized) of
+        {ok, Token} -> Token;
+        ?ERROR_BAD_MACAROON -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
+    end;
+check_type(token, Key, Token) ->
+    case tokens:is_token(Token) of
+        true -> Token;
+        false -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
+    end;
+check_type(invite_token, Key, <<>>) ->
+    throw(?ERROR_BAD_VALUE_EMPTY(Key));
+check_type(invite_token, Key, Token) when is_binary(Token) ->
+    case invite_tokens:deserialize(Token) of
         {ok, Macaroon} -> Macaroon;
         ?ERROR_BAD_MACAROON -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
     end;
-check_type(token, Key, Macaroon) ->
+check_type(invite_token, Key, Macaroon) ->
     case macaroon:is_macaroon(Macaroon) of
         true -> Macaroon;
         false -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
@@ -989,8 +956,8 @@ check_value(_, {relation_exists, ChType, ChId, ParType, ParId, VerifyFun}, _Key,
     end;
 check_value(token, any, _Key, _Macaroon) ->
     ok;
-check_value(token, TokenType, Key, Macaroon) ->
-    case token_logic:validate(Macaroon, TokenType) of
+check_value(invite_token, TokenType, Key, Macaroon) ->
+    case invite_tokens:validate(Macaroon, TokenType) of
         ok ->
             Macaroon;
         inexistent ->

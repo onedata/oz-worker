@@ -103,7 +103,7 @@ list_users_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_users,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_LIST(ExpUsers)
         }
         % TODO gs
@@ -146,7 +146,7 @@ create_user_invite_token_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = create_user_invite_token,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_TERM(VerifyFun)
         }
         % TODO gs
@@ -219,7 +219,7 @@ get_user_details_test(Config) ->
             logic_spec = #logic_spec{
                 module = group_logic,
                 function = get_user,
-                args = [client, Group, SubjectUser],
+                args = [auth, Group, SubjectUser],
                 expected_result = ?OK_MAP_CONTAINS(ExpDetails)
             },
             gs_spec = #gs_spec{
@@ -305,7 +305,7 @@ add_user_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = add_user,
-            args = [client, G1, EffectiveUser, data],
+            args = [auth, G1, EffectiveUser, data],
             expected_result = ?OK_BINARY(EffectiveUser)
         },
         % TODO gs
@@ -382,7 +382,7 @@ add_user_with_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = add_user,
-            args = [client, G1, EffectiveUser, data],
+            args = [auth, G1, EffectiveUser, data],
             expected_result = ?OK_BINARY(EffectiveUser)
         },
         % TODO gs
@@ -449,7 +449,7 @@ remove_user_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = remove_user,
-            args = [client, G1, userId],
+            args = [auth, G1, userId],
             expected_result = ?OK
         }
         % TODO gs
@@ -508,7 +508,7 @@ list_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_user_privileges,
-            args = [client, G1, U3],
+            args = [auth, G1, U3],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -567,7 +567,7 @@ update_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = update_user_privileges,
-            args = [client, G1, U3, data],
+            args = [auth, G1, U3, data],
             expected_result = ?OK
         }
         % TODO gs
@@ -621,7 +621,7 @@ list_eff_users_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_eff_users,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_LIST(ExpUsers)
         }
         % TODO gs
@@ -693,7 +693,7 @@ get_eff_user_details_test(Config) ->
                 logic_spec = #logic_spec{
                     module = group_logic,
                     function = get_eff_user,
-                    args = [client, G1, UserId],
+                    args = [auth, G1, UserId],
                     expected_result = ?OK_MAP_CONTAINS(UserDetails)
                 },
                 gs_spec = #gs_spec{
@@ -832,7 +832,7 @@ list_eff_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_eff_user_privileges,
-            args = [client, G1, U1],
+            args = [auth, G1, U1],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -940,7 +940,7 @@ get_eff_user_membership_intermediaries(Config) ->
             logic_spec = #logic_spec{
                 module = group_logic,
                 function = get_eff_user_membership_intermediaries,
-                args = [client, GroupId, SubjectUser],
+                args = [auth, GroupId, SubjectUser],
                 expected_result = ?OK_LIST(ExpIntermediariesRaw)
             }
         },

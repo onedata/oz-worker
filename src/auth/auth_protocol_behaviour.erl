@@ -23,7 +23,7 @@
 %% that defines what request should be performed to redirect to the login page.
 %% @end
 %%--------------------------------------------------------------------
--callback get_login_endpoint(auth_config:idp(), state_token:id()) ->
+-callback get_login_endpoint(auth_config:idp(), state_token:state_token()) ->
     {ok, #{binary() => binary() | null}}.
 
 

@@ -20,6 +20,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -export([handle/2]).
 
@@ -57,10 +58,11 @@ handle(<<"POST">>, Req) ->
                 end,
 
                 SessionId = gui_session:get_session_id(Cookie),
+                Audience = ?AUD(Service, ClusterId),
                 cowboy_req:reply(
                     ?HTTP_200_OK,
                     #{<<"content-type">> => <<"application/json">>},
-                    generate_gui_token(SessionId, Service, ClusterId),
+                    generate_gui_token(SessionId, Audience),
                     Req2
                 )
             catch
@@ -77,32 +79,16 @@ handle(<<"POST">>, Req) ->
 %%%===================================================================
 
 %% @private
--spec generate_gui_token(session:id(), onedata:service(), od_cluster:id()) ->
-    Response :: binary() | no_return().
-generate_gui_token(SessionId, Service, ClusterId) ->
-    ClusterType = onedata:service_to_cluster_type(Service),
+-spec generate_gui_token(session:id(), aai:audience()) -> binary() | no_return().
+generate_gui_token(SessionId, Audience) ->
     {ok, UserId} = session:get_user_id(SessionId),
-
-    can_generate_gui_token(UserId, Service, ClusterId) orelse throw(?HTTP_403_FORBIDDEN),
-
-    {ok, {Macaroon, Expires}} = session:acquire_gui_macaroon(
-        SessionId, ClusterType, ClusterId
-    ),
-    {ok, Token} = onedata_macaroons:serialize(Macaroon),
-    json_utils:encode(#{
-        <<"token">> => Token,
-        <<"ttl">> => Expires - time_utils:cluster_time_seconds()
-    }).
-
-
-%% @private
--spec can_generate_gui_token(od_user:id(), onedata:service(), od_cluster:id()) -> boolean().
-can_generate_gui_token(_UserId, ?OZ_WORKER, ?ONEZONE_CLUSTER_ID) ->
-    % All users can generate a token for Onezone
-    true;
-can_generate_gui_token(UserId, ?OZ_PANEL, ?ONEZONE_CLUSTER_ID) ->
-    cluster_logic:has_eff_user(?ONEZONE_CLUSTER_ID, UserId);
-can_generate_gui_token(UserId, ?OP_WORKER, ProviderId) ->
-    provider_logic:has_eff_user(ProviderId, UserId);
-can_generate_gui_token(UserId, ?OP_PANEL, ProviderId) ->
-    cluster_logic:has_eff_user(ProviderId, UserId).
+    case gui_tokens:create(UserId, SessionId, Audience) of
+        ?ERROR_TOKEN_AUDIENCE_FORBIDDEN ->
+            throw(?HTTP_403_FORBIDDEN);
+        {ok, Token, Expires} ->
+            {ok, Serialized} = tokens:serialize(Token),
+            json_utils:encode(#{
+                <<"token">> => Serialized,
+                <<"ttl">> => Expires - time_utils:cluster_time_seconds()
+            })
+    end.

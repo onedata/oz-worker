@@ -44,7 +44,7 @@
 %% {@link openid_plugin_behaviour} callback get_login_endpoint/3.
 %% @end
 %%--------------------------------------------------------------------
--spec get_login_endpoint(auth_config:idp(), state_token:id(),
+-spec get_login_endpoint(auth_config:idp(), state_token:state_token(),
     auth_logic:redirect_uri()) ->
     auth_logic:login_endpoint().
 get_login_endpoint(IdP, State, RedirectUri) ->

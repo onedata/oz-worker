@@ -45,7 +45,7 @@
 %% {@link auth_protocol_behaviour} callback get_login_endpoint/2.
 %% @end
 %%--------------------------------------------------------------------
--spec get_login_endpoint(auth_config:idp(), state_token:id()) ->
+-spec get_login_endpoint(auth_config:idp(), state_token:state_token()) ->
     {ok, #{binary() => binary() | null}}.
 get_login_endpoint(IdP, State) ->
     Url = call_plugin(IdP, get_login_endpoint, [IdP, State, ?redirect_uri]),

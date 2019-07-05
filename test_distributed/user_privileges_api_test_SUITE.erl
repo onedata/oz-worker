@@ -94,7 +94,7 @@ get_oz_privileges_test(Config) ->
             operation = get,
             module = user_logic,
             function = get_oz_privileges,
-            args = [client, User],
+            args = [auth, User],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -153,7 +153,7 @@ update_oz_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = update_oz_privileges,
-            args = [client, User, data],
+            args = [auth, User, data],
             expected_result = ?OK
         }
         % TODO gs
@@ -229,7 +229,7 @@ delete_oz_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = delete_oz_privileges,
-            args = [client, User],
+            args = [auth, User],
             expected_result = ?OK
         }
         % TODO gs
@@ -300,7 +300,7 @@ get_eff_oz_privileges_test(Config) ->
             operation = get,
             module = user_logic,
             function = get_eff_oz_privileges,
-            args = [client, User],
+            args = [auth, User],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs

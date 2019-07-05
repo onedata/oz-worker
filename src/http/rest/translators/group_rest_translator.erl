@@ -50,11 +50,11 @@ create_response(#gri{id = ParentGroupId, aspect = child}, _, resource, {#gri{id 
     rest_translator:created_reply([<<"groups">>, ParentGroupId, <<"children">>, GroupId]);
 
 create_response(#gri{aspect = invite_user_token}, _, value, Macaroon) ->
-    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    {ok, Token} = macaroons:serialize(Macaroon),
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 
 create_response(#gri{aspect = invite_group_token}, _, value, Macaroon) ->
-    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    {ok, Token} = macaroons:serialize(Macaroon),
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 
 create_response(#gri{id = GroupId, aspect = {user, UserId}}, _, resource, _) ->

@@ -100,6 +100,19 @@ translate(?ERROR_MACAROON_TTL_TO_LONG(MaxTtl)) ->
         [MaxTtl]
     };
 
+translate(?ERROR_BAD_AUDIENCE_TOKEN) ->
+    {?HTTP_401_UNAUTHORIZED,
+        <<"Provided audience token is not valid">>
+    };
+translate(?ERROR_TOKEN_AUDIENCE_FORBIDDEN) ->
+    {?HTTP_400_BAD_REQUEST,
+        <<"Requested audience is not allowed for this subject">>
+    };
+translate(?ERROR_TOKEN_SESSION_INVALID) ->
+    {?HTTP_401_UNAUTHORIZED,
+        <<"This token was issued for a session that no longer exists">>
+    };
+
 % Errors connected with bad data
 translate(?ERROR_MALFORMED_DATA) ->
     {?HTTP_400_BAD_REQUEST,

@@ -96,7 +96,7 @@ list_test(Config) ->
         logic_spec = #logic_spec{
             module = share_logic,
             function = list,
-            args = [client],
+            args = [auth],
             expected_result = ?OK_LIST(ExpShares)
         }
         % TODO gs
@@ -172,7 +172,7 @@ create_test(Config) ->
         logic_spec = #logic_spec{
             module = share_logic,
             function = create,
-            args = [client, data],
+            args = [auth, data],
             expected_result = ?OK_TERM(VerifyFun)
         },
         gs_spec = #gs_spec{
@@ -276,7 +276,7 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             module = share_logic,
             function = get,
-            args = [client, ShareId],
+            args = [auth, ShareId],
             expected_result = ?OK_TERM(
                 fun(#od_share{
                     name = ShareName, public_url = PublicURL,
@@ -320,7 +320,7 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             module = share_logic,
             function = get_public_data,
-            args = [client, ShareId],
+            args = [auth, ShareId],
             expected_result = ?OK_MAP_CONTAINS(SharePublicDetails)
         },
         gs_spec = #gs_spec{
@@ -386,7 +386,7 @@ update_test(Config) ->
         logic_spec = #logic_spec{
             module = share_logic,
             function = update,
-            args = [client, shareId, data],
+            args = [auth, shareId, data],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -450,7 +450,7 @@ delete_test(Config) ->
         logic_spec = #logic_spec{
             module = share_logic,
             function = delete,
-            args = [client, shareId],
+            args = [auth, shareId],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{

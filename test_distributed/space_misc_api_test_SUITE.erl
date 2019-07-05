@@ -102,7 +102,7 @@ create_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = create,
-            args = [client, data],
+            args = [auth, data],
             expected_result = ?OK_TERM(VerifyFun)
         },
         gs_spec = #gs_spec{
@@ -162,7 +162,7 @@ list_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = list,
-            args = [client],
+            args = [auth],
             expected_result = ?OK_LIST(ExpSpaces)
         }
         % TODO gs
@@ -227,7 +227,7 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = get,
-            args = [client, S1],
+            args = [auth, S1],
             expected_result = ?OK_TERM(
                 fun(#od_space{
                     name = Name, users = Users, groups = #{},
@@ -308,7 +308,7 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_protected_data,
-            args = [client, S1],
+            args = [auth, S1],
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?SPACE_NAME1,
                 <<"providers">> => #{P1 => SupportSize}
@@ -380,7 +380,7 @@ update_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = update,
-            args = [client, spaceId, data],
+            args = [auth, spaceId, data],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -446,7 +446,7 @@ delete_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = delete,
-            args = [client, spaceId],
+            args = [auth, spaceId],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -498,7 +498,7 @@ list_shares_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_shares,
-            args = [client, S1],
+            args = [auth, S1],
             expected_result = ?OK_LIST(ExpShares)
         }
         % TODO gs
@@ -550,7 +550,7 @@ get_share_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_share,
-            args = [client, S1, ShareId],
+            args = [auth, S1, ShareId],
             expected_result = ?OK_TERM(
                 fun(#od_share{
                     name = Name,
@@ -630,7 +630,7 @@ list_providers_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_providers,
-            args = [client, S1],
+            args = [auth, S1],
             expected_result = ?OK_LIST(ExpProviders)
         }
         % TODO gs
@@ -683,7 +683,7 @@ create_provider_support_token(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = create_provider_invite_token,
-            args = [client, S1],
+            args = [auth, S1],
             expected_result = ?OK_TERM(VerifyFun)
         }
         % TODO gs
@@ -744,7 +744,7 @@ get_provider_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_provider,
-            args = [client, S1, P1],
+            args = [auth, S1, P1],
             expected_result = ?OK_MAP_CONTAINS(ExpDetails)
         },
         gs_spec = GsSpec = #gs_spec{
@@ -833,7 +833,7 @@ leave_provider_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = leave_provider,
-            args = [client, S1, providerId],
+            args = [auth, S1, providerId],
             expected_result = ?OK
         }
         % TODO gs

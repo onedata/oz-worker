@@ -14,7 +14,7 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("tokens.hrl").
+-include("invite_tokens.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -246,8 +246,8 @@ create(#el_req{gri = #gri{aspect = {idp_access_token, IdP}}}) ->
     end;
 
 create(Req = #el_req{gri = #gri{id = UserId, aspect = provider_registration_token}}) ->
-    {ok, Macaroon} = token_logic:create(
-        Req#el_req.client,
+    {ok, Macaroon} = invite_tokens:create(
+        Req#el_req.auth,
         ?PROVIDER_REGISTRATION_TOKEN,
         {od_user, UserId}
     ),
@@ -442,8 +442,8 @@ delete(#el_req{gri = #gri{id = UserId, aspect = instance}}) ->
         }}} = od_user:get(UserId),
     lists:foreach(
         fun(Token) ->
-            {ok, Macaroon} = token_logic:deserialize(Token),
-            ok = token_logic:delete(Macaroon)
+            {ok, Macaroon} = invite_tokens:deserialize(Token),
+            ok = invite_tokens:delete(Macaroon)
         end, Tokens),
     entity_graph:delete_with_relations(od_user, UserId);
 
@@ -453,9 +453,9 @@ delete(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}}) ->
     }});
 
 delete(#el_req{gri = #gri{id = UserId, aspect = {client_token, TokenId}}}) ->
-    {ok, Macaroon} = onedata_macaroons:deserialize(TokenId),
+    {ok, Macaroon} = macaroons:deserialize(TokenId),
     Identifier = macaroon:identifier(Macaroon),
-    onedata_auth:delete(Identifier),
+    auth_tokens:invalidate_token(Identifier),
     {ok, _} = od_user:update(UserId, fun(User = #od_user{client_tokens = Tokens}) ->
         {ok, User#od_user{client_tokens = Tokens -- [TokenId]}}
     end),
@@ -536,32 +536,32 @@ exists(Req = #el_req{gri = #gri{id = UserId, aspect = instance, scope = shared}}
         ?THROUGH_GROUP(GroupId) ->
             user_logic:has_eff_group(User, GroupId) orelse begin
                 {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
-                Group#od_group.creator =:= ?USER(UserId)
+                Group#od_group.creator =:= ?SUB(user, UserId)
             end;
         ?THROUGH_SPACE(SpaceId) ->
             user_logic:has_eff_space(User, SpaceId) orelse begin
                 {ok, Space} = space_logic_plugin:fetch_entity(SpaceId),
-                Space#od_space.creator =:= ?USER(UserId)
+                Space#od_space.creator =:= ?SUB(user, UserId)
             end;
         ?THROUGH_HANDLE_SERVICE(HServiceId) ->
             user_logic:has_eff_handle_service(User, HServiceId) orelse begin
                 {ok, HService} = handle_service_logic_plugin:fetch_entity(HServiceId),
-                HService#od_handle_service.creator =:= ?USER(UserId)
+                HService#od_handle_service.creator =:= ?SUB(user, UserId)
             end;
         ?THROUGH_HANDLE(HandleId) ->
             user_logic:has_eff_handle(User, HandleId) orelse begin
                 {ok, Handle} = handle_logic_plugin:fetch_entity(HandleId),
-                Handle#od_handle.creator =:= ?USER(UserId)
+                Handle#od_handle.creator =:= ?SUB(user, UserId)
             end;
         ?THROUGH_HARVESTER(HarvesterId) ->
             user_logic:has_eff_harvester(User, HarvesterId) orelse begin
                 {ok, Harvester} = harvester_logic_plugin:fetch_entity(HarvesterId),
-                Harvester#od_harvester.creator =:= ?USER(UserId)
+                Harvester#od_harvester.creator =:= ?SUB(user, UserId)
             end;
         ?THROUGH_CLUSTER(ClusterId) ->
             user_logic:has_eff_cluster(User, ClusterId) orelse begin
                 {ok, Cluster} = cluster_logic_plugin:fetch_entity(ClusterId),
-                Cluster#od_cluster.creator =:= ?USER(UserId)
+                Cluster#od_cluster.creator =:= ?SUB(user, UserId)
             end;
         undefined ->
             true
@@ -620,7 +620,7 @@ authorize(#el_req{operation = create, gri = #gri{aspect = authorize}}, _) ->
 
 %% Operations reserved for admins or available to users in certain circumstances
 authorize(Req = #el_req{operation = create, gri = #gri{id = UserId, aspect = provider_registration_token}}, _) ->
-    case Req#el_req.client of
+    case Req#el_req.auth of
         ?USER(UserId) ->
             % Issuing provider registration token for self. In case of 'restricted'
             % policy, the admin rights will be checked in required_admin_privileges/1
@@ -629,7 +629,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{id = UserId, aspect = pro
             false
     end;
 
-authorize(#el_req{client = ?USER(UserId), operation = Operation, gri = #gri{id = UserId, aspect = oz_privileges}}, _) ->
+authorize(#el_req{auth = ?USER(UserId), operation = Operation, gri = #gri{id = UserId, aspect = oz_privileges}}, _) ->
     % Regular users are allowed only to view their own OZ privileges
     % (other operations are checked in required_admin_privileges/1)
     Operation =:= get;
@@ -640,13 +640,13 @@ authorize(#el_req{operation = update, gri = #gri{aspect = basic_auth}}, _) ->
 
 
 %% User can perform all operations on his record except the restricted ones handled above
-authorize(#el_req{client = ?USER(UserId), gri = #gri{id = UserId}}, _) ->
+authorize(#el_req{auth = ?USER(UserId), gri = #gri{id = UserId}}, _) ->
     true;
 
 
 %% Operations available to other subjects
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, User) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?PROVIDER(ProviderId), ?THROUGH_PROVIDER(ProviderId)} ->
             % User's membership in provider is checked in 'exists'
             true;
@@ -662,14 +662,14 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
     end;
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = instance, scope = shared}}, User) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(ClientUserId), ?THROUGH_GROUP(GroupId)} ->
             {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
             % UserId's membership in group is checked in 'exists'
             group_logic:has_eff_privilege(Group, ClientUserId, ?GROUP_VIEW) orelse begin
             % Members of a group can see the shared data of its creator
                 group_logic:has_eff_user(Group, ClientUserId) andalso
-                    Group#od_group.creator =:= ?USER(UserId)
+                    Group#od_group.creator =:= ?SUB(user, UserId)
             end;
 
         {?USER(ClientUserId), ?THROUGH_SPACE(SpaceId)} ->
@@ -678,7 +678,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
             space_logic:has_eff_privilege(Space, ClientUserId, ?SPACE_VIEW) orelse begin
             % Members of a space can see the shared data of its creator
                 space_logic:has_eff_user(Space, ClientUserId) andalso
-                    Space#od_space.creator =:= ?USER(UserId)
+                    Space#od_space.creator =:= ?SUB(user, UserId)
             end;
 
         {?USER(ClientUserId), ?THROUGH_HANDLE_SERVICE(HServiceId)} ->
@@ -687,7 +687,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
             handle_service_logic:has_eff_privilege(HService, ClientUserId, ?HANDLE_SERVICE_VIEW) orelse begin
             % Members of a handle service can see the shared data of its creator
                 handle_service_logic:has_eff_user(HService, ClientUserId) andalso
-                    HService#od_handle_service.creator =:= ?USER(UserId)
+                    HService#od_handle_service.creator =:= ?SUB(user, UserId)
             end;
 
         {?USER(ClientUserId), ?THROUGH_HANDLE(HandleId)} ->
@@ -696,7 +696,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
             handle_logic:has_eff_privilege(Handle, ClientUserId, ?HANDLE_VIEW) orelse begin
             % Members of a handle can see the shared data of its creator
                 handle_logic:has_eff_user(Handle, ClientUserId) andalso
-                    Handle#od_handle.creator =:= ?USER(UserId)
+                    Handle#od_handle.creator =:= ?SUB(user, UserId)
             end;
 
         {?USER(ClientUserId), ?THROUGH_HARVESTER(HarvesterId)} ->
@@ -705,7 +705,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
             harvester_logic:has_eff_privilege(Harvester, ClientUserId, ?HARVESTER_VIEW) orelse begin
             % Members of a harvester can see the shared data of its creator
                 harvester_logic:has_eff_user(Harvester, ClientUserId) andalso
-                    Harvester#od_harvester.creator =:= ?USER(UserId)
+                    Harvester#od_harvester.creator =:= ?SUB(user, UserId)
             end;
 
         {?USER(ClientUserId), ?THROUGH_CLUSTER(ClusterId)} ->
@@ -714,7 +714,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
             cluster_logic:has_eff_privilege(Cluster, ClientUserId, ?CLUSTER_VIEW) orelse begin
             % Members of a cluster can see the shared data of its creator
                 cluster_logic:has_eff_user(Cluster, ClientUserId) andalso
-                    Cluster#od_cluster.creator =:= ?USER(UserId)
+                    Cluster#od_cluster.creator =:= ?SUB(user, UserId)
             end;
 
         {?PROVIDER(ProviderId), ?THROUGH_CLUSTER(ClusterId)} ->
@@ -930,9 +930,9 @@ validate(#el_req{operation = update, gri = #gri{aspect = oz_privileges}}) -> #{
 %%--------------------------------------------------------------------
 -spec auth_by_oz_privilege(entity_logic:req() | od_user:id() | od_user:info(),
     privileges:oz_privilege()) -> boolean().
-auth_by_oz_privilege(#el_req{client = ?USER(UserId)}, Privilege) ->
+auth_by_oz_privilege(#el_req{auth = ?USER(UserId)}, Privilege) ->
     auth_by_oz_privilege(UserId, Privilege);
-auth_by_oz_privilege(#el_req{client = _OtherClient}, _Privilege) ->
+auth_by_oz_privilege(#el_req{auth = _OtherAuth}, _Privilege) ->
     false;
 auth_by_oz_privilege(UserOrId, Privilege) ->
     user_logic:has_eff_oz_privilege(UserOrId, Privilege).

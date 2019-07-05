@@ -46,7 +46,7 @@ create_response(#gri{aspect = {idp_access_token, _}}, _, value, {AccessToken, Ex
     });
 
 create_response(#gri{aspect = provider_registration_token}, _, value, Macaroon) ->
-    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    {ok, Token} = macaroons:serialize(Macaroon),
     rest_translator:ok_body_reply(#{<<"token">> => Token}).
 
 

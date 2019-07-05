@@ -128,10 +128,10 @@
 %% Creates a new group document in database based on group name and type.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: entity_logic:client(), Name :: binary(),
+-spec create(Auth :: aai:auth(), Name :: binary(),
     Type :: od_group:type()) -> {ok, od_group:id()} | {error, term()}.
-create(Client, Name, Type) ->
-    create(Client, #{<<"name">> => Name, <<"type">> => Type}).
+create(Auth, Name, Type) ->
+    create(Auth, #{<<"name">> => Name, <<"type">> => Type}).
 
 
 %%--------------------------------------------------------------------
@@ -141,14 +141,14 @@ create(Client, Name, Type) ->
 %% 2) Group name is provided in a proper Data object, group type is optional.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Client :: entity_logic:client(), NameOrData :: binary() | #{}) ->
+-spec create(Auth :: aai:auth(), NameOrData :: binary() | #{}) ->
     {ok, od_group:id()} | {error, term()}.
-create(Client, Name) when is_binary(Name) ->
-    create(Client, #{<<"name">> => Name});
-create(Client, Data) ->
+create(Auth, Name) when is_binary(Name) ->
+    create(Auth, #{<<"name">> => Name});
+create(Auth, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = undefined, aspect = instance},
         data = Data
     })).
@@ -159,12 +159,12 @@ create(Client, Data) ->
 %% Retrieves a group record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, #od_group{}} | {error, term()}.
-get(Client, GroupId) ->
+get(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = instance}
     }).
 
@@ -174,12 +174,12 @@ get(Client, GroupId) ->
 %% Retrieves protected group data from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_protected_data(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_protected_data(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, map()} | {error, term()}.
-get_protected_data(Client, GroupId) ->
+get_protected_data(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = instance, scope = protected}
     }).
 
@@ -189,11 +189,11 @@ get_protected_data(Client, GroupId) ->
 %% Retrieves shared group data from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_shared_data(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_shared_data(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, #od_group{}} | {error, term()}.
-get_shared_data(Client, GroupId) ->
+get_shared_data(Auth, GroupId) ->
     % Currently, these two return the same data
-    get_protected_data(Client, GroupId).
+    get_protected_data(Auth, GroupId).
 
 
 %%--------------------------------------------------------------------
@@ -201,12 +201,12 @@ get_shared_data(Client, GroupId) ->
 %% Lists all groups (their ids) in database.
 %% @end
 %%--------------------------------------------------------------------
--spec list(Client :: entity_logic:client()) ->
+-spec list(Auth :: aai:auth()) ->
     {ok, [od_group:id()]} | {error, term()}.
-list(Client) ->
+list(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = undefined, aspect = list}
     }).
 
@@ -216,12 +216,12 @@ list(Client) ->
 %% Retrieves oz privileges of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_oz_privileges(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_oz_privileges(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [privileges:oz_privilege()]} | {error, term()}.
-get_oz_privileges(Client, GroupId) ->
+get_oz_privileges(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = oz_privileges}
     }).
 
@@ -231,12 +231,12 @@ get_oz_privileges(Client, GroupId) ->
 %% Retrieves effective oz privileges of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_oz_privileges(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_eff_oz_privileges(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [privileges:oz_privilege()]} | {error, term()}.
-get_eff_oz_privileges(Client, GroupId) ->
+get_eff_oz_privileges(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = eff_oz_privileges}
     }).
 
@@ -246,12 +246,12 @@ get_eff_oz_privileges(Client, GroupId) ->
 %% Updates information of given group (name and type).
 %% @end
 %%--------------------------------------------------------------------
--spec update(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec update(Auth :: aai:auth(), GroupId :: od_group:id(),
     Data :: #{}) -> ok | {error, term()}.
-update(Client, GroupId, Data) ->
+update(Auth, GroupId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = instance},
         data = Data
     }).
@@ -263,11 +263,11 @@ update(Client, GroupId, Data) ->
 %% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
--spec update_oz_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec update_oz_privileges(Auth :: aai:auth(), GroupId :: od_group:id(),
     PrivsToGrant :: [privileges:oz_privilege()],
     PrivsToRevoke :: [privileges:oz_privilege()]) -> ok | {error, term()}.
-update_oz_privileges(Client, GroupId, PrivsToGrant, PrivsToRevoke) ->
-    update_oz_privileges(Client, GroupId, #{
+update_oz_privileges(Auth, GroupId, PrivsToGrant, PrivsToRevoke) ->
+    update_oz_privileges(Auth, GroupId, #{
         <<"grant">> => PrivsToGrant,
         <<"revoke">> => PrivsToRevoke
     }).
@@ -279,12 +279,12 @@ update_oz_privileges(Client, GroupId, PrivsToGrant, PrivsToRevoke) ->
 %% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update_oz_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec update_oz_privileges(Auth :: aai:auth(), GroupId :: od_group:id(),
     Data :: #{}) -> ok | {error, term()}.
-update_oz_privileges(Client, GroupId, Data) ->
+update_oz_privileges(Auth, GroupId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = oz_privileges},
         data = Data
     }).
@@ -295,12 +295,12 @@ update_oz_privileges(Client, GroupId, Data) ->
 %% Deletes given group from database.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec delete(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     ok | {error, term()}.
-delete(Client, GroupId) ->
+delete(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = instance}
     }).
 
@@ -310,12 +310,12 @@ delete(Client, GroupId) ->
 %% Deletes (sets to empty list) oz privileges of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_oz_privileges(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec delete_oz_privileges(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     ok | {error, term()}.
-delete_oz_privileges(Client, GroupId) ->
+delete_oz_privileges(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = oz_privileges}
     }).
 
@@ -325,10 +325,10 @@ delete_oz_privileges(Client, GroupId) ->
 %% Creates a new parent group document in database based on group name and type.
 %% @end
 %%--------------------------------------------------------------------
--spec create_parent_group(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec create_parent_group(Auth :: aai:auth(), GroupId :: od_group:id(),
     Name :: binary(), Type :: od_group:type()) -> {ok, od_group:id()} | {error, term()}.
-create_parent_group(Client, GroupId, Name, Type) ->
-    create_parent_group(Client, GroupId, #{<<"name">> => Name, <<"type">> => Type}).
+create_parent_group(Auth, GroupId, Name, Type) ->
+    create_parent_group(Auth, GroupId, #{<<"name">> => Name, <<"type">> => Type}).
 
 
 %%--------------------------------------------------------------------
@@ -338,14 +338,14 @@ create_parent_group(Client, GroupId, Name, Type) ->
 %% 2) Group name is provided in a proper Data object, group type is optional.
 %% @end
 %%--------------------------------------------------------------------
--spec create_parent_group(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec create_parent_group(Auth :: aai:auth(), GroupId :: od_group:id(),
     NameOrData :: binary() | #{}) -> {ok, od_space:id()} | {error, term()}.
-create_parent_group(Client, GroupId, Name) when is_binary(Name) ->
-    create_parent_group(Client, GroupId, #{<<"name">> => Name});
-create_parent_group(Client, GroupId, Data) ->
+create_parent_group(Auth, GroupId, Name) when is_binary(Name) ->
+    create_parent_group(Auth, GroupId, #{<<"name">> => Name});
+create_parent_group(Auth, GroupId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = undefined, aspect = instance},
         auth_hint = ?AS_GROUP(GroupId),
         data = Data
@@ -359,14 +359,14 @@ create_parent_group(Client, GroupId, Data) ->
 %% 2) Space name is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec create_space(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec create_space(Auth :: aai:auth(), GroupId :: od_group:id(),
     NameOrData :: binary() | #{}) -> {ok, od_space:id()} | {error, term()}.
-create_space(Client, GroupId, Name) when is_binary(Name) ->
-    create_space(Client, GroupId, #{<<"name">> => Name});
-create_space(Client, GroupId, Data) ->
+create_space(Auth, GroupId, Name) when is_binary(Name) ->
+    create_space(Auth, GroupId, #{<<"name">> => Name});
+create_space(Auth, GroupId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_space, id = undefined, aspect = instance},
         auth_hint = ?AS_GROUP(GroupId),
         data = Data
@@ -379,12 +379,12 @@ create_space(Client, GroupId, Data) ->
 %% Allows to specify the Name, ProxyEndpoint and ServiceProperties.
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle_service(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec create_handle_service(Auth :: aai:auth(), GroupId :: od_group:id(),
     Name :: binary(), ProxyEndpoint :: od_handle_service:proxy_endpoint(),
     ServiceProperties :: od_handle_service:service_properties()) ->
     {ok, od_handle_service:id()} | {error, term()}.
-create_handle_service(Client, GroupId, Name, ProxyEndpoint, ServiceProperties) ->
-    create_handle_service(Client, GroupId, #{
+create_handle_service(Auth, GroupId, Name, ProxyEndpoint, ServiceProperties) ->
+    create_handle_service(Auth, GroupId, #{
         <<"name">> => Name,
         <<"proxyEndpoint">> => ProxyEndpoint,
         <<"serviceProperties">> => ServiceProperties
@@ -397,12 +397,12 @@ create_handle_service(Client, GroupId, Name, ProxyEndpoint, ServiceProperties) -
 %% Name, ProxyEndpoint and ServiceProperties must be given in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle_service(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec create_handle_service(Auth :: aai:auth(), GroupId :: od_group:id(),
     Data :: #{}) -> {ok, od_handle_service:id()} | {error, term()}.
-create_handle_service(Client, GroupId, Data) ->
+create_handle_service(Auth, GroupId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_handle_service, id = undefined, aspect = instance},
         auth_hint = ?AS_GROUP(GroupId),
         data = Data
@@ -415,12 +415,12 @@ create_handle_service(Client, GroupId, Data) ->
 %% Allows to specify the HServiceId, ResourceType, ResourceId and Metadata.
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec create_handle(Auth :: aai:auth(), GroupId :: od_group:id(),
     HServiceId :: od_handle_service:id(), ResourceType :: od_handle:resource_type(),
     ResourceId :: od_handle:resource_id(), Metadata :: od_handle:metadata()) ->
     {ok, od_handle:id()} | {error, term()}.
-create_handle(Client, GroupId, HServiceId, ResourceType, ResourceId, Metadata) ->
-    create_handle(Client, GroupId, #{
+create_handle(Auth, GroupId, HServiceId, ResourceType, ResourceId, Metadata) ->
+    create_handle(Auth, GroupId, #{
         <<"handleServiceId">> => HServiceId,
         <<"resourceType">> => ResourceType,
         <<"resourceId">> => ResourceId,
@@ -434,12 +434,12 @@ create_handle(Client, GroupId, HServiceId, ResourceType, ResourceId, Metadata) -
 %% HServiceId, ResourceType, ResourceId and Metadata must be given in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec create_handle(Auth :: aai:auth(), GroupId :: od_group:id(),
     Data :: #{}) -> {ok, od_handle:id()} | {error, term()}.
-create_handle(Client, GroupId, Data) ->
+create_handle(Auth, GroupId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_handle, id = undefined, aspect = instance},
         auth_hint = ?AS_GROUP(GroupId),
         data = Data
@@ -451,10 +451,10 @@ create_handle(Client, GroupId, Data) ->
 %% Harvester name, endpoint plugin and config are given explicitly.
 %% @end
 %%--------------------------------------------------------------------
--spec create_harvester(Client :: entity_logic:client(), GroupId :: od_group:id(), Name :: binary(),
+-spec create_harvester(Auth :: aai:auth(), GroupId :: od_group:id(), Name :: binary(),
     Endpoint :: binary(), Plugin :: binary(), Config :: map()) -> {ok, od_harvester:id()} | {error, term()}.
-create_harvester(Client, GroupId, Name, Endpoint, Plugin, Config) ->
-    create_harvester(Client, GroupId, #{
+create_harvester(Auth, GroupId, Name, Endpoint, Plugin, Config) ->
+    create_harvester(Auth, GroupId, #{
         <<"name">> => Name,
         <<"endpoint">> => Endpoint,
         <<"plugin">> => Plugin,
@@ -468,12 +468,12 @@ create_harvester(Client, GroupId, Name, Endpoint, Plugin, Config) ->
 %% Harvester name, endpoint plugin and config are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec create_harvester(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec create_harvester(Auth :: aai:auth(), GroupId :: od_group:id(),
     Data :: #{}) -> {ok, od_harvester:id()} | {error, term()}.
-create_harvester(Client, GroupId, Data) ->
+create_harvester(Auth, GroupId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = undefined, aspect = instance},
         auth_hint = ?AS_GROUP(GroupId),
         data = Data
@@ -486,12 +486,12 @@ create_harvester(Client, GroupId, Data) ->
 %% given group.
 %% @end
 %%--------------------------------------------------------------------
--spec create_user_invite_token(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec create_user_invite_token(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, macaroon:macaroon()} | {error, term()}.
-create_user_invite_token(Client, GroupId) ->
+create_user_invite_token(Auth, GroupId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = invite_user_token},
         data = #{}
     })).
@@ -503,12 +503,12 @@ create_user_invite_token(Client, GroupId) ->
 %% given group.
 %% @end
 %%--------------------------------------------------------------------
--spec create_group_invite_token(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec create_group_invite_token(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, macaroon:macaroon()} | {error, term()}.
-create_group_invite_token(Client, GroupId) ->
+create_group_invite_token(Auth, GroupId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = invite_group_token},
         data = #{}
     })).
@@ -519,11 +519,11 @@ create_group_invite_token(Client, GroupId) ->
 %% Creates a new child group belonging to given group.
 %% @end
 %%--------------------------------------------------------------------
--spec create_child_group(Client :: entity_logic:client(),
+-spec create_child_group(Auth :: aai:auth(),
     ParentGroupId :: od_group:id(), Name :: binary(),
     Type :: od_group:type()) -> {ok, od_group:id()} | {error, term()}.
-create_child_group(Client, ParentGroupId, Name, Type) ->
-    create_child_group(Client, ParentGroupId, #{
+create_child_group(Auth, ParentGroupId, Name, Type) ->
+    create_child_group(Auth, ParentGroupId, #{
         <<"name">> => Name, <<"type">> => Type
     }).
 
@@ -535,19 +535,19 @@ create_child_group(Client, ParentGroupId, Name, Type) ->
 %% 2) Group name is provided in a proper Data object, group type is optional.
 %% @end
 %%--------------------------------------------------------------------
--spec create_child_group(Client :: entity_logic:client(),
+-spec create_child_group(Auth :: aai:auth(),
     ParentGroupId :: od_group:id(), NameOrData :: binary() | #{}) ->
     {ok, od_group:id()} | {error, term()}.
-create_child_group(Client, ParentGroupId, Name) when is_binary(Name) ->
-    create_child_group(Client, ParentGroupId, #{<<"name">> => Name});
-create_child_group(Client, ParentGroupId, Data) ->
-    AuthHint = case Client of
+create_child_group(Auth, ParentGroupId, Name) when is_binary(Name) ->
+    create_child_group(Auth, ParentGroupId, #{<<"name">> => Name});
+create_child_group(Auth, ParentGroupId, Data) ->
+    AuthHint = case Auth of
         ?USER(UserId) -> ?AS_USER(UserId);
         _ -> undefined
     end,
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = ParentGroupId, aspect = child},
         data = Data,
         auth_hint = AuthHint
@@ -562,19 +562,19 @@ create_child_group(Client, ParentGroupId, Data) ->
 %% 2) Token is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec join_group(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec join_group(Auth :: aai:auth(), GroupId :: od_group:id(),
     TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
     {ok, od_group:id()} | {error, term()}.
-join_group(Client, GroupId, Data) when is_map(Data) ->
+join_group(Auth, GroupId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = undefined, aspect = join},
         auth_hint = ?AS_GROUP(GroupId),
         data = Data
     }));
-join_group(Client, GroupId, Token) ->
-    join_group(Client, GroupId, #{<<"token">> => Token}).
+join_group(Auth, GroupId, Token) ->
+    join_group(Auth, GroupId, #{<<"token">> => Token}).
 
 
 %%--------------------------------------------------------------------
@@ -585,19 +585,19 @@ join_group(Client, GroupId, Token) ->
 %% 2) Token is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec join_space(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec join_space(Auth :: aai:auth(), GroupId :: od_group:id(),
     TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
     {ok, od_space:id()} | {error, term()}.
-join_space(Client, GroupId, Data) when is_map(Data) ->
+join_space(Auth, GroupId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_space, id = undefined, aspect = join},
         auth_hint = ?AS_GROUP(GroupId),
         data = Data
     }));
-join_space(Client, GroupId, Token) ->
-    join_space(Client, GroupId, #{<<"token">> => Token}).
+join_space(Auth, GroupId, Token) ->
+    join_space(Auth, GroupId, #{<<"token">> => Token}).
 
 
 %%--------------------------------------------------------------------
@@ -608,19 +608,19 @@ join_space(Client, GroupId, Token) ->
 %% 2) Token is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec join_harvester(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec join_harvester(Auth :: aai:auth(), GroupId :: od_group:id(),
     TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
     {ok, od_harvester:id()} | {error, term()}.
-join_harvester(Client, GroupId, Data) when is_map(Data) ->
+join_harvester(Auth, GroupId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = undefined, aspect = join},
         auth_hint = ?AS_GROUP(GroupId),
         data = Data
     }));
-join_harvester(Client, GroupId, Token) ->
-    join_harvester(Client, GroupId, #{<<"token">> => Token}).
+join_harvester(Auth, GroupId, Token) ->
+    join_harvester(Auth, GroupId, #{<<"token">> => Token}).
 
 
 %%--------------------------------------------------------------------
@@ -631,19 +631,19 @@ join_harvester(Client, GroupId, Token) ->
 %% 2) Token is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec join_cluster(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec join_cluster(Auth :: aai:auth(), GroupId :: od_group:id(),
     TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
     {ok, od_cluster:id()} | {error, term()}.
-join_cluster(Client, GroupId, Data) when is_map(Data) ->
+join_cluster(Auth, GroupId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = undefined, aspect = join},
         auth_hint = ?AS_GROUP(GroupId),
         data = Data
     }));
-join_cluster(Client, GroupId, Token) ->
-    join_cluster(Client, GroupId, #{<<"token">> => Token}).
+join_cluster(Auth, GroupId, Token) ->
+    join_cluster(Auth, GroupId, #{<<"token">> => Token}).
 
 
 %%--------------------------------------------------------------------
@@ -651,11 +651,11 @@ join_cluster(Client, GroupId, Token) ->
 %% Adds specified user to given group.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(Client :: entity_logic:client(),
+-spec add_user(Auth :: aai:auth(),
     GroupId :: od_group:id(), UserId :: od_user:id()) ->
     {ok, od_user:id()} | {error, term()}.
-add_user(Client, GroupId, UserId) ->
-    add_user(Client, GroupId, UserId, #{}).
+add_user(Auth, GroupId, UserId) ->
+    add_user(Auth, GroupId, UserId, #{}).
 
 
 %%--------------------------------------------------------------------
@@ -666,18 +666,18 @@ add_user(Client, GroupId, UserId) ->
 %% 2) Privileges are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec add_user(Client :: entity_logic:client(),
+-spec add_user(Auth :: aai:auth(),
     GroupId :: od_group:id(), UserId :: od_user:id(),
     PrivilegesPrivilegesOrData :: [privileges:group_privileges()] | #{}) ->
     {ok, od_user:id()} | {error, term()}.
-add_user(Client, GroupId, UserId, Privileges) when is_list(Privileges) ->
-    add_user(Client, GroupId, UserId, #{
+add_user(Auth, GroupId, UserId, Privileges) when is_list(Privileges) ->
+    add_user(Auth, GroupId, UserId, #{
         <<"privileges">> => Privileges
     });
-add_user(Client, GroupId, UserId, Data) ->
+add_user(Auth, GroupId, UserId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {user, UserId}},
         data = Data
     })).
@@ -688,11 +688,11 @@ add_user(Client, GroupId, UserId, Data) ->
 %% Adds specified child group to given group.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(Client :: entity_logic:client(),
+-spec add_group(Auth :: aai:auth(),
     GroupId :: od_group:id(), ChildGroupId :: od_group:id()) ->
     {ok, od_group:id()} | {error, term()}.
-add_group(Client, GroupId, ChildGroupId) ->
-    add_group(Client, GroupId, ChildGroupId, #{}).
+add_group(Auth, GroupId, ChildGroupId) ->
+    add_group(Auth, GroupId, ChildGroupId, #{}).
 
 
 %%--------------------------------------------------------------------
@@ -703,27 +703,27 @@ add_group(Client, GroupId, ChildGroupId) ->
 %% 2) Privileges are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec add_group(Client :: entity_logic:client(),
+-spec add_group(Auth :: aai:auth(),
     GroupId :: od_group:id(), ChildGroupId :: od_group:id(),
     PrivilegesOrData :: [privileges:group_privileges()] | #{}) ->
     {ok, od_group:id()} | {error, term()}.
-add_group(Client, GroupId, ChildGroupId, Privileges) when is_list(Privileges) ->
-    add_group(Client, GroupId, ChildGroupId, #{
+add_group(Auth, GroupId, ChildGroupId, Privileges) when is_list(Privileges) ->
+    add_group(Auth, GroupId, ChildGroupId, #{
         <<"privileges">> => Privileges
     });
-add_group(Client, GroupId, ChildGroupId, Data) ->
+add_group(Auth, GroupId, ChildGroupId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {child, ChildGroupId}},
         data = Data
     })).
 
 
--spec get_name(entity_logic:client(), od_group:id()) ->
+-spec get_name(aai:auth(), od_group:id()) ->
     {ok, od_group:name()} | {error, term()}.
-get_name(Client, GroupId) ->
-    case get(Client, GroupId) of
+get_name(Auth, GroupId) ->
+    case get(Auth, GroupId) of
         {ok, #od_group{name = Name}} -> {ok, Name};
         {error, _} = Error -> Error
     end.
@@ -734,12 +734,12 @@ get_name(Client, GroupId) ->
 %% Retrieves the list of parents of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_parents(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_parents(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
-get_parents(Client, GroupId) ->
+get_parents(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = parents}
     }).
 
@@ -749,12 +749,12 @@ get_parents(Client, GroupId) ->
 %% Retrieves the list of effective parents of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_parents(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_eff_parents(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
-get_eff_parents(Client, GroupId) ->
+get_eff_parents(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = eff_parents}
     }).
 
@@ -764,12 +764,12 @@ get_eff_parents(Client, GroupId) ->
 %% Retrieves the information about specific parent among parents of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_parent(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_parent(Auth :: aai:auth(), GroupId :: od_group:id(),
     ParentGroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
-get_parent(Client, GroupId, ParentGroupId) ->
+get_parent(Auth, GroupId, ParentGroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = ParentGroupId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -781,12 +781,12 @@ get_parent(Client, GroupId, ParentGroupId) ->
 %% effective parents of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_parent(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_eff_parent(Auth :: aai:auth(), GroupId :: od_group:id(),
     ParentGroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
-get_eff_parent(Client, GroupId, ParentGroupId) ->
+get_eff_parent(Auth, GroupId, ParentGroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = ParentGroupId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -797,12 +797,12 @@ get_eff_parent(Client, GroupId, ParentGroupId) ->
 %% Retrieves the list of children of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_children(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_children(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
-get_children(Client, GroupId) ->
+get_children(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = children}
     }).
 
@@ -812,12 +812,12 @@ get_children(Client, GroupId) ->
 %% Retrieves the list of effective children of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_children(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_eff_children(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
-get_eff_children(Client, GroupId) ->
+get_eff_children(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = eff_children}
     }).
 
@@ -827,12 +827,12 @@ get_eff_children(Client, GroupId) ->
 %% Retrieves the information about specific child among children of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_child(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_child(Auth :: aai:auth(), GroupId :: od_group:id(),
     ChildGroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
-get_child(Client, GroupId, ChildGroupId) ->
+get_child(Auth, GroupId, ChildGroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = ChildGroupId, aspect = instance, scope = shared},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -844,12 +844,12 @@ get_child(Client, GroupId, ChildGroupId) ->
 %% effective children of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_child(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_eff_child(Auth :: aai:auth(), GroupId :: od_group:id(),
     ChildGroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
-get_eff_child(Client, GroupId, ChildGroupId) ->
+get_eff_child(Auth, GroupId, ChildGroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = ChildGroupId, aspect = instance, scope = shared},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -860,12 +860,12 @@ get_eff_child(Client, GroupId, ChildGroupId) ->
 %% Retrieves the privileges of specific child among children of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_child_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_child_privileges(Auth :: aai:auth(), GroupId :: od_group:id(),
     ChildGroupId :: od_group:id()) -> {ok, [privileges:group_privileges()]} | {error, term()}.
-get_child_privileges(Client, GroupId, ChildGroupId) ->
+get_child_privileges(Auth, GroupId, ChildGroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {child_privileges, ChildGroupId}}
     }).
 
@@ -876,12 +876,12 @@ get_child_privileges(Client, GroupId, ChildGroupId) ->
 %% among effective children of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_child_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_eff_child_privileges(Auth :: aai:auth(), GroupId :: od_group:id(),
     ChildGroupId :: od_group:id()) -> {ok, [privileges:group_privileges()]} | {error, term()}.
-get_eff_child_privileges(Client, GroupId, ChildGroupId) ->
+get_eff_child_privileges(Auth, GroupId, ChildGroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {eff_child_privileges, ChildGroupId}}
     }).
 
@@ -892,13 +892,13 @@ get_eff_child_privileges(Client, GroupId, ChildGroupId) ->
 %% among effective children of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_child_membership_intermediaries(Client :: entity_logic:client(),
+-spec get_eff_child_membership_intermediaries(Auth :: aai:auth(),
     GroupId :: od_group:id(), ChildGroupId :: od_group:id()) ->
     {ok, entity_graph:intermediaries()} | {error, term()}.
-get_eff_child_membership_intermediaries(Client, GroupId, ChildGroupId) ->
+get_eff_child_membership_intermediaries(Auth, GroupId, ChildGroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {eff_child_membership, ChildGroupId}}
     }).
 
@@ -908,12 +908,12 @@ get_eff_child_membership_intermediaries(Client, GroupId, ChildGroupId) ->
 %% Retrieves the list of users of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_users(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_users(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
-get_users(Client, GroupId) ->
+get_users(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = users}
     }).
 
@@ -923,12 +923,12 @@ get_users(Client, GroupId) ->
 %% Retrieves the list of effective users of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_users(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_eff_users(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
-get_eff_users(Client, GroupId) ->
+get_eff_users(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = eff_users}
     }).
 
@@ -938,12 +938,12 @@ get_eff_users(Client, GroupId) ->
 %% Retrieves the information about specific user among users of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_user(Auth :: aai:auth(), GroupId :: od_group:id(),
     UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
-get_user(Client, GroupId, UserId) ->
+get_user(Auth, GroupId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -955,12 +955,12 @@ get_user(Client, GroupId, UserId) ->
 %% effective users of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_eff_user(Auth :: aai:auth(), GroupId :: od_group:id(),
     UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
-get_eff_user(Client, GroupId, UserId) ->
+get_eff_user(Auth, GroupId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -971,12 +971,12 @@ get_eff_user(Client, GroupId, UserId) ->
 %% Retrieves the privileges of specific user among users of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_user_privileges(Auth :: aai:auth(), GroupId :: od_group:id(),
     UserId :: od_user:id()) -> {ok, [privileges:group_privileges()]} | {error, term()}.
-get_user_privileges(Client, GroupId, UserId) ->
+get_user_privileges(Auth, GroupId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {user_privileges, UserId}}
     }).
 
@@ -987,12 +987,12 @@ get_user_privileges(Client, GroupId, UserId) ->
 %% among effective users of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_eff_user_privileges(Auth :: aai:auth(), GroupId :: od_group:id(),
     UserId :: od_user:id()) -> {ok, [privileges:group_privileges()]} | {error, term()}.
-get_eff_user_privileges(Client, GroupId, UserId) ->
+get_eff_user_privileges(Auth, GroupId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {eff_user_privileges, UserId}}
     }).
 
@@ -1003,13 +1003,13 @@ get_eff_user_privileges(Client, GroupId, UserId) ->
 %% among effective users of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_user_membership_intermediaries(Client :: entity_logic:client(),
+-spec get_eff_user_membership_intermediaries(Auth :: aai:auth(),
     GroupId :: od_group:id(), UserId :: od_user:id()) ->
     {ok, entity_graph:intermediaries()} | {error, term()}.
-get_eff_user_membership_intermediaries(Client, GroupId, UserId) ->
+get_eff_user_membership_intermediaries(Auth, GroupId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {eff_user_membership, UserId}}
     }).
 
@@ -1019,12 +1019,12 @@ get_eff_user_membership_intermediaries(Client, GroupId, UserId) ->
 %% Retrieves the list of spaces of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_spaces(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_spaces(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_space:id()]} | {error, term()}.
-get_spaces(Client, GroupId) ->
+get_spaces(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = spaces}
     }).
 
@@ -1034,12 +1034,12 @@ get_spaces(Client, GroupId) ->
 %% Retrieves the list of effective spaces of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_spaces(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_eff_spaces(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_space:id()]} | {error, term()}.
-get_eff_spaces(Client, GroupId) ->
+get_eff_spaces(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = eff_spaces}
     }).
 
@@ -1049,12 +1049,12 @@ get_eff_spaces(Client, GroupId) ->
 %% Retrieves the information about specific space among spaces of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_space(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_space(Auth :: aai:auth(), GroupId :: od_group:id(),
     SpaceId :: od_space:id()) -> {ok, #{}} | {error, term()}.
-get_space(Client, GroupId, SpaceId) ->
+get_space(Auth, GroupId, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -1066,12 +1066,12 @@ get_space(Client, GroupId, SpaceId) ->
 %% effective spaces of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_space(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_eff_space(Auth :: aai:auth(), GroupId :: od_group:id(),
     SpaceId :: od_space:id()) -> {ok, #{}} | {error, term()}.
-get_eff_space(Client, GroupId, SpaceId) ->
+get_eff_space(Auth, GroupId, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -1082,12 +1082,12 @@ get_eff_space(Client, GroupId, SpaceId) ->
 %% Retrieves the list of effective providers of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_providers(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_eff_providers(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_provider:id()]} | {error, term()}.
-get_eff_providers(Client, GroupId) ->
+get_eff_providers(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = eff_providers}
     }).
 
@@ -1098,12 +1098,12 @@ get_eff_providers(Client, GroupId) ->
 %% effective providers of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_provider(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_eff_provider(Auth :: aai:auth(), GroupId :: od_group:id(),
     ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
-get_eff_provider(Client, GroupId, ProviderId) ->
+get_eff_provider(Auth, GroupId, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -1115,12 +1115,12 @@ get_eff_provider(Client, GroupId, ProviderId) ->
 %% effective providers of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_spaces_in_eff_provider(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_spaces_in_eff_provider(Auth :: aai:auth(), GroupId :: od_group:id(),
     ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
-get_spaces_in_eff_provider(Client, GroupId, ProviderId) ->
+get_spaces_in_eff_provider(Auth, GroupId, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = {group_spaces, GroupId}}
     }).
 
@@ -1130,12 +1130,12 @@ get_spaces_in_eff_provider(Client, GroupId, ProviderId) ->
 %% Retrieves the list of handle_services of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_handle_services(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_handle_services(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_handle_service:id()]} | {error, term()}.
-get_handle_services(Client, GroupId) ->
+get_handle_services(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = handle_services}
     }).
 
@@ -1145,12 +1145,12 @@ get_handle_services(Client, GroupId) ->
 %% Retrieves the list of effective handle_services of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_handle_services(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_eff_handle_services(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_handle_service:id()]} | {error, term()}.
-get_eff_handle_services(Client, GroupId) ->
+get_eff_handle_services(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = eff_handle_services}
     }).
 
@@ -1161,12 +1161,12 @@ get_eff_handle_services(Client, GroupId) ->
 %% handle_services of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_handle_service(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_handle_service(Auth :: aai:auth(), GroupId :: od_group:id(),
     HServiceId :: od_handle_service:id()) -> {ok, #{}} | {error, term()}.
-get_handle_service(Client, GroupId, HServiceId) ->
+get_handle_service(Auth, GroupId, HServiceId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_handle_service, id = HServiceId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -1178,12 +1178,12 @@ get_handle_service(Client, GroupId, HServiceId) ->
 %% effective handle_services of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_handle_service(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_eff_handle_service(Auth :: aai:auth(), GroupId :: od_group:id(),
     HServiceId :: od_handle_service:id()) -> {ok, #{}} | {error, term()}.
-get_eff_handle_service(Client, GroupId, HServiceId) ->
+get_eff_handle_service(Auth, GroupId, HServiceId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_handle_service, id = HServiceId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -1194,12 +1194,12 @@ get_eff_handle_service(Client, GroupId, HServiceId) ->
 %% Retrieves the list of handles of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_handles(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_handles(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_handle:id()]} | {error, term()}.
-get_handles(Client, GroupId) ->
+get_handles(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = handles}
     }).
 
@@ -1209,12 +1209,12 @@ get_handles(Client, GroupId) ->
 %% Retrieves the list of effective handles of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_handles(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_eff_handles(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_handle:id()]} | {error, term()}.
-get_eff_handles(Client, GroupId) ->
+get_eff_handles(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = eff_handles}
     }).
 
@@ -1225,12 +1225,12 @@ get_eff_handles(Client, GroupId) ->
 %% handles of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_handle(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_handle(Auth :: aai:auth(), GroupId :: od_group:id(),
     HandleId :: od_handle:id()) -> {ok, #{}} | {error, term()}.
-get_handle(Client, GroupId, HandleId) ->
+get_handle(Auth, GroupId, HandleId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_handle, id = HandleId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -1242,12 +1242,12 @@ get_handle(Client, GroupId, HandleId) ->
 %% effective handles of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_handle(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_eff_handle(Auth :: aai:auth(), GroupId :: od_group:id(),
     HandleId :: od_handle:id()) -> {ok, #{}} | {error, term()}.
-get_eff_handle(Client, GroupId, HandleId) ->
+get_eff_handle(Auth, GroupId, HandleId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_handle, id = HandleId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -1258,12 +1258,12 @@ get_eff_handle(Client, GroupId, HandleId) ->
 %% Retrieves the list of clusters of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_clusters(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_clusters(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_cluster:id()]} | {error, term()}.
-get_clusters(Client, GroupId) ->
+get_clusters(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = clusters}
     }).
 
@@ -1273,12 +1273,12 @@ get_clusters(Client, GroupId) ->
 %% Retrieves the list of effective clusters of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_clusters(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_eff_clusters(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_cluster:id()]} | {error, term()}.
-get_eff_clusters(Client, GroupId) ->
+get_eff_clusters(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = eff_clusters}
     }).
 
@@ -1288,12 +1288,12 @@ get_eff_clusters(Client, GroupId) ->
 %% Retrieves the information about specific cluster among clusters of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_cluster(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_cluster(Auth :: aai:auth(), GroupId :: od_group:id(),
     ClusterId :: od_cluster:id()) -> {ok, #{}} | {error, term()}.
-get_cluster(Client, GroupId, ClusterId) ->
+get_cluster(Auth, GroupId, ClusterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -1305,12 +1305,12 @@ get_cluster(Client, GroupId, ClusterId) ->
 %% effective clusters of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_cluster(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_eff_cluster(Auth :: aai:auth(), GroupId :: od_group:id(),
     ClusterId :: od_cluster:id()) -> {ok, #{}} | {error, term()}.
-get_eff_cluster(Client, GroupId, ClusterId) ->
+get_eff_cluster(Auth, GroupId, ClusterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_cluster, id = ClusterId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -1320,12 +1320,12 @@ get_eff_cluster(Client, GroupId, ClusterId) ->
 %% Retrieves the list of harvesters of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_harvesters(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_harvesters(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_harvester:id()]} | {error, term()}.
-get_harvesters(Client, GroupId) ->
+get_harvesters(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = harvesters}
     }).
 
@@ -1335,12 +1335,12 @@ get_harvesters(Client, GroupId) ->
 %% Retrieves the list of effective harvesters of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_harvesters(Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+-spec get_eff_harvesters(Auth :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, [od_harvester:id()]} | {error, term()}.
-get_eff_harvesters(Client, GroupId) ->
+get_eff_harvesters(Auth, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = eff_harvesters}
     }).
 
@@ -1350,12 +1350,12 @@ get_eff_harvesters(Client, GroupId) ->
 %% Retrieves the information about specific harvester among harvesters of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_harvester(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_harvester(Auth :: aai:auth(), GroupId :: od_group:id(),
     HarvesterId :: od_harvester:id()) -> {ok, #{}} | {error, term()}.
-get_harvester(Client, GroupId, HarvesterId) ->
+get_harvester(Auth, GroupId, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -1367,12 +1367,12 @@ get_harvester(Client, GroupId, HarvesterId) ->
 %% effective harvesters of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec get_eff_harvester(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec get_eff_harvester(Auth :: aai:auth(), GroupId :: od_group:id(),
     HarvesterId :: od_harvester:id()) -> {ok, #{}} | {error, term()}.
-get_eff_harvester(Client, GroupId, HarvesterId) ->
+get_eff_harvester(Auth, GroupId, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_GROUP(GroupId)
     }).
@@ -1384,11 +1384,11 @@ get_eff_harvester(Client, GroupId, HarvesterId) ->
 %% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
--spec update_user_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec update_user_privileges(Auth :: aai:auth(), GroupId :: od_group:id(),
     UserId :: od_user:id(), PrivsToGrant :: [privileges:group_privilege()],
     PrivsToRevoke :: [privileges:group_privilege()]) -> ok | {error, term()}.
-update_user_privileges(Client, GroupId, UserId, PrivsToGrant, PrivsToRevoke) ->
-    update_user_privileges(Client, GroupId, UserId, #{
+update_user_privileges(Auth, GroupId, UserId, PrivsToGrant, PrivsToRevoke) ->
+    update_user_privileges(Auth, GroupId, UserId, #{
         <<"grant">> => PrivsToGrant,
         <<"revoke">> => PrivsToRevoke
     }).
@@ -1400,12 +1400,12 @@ update_user_privileges(Client, GroupId, UserId, PrivsToGrant, PrivsToRevoke) ->
 %% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update_user_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec update_user_privileges(Auth :: aai:auth(), GroupId :: od_group:id(),
     UserId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
-update_user_privileges(Client, GroupId, UserId, Data) ->
+update_user_privileges(Auth, GroupId, UserId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {user_privileges, UserId}},
         data = Data
     }).
@@ -1417,11 +1417,11 @@ update_user_privileges(Client, GroupId, UserId, Data) ->
 %% Allows to specify privileges to grant and to revoke.
 %% @end
 %%--------------------------------------------------------------------
--spec update_child_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec update_child_privileges(Auth :: aai:auth(), GroupId :: od_group:id(),
     ChildGroupId :: od_group:id(), PrivsToGrant :: [privileges:group_privilege()],
     PrivsToRevoke :: [privileges:group_privilege()]) -> ok | {error, term()}.
-update_child_privileges(Client, GroupId, ChildGroupId, PrivsToGrant, PrivsToRevoke) ->
-    update_child_privileges(Client, GroupId, ChildGroupId, #{
+update_child_privileges(Auth, GroupId, ChildGroupId, PrivsToGrant, PrivsToRevoke) ->
+    update_child_privileges(Auth, GroupId, ChildGroupId, #{
         <<"grant">> => PrivsToGrant,
         <<"revoke">> => PrivsToRevoke
     }).
@@ -1433,12 +1433,12 @@ update_child_privileges(Client, GroupId, ChildGroupId, PrivsToGrant, PrivsToRevo
 %% Privileges to grant and revoke must be included in proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update_child_privileges(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec update_child_privileges(Auth :: aai:auth(), GroupId :: od_group:id(),
     ChildGroupId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
-update_child_privileges(Client, GroupId, ChildGroupId, Data) ->
+update_child_privileges(Auth, GroupId, ChildGroupId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {child_privileges, ChildGroupId}},
         data = Data
     }).
@@ -1449,12 +1449,12 @@ update_child_privileges(Client, GroupId, ChildGroupId, Data) ->
 %% Leaves specified parent group on behalf of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec leave_group(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec leave_group(Auth :: aai:auth(), GroupId :: od_group:id(),
     ParentGroupId :: od_group:id()) -> ok | {error, term()}.
-leave_group(Client, GroupId, ParentGroupId) ->
+leave_group(Auth, GroupId, ParentGroupId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {parent, ParentGroupId}}
     }).
 
@@ -1464,12 +1464,12 @@ leave_group(Client, GroupId, ParentGroupId) ->
 %% Leaves specified space on behalf of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec leave_space(Client :: entity_logic:client(), GroupId :: od_user:id(),
+-spec leave_space(Auth :: aai:auth(), GroupId :: od_user:id(),
     SpaceId :: od_space:id()) -> ok | {error, term()}.
-leave_space(Client, GroupId, SpaceId) ->
+leave_space(Auth, GroupId, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {space, SpaceId}}
     }).
 
@@ -1479,12 +1479,12 @@ leave_space(Client, GroupId, SpaceId) ->
 %% Leaves specified od_handle_service on behalf of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec leave_handle_service(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec leave_handle_service(Auth :: aai:auth(), GroupId :: od_group:id(),
     HServiceId :: od_handle_service:id()) -> ok | {error, term()}.
-leave_handle_service(Client, GroupId, HServiceId) ->
+leave_handle_service(Auth, GroupId, HServiceId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {handle_service, HServiceId}}
     }).
 
@@ -1494,12 +1494,12 @@ leave_handle_service(Client, GroupId, HServiceId) ->
 %% Leaves specified handle on behalf of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec leave_handle(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec leave_handle(Auth :: aai:auth(), GroupId :: od_group:id(),
     HandleId :: od_handle:id()) -> ok | {error, term()}.
-leave_handle(Client, GroupId, HandleId) ->
+leave_handle(Auth, GroupId, HandleId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {handle, HandleId}}
     }).
 
@@ -1509,12 +1509,12 @@ leave_handle(Client, GroupId, HandleId) ->
 %% Leaves specified harvester on behalf of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec leave_harvester(Client :: entity_logic:client(), GroupId :: od_user:id(),
+-spec leave_harvester(Auth :: aai:auth(), GroupId :: od_user:id(),
     HarvesterId :: od_harvester:id()) -> ok | {error, term()}.
-leave_harvester(Client, GroupId, HarvesterId) ->
+leave_harvester(Auth, GroupId, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {harvester, HarvesterId}}
     }).
 
@@ -1524,12 +1524,12 @@ leave_harvester(Client, GroupId, HarvesterId) ->
 %% Leaves specified cluster on behalf of given group.
 %% @end
 %%--------------------------------------------------------------------
--spec leave_cluster(Client :: entity_logic:client(), GroupId :: od_user:id(),
+-spec leave_cluster(Auth :: aai:auth(), GroupId :: od_user:id(),
     ClusterId :: od_cluster:id()) -> ok | {error, term()}.
-leave_cluster(Client, GroupId, ClusterId) ->
+leave_cluster(Auth, GroupId, ClusterId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {cluster, ClusterId}}
     }).
 
@@ -1539,12 +1539,12 @@ leave_cluster(Client, GroupId, ClusterId) ->
 %% Removes specified user from given group.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_user(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec remove_user(Auth :: aai:auth(), GroupId :: od_group:id(),
     UserId :: od_user:id()) -> ok | {error, term()}.
-remove_user(Client, GroupId, UserId) ->
+remove_user(Auth, GroupId, UserId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {user, UserId}}
     }).
 
@@ -1554,12 +1554,12 @@ remove_user(Client, GroupId, UserId) ->
 %% Removes specified child group from given group.
 %% @end
 %%--------------------------------------------------------------------
--spec remove_group(Client :: entity_logic:client(), GroupId :: od_group:id(),
+-spec remove_group(Auth :: aai:auth(), GroupId :: od_group:id(),
     ChildGroupId :: od_group:id()) -> ok | {error, term()}.
-remove_group(Client, GroupId, ChildGroupId) ->
+remove_group(Auth, GroupId, ChildGroupId) ->
     entity_logic:handle(#el_req{
         operation = delete,
-        client = Client,
+        auth = Auth,
         gri = #gri{type = od_group, id = GroupId, aspect = {child, ChildGroupId}}
     }).
 
@@ -1785,7 +1785,7 @@ create_predefined_group(GroupId, Name, Privileges) ->
                     name = NormalizedName,
                     type = role_holders,
                     protected = true,
-                    creator = ?ROOT
+                    creator = ?SUB(root)
                 }},
             case od_group:create(NewGroup) of
                 {ok, _} ->

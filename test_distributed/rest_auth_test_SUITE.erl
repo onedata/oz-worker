@@ -14,8 +14,9 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("auth/auth_errors.hrl").
--include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 
@@ -37,7 +38,7 @@
     macaroon_test/1,
     basic_auth_test/1,
     external_access_token_test/1,
-    gui_macaroon_test/1
+    gui_token_test/1
 ]).
 
 all() ->
@@ -45,7 +46,7 @@ all() ->
         macaroon_test,
         basic_auth_test,
         external_access_token_test,
-        gui_macaroon_test
+        gui_token_test
     ]).
 
 %%%===================================================================
@@ -244,31 +245,34 @@ external_access_token_test(Config) ->
     ok.
 
 
-gui_macaroon_test(Config) ->
-    {ok, {Provider1, Provider1Macaroon}} = oz_test_utils:create_provider(
+gui_token_test(Config) ->
+    {ok, {Provider1, Provider1Token}} = oz_test_utils:create_provider(
         Config, ?UNIQUE_STRING
     ),
-    {ok, {_Provider2, Provider2Macaroon}} = oz_test_utils:create_provider(
+    {ok, {_Provider2, Provider2Token}} = oz_test_utils:create_provider(
         Config, ?UNIQUE_STRING
     ),
     {ok, UserId} = oz_test_utils:create_user(Config, #{<<"fullName">> => <<"U1">>}),
+    {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
+    oz_test_utils:support_space(Config, Provider1, SpaceId),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, UserId),
 
-    ClusterType = ?ONEPROVIDER,
-    ClusterId = Provider1,
-
-    {ok, {Macaroon, Expires}} = oz_test_utils:call_oz(Config, session, acquire_gui_macaroon, [
-        SessionId, ClusterType, ClusterId
+    {ok, Token, Expires} = oz_test_utils:call_oz(Config, gui_tokens, create, [
+        UserId, SessionId, ?AUD(?OP_WORKER, Provider1)
     ]),
-    {ok, MacaroonBin} = onedata_macaroons:serialize(Macaroon),
+    {ok, Serialized} = tokens:serialize(Token),
+
+    Provider1AudToken = tokens:serialize_audience_token(?OP_WORKER, Provider1Token),
+    Provider2AudToken = tokens:serialize_audience_token(?OP_WORKER, Provider2Token),
 
     ?assert(rest_test_utils:check_rest_call(Config, #{
         request => #{
             method => get,
             path => <<"/user">>,
             headers => #{
-                <<"Subject-Token">> => MacaroonBin,
-                <<"Audience-Token">> => Provider1Macaroon
+                <<"X-Auth-Token">> => Serialized,
+                <<"X-Onedata-Audience-Token">> => Provider1AudToken
             }
         },
         expect => #{
@@ -282,8 +286,8 @@ gui_macaroon_test(Config) ->
             method => get,
             path => <<"/user">>,
             headers => #{
-                <<"Subject-Token">> => MacaroonBin,
-                <<"Audience-Token">> => Provider2Macaroon
+                <<"Authorization">> => <<"Bearer ", Serialized/binary>>,
+                <<"x-onedata-audience-token">> => Provider2AudToken
             }
         },
         expect => #{
@@ -296,7 +300,7 @@ gui_macaroon_test(Config) ->
             method => get,
             path => <<"/user">>,
             headers => #{
-                <<"Subject-Token">> => MacaroonBin
+                <<"x-auth-token">> => Serialized
             }
         },
         expect => #{
@@ -312,15 +316,14 @@ gui_macaroon_test(Config) ->
             method => get,
             path => <<"/user">>,
             headers => #{
-                <<"Subject-Token">> => MacaroonBin,
-                <<"Audience-Token">> => Provider1Macaroon
+                <<"macaroon">> => Serialized,
+                <<"x-onedata-audience-token">> => Provider1AudToken
             }
         },
         expect => #{
             code => 401 % expired token
         }
     })),
-
     ok.
 
 %%%===================================================================
@@ -445,7 +448,7 @@ init_per_testcase(external_access_token_test, Config) ->
         Config
     ];
 
-init_per_testcase(gui_macaroon_test, Config) ->
+init_per_testcase(gui_token_test, Config) ->
     oz_test_utils:mock_time(Config),
     Config;
 
@@ -457,7 +460,7 @@ end_per_testcase(external_access_token_test, Config) ->
     Nodes = ?config(oz_worker_nodes, Config),
     test_utils:mock_unload(Nodes, default_oidc_plugin);
 
-end_per_testcase(gui_macaroon_test, Config) ->
+end_per_testcase(gui_token_test, Config) ->
     oz_test_utils:unmock_time(Config);
 
 end_per_testcase(_, _) ->
