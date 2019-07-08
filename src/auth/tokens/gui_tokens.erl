@@ -71,8 +71,7 @@ create(UserId, SessionId, Audience) ->
 %% an existing session and is intended for given Audience.
 %% @end
 %%--------------------------------------------------------------------
--spec verify(tokens:token(), aai:audience()) ->
-    {ok, od_user:id(), session:id()} | {error, term()}.
+-spec verify(tokens:token(), aai:audience()) -> {ok, aai:auth()} | {error, term()}.
 verify(AuthToken = #auth_token{type = ?GUI_TOKEN(SessionId)}, Audience) ->
     case session:exists(SessionId) of
         {ok, true} ->

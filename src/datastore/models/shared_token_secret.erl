@@ -7,7 +7,7 @@
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% API for singleton record that stores a global, shared token secret for
-%%% temporary tokens. The secret can be regenerated, in such ase all existing
+%%% temporary tokens. The secret can be regenerated, in such case all existing
 %%% temporary tokens become invalid.
 %%% @end
 %%%-------------------------------------------------------------------
@@ -65,7 +65,8 @@ get() ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Regenerates the .
+%% Regenerates the shared token secret. Causes all existing temporary tokens
+%% to be invalidated.
 %% @end
 %%--------------------------------------------------------------------
 -spec regenerate() -> ok.
