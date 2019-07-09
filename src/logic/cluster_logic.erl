@@ -167,7 +167,7 @@ get_protected_data(Auth, ClusterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_public_data(Auth :: aai:auth(), ClusterId :: od_cluster:id()) ->
-    {ok, maps:map()} | {error, term()}.
+    {ok, map()} | {error, term()}.
 get_public_data(Auth, ClusterId) ->
     entity_logic:handle(#el_req{
         operation = get,

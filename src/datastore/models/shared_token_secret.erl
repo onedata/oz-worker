@@ -29,6 +29,7 @@
 
 -define(SINGLETON_DB_KEY, <<"secret">>).
 -define(CACHE_KEY, shared_token_secret).
+-define(CACHE_TTL, 600000).  % 10 minutes
 
 -define(CLUSTER_NODES, element(2, {ok, _} = node_manager:get_cluster_nodes())).
 
@@ -58,7 +59,7 @@ init() ->
 get() ->
     {ok, Secret} = simple_cache:get(?CACHE_KEY, fun() ->
         {ok, Doc} = datastore_model:get(?CTX, ?SINGLETON_DB_KEY),
-        {true, Doc#document.value#shared_token_secret.secret}
+        {true, Doc#document.value#shared_token_secret.secret, ?CACHE_TTL}
     end),
     Secret.
 

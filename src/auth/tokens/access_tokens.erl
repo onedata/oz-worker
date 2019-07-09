@@ -75,12 +75,12 @@ verify_provider_identity(Token) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Irreversibly invalidates a provider root macaroon by its identifier.
+%% Irreversibly invalidates a provider root macaroon by its nonce.
 %% @end
 %%--------------------------------------------------------------------
 -spec invalidate_provider_root_macaroon(tokens:nonce()) -> ok.
-invalidate_provider_root_macaroon(Identifier) ->
-    macaroon_auth:delete(Identifier).
+invalidate_provider_root_macaroon(Nonce) ->
+    macaroon_auth:delete(Nonce).
 
 %%%===================================================================
 %%% Internal functions
