@@ -1,5 +1,5 @@
 %%% @author Wojciech Geisler
-%%% @copyright (C): 2017 ACK CYFRONET AGH
+%%% @copyright (C) 2017 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
@@ -323,28 +323,28 @@ update_fails_on_duplicated_subdomain_test(Config) ->
     % subdomain used by another provider
     ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
         oz_test_utils:call_oz(Config,
-            provider_logic, update_domain_config, [#client{type = root}, P2, Data])
+            provider_logic, update_domain_config, [?ROOT, P2, Data])
     ),
 
     % subdomain reserved for nameserver
     Data2 = Data#{<<"subdomain">> := <<"ns19">>},
     ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
         oz_test_utils:call_oz(Config,
-            provider_logic, update_domain_config, [#client{type = root}, P2, Data2])
+            provider_logic, update_domain_config, [?ROOT, P2, Data2])
     ),
 
     % subdomain configured in app config
     Data3 = Data#{<<"subdomain">> := StaticSubdomain},
     ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
         oz_test_utils:call_oz(Config,
-            provider_logic, update_domain_config, [#client{type = root}, P2, Data3])
+            provider_logic, update_domain_config, [?ROOT, P2, Data3])
     ),
 
     % subdomain configured in app config for ns server
     Data4 = Data#{<<"subdomain">> := StaticNSSubdomain},
     ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"subdomain">>),
         oz_test_utils:call_oz(Config,
-            provider_logic, update_domain_config, [#client{type = root}, P2, Data4])
+            provider_logic, update_domain_config, [?ROOT, P2, Data4])
     ).
 
 
@@ -477,11 +477,11 @@ dns_resolves_txt_record(Config) ->
 
     ?assertMatch(ok,
         oz_test_utils:call_oz(Config,
-            provider_logic, set_dns_txt_record, [#client{type = root}, P1, RecordName, RecordContent])
+            provider_logic, set_dns_txt_record, [?ROOT, P1, RecordName, RecordContent])
     ),
     ?assertMatch(ok,
         oz_test_utils:call_oz(Config,
-            provider_logic, set_dns_txt_record, [#client{type = root}, P1, RecordName2,
+            provider_logic, set_dns_txt_record, [?ROOT, P1, RecordName2,
                 RecordContent2, 10])
     ),
 
@@ -499,7 +499,7 @@ txt_record_forbidden_without_subdomain_delegation(Config) ->
 
     ?assertMatch(?ERROR_SUBDOMAIN_DELEGATION_DISABLED,
         oz_test_utils:call_oz(Config,
-            provider_logic, set_dns_txt_record, [#client{type = root}, P1, RecordName, RecordContent])
+            provider_logic, set_dns_txt_record, [?ROOT, P1, RecordName, RecordContent])
     ).
 
 
@@ -521,13 +521,13 @@ dns_does_not_resolve_removed_txt_record_test(Config) ->
     oz_test_utils:enable_subdomain_delegation(Config, P1, SubdomainBin, []),
 
     ?assertMatch(ok, oz_test_utils:call_oz(Config,
-            provider_logic, set_dns_txt_record, [#client{type = root}, P1, RecordName, RecordContent])
+            provider_logic, set_dns_txt_record, [?ROOT, P1, RecordName, RecordContent])
     ),
 
     assert_dns_answer(OZIPs, RecordFQDN, txt, [[binary_to_list(RecordContent)]]),
 
     ?assertMatch(ok, oz_test_utils:call_oz(Config,
-            provider_logic, remove_dns_txt_record, [#client{type = root}, P1, RecordName])
+            provider_logic, remove_dns_txt_record, [?ROOT, P1, RecordName])
     ),
 
     assert_dns_answer(OZIPs, RecordFQDN, txt, []).

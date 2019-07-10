@@ -103,7 +103,7 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, client = Client}) ->
+create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     Name = maps:get(<<"name">>, Req#el_req.data),
     ProxyEndpoint = maps:get(<<"proxyEndpoint">>, Req#el_req.data),
     ServiceProperties = maps:get(<<"serviceProperties">>, Req#el_req.data),
@@ -111,7 +111,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, client
         name = Name,
         proxy_endpoint = ProxyEndpoint,
         service_properties = ServiceProperties,
-        creator = Client
+        creator = Auth#auth.subject
     }},
     {ok, #document{key = HServiceId}} = od_handle_service:create(HandleService),
     case Req#el_req.auth_hint of
@@ -318,7 +318,7 @@ exists(#el_req{gri = #gri{id = Id}}, #od_handle_service{}) ->
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
 authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = instance}}, _) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             user_logic_plugin:auth_by_oz_privilege(UserId, ?OZ_HANDLE_SERVICES_CREATE);
 
@@ -343,7 +343,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
     auth_by_privilege(Req, HService, ?HANDLE_SERVICE_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, HService) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this handle_service is checked in 'exists'
             true;
@@ -364,13 +364,13 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             authorize(Req#el_req{gri = GRI#gri{scope = private}}, HService)
     end;
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
     true;
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
     true;
 
-authorize(Req = #el_req{operation = get, client = ?USER}, HService) ->
+authorize(Req = #el_req{operation = get, auth = ?USER}, HService) ->
     % All other resources can be accessed with view privileges
     auth_by_privilege(Req, HService, ?HANDLE_SERVICE_VIEW);
 
@@ -527,15 +527,15 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 %% @doc
 %% Returns if given user has specific effective privilege in the handle_service.
 %% UserId is either given explicitly or derived from entity logic request.
-%% Clients of type other than user are discarded.
+%% Auths of type other than user are discarded.
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_privilege(entity_logic:req() | od_user:id(),
     od_handle_service:id() | od_handle_service:info(),
     privileges:handle_service_privilege()) -> boolean().
-auth_by_privilege(#el_req{client = ?USER(UserId)}, HServiceOrId, Privilege) ->
+auth_by_privilege(#el_req{auth = ?USER(UserId)}, HServiceOrId, Privilege) ->
     auth_by_privilege(UserId, HServiceOrId, Privilege);
-auth_by_privilege(#el_req{client = _OtherClient}, _HServiceOrId, _Privilege) ->
+auth_by_privilege(#el_req{auth = _OtherAuth}, _HServiceOrId, _Privilege) ->
     false;
 auth_by_privilege(UserId, HServiceOrId, Privilege) ->
     handle_service_logic:has_eff_privilege(HServiceOrId, UserId, Privilege).

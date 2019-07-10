@@ -103,7 +103,7 @@ list_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_logic,
             function = list,
-            args = [client],
+            args = [auth],
             expected_result = ?OK_LIST(ExpHandles)
         }
         % TODO gs
@@ -187,7 +187,7 @@ create_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_logic,
             function = create,
-            args = [client, data],
+            args = [auth, data],
             expected_result = ?OK_ENV(fun(_Env, Data) ->
                 HService = maps:get(<<"handleServiceId">>, Data),
                 ?OK_TERM(fun(Result) -> VerifyFun(Result, HService) end)
@@ -282,7 +282,7 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_logic,
             function = get,
-            args = [client, HandleId],
+            args = [auth, HandleId],
             expected_result = ?OK_TERM(
                 fun(#od_handle{
                     resource_type = <<"Share">>,
@@ -356,7 +356,7 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_logic,
             function = get_protected_data,
-            args = [client, HandleId],
+            args = [auth, HandleId],
             expected_result = ?OK_MAP_CONTAINS(HandleDetails)
         }
         % TODO gs
@@ -424,7 +424,7 @@ update_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_logic,
             function = update,
-            args = [client, handleId, data],
+            args = [auth, handleId, data],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -504,7 +504,7 @@ delete_test(Config) ->
         logic_spec = #logic_spec{
             module = handle_logic,
             function = delete,
-            args = [client, handleId],
+            args = [auth, handleId],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{

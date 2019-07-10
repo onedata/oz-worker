@@ -204,7 +204,7 @@
     eff_clusters = #{} :: entity_graph:eff_relations(od_cluster:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
-    creator = undefined :: undefined | entity_logic:client(),
+    creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.
@@ -235,7 +235,7 @@
     eff_harvesters = #{} :: entity_graph:eff_relations(od_provider:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
-    creator = undefined :: undefined | entity_logic:client(),
+    creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.
     % Groups' effective relations must be calculated top-down and bottom-up.
@@ -257,14 +257,14 @@
     root_file = undefined :: undefined | binary(),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
-    creator = undefined :: undefined | entity_logic:client()
+    creator = undefined :: undefined | aai:subject()
 }).
 
 %% This record defines a provider who supports spaces and can be reached via url
 -record(od_provider, {
     name = <<"">> :: od_provider:name(),
     admin_email = undefined :: undefined | binary(),
-    root_macaroon = undefined :: undefined | macaroon_logic:id(),
+    root_macaroon = undefined :: undefined | tokens:nonce(),
 
     subdomain_delegation = false :: boolean(),
     domain :: binary(),
@@ -302,7 +302,7 @@
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_service_privilege()]),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
-    creator = undefined :: undefined | entity_logic:client(),
+    creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -325,7 +325,7 @@
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:handle_privilege()]),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
-    creator = undefined :: undefined | entity_logic:client(),
+    creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -352,7 +352,7 @@
     eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
-    creator = undefined :: undefined | entity_logic:client(),
+    creator = undefined :: undefined | aai:subject(),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean(),
@@ -370,7 +370,7 @@
     onepanel_proxy = false :: boolean(),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
-    creator = undefined :: undefined | entity_logic:client(),
+    creator = undefined :: undefined | aai:subject(),
 
     % Direct relations to other entities
     users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:cluster_privilege()]),
@@ -393,42 +393,13 @@
     user_id :: od_user:id(),
     last_refresh = 0 :: non_neg_integer(),
     nonce = <<"">> :: binary(),
-    previous_nonce = <<"">> :: binary(),
-    gui_macaroons = #{} :: session:gui_macaroons_cache()
+    previous_nonce = <<"">> :: binary()
 }).
 
-%% This record defines a token that can be used by user to do something
--record(token, {
-    secret :: undefined | binary(),
-    resource :: undefined | atom(),
-    resource_id :: undefined | binary(),
-    issuer :: undefined | entity_logic:client(),
-    % Locked token cannot be consumed.
-    locked = false :: boolean()
+%% Singleton record that stores a global, shared token secret for temporary tokens.
+-record(shared_token_secret, {
+    secret :: tokens:secret()
 }).
-
-%% Records of this type store a macaroons secret used for authorizing users
--record(onedata_auth, {
-    secret :: undefined | binary(),
-    user_id :: undefined | binary()
-}).
-
-%% Stores information about authorization correlated with a macaroon.
-%% Record id serves as macaroon identifier.
--record(macaroon_auth, {
-    secret :: macaroon_logic:secret(),
-    type :: macaroon_logic:type(),
-    issuer :: macaroon_logic:issuer()
-}).
-
-%% Stores information about the issuer of a macaroon.
-%% Record id serves as macaroon identifier.
-%% Stored in memory only.
--record(volatile_macaroon, {
-    secret :: macaroon_logic:secret(),
-    issuer :: macaroon_logic:issuer()
-}).
-
 
 -record(dns_state, {
     subdomain_to_provider = #{} :: #{dns_state:subdomain() => od_provider:id()},
@@ -466,6 +437,33 @@
 -record(state_token, {
     timestamp = 0 :: integer(),  % In seconds since epoch
     state_info = #{} :: state_token:state_info()
+}).
+
+% @todo VFS-5524 deemed for deletion when invite tokens are reworked
+%% This record defines a token that can be used by user to do something
+-record(token, {
+    secret :: undefined | binary(),
+    resource :: undefined | atom(),
+    resource_id :: undefined | binary(),
+    issuer :: undefined | aai:subject(),
+    % Locked token cannot be consumed.
+    locked = false :: boolean()
+}).
+
+%% @todo VFS-5554 This record is deprecated, kept for backward compatibility
+%% Records of this type store a macaroons secret used for authorizing users
+-record(onedata_auth, {
+    secret :: undefined | binary(),
+    user_id :: undefined | binary()
+}).
+
+%% @todo VFS-5554 This record is deprecated, kept for backward compatibility
+%% Stores information about authorization correlated with a macaroon.
+%% Record id serves as macaroon identifier.
+-record(macaroon_auth, {
+    secret :: tokens:secret(),
+    type :: authorization,
+    issuer :: aai:subject()
 }).
 
 -endif.

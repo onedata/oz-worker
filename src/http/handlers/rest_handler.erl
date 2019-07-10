@@ -35,7 +35,7 @@
 
 % State of REST handler
 -record(state, {
-    client = #client{} :: entity_logic:client(),
+    auth = #auth{} :: aai:auth(),
     rest_req = undefined :: #rest_req{} | undefined,
     allowed_methods :: [method()]
 }).
@@ -141,10 +141,9 @@ is_authorized(Req, State) ->
     Result = try
         % Try to authorize the client using several methods.
         authorize(Req, [
-            fun auth_logic:authorize_by_basic_auth/1,
-            fun auth_logic:authorize_by_macaroons/1,
-            fun auth_logic:authorize_by_oneprovider_gui_macaroon/1,
-            fun auth_logic:authorize_by_access_token/1
+            fun auth_logic:authorize_by_oneprovider_gui_token/1,
+            fun auth_logic:authorize_by_access_token/1,
+            fun auth_logic:authorize_by_basic_auth/1
         ])
     catch
         throw:Err ->
@@ -159,7 +158,7 @@ is_authorized(Req, State) ->
     case Result of
         % Always return true - authorization is checked by entity_logic later.
         {true, Client} ->
-            {true, Req, State#state{client = Client}};
+            {true, Req, State#state{auth = Client}};
         {error, _} = Error ->
             RestResp = error_rest_translator:response(Error),
             {stop, send_response(RestResp, Req), State}
@@ -253,7 +252,7 @@ rest_routes() ->
     {stop, NewReq :: cowboy_req:req(), NewState :: #state{}}.
 process_request(Req, State) ->
     try
-        #state{client = Client, rest_req = #rest_req{
+        #state{auth = Client, rest_req = #rest_req{
             method = Method,
             b_gri = GriWithBindings,
             b_auth_hint = AuthHintWithBindings
@@ -269,7 +268,7 @@ process_request(Req, State) ->
         end,
         ElReq = #el_req{
             operation = Operation,
-            client = Client,
+            auth = Client,
             gri = GRI,
             auth_hint = AuthHint,
             data = Data
@@ -313,7 +312,7 @@ send_response(#rest_resp{code = Code, headers = Headers, body = Body}, Req) ->
 %% sent with the request.
 %% @end
 %%--------------------------------------------------------------------
--spec resolve_gri_bindings(bound_gri(), entity_logic:client(),
+-spec resolve_gri_bindings(bound_gri(), aai:auth(),
     cowboy_req:req()) -> entity_logic:gri().
 resolve_gri_bindings(#b_gri{type = Tp, id = Id, aspect = As, scope = Sc}, Client, Req) ->
     IdBinding = resolve_bindings(Id, Client, Req),
@@ -331,7 +330,7 @@ resolve_gri_bindings(#b_gri{type = Tp, id = Id, aspect = As, scope = Sc}, Client
 %% was sent with the request.
 %% @end
 %%--------------------------------------------------------------------
--spec resolve_auth_hint_bindings(bound_auth_hint(), entity_logic:client(),
+-spec resolve_auth_hint_bindings(bound_auth_hint(), aai:auth(),
     cowboy_req:req()) -> entity_logic:auth_hint().
 resolve_auth_hint_bindings({Key, Value}, Client, Req) ->
     {Key, resolve_bindings(Value, Client, Req)};
@@ -347,10 +346,10 @@ resolve_auth_hint_bindings(undefined, _Client, _Req) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec resolve_bindings(binding() | {atom(), binding()} | term(),
-    entity_logic:client(), cowboy_req:req()) -> binary() | {atom(), binary()}.
+    aai:auth(), cowboy_req:req()) -> binary() | {atom(), binary()}.
 resolve_bindings(?BINDING(Key), _Client, Req) ->
     cowboy_req:binding(Key, Req);
-resolve_bindings(?CLIENT_ID, #client{id = Id}, _Req) ->
+resolve_bindings(?CLIENT_ID, #auth{subject = #subject{id = Id}}, _Req) ->
     Id;
 resolve_bindings(?CLIENT_IP, _Client, #{peer := {Ip, _Port}} = _Req) ->
     list_to_binary(inet_parse:ntoa(Ip));
@@ -395,19 +394,16 @@ call_entity_logic_and_translate_response(ElReq) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(Req :: cowboy_req:req(),
-    [fun((cowboy_req:req()) -> {true, #client{}} | {error, term()})]) ->
-    {true, #client{}} | {error, term()}.
+    [fun((cowboy_req:req()) -> {true, aai:auth()} | {error, term()})]) ->
+    {true, aai:auth()} | {error, term()}.
 authorize(_Req, []) ->
     {true, ?NOBODY};
 authorize(Req, [AuthMethod | Rest]) ->
     case AuthMethod(Req) of
         false ->
             authorize(Req, Rest);
-        {true, Client, _SessionId} ->
-            % Can be returned from auth_logic:authorize_by_oneprovider_gui_macaroon/1
-            {true, Client};
-        {true, Client} ->
-            {true, Client};
+        {true, Auth} ->
+            {true, Auth};
         {error, Error} ->
             {error, Error}
     end.

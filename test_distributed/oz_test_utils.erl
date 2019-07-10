@@ -292,8 +292,8 @@
     graph_sync_url/2,
     get_gs_supported_proto_versions/1,
     decode_gri/2,
-    acquire_gui_token/2,
-    acquire_gui_token/4
+    request_gui_token/2,
+    request_gui_token/4
 ]).
 
 %%%===================================================================
@@ -688,7 +688,7 @@ user_leave_cluster(Config, UserId, ClusterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_provider_registration_token(Config :: term(),
-    Client :: entity_logic:client(), od_user:id()) -> {ok, macaroon:macaroon()}.
+    Client :: aai:auth(), od_user:id()) -> {ok, macaroon:macaroon()}.
 create_provider_registration_token(Config, Client, UserId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, user_logic, create_provider_registration_token, [Client, UserId]
@@ -700,7 +700,7 @@ create_provider_registration_token(Config, Client, UserId) ->
 %% Creates group in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec create_group(Config :: term(), Client :: entity_logic:client(),
+-spec create_group(Config :: term(), Client :: aai:auth(),
     NameOrData :: od_group:name() | #{}) -> {ok, Id :: binary()}.
 create_group(Config, Client, NameOrData) ->
     Result = case Client of
@@ -717,7 +717,7 @@ create_group(Config, Client, NameOrData) ->
 %% Creates a parent group for given group in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec create_parent_group(Config :: term(), Client :: entity_logic:client(),
+-spec create_parent_group(Config :: term(), Client :: aai:auth(),
     ChildGroupId :: od_group:id(), NameOrData :: od_group:name() | #{}) ->
     {ok, Id :: binary()}.
 create_parent_group(Config, Client, ChildGroupId, NameOrData) ->
@@ -924,7 +924,7 @@ group_add_user(Config, GroupId, UserId) ->
 %% Adds a user a to group in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec group_add_user(Config :: term(), entity_logic:client(), GroupId :: od_group:id(),
+-spec group_add_user(Config :: term(), aai:auth(), GroupId :: od_group:id(),
     UserId :: od_user:id()) -> {ok, UserId :: od_user:id()}.
 group_add_user(Config, Client, GroupId, UserId) ->
     ?assertMatch({ok, _}, call_oz(
@@ -948,7 +948,7 @@ group_add_group(Config, GroupId, ChildGroupId) ->
 %% Adds a group a to group in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec group_add_group(Config :: term(), entity_logic:client(), GroupId :: od_group:id(),
+-spec group_add_group(Config :: term(), aai:auth(), GroupId :: od_group:id(),
     ChildGroupId :: od_group:id()) -> {ok, ChildGroupId :: od_group:id()}.
 group_add_group(Config, Client, GroupId, ChildGroupId) ->
     ?assertMatch({ok, _}, call_oz(
@@ -1066,7 +1066,7 @@ group_get_group_privileges(Config, GroupId, ChildGroupId) ->
 %% Creates a space in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec create_space(Config :: term(), Client :: entity_logic:client(),
+-spec create_space(Config :: term(), Client :: aai:auth(),
     Name :: od_space:name()) -> {ok, od_space:id()}.
 create_space(Config, Client, Name) ->
     Result = case Client of
@@ -1304,7 +1304,7 @@ space_set_group_privileges(Config, SpaceId, GroupId, PrivsToGrant, PrivsToRevoke
 %% @end
 %%--------------------------------------------------------------------
 -spec space_invite_user_token(Config :: term(),
-    Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
+    Client :: aai:auth(), SpaceId :: od_space:id()) ->
     {ok, macaroon:macaroon()}.
 space_invite_user_token(Config, Client, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
@@ -1318,7 +1318,7 @@ space_invite_user_token(Config, Client, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_invite_group_token(Config :: term(),
-    Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
+    Client :: aai:auth(), SpaceId :: od_space:id()) ->
     {ok, macaroon:macaroon()}.
 space_invite_group_token(Config, Client, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
@@ -1332,7 +1332,7 @@ space_invite_group_token(Config, Client, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_invite_provider_token(Config :: term(),
-    Client :: entity_logic:client(), SpaceId :: od_space:id()) ->
+    Client :: aai:auth(), SpaceId :: od_space:id()) ->
     {ok, macaroon:macaroon()}.
 space_invite_provider_token(Config, Client, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
@@ -1359,7 +1359,7 @@ space_has_effective_user(Config, SpaceId, UserId) ->
 %% Creates a share in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec create_share(Config :: term(), Client :: entity_logic:client(),
+-spec create_share(Config :: term(), Client :: aai:auth(),
     ShareId :: od_share:id(), Name :: od_share:name(), RootFileId :: binary(),
     SpaceId :: od_space:id()) -> {ok, od_share:id()}.
 create_share(Config, Client, ShareId, Name, RootFileId, SpaceId) ->
@@ -1373,7 +1373,7 @@ create_share(Config, Client, ShareId, Name, RootFileId, SpaceId) ->
 %% Creates a share in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec create_share(Config :: term(), Client :: entity_logic:client(),
+-spec create_share(Config :: term(), Client :: aai:auth(),
     Data :: map()) -> {ok, od_share:id()}.
 create_share(Config, Client, Data) ->
     ?assertMatch({ok, _}, call_oz(
@@ -1458,16 +1458,16 @@ create_provider(Config, CreatorUserId, Data) ->
         undefined ->
             Data;
         _ ->
-            {ok, Token} = create_provider_registration_token(
+            {ok, RegistrationToken} = create_provider_registration_token(
                 Config, ?USER(CreatorUserId), CreatorUserId
             ),
-            Data#{<<"token">> => Token}
+            Data#{<<"token">> => RegistrationToken}
     end,
-    {ok, {ProviderId, Macaroon}} = ?assertMatch({ok, _}, call_oz(
+    {ok, {ProviderId, Token}} = ?assertMatch({ok, _}, call_oz(
         Config, provider_logic, create, [?NOBODY, DataWithToken]
     )),
-    {ok, MacaroonBin} = onedata_macaroons:serialize(Macaroon),
-    {ok, {ProviderId, MacaroonBin}}.
+    {ok, Serialized} = tokens:serialize(Token),
+    {ok, {ProviderId, Serialized}}.
 
 
 %%--------------------------------------------------------------------
@@ -1544,7 +1544,7 @@ support_space(Config, ProviderId, SpaceId, Size) ->
 %% Supports a space by a provider based on token and support size.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Config :: term(), Client :: entity_logic:client(),
+-spec support_space(Config :: term(), Client :: aai:auth(),
     ProviderId :: od_provider:id(), Token :: binary() | macaroon:macaroon(),
     Size :: non_neg_integer()) ->
     {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
@@ -1604,7 +1604,7 @@ set_provider_domain(Config, ProviderId, Domain) ->
 %% Creates a handle service.
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle_service(Config :: term(), Client :: entity_logic:client(),
+-spec create_handle_service(Config :: term(), Client :: aai:auth(),
     Name :: od_handle_service:name(),
     ProxyEndpoint :: od_handle_service:proxy_endpoint(),
     ServiceProperties :: od_handle_service:service_properties()) ->
@@ -1628,7 +1628,7 @@ create_handle_service(Config, Client, Name, ProxyEndpoint, ServiceProperties) ->
 %% Creates a handle service.
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle_service(Config :: term(), Client :: entity_logic:client(),
+-spec create_handle_service(Config :: term(), Client :: aai:auth(),
     Data :: map()) -> {ok, od_handle_service:id()}.
 create_handle_service(Config, Client, Data) ->
     Result = case Client of
@@ -1829,7 +1829,7 @@ handle_service_set_group_privileges(
 %% Creates a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle(Config :: term(), Client :: entity_logic:client(),
+-spec create_handle(Config :: term(), Client :: aai:auth(),
     HandleServiceId :: od_handle_service:id(),
     ResourceType :: od_handle:resource_type(),
     ResourceId :: od_handle:resource_id(), Metadata :: od_handle:metadata()) ->
@@ -1853,7 +1853,7 @@ create_handle(Config, Client, HandleServiceId, ResourceType, ResourceId, Metadat
 %% Creates a handle.
 %% @end
 %%--------------------------------------------------------------------
--spec create_handle(Config :: term(), Client :: entity_logic:client(),
+-spec create_handle(Config :: term(), Client :: aai:auth(),
     Data :: map()) -> {ok, od_handle:id()}.
 create_handle(Config, Client, Data) ->
     Result = case Client of
@@ -2069,7 +2069,7 @@ handle_get_group_privileges(Config, HandleId, GroupId) ->
 %% Creates a harvester in onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec create_harvester(Config :: term(), Client :: entity_logic:client(),
+-spec create_harvester(Config :: term(), Client :: aai:auth(),
     Data :: #{}) -> {ok, od_harvester:id()}.
 create_harvester(Config, Client, Data) ->
     Result = case Client of
@@ -2294,7 +2294,7 @@ harvester_set_group_privileges(Config, HarvesterId, GroupId, PrivsToGrant, Privs
 %% @end
 %%--------------------------------------------------------------------
 -spec harvester_invite_user_token(Config :: term(),
-    Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+    Client :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, macaroon:macaroon()}.
 harvester_invite_user_token(Config, Client, HarvesterId) ->
     ?assertMatch({ok, _}, call_oz(
@@ -2308,7 +2308,7 @@ harvester_invite_user_token(Config, Client, HarvesterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec harvester_invite_group_token(Config :: term(),
-    Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+    Client :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, macaroon:macaroon()}.
 harvester_invite_group_token(Config, Client, HarvesterId) ->
     ?assertMatch({ok, _}, call_oz(
@@ -2322,7 +2322,7 @@ harvester_invite_group_token(Config, Client, HarvesterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec harvester_invite_space_token(Config :: term(),
-    Client :: entity_logic:client(), HarvesterId :: od_harvester:id()) ->
+    Client :: aai:auth(), HarvesterId :: od_harvester:id()) ->
     {ok, macaroon:macaroon()}.
 harvester_invite_space_token(Config, Client, HarvesterId) ->
     ?assertMatch({ok, _}, call_oz(
@@ -2572,7 +2572,7 @@ cluster_get_user_privileges(Config, ClusterId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec cluster_invite_user_token(Config :: term(),
-    Client :: entity_logic:client(), ClusterId :: od_cluster:id()) ->
+    Client :: aai:auth(), ClusterId :: od_cluster:id()) ->
     {ok, macaroon:macaroon()}.
 cluster_invite_user_token(Config, Client, ClusterId) ->
     ?assertMatch({ok, _}, call_oz(
@@ -2586,7 +2586,7 @@ cluster_invite_user_token(Config, Client, ClusterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec cluster_invite_group_token(Config :: term(),
-    Client :: entity_logic:client(), ClusterId :: od_cluster:id()) ->
+    Client :: aai:auth(), ClusterId :: od_cluster:id()) ->
     {ok, macaroon:macaroon()}.
 cluster_invite_group_token(Config, Client, ClusterId) ->
     ?assertMatch({ok, _}, call_oz(
@@ -2665,7 +2665,7 @@ group_set_user_privileges(Config, GroupId, UserId, PrivsToGrant, PrivsToRevoke) 
 %% Sets privileges for group's user.
 %% @end
 %%--------------------------------------------------------------------
--spec group_set_user_privileges(Config :: term(), entity_logic:client(),
+-spec group_set_user_privileges(Config :: term(), aai:auth(),
     GroupId :: od_group:id(), UserId :: od_user:id(),
     PrivsToGrant :: [privileges:group_privilege()],
     PrivsToRevoke :: [privileges:group_privilege()]) -> ok.
@@ -2750,7 +2750,7 @@ space_harvest_metadata(Config, ClientProviderId, SpaceId, Destination, MaxStream
 %% @end
 %%--------------------------------------------------------------------
 -spec group_invite_group_token(Config :: term(),
-    Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+    Client :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, macaroon:macaroon()}.
 group_invite_group_token(Config, Client, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
@@ -2764,7 +2764,7 @@ group_invite_group_token(Config, Client, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec group_invite_user_token(Config :: term(),
-    Client :: entity_logic:client(), GroupId :: od_group:id()) ->
+    Client :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, macaroon:macaroon()}.
 group_invite_user_token(Config, Client, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
@@ -3462,10 +3462,10 @@ decode_gri(Config, EncodedGri) ->
 %% Acquires a Onezone gui token issued for the session denoted by given cookie.
 %% @end
 %%--------------------------------------------------------------------
--spec acquire_gui_token(Config :: term(), Cookie :: binary()) ->
+-spec request_gui_token(Config :: term(), Cookie :: binary()) ->
     {ok, Token :: binary()} | {error, term()}.
-acquire_gui_token(Config, Cookie) ->
-    acquire_gui_token(Config, Cookie, ?OZ_WORKER_GUI, ?ONEZONE_CLUSTER_ID).
+request_gui_token(Config, Cookie) ->
+    request_gui_token(Config, Cookie, ?OZ_WORKER_GUI, ?ONEZONE_CLUSTER_ID).
 
 
 %%--------------------------------------------------------------------
@@ -3474,10 +3474,9 @@ acquire_gui_token(Config, Cookie) ->
 %% for use by given service (defined via cluster type and id).
 %% @end
 %%--------------------------------------------------------------------
--spec acquire_gui_token(Config :: term(), Cookie :: binary(),
-    od_cluster:id(), od_cluster:type()) ->
+-spec request_gui_token(Config :: term(), Cookie :: binary(), onedata:gui(), od_cluster:id()) ->
     {ok, Token :: binary()} | {error, term()}.
-acquire_gui_token(Config, Cookie, GuiType, ClusterId) ->
+request_gui_token(Config, Cookie, GuiType, ClusterId) ->
     GuiPrefix = onedata:gui_prefix(GuiType),
     Result = http_client:post(
         oz_url(Config, str_utils:format_bin("/~s/~s/gui-preauthorize", [GuiPrefix, ClusterId])),

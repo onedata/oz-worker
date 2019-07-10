@@ -5,7 +5,9 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc The module implementing the business logic for OpenID Connect end-user
+%%% @doc
+%%% @todo VFS-5554 This module is deprecated, kept for backward compatibility
+%%% The module implementing the business logic for OpenID Connect end-user
 %%% authentication and authorization.
 %%% @end
 %%%-------------------------------------------------------------------
@@ -22,13 +24,10 @@
 -define(MACAROONS_LOCATION, oz_worker:get_domain()).
 
 %% API
--export([get_redirection_uri/2, get_redirection_uri/3]).
+-export([get_redirection_uri/3]).
 -export([gen_token/1, gen_token/2, validate_token/5,
     invalidate_token/1, invalidate_user_tokens/1,
     authenticate_user/1]).
-
-%% Handling state tokens
--export([generate_state_token/4, lookup_state_token/1]).
 
 %%%===================================================================
 %%% API
@@ -50,7 +49,7 @@ authenticate_user(Identifier) ->
             M2 = macaroon:add_first_party_caveat(M,
                 ["time < ", integer_to_binary(time_utils:cluster_time_seconds() + ExpirationSecs)]),
 
-            case onedata_macaroons:serialize(M2) of
+            case macaroons:serialize(M2) of
                 {ok, _} = Serialized -> Serialized;
                 {error, _} = Error -> Error
             end;
@@ -58,17 +57,6 @@ authenticate_user(Identifier) ->
         _ ->
             {error, no_auth_record}
     end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% @equiv get_redirection_uri(UserId, ProviderId, <<"/">>).
-%% @end
-%%--------------------------------------------------------------------
--spec get_redirection_uri(UserId :: binary(), ProviderId :: binary()) ->
-    {ok, RedirectionUri :: binary()}.
-get_redirection_uri(UserId, ProviderId) ->
-    get_redirection_uri(UserId, ProviderId, <<"/">>).
 
 
 %%--------------------------------------------------------------------
@@ -106,7 +94,7 @@ gen_token(UserId) ->
     }}),
     Identifier = binary_to_list(Doc#document.key),
     M = create_macaroon(Secret, str_utils:to_binary(Identifier), Caveats),
-    {ok, Token} = onedata_macaroons:serialize(M),
+    {ok, Token} = macaroons:serialize(M),
     Token.
 
 %%--------------------------------------------------------------------
@@ -130,7 +118,7 @@ gen_token(UserId, _ProviderId) ->
     }}),
     CaveatId = binary_to_list(CaveatDoc#document.key),
     M2 = macaroon:add_third_party_caveat(M, Location, CaveatKey, CaveatId),
-    {ok, Token} = onedata_macaroons:serialize(M2),
+    {ok, Token} = macaroons:serialize(M2),
     Token.
 
 %%--------------------------------------------------------------------
@@ -138,11 +126,11 @@ gen_token(UserId, _ProviderId) ->
 %% the user that gave the authorization.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_token(ProviderId :: binary(), Macaroon :: macaroon:macaroon(),
+-spec validate_token(ProviderId :: binary(), Token :: tokens:token(),
     DischargeMacaroons :: [macaroon:macaroon()], Method :: binary(),
     RootResource :: atom()) ->
     {ok, UserId :: binary()} | {error, Reason :: any()}.
-validate_token(ProviderId, Macaroon, DischargeMacaroons, _Method, _RootResource) ->
+validate_token(ProviderId, #auth_token{macaroon = Macaroon}, DischargeMacaroons, _Method, _RootResource) ->
     Identifier = macaroon:identifier(Macaroon),
     case onedata_auth:get(Identifier) of
         {ok, #document{value = #onedata_auth{secret = Secret, user_id = UserId}}} ->
@@ -188,36 +176,6 @@ invalidate_user_tokens(UserId) ->
 -spec invalidate_token(binary()) -> ok.
 invalidate_token(Identifier) when is_binary(Identifier) ->
     onedata_auth:delete(Identifier).
-
-
-%%--------------------------------------------------------------------
-%% @doc Generates a state token and returns it. In the process, it stores the token
-%% and associates some login info, that can be later retrieved given the token.
-%% For example, where to redirect the user after login.
-%% @end
-%%--------------------------------------------------------------------
--spec generate_state_token(auth_config:idp(), LinkAccount :: false | {true, od_user:id()},
-    RedirectAfterLogin :: binary(), TestMode :: boolean()) -> state_token:id().
-generate_state_token(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
-    StateInfo = #{
-        idp => IdP,
-        link_account => LinkAccount,
-        redirect_after_login => RedirectAfterLogin,
-        test_mode => TestMode
-    },
-    {ok, Token} = state_token:create(StateInfo),
-    Token.
-
-%%--------------------------------------------------------------------
-%% @doc Checks if the given state token exists and returns login info
-%% associated with it or error otherwise.
-%% @end
-%%--------------------------------------------------------------------
--spec lookup_state_token(Token :: binary()) ->
-    {ok, state_token:state_info()} | error.
-lookup_state_token(Token) ->
-    state_token:lookup(Token).
-
 
 %%%===================================================================
 %%% Internal functions

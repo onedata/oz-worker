@@ -122,7 +122,7 @@ list_spaces_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_spaces,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?OK_LIST(ExpSpaces)
         }
         % TODO gs
@@ -194,7 +194,7 @@ create_space_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = create_space,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?OK_TERM(VerifyFun)
         },
         gs_spec = #gs_spec{
@@ -228,7 +228,7 @@ join_space_test(Config) ->
         {ok, Macaroon} = oz_test_utils:space_invite_user_token(
             Config, ?ROOT, SpaceId
         ),
-        {ok, Token} = onedata_macaroons:serialize(Macaroon),
+        {ok, Token} = macaroons:serialize(Macaroon),
         #{
             spaceId => SpaceId, 
             token => Token,
@@ -293,7 +293,7 @@ join_space_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = join_space,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?OK_ENV(fun(#{spaceId := SpaceId} = _Env, _) ->
                 ?OK_BINARY(SpaceId)
             end)
@@ -311,7 +311,7 @@ join_space_test(Config) ->
     {ok, Macaroon} = oz_test_utils:space_invite_user_token(
         Config, ?ROOT, Space
     ),
-    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    {ok, Token} = macaroons:serialize(Macaroon),
     
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
@@ -327,7 +327,7 @@ join_space_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = join_space,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_user, U1, od_space, Space))
         },
         % TODO gs
@@ -387,7 +387,7 @@ get_space_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_space,
-            args = [client, U1, S1],
+            args = [auth, U1, S1],
             expected_result = ?OK_MAP_CONTAINS(ExpDetails)
         },
         gs_spec = #gs_spec{
@@ -456,7 +456,7 @@ leave_space_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = leave_space,
-            args = [client, U1, spaceId],
+            args = [auth, U1, spaceId],
             expected_result = ?OK
         }
         % TODO gs
@@ -531,7 +531,7 @@ set_default_space_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = set_default_space,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?OK
         }
         % TODO gs
@@ -563,7 +563,7 @@ get_default_space_test(Config) ->
             operation = get,
             module = user_logic,
             function = get_default_space,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
         % TODO gs
@@ -602,7 +602,7 @@ get_default_space_test(Config) ->
             operation = get,
             module = user_logic,
             function = get_default_space,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?OK_BINARY(Space)
         }
         % TODO gs
@@ -666,7 +666,7 @@ unset_default_space_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = unset_default_space,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?OK
         }
         % TODO gs
@@ -733,7 +733,7 @@ set_space_alias_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = set_space_alias,
-            args = [client, U1, S1, data],
+            args = [auth, U1, S1, data],
             expected_result = ?OK
         }
         % TODO gs
@@ -767,7 +767,7 @@ get_space_alias_test(Config) ->
         logic_spec = LogicSpec = #logic_spec{
             module = user_logic,
             function = get_space_alias,
-            args = [client, U1, S1],
+            args = [auth, U1, S1],
             expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
         % TODO gs
@@ -806,7 +806,7 @@ get_space_alias_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_space_alias,
-            args = [client, U1, S1],
+            args = [auth, U1, S1],
             expected_result = ?OK_BINARY(ExpAlias)
         }
         % TODO gs
@@ -872,7 +872,7 @@ delete_space_alias_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = delete_space_alias,
-            args = [client, U1, S1],
+            args = [auth, U1, S1],
             expected_result = ?OK
         }
         % TODO gs
@@ -925,7 +925,7 @@ list_eff_spaces_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_eff_spaces,
-            args = [client, U2],
+            args = [auth, U2],
             expected_result = ?OK_LIST(ExpSpaces)
         }
         % TODO gs
@@ -991,7 +991,7 @@ get_eff_space_test(Config) ->
                 logic_spec = #logic_spec{
                     module = user_logic,
                     function = get_eff_space,
-                    args = [client, U1, SpaceId],
+                    args = [auth, U1, SpaceId],
                     expected_result = ?OK_MAP_CONTAINS(SpaceDetails)
                 },
                 gs_spec = #gs_spec{

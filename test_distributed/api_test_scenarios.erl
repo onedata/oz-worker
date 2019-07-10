@@ -1267,7 +1267,7 @@ create_eff_providers_env(Config) ->
             {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
                 Config, ?ROOT, SpaceId
             ),
-            {ok, Token} = onedata_macaroons:serialize(Macaroon),
+            {ok, Token} = macaroons:serialize(Macaroon),
             {ok, SpaceId} = oz_test_utils:support_space(
                 Config, ?ROOT, ProvId, Token,
                 oz_test_utils:minimum_support_size(Config)

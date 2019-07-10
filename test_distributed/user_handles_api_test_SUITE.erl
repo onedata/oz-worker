@@ -119,7 +119,7 @@ list_handles_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_handles,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?OK_LIST(ExpHandles)
         }
         % TODO gs
@@ -228,7 +228,7 @@ create_handle_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = create_handle,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?OK_TERM(VerifyFun)
         },
         gs_spec = #gs_spec{
@@ -341,7 +341,7 @@ get_handle_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_handle,
-            args = [client, U1, HandleId],
+            args = [auth, U1, HandleId],
             expected_result = ?OK_MAP_CONTAINS(HandleDetails)
         }
         % TODO gs
@@ -406,7 +406,7 @@ leave_handle_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = leave_handle,
-            args = [client, U1, handleId],
+            args = [auth, U1, handleId],
             expected_result = ?OK
         }
         % TODO gs
@@ -457,7 +457,7 @@ list_eff_handles_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_eff_handles,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?OK_LIST(ExpHandles)
         }
         % TODO gs
@@ -520,7 +520,7 @@ get_eff_handle_test(Config) ->
                 logic_spec = #logic_spec{
                     module = user_logic,
                     function = get_eff_handle,
-                    args = [client, U1, HandleId],
+                    args = [auth, U1, HandleId],
                     expected_result = ?OK_MAP_CONTAINS(HandleDetails)
                 }
                 % TODO gs

@@ -137,7 +137,7 @@ add_group_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = add_group,
-            args = [client, S1, G1, data],
+            args = [auth, S1, G1, data],
             expected_result = ?OK_BINARY(G1)
         },
         % TODO gs
@@ -210,7 +210,7 @@ add_group_with_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = add_group,
-            args = [client, S1, G1, data],
+            args = [auth, S1, G1, data],
             expected_result = ?OK_BINARY(G1)
         },
         % TODO gs
@@ -282,7 +282,7 @@ create_group_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = create_group,
-            args = [client, S1, data],
+            args = [auth, S1, data],
             expected_result = ?OK_ENV(fun(_, DataSet) ->
                 ExpType = maps:get(<<"type">>, DataSet, ?DEFAULT_GROUP_TYPE),
                 ?OK_TERM(fun(SpaceId) -> VerifyFun(SpaceId, ExpType) end)
@@ -340,7 +340,7 @@ create_group_invite_token_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = create_group_invite_token,
-            args = [client, S1],
+            args = [auth, S1],
             expected_result = ?OK_TERM(VerifyFun)
         }
         % TODO gs
@@ -391,7 +391,7 @@ remove_group_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = remove_group,
-            args = [client, S1, groupId],
+            args = [auth, S1, groupId],
             expected_result = ?OK
         }
         % TODO gs
@@ -443,7 +443,7 @@ list_groups_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_groups,
-            args = [client, S1],
+            args = [auth, S1],
             expected_result = ?OK_LIST(ExpGroups)
         }
         % TODO gs
@@ -492,7 +492,7 @@ get_group_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_group,
-            args = [client, S1, G1],
+            args = [auth, S1, G1],
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1
@@ -568,7 +568,7 @@ get_group_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_group_privileges,
-            args = [client, S1, G1],
+            args = [auth, S1, G1],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -629,7 +629,7 @@ update_group_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = update_group_privileges,
-            args = [client, S1, G1, data],
+            args = [auth, S1, G1, data],
             expected_result = ?OK
         }
         % TODO gs
@@ -671,7 +671,7 @@ list_eff_groups_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_eff_groups,
-            args = [client, S1],
+            args = [auth, S1],
             expected_result = ?OK_LIST(ExpGroups)
         }
         % TODO gs
@@ -729,7 +729,7 @@ get_eff_group_test(Config) ->
                 logic_spec = #logic_spec{
                     module = space_logic,
                     function = get_eff_group,
-                    args = [client, S1, GroupId],
+                    args = [auth, S1, GroupId],
                     expected_result = ?OK_MAP_CONTAINS(GroupDetails)
                 },
                 gs_spec = #gs_spec{
@@ -851,7 +851,7 @@ get_eff_group_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_eff_group_privileges,
-            args = [client, S1, G4],
+            args = [auth, S1, G4],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -985,7 +985,7 @@ get_eff_group_membership_intermediaries(Config) ->
             logic_spec = #logic_spec{
                 module = space_logic,
                 function = get_eff_group_membership_intermediaries,
-                args = [client, SpaceId, GroupId],
+                args = [auth, SpaceId, GroupId],
                 expected_result = ?OK_LIST(ExpIntermediariesRaw)
             }
         },

@@ -15,7 +15,7 @@
 -include_lib("gui/include/gui_session.hrl").
 
 %% @formatter:off
--type client() :: nobody | root | {user, UserId :: binary()} |
+-type auth() :: nobody | root | {user, UserId :: binary()} |
     {provider, ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}.
 
 -type data_error() :: bad | empty | bad_token | bad_token_type |
@@ -37,9 +37,9 @@
 %% @formatter:on
 
 -record(client_spec, {
-    correct = [] :: [client()],
-    unauthorized = [] :: [client()],
-    forbidden = [] :: [client()]
+    correct = [] :: [auth()],
+    unauthorized = [] :: [auth()],
+    forbidden = [] :: [auth()]
 }).
 
 -record(data_spec, {

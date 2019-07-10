@@ -109,7 +109,7 @@ list_groups_test(Config) ->
             operation = get,
             module = user_logic,
             function = get_groups,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?OK_LIST(ExpGroups)
         }
         % TODO gs
@@ -194,7 +194,7 @@ create_group_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = create_group,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?OK_ENV(fun(_, Data) ->
                 ExpName = maps:get(<<"name">>, Data),
                 ExpType = maps:get(<<"type">>, Data, ?DEFAULT_GROUP_TYPE),
@@ -239,7 +239,7 @@ join_group_test(Config) ->
         {ok, Macaroon} = oz_test_utils:group_invite_user_token(
             Config, ?ROOT, G1
         ),
-        {ok, Token} = onedata_macaroons:serialize(Macaroon),
+        {ok, Token} = macaroons:serialize(Macaroon),
         #{macaroonId => macaroon:identifier(Macaroon),
           token => Token}
     end,
@@ -302,7 +302,7 @@ join_group_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = join_group,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?OK_BINARY(G1)
         }
         % TODO gs
@@ -318,7 +318,7 @@ join_group_test(Config) ->
     {ok, Macaroon} = oz_test_utils:group_invite_user_token(
         Config, ?ROOT, Group
     ),
-    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    {ok, Token} = macaroons:serialize(Macaroon),
     
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
@@ -334,7 +334,7 @@ join_group_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = join_group,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_user, U1, od_group, Group))
         },
         % TODO gs
@@ -399,7 +399,7 @@ get_group_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_group,
-            args = [client, U1, G1],
+            args = [auth, U1, G1],
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1
@@ -472,7 +472,7 @@ leave_group_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = leave_group,
-            args = [client, U1, groupId],
+            args = [auth, U1, groupId],
             expected_result = ?OK
         }
     },
@@ -521,7 +521,7 @@ list_eff_groups_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_eff_groups,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?OK_LIST(ExpGroups)
         }
         % TODO gs
@@ -582,7 +582,7 @@ get_eff_group_test(Config) ->
                 logic_spec = #logic_spec{
                     module = user_logic,
                     function = get_eff_group,
-                    args = [client, U1, GroupId],
+                    args = [auth, U1, GroupId],
                     expected_result = ?OK_MAP_CONTAINS(GroupDetails)
                 },
                 gs_spec = #gs_spec{

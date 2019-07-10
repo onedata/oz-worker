@@ -14,7 +14,7 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("tokens.hrl").
+-include("invite_tokens.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -155,11 +155,13 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, client = Client}) ->
+create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     Name = maps:get(<<"name">>, Req#el_req.data),
     Type = maps:get(<<"type">>, Req#el_req.data, ?DEFAULT_GROUP_TYPE),
     {ok, #document{key = GroupId}} = od_group:create(
-        #document{value = #od_group{name = Name, type = Type, creator = Client}}
+        #document{value = #od_group{
+            name = Name, type = Type, creator = Auth#auth.subject
+        }}
     ),
     case Req#el_req.auth_hint of
         ?AS_USER(UserId) ->
@@ -203,7 +205,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
         end,
         GroupId
     end,
-    GroupId = token_logic:consume(Macaroon, JoinGroupFun),
+    GroupId = invite_tokens:consume(Macaroon, JoinGroupFun),
 
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance,
         scope = case lists:member(?GROUP_VIEW, Privileges) of
@@ -231,16 +233,16 @@ create(Req = #el_req{gri = GRI = #gri{id = ParentGroupId, aspect = child}}) ->
     {ok, resource, {NewGRI, Group}};
 
 create(Req = #el_req{gri = #gri{id = GrId, aspect = invite_user_token}}) ->
-    {ok, Macaroon} = token_logic:create(
-        Req#el_req.client,
+    {ok, Macaroon} = invite_tokens:create(
+        Req#el_req.auth,
         ?GROUP_INVITE_USER_TOKEN,
         {od_group, GrId}
     ),
     {ok, value, Macaroon};
 
 create(Req = #el_req{gri = #gri{id = GrId, aspect = invite_group_token}}) ->
-    {ok, Macaroon} = token_logic:create(
-        Req#el_req.client,
+    {ok, Macaroon} = invite_tokens:create(
+        Req#el_req.auth,
         ?GROUP_INVITE_GROUP_TOKEN,
         {od_group, GrId}
     ),
@@ -575,7 +577,7 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = oz_privileges}},
 
 
 authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = instance}}, _) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             true;
         {?USER(UserId), ?AS_GROUP(ChildGroupId)} ->
@@ -585,7 +587,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = 
     end;
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             true;
         {?USER(UserId), ?AS_GROUP(ChildGroupId)} ->
@@ -594,16 +596,16 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
             false
     end;
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, client = ?USER(UserId), data = #{<<"privileges">> := _}}, Group) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, auth = ?USER(UserId), data = #{<<"privileges">> := _}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_ADD_USER) andalso auth_by_privilege(Req, Group, ?GROUP_SET_PRIVILEGES);
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, client = ?USER(UserId), data = _}, Group) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {user, UserId}}, auth = ?USER(UserId), data = _}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_ADD_USER);
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {child, ChildId}}, client = ?USER(UserId), data = #{<<"privileges">> := _}}, Group) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {child, ChildId}}, auth = ?USER(UserId), data = #{<<"privileges">> := _}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_ADD_CHILD) andalso
         auth_by_privilege(Req, Group, ?GROUP_SET_PRIVILEGES) andalso
         group_logic:has_eff_privilege(ChildId, UserId, ?GROUP_ADD_PARENT);
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = {child, ChildId}}, client = ?USER(UserId), data = _}, Group) ->
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = {child, ChildId}}, auth = ?USER(UserId), data = _}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_ADD_CHILD) andalso
         group_logic:has_eff_privilege(ChildId, UserId, ?GROUP_ADD_PARENT);
 
@@ -622,7 +624,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
     auth_by_privilege(Req, Group, ?GROUP_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Group) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this group is checked in 'exists'
             group_logic:has_eff_privilege(Group, UserId, ?GROUP_VIEW);
@@ -655,7 +657,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
     end;
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = shared}}, Group) ->
-    case {Req#el_req.client, Req#el_req.auth_hint} of
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(ClientUserId), ?THROUGH_GROUP(ParentGroupId)} ->
             % Group's membership in parent group is checked in 'exists'
             group_logic:has_eff_privilege(ParentGroupId, ClientUserId, ?GROUP_VIEW);
@@ -703,7 +705,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = {child_privileges, 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_child_privileges, _}}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_VIEW_PRIVILEGES);
 
-authorize(Req = #el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_child_membership, GroupId}}}, Group) ->
+authorize(Req = #el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_child_membership, GroupId}}}, Group) ->
     group_logic:has_eff_user(GroupId, UserId) orelse auth_by_privilege(Req, Group, ?GROUP_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = users}}, Group) ->
@@ -712,17 +714,17 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = users}}, Group) ->
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_users}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_VIEW);
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
     true;
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_VIEW_PRIVILEGES);
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
     true;
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_privileges, _}}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_VIEW_PRIVILEGES);
 
-authorize(#el_req{operation = get, client = ?USER(UserId), gri = #gri{aspect = {eff_user_membership, UserId}}}, _) ->
+authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_membership, UserId}}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_membership, _}}}, Group) ->
@@ -928,7 +930,7 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
     end,
     #{
         required => #{
-            <<"token">> => {token, TokenType}
+            <<"token">> => {invite_token, TokenType}
         }
     };
 
@@ -1009,14 +1011,14 @@ auth_by_membership(UserId, GroupOrId) ->
 %% @doc
 %% Returns if given user has specific effective privilege in the group.
 %% UserId is either given explicitly or derived from entity logic request.
-%% Clients of type other than user are discarded.
+%% Auths of type other than user are discarded.
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_privilege(entity_logic:req() | od_user:id(),
     od_group:id() | od_group:info(), privileges:group_privilege()) -> boolean().
-auth_by_privilege(#el_req{client = ?USER(UserId)}, GroupOrId, Privilege) ->
+auth_by_privilege(#el_req{auth = ?USER(UserId)}, GroupOrId, Privilege) ->
     auth_by_privilege(UserId, GroupOrId, Privilege);
-auth_by_privilege(#el_req{client = _OtherClient}, _GroupOrId, _Privilege) ->
+auth_by_privilege(#el_req{auth = _OtherAuth}, _GroupOrId, _Privilege) ->
     false;
 auth_by_privilege(UserId, GroupOrId, Privilege) ->
     group_logic:has_eff_privilege(GroupOrId, UserId, Privilege).

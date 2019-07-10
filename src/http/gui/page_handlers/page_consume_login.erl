@@ -95,7 +95,7 @@ format_error_reason(?ERROR_INTERNAL_SERVER_ERROR) ->
 
 %% @private
 -spec render_test_login_results({ok, od_user:id(), RedirectPage :: binary()} |
-{auth_error, {error, term()}, state_token:id(), RedirectPage :: binary()}) -> binary().
+{auth_error, {error, term()}, state_token:state_token(), RedirectPage :: binary()}) -> binary().
 render_test_login_results(ValidateResult) ->
     StatusHeaders = case ValidateResult of
         {ok, _, _} ->

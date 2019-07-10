@@ -22,7 +22,7 @@
 %% Builds an URL in given IdP where clients should be redirected for authentication.
 %% @end
 %%--------------------------------------------------------------------
--callback get_login_endpoint(auth_config:idp(), state_token:id(),
+-callback get_login_endpoint(auth_config:idp(), state_token:state_token(),
     auth_logic:redirect_uri()) ->
     auth_logic:login_endpoint().
 

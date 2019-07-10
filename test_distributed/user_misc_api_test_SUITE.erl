@@ -163,7 +163,7 @@ create_test(Config) ->
             logic_spec = #logic_spec{
                 module = user_logic,
                 function = create,
-                args = [client, data],
+                args = [auth, data],
                 expected_result = ?OK_TERM(VerifyFun)
             },
             gs_spec = #gs_spec{
@@ -233,11 +233,11 @@ authorize_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
     % Generate an auth token, parse the token for 3rd party caveats and check
     % if authorize endpoint works as expected.
-    AuthToken = oz_test_utils:call_oz(
+    SerializedToken = oz_test_utils:call_oz(
         Config, auth_tokens, gen_token, [User, Provider]
     ),
-    {ok, Macaroon} = onedata_macaroons:deserialize(AuthToken),
-    Caveats = macaroon:third_party_caveats(Macaroon),
+    {ok, Token} = macaroons:deserialize(SerializedToken),
+    Caveats = macaroon:third_party_caveats(Token),
 
     lists:foreach(
         fun({_, CaveatId}) ->
@@ -317,7 +317,7 @@ list_test(Config) ->
             operation = get,
             module = user_logic,
             function = list,
-            args = [client],
+            args = [auth],
             expected_result = ?OK_LIST(ExpUsers)
         }
         % TODO gs
@@ -381,7 +381,7 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get,
-            args = [client, User],
+            args = [auth, User],
             expected_result = ?OK_TERM(
                 fun(#od_user{
                     full_name = FullName, username = Username,
@@ -475,7 +475,7 @@ get_test(Config) ->
         logic_spec = LogicSpec = #logic_spec{
             module = user_logic,
             function = get_protected_data,
-            args = [client, User],
+            args = [auth, User],
             expected_result = ?OK_MAP_CONTAINS(ProtectedData)
         },
         gs_spec = GsSpec = #gs_spec{
@@ -674,7 +674,7 @@ update_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = update,
-            args = [client, userId, data],
+            args = [auth, userId, data],
             expected_result = ?OK
         },
         gs_spec = GsSpec#gs_spec{
@@ -762,7 +762,7 @@ change_password_test(Config) ->
             logic_spec = #logic_spec{
                 module = user_logic,
                 function = change_password,
-                args = [client, userId, data],
+                args = [auth, userId, data],
                 expected_result = ExpResult
             },
             gs_spec = GsSpec#gs_spec{
@@ -925,7 +925,7 @@ update_basic_auth_config(Config) ->
             logic_spec = #logic_spec{
                 module = user_logic,
                 function = update_basic_auth_config,
-                args = [client, userId, data],
+                args = [auth, userId, data],
                 expected_result = ExpResult
             },
             data_spec = #data_spec{
@@ -981,7 +981,7 @@ delete_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = delete,
-            args = [client, userId],
+            args = [auth, userId],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -1035,10 +1035,10 @@ create_client_token_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
 
     VerifyFun = fun(ClientToken) ->
-        {ok, Macaroon} = onedata_macaroons:deserialize(ClientToken),
+        {ok, Token} = tokens:deserialize(ClientToken),
         ?assertEqual({ok, User}, oz_test_utils:call_oz(
             Config, auth_tokens, validate_token,
-            [<<>>, Macaroon, [], undefined, undefined]
+            [<<>>, Token, [], undefined, undefined]
         )),
         true
     end,
@@ -1070,7 +1070,7 @@ create_client_token_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = create_client_token,
-            args = [client, User],
+            args = [auth, User],
             expected_result = ?OK_TERM(VerifyFun)
         },
         rest_spec = undefined
@@ -1119,7 +1119,7 @@ list_client_tokens_test(Config) ->
             operation = get,
             module = user_logic,
             function = list_client_tokens,
-            args = [client, User],
+            args = [auth, User],
             expected_result = ?OK_LIST(ExpTokens)
         }
         % TODO gs
@@ -1168,7 +1168,7 @@ delete_client_token_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = delete_client_token,
-            args = [client, User, token],
+            args = [auth, User, token],
             expected_result = ?OK
         }
         % TODO gs
@@ -1253,7 +1253,7 @@ set_default_provider_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = set_default_provider,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?OK
         }
         % TODO gs
@@ -1284,7 +1284,7 @@ get_default_provider_test(Config) ->
         logic_spec = LogicSpec = #logic_spec{
             module = user_logic,
             function = get_default_provider,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
         % TODO gs
@@ -1332,7 +1332,7 @@ get_default_provider_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_default_provider,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?OK_BINARY(P1)
         }
         % TODO gs
@@ -1405,7 +1405,7 @@ unset_default_provider_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = unset_default_provider,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?OK
         }
         % TODO gs
@@ -1450,7 +1450,7 @@ acquire_idp_access_token_test(Config) ->
         logic_spec = LogicSpec = #logic_spec{
             module = user_logic,
             function = acquire_idp_access_token,
-            args = [client, U1, dummyIdP],
+            args = [auth, U1, dummyIdP],
             expected_result = ?ERROR_REASON(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, []))
         }
     },
@@ -1478,7 +1478,7 @@ acquire_idp_access_token_test(Config) ->
             expected_code = ?HTTP_400_BAD_REQUEST
         },
         logic_spec = LogicSpec#logic_spec{
-            args = [client, U1, inexistentIdP],
+            args = [auth, U1, inexistentIdP],
             expected_result = ?ERROR_REASON(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, [dummyIdP]))
         }
     },
@@ -1492,7 +1492,7 @@ acquire_idp_access_token_test(Config) ->
             expected_code = ?HTTP_404_NOT_FOUND
         },
         logic_spec = LogicSpec#logic_spec{
-            args = [client, U1, dummyIdP],
+            args = [auth, U1, dummyIdP],
             expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
         }
     },
@@ -1522,7 +1522,7 @@ acquire_idp_access_token_test(Config) ->
             end
         },
         logic_spec = LogicSpec#logic_spec{
-            args = [client, U1, dummyIdP],
+            args = [auth, U1, dummyIdP],
             expected_result = ?OK_TERM(fun({Token, Ttl}) ->
                 VerifyFun(Token, Ttl)
             end)
@@ -1591,7 +1591,7 @@ list_eff_providers_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_eff_providers,
-            args = [client, U2],
+            args = [auth, U2],
             expected_result = ?OK_LIST(ExpProviders)
         }
         % TODO gs
@@ -1653,7 +1653,7 @@ get_eff_provider_test(Config) ->
                 logic_spec = #logic_spec{
                     module = user_logic,
                     function = get_eff_provider,
-                    args = [client, U2, ProvId],
+                    args = [auth, U2, ProvId],
                     expected_result = ?OK_MAP_CONTAINS(ProvDetails)
                 }
                 % @todo gs
@@ -1723,7 +1723,7 @@ get_spaces_in_eff_provider_test(Config) ->
                 logic_spec = #logic_spec{
                     module = user_logic,
                     function = get_spaces_in_eff_provider,
-                    args = [client, UserId, ProviderId],
+                    args = [auth, UserId, ProviderId],
                     expected_result = ?OK_LIST(UserSpaces)
                 }
                 % @todo gs

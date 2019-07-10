@@ -111,7 +111,7 @@ list_children_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_children,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_LIST(ExpChildren)
         }
         % TODO gs
@@ -154,7 +154,7 @@ create_group_invite_token_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = create_group_invite_token,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_TERM(VerifyFun)
         }
         % TODO gs
@@ -208,7 +208,7 @@ create_child_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = create_child_group,
-            args = [client, Parent, data],
+            args = [auth, Parent, data],
             expected_result = ?OK_ENV(fun(_, DataSet) ->
                 ExpType = maps:get(<<"type">>, DataSet, ?DEFAULT_GROUP_TYPE),
                 ?OK_TERM(fun(GroupId) -> VerifyFun(GroupId, ExpType) end)
@@ -274,7 +274,7 @@ get_child_details_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_child,
-            args = [client, G1, G2],
+            args = [auth, G1, G2],
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME2,
                 <<"type">> => ?GROUP_TYPE2
@@ -365,7 +365,7 @@ add_child_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = add_group,
-            args = [client, ParentGroup, ChildGroup, data],
+            args = [auth, ParentGroup, ChildGroup, data],
             expected_result = ?OK_BINARY(ChildGroup)
         },
         % TODO gs
@@ -437,7 +437,7 @@ add_child_with_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = add_group,
-            args = [client, ParentGroup, ChildGroup, data],
+            args = [auth, ParentGroup, ChildGroup, data],
             expected_result = ?OK_BINARY(ChildGroup)
         },
         % TODO gs
@@ -505,7 +505,7 @@ remove_child_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = remove_group,
-            args = [client, G1, groupId],
+            args = [auth, G1, groupId],
             expected_result = ?OK
         }
         % TODO gs
@@ -567,7 +567,7 @@ get_child_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_child_privileges,
-            args = [client, G1, G2],
+            args = [auth, G1, G2],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -632,7 +632,7 @@ update_child_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = update_child_privileges,
-            args = [client, G1, G2, data],
+            args = [auth, G1, G2, data],
             expected_result = ?OK
         }
         % TODO gs
@@ -687,7 +687,7 @@ get_eff_children_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_eff_children,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_LIST(ExpGroups)
         }
         % TODO gs
@@ -760,7 +760,7 @@ get_eff_child_details_test(Config) ->
                 logic_spec = #logic_spec{
                     module = group_logic,
                     function = get_eff_child,
-                    args = [client, G1, GroupId],
+                    args = [auth, G1, GroupId],
                     expected_result = ?OK_MAP_CONTAINS(GroupDetails)
                 },
                 gs_spec = #gs_spec{
@@ -878,7 +878,7 @@ get_eff_child_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_eff_child_privileges,
-            args = [client, G1, G3],
+            args = [auth, G1, G3],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -1020,7 +1020,7 @@ get_eff_child_membership_intermediaries(Config) ->
             logic_spec = #logic_spec{
                 module = group_logic,
                 function = get_eff_child_membership_intermediaries,
-                args = [client, ParentId, ChildId],
+                args = [auth, ParentId, ChildId],
                 expected_result = ?OK_LIST(ExpIntermediariesRaw)
             }
         },

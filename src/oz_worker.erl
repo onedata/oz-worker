@@ -158,6 +158,6 @@ entity_logic_plugin() ->
 get_config() ->
     entity_logic:handle(#el_req{
         operation = get,
-        client = ?NOBODY,
+        auth = ?NOBODY,
         gri = #gri{type = oz_worker, id = undefined, aspect = configuration}
     }).

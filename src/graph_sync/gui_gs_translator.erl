@@ -37,7 +37,7 @@
 %% {@link gs_translator_behaviour} callback handshake_attributes/1.
 %% @end
 %%--------------------------------------------------------------------
--spec handshake_attributes(gs_protocol:client()) ->
+-spec handshake_attributes(aai:auth()) ->
     gs_protocol:handshake_attributes().
 handshake_attributes(_Client) ->
     BrandSubtitle = oz_worker:get_env(brand_subtitle, ""),
@@ -58,7 +58,7 @@ handshake_attributes(_Client) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_value(gs_protocol:protocol_version(), gs_protocol:gri(),
-    Value :: term()) -> Result | fun((gs_protocol:client()) -> Result) when
+    Value :: term()) -> Result | fun((aai:auth()) -> Result) when
     Result :: gs_protocol:data() | gs_protocol:error().
 translate_value(_, #gri{aspect = TokenType}, Macaroon) when
     TokenType == invite_user_token;
@@ -67,7 +67,7 @@ translate_value(_, #gri{aspect = TokenType}, Macaroon) when
     TokenType == invite_provider_token;
     TokenType == provider_registration_token ->
 
-    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    {ok, Token} = macaroons:serialize(Macaroon),
     Token;
 translate_value(_, #gri{type = od_harvester, aspect = {query, _}}, Response) ->
     Response;
@@ -88,7 +88,7 @@ translate_value(ProtocolVersion, GRI, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_resource(gs_protocol:protocol_version(), gs_protocol:gri(),
-    ResourceData :: term()) -> Result | fun((gs_protocol:client()) -> Result) when
+    ResourceData :: term()) -> Result | fun((aai:auth()) -> Result) when
     Result :: gs_protocol:data() | gs_protocol:error().
 translate_resource(_, GRI = #gri{type = od_user}, Data) ->
     translate_user(GRI, Data);
@@ -124,7 +124,7 @@ translate_resource(ProtocolVersion, GRI, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_user(gs_protocol:gri(), Data :: term()) ->
-    gs_protocol:data() | fun((gs_protocol:client()) -> gs_protocol:data()).
+    gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, User) ->
     #od_user{
         basic_auth_enabled = BasicAuthEnabled,
@@ -252,7 +252,7 @@ translate_user(#gri{aspect = eff_clusters}, Clusters) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_group(gs_protocol:gri(), Data :: term()) ->
-    gs_protocol:data() | fun((gs_protocol:client()) -> gs_protocol:data()).
+    gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_group(#gri{id = GroupId, aspect = instance, scope = private}, Group) ->
     fun(?USER(UserId)) -> #{
         <<"name">> => Group#od_group.name,
@@ -394,7 +394,7 @@ translate_group(#gri{aspect = eff_harvesters}, Harvesters) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_space(gs_protocol:gri(), Data :: term()) ->
-    gs_protocol:data() | fun((gs_protocol:client()) -> gs_protocol:data()).
+    gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) ->
     #od_space{name = Name, providers = Providers, shares = Shares} = Space,
     fun(?USER(UserId)) -> #{
@@ -517,7 +517,7 @@ translate_space(#gri{aspect = harvesters}, Harvesters) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_provider(gs_protocol:gri(), Data :: term()) ->
-    gs_protocol:data() | fun((gs_protocol:client()) -> gs_protocol:data()).
+    gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Provider) ->
     #od_provider{
         name = Name, domain = Domain,
@@ -608,7 +608,7 @@ translate_provider(#gri{aspect = spaces}, Spaces) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_harvester(gs_protocol:gri(), Data :: term()) ->
-    gs_protocol:data() | fun((gs_protocol:client()) -> gs_protocol:data()).
+    gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, Harvester) ->
     #od_harvester{
         name = Name, endpoint = Endpoint,
@@ -806,7 +806,7 @@ translate_harvester(#gri{aspect = {index_stats, _}}, IndexStats) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec translate_cluster(gs_protocol:gri(), Data :: term()) ->
-    gs_protocol:data() | fun((gs_protocol:client()) -> gs_protocol:data()).
+    gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Cluster) ->
     #od_cluster{
         type = Type,
@@ -978,13 +978,13 @@ format_intermediaries(Intermediaries) ->
     }.
 
 
--spec translate_creator(undefined | entity_logic:client()) ->
+-spec translate_creator(undefined | aai:auth()) ->
     #{binary() => null | binary()}.
 translate_creator(undefined) -> #{
     <<"creatorType">> => null,
     <<"creatorId">> => null
 };
-translate_creator(#client{type = Type, id = Id}) -> #{
+translate_creator(?SUB(Type, Id)) -> #{
     <<"creatorType">> => atom_to_binary(Type, utf8),
     <<"creatorId">> => gs_protocol:undefined_to_null(Id)
 }.

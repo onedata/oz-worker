@@ -5,14 +5,16 @@
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc The module implementing the business logic for tokens created by users.
+%%% @todo VFS-5554 This module is deprecated, kept for backward compatibility
+%%% @doc
+%%% The module implementing the business logic for tokens created by users.
 %%% This module serves as a buffer between the database and the REST API.
 %%% @end
 %%%-------------------------------------------------------------------
--module(token_logic).
+-module(invite_tokens).
 -author("Konrad Zemek").
 
--include("tokens.hrl").
+-include("invite_tokens.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -46,7 +48,7 @@
 %%--------------------------------------------------------------------
 -spec serialize(macaroon:macaroon()) -> {ok, Token :: binary()} | {error, term()}.
 serialize(Macaroon) ->
-    onedata_macaroons:serialize(Macaroon).
+    macaroons:serialize(Macaroon).
 
 
 %%--------------------------------------------------------------------
@@ -57,7 +59,7 @@ serialize(Macaroon) ->
 -spec deserialize(Token :: binary()) ->
     {ok, macaroon:macaroon()} | {error, term()}.
 deserialize(Token) ->
-    onedata_macaroons:deserialize(Token).
+    macaroons:deserialize(Token).
 
 
 %%--------------------------------------------------------------------
@@ -96,12 +98,12 @@ validate(Macaroon, TokenType) ->
 %% Throws exception when call to the datastore fails.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Issuer :: entity_logic:client(), TokenType :: token_type(),
+-spec create(Issuer :: aai:auth(), TokenType :: token_type(),
     Resource :: {resource_type(), binary()}) ->
     {ok, macaroon:macaroon()} | {error, Reason :: any()}.
 create(Issuer, TokenType, {ResourceType, ResourceId}) ->
     Secret = crypto:strong_rand_bytes(macaroon:suggested_secret_length()),
-    TokenData = #token{secret = Secret, issuer = Issuer,
+    TokenData = #token{secret = Secret, issuer = Issuer#auth.subject,
         resource = ResourceType, resource_id = ResourceId},
 
     {ok, #document{key = Identifier}} = token:save(#document{value = TokenData}),

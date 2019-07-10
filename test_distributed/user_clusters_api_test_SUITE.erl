@@ -109,7 +109,7 @@ list_clusters_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_clusters,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?OK_LIST(ExpClusters)
         }
         % TODO gs
@@ -192,7 +192,7 @@ create_provider_registration_token_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = create_provider_registration_token,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?OK_TERM(VerifyFun)
         }
         % TODO gs
@@ -211,7 +211,7 @@ join_cluster_test(Config) ->
         {ok, Macaroon} = oz_test_utils:cluster_invite_user_token(
             Config, ?ROOT, ClusterId
         ),
-        {ok, Token} = onedata_macaroons:serialize(Macaroon),
+        {ok, Token} = macaroons:serialize(Macaroon),
         #{
             clusterId => ClusterId,
             token => Token,
@@ -276,7 +276,7 @@ join_cluster_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = join_cluster,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?OK_ENV(fun(#{clusterId := ClusterId} = _Env, _) ->
                 ?OK_BINARY(ClusterId)
             end)
@@ -293,7 +293,7 @@ join_cluster_test(Config) ->
     {ok, Macaroon} = oz_test_utils:cluster_invite_user_token(
         Config, ?ROOT, NewCluster
     ),
-    {ok, Token} = onedata_macaroons:serialize(Macaroon),
+    {ok, Token} = macaroons:serialize(Macaroon),
 
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
@@ -309,7 +309,7 @@ join_cluster_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = join_cluster,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_user, U1, od_cluster, NewCluster))
         },
         % TODO gs
@@ -385,7 +385,7 @@ get_cluster_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_cluster,
-            args = [client, U1, ClusterId],
+            args = [auth, U1, ClusterId],
             expected_result = ?OK_MAP_CONTAINS(ExpDetails)
         }
         % @todo gs
@@ -441,7 +441,7 @@ leave_cluster_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = leave_cluster,
-            args = [client, U1, clusterId],
+            args = [auth, U1, clusterId],
             expected_result = ?OK
         }
         % TODO gs
@@ -509,7 +509,7 @@ list_eff_clusters_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_eff_clusters,
-            args = [client, U2],
+            args = [auth, U2],
             expected_result = ?OK_LIST(ExpClusters)
         }
         % TODO gs
@@ -601,7 +601,7 @@ get_eff_cluster_test(Config) ->
                 logic_spec = #logic_spec{
                     module = user_logic,
                     function = get_eff_cluster,
-                    args = [client, U1, ClusterId],
+                    args = [auth, U1, ClusterId],
                     expected_result = ?OK_MAP_CONTAINS(ClusterDetails)
                 }
                 % @todo gs

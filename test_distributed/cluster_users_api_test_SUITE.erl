@@ -128,7 +128,7 @@ add_user_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = add_user,
-            args = [client, ClusterId, EffectiveUser, data],
+            args = [auth, ClusterId, EffectiveUser, data],
             expected_result = ?OK_BINARY(EffectiveUser)
         },
         % TODO gs
@@ -204,7 +204,7 @@ add_user_with_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = add_user,
-            args = [client, ClusterId, EffectiveUser, data],
+            args = [auth, ClusterId, EffectiveUser, data],
             expected_result = ?OK_BINARY(EffectiveUser)
         },
         % TODO gs
@@ -263,7 +263,7 @@ create_user_invite_token_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = create_user_invite_token,
-            args = [client, C1],
+            args = [auth, C1],
             expected_result = ?OK_TERM(VerifyFun)
         }
         % TODO gs
@@ -315,7 +315,7 @@ remove_user_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = remove_user,
-            args = [client, C1, userId],
+            args = [auth, C1, userId],
             expected_result = ?OK
         }
         % TODO gs
@@ -362,7 +362,7 @@ list_users_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = get_users,
-            args = [client, C1],
+            args = [auth, C1],
             expected_result = ?OK_LIST(ExpUsers)
         }
         % TODO gs
@@ -438,7 +438,7 @@ get_user_test(Config) ->
             logic_spec = #logic_spec{
                 module = cluster_logic,
                 function = get_user,
-                args = [client, ClusterId, SubjectUser],
+                args = [auth, ClusterId, SubjectUser],
                 expected_result = ?OK_MAP_CONTAINS(ExpUserDetails)
             },
             gs_spec = #gs_spec{
@@ -515,7 +515,7 @@ get_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = get_user_privileges,
-            args = [client, C1, U3],
+            args = [auth, C1, U3],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -575,7 +575,7 @@ update_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = update_user_privileges,
-            args = [client, C1, U3, data],
+            args = [auth, C1, U3, data],
             expected_result = ?OK
         }
         % TODO gs
@@ -618,7 +618,7 @@ list_eff_users_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = get_eff_users,
-            args = [client, C1],
+            args = [auth, C1],
             expected_result = ?OK_LIST(ExpUsers)
         }
         % TODO gs
@@ -677,7 +677,7 @@ get_eff_user_test(Config) ->
                 logic_spec = #logic_spec{
                     module = cluster_logic,
                     function = get_eff_user,
-                    args = [client, C1, UserId],
+                    args = [auth, C1, UserId],
                     expected_result = ?OK_MAP_CONTAINS(UserDetails)
                 },
                 gs_spec = #gs_spec{
@@ -803,7 +803,7 @@ get_eff_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = cluster_logic,
             function = get_eff_user_privileges,
-            args = [client, C1, U3],
+            args = [auth, C1, U3],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -911,7 +911,7 @@ get_eff_user_membership_intermediaries(Config) ->
             logic_spec = #logic_spec{
                 module = cluster_logic,
                 function = get_eff_user_membership_intermediaries,
-                args = [client, ClusterId, SubjectUser],
+                args = [auth, ClusterId, SubjectUser],
                 expected_result = ?OK_LIST(ExpIntermediariesRaw)
             }
         },

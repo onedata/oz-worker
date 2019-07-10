@@ -85,7 +85,7 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, client = Client}) ->
+create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     ShareId = maps:get(<<"shareId">>, Req#el_req.data),
     Name = maps:get(<<"name">>, Req#el_req.data),
     SpaceId = maps:get(<<"spaceId">>, Req#el_req.data),
@@ -94,7 +94,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, client
         name = Name,
         root_file = RootFileId,
         public_url = share_logic:share_id_to_public_url(ShareId),
-        creator = Client
+        creator = Auth#auth.subject
     }},
     case od_share:create(ShareDoc) of
         {ok, _} ->
@@ -195,7 +195,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = 
     auth_by_space_privilege(Req, SpaceId, ?SPACE_MANAGE_SHARES);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Share) ->
-    case Req#el_req.client of
+    case Req#el_req.auth of
         ?USER(UserId) ->
             % In case of auth_hint = ?THROUGH_SPACE(SpaceId),
             % share's membership in space is checked in 'exists'.
@@ -281,15 +281,15 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
 %% @doc
 %% Returns if given user has specific effective privilege in space to which this
 %% share belongs. UserId and SpaceId is either given explicitly or derived from
-%% request or share record. Clients of type other than user are discarded.
+%% request or share record. Auths of type other than user are discarded.
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_space_privilege(entity_logic:req() | od_user:id(),
     od_share:info() | od_space:id(), privileges:space_privilege()) ->
     boolean().
-auth_by_space_privilege(#el_req{client = ?USER(UserId)}, Share, Privilege) ->
+auth_by_space_privilege(#el_req{auth = ?USER(UserId)}, Share, Privilege) ->
     auth_by_space_privilege(UserId, Share, Privilege);
-auth_by_space_privilege(#el_req{client = _OtherClient}, _Share, _Privilege) ->
+auth_by_space_privilege(#el_req{auth = _OtherAuth}, _Share, _Privilege) ->
     false;
 auth_by_space_privilege(UserId, Share = #od_share{}, Privilege) ->
     auth_by_space_privilege(UserId, Share#od_share.space, Privilege);

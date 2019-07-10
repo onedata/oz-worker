@@ -124,7 +124,7 @@ create_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = create,
-            args = [client, data],
+            args = [auth, data],
             expected_result = ?OK_ENV(fun(_, Data) ->
                 ?OK_TERM(fun(HarvesterId) -> VerifyFun(HarvesterId, Data) end)
             end)
@@ -186,7 +186,7 @@ list_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = list,
-            args = [client],
+            args = [auth],
             expected_result = ?OK_LIST(ExpHarvesters)
         }
         % TODO gs
@@ -247,7 +247,7 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get,
-            args = [client, H1],
+            args = [auth, H1],
             expected_result = ?OK_TERM(
                 fun(#od_harvester{
                     name = Name, users = Users, groups = #{},
@@ -316,7 +316,7 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_protected_data,
-            args = [client, H1],
+            args = [auth, H1],
             expected_result = ?OK_MAP_CONTAINS(ExpData#{<<"plugin">> => ?HARVESTER_MOCK_PLUGIN})
         }
     },
@@ -339,7 +339,7 @@ get_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_public_data,
-            args = [client, H1],
+            args = [auth, H1],
             expected_result = ?OK_MAP_CONTAINS(#{<<"name">> => ?HARVESTER_NAME1})
         }
     },
@@ -405,7 +405,7 @@ get_gui_plugin_config_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_gui_plugin_config,
-            args = [client, H1],
+            args = [auth, H1],
             expected_result = ?OK_TERM(
                 fun(Conf) -> ?assertEqual(?HARVESTER_GUI_PLUGIN_CONFIG, Conf) end
             )
@@ -476,7 +476,7 @@ update_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = update,
-            args = [client, harvesterId, data],
+            args = [auth, harvesterId, data],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -562,7 +562,7 @@ update_gui_plugin_config_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = update_gui_plugin_config,
-            args = [client, harvesterId, data],
+            args = [auth, harvesterId, data],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -632,7 +632,7 @@ delete_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = delete,
-            args = [client, harvesterId],
+            args = [auth, harvesterId],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -702,7 +702,7 @@ delete_harvested_metadata_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = delete_harvested_metadata,
-            args = [client, harvesterId],
+            args = [auth, harvesterId],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -767,7 +767,7 @@ create_index_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = create_index,
-            args = [client, H1, data],
+            args = [auth, H1, data],
             expected_result = ?OK_ENV(fun(_, Data) ->
                 ?OK_TERM(fun(IndexId) -> VerifyFun(IndexId, Data) end)
             end)
@@ -832,7 +832,7 @@ get_index_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_index,
-            args = [client, H1, IndexId],
+            args = [auth, H1, IndexId],
             expected_result = ?OK_MAP(#{
                 <<"name">> => ?HARVESTER_INDEX_NAME,
                 <<"schema">> => ?HARVESTER_INDEX_SCHEMA,
@@ -856,7 +856,7 @@ get_index_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_public_index,
-            args = [client, H1, IndexId],
+            args = [auth, H1, IndexId],
             expected_result = ?OK_MAP_CONTAINS(#{<<"guiPluginName">> => undefined})
         }
     },
@@ -922,7 +922,7 @@ get_index_stats_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_index_stats,
-            args = [client, H1, IndexId],
+            args = [auth, H1, IndexId],
             expected_result = ?OK_MAP(#{})
         }
     },
@@ -992,7 +992,7 @@ update_index_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = update_index,
-            args = [client, harvesterId, indexId, data],
+            args = [auth, harvesterId, indexId, data],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -1062,7 +1062,7 @@ delete_index_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = delete_index,
-            args = [client, harvesterId, indexId],
+            args = [auth, harvesterId, indexId],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -1124,7 +1124,7 @@ delete_index_metadata_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = delete_index_metadata,
-            args = [client, harvesterId, indexId],
+            args = [auth, harvesterId, indexId],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -1162,7 +1162,7 @@ query_index_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = query_index,
-            args = [client, H1, indexId, data],
+            args = [auth, H1, indexId, data],
             expected_result = ?OK_MAP(?HARVESTER_MOCKED_QUERY_DATA_MAP)
         },
         rest_spec = #rest_spec{
@@ -1249,7 +1249,7 @@ list_indices_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = list_indices,
-            args = [client, H1],
+            args = [auth, H1],
             expected_result = ?OK_LIST(ExpectedIndices)
         }
     },
@@ -1307,7 +1307,7 @@ submit_batch_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = submit_batch,
-            args = [client, H1, S1, data],
+            args = [auth, H1, S1, data],
             expected_result = ?OK_MAP(#{})
         },
         data_spec = #data_spec{

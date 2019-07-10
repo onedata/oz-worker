@@ -17,13 +17,13 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("auth/entitlement_mapping.hrl").
+-include_lib("ctool/include/aai/aai.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/auth/onedata_macaroons.hrl").
--include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
 
 -include("api_test_utils.hrl").
@@ -123,11 +123,11 @@ create_test(Config) ->
     {ok, ClientToken} = oz_test_utils:create_client_token(Config, CreatorUserId),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(CreatorUserId), ?UNIQUE_STRING),
     {ok, SpaceInviteMacaroon} = oz_test_utils:space_invite_user_token(Config, ?USER(CreatorUserId), Space),
-    {ok, SpaceInviteToken} = onedata_macaroons:serialize(SpaceInviteMacaroon),
+    {ok, SpaceInviteToken} = macaroons:serialize(SpaceInviteMacaroon),
 
     OZDomain = oz_test_utils:oz_domain(Config),
 
-    VerifyFun = fun(ProviderId, Macaroon, Data) ->
+    VerifyFun = fun(ProviderId, ProviderToken, Data) ->
         ExpSubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
         ExpAdminEmail = maps:get(<<"adminEmail">>, Data),
         ExpLatitude = maps:get(<<"latitude">>, Data, 0.0),
@@ -142,15 +142,15 @@ create_test(Config) ->
         ExpClusterId = ProviderId,
 
         % Logic returns the macaroon in deserialized format, and REST in serialized
-        MacaroonBin = case is_binary(Macaroon) of
+        SerializedToken = case is_binary(ProviderToken) of
             true ->
-                Macaroon;
+                ProviderToken;
             false ->
-                {ok, Serialized} = onedata_macaroons:serialize(Macaroon),
+                {ok, Serialized} = tokens:serialize(ProviderToken),
                 Serialized
         end,
         ?assertEqual(ok, oz_test_utils:call_oz(Config, provider_logic, verify_provider_identity, [
-            ?ROOT, ProviderId, MacaroonBin
+            ?ROOT, ProviderId, SerializedToken
         ])),
         {ok, Provider} = oz_test_utils:get_provider(Config, ProviderId),
         ?assertEqual(ExpName, Provider#od_provider.name),
@@ -197,9 +197,9 @@ create_test(Config) ->
             path = <<"/providers">>,
             expected_code = ?HTTP_200_OK,
             expected_body = ?OK_ENV(fun(_Env, Data) -> fun(Value) ->
-                Macaroon = maps:get(<<"macaroon">>, Value),
+                ProviderToken = maps:get(<<"macaroon">>, Value),
                 ProviderId = maps:get(<<"providerId">>, Value),
-                VerifyFun(ProviderId, Macaroon, Data)
+                VerifyFun(ProviderId, ProviderToken, Data)
             end
             end)
         },
@@ -207,10 +207,10 @@ create_test(Config) ->
             operation = create,
             module = provider_logic,
             function = create,
-            args = [client, data],
+            args = [auth, data],
             expected_result = ?OK_ENV(fun(_Env, Data) ->
-                ?OK_TERM(fun({ProviderId, Macaroon}) ->
-                    VerifyFun(ProviderId, Macaroon, Data)
+                ?OK_TERM(fun({ProviderId, ProviderToken}) ->
+                    VerifyFun(ProviderId, ProviderToken, Data)
                 end)
             end)
         },
@@ -222,9 +222,11 @@ create_test(Config) ->
             optional = [<<"token">>, <<"latitude">>, <<"longitude">>],
             correct_values = #{
                 <<"token">> => [fun() ->
-                    {ok, Token} = oz_test_utils:create_provider_registration_token(Config, ?USER(CreatorUserId), CreatorUserId),
-                    {ok, Macaroon} = onedata_macaroons:serialize(Token),
-                    Macaroon
+                    {ok, RegistrationToken} = oz_test_utils:create_provider_registration_token(
+                        Config, ?USER(CreatorUserId), CreatorUserId
+                    ),
+                    {ok, Serialized} = macaroons:serialize(RegistrationToken),
+                    Serialized
                 end],
                 <<"name">> => [ExpName],
                 <<"domain">> => [<<"multilevel.provider-domain.org">>],
@@ -274,9 +276,11 @@ create_test(Config) ->
             optional = [<<"token">>, <<"latitude">>, <<"longitude">>],
             correct_values = #{
                 <<"token">> => [fun() ->
-                    {ok, Token} = oz_test_utils:create_provider_registration_token(Config, ?USER(CreatorUserId), CreatorUserId),
-                    {ok, Macaroon} = onedata_macaroons:serialize(Token),
-                    Macaroon
+                    {ok, RegistrationToken} = oz_test_utils:create_provider_registration_token(
+                        Config, ?USER(CreatorUserId), CreatorUserId
+                    ),
+                    {ok, Serialized} = macaroons:serialize(RegistrationToken),
+                    Serialized
                 end],
                 <<"name">> => [ExpName],
                 <<"subdomainDelegation">> => [true],
@@ -372,7 +376,7 @@ get_test(Config) ->
             operation = get,
             module = provider_logic,
             function = get,
-            args = [client, P1],
+            args = [auth, P1],
             expected_result = ?OK_TERM(
                 fun(#od_provider{
                     name = Name, subdomain_delegation = false,
@@ -443,7 +447,7 @@ get_test(Config) ->
             operation = get,
             module = provider_logic,
             function = get_protected_data,
-            args = [client, P1],
+            args = [auth, P1],
             expected_result = ?OK_MAP_CONTAINS(ExpProtectedDetails)
         },
         gs_spec = #gs_spec{
@@ -544,7 +548,7 @@ list_test(Config) ->
             operation = get,
             module = provider_logic,
             function = list,
-            args = [client],
+            args = [auth],
             expected_result = ?OK_LIST(ExpProviders)
         }
         % TODO gs
@@ -675,7 +679,7 @@ update_test(Config) ->
         logic_spec = #logic_spec{
             module = provider_logic,
             function = update,
-            args = [client, providerId, data],
+            args = [auth, providerId, data],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -740,7 +744,7 @@ delete_test(Config) ->
         logic_spec = #logic_spec{
             module = provider_logic,
             function = delete,
-            args = [client, providerId],
+            args = [auth, providerId],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -835,7 +839,7 @@ list_eff_users_test(Config) ->
         logic_spec = #logic_spec{
             module = provider_logic,
             function = get_eff_users,
-            args = [client, P1],
+            args = [auth, P1],
             expected_result = ?OK_LIST(ExpUsers)
         }
         % TODO gs
@@ -914,7 +918,7 @@ get_eff_user_test(Config) ->
                 logic_spec = #logic_spec{
                     module = provider_logic,
                     function = get_eff_user,
-                    args = [client, P1, UserId],
+                    args = [auth, P1, UserId],
                     expected_result = ?OK_MAP_CONTAINS(ExpDetails)
                 },
                 gs_spec = #gs_spec{
@@ -1053,7 +1057,7 @@ get_eff_user_membership_intermediaries(Config) ->
             logic_spec = #logic_spec{
                 module = provider_logic,
                 function = get_eff_user_membership_intermediaries,
-                args = [client, ProviderId, SubjectUser],
+                args = [auth, ProviderId, SubjectUser],
                 expected_result = ?OK_LIST(ExpIntermediariesRaw)
             }
         },
@@ -1101,7 +1105,7 @@ list_eff_groups_test(Config) ->
         logic_spec = #logic_spec{
             module = provider_logic,
             function = get_eff_groups,
-            args = [client, P1],
+            args = [auth, P1],
             expected_result = ?OK_LIST(ExpGroups)
         }
         % TODO gs
@@ -1174,7 +1178,7 @@ get_eff_group_test(Config) ->
                 logic_spec = #logic_spec{
                     module = provider_logic,
                     function = get_eff_group,
-                    args = [client, P1, GroupId],
+                    args = [auth, P1, GroupId],
                     expected_result = ?OK_MAP_CONTAINS(GroupDetails)
                 },
                 gs_spec = #gs_spec{
@@ -1343,7 +1347,7 @@ get_eff_group_membership_intermediaries(Config) ->
             logic_spec = #logic_spec{
                 module = provider_logic,
                 function = get_eff_group_membership_intermediaries,
-                args = [client, ProviderId, SubjectGroup],
+                args = [auth, ProviderId, SubjectGroup],
                 expected_result = ?OK_LIST(ExpIntermediariesRaw)
             }
         },
@@ -1412,7 +1416,7 @@ list_eff_harvesters_test(Config) ->
         logic_spec = #logic_spec{
             module = provider_logic,
             function = get_eff_harvesters,
-            args = [client, P1],
+            args = [auth, P1],
             expected_result = ?OK_LIST(ExpHarvesters)
         }
     },
@@ -1467,7 +1471,7 @@ list_spaces_test(Config) ->
             operation = get,
             module = provider_logic,
             function = get_spaces,
-            args = [client, P1],
+            args = [auth, P1],
             expected_result = ?OK_LIST(ExpSpaces)
         }
         % TODO gs
@@ -1532,7 +1536,7 @@ get_space_test(Config) ->
                     operation = get,
                     module = provider_logic,
                     function = get_space,
-                    args = [client, P1, SpaceId],
+                    args = [auth, P1, SpaceId],
                     expected_result = ?OK_MAP_CONTAINS(SpaceDetails)
                 },
                 gs_spec = #gs_spec{
@@ -1595,7 +1599,7 @@ support_space_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, BadMacaroon1} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
-    {ok, BadTokenType1} = token_logic:serialize(BadMacaroon1),
+    {ok, BadTokenType1} = invite_tokens:serialize(BadMacaroon1),
 
     % Reused in all specs
     BadValues = [
@@ -1659,7 +1663,7 @@ support_space_test(Config) ->
                     {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
                         Config, ?USER(U1), Space
                     ),
-                    {ok, TokenBin} = token_logic:serialize(Macaroon),
+                    {ok, TokenBin} = invite_tokens:serialize(Macaroon),
                     TokenBin
                 end],
                 <<"size">> => [MinSupportSize]
@@ -1691,7 +1695,7 @@ support_space_test(Config) ->
         logic_spec = #logic_spec{
             module = provider_logic,
             function = support_space,
-            args = [client, P1, data],
+            args = [auth, P1, data],
             expected_result = ?OK_TERM(VerifyFun)
         }
         % TODO gs
@@ -1806,7 +1810,7 @@ update_support_size_test(Config) ->
         logic_spec = #logic_spec{
             module = provider_logic,
             function = update_support_size,
-            args = [client, P1, spaceId, data],
+            args = [auth, P1, spaceId, data],
             expected_result = ?OK
         }
         % TODO gs
@@ -1881,7 +1885,7 @@ revoke_support_test(Config) ->
         logic_spec = #logic_spec{
             module = provider_logic,
             function = revoke_support,
-            args = [client, P1, spaceId],
+            args = [auth, P1, spaceId],
             expected_result = ?OK
         }
         % TODO gs
@@ -1926,7 +1930,7 @@ check_my_ports_test(Config) ->
         logic_spec = #logic_spec{
             module = provider_logic,
             function = check_my_ports,
-            args = [client, data],
+            args = [auth, data],
             expected_result = ?OK_TERM(fun(Result) ->
                 Result =:= ExpectedBody
             end)
@@ -2093,7 +2097,7 @@ update_subdomain_test(Config) ->
         logic_spec = #logic_spec{
             module = provider_logic,
             function = update_domain_config,
-            args = [client, providerId, data],
+            args = [auth, providerId, data],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -2214,7 +2218,7 @@ update_domain_test(Config) ->
         logic_spec = #logic_spec{
             module = provider_logic,
             function = update_domain_config,
-            args = [client, providerId, data],
+            args = [auth, providerId, data],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -2289,7 +2293,7 @@ update_domain_is_idempotent_test(Config) ->
         logic_spec = #logic_spec{
             module = provider_logic,
             function = update_domain_config,
-            args = [client, providerId, data],
+            args = [auth, providerId, data],
             expected_result = ?OK
         },
         gs_spec = #gs_spec{
@@ -2354,7 +2358,7 @@ get_domain_config_test(Config) ->
         logic_spec = LogicSpec = #logic_spec{
             module = provider_logic,
             function = get_domain_config,
-            args = [client, P1],
+            args = [auth, P1],
             expected_result = ?OK_MAP_CONTAINS(ExpBody)
         },
         rest_spec = RestSpec = #rest_spec{
@@ -2474,7 +2478,7 @@ get_current_time_test(Config) ->
         logic_spec = #logic_spec{
             module = provider_logic,
             function = get_current_time,
-            args = [client],
+            args = [auth],
             expected_result = ?OK_TERM(fun(Result) ->
                 Result > 0
             end)
@@ -2492,22 +2496,22 @@ verify_provider_identity_test(Config) ->
         Config, ?PROVIDER_NAME2
     ),
 
-    {ok, DeserializedMacaroon} = onedata_macaroons:deserialize(P1Macaroon),
+    {ok, DeserializedMacaroon} = tokens:deserialize(P1Macaroon),
     Timestamp = oz_test_utils:call_oz(
         Config, time_utils, cluster_time_seconds, []
     ),
-    MacaroonNoAuth = onedata_macaroons:add_caveat(
+    MacaroonNoAuth = tokens:add_caveat(
         DeserializedMacaroon, ?AUTHORIZATION_NONE_CAVEAT
     ),
-    MacaroonNotExpired = onedata_macaroons:add_caveat(
+    MacaroonNotExpired = tokens:add_caveat(
         MacaroonNoAuth, ?TIME_CAVEAT(Timestamp, 100)
     ),
-    MacaroonExpired = onedata_macaroons:add_caveat(
+    MacaroonExpired = tokens:add_caveat(
         MacaroonNoAuth, ?TIME_CAVEAT(Timestamp - 200, 100)
     ),
-    {ok, MacaroonNoAuthBin} = onedata_macaroons:serialize(MacaroonNoAuth),
-    {ok, MacaroonNotExpiredBin} = onedata_macaroons:serialize(MacaroonNotExpired),
-    {ok, MacaroonExpiredBin} = onedata_macaroons:serialize(MacaroonExpired),
+    {ok, MacaroonNoAuthBin} = tokens:serialize(MacaroonNoAuth),
+    {ok, MacaroonNotExpiredBin} = tokens:serialize(MacaroonNotExpired),
+    {ok, MacaroonExpiredBin} = tokens:serialize(MacaroonExpired),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -2525,7 +2529,7 @@ verify_provider_identity_test(Config) ->
         logic_spec = #logic_spec{
             module = provider_logic,
             function = verify_provider_identity,
-            args = [client, data],
+            args = [auth, data],
             expected_result = ?OK
         },
         % TODO gs

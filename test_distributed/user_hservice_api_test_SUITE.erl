@@ -111,7 +111,7 @@ list_handle_services_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_handle_services,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?OK_LIST(ExpHServices)
         }
         % TODO gs
@@ -215,7 +215,7 @@ create_handle_service_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = create_handle_service,
-            args = [client, U1, data],
+            args = [auth, U1, data],
             expected_result = ?OK_TERM(VerifyFun)
         },
         gs_spec = #gs_spec{
@@ -289,7 +289,7 @@ get_handle_service_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_handle_service,
-            args = [client, U1, HService],
+            args = [auth, U1, HService],
             expected_result = ?OK_MAP_CONTAINS(ExpHServiceDetails)
         }
         % TODO gs
@@ -357,7 +357,7 @@ leave_handle_service_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = leave_handle_service,
-            args = [client, U1, hserviceId],
+            args = [auth, U1, hserviceId],
             expected_result = ?OK
         }
         % TODO gs
@@ -414,7 +414,7 @@ list_eff_handle_services_test(Config) ->
         logic_spec = #logic_spec{
             module = user_logic,
             function = get_eff_handle_services,
-            args = [client, U1],
+            args = [auth, U1],
             expected_result = ?OK_LIST(ExpHServices)
         }
         % TODO gs
@@ -486,7 +486,7 @@ get_eff_handle_service_test(Config) ->
                 logic_spec = #logic_spec{
                     module = user_logic,
                     function = get_eff_handle_service,
-                    args = [client, U1, HServiceId],
+                    args = [auth, U1, HServiceId],
                     expected_result = ?OK_MAP_CONTAINS(HServiceDetails)
                 }
                 % TODO gs

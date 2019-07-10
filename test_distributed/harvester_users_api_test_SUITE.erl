@@ -129,7 +129,7 @@ add_user_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = add_user,
-            args = [client, H1, EffectiveUser, data],
+            args = [auth, H1, EffectiveUser, data],
             expected_result = ?OK_BINARY(EffectiveUser)
         },
         % TODO gs
@@ -205,7 +205,7 @@ add_user_with_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = add_user,
-            args = [client, H1, EffectiveUser, data],
+            args = [auth, H1, EffectiveUser, data],
             expected_result = ?OK_BINARY(EffectiveUser)
         },
         % TODO gs
@@ -263,7 +263,7 @@ create_user_invite_token_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = create_user_invite_token,
-            args = [client, H1],
+            args = [auth, H1],
             expected_result = ?OK_TERM(VerifyFun)
         }
         % TODO gs
@@ -314,7 +314,7 @@ remove_user_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = remove_user,
-            args = [client, H1, userId],
+            args = [auth, H1, userId],
             expected_result = ?OK
         }
         % TODO gs
@@ -360,7 +360,7 @@ list_users_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_users,
-            args = [client, H1],
+            args = [auth, H1],
             expected_result = ?OK_LIST(ExpUsers)
         }
         % TODO gs
@@ -434,7 +434,7 @@ get_user_test(Config) ->
             logic_spec = #logic_spec{
                 module = harvester_logic,
                 function = get_user,
-                args = [client, Harvester, SubjectUser],
+                args = [auth, Harvester, SubjectUser],
                 expected_result = ?OK_MAP_CONTAINS(ExpUserDetails)
             },
             gs_spec = #gs_spec{
@@ -510,7 +510,7 @@ get_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_user_privileges,
-            args = [client, H1, U3],
+            args = [auth, H1, U3],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -569,7 +569,7 @@ update_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = update_user_privileges,
-            args = [client, H1, U3, data],
+            args = [auth, H1, U3, data],
             expected_result = ?OK
         }
         % TODO gs
@@ -610,7 +610,7 @@ list_eff_users_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_eff_users,
-            args = [client, H1],
+            args = [auth, H1],
             expected_result = ?OK_LIST(ExpUsers)
         }
         % TODO gs
@@ -669,7 +669,7 @@ get_eff_user_test(Config) ->
                 logic_spec = #logic_spec{
                     module = harvester_logic,
                     function = get_eff_user,
-                    args = [client, H1, UserId],
+                    args = [auth, H1, UserId],
                     expected_result = ?OK_MAP_CONTAINS(UserDetails)
                 },
                 gs_spec = #gs_spec{
@@ -794,7 +794,7 @@ get_eff_user_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_eff_user_privileges,
-            args = [client, H1, U3],
+            args = [auth, H1, U3],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -897,7 +897,7 @@ get_eff_user_membership_intermediaries(Config) ->
             logic_spec = #logic_spec{
                 module = harvester_logic,
                 function = get_eff_user_membership_intermediaries,
-                args = [client, HarvesterId, SubjectUser],
+                args = [auth, HarvesterId, SubjectUser],
                 expected_result = ?OK_LIST(ExpIntermediariesRaw)
             }
         },

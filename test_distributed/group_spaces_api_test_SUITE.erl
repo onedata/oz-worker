@@ -94,7 +94,7 @@ list_spaces_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_spaces,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_LIST(ExpSpaces)
         }
         % TODO gs
@@ -136,7 +136,7 @@ get_space_details_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_space,
-            args = [client, G1, S1],
+            args = [auth, G1, S1],
             expected_result = ?OK_MAP_CONTAINS(ExpDetails)
         },
         gs_spec = #gs_spec{
@@ -214,7 +214,7 @@ create_space_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = create_space,
-            args = [client, G1, data],
+            args = [auth, G1, data],
             expected_result = ?OK_TERM(VerifyFun)
         },
         gs_spec = #gs_spec{
@@ -258,7 +258,7 @@ join_space_test(Config) ->
         {ok, Macaroon} = oz_test_utils:space_invite_group_token(
             Config, ?ROOT, SpaceId
         ),
-        {ok, Token} = onedata_macaroons:serialize(Macaroon),
+        {ok, Token} = macaroons:serialize(Macaroon),
         #{
             spaceId => SpaceId,
             token => Token,
@@ -305,7 +305,7 @@ join_space_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = join_space,
-            args = [client, G1, data],
+            args = [auth, G1, data],
             expected_result = ?OK_ENV(fun(#{spaceId := SpaceId} = _Env, _) ->
                 ?OK_BINARY(SpaceId)
             end)
@@ -337,7 +337,7 @@ join_space_test(Config) ->
     {ok, Macaroon1} = oz_test_utils:space_invite_group_token(
         Config, ?ROOT, Space
     ),
-    {ok, Token} = onedata_macaroons:serialize(Macaroon1),
+    {ok, Token} = macaroons:serialize(Macaroon1),
     oz_test_utils:space_add_group(Config, Space, G1),
     
     ApiTestSpec1 = #api_test_spec{
@@ -354,7 +354,7 @@ join_space_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = join_space,
-            args = [client, G1, data],
+            args = [auth, G1, data],
             expected_result = ?ERROR_REASON(?ERROR_RELATION_ALREADY_EXISTS(od_group, G1, od_space, Space))
         },
         % TODO gs
@@ -415,7 +415,7 @@ leave_space_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = leave_space,
-            args = [client, G1, spaceId],
+            args = [auth, G1, spaceId],
             expected_result = ?OK
         }
         % TODO gs
@@ -455,7 +455,7 @@ list_eff_spaces_test(Config) ->
         logic_spec = #logic_spec{
             module = group_logic,
             function = get_eff_spaces,
-            args = [client, G1],
+            args = [auth, G1],
             expected_result = ?OK_LIST(ExpSpaces)
         }
         % TODO gs
@@ -507,7 +507,7 @@ get_eff_space_details_test(Config) ->
                 logic_spec = #logic_spec{
                     module = group_logic,
                     function = get_eff_space,
-                    args = [client, G1, SpaceId],
+                    args = [auth, G1, SpaceId],
                     expected_result = ?OK_MAP_CONTAINS(SpaceDetails)
                 },
                 gs_spec = #gs_spec{

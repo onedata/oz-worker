@@ -107,13 +107,13 @@ handle_gui_upload(Req) ->
 validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
     harvester_logic:exists(HarvesterId) orelse throw(?HTTP_404_NOT_FOUND),
 
-    Token = case cowboy_req:header(<<"x-auth-token">>, Req, undefined) of
+    Token = case tokens:parse_access_token_header(Req) of
         undefined -> throw(?HTTP_401_UNAUTHORIZED);
         T -> T
     end,
 
-    case auth_logic:authorize_by_onezone_gui_macaroon(Token) of
-        {true, ?USER(UserId), _} ->
+    case auth_logic:authorize_by_oz_worker_gui_token(Token) of
+        {true, ?USER(UserId)} ->
             case harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_UPDATE)
                 orelse user_logic:has_eff_oz_privilege(UserId, ?OZ_HARVESTERS_UPDATE) of
                 true ->
@@ -141,7 +141,7 @@ validate_and_authorize(GuiType, ClusterId, Req) ->
         ?OP_PANEL -> Cluster#od_cluster.onepanel_version
     end,
 
-    case auth_logic:authorize_by_macaroons(Req) of
+    case auth_logic:authorize_by_access_token(Req) of
         {true, ?PROVIDER(ClusterId)} ->
             ReleaseVersion;
         {true, _} ->

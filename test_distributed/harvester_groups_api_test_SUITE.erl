@@ -139,7 +139,7 @@ add_group_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = add_group,
-            args = [client, H1, G1, data],
+            args = [auth, H1, G1, data],
             expected_result = ?OK_BINARY(G1)
         },
         % TODO gs
@@ -213,7 +213,7 @@ add_group_with_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = add_group,
-            args = [client, H1, G1, data],
+            args = [auth, H1, G1, data],
             expected_result = ?OK_BINARY(G1)
         },
         % TODO gs
@@ -285,7 +285,7 @@ create_group_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = create_group,
-            args = [client, H1, data],
+            args = [auth, H1, data],
             expected_result = ?OK_ENV(fun(_, DataSet) ->
                 ExpType = maps:get(<<"type">>, DataSet, ?DEFAULT_GROUP_TYPE),
                 ?OK_TERM(fun(HarvesterId) -> VerifyFun(HarvesterId, ExpType) end)
@@ -343,7 +343,7 @@ create_group_invite_token_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = create_group_invite_token,
-            args = [client, H1],
+            args = [auth, H1],
             expected_result = ?OK_TERM(VerifyFun)
         }
         % TODO gs
@@ -394,7 +394,7 @@ remove_group_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = remove_group,
-            args = [client, H1, groupId],
+            args = [auth, H1, groupId],
             expected_result = ?OK
         }
         % TODO gs
@@ -446,7 +446,7 @@ list_groups_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_groups,
-            args = [client, H1],
+            args = [auth, H1],
             expected_result = ?OK_LIST(ExpGroups)
         }
         % TODO gs
@@ -495,7 +495,7 @@ get_group_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_group,
-            args = [client, H1, G1],
+            args = [auth, H1, G1],
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1
@@ -571,7 +571,7 @@ get_group_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_group_privileges,
-            args = [client, H1, G1],
+            args = [auth, H1, G1],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -632,7 +632,7 @@ update_group_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = update_group_privileges,
-            args = [client, H1, G1, data],
+            args = [auth, H1, G1, data],
             expected_result = ?OK
         }
         % TODO gs
@@ -674,7 +674,7 @@ list_eff_groups_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_eff_groups,
-            args = [client, H1],
+            args = [auth, H1],
             expected_result = ?OK_LIST(ExpGroups)
         }
         % TODO gs
@@ -732,7 +732,7 @@ get_eff_group_test(Config) ->
                 logic_spec = #logic_spec{
                     module = harvester_logic,
                     function = get_eff_group,
-                    args = [client, H1, GroupId],
+                    args = [auth, H1, GroupId],
                     expected_result = ?OK_MAP_CONTAINS(GroupDetails)
                 },
                 gs_spec = #gs_spec{
@@ -854,7 +854,7 @@ get_eff_group_privileges_test(Config) ->
         logic_spec = #logic_spec{
             module = harvester_logic,
             function = get_eff_group_privileges,
-            args = [client, H1, G4],
+            args = [auth, H1, G4],
             expected_result = ?OK_LIST(InitialPrivs)
         }
         % TODO gs
@@ -990,7 +990,7 @@ get_eff_group_membership_intermediaries(Config) ->
             logic_spec = #logic_spec{
                 module = harvester_logic,
                 function = get_eff_group_membership_intermediaries,
-                args = [client, HarvesterId, GroupId],
+                args = [auth, HarvesterId, GroupId],
                 expected_result = ?OK_LIST(ExpIntermediariesRaw)
             }
         },

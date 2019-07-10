@@ -10,8 +10,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 
--ifndef(TOKENS_HRL).
--define(TOKENS_HRL, 1).
+-ifndef(INVITE_TOKENS_HRL).
+-define(INVITE_TOKENS_HRL, 1).
 
 % Token types
 -define(GROUP_INVITE_USER_TOKEN, group_invite_user_token).
