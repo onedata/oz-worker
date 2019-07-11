@@ -188,7 +188,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    4.
+    5.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -254,7 +254,12 @@ get_record_struct(4) ->
 
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
-    ]}.
+    ]};
+get_record_struct(5) ->
+    % The structure does not change, but some privileges change names and some are added
+    % so all records must be marked dirty to recalculate effective relations
+    % (as intermediaries computing logic has changed).
+    get_record_struct(4).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -348,7 +353,7 @@ upgrade_record(3, Space) ->
     % introduction they all were allowed to perform related operations
     NewPrivileges = [
         ?SPACE_READ_DATA,
-        ?SPACE_MANAGE_INDEXES, ?SPACE_QUERY_INDEXES,
+        space_manage_indexes, space_query_indexes,
         ?SPACE_VIEW_STATISTICS
     ],
 
@@ -385,6 +390,66 @@ upgrade_record(3, Space) ->
 
         creation_time = time_utils:system_time_seconds(),
         creator = undefined,
+
+        top_down_dirty = true,
+        bottom_up_dirty = true
+    }};
+upgrade_record(4, Space) ->
+    {
+        od_space,
+        Name,
+
+        Users,
+        Groups,
+        Providers,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        _TopDownDirty,
+        _BottomUpDirty
+
+    } = Space,
+
+    TranslatePrivileges = fun(Privileges) ->
+        lists:usort(lists:flatten(lists:map(fun
+            (space_view) -> [?SPACE_VIEW, ?SPACE_VIEW_CHANGES_STREAM];
+            (space_manage_indexes) -> [?SPACE_VIEW_INDICES, ?SPACE_MANAGE_INDICES];
+            (space_query_indexes) -> [?SPACE_VIEW_INDICES, ?SPACE_QUERY_INDICES];
+            (Other) -> Other
+        end, Privileges)))
+    end,
+
+    TranslateField = fun(Field) ->
+        maps:map(fun
+            (_, {Privs, Relation}) -> {TranslatePrivileges(Privs), Relation};
+            (_, Privs) -> TranslatePrivileges(Privs)
+        end, Field)
+    end,
+
+    {5, #od_space{
+        name = Name,
+
+        users = TranslateField(Users),
+        groups = TranslateField(Groups),
+        providers = Providers,
+        shares = Shares,
+        harvesters = Harvesters,
+
+        eff_users = TranslateField(EffUsers),
+        eff_groups = TranslateField(EffGroups),
+        eff_providers = EffProviders,
+        eff_harvesters = EffHarvesters,
+
+        creation_time = CreationTime,
+        creator = Creator,
 
         top_down_dirty = true,
         bottom_up_dirty = true
