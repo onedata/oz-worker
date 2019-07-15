@@ -13,7 +13,7 @@
 
 -behaviour(cowboy_rest).
 
--include("http/codes.hrl").
+-include_lib("ctool/include/http/codes.hrl").
 -include("http/handlers/oai.hrl").
 -include_lib("ctool/include/logging.hrl").
 

@@ -26,6 +26,13 @@
 -define(REQUEST_TIMEOUT, oz_worker:get_env(https_request_timeout, timer:minutes(5))).
 -define(MAX_KEEPALIVE, oz_worker:get_env(https_max_keepalive, 30)).
 
+-define(ONEPANEL_CONNECT_OPTS, fun() -> [
+    {recv_timeout, 10000}, {ssl_options, [
+        {secure, only_verify_peercert},
+        {cacerts, get_cert_chain_pems()}
+    ]}
+] end).
+
 %% listener_behaviour callbacks
 -export([port/0, start/0, stop/0, healthcheck/0]).
 -export([get_cert_chain_pems/0]).
@@ -59,6 +66,7 @@ start() ->
 
     CustomCowboyRoutes = lists:flatten([
         {?NAGIOS_PATH, nagios_handler, []},
+        {?PANEL_REST_PROXY_PATH ++ "[...]", http_port_forwarder, [9443, ?ONEPANEL_CONNECT_OPTS]},
         {?PROVIDER_GRAPH_SYNC_WS_PATH, gs_ws_handler, [provider_gs_translator]},
         {?GUI_GRAPH_SYNC_WS_PATH, gs_ws_handler, [gui_gs_translator]},
         rest_handler:rest_routes(),

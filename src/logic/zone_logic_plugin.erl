@@ -50,6 +50,7 @@ fetch_entity(_) ->
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
 operation_supported(get, configuration, _) -> true;
+operation_supported(get, test_image, _) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -95,7 +96,19 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
         compatibleOneproviderVersions => CompatibleOpVersions,
         subdomainDelegationSupported => SubdomainDelegationSupported,
         supportedIdPs => auth_config:get_supported_idps_in_configuration_format()
-    }}.
+    }};
+
+get(#el_req{gri = #gri{aspect = test_image}}, _) ->
+    % Dummy image in png format. Used by gui to check connectivity.
+    {ok, {binary, <<
+        137, 80, 78, 71, 13, 10, 26, 10, 0, 0, 0, 13, 73, 72, 68, 82, 0, 0,
+        0, 1, 0, 0, 0, 1, 1, 3, 0, 0, 0, 37, 219, 86, 202, 0, 0, 0, 6, 80,
+        76, 84, 69, 0, 0, 0, 255, 255, 255, 165, 217, 159, 221, 0, 0, 0, 9,
+        112, 72, 89, 115, 0, 0, 14, 196, 0, 0, 14, 196, 1, 149, 43, 14, 27,
+        0, 0, 0, 10, 73, 68, 65, 84, 8, 153, 99, 96, 0, 0, 0, 2, 0, 1, 244,
+        113, 100, 166, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130
+    >>}}.
+
 
 
 %%--------------------------------------------------------------------
@@ -140,6 +153,9 @@ exists(_Req, _) ->
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
 authorize(#el_req{operation = get, gri = #gri{aspect = configuration}}, _) ->
+    true;
+
+authorize(#el_req{operation = get, gri = #gri{aspect = test_image}}, _) ->
     true;
 
 authorize(_Req = #el_req{}, _) ->

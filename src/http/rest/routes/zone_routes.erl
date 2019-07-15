@@ -31,6 +31,14 @@ routes() -> [
     %% This operation requires one of the following privileges:
     {<<"/configuration">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = oz_worker, id = undefined, aspect = configuration}
+    }},
+    %% Returns test image.
+    %% This operation requires one of the following privileges:
+    {<<"/test_image">>, #rest_req{
+        method = 'GET',
+        produces = [<<"image/png">>],
+        b_gri = #b_gri{type = oz_worker, id = undefined, aspect = test_image}
     }}
 ].

@@ -75,4 +75,7 @@
 % URL (relative) to redirect to after login.
 -define(AFTER_LOGIN_PAGE_PATH, "/#/onezone").
 
+%% All requests to this endpoint will be proxied to onepanel.
+-define(PANEL_REST_PROXY_PATH, "/api/v3/onepanel/").
+
 -endif.
