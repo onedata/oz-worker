@@ -418,7 +418,7 @@ upgrade_record(4, Space) ->
     } = Space,
 
     TranslatePrivileges = fun(Privileges) ->
-        lists:usort(lists:flatmap(fun
+        privileges:from_list(lists:flatmap(fun
             (?SPACE_VIEW) -> [?SPACE_VIEW, ?SPACE_VIEW_CHANGES_STREAM];
             (space_manage_indexes) -> [?SPACE_VIEW_INDICES, ?SPACE_MANAGE_INDICES];
             (space_query_indexes) -> [?SPACE_VIEW_INDICES, ?SPACE_QUERY_INDICES];
