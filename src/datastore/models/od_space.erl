@@ -257,8 +257,7 @@ get_record_struct(4) ->
     ]};
 get_record_struct(5) ->
     % The structure does not change, but some privileges change names and some are added
-    % so all records must be marked dirty to recalculate effective relations
-    % (as intermediaries computing logic has changed).
+    % so all records must be marked dirty to recalculate effective relations.
     get_record_struct(4).
 
 %%--------------------------------------------------------------------
@@ -358,13 +357,13 @@ upgrade_record(3, Space) ->
     ],
 
     TranslatePrivileges = fun(Privileges) ->
-        privileges:union(NewPrivileges, lists:flatten(lists:map(fun
+        privileges:union(NewPrivileges, lists:flatmap(fun
             (space_view) -> [?SPACE_VIEW, ?SPACE_VIEW_PRIVILEGES];
             (space_invite_user) -> [?SPACE_ADD_USER];
             (space_invite_group) -> [?SPACE_ADD_GROUP];
             (space_invite_provider) -> [?SPACE_ADD_PROVIDER];
-            (Other) -> Other
-        end, Privileges)))
+            (Other) -> [Other]
+        end, Privileges))
     end,
 
     TranslateField = fun(Field) ->
@@ -419,12 +418,12 @@ upgrade_record(4, Space) ->
     } = Space,
 
     TranslatePrivileges = fun(Privileges) ->
-        lists:usort(lists:flatten(lists:map(fun
-            (space_view) -> [?SPACE_VIEW, ?SPACE_VIEW_CHANGES_STREAM];
+        lists:usort(lists:flatmap(fun
+            (?SPACE_VIEW) -> [?SPACE_VIEW, ?SPACE_VIEW_CHANGES_STREAM];
             (space_manage_indexes) -> [?SPACE_VIEW_INDICES, ?SPACE_MANAGE_INDICES];
             (space_query_indexes) -> [?SPACE_VIEW_INDICES, ?SPACE_QUERY_INDICES];
-            (Other) -> Other
-        end, Privileges)))
+            (Other) -> [Other]
+        end, Privileges))
     end,
 
     TranslateField = fun(Field) ->
