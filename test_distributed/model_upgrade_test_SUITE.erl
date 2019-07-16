@@ -961,22 +961,66 @@ get_record(od_space, 4) -> #od_space{
     users = #{
         <<"user1">> => privileges:from_list([
             ?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_VIEW_PRIVILEGES, ?SPACE_REMOVE_GROUP,
-            ?SPACE_READ_DATA, ?SPACE_MANAGE_INDEXES, ?SPACE_QUERY_INDEXES, ?SPACE_VIEW_STATISTICS
+            ?SPACE_READ_DATA, space_manage_indexes, space_query_indexes, ?SPACE_VIEW_STATISTICS
         ]),
         <<"user2">> => privileges:from_list([
             ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
-            ?SPACE_READ_DATA, ?SPACE_MANAGE_INDEXES, ?SPACE_QUERY_INDEXES, ?SPACE_VIEW_STATISTICS,
+            ?SPACE_READ_DATA, space_manage_indexes, space_query_indexes, ?SPACE_VIEW_STATISTICS,
             ?SPACE_ADD_USER
         ])
     },
     groups = #{
         <<"group1">> => privileges:from_list([
             ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
-            ?SPACE_READ_DATA, ?SPACE_MANAGE_INDEXES, ?SPACE_QUERY_INDEXES, ?SPACE_VIEW_STATISTICS
+            ?SPACE_READ_DATA, space_manage_indexes, space_query_indexes, ?SPACE_VIEW_STATISTICS
         ]),
         <<"group2">> => privileges:from_list([
             ?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
-            ?SPACE_READ_DATA, ?SPACE_MANAGE_INDEXES, ?SPACE_QUERY_INDEXES, ?SPACE_VIEW_STATISTICS
+            ?SPACE_READ_DATA, space_manage_indexes, space_query_indexes, ?SPACE_VIEW_STATISTICS
+        ])
+    },
+    providers = #{
+        <<"prov1">> => 1000,
+        <<"prov2">> => 250000,
+        <<"prov3">> => 19999999
+    },
+    shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+    harvesters = [],
+
+    eff_users = #{},
+    eff_groups = #{},
+    eff_providers = #{},
+
+    creation_time = ?DUMMY_TIMESTAMP,
+    creator = undefined,
+
+    top_down_dirty = true,
+    bottom_up_dirty = true
+};
+get_record(od_space, 5) -> #od_space{
+    name = <<"name">>,
+    users = #{
+        <<"user1">> => privileges:from_list([
+            ?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_VIEW_CHANGES_STREAM, ?SPACE_VIEW_PRIVILEGES,
+            ?SPACE_REMOVE_GROUP, ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
+            ?SPACE_MANAGE_INDICES, ?SPACE_VIEW_INDICES, ?SPACE_QUERY_INDICES
+        ]),
+        <<"user2">> => privileges:from_list([
+            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+            ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
+            ?SPACE_MANAGE_INDICES, ?SPACE_VIEW_INDICES, ?SPACE_QUERY_INDICES
+        ])
+    },
+    groups = #{
+        <<"group1">> => privileges:from_list([
+            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+            ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
+            ?SPACE_MANAGE_INDICES, ?SPACE_VIEW_INDICES, ?SPACE_QUERY_INDICES
+        ]),
+        <<"group2">> => privileges:from_list([
+            ?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+            ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
+            ?SPACE_MANAGE_INDICES, ?SPACE_VIEW_INDICES, ?SPACE_QUERY_INDICES
         ])
     },
     providers = #{
