@@ -477,7 +477,7 @@ get_parent_details_test(Config) ->
                 aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_GROUP(Group),
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME2,
                 <<"type">> => ?GROUP_TYPE2_BIN,
                 <<"gri">> => fun(EncodedGri) ->
@@ -588,7 +588,7 @@ get_eff_parent_details_test(Config) ->
                         aspect = instance, scope = protected
                     },
                     auth_hint = ?THROUGH_GROUP(G1),
-                    expected_result = ?OK_MAP(
+                    expected_result = ?OK_MAP_CONTAINS(
                         GroupDetails#{
                             <<"type">> => atom_to_binary(ExpType, utf8),
                             <<"gri">> => fun(EncodedGri) ->

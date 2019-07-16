@@ -290,7 +290,7 @@ get_test(Config) ->
             gri = #gri{
                 type = od_handle_service, id = HService, aspect = instance
             },
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?HANDLE_SERVICE_NAME1,
                 <<"effectiveUsers">> => #{
                     U1 => AllPrivsBin -- [<<"handle_service_view">>],

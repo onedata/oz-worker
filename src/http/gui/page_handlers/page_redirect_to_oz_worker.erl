@@ -30,6 +30,7 @@
 %%--------------------------------------------------------------------
 -spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"GET">>, Req) ->
-    cowboy_req:reply(?HTTP_301_MOVED_PERMANENTLY, #{
-        <<"location">> => gui_static:oz_worker_gui_path(<<"/i">>)
+    cowboy_req:reply(?HTTP_302_FOUND, #{
+        <<"location">> => gui_static:oz_worker_gui_path(<<"/i">>),
+        <<"cache-control">> => <<"max-age=3600">>
     }, Req).

@@ -271,7 +271,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_group, id = G1, aspect = instance},
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"children">> => #{},
                 <<"effectiveChildren">> => #{},
                 <<"name">> => ?GROUP_NAME1,
@@ -323,7 +323,7 @@ get_test(Config) ->
             gri = #gri{
                 type = od_group, id = G1, aspect = instance, scope = shared
             },
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1_BIN,
                 <<"gri">> => fun(EncodedGri) ->

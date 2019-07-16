@@ -34,16 +34,17 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity from datastore based on its EntityId.
+%% Retrieves an entity and its revision from datastore based on EntityId.
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | entity_logic:error().
+    {ok, entity_logic:versioned_entity()} | entity_logic:error().
 fetch_entity(HarvesterId) ->
     case od_harvester:get(HarvesterId) of
-        {ok, #document{value = Harvester}} ->
-            {ok, Harvester};
+        {ok, #document{value = Harvester, revs = [DbRev | _]}} ->
+            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {ok, {Harvester, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -203,7 +204,7 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
             ok
     end,
 
-    {ok, Harvester} = fetch_entity(HarvesterId),
+    {ok, {Harvester, _}} = fetch_entity(HarvesterId),
     {ok, resource, {GRI#gri{id = HarvesterId}, Harvester}};
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
@@ -244,7 +245,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
             false -> protected
         end
     },
-    {ok, Harvester} = fetch_entity(HarvesterId),
+    {ok, {Harvester, _}} = fetch_entity(HarvesterId),
     {ok, HarvesterData} = get(#el_req{gri = NewGRI}, Harvester),
     {ok, resource, {NewGRI, HarvesterData}};
 
@@ -280,7 +281,7 @@ create(#el_req{gri = #gri{id = HarvesterId, aspect = {user, UserId}}, data = Dat
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, User} = user_logic_plugin:fetch_entity(UserId),
+    {ok, {User, _}} = user_logic_plugin:fetch_entity(UserId),
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
     {ok, resource, {NewGRI, ?THROUGH_HARVESTER(HarvesterId), UserData}};
 
@@ -292,7 +293,7 @@ create(#el_req{gri = #gri{id = HarvesterId, aspect = {group, GroupId}}, data = D
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
-    {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
+    {ok, {Group, _}} = group_logic_plugin:fetch_entity(GroupId),
     {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
     {ok, resource, {NewGRI, ?THROUGH_GROUP(HarvesterId), GroupData}};
 
@@ -302,7 +303,7 @@ create(#el_req{gri = #gri{id = HarvesterId, aspect = {space, SpaceId}}}) ->
         od_space, SpaceId
     ),
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
-    {ok, Space} = space_logic_plugin:fetch_entity(SpaceId),
+    {ok, {Space, _}} = space_logic_plugin:fetch_entity(SpaceId),
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
     harvester_indices:update_stats(HarvesterId, all,
         fun(ExistingStats) -> harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, false) end),
@@ -319,7 +320,7 @@ create(Req = #el_req{gri = GRI = #gri{id = HarvesterId, aspect = group}}) ->
         od_harvester, HarvesterId,
         Privileges
     ),
-    {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
+    {ok, {Group, _}} = group_logic_plugin:fetch_entity(GroupId),
     {ok, resource, {NewGRI, Group}};
 
 create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data}) ->

@@ -31,16 +31,17 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity from datastore based on its EntityId.
+%% Retrieves an entity and its revision from datastore based on EntityId.
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | entity_logic:error().
+    {ok, entity_logic:versioned_entity()} | entity_logic:error().
 fetch_entity(GroupId) ->
     case od_group:get(GroupId) of
-        {ok, #document{value = Group}} ->
-            {ok, Group};
+        {ok, #document{value = Group, revs = [DbRev | _]}} ->
+            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {ok, {Group, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -179,7 +180,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         _ ->
             ok
     end,
-    {ok, Group} = fetch_entity(GroupId),
+    {ok, {Group, _}} = fetch_entity(GroupId),
     {ok, resource, {GRI#gri{id = GroupId}, Group}};
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
@@ -213,7 +214,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
             false -> protected
         end
     },
-    {ok, Group} = fetch_entity(GroupId),
+    {ok, {Group, _}} = fetch_entity(GroupId),
     {ok, GroupData} = get(#el_req{gri = NewGRI}, Group),
     {ok, resource, {NewGRI, GroupData}};
 
@@ -229,7 +230,7 @@ create(Req = #el_req{gri = GRI = #gri{id = ParentGroupId, aspect = child}}) ->
         od_group, ParentGroupId,
         Privileges
     ),
-    {ok, Group} = fetch_entity(ChildGroupId),
+    {ok, {Group, _}} = fetch_entity(ChildGroupId),
     {ok, resource, {NewGRI, Group}};
 
 create(Req = #el_req{gri = #gri{id = GrId, aspect = invite_user_token}}) ->
@@ -256,7 +257,7 @@ create(#el_req{gri = #gri{id = GrId, aspect = {user, UserId}}, data = Data}) ->
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, User} = user_logic_plugin:fetch_entity(UserId),
+    {ok, {User, _}} = user_logic_plugin:fetch_entity(UserId),
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
     {ok, resource, {NewGRI, ?THROUGH_GROUP(GrId), UserData}};
 
@@ -268,7 +269,7 @@ create(#el_req{gri = #gri{id = GrId, aspect = {child, ChGrId}}, data = Data}) ->
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = ChGrId, aspect = instance, scope = shared},
-    {ok, ChildGroup} = fetch_entity(ChGrId),
+    {ok, {ChildGroup, _}} = fetch_entity(ChGrId),
     {ok, ChildGroupData} = get(#el_req{gri = NewGRI}, ChildGroup),
     {ok, resource, {NewGRI, ?THROUGH_GROUP(GrId), ChildGroupData}}.
 
@@ -413,7 +414,7 @@ update(Req = #el_req{gri = #gri{id = ParGrId, aspect = {child_privileges, ChGrId
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = GroupId, aspect = instance}}) ->
-    {ok, Group} = fetch_entity(GroupId),
+    {ok, {Group, _}} = fetch_entity(GroupId),
     case Group#od_group.protected of
         true ->
             throw(?ERROR_PROTECTED_GROUP);

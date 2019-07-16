@@ -30,16 +30,17 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity from datastore based on its EntityId.
+%% Retrieves an entity and its revision from datastore based on EntityId.
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | entity_logic:error().
+    {ok, entity_logic:versioned_entity()} | entity_logic:error().
 fetch_entity(ShareId) ->
     case od_share:get(ShareId) of
-        {ok, #document{value = Share}} ->
-            {ok, Share};
+        {ok, #document{value = Share, revs = [DbRev | _]}} ->
+            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {ok, {Share, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -102,7 +103,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
                 od_share, ShareId,
                 od_space, SpaceId
             ),
-            {ok, Share} = fetch_entity(ShareId),
+            {ok, {Share, _}} = fetch_entity(ShareId),
             {ok, resource, {GRI#gri{id = ShareId}, Share}};
         _ ->
             % This can potentially happen if a share with given share id

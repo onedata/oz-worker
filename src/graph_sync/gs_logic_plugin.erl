@@ -44,6 +44,8 @@
     {ok, aai:auth()} | gs_protocol:error().
 verify_handshake_auth(undefined) ->
     {ok, ?NOBODY};
+verify_handshake_auth(nobody) ->
+    {ok, ?NOBODY};
 verify_handshake_auth({macaroon, Macaroon, DischargeMacaroons}) ->
     case auth_logic:authorize_by_oz_worker_gui_token(Macaroon) of
         {true, Auth} ->
@@ -64,15 +66,16 @@ verify_handshake_auth({macaroon, Macaroon, DischargeMacaroons}) ->
 -spec client_connected(aai:auth(), gs_server:conn_ref()) ->
     ok.
 client_connected(?PROVIDER(ProvId), ConnectionRef) ->
-    {ok, ProviderRecord} = provider_logic:get(?ROOT, ProvId),
-    ?info("Provider '~ts' has connected (~s)", [ProviderRecord#od_provider.name, ProvId]),
+    {ok, #document{value = ProvRecord, revs = [DbRev | _]}} = od_provider:get(ProvId),
+    ?info("Provider '~ts' has connected (~s)", [ProvRecord#od_provider.name, ProvId]),
     provider_connection:add_connection(ProvId, ConnectionRef),
     % Generate a dummy update which will cause a push to GUI clients so that
     % they can learn the provider is now online.
+    {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
     gs_server:updated(
         od_provider,
         ProvId,
-        ProviderRecord
+        {ProvRecord, Revision}
     );
 client_connected(?USER = #auth{session_id = SessionId}, ConnectionRef) ->
     user_connections:add(SessionId, ConnectionRef);
@@ -88,15 +91,16 @@ client_connected(_, _) ->
 -spec client_disconnected(aai:auth(), gs_server:conn_ref()) ->
     ok.
 client_disconnected(?PROVIDER(ProvId), _ConnectionRef) ->
-    case provider_logic:get(?ROOT, ProvId) of
-        {ok, ProviderRecord = #od_provider{name = Name}} ->
-            ?info("Provider '~ts' went offline (~s)", [Name, ProvId]),
+    case od_provider:get(ProvId) of
+        {ok, #document{value = ProvRecord, revs = [DbRev | _]}} ->
+            ?info("Provider '~ts' went offline (~s)", [ProvRecord#od_provider.name, ProvId]),
             % Generate a dummy update which will cause a push to GUI clients so that
             % they can learn the provider is now offline.
+            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
             gs_server:updated(
                 od_provider,
                 ProvId,
-                ProviderRecord
+                {ProvRecord, Revision}
             );
         _ ->
             % Provider could have been deleted in the meantime, in such case do
@@ -135,6 +139,8 @@ verify_auth_override(Auth, {macaroon, Macaroon, DischMacaroons}) ->
             end
 
     end;
+verify_auth_override(_Auth, nobody) ->
+    {ok, ?NOBODY};
 verify_auth_override(_, _) ->
     ?ERROR_UNAUTHORIZED.
 
@@ -145,16 +151,16 @@ verify_auth_override(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec is_authorized(aai:auth(), gs_protocol:auth_hint(),
-    gs_protocol:gri(), gs_protocol:operation(), gs_protocol:data()) ->
+    gs_protocol:gri(), gs_protocol:operation(), gs_protocol:versioned_entity()) ->
     {true, gs_protocol:gri()} | false.
-is_authorized(Auth, AuthHint, GRI, Operation, Entity) ->
+is_authorized(Auth, AuthHint, GRI, Operation, VersionedEntity) ->
     ElReq = #el_req{
         auth = Auth,
         operation = Operation,
         gri = GRI,
         auth_hint = AuthHint
     },
-    entity_logic:is_authorized(ElReq, Entity).
+    entity_logic:is_authorized(ElReq, VersionedEntity).
 
 
 %%--------------------------------------------------------------------
@@ -238,16 +244,17 @@ handle_rpc(_, _, _, _) ->
 %%--------------------------------------------------------------------
 -spec handle_graph_request(aai:auth(), gs_protocol:auth_hint(),
     gs_protocol:gri(), gs_protocol:operation(), gs_protocol:data(),
-    gs_protocol:entity()) -> gs_protocol:graph_request_result().
-handle_graph_request(Auth, AuthHint, GRI, Operation, Data, Entity) ->
+    gs_protocol:versioned_entity()) -> gs_protocol:graph_request_result().
+handle_graph_request(Auth, AuthHint, GRI, Operation, Data, VersionedEntity) ->
     ElReq = #el_req{
         auth = Auth,
         operation = Operation,
         gri = GRI,
         data = Data,
-        auth_hint = AuthHint
+        auth_hint = AuthHint,
+        return_revision = true
     },
-    entity_logic:handle(ElReq, Entity).
+    entity_logic:handle(ElReq, VersionedEntity).
 
 
 %%--------------------------------------------------------------------

@@ -286,7 +286,7 @@ get_child_details_test(Config) ->
                 type = od_group, id = G2, aspect = instance, scope = shared
             },
             auth_hint = ?THROUGH_GROUP(G1),
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME2,
                 <<"type">> => ?GROUP_TYPE2_BIN,
                 <<"gri">> => fun(EncodedGri) ->
@@ -770,7 +770,7 @@ get_eff_child_details_test(Config) ->
                         aspect = instance, scope = shared
                     },
                     auth_hint = ?THROUGH_GROUP(G1),
-                    expected_result = ?OK_MAP(GroupDetailsBinary#{
+                    expected_result = ?OK_MAP_CONTAINS(GroupDetailsBinary#{
                         <<"gri">> => fun(EncodedGri) ->
                             #gri{id = Gid} = oz_test_utils:decode_gri(
                                 Config, EncodedGri

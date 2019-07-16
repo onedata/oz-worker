@@ -24,7 +24,9 @@
     gri :: entity_logic:gri(),
     operation = create :: entity_logic:operation(),
     data = #{} :: entity_logic:data(),
-    auth_hint = undefined :: undefined | entity_logic:auth_hint()
+    auth_hint = undefined :: undefined | entity_logic:auth_hint(),
+    % applicable for create/get requests - returns the revision of resource
+    return_revision = false :: boolean()
 }).
 
 % Macros to strip results from entity_logic:create into simpler form.
