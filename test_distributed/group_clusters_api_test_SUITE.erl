@@ -256,7 +256,7 @@ get_cluster_test(Config) ->
         <<"type">> => ?ONEPROVIDER,
         <<"workerVersion">> => DefaultVersionInfo,
         <<"onepanelVersion">> => DefaultVersionInfo,
-        <<"onepanelProxy">> => false
+        <<"onepanelProxy">> => true
     },
 
     ApiTestSpec = #api_test_spec{

@@ -183,7 +183,7 @@ get_private_data_test_base(Config, ClusterId, ClusterType, VersionInfo, CorrectC
     oz_test_utils:cluster_set_user_privileges(Config, ClusterId, U2, [?CLUSTER_VIEW], AllPrivsWithoutView),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    ExpectedOnepanelProxy = false,
+    ExpectedOnepanelProxy = true,
 
     % Get and check private data
     ApiTestSpec = #api_test_spec{
@@ -254,7 +254,7 @@ get_protected_data_test_base(Config, ClusterId, ClusterType, VersionInfo, Correc
         <<"build">> => ?DEFAULT_BUILD_VERSION,
         <<"gui">> => ?EMPTY_GUI_HASH
     },
-    ExpectedOnepanelProxy = false,
+    ExpectedOnepanelProxy = true,
 
     ClusterDetails = #{
         <<"type">> => ClusterType,
@@ -377,7 +377,7 @@ update_onepanel_proxy_test(Config) ->
     VerifyEndFun = fun(ShouldSucceed, #{clusterId := ClusterId}, Data) ->
         {ok, Cluster} = oz_test_utils:get_cluster(Config, ClusterId),
         ExpOnepanelProxy = case ShouldSucceed of
-            false -> false;
+            false -> true;
             true -> maps:get(<<"onepanelProxy">>, Data)
         end,
         ?assertEqual(ExpOnepanelProxy, Cluster#od_cluster.onepanel_proxy)
