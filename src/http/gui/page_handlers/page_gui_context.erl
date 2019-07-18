@@ -16,7 +16,7 @@
 
 -behaviour(dynamic_page_behaviour).
 
--include("http/codes.hrl").
+-include_lib("ctool/include/http/codes.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
@@ -46,17 +46,19 @@ handle(<<"GET">>, Req) ->
         end,
 
         ClusterType = onedata:service_to_cluster_type(Service),
-        case cluster_logic:get(?ROOT, ClusterId) of
-            {ok, #od_cluster{type = ClusterType}} -> ok;
-            _ -> throw(?HTTP_404_NOT_FOUND)
+        OnepanelProxy = case cluster_logic:get(?ROOT, ClusterId) of
+            {ok, #od_cluster{type = ClusterType, onepanel_proxy = Proxy}} ->
+                Proxy;
+            _ ->
+                throw(?HTTP_404_NOT_FOUND)
         end,
 
         ServiceType = onedata:service_type(Service),
         {ok, Domain} = cluster_logic:get_domain(ClusterId),
-        ApiOrigin = case ServiceType of
-            ?WORKER -> Domain;
-            % @TODO VFS-4698 Should depend on Onepanel proxy
-            ?ONEPANEL -> str_utils:format_bin("~s:9443", [Domain])
+        ApiOrigin = case {ServiceType, OnepanelProxy} of
+            {?WORKER, _} -> Domain;
+            {?ONEPANEL, true} -> Domain;
+            {?ONEPANEL, false} -> str_utils:format_bin("~s:9443", [Domain])
         end,
 
         cowboy_req:reply(

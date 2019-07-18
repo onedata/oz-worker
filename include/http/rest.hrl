@@ -14,7 +14,7 @@
 -define(REST_HRL, 1).
 
 -include("entity_logic.hrl").
--include("http/codes.hrl").
+-include_lib("ctool/include/http/codes.hrl").
 
 -define(REST_HANDLER_MODULE, rest_handler).
 
@@ -31,7 +31,8 @@
 -record(rest_req, {
     method = get :: rest_handler:method(),
     b_gri :: rest_handler:bound_gri(),
-    b_auth_hint :: rest_handler:bound_auth_hint()
+    b_auth_hint :: rest_handler:bound_auth_hint(),
+    produces = [<<"application/json">>] :: [binary()]
 }).
 %% Record representing REST response.
 -record(rest_resp, {

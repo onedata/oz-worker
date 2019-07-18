@@ -367,7 +367,7 @@
     worker_version = {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH} :: od_cluster:version_info(),
     onepanel_version = {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH} :: od_cluster:version_info(),
     % If enabled, onepanel is served on port 443 by oneprovider/onezone (rather than 9443)
-    onepanel_proxy = false :: boolean(),
+    onepanel_proxy = true :: boolean(),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject(),

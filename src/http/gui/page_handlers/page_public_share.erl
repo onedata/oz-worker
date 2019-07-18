@@ -15,7 +15,7 @@
 
 -behaviour(dynamic_page_behaviour).
 
--include("http/codes.hrl").
+-include_lib("ctool/include/http/codes.hrl").
 -include("http/gui_paths.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").

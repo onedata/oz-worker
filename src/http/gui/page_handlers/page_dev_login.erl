@@ -15,7 +15,7 @@
 
 -behaviour(dynamic_page_behaviour).
 
--include("http/codes.hrl").
+-include_lib("ctool/include/http/codes.hrl").
 -include("entity_logic.hrl").
 -include_lib("ctool/include/logging.hrl").
 

@@ -121,8 +121,8 @@ content_types_accepted(Req, State) ->
     SubType :: binary(),
     Params :: '*' | [{binary(), binary()}],
     ProvideResource :: atom().
-content_types_provided(Req, State) ->
-    {[{<<"application/json">>, provide_resource}], Req, State}.
+content_types_provided(Req, #state{rest_req = #rest_req{produces = Produces}} = State) ->
+    {lists:map(fun(ContentType) -> {ContentType, provide_resource} end, Produces), Req, State}.
 
 
 %%--------------------------------------------------------------------
