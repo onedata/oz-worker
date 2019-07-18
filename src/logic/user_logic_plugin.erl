@@ -434,18 +434,8 @@ update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = Data}) ->
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = UserId, aspect = instance}}) ->
-    % Invalidate auth tokens
-    auth_tokens:invalidate_user_tokens(UserId),
     % Invalidate client tokens
-    {ok, #document{
-        value = #od_user{
-            client_tokens = Tokens
-        }}} = od_user:get(UserId),
-    lists:foreach(
-        fun(Token) ->
-            {ok, Macaroon} = invite_tokens:deserialize(Token),
-            ok = invite_tokens:delete(Macaroon)
-        end, Tokens),
+    auth_tokens:invalidate_user_tokens(UserId),
     entity_graph:delete_with_relations(od_user, UserId);
 
 delete(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}}) ->
