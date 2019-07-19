@@ -69,7 +69,8 @@ handle(<<"GET">>, Req) ->
                 <<"clusterId">> => ClusterId,
                 <<"serviceType">> => ServiceType,
                 <<"apiOrigin">> => ApiOrigin,
-                <<"guiMode">> => ?UNIFIED
+                <<"guiMode">> => ?UNIFIED,
+                <<"browserDebugLogs">> => oz_worker:get_env(gui_debug_mode, false)
             }),
             Req
         )
