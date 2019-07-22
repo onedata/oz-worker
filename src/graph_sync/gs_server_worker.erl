@@ -161,7 +161,7 @@ code_change(_OldVsn, State, _Extra) ->
 %%% Internal functions
 %%%===================================================================
 
--spec handle_change(Doc :: datastore:document()) -> ok.
+-spec handle_change(Doc :: datastore:doc()) -> ok.
 handle_change(Doc = #document{seq = Seq, value = Value}) ->
     % Let the gen_server crash if anything goes wrong (no error is expected
     % on this level).

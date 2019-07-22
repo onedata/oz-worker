@@ -299,7 +299,7 @@ add_user(Auth, ClusterId, UserId) ->
 %%--------------------------------------------------------------------
 -spec add_user(Auth :: aai:auth(),
     ClusterId :: od_cluster:id(), UserId :: od_user:id(),
-    PrivilegesPrivilegesOrData :: [privileges:cluster_privileges()] | #{}) ->
+    PrivilegesPrivilegesOrData :: [privileges:cluster_privilege()] | #{}) ->
     {ok, od_user:id()} | {error, term()}.
 add_user(Auth, ClusterId, UserId, Privileges) when is_list(Privileges) ->
     add_user(Auth, ClusterId, UserId, #{
@@ -336,7 +336,7 @@ add_group(Auth, ClusterId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec add_group(Auth :: aai:auth(),
     ClusterId :: od_cluster:id(), GroupId :: od_group:id(),
-    PrivilegesOrData :: [privileges:cluster_privileges()] | #{}) ->
+    PrivilegesOrData :: [privileges:cluster_privilege()] | #{}) ->
     {ok, od_group:id()} | {error, term()}.
 add_group(Auth, ClusterId, GroupId, Privileges) when is_list(Privileges) ->
     add_group(Auth, ClusterId, GroupId, #{
@@ -454,7 +454,7 @@ get_eff_user(Auth, ClusterId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_user_privileges(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:cluster_privileges()]} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, [privileges:cluster_privilege()]} | {error, term()}.
 get_user_privileges(Auth, ClusterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -470,7 +470,7 @@ get_user_privileges(Auth, ClusterId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_user_privileges(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:cluster_privileges()]} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, [privileges:cluster_privilege()]} | {error, term()}.
 get_eff_user_privileges(Auth, ClusterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -565,7 +565,7 @@ get_eff_group(Auth, ClusterId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_group_privileges(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
-    GroupId :: od_group:id()) -> {ok, [privileges:cluster_privileges()]} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, [privileges:cluster_privilege()]} | {error, term()}.
 get_group_privileges(Auth, ClusterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -581,7 +581,7 @@ get_group_privileges(Auth, ClusterId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_group_privileges(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
-    GroupId :: od_group:id()) -> {ok, [privileges:cluster_privileges()]} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, [privileges:cluster_privilege()]} | {error, term()}.
 get_eff_group_privileges(Auth, ClusterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -721,7 +721,7 @@ exists(ClusterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_privilege(ClusterOrId :: od_cluster:id() | #od_cluster{},
-    UserId :: od_user:id(), Privilege :: privileges:cluster_privileges()) ->
+    UserId :: od_user:id(), Privilege :: privileges:cluster_privilege()) ->
     boolean().
 has_eff_privilege(ClusterId, UserId, Privilege) when is_binary(ClusterId) ->
     entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, od_cluster, ClusterId);
