@@ -72,7 +72,7 @@ exists(Id) ->
 %% Retrieves user id - the owner of given session.
 %% @end
 %%--------------------------------------------------------------------
--spec get_user_id(id()) -> {ok, doc()} | {error, term()}.
+-spec get_user_id(id()) -> {ok, od_user:id()} | {error, term()}.
 get_user_id(Id) ->
     case ?MODULE:get(Id) of
         {ok, #document{value = #session{user_id = UserId}}} ->

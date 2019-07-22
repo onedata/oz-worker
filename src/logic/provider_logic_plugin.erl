@@ -766,7 +766,7 @@ auth_by_cluster_membership(_) ->
 %% has given privilege.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_cluster_privilege(entity_logic:req(), oprivileges:cluster_privilege()) ->
+-spec auth_by_cluster_privilege(entity_logic:req(), privileges:cluster_privilege()) ->
     boolean().
 auth_by_cluster_privilege(#el_req{auth = ?USER(UserId), gri = #gri{id = ProviderId}}, Privilege) ->
     ClusterId = ProviderId,

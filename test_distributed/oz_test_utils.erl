@@ -3228,7 +3228,7 @@ create_dummy_gui_package() ->
     {DummyPackage, IndexContent}.
 
 
--spec deploy_dummy_gui(Config :: term(), onedata:gui_type()) -> {ok, GuiHash :: binary()}.
+-spec deploy_dummy_gui(Config :: term(), onedata:gui()) -> {ok, GuiHash :: binary()}.
 deploy_dummy_gui(Config, GuiType) ->
     {GuiPackage, IndexContent} = create_dummy_gui_package(),
     copy_file_to_onezone_nodes(Config, GuiPackage),

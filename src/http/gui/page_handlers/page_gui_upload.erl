@@ -102,7 +102,7 @@ handle_gui_upload(Req) ->
 %% Validates and authorizes GUI upload request based on GUI type and Id.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_and_authorize(onedata:gui_type(), gui_static:gui_id(), cowboy_req:req()) ->
+-spec validate_and_authorize(onedata:gui(), gui_static:gui_id(), cowboy_req:req()) ->
     onedata:release_version() | no_return().
 validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
     harvester_logic:exists(HarvesterId) orelse throw(?HTTP_404_NOT_FOUND),
@@ -157,7 +157,7 @@ validate_and_authorize(GuiType, ClusterId, Req) ->
 %% Reads package from Req and deploys it on cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec stream_and_deploy_package(cowboy_req:req(), onedata:gui_type(),
+-spec stream_and_deploy_package(cowboy_req:req(), onedata:gui(),
     gui_static:gui_id(), onedata:release_version()) ->
     {ok, onedata:gui_hash(), cowboy_req:req()} | {error, term()}.
 stream_and_deploy_package(Req, GuiType, GuiId, ServiceReleaseVersion) ->

@@ -79,7 +79,7 @@
 %% GUI prefix on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec deploy_package(onedata:gui_type(), onedata:release_version(), file:name_all()) ->
+-spec deploy_package(onedata:gui(), onedata:release_version(), file:name_all()) ->
     {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE |
     ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED.
 deploy_package(GuiType, ReleaseVersion, PackagePath) ->
@@ -106,7 +106,7 @@ deploy_package(GuiType, ReleaseVersion, PackagePath) ->
 %% already exists on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_package(onedata:gui_type(), PackageBin :: binary(), onedata:gui_hash()) ->
+-spec ensure_package(onedata:gui(), PackageBin :: binary(), onedata:gui_hash()) ->
     ok.
 ensure_package(GuiType, PackageBin, GuiHash) ->
     ?CRITICAL_SECTION(GuiHash, fun() ->
@@ -128,7 +128,7 @@ ensure_package(GuiType, PackageBin, GuiHash) ->
 %%  on_node - performs the operation only on the local node
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_package(on_cluster | on_node, onedata:gui_type(), PackageBin :: binary(),
+-spec ensure_package(on_cluster | on_node, onedata:gui(), PackageBin :: binary(),
     onedata:gui_hash()) -> ok.
 ensure_package(on_cluster, GuiType, PackageBin, GuiHash) ->
     lists:foreach(fun(Node) ->
@@ -150,7 +150,7 @@ ensure_package(on_node, GuiType, PackageBin, GuiHash) ->
 %% @equiv link_gui(on_cluster, GuiType, GuiId, GuiHash).
 %% @end
 %%--------------------------------------------------------------------
--spec link_gui(onedata:gui_type(), gui_id(), onedata:gui_hash()) -> ok.
+-spec link_gui(onedata:gui(), gui_id(), onedata:gui_hash()) -> ok.
 link_gui(GuiType, GuiId, GuiHash) ->
     link_gui(on_cluster, GuiType, GuiId, GuiHash),
     schedule_removal_of_unused_packages().
@@ -169,7 +169,7 @@ link_gui(GuiType, GuiId, GuiHash) ->
 %%  on_node - performs the operation only on the local node
 %% @end
 %%--------------------------------------------------------------------
--spec link_gui(on_cluster | on_node, onedata:gui_type(), gui_id(),
+-spec link_gui(on_cluster | on_node, onedata:gui(), gui_id(),
     onedata:gui_hash()) -> ok.
 link_gui(on_cluster, GuiType, GuiId, GuiHash) ->
     lists:foreach(fun(Node) ->
@@ -194,7 +194,7 @@ link_gui(on_node, GuiType, GuiId, GuiHash) ->
 %% @equiv unlink_gui(on_cluster, GuiType, GuiId).
 %% @end
 %%--------------------------------------------------------------------
--spec unlink_gui(onedata:gui_type(), gui_id()) -> ok.
+-spec unlink_gui(onedata:gui(), gui_id()) -> ok.
 unlink_gui(GuiType, GuiId) ->
     unlink_gui(on_cluster, GuiType, GuiId),
     schedule_removal_of_unused_packages().
@@ -210,7 +210,7 @@ unlink_gui(GuiType, GuiId) ->
 %%  on_node - performs the operation only on the local node
 %% @end
 %%--------------------------------------------------------------------
--spec unlink_gui(on_cluster | on_node, onedata:gui_type(), gui_id()) -> ok.
+-spec unlink_gui(on_cluster | on_node, onedata:gui(), gui_id()) -> ok.
 unlink_gui(on_cluster, GuiType, GuiId) ->
     lists:foreach(fun(Node) ->
         ok = rpc:call(Node, ?MODULE, unlink_gui, [on_node, GuiType, GuiId])
@@ -227,7 +227,7 @@ unlink_gui(on_node, GuiType, GuiId) ->
 %% Checks on all cluster nodes if given GUI hash exists.
 %% @end
 %%--------------------------------------------------------------------
--spec gui_exists(onedata:gui_type(), onedata:gui_hash()) -> boolean().
+-spec gui_exists(onedata:gui(), onedata:gui_hash()) -> boolean().
 gui_exists(GuiType, GuiHash) ->
     ?CRITICAL_SECTION(GuiHash, fun() ->
         gui_exists_unsafe(GuiType, GuiHash)
@@ -242,11 +242,11 @@ gui_exists(GuiType, GuiHash) ->
 %%  * hasn't been modified for more than ?CLEANING_AGE_THRESHOLD seconds
 %% @end
 %%--------------------------------------------------------------------
--spec remove_unused_packages(onedata:gui_type()) -> ok.
+-spec remove_unused_packages(onedata:gui()) -> ok.
 remove_unused_packages(GuiType) ->
     remove_unused_packages(on_cluster, GuiType).
 
--spec remove_unused_packages(on_cluster | on_node, onedata:gui_type()) -> ok.
+-spec remove_unused_packages(on_cluster | on_node, onedata:gui()) -> ok.
 remove_unused_packages(on_cluster, GuiType) ->
     lists:foreach(fun(Node) ->
         ok = rpc:call(Node, ?MODULE, remove_unused_packages, [on_node, GuiType])
@@ -360,7 +360,7 @@ mimetype(Path) ->
 %% (or disable_harvester_gui_package_verification in case of harvester GUI).
 %% @end
 %%--------------------------------------------------------------------
--spec verify_gui_package(onedata:gui_type(), onedata:release_version(), onedata:gui_hash()) ->
+-spec verify_gui_package(onedata:gui(), onedata:release_version(), onedata:gui_hash()) ->
     boolean().
 verify_gui_package(GuiType, ReleaseVersion, GuiHash) ->
     case {?DISABLE_VERIFICATION, ?DISABLE_HARVESTER_VERIFICATION, GuiType} of
@@ -395,7 +395,7 @@ verify_gui_package(GuiType, ReleaseVersion, GuiHash) ->
 %% NOTE: This function must be run in a critical section to avoid race conditions.
 %% @end
 %%--------------------------------------------------------------------
--spec gui_exists_unsafe(onedata:gui_type(), onedata:gui_hash()) -> boolean().
+-spec gui_exists_unsafe(onedata:gui(), onedata:gui_hash()) -> boolean().
 gui_exists_unsafe(GuiType, GuiHash) ->
     PackageStaticRoot = static_root(GuiType, GuiHash),
     lists:all(fun(Node) ->
@@ -414,7 +414,7 @@ gui_exists_unsafe(GuiType, GuiHash) ->
 %% Identifier can be a GuiId or a GuiHash.
 %% @end
 %%--------------------------------------------------------------------
--spec static_root(onedata:gui_type(), gui_id() | onedata:gui_hash()) -> binary().
+-spec static_root(onedata:gui(), gui_id() | onedata:gui_hash()) -> binary().
 static_root(GuiType, Identifier) ->
     GuiStaticRoot = list_to_binary(?GUI_STATIC_ROOT),
     <<GuiStaticRoot/binary, (gui_path(GuiType, Identifier))/binary>>.
@@ -429,7 +429,7 @@ static_root(GuiType, Identifier) ->
 %%      /onp/4fc98577cee89c3dfb7817b11c0027ec3084f8ba455a162c9038ed568b9d3b7d
 %% @end
 %%--------------------------------------------------------------------
--spec gui_path(onedata:gui_type(), gui_id() | onedata:gui_hash()) -> binary().
+-spec gui_path(onedata:gui(), gui_id() | onedata:gui_hash()) -> binary().
 gui_path(GuiType, Identifier) ->
     <<"/", (onedata:gui_prefix(GuiType))/binary, "/", Identifier/binary>>.
 
