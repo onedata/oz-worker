@@ -180,8 +180,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         _ ->
             ok
     end,
-    {ok, {Group, _}} = fetch_entity(GroupId),
-    {ok, resource, {GRI#gri{id = GroupId}, Group}};
+    {ok, {Group, Rev}} = fetch_entity(GroupId),
+    {ok, resource, {GRI#gri{id = GroupId}, {Group, Rev}}};
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     Macaroon = maps:get(<<"token">>, Req#el_req.data),
@@ -214,9 +214,9 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
             false -> protected
         end
     },
-    {ok, {Group, _}} = fetch_entity(GroupId),
+    {ok, {Group, Rev}} = fetch_entity(GroupId),
     {ok, GroupData} = get(#el_req{gri = NewGRI}, Group),
-    {ok, resource, {NewGRI, GroupData}};
+    {ok, resource, {NewGRI, {GroupData, Rev}}};
 
 create(Req = #el_req{gri = GRI = #gri{id = ParentGroupId, aspect = child}}) ->
     % Create a new group for user/group (authHint is checked in authorize) and
@@ -230,8 +230,8 @@ create(Req = #el_req{gri = GRI = #gri{id = ParentGroupId, aspect = child}}) ->
         od_group, ParentGroupId,
         Privileges
     ),
-    {ok, {Group, _}} = fetch_entity(ChildGroupId),
-    {ok, resource, {NewGRI, Group}};
+    {ok, {Group, Rev}} = fetch_entity(ChildGroupId),
+    {ok, resource, {NewGRI, {Group, Rev}}};
 
 create(Req = #el_req{gri = #gri{id = GrId, aspect = invite_user_token}}) ->
     {ok, Macaroon} = invite_tokens:create(
@@ -257,9 +257,9 @@ create(#el_req{gri = #gri{id = GrId, aspect = {user, UserId}}, data = Data}) ->
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, {User, _}} = user_logic_plugin:fetch_entity(UserId),
+    {ok, {User, Rev}} = user_logic_plugin:fetch_entity(UserId),
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
-    {ok, resource, {NewGRI, ?THROUGH_GROUP(GrId), UserData}};
+    {ok, resource, {NewGRI, ?THROUGH_GROUP(GrId), {UserData, Rev}}};
 
 create(#el_req{gri = #gri{id = GrId, aspect = {child, ChGrId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:group_user()),
@@ -269,9 +269,9 @@ create(#el_req{gri = #gri{id = GrId, aspect = {child, ChGrId}}, data = Data}) ->
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = ChGrId, aspect = instance, scope = shared},
-    {ok, {ChildGroup, _}} = fetch_entity(ChGrId),
+    {ok, {ChildGroup, Rev}} = fetch_entity(ChGrId),
     {ok, ChildGroupData} = get(#el_req{gri = NewGRI}, ChildGroup),
-    {ok, resource, {NewGRI, ?THROUGH_GROUP(GrId), ChildGroupData}}.
+    {ok, resource, {NewGRI, ?THROUGH_GROUP(GrId), {ChildGroupData, Rev}}}.
 
 
 %%--------------------------------------------------------------------

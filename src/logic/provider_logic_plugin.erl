@@ -139,7 +139,7 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     SpaceId = invite_tokens:consume(Macaroon, SupportSpaceFun),
 
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
-    {ok, {#od_space{harvesters = Harvesters} = Space, _}} = space_logic_plugin:fetch_entity(SpaceId),
+    {ok, {#od_space{harvesters = Harvesters} = Space, Rev}} = space_logic_plugin:fetch_entity(SpaceId),
     
     lists:foreach(fun(HarvesterId) ->
         harvester_indices:update_stats(HarvesterId, all,
@@ -147,7 +147,7 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
         end, Harvesters),
         
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
-    {ok, resource, {NewGRI, SpaceData}};
+    {ok, resource, {NewGRI, {SpaceData, Rev}}};
 
 create(Req = #el_req{gri = #gri{aspect = check_my_ports}}) ->
     try
@@ -928,9 +928,9 @@ create_provider(Data, ProviderId, GRI) ->
         try
             {ok, _} = od_provider:create(#document{key = ProviderId, value = ProviderRecord}),
             cluster_logic:create_oneprovider_cluster(CreatorUserId, ProviderId),
-            {ok, {Provider, _}} = fetch_entity(ProviderId),
+            {ok, {Provider, Rev}} = fetch_entity(ProviderId),
             ?info("Provider '~ts' has registered (~s)", [Name, ProviderId]),
-            {ok, resource, {GRI#gri{id = ProviderId}, {Provider, Macaroon}}}
+            {ok, resource, {GRI#gri{id = ProviderId}, {{Provider, Macaroon}, Rev}}}
         catch Type:Reason ->
             ?error_stacktrace("Cannot create a new provider due to ~p:~p", [Type, Reason]),
             dns_state:remove_delegation_config(ProviderId),

@@ -131,8 +131,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         _ ->
             ok
     end,
-    {ok, {FetchedHandleService, _}} = fetch_entity(HServiceId),
-    {ok, resource, {GRI#gri{id = HServiceId}, FetchedHandleService}};
+    {ok, {FetchedHandleService, Rev}} = fetch_entity(HServiceId),
+    {ok, resource, {GRI#gri{id = HServiceId}, {FetchedHandleService, Rev}}};
 
 create(#el_req{gri = #gri{id = HServiceId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:handle_service_user()),
@@ -142,9 +142,9 @@ create(#el_req{gri = #gri{id = HServiceId, aspect = {user, UserId}}, data = Data
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, {User, _}} = user_logic_plugin:fetch_entity(UserId),
+    {ok, {User, Rev}} = user_logic_plugin:fetch_entity(UserId),
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
-    {ok, resource, {NewGRI, ?THROUGH_HANDLE_SERVICE(HServiceId), UserData}};
+    {ok, resource, {NewGRI, ?THROUGH_HANDLE_SERVICE(HServiceId), {UserData, Rev}}};
 
 create(#el_req{gri = #gri{id = HServiceId, aspect = {group, GroupId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:handle_service_user()),
@@ -154,9 +154,9 @@ create(#el_req{gri = #gri{id = HServiceId, aspect = {group, GroupId}}, data = Da
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
-    {ok, {Group, _}} = group_logic_plugin:fetch_entity(GroupId),
+    {ok, {Group, Rev}} = group_logic_plugin:fetch_entity(GroupId),
     {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
-    {ok, resource, {NewGRI, ?THROUGH_HANDLE_SERVICE(HServiceId), GroupData}}.
+    {ok, resource, {NewGRI, ?THROUGH_HANDLE_SERVICE(HServiceId), {GroupData, Rev}}}.
 
 
 %%--------------------------------------------------------------------

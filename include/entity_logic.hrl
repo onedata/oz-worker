@@ -38,9 +38,9 @@
             throw(create_did_not_return_id);
         {ok, value, __Data} ->
             throw(create_did_not_return_id);
-        {ok, resource, {#gri{id = __Id}, __Data}} ->
+        {ok, resource, {#gri{id = __Id}, {__Data, __Rev}}} ->
             {ok, __Id};
-        {ok, resource, {#gri{id = __Id}, _AuthHint, __Data}} ->
+        {ok, resource, {#gri{id = __Id}, _AuthHint, {__Data, __Rev}}} ->
             {ok, __Id}
     end
 ).
@@ -53,9 +53,9 @@
             throw(create_did_not_return_data);
         {ok, value, __Data} ->
             {ok, __Data};
-        {ok, resource, {_GRI, __Data}} ->
+        {ok, resource, {_GRI, {__Data, __Rev}}} ->
             {ok, __Data};
-        {ok, resource, {_GRI, _AuthHint, __Data}} ->
+        {ok, resource, {_GRI, _AuthHint, {__Data, __Rev}}} ->
             {ok, __Data}
     end
 ).

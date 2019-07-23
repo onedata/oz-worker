@@ -103,8 +103,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
                 od_share, ShareId,
                 od_space, SpaceId
             ),
-            {ok, {Share, _}} = fetch_entity(ShareId),
-            {ok, resource, {GRI#gri{id = ShareId}, Share}};
+            {ok, {Share, Rev}} = fetch_entity(ShareId),
+            {ok, resource, {GRI#gri{id = ShareId}, {Share, Rev}}};
         _ ->
             % This can potentially happen if a share with given share id
             % has been created between data verification and create

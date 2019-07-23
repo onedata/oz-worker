@@ -127,7 +127,7 @@ create(Auth, Data) ->
     case Res of
         Error = {error, _} ->
             Error;
-        {ok, resource, {#gri{id = ProviderId}, {_, Macaroon}}} ->
+        {ok, resource, {#gri{id = ProviderId}, {{_, Macaroon}, _Rev}}} ->
             {ok, {ProviderId, Macaroon}}
     end.
 
@@ -153,8 +153,8 @@ create_dev(Auth, Data) ->
     case Res of
         Error = {error, _} ->
             Error;
-        {ok, resource, {#gri{id = ProviderId}, {_, Certificate}}} ->
-            {ok, {ProviderId, Certificate}}
+        {ok, resource, {#gri{id = ProviderId}, {{_, Macaroon}, _Rev}}} ->
+            {ok, {ProviderId, Macaroon}}
     end.
 
 

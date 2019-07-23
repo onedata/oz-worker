@@ -30,7 +30,7 @@
 -spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
     {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
-create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id = ProvId}, {_, Token}}) ->
+create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id = ProvId}, {{_, Token}, _Rev}}) ->
     {ok, Serialized} = tokens:serialize(Token),
 
     rest_translator:ok_body_reply(#{
@@ -38,7 +38,7 @@ create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id =
         <<"macaroon">> => Serialized
     });
 
-create_response(#gri{id = undefined, aspect = instance_dev}, _, resource, {#gri{id = ProvId}, {_, Token}}) ->
+create_response(#gri{id = undefined, aspect = instance_dev}, _, resource, {#gri{id = ProvId}, {{_, Token}, _Rev}}) ->
     {ok, Serialized} = tokens:serialize(Token),
     rest_translator:ok_body_reply(#{
         <<"providerId">> => ProvId,

@@ -379,17 +379,19 @@ fetch_entity(State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_create(State :: #state{}) -> create_result().
-call_create(State = #state{req = #el_req{return_revision = true}, versioned_entity = {_, Rev}}) ->
+call_create(State = #state{versioned_entity = {_, InheritedRev}}) ->
     case call_plugin(create, State) of
-        {ok, resource, {ResultGRI, ResData}} ->
-            {ok, resource, {ResultGRI, {ResData, Rev}}};
-        {ok, resource, {ResultGRI, NAuthHint, ResData}} ->
-            {ok, resource, {ResultGRI, NAuthHint, {ResData, Rev}}};
+        {ok, resource, {ResultGRI, {ResData, inherit_rev}}} ->
+            {ok, resource, {ResultGRI, {ResData, InheritedRev}}};
+        {ok, resource, {ResultGRI, {ResData, NewRev}}} ->
+            {ok, resource, {ResultGRI, {ResData, NewRev}}};
+        {ok, resource, {ResultGRI, NAuthHint, {ResData, inherit_rev}}} ->
+            {ok, resource, {ResultGRI, NAuthHint, {ResData, InheritedRev}}};
+        {ok, resource, {ResultGRI, NAuthHint, {ResData, NewRev}}} ->
+            {ok, resource, {ResultGRI, NAuthHint, {ResData, NewRev}}};
         Other ->
             Other
-    end;
-call_create(State) ->
-    call_plugin(create, State).
+    end.
 
 
 %%--------------------------------------------------------------------

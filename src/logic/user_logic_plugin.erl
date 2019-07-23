@@ -188,8 +188,8 @@ create(#el_req{gri = GRI = #gri{id = ProposedUserId, aspect = instance}, data = 
                 ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"userId">>);
             {ok, #document{key = UserId}} ->
                 set_up_user(UserId),
-                {ok, {User, _}} = fetch_entity(UserId),
-                {ok, resource, {GRI#gri{id = UserId}, User}}
+                {ok, {User, Rev}} = fetch_entity(UserId),
+                {ok, resource, {GRI#gri{id = UserId}, {User, Rev}}}
         end
     end,
 
@@ -213,7 +213,7 @@ create(#el_req{gri = #gri{id = UserId, aspect = client_tokens} = GRI}) ->
     {ok, _} = od_user:update(UserId, fun(#od_user{client_tokens = Tokens} = User) ->
         {ok, User#od_user{client_tokens = [Token | Tokens]}}
     end),
-    {ok, resource, {GRI#gri{aspect = {client_token, Token}}, Token}};
+    {ok, resource, {GRI#gri{aspect = {client_token, Token}}, {Token, inherit_rev}}};
 
 create(Req = #el_req{gri = #gri{id = UserId, aspect = default_space}}) ->
     SpaceId = maps:get(<<"spaceId">>, Req#el_req.data),
