@@ -396,7 +396,7 @@ get_space_test(Config) ->
                 type = od_space, id = S1, aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_USER(U1),
-            expected_result = ?OK_MAP(ExpDetails#{
+            expected_result = ?OK_MAP_CONTAINS(ExpDetails#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -1001,7 +1001,7 @@ get_eff_space_test(Config) ->
                         aspect = instance, scope = protected
                     },
                     auth_hint = ?THROUGH_USER(U1),
-                    expected_result = ?OK_MAP(SpaceDetails#{
+                    expected_result = ?OK_MAP_CONTAINS(SpaceDetails#{
                         <<"gri">> => fun(EncodedGri) ->
                             #gri{id = Id} = oz_test_utils:decode_gri(
                                 Config, EncodedGri

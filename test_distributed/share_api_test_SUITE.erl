@@ -292,7 +292,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_share, id = ShareId, aspect = instance},
-            expected_result = ?OK_MAP(SharePrivateDetails#{
+            expected_result = ?OK_MAP_CONTAINS(SharePrivateDetails#{
                 <<"handleId">> => null,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(

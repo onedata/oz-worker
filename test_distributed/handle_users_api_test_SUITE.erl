@@ -326,7 +326,7 @@ get_user_test(Config) ->
                     type = od_user, id = SubjectUser, aspect = instance, scope = shared
                 },
                 auth_hint = ?THROUGH_HANDLE(Handle),
-                expected_result = ?OK_MAP(ExpUserDetails#{
+                expected_result = ?OK_MAP_CONTAINS(ExpUserDetails#{
                     <<"gri">> => fun(EncodedGri) ->
                         ?assertMatch(
                             #gri{id = SubjectUser},
@@ -569,7 +569,7 @@ get_eff_user_test(Config) ->
                         aspect = instance, scope = shared
                     },
                     auth_hint = ?THROUGH_HANDLE(HandleId),
-                    expected_result = ?OK_MAP(UserDetails#{
+                    expected_result = ?OK_MAP_CONTAINS(UserDetails#{
                         <<"gri">> => fun(EncodedGri) ->
                             #gri{id = Id} = oz_test_utils:decode_gri(
                                 Config, EncodedGri

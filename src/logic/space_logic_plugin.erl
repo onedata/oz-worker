@@ -32,16 +32,17 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity from datastore based on its EntityId.
+%% Retrieves an entity and its revision from datastore based on EntityId.
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | entity_logic:error().
+    {ok, entity_logic:versioned_entity()} | entity_logic:error().
 fetch_entity(SpaceId) ->
     case od_space:get(SpaceId) of
-        {ok, #document{value = Space}} ->
-            {ok, Space};
+        {ok, #document{value = Space, revs = [DbRev | _]}} ->
+            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {ok, {Space, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -156,8 +157,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         _ ->
             ok
     end,
-    {ok, Space} = fetch_entity(SpaceId),
-    {ok, resource, {GRI#gri{id = SpaceId}, Space}};
+    {ok, {Space, Rev}} = fetch_entity(SpaceId),
+    {ok, resource, {GRI#gri{id = SpaceId}, {Space, Rev}}};
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     Macaroon = maps:get(<<"token">>, Req#el_req.data),
@@ -190,9 +191,9 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
             false -> protected
         end
     },
-    {ok, Space} = fetch_entity(SpaceId),
+    {ok, {Space, Rev}} = fetch_entity(SpaceId),
     {ok, SpaceData} = get(#el_req{gri = NewGRI}, Space),
-    {ok, resource, {NewGRI, SpaceData}};
+    {ok, resource, {NewGRI, {SpaceData, Rev}}};
 
 create(Req = #el_req{gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
     {ok, Macaroon} = invite_tokens:create(
@@ -226,9 +227,9 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}, data = Data}) 
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, User} = user_logic_plugin:fetch_entity(UserId),
+    {ok, {User, Rev}} = user_logic_plugin:fetch_entity(UserId),
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
-    {ok, resource, {NewGRI, ?THROUGH_SPACE(SpaceId), UserData}};
+    {ok, resource, {NewGRI, ?THROUGH_SPACE(SpaceId), {UserData, Rev}}};
 
 create(Req = #el_req{gri = GRI = #gri{id = SpaceId, aspect = group}}) ->
     % Create a new group for a user and add the group as a member of this space.
@@ -241,8 +242,8 @@ create(Req = #el_req{gri = GRI = #gri{id = SpaceId, aspect = group}}) ->
         od_space, SpaceId,
         Privileges
     ),
-    {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
-    {ok, resource, {NewGRI, Group}};
+    {ok, {Group, Rev}} = group_logic_plugin:fetch_entity(GroupId),
+    {ok, resource, {NewGRI, {Group, Rev}}};
 
 create(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:space_user()),
@@ -252,9 +253,9 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}, data = Data}
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
-    {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
+    {ok, {Group, Rev}} = group_logic_plugin:fetch_entity(GroupId),
     {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
-    {ok, resource, {NewGRI, ?THROUGH_GROUP(SpaceId), GroupData}};
+    {ok, resource, {NewGRI, ?THROUGH_GROUP(SpaceId), {GroupData, Rev}}};
 
 create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata}, data = Data}) ->
     #{

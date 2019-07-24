@@ -36,7 +36,7 @@ create_response(#gri{aspect = authorize}, _, value, DischargeMacaroon) ->
 create_response(#gri{aspect = instance}, _, resource, {#gri{id = UserId}, _}) ->
     rest_translator:created_reply([<<"users">>, UserId]);
 
-create_response(#gri{aspect = client_tokens}, _, resource, {_, Token}) ->
+create_response(#gri{aspect = client_tokens}, _, resource, {_, {Token, _Rev}}) ->
     rest_translator:ok_body_reply(#{<<"token">> => Token});
 
 create_response(#gri{aspect = {idp_access_token, _}}, _, value, {AccessToken, Expires}) ->

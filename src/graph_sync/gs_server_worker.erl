@@ -169,8 +169,9 @@ handle_change(Doc = #document{seq = Seq, value = Value}) ->
     case Doc of
         #document{key = EntityId, deleted = true} ->
             gs_server:deleted(Type, EntityId);
-        #document{key = EntityId, value = Entity} ->
-            gs_server:updated(Type, EntityId, Entity)
+        #document{key = EntityId, value = Entity, revs = [DbRev | _]} ->
+            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            gs_server:updated(Type, EntityId, {Entity, Revision})
     end,
     {ok, _} = gs_server_state:set_seq(Seq),
     ok.

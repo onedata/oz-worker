@@ -456,7 +456,7 @@ get_test(Config) ->
                 type = od_provider, id = P1,
                 aspect = instance, scope = protected
             },
-            expected_result = ?OK_MAP(ExpProtectedDetails#{
+            expected_result = ?OK_MAP_CONTAINS(ExpProtectedDetails#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -495,7 +495,7 @@ get_self_test(Config) ->
                 type = od_provider, id = ?SELF,
                 aspect = instance, scope = protected
             },
-            expected_result = ?OK_MAP(ExpDetails#{
+            expected_result = ?OK_MAP_CONTAINS(ExpDetails#{
                 <<"online">> => true,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
@@ -928,7 +928,7 @@ get_eff_user_test(Config) ->
                         aspect = instance, scope = protected
                     },
                     auth_hint = ?THROUGH_PROVIDER(P1),
-                    expected_result = ?OK_MAP(ExpDetails#{
+                    expected_result = ?OK_MAP_CONTAINS(ExpDetails#{
                         <<"gri">> => fun(EncodedGri) ->
                             #gri{id = Id} = oz_test_utils:decode_gri(
                                 Config, EncodedGri
@@ -1188,7 +1188,7 @@ get_eff_group_test(Config) ->
                         aspect = instance, scope = protected
                     },
                     auth_hint = ?THROUGH_PROVIDER(P1),
-                    expected_result = ?OK_MAP(GroupDetailsBinary#{
+                    expected_result = ?OK_MAP_CONTAINS(GroupDetailsBinary#{
                         <<"gri">> => fun(EncodedGri) ->
                             #gri{id = Id} = oz_test_utils:decode_gri(
                                 Config, EncodedGri
@@ -1546,7 +1546,7 @@ get_space_test(Config) ->
                         aspect = instance, scope = protected
                     },
                     auth_hint = ?THROUGH_PROVIDER(P1),
-                    expected_result = ?OK_MAP(SpaceDetails#{
+                    expected_result = ?OK_MAP_CONTAINS(SpaceDetails#{
                         <<"gri">> => fun(EncodedGri) ->
                             #gri{id = Id} = oz_test_utils:decode_gri(
                                 Config, EncodedGri
@@ -2370,7 +2370,7 @@ get_domain_config_test(Config) ->
         gs_spec = GsSpec = #gs_spec{
             operation = get,
             gri = #gri{type = od_provider, id = P1, aspect = domain_config},
-            expected_result = ?OK_MAP(ExpBody#{
+            expected_result = ?OK_MAP_CONTAINS(ExpBody#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -2402,7 +2402,7 @@ get_domain_config_test(Config) ->
         logic_spec = LogicSpec#logic_spec{expected_result = ?OK_MAP(ExpBody2)},
         rest_spec = RestSpec#rest_spec{expected_body = {contains, ExpBody2Bin}},
         gs_spec = GsSpec#gs_spec{
-            expected_result = ?OK_MAP(ExpBody2Bin#{
+            expected_result = ?OK_MAP_CONTAINS(ExpBody2Bin#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri

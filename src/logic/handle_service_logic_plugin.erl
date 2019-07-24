@@ -30,16 +30,17 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity from datastore based on its EntityId.
+%% Retrieves an entity and its revision from datastore based on EntityId.
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | entity_logic:error().
+    {ok, entity_logic:versioned_entity()} | entity_logic:error().
 fetch_entity(HServiceId) ->
     case od_handle_service:get(HServiceId) of
-        {ok, #document{value = HandleService}} ->
-            {ok, HandleService};
+        {ok, #document{value = HandleService, revs = [DbRev | _]}} ->
+            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {ok, {HandleService, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -130,8 +131,8 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         _ ->
             ok
     end,
-    {ok, FetchedHandleService} = fetch_entity(HServiceId),
-    {ok, resource, {GRI#gri{id = HServiceId}, FetchedHandleService}};
+    {ok, {FetchedHandleService, Rev}} = fetch_entity(HServiceId),
+    {ok, resource, {GRI#gri{id = HServiceId}, {FetchedHandleService, Rev}}};
 
 create(#el_req{gri = #gri{id = HServiceId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:handle_service_user()),
@@ -141,9 +142,9 @@ create(#el_req{gri = #gri{id = HServiceId, aspect = {user, UserId}}, data = Data
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, User} = user_logic_plugin:fetch_entity(UserId),
+    {ok, {User, Rev}} = user_logic_plugin:fetch_entity(UserId),
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
-    {ok, resource, {NewGRI, ?THROUGH_HANDLE_SERVICE(HServiceId), UserData}};
+    {ok, resource, {NewGRI, ?THROUGH_HANDLE_SERVICE(HServiceId), {UserData, Rev}}};
 
 create(#el_req{gri = #gri{id = HServiceId, aspect = {group, GroupId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:handle_service_user()),
@@ -153,9 +154,9 @@ create(#el_req{gri = #gri{id = HServiceId, aspect = {group, GroupId}}, data = Da
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
-    {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
+    {ok, {Group, Rev}} = group_logic_plugin:fetch_entity(GroupId),
     {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
-    {ok, resource, {NewGRI, ?THROUGH_HANDLE_SERVICE(HServiceId), GroupData}}.
+    {ok, resource, {NewGRI, ?THROUGH_HANDLE_SERVICE(HServiceId), {GroupData, Rev}}}.
 
 
 %%--------------------------------------------------------------------

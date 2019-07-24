@@ -35,16 +35,17 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity from datastore based on its EntityId.
+%% Retrieves an entity and its revision from datastore based on EntityId.
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | entity_logic:error().
+    {ok, entity_logic:versioned_entity()} | entity_logic:error().
 fetch_entity(UserId) ->
     case od_user:get(UserId) of
-        {ok, #document{value = Group}} ->
-            {ok, Group};
+        {ok, #document{value = User, revs = [DbRev | _]}} ->
+            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {ok, {User, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -187,8 +188,8 @@ create(#el_req{gri = GRI = #gri{id = ProposedUserId, aspect = instance}, data = 
                 ?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"userId">>);
             {ok, #document{key = UserId}} ->
                 set_up_user(UserId),
-                {ok, User} = fetch_entity(UserId),
-                {ok, resource, {GRI#gri{id = UserId}, User}}
+                {ok, {User, Rev}} = fetch_entity(UserId),
+                {ok, resource, {GRI#gri{id = UserId}, {User, Rev}}}
         end
     end,
 
@@ -212,7 +213,7 @@ create(#el_req{gri = #gri{id = UserId, aspect = client_tokens} = GRI}) ->
     {ok, _} = od_user:update(UserId, fun(#od_user{client_tokens = Tokens} = User) ->
         {ok, User#od_user{client_tokens = [Token | Tokens]}}
     end),
-    {ok, resource, {GRI#gri{aspect = {client_token, Token}}, Token}};
+    {ok, resource, {GRI#gri{aspect = {client_token, Token}}, {Token, inherit_rev}}};
 
 create(Req = #el_req{gri = #gri{id = UserId, aspect = default_space}}) ->
     SpaceId = maps:get(<<"spaceId">>, Req#el_req.data),
@@ -433,18 +434,8 @@ update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = Data}) ->
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = UserId, aspect = instance}}) ->
-    % Invalidate auth tokens
-    auth_tokens:invalidate_user_tokens(UserId),
     % Invalidate client tokens
-    {ok, #document{
-        value = #od_user{
-            client_tokens = Tokens
-        }}} = od_user:get(UserId),
-    lists:foreach(
-        fun(Token) ->
-            {ok, Macaroon} = invite_tokens:deserialize(Token),
-            ok = invite_tokens:delete(Macaroon)
-        end, Tokens),
+    auth_tokens:invalidate_user_tokens(UserId),
     entity_graph:delete_with_relations(od_user, UserId);
 
 delete(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}}) ->
@@ -535,32 +526,32 @@ exists(Req = #el_req{gri = #gri{id = UserId, aspect = instance, scope = shared}}
     case Req#el_req.auth_hint of
         ?THROUGH_GROUP(GroupId) ->
             user_logic:has_eff_group(User, GroupId) orelse begin
-                {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
+                {ok, {Group, _}} = group_logic_plugin:fetch_entity(GroupId),
                 Group#od_group.creator =:= ?SUB(user, UserId)
             end;
         ?THROUGH_SPACE(SpaceId) ->
             user_logic:has_eff_space(User, SpaceId) orelse begin
-                {ok, Space} = space_logic_plugin:fetch_entity(SpaceId),
+                {ok, {Space, _}} = space_logic_plugin:fetch_entity(SpaceId),
                 Space#od_space.creator =:= ?SUB(user, UserId)
             end;
         ?THROUGH_HANDLE_SERVICE(HServiceId) ->
             user_logic:has_eff_handle_service(User, HServiceId) orelse begin
-                {ok, HService} = handle_service_logic_plugin:fetch_entity(HServiceId),
+                {ok, {HService, _}} = handle_service_logic_plugin:fetch_entity(HServiceId),
                 HService#od_handle_service.creator =:= ?SUB(user, UserId)
             end;
         ?THROUGH_HANDLE(HandleId) ->
             user_logic:has_eff_handle(User, HandleId) orelse begin
-                {ok, Handle} = handle_logic_plugin:fetch_entity(HandleId),
+                {ok, {Handle, _}} = handle_logic_plugin:fetch_entity(HandleId),
                 Handle#od_handle.creator =:= ?SUB(user, UserId)
             end;
         ?THROUGH_HARVESTER(HarvesterId) ->
             user_logic:has_eff_harvester(User, HarvesterId) orelse begin
-                {ok, Harvester} = harvester_logic_plugin:fetch_entity(HarvesterId),
+                {ok, {Harvester, _}} = harvester_logic_plugin:fetch_entity(HarvesterId),
                 Harvester#od_harvester.creator =:= ?SUB(user, UserId)
             end;
         ?THROUGH_CLUSTER(ClusterId) ->
             user_logic:has_eff_cluster(User, ClusterId) orelse begin
-                {ok, Cluster} = cluster_logic_plugin:fetch_entity(ClusterId),
+                {ok, {Cluster, _}} = cluster_logic_plugin:fetch_entity(ClusterId),
                 Cluster#od_cluster.creator =:= ?SUB(user, UserId)
             end;
         undefined ->
@@ -664,7 +655,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = instance, scope = shared}}, User) ->
     case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(ClientUserId), ?THROUGH_GROUP(GroupId)} ->
-            {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
+            {ok, {Group, _}} = group_logic_plugin:fetch_entity(GroupId),
             % UserId's membership in group is checked in 'exists'
             group_logic:has_eff_privilege(Group, ClientUserId, ?GROUP_VIEW) orelse begin
             % Members of a group can see the shared data of its creator
@@ -673,7 +664,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
             end;
 
         {?USER(ClientUserId), ?THROUGH_SPACE(SpaceId)} ->
-            {ok, Space} = space_logic_plugin:fetch_entity(SpaceId),
+            {ok, {Space, _}} = space_logic_plugin:fetch_entity(SpaceId),
             % UserId's membership in space is checked in 'exists'
             space_logic:has_eff_privilege(Space, ClientUserId, ?SPACE_VIEW) orelse begin
             % Members of a space can see the shared data of its creator
@@ -682,7 +673,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
             end;
 
         {?USER(ClientUserId), ?THROUGH_HANDLE_SERVICE(HServiceId)} ->
-            {ok, HService} = handle_service_logic_plugin:fetch_entity(HServiceId),
+            {ok, {HService, _}} = handle_service_logic_plugin:fetch_entity(HServiceId),
             % UserId's membership in handle_service is checked in 'exists'
             handle_service_logic:has_eff_privilege(HService, ClientUserId, ?HANDLE_SERVICE_VIEW) orelse begin
             % Members of a handle service can see the shared data of its creator
@@ -691,7 +682,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
             end;
 
         {?USER(ClientUserId), ?THROUGH_HANDLE(HandleId)} ->
-            {ok, Handle} = handle_logic_plugin:fetch_entity(HandleId),
+            {ok, {Handle, _}} = handle_logic_plugin:fetch_entity(HandleId),
             % UserId's membership in handle is checked in 'exists'
             handle_logic:has_eff_privilege(Handle, ClientUserId, ?HANDLE_VIEW) orelse begin
             % Members of a handle can see the shared data of its creator
@@ -700,7 +691,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
             end;
 
         {?USER(ClientUserId), ?THROUGH_HARVESTER(HarvesterId)} ->
-            {ok, Harvester} = harvester_logic_plugin:fetch_entity(HarvesterId),
+            {ok, {Harvester, _}} = harvester_logic_plugin:fetch_entity(HarvesterId),
             % UserId's membership in harvester is checked in 'exists'
             harvester_logic:has_eff_privilege(Harvester, ClientUserId, ?HARVESTER_VIEW) orelse begin
             % Members of a harvester can see the shared data of its creator
@@ -709,7 +700,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
             end;
 
         {?USER(ClientUserId), ?THROUGH_CLUSTER(ClusterId)} ->
-            {ok, Cluster} = cluster_logic_plugin:fetch_entity(ClusterId),
+            {ok, {Cluster, _}} = cluster_logic_plugin:fetch_entity(ClusterId),
             % UserId's membership in cluster is checked in 'exists'
             cluster_logic:has_eff_privilege(Cluster, ClientUserId, ?CLUSTER_VIEW) orelse begin
             % Members of a cluster can see the shared data of its creator

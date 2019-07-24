@@ -24,7 +24,9 @@
     gri :: entity_logic:gri(),
     operation = create :: entity_logic:operation(),
     data = #{} :: entity_logic:data(),
-    auth_hint = undefined :: undefined | entity_logic:auth_hint()
+    auth_hint = undefined :: undefined | entity_logic:auth_hint(),
+    % applicable for create/get requests - returns the revision of resource
+    return_revision = false :: boolean()
 }).
 
 % Macros to strip results from entity_logic:create into simpler form.
@@ -36,9 +38,9 @@
             throw(create_did_not_return_id);
         {ok, value, __Data} ->
             throw(create_did_not_return_id);
-        {ok, resource, {#gri{id = __Id}, __Data}} ->
+        {ok, resource, {#gri{id = __Id}, {__Data, __Rev}}} ->
             {ok, __Id};
-        {ok, resource, {#gri{id = __Id}, _AuthHint, __Data}} ->
+        {ok, resource, {#gri{id = __Id}, _AuthHint, {__Data, __Rev}}} ->
             {ok, __Id}
     end
 ).
@@ -51,9 +53,9 @@
             throw(create_did_not_return_data);
         {ok, value, __Data} ->
             {ok, __Data};
-        {ok, resource, {_GRI, __Data}} ->
+        {ok, resource, {_GRI, {__Data, __Rev}}} ->
             {ok, __Data};
-        {ok, resource, {_GRI, _AuthHint, __Data}} ->
+        {ok, resource, {_GRI, _AuthHint, {__Data, __Rev}}} ->
             {ok, __Data}
     end
 ).

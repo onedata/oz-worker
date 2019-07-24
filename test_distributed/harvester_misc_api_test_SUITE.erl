@@ -276,7 +276,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_harvester, id = H1, aspect = instance, scope = private},
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"indices">> => [],
                 <<"spaces">> => [S],
                 <<"gri">> => fun(EncodedGri) ->

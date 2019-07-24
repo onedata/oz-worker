@@ -44,7 +44,7 @@
 -export_type([gui_id/0]).
 
 %% API
--export([deploy_package/3, ensure_package/4]).
+-export([deploy_package/3, deploy_package/4, ensure_package/4]).
 -export([link_gui/3, link_gui/4]).
 -export([unlink_gui/2, unlink_gui/3]).
 -export([gui_exists/2]).
@@ -75,18 +75,31 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Reads given GUI package, and upon success, deploys the GUI package under given
-%% GUI prefix on all cluster nodes.
+%% @equiv deploy_package(GuiType, ReleaseVsn, PackagePath, true)
 %% @end
 %%--------------------------------------------------------------------
 -spec deploy_package(onedata:gui(), onedata:release_version(), file:name_all()) ->
     {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE |
     ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED.
-deploy_package(GuiType, ReleaseVersion, PackagePath) ->
+deploy_package(GuiType, ReleaseVsn, PackagePath) ->
+    deploy_package(GuiType, ReleaseVsn, PackagePath, true).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Reads given GUI package, and upon success, deploys the GUI package under given
+%% GUI prefix on all cluster nodes. VerifyGuiHash flag decides if the GUI package
+%% should be verified against known SHA256 checksums.
+%% @end
+%%--------------------------------------------------------------------
+-spec deploy_package(onedata:gui(), onedata:release_version(), file:name_all(), VerifyGuiHash :: boolean()) ->
+    {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE |
+    ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED.
+deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
     case gui:read_package(PackagePath) of
         {ok, _, PackageBin} ->
             {ok, GuiHash} = gui:package_hash({binary, PackageBin}),
-            case verify_gui_package(GuiType, ReleaseVersion, GuiHash) of
+            case (not VerifyGuiHash) orelse verify_gui_hash(GuiType, ReleaseVsn, GuiHash) of
                 true ->
                     ensure_package(GuiType, PackageBin, GuiHash),
                     {ok, GuiHash};
@@ -360,14 +373,21 @@ mimetype(Path) ->
 %% (or disable_harvester_gui_package_verification in case of harvester GUI).
 %% @end
 %%--------------------------------------------------------------------
--spec verify_gui_package(onedata:gui(), onedata:release_version(), onedata:gui_hash()) ->
+-spec verify_gui_hash(onedata:gui(), onedata:release_version(), onedata:gui_hash()) ->
     boolean().
-verify_gui_package(GuiType, ReleaseVersion, GuiHash) ->
-    case {?DISABLE_VERIFICATION, ?DISABLE_HARVESTER_VERIFICATION, GuiType} of
-        {true, _, _} ->
+verify_gui_hash(GuiType, ReleaseVersion, GuiHash) ->
+    case {GuiType, ?DISABLE_VERIFICATION, ?DISABLE_HARVESTER_VERIFICATION} of
+        {?OZ_WORKER_GUI, _, _} ->
+            % OZ GUI does not need to be checked as it is always present in the
+            % Onezone release package.
             true;
-        {false, true, ?HARVESTER_GUI} ->
+
+        {_, true, _} ->
             true;
+
+        {?HARVESTER_GUI, false, true} ->
+            true;
+
         {_, _, _} ->
             case compatibility:verify_gui_hash(GuiType, ReleaseVersion, GuiHash) of
                 true ->

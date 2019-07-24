@@ -34,16 +34,17 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity from datastore based on its EntityId.
+%% Retrieves an entity and its revision from datastore based on EntityId.
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | entity_logic:error().
+    {ok, entity_logic:versioned_entity()} | entity_logic:error().
 fetch_entity(HarvesterId) ->
     case od_harvester:get(HarvesterId) of
-        {ok, #document{value = Harvester}} ->
-            {ok, Harvester};
+        {ok, #document{value = Harvester, revs = [DbRev | _]}} ->
+            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {ok, {Harvester, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -169,23 +170,23 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
     } = Data,
     Config = maps:get(<<"guiPluginConfig">>, Data, #{}),
 
-    
+
     NormalizedEndpoint = case normalize_endpoint_and_check_connectivity(Endpoint, Plugin) of
         {ok, NewEndpoint} -> NewEndpoint;
         {error, _} = Error -> throw(Error)
     end,
-    
+
 
     {ok, #document{key = HarvesterId}} = od_harvester:create(#document{
         value = #od_harvester{
-            name = Name, 
-            endpoint = NormalizedEndpoint, 
-            plugin = Plugin, 
+            name = Name,
+            endpoint = NormalizedEndpoint,
+            plugin = Plugin,
             gui_plugin_config = Config,
             creator = Auth#auth.subject
         }
     }),
-    
+
     case AuthHint of
         ?AS_USER(UserId) ->
             entity_graph:add_relation(
@@ -203,8 +204,8 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
             ok
     end,
 
-    {ok, Harvester} = fetch_entity(HarvesterId),
-    {ok, resource, {GRI#gri{id = HarvesterId}, Harvester}};
+    {ok, {Harvester, Rev}} = fetch_entity(HarvesterId),
+    {ok, resource, {GRI#gri{id = HarvesterId}, {Harvester, Rev}}};
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     Macaroon = maps:get(<<"token">>, Req#el_req.data),
@@ -244,9 +245,9 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
             false -> protected
         end
     },
-    {ok, Harvester} = fetch_entity(HarvesterId),
+    {ok, {Harvester, Rev}} = fetch_entity(HarvesterId),
     {ok, HarvesterData} = get(#el_req{gri = NewGRI}, Harvester),
-    {ok, resource, {NewGRI, HarvesterData}};
+    {ok, resource, {NewGRI, {HarvesterData, Rev}}};
 
 create(Req = #el_req{gri = #gri{id = HarvesterId, aspect = invite_user_token}}) ->
     {ok, Macaroon} = invite_tokens:create(
@@ -280,9 +281,9 @@ create(#el_req{gri = #gri{id = HarvesterId, aspect = {user, UserId}}, data = Dat
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, User} = user_logic_plugin:fetch_entity(UserId),
+    {ok, {User, Rev}} = user_logic_plugin:fetch_entity(UserId),
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
-    {ok, resource, {NewGRI, ?THROUGH_HARVESTER(HarvesterId), UserData}};
+    {ok, resource, {NewGRI, ?THROUGH_HARVESTER(HarvesterId), {UserData, Rev}}};
 
 create(#el_req{gri = #gri{id = HarvesterId, aspect = {group, GroupId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:harvester_user()),
@@ -292,9 +293,9 @@ create(#el_req{gri = #gri{id = HarvesterId, aspect = {group, GroupId}}, data = D
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
-    {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
+    {ok, {Group, Rev}} = group_logic_plugin:fetch_entity(GroupId),
     {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
-    {ok, resource, {NewGRI, ?THROUGH_GROUP(HarvesterId), GroupData}};
+    {ok, resource, {NewGRI, ?THROUGH_GROUP(HarvesterId), {GroupData, Rev}}};
 
 create(#el_req{gri = #gri{id = HarvesterId, aspect = {space, SpaceId}}}) ->
     entity_graph:add_relation(
@@ -302,11 +303,11 @@ create(#el_req{gri = #gri{id = HarvesterId, aspect = {space, SpaceId}}}) ->
         od_space, SpaceId
     ),
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
-    {ok, Space} = space_logic_plugin:fetch_entity(SpaceId),
+    {ok, {Space, Rev}} = space_logic_plugin:fetch_entity(SpaceId),
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
     harvester_indices:update_stats(HarvesterId, all,
         fun(ExistingStats) -> harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, false) end),
-    {ok, resource, {NewGRI, ?THROUGH_SPACE(HarvesterId), SpaceData}};
+    {ok, resource, {NewGRI, ?THROUGH_SPACE(HarvesterId), {SpaceData, Rev}}};
 
 create(Req = #el_req{gri = GRI = #gri{id = HarvesterId, aspect = group}}) ->
     % Create a new group for a user and add the group as a member of this harvester.
@@ -319,8 +320,8 @@ create(Req = #el_req{gri = GRI = #gri{id = HarvesterId, aspect = group}}) ->
         od_harvester, HarvesterId,
         Privileges
     ),
-    {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
-    {ok, resource, {NewGRI, Group}};
+    {ok, {Group, Rev}} = group_logic_plugin:fetch_entity(GroupId),
+    {ok, resource, {NewGRI, {Group, Rev}}};
 
 create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data}) ->
     IndexId = datastore_utils:gen_key(),
@@ -328,9 +329,10 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
     Name = maps:get(<<"name">>, Data),
     Schema = maps:get(<<"schema">>, Data, undefined),
     GuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data, undefined)),
-    
+
     UpdateFun = fun(#od_harvester{indices = Indices, plugin = Plugin, endpoint = Endpoint, spaces = Spaces} = Harvester) ->
-        IndexStats = lists:foldl(fun(SpaceId, ExistingStats) -> harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, false) end, #{}, Spaces),
+        IndexStats = lists:foldl(fun(SpaceId, ExistingStats) ->
+            harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, false) end, #{}, Spaces),
         Index = #harvester_index{
             name = Name,
             schema = Schema,
@@ -346,8 +348,10 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
     end,
     NewGri = Gri#gri{aspect = {index, IndexId}, scope = private},
     case od_harvester:update(HarvesterId, UpdateFun) of
-        {ok, _} -> {ok, resource, {NewGri, Data#{ <<"schema">> => Schema }}};
-        {error, _} = Error -> Error
+        {ok, _} ->
+            {ok, resource, {NewGri, {Data#{<<"schema">> => Schema}, inherit_rev}}};
+        {error, _} = Error ->
+            Error
     end;
 
 create(#el_req{gri = #gri{aspect = {query, IndexId}}, data = Data}) ->
@@ -375,16 +379,16 @@ create(#el_req{auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch, 
             [] -> {ok, lists:map(fun(IndexId) -> {IndexId, ok} end, IndicesToUpdate)};
             _ -> Plugin:submit_batch(Endpoint, HarvesterId, IndicesToUpdate, Batch)
         end,
-        harvester_indices:update_stats(HarvesterId, Res,
-            fun(PreviousStats, ok) ->
-                   harvester_indices:update_seqs(PreviousStats, SpaceId, ProviderId, MaxStreamSeq, MaxSeq, undefined);
-               (PreviousStats, {error, NewCurrentSeq, _, ErrorMsg}) ->
-                   harvester_indices:update_seqs(PreviousStats, SpaceId, ProviderId, NewCurrentSeq, MaxSeq, ErrorMsg)
-            end
+        harvester_indices:update_stats(HarvesterId, Res, fun
+            (PreviousStats, ok) ->
+                harvester_indices:update_seqs(PreviousStats, SpaceId, ProviderId, MaxStreamSeq, MaxSeq, undefined);
+            (PreviousStats, {error, NewCurrentSeq, _, ErrorMsg}) ->
+                harvester_indices:update_seqs(PreviousStats, SpaceId, ProviderId, NewCurrentSeq, MaxSeq, ErrorMsg)
+        end
         ),
         FailedIndices = lists:filtermap(
             fun({_IndexId, ok}) -> false;
-               ({IndexId, {error, _, FailedSeq, _}}) -> {true, {IndexId, FailedSeq}}
+                ({IndexId, {error, _, FailedSeq, _}}) -> {true, {IndexId, FailedSeq}}
             end, Res
         ),
         {ok, value, maps:from_list(FailedIndices)}
@@ -437,7 +441,7 @@ get(#el_req{gri = #gri{aspect = all_plugins}}, _) ->
         }
     end, AllPlugins)};
 get(#el_req{gri = #gri{aspect = gui_plugin_config}}, #od_harvester{gui_plugin_config = Config}) ->
-    {ok, Config};    
+    {ok, Config};
 
 get(#el_req{gri = #gri{aspect = users}}, Harvester) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_user, Harvester)};
@@ -524,25 +528,25 @@ get(#el_req{gri = #gri{aspect = {index_stats, IndexId}}}, Harvester) ->
 update(#el_req{gri = #gri{id = HarvesterId, aspect = instance}, data = Data}) ->
     UpdateFun = fun(Harvester) ->
         #od_harvester{
-            name = Name, endpoint = Endpoint, 
+            name = Name, endpoint = Endpoint,
             plugin = Plugin, public = Public
         } = Harvester,
-        
+
         NewName = maps:get(<<"name">>, Data, Name),
         NewEndpoint = maps:get(<<"endpoint">>, Data, Endpoint),
         NewPlugin = maps:get(<<"plugin">>, Data, Plugin),
         NewPublic = maps:get(<<"public">>, Data, Public),
-        
+
         NewHarvester = Harvester#od_harvester{
             name = NewName,
             plugin = NewPlugin,
             public = NewPublic
         },
-        
+
         case normalize_endpoint_and_check_connectivity(NewEndpoint, NewPlugin) of
-            {ok, NormalizedEndpoint} -> 
+            {ok, NormalizedEndpoint} ->
                 {ok, NewHarvester#od_harvester{endpoint = NormalizedEndpoint}};
-            {error, _} = Error -> 
+            {error, _} = Error ->
                 Error
         end
     end,
@@ -559,9 +563,9 @@ update(#el_req{gri = #gri{id = HarvesterId, aspect = gui_plugin_config}, data = 
     ok;
 
 update(#el_req{gri = #gri{id = HarvesterId, aspect = {index, IndexId}}, data = Data}) ->
-    {ok, _} = od_harvester:update(HarvesterId, fun(#od_harvester{indices =  Indices} = Harvester) ->
+    {ok, _} = od_harvester:update(HarvesterId, fun(#od_harvester{indices = Indices} = Harvester) ->
         Index = #harvester_index{
-            name = Name, 
+            name = Name,
             gui_plugin_name = GuiPluginName
         } = maps:get(IndexId, Indices),
         NewName = maps:get(<<"name">>, Data, Name),
@@ -823,7 +827,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = public}}, Harvester) ->
     Harvester#od_harvester.public orelse
         % Access to protected data also allows access to public data
-        authorize(Req#el_req{gri = GRI#gri{scope = protected}}, Harvester);
+    authorize(Req#el_req{gri = GRI#gri{scope = protected}}, Harvester);
 
 authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
     true;

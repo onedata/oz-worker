@@ -254,7 +254,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_space, id = S1, aspect = instance},
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?SPACE_NAME1,
                 <<"users">> => #{
                     U1 => AllPrivsBin -- [<<"space_view">>],
@@ -319,7 +319,7 @@ get_test(Config) ->
             gri = #gri{
                 type = od_space, id = S1, aspect = instance, scope = protected
             },
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?SPACE_NAME1,
                 <<"providers">> => #{P1 => SupportSize},
                 <<"gri">> => fun(EncodedGri) ->
@@ -572,7 +572,7 @@ get_share_test(Config) ->
                 aspect = instance, scope = private
             },
             auth_hint = ?THROUGH_SPACE(S1),
-            expected_result = ?OK_MAP(ExpShareDetails#{
+            expected_result = ?OK_MAP_CONTAINS(ExpShareDetails#{
                 <<"handleId">> => null,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
@@ -754,7 +754,7 @@ get_provider_test(Config) ->
                 aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_SPACE(S1),
-            expected_result = ?OK_MAP(ExpDetails#{
+            expected_result = ?OK_MAP_CONTAINS(ExpDetails#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -773,7 +773,7 @@ get_provider_test(Config) ->
             correct = [{provider, P1, P1Macaroon}]
         },
         gs_spec = GsSpec#gs_spec{
-            expected_result = ?OK_MAP(ExpDetails2#{
+            expected_result = ?OK_MAP_CONTAINS(ExpDetails2#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri

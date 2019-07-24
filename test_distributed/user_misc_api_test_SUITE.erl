@@ -415,7 +415,7 @@ get_test(Config) ->
         gs_spec = #gs_spec{
             operation = get,
             gri = #gri{type = od_user, id = User, aspect = instance},
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"defaultSpaceId">> => null,
                 <<"effectiveGroups">> => [],
                 <<"effectiveHandleServices">> => [],
@@ -483,7 +483,7 @@ get_test(Config) ->
             gri = #gri{
                 type = od_user, id = User, aspect = instance, scope = protected
             },
-            expected_result = ?OK_MAP(ProtectedData#{
+            expected_result = ?OK_MAP_CONTAINS(ProtectedData#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri
@@ -515,7 +515,7 @@ get_test(Config) ->
             gri = #gri{
                 type = od_user, id = User, aspect = instance, scope = shared
             },
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"fullName">> => ExpFullName,
                 <<"username">> => ExpUsername,
                 <<"gri">> => fun(EncodedGri) ->
@@ -575,7 +575,7 @@ get_self_test(Config) ->
                 type = od_user, id = ?SELF,
                 aspect = instance, scope = protected
             },
-            expected_result = ?OK_MAP(ProtectedData#{
+            expected_result = ?OK_MAP_CONTAINS(ProtectedData#{
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = oz_test_utils:decode_gri(
                         Config, EncodedGri

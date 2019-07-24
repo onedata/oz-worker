@@ -89,6 +89,7 @@ gui_tokens_are_bound_to_specific_audience(Config) ->
     {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
     oz_test_utils:support_space(Config, ProviderId, SpaceId),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     {ok, Token2, _} = create_token(Config, UserId, Session2, ?OPW_AUD(ProviderId)),
     ?assertMatch(
         {ok, ?EXP_AUTH(UserId, ?OPW_AUD(ProviderId), Session2)},
@@ -158,6 +159,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
 
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
     oz_test_utils:support_space(Config, ProviderId, Space1),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     % Now it should be possible for the user to generate a token
     {ok, SerializedToken2} = ?assertMatch({ok, _}, AcquireGuiToken(Cookie, ?OP_WORKER_GUI, ProviderId)),
@@ -179,6 +181,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     {ok, Space2} = oz_test_utils:create_space(Config, ?USER(User2), <<"space">>),
     oz_test_utils:support_space(Config, ProviderId, Space2),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     {ok, SerializedToken3} = ?assertMatch({ok, _}, AcquireGuiToken(Cookie2, ?OP_WORKER_GUI, ProviderId)),
     % ... but not for the Onepanel GUI
     ?assertMatch(?ERROR_FORBIDDEN, AcquireGuiToken(Cookie2, ?ONEPANEL_GUI, ProviderId)),

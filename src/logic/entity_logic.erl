@@ -36,6 +36,8 @@ od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id() | od_
 od_handle_service | od_handle | od_harvester | od_cluster | oz_privileges.
 -type entity() :: undefined | #od_user{} | #od_group{} | #od_space{} |
 #od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{} | #od_harvester{} | #od_cluster{}.
+-type revision() :: gs_protocol:revision().
+-type versioned_entity() :: gs_protocol:versioned_entity().
 -type aspect() :: gs_protocol:aspect().
 -type scope() :: gs_protocol:scope().
 -type data_format() :: gs_protocol:data_format().
@@ -44,7 +46,7 @@ od_handle_service | od_handle | od_harvester | od_cluster | oz_privileges.
 -type auth_hint() :: gs_protocol:auth_hint().
 
 -type create_result() :: gs_protocol:graph_create_result().
--type get_result() :: gs_protocol:graph_get_result().
+-type get_result() :: gs_protocol:graph_get_result() | {ok, term()} | {ok, gri(), term()}.
 -type delete_result() :: gs_protocol:graph_delete_result().
 -type update_result() :: gs_protocol:graph_update_result().
 -type result() :: create_result() | get_result() | update_result() | delete_result().
@@ -84,6 +86,8 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
     entity_id/0,
     entity_type/0,
     entity/0,
+    revision/0,
+    versioned_entity/0,
     aspect/0,
     scope/0,
     gri/0,
@@ -106,7 +110,7 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
 -record(state, {
     req = #el_req{} :: req(),
     plugin = undefined :: el_plugin(),
-    entity = undefined :: entity()
+    versioned_entity = {undefined, 1} :: versioned_entity()
 }).
 
 -define(DEFAULT_ENTITY_NAME, <<"Unnamed">>).
@@ -127,7 +131,7 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
 %%--------------------------------------------------------------------
 -spec handle(req()) -> result().
 handle(ElReq) ->
-    handle(ElReq, undefined).
+    handle(ElReq, {undefined, 1}).
 
 
 %%--------------------------------------------------------------------
@@ -136,12 +140,12 @@ handle(ElReq) ->
 %% be provided if it was prefetched.
 %% @end
 %%--------------------------------------------------------------------
--spec handle(req(), Entity :: entity()) -> result().
-handle(#el_req{gri = #gri{type = EntityType}} = ElReq, Entity) ->
+-spec handle(req(), VersionedEntity :: versioned_entity()) -> result().
+handle(#el_req{gri = #gri{type = EntityType}} = ElReq, VersionedEntity) ->
     try
         ElPlugin = EntityType:entity_logic_plugin(),
         handle_unsafe(#state{
-            req = ElReq, plugin = ElPlugin, entity = Entity
+            req = ElReq, plugin = ElPlugin, versioned_entity = VersionedEntity
         })
     catch
         throw:Error ->
@@ -160,15 +164,15 @@ handle(#el_req{gri = #gri{type = EntityType}} = ElReq, Entity) ->
 %% in the #el_req{} record. Entity can be provided if it was prefetched.
 %% @end
 %%--------------------------------------------------------------------
--spec is_authorized(req(), entity()) -> {true, gs_protocol:gri()} | false.
-is_authorized(#el_req{gri = #gri{type = EntityType}} = ElReq, Entity) ->
+-spec is_authorized(req(), versioned_entity()) -> {true, gs_protocol:gri()} | false.
+is_authorized(#el_req{gri = #gri{type = EntityType}} = ElReq, VersionedEntity) ->
     try
         ElPlugin = EntityType:entity_logic_plugin(),
         % Existence must be checked too, as sometimes authorization depends
         % on that.
         NewState = ensure_authorized(
             ensure_exists(#state{
-                req = ElReq, plugin = ElPlugin, entity = Entity
+                req = ElReq, plugin = ElPlugin, versioned_entity = VersionedEntity
             })),
         {true, NewState#state.req#el_req.gri}
     catch
@@ -304,11 +308,11 @@ handle_unsafe(State = #state{req = #el_req{operation = get}}) ->
             fetch_entity(
                 ensure_operation_supported(
                     State)))),
-    {ok, Data} = call_get(NewState),
+    {ok, GetResult} = call_get(NewState),
     % Return the new GRI if auto scope was requested
     case State#state.req#el_req.gri#gri.scope of
-        auto -> {ok, NewState#state.req#el_req.gri, Data};
-        _ -> {ok, Data}
+        auto -> {ok, NewState#state.req#el_req.gri, GetResult};
+        _ -> {ok, GetResult}
     end;
 
 
@@ -351,17 +355,17 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = delete}}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(State :: #state{}) -> #state{}.
-fetch_entity(State = #state{entity = Entity}) when Entity /= undefined ->
+fetch_entity(State = #state{versioned_entity = {Entity, _}}) when Entity /= undefined ->
     State;
 fetch_entity(State = #state{req = #el_req{gri = #gri{id = undefined}}}) ->
     State;
 fetch_entity(State = #state{req = #el_req{operation = create, gri = #gri{aspect = instance}}}) ->
-    % Skip when creating an instance with predefined Id
-    State;
+    % Skip when creating an instance with predefined Id, set revision to 1
+    State#state{versioned_entity = {undefined, 1}};
 fetch_entity(State) ->
     case call_plugin(fetch_entity, State) of
-        {ok, Entity} ->
-            State#state{entity = Entity};
+        {ok, {Entity, Revision}} ->
+            State#state{versioned_entity = {Entity, Revision}};
         ?ERROR_NOT_FOUND ->
             throw(?ERROR_NOT_FOUND)
     end.
@@ -375,8 +379,19 @@ fetch_entity(State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_create(State :: #state{}) -> create_result().
-call_create(State) ->
-    call_plugin(create, State).
+call_create(State = #state{versioned_entity = {_, InheritedRev}}) ->
+    case call_plugin(create, State) of
+        {ok, resource, {ResultGRI, {ResData, inherit_rev}}} ->
+            {ok, resource, {ResultGRI, {ResData, InheritedRev}}};
+        {ok, resource, {ResultGRI, {ResData, NewRev}}} ->
+            {ok, resource, {ResultGRI, {ResData, NewRev}}};
+        {ok, resource, {ResultGRI, NAuthHint, {ResData, inherit_rev}}} ->
+            {ok, resource, {ResultGRI, NAuthHint, {ResData, InheritedRev}}};
+        {ok, resource, {ResultGRI, NAuthHint, {ResData, NewRev}}} ->
+            {ok, resource, {ResultGRI, NAuthHint, {ResData, NewRev}}};
+        Other ->
+            Other
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -387,6 +402,11 @@ call_create(State) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_get(State :: #state{}) -> get_result().
+call_get(State = #state{req = #el_req{return_revision = true}, versioned_entity = {_, Rev}}) ->
+    case call_plugin(get, State) of
+        {ok, Data} -> {ok, {Data, Rev}};
+        {error, _} = Error -> Error
+    end;
 call_get(State) ->
     call_plugin(get, State).
 
@@ -1003,24 +1023,24 @@ check_value(TypeRule, ValueRule, Key, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_plugin(Operation :: atom(), #state{}) -> term().
-call_plugin(fetch_entity, #state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}) when is_binary(Id)->
+call_plugin(fetch_entity, #state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}) when is_binary(Id) ->
     Plugin:fetch_entity(Id);
 call_plugin(fetch_entity, _) ->
     ?ERROR_NOT_FOUND;
-call_plugin(operation_supported,  #state{plugin = Plugin, req = #el_req{operation = Operation,
-    gri =#gri{aspect = Aspect, scope = Scope}}}) ->
+call_plugin(operation_supported, #state{plugin = Plugin, req = #el_req{operation = Operation,
+    gri = #gri{aspect = Aspect, scope = Scope}}}) ->
     Plugin:operation_supported(Operation, Aspect, Scope);
-call_plugin(exists, #state{plugin = Plugin, req = ElReq, entity = Entity}) ->
+call_plugin(exists, #state{plugin = Plugin, req = ElReq, versioned_entity = {Entity, _}}) ->
     Plugin:exists(ElReq, Entity);
-call_plugin(authorize, #state{plugin = Plugin, req = ElReq, entity = Entity}) ->
+call_plugin(authorize, #state{plugin = Plugin, req = ElReq, versioned_entity = {Entity, _}}) ->
     Plugin:authorize(ElReq, Entity);
 call_plugin(required_admin_privileges, #state{plugin = Plugin, req = ElReq}) ->
     Plugin:required_admin_privileges(ElReq);
-call_plugin(get, #state{plugin = Plugin, req = ElReq, entity = Entity}) ->
+call_plugin(get, #state{plugin = Plugin, req = ElReq, versioned_entity = {Entity, _}}) ->
     Plugin:get(ElReq, Entity);
 call_plugin(update, #state{plugin = Plugin, req = ElReq}) ->
     Plugin:update(ElReq);
-call_plugin(Operation, #state{plugin = Plugin, req = ElReq, entity = Entity}) ->
+call_plugin(Operation, #state{plugin = Plugin, req = ElReq, versioned_entity = {Entity, _}}) ->
     % covers create, delete, validate
     case Plugin:Operation(ElReq) of
         Fun when is_function(Fun, 1) ->

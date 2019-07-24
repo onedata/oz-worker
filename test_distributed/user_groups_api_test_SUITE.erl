@@ -411,7 +411,7 @@ get_group_test(Config) ->
                 type = od_group, id = G1, aspect = instance, scope = protected
             },
             auth_hint = ?THROUGH_USER(U1),
-            expected_result = ?OK_MAP(#{
+            expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1_BIN,
                 <<"gri">> => fun(EncodedGri) ->
@@ -592,7 +592,7 @@ get_eff_group_test(Config) ->
                         aspect = instance, scope = protected
                     },
                     auth_hint = ?THROUGH_USER(U1),
-                    expected_result = ?OK_MAP(GroupDetails#{
+                    expected_result = ?OK_MAP_CONTAINS(GroupDetails#{
                         <<"type">> => atom_to_binary(ExpType, utf8),
                         <<"gri">> => fun(EncodedGri) ->
                             #gri{id = Id} = oz_test_utils:decode_gri(

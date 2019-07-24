@@ -31,16 +31,17 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity from datastore based on its EntityId.
+%% Retrieves an entity and its revision from datastore based on EntityId.
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | entity_logic:error().
+    {ok, entity_logic:versioned_entity()} | entity_logic:error().
 fetch_entity(ClusterId) ->
     case od_cluster:get(ClusterId) of
-        {ok, #document{value = Cluster}} ->
-            {ok, Cluster};
+        {ok, #document{value = Cluster, revs = [DbRev | _]}} ->
+            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {ok, {Cluster, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -156,9 +157,9 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
             false -> protected
         end
     },
-    {ok, Cluster} = fetch_entity(ClusterId),
+    {ok, {Cluster, Rev}} = fetch_entity(ClusterId),
     {ok, ClusterData} = get(#el_req{gri = NewGRI}, Cluster),
-    {ok, resource, {NewGRI, ClusterData}};
+    {ok, resource, {NewGRI, {ClusterData, Rev}}};
 
 create(Req = #el_req{gri = #gri{id = ClusterId, aspect = invite_user_token}}) ->
     {ok, Macaroon} = invite_tokens:create(
@@ -184,9 +185,9 @@ create(#el_req{gri = #gri{id = ClusterId, aspect = {user, UserId}}, data = Data}
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, User} = user_logic_plugin:fetch_entity(UserId),
+    {ok, {User, Rev}} = user_logic_plugin:fetch_entity(UserId),
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
-    {ok, resource, {NewGRI, ?THROUGH_CLUSTER(ClusterId), UserData}};
+    {ok, resource, {NewGRI, ?THROUGH_CLUSTER(ClusterId), {UserData, Rev}}};
 
 create(Req = #el_req{gri = GRI = #gri{id = ClusterId, aspect = group}}) ->
     % Create a new group for the requesting client and add the group as a member
@@ -200,8 +201,8 @@ create(Req = #el_req{gri = GRI = #gri{id = ClusterId, aspect = group}}) ->
         od_cluster, ClusterId,
         Privileges
     ),
-    {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
-    {ok, resource, {NewGRI, Group}};
+    {ok, {Group, Rev}} = group_logic_plugin:fetch_entity(GroupId),
+    {ok, resource, {NewGRI, {Group, Rev}}};
 
 create(#el_req{gri = #gri{id = ClusterId, aspect = {group, GroupId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:cluster_user()),
@@ -211,9 +212,9 @@ create(#el_req{gri = #gri{id = ClusterId, aspect = {group, GroupId}}, data = Dat
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
-    {ok, Group} = group_logic_plugin:fetch_entity(GroupId),
+    {ok, {Group, Rev}} = group_logic_plugin:fetch_entity(GroupId),
     {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
-    {ok, resource, {NewGRI, ?THROUGH_GROUP(ClusterId), GroupData}}.
+    {ok, resource, {NewGRI, ?THROUGH_GROUP(ClusterId), {GroupData, Rev}}}.
 
 
 %%--------------------------------------------------------------------

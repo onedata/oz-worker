@@ -36,16 +36,17 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity from datastore based on its EntityId.
+%% Retrieves an entity and its revision from datastore based on EntityId.
 %% Should return ?ERROR_NOT_FOUND if the entity does not exist.
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:entity()} | entity_logic:error().
+    {ok, entity_logic:versioned_entity()} | entity_logic:error().
 fetch_entity(ProviderId) ->
     case od_provider:get(ProviderId) of
-        {ok, #document{value = Provider}} ->
-            {ok, Provider};
+        {ok, #document{value = Provider, revs = [DbRev | _]}} ->
+            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {ok, {Provider, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -138,7 +139,7 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     SpaceId = invite_tokens:consume(Macaroon, SupportSpaceFun),
 
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
-    {ok, #od_space{harvesters = Harvesters} = Space} = space_logic_plugin:fetch_entity(SpaceId),
+    {ok, {#od_space{harvesters = Harvesters} = Space, Rev}} = space_logic_plugin:fetch_entity(SpaceId),
     
     lists:foreach(fun(HarvesterId) ->
         harvester_indices:update_stats(HarvesterId, all,
@@ -146,7 +147,7 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
         end, Harvesters),
         
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
-    {ok, resource, {NewGRI, SpaceData}};
+    {ok, resource, {NewGRI, {SpaceData, Rev}}};
 
 create(Req = #el_req{gri = #gri{aspect = check_my_ports}}) ->
     try
@@ -157,11 +158,11 @@ create(Req = #el_req{gri = #gri{aspect = check_my_ports}}) ->
 
 create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}, data = Data}) ->
     case fetch_entity(ProviderId) of
-        {ok, #od_provider{subdomain_delegation = true}} ->
+        {ok, {#od_provider{subdomain_delegation = true}, _}} ->
             #{<<"content">> := Content} = Data,
             TTL = maps:get(<<"ttl">>, Data, undefined),
             ok = dns_state:set_txt_record(ProviderId, RecordName, Content, TTL);
-        {ok, #od_provider{subdomain_delegation = false}} ->
+        {ok, {#od_provider{subdomain_delegation = false}, _}} ->
             ?ERROR_SUBDOMAIN_DELEGATION_DISABLED;
         Error ->
             Error
@@ -324,7 +325,12 @@ update(Req = #el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     ok = dns_state:remove_delegation_config(ProviderId),
-    {ok, #od_provider{root_macaroon = RootMacaroon, spaces = Spaces, eff_harvesters = Harvesters}} = fetch_entity(ProviderId),
+    {ok, {#od_provider{
+        root_macaroon = RootMacaroon,
+        spaces = Spaces,
+        eff_harvesters = Harvesters
+    }, _}} = fetch_entity(ProviderId),
+
     ok = access_tokens:invalidate_provider_root_macaroon(RootMacaroon),
 
     lists:foreach(fun(HarvesterId) ->
@@ -352,7 +358,7 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     end;
 
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
-    {ok, #od_space{harvesters = Harvesters}} = space_logic_plugin:fetch_entity(SpaceId),
+    {ok, {#od_space{harvesters = Harvesters}, _}} = space_logic_plugin:fetch_entity(SpaceId),
     lists:foreach(fun(HarvesterId) ->
         harvester_indices:update_stats(HarvesterId, all,
             fun(ExistingStats) ->
@@ -922,9 +928,9 @@ create_provider(Data, ProviderId, GRI) ->
         try
             {ok, _} = od_provider:create(#document{key = ProviderId, value = ProviderRecord}),
             cluster_logic:create_oneprovider_cluster(CreatorUserId, ProviderId),
-            {ok, Provider} = fetch_entity(ProviderId),
+            {ok, {Provider, Rev}} = fetch_entity(ProviderId),
             ?info("Provider '~ts' has registered (~s)", [Name, ProviderId]),
-            {ok, resource, {GRI#gri{id = ProviderId}, {Provider, Macaroon}}}
+            {ok, resource, {GRI#gri{id = ProviderId}, {{Provider, Macaroon}, Rev}}}
         catch Type:Reason ->
             ?error_stacktrace("Cannot create a new provider due to ~p:~p", [Type, Reason]),
             dns_state:remove_delegation_config(ProviderId),
