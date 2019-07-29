@@ -39,13 +39,22 @@ routes() -> [
     %% - oz_groups_list
     {<<"/groups">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = undefined, aspect = list}
+    }},
+    %% Get all group privileges.
+    %% This operation requires one of the following privileges:
+    {<<"/groups/privileges">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_group, id = undefined, aspect = privileges}
     }},
     %% Get group details
     %% This operation requires one of the following privileges:
     %% - oz_groups_view
     {<<"/groups/:id">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = instance, scope = protected}
     }},
     %% Modify group details
@@ -69,6 +78,7 @@ routes() -> [
     %% - oz_view_privileges
     {<<"/groups/:id/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = oz_privileges}
     }},
     %% Remove group's admin privileges
@@ -90,6 +100,7 @@ routes() -> [
     %% - oz_view_privileges
     {<<"/groups/:id/effective_privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_oz_privileges}
     }},
     %% List group users
@@ -98,6 +109,7 @@ routes() -> [
     %% - oz_groups_list_relationships
     {<<"/groups/:id/users">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = users}
     }},
     %% Create user invite token for group
@@ -106,6 +118,7 @@ routes() -> [
     %% - oz_groups_add_relationships
     {<<"/groups/:id/users/token">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = invite_user_token}
     }},
     %% Add user to group
@@ -117,6 +130,7 @@ routes() -> [
     %% - oz_groups_set_privileges
     {<<"/groups/:id/users/:uid">>, #rest_req{
         method = 'PUT',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {user, ?BINDING(uid)}}
     }},
     %% Get group user details
@@ -125,6 +139,7 @@ routes() -> [
     %% - oz_users_view
     {<<"/groups/:id/users/:uid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -143,6 +158,7 @@ routes() -> [
     %% - oz_groups_view_privileges
     {<<"/groups/:id/users/:uid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}
     }},
     %% Update user's group privileges
@@ -159,6 +175,7 @@ routes() -> [
     %% - oz_groups_list_relationships
     {<<"/groups/:id/effective_users">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_users}
     }},
     %% Get effective group user details
@@ -167,6 +184,7 @@ routes() -> [
     %% - oz_users_view
     {<<"/groups/:id/effective_users/:uid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -176,6 +194,7 @@ routes() -> [
     %% - oz_groups_view_privileges
     {<<"/groups/:id/effective_users/:uid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {eff_user_privileges, ?BINDING(uid)}}
     }},
     %% Get effective user's group membership intermediaries
@@ -184,6 +203,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/groups/:id/effective_users/:uid/membership">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {eff_user_membership, ?BINDING(uid)}}
     }},
     %% Create a new parent group for given group
@@ -202,6 +222,7 @@ routes() -> [
     %% - oz_groups_list_relationships
     {<<"/groups/:id/parents">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = parents}
     }},
     %% Join parent group
@@ -219,6 +240,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/groups/:id/parents/:pid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(pid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -228,6 +250,7 @@ routes() -> [
     %% - oz_groups_remove_relationships
     {<<"/groups/:id/parents/:pid">>, #rest_req{
         method = 'DELETE',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {parent, ?BINDING(pid)}}
     }},
     %% List effective parent groups
@@ -236,6 +259,7 @@ routes() -> [
     %% - oz_groups_list_relationships
     {<<"/groups/:id/effective_parents">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_parents}
     }},
     %% Get effective parent group details
@@ -244,6 +268,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/groups/:id/effective_parents/:pid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(pid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -254,6 +279,7 @@ routes() -> [
     %% - oz_groups_add_relationships
     {<<"/groups/:id/children">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = child},
         b_auth_hint = ?AS_USER(?CLIENT_ID)
     }},
@@ -263,6 +289,7 @@ routes() -> [
     %% - oz_groups_list_relationships
     {<<"/groups/:id/children">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = children}
     }},
     %% Create child group invitation token
@@ -271,6 +298,7 @@ routes() -> [
     %% - oz_groups_add_relationships
     {<<"/groups/:id/children/token">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = invite_group_token}
     }},
     %% Add child group
@@ -278,6 +306,7 @@ routes() -> [
     %% - oz_groups_add_relationships
     {<<"/groups/:id/children/:cid">>, #rest_req{
         method = 'PUT',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {child, ?BINDING(cid)}}
     }},
     %% Get child group details
@@ -286,6 +315,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/groups/:id/children/:cid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(cid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -303,6 +333,7 @@ routes() -> [
     %% - oz_groups_view_privileges
     {<<"/groups/:id/children/:cid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {child_privileges, ?BINDING(cid)}}
     }},
     %% Update child's group privileges
@@ -319,6 +350,7 @@ routes() -> [
     %% - oz_groups_list_relationships
     {<<"/groups/:id/effective_children">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_children}
     }},
     %% Get effective child group details
@@ -327,6 +359,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/groups/:id/effective_children/:cid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(cid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -336,6 +369,7 @@ routes() -> [
     %% - oz_groups_view_privileges
     {<<"/groups/:id/effective_children/:cid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {eff_child_privileges, ?BINDING(cid)}}
     }},
     %% Get effective child's group membership intermediaries
@@ -344,6 +378,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/groups/:id/effective_children/:cid/membership">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {eff_child_membership, ?BINDING(cid)}}
     }},
     %% Create a new space for given group
@@ -353,6 +388,7 @@ routes() -> [
     %% - oz_spaces_create
     {<<"/groups/:id/spaces">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = undefined, aspect = instance},
         b_auth_hint = ?AS_GROUP(?BINDING(id))
     }},
@@ -362,6 +398,7 @@ routes() -> [
     %% - oz_groups_list_relationships
     {<<"/groups/:id/spaces">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = spaces}
     }},
     %% Join space by group
@@ -380,6 +417,7 @@ routes() -> [
     %% - oz_spaces_view
     {<<"/groups/:id/spaces/:sid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(sid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -398,6 +436,7 @@ routes() -> [
     %% - oz_groups_list_relationships
     {<<"/groups/:id/effective_spaces">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_spaces}
     }},
     %% Get effective group space details
@@ -406,6 +445,7 @@ routes() -> [
     %% - oz_spaces_view
     {<<"/groups/:id/effective_spaces/:sid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(sid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -415,6 +455,7 @@ routes() -> [
     %% - oz_groups_list_relationships
     {<<"/groups/:id/effective_providers">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_providers}
     }},
     %% Get group's effective provider details
@@ -423,6 +464,7 @@ routes() -> [
     %% - oz_providers_view
     {<<"/groups/:id/effective_providers/:pid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -431,6 +473,7 @@ routes() -> [
     %% - group_view
     {<<"/groups/:id/effective_providers/:pid/spaces">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = {group_spaces, ?BINDING(id)}, scope = private}
     }},
     %% Create a new handle service for given group.
@@ -449,6 +492,7 @@ routes() -> [
     %% - oz_groups_list_relationships
     {<<"/groups/:id/handle_services">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = handle_services}
     }},
     %% Get group handle service details
@@ -457,6 +501,7 @@ routes() -> [
     %% - oz_handle_services_view
     {<<"/groups/:id/handle_services/:hsid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(hsid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -467,6 +512,7 @@ routes() -> [
     %% - oz_handle_services_remove_relationships
     {<<"/groups/:id/handle_services/:hsid">>, #rest_req{
         method = 'DELETE',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {handle_service, ?BINDING(hsid)}}
     }},
     %% List effective group handle services
@@ -475,6 +521,7 @@ routes() -> [
     %% - oz_groups_list_relationships
     {<<"/groups/:id/effective_handle_services">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_handle_services}
     }},
     %% Get effective group handle service details
@@ -483,6 +530,7 @@ routes() -> [
     %% - oz_handle_services_view
     {<<"/groups/:id/effective_handle_services/:hsid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(hsid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -503,6 +551,7 @@ routes() -> [
     %% - oz_groups_list_relationships
     {<<"/groups/:id/handles">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = handles}
     }},
     %% Get group handle details
@@ -511,6 +560,7 @@ routes() -> [
     %% - oz_handles_view
     {<<"/groups/:id/handles/:hid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -521,6 +571,7 @@ routes() -> [
     %% - oz_handles_remove_relationships
     {<<"/groups/:id/handles/:hid">>, #rest_req{
         method = 'DELETE',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {handle, ?BINDING(hid)}}
     }},
     %% List effective group handles
@@ -529,6 +580,7 @@ routes() -> [
     %% - oz_groups_list_relationships
     {<<"/groups/:id/effective_handles">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_handles}
     }},
     %% Get effective group handle details
@@ -537,6 +589,7 @@ routes() -> [
     %% - oz_handles_view
     {<<"/groups/:id/effective_handles/:hid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -547,6 +600,7 @@ routes() -> [
     %% - oz_harvesters_create
     {<<"/groups/:id/harvesters">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = undefined, aspect = instance},
         b_auth_hint = ?AS_GROUP(?BINDING(id))
     }},
@@ -556,6 +610,7 @@ routes() -> [
     %% - oz_groups_list_relationships
     {<<"/groups/:id/harvesters">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = harvesters}
     }},
     %% Join harvester by group
@@ -574,6 +629,7 @@ routes() -> [
     %% - oz_harvesters_view
     {<<"/groups/:id/harvesters/:hid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(hid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -592,6 +648,7 @@ routes() -> [
     %% - oz_groups_list_relationships
     {<<"/groups/:id/effective_harvesters">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_harvesters}
     }},
     %% Get effective group harvester details
@@ -600,6 +657,7 @@ routes() -> [
     %% - oz_harvesters_view
     {<<"/groups/:id/effective_harvesters/:hid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(hid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -607,6 +665,7 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/groups/:id/clusters">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = clusters}
     }},
     %% Join group to a cluster
@@ -620,6 +679,7 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/groups/:id/clusters/:cid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(cid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }},
@@ -627,18 +687,21 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/groups/:id/clusters/:cid">>, #rest_req{
         method = 'DELETE',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = {cluster, ?BINDING(cid)}}
     }},
     %% List group's effective clusters
     %% This operation does not require any specific privileges.
     {<<"/groups/:id/effective_clusters">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(id), aspect = eff_clusters}
     }},
     %% Get group's effective cluster details
     %% This operation does not require any specific privileges.
     {<<"/groups/:id/effective_clusters/:cid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(cid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_GROUP(?BINDING(id))
     }}

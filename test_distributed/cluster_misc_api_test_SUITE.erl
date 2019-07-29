@@ -34,6 +34,7 @@
 ]).
 -export([
     list_test/1,
+    list_privileges_test/1,
     get_oneprovider_cluster_test/1,
     get_onezone_cluster_test/1,
     update_onepanel_proxy_test/1,
@@ -46,6 +47,7 @@
 all() ->
     ?ALL([
         list_test,
+        list_privileges_test,
         get_oneprovider_cluster_test,
         get_onezone_cluster_test,
         update_onepanel_proxy_test,
@@ -116,6 +118,26 @@ list_test(Config) ->
     ?assert(not oz_test_utils:call_oz(
         Config, cluster_logic, exists, [<<"asdiucyaie827346w">>])
     ).
+
+
+list_privileges_test(Config) ->
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, nobody]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/clusters/privileges">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{
+                <<"member">> => [atom_to_binary(P, utf8) || P <- privileges:cluster_member()],
+                <<"manager">> => [atom_to_binary(P, utf8) || P <- privileges:cluster_manager()],
+                <<"admin">> => [atom_to_binary(P, utf8) || P <- privileges:cluster_admin()]
+            }
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 get_onezone_cluster_test(Config) ->

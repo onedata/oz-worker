@@ -32,13 +32,22 @@ routes() -> [
     %% - oz_clusters_list
     {<<"/clusters">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = undefined, aspect = list}
+    }},
+    %% Get all cluster privileges.
+    %% This operation requires one of the following privileges:
+    {<<"/clusters/privileges">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_cluster, id = undefined, aspect = privileges}
     }},
     %% Get cluster details
     %% This operation requires one of the following privileges:
     %% - oz_clusters_view
     {<<"/clusters/:id">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = instance, scope = protected}
     }},
     %% Modify cluster details
@@ -55,6 +64,7 @@ routes() -> [
     %% - oz_clusters_list_relationships
     {<<"/clusters/:id/users">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = users}
     }},
     %% Create cluster user invite token
@@ -63,6 +73,7 @@ routes() -> [
     %% - oz_clusters_add_relationships
     {<<"/clusters/:id/users/token">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = invite_user_token}
     }},
     %% Add user to cluster
@@ -82,6 +93,7 @@ routes() -> [
     %% - oz_users_view
     {<<"/clusters/:id/users/:uid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_CLUSTER(?BINDING(id))
     }},
@@ -100,6 +112,7 @@ routes() -> [
     %% - oz_clusters_view_privileges
     {<<"/clusters/:id/users/:uid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}
     }},
     %% Update user's cluster privileges
@@ -116,6 +129,7 @@ routes() -> [
     %% - oz_clusters_list_relationships
     {<<"/clusters/:id/effective_users">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = eff_users}
     }},
     %% Get cluster's effective user details
@@ -124,6 +138,7 @@ routes() -> [
     %% - oz_users_view
     {<<"/clusters/:id/effective_users/:uid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_CLUSTER(?BINDING(id))
     }},
@@ -133,6 +148,7 @@ routes() -> [
     %% - oz_clusters_view_privileges
     {<<"/clusters/:id/effective_users/:uid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = {eff_user_privileges, ?BINDING(uid)}}
     }},
     %% Get effective user's cluster membership intermediaries
@@ -141,6 +157,7 @@ routes() -> [
     %% - oz_clusters_view
     {<<"/clusters/:id/effective_users/:uid/membership">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = {eff_user_membership, ?BINDING(uid)}}
     }},
     %% Create group in cluster
@@ -150,6 +167,7 @@ routes() -> [
     %% - oz_clusters_add_relationships
     {<<"/clusters/:id/groups">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = group},
         b_auth_hint = ?AS_USER(?CLIENT_ID)
     }},
@@ -159,6 +177,7 @@ routes() -> [
     %% - oz_clusters_list_relationships
     {<<"/clusters/:id/groups">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = groups}
     }},
     %% Create cluster invite token for group
@@ -167,6 +186,7 @@ routes() -> [
     %% - oz_clusters_add_relationships
     {<<"/clusters/:id/groups/token">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = invite_group_token}
     }},
     %% Add group to cluster
@@ -186,6 +206,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/clusters/:id/groups/:gid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_CLUSTER(?BINDING(id))
     }},
@@ -203,6 +224,7 @@ routes() -> [
     %% - oz_clusters_view_privileges
     {<<"/clusters/:id/groups/:gid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = {group_privileges, ?BINDING(gid)}}
     }},
     %% Update group's privileges in a cluster
@@ -219,6 +241,7 @@ routes() -> [
     %% - oz_clusters_list_relationships
     {<<"/clusters/:id/effective_groups">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = eff_groups}
     }},
     %% Get cluster's effective group details
@@ -227,6 +250,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/clusters/:id/effective_groups/:gid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_CLUSTER(?BINDING(id))
     }},
@@ -236,6 +260,7 @@ routes() -> [
     %% - oz_clusters_view_privileges
     {<<"/clusters/:id/effective_groups/:gid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = {eff_group_privileges, ?BINDING(gid)}}
     }},
     %% Get effective group's cluster membership intermediaries
@@ -244,6 +269,7 @@ routes() -> [
     %% - oz_clusters_view
     {<<"/clusters/:id/effective_groups/:gid/membership">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(id), aspect = {eff_group_membership, ?BINDING(gid)}}
     }}
 ].

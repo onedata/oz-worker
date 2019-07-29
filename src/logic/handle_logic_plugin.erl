@@ -59,6 +59,7 @@ operation_supported(create, {user, _}, private) -> true;
 operation_supported(create, {group, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
+operation_supported(get, privileges, _) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
@@ -153,7 +154,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}};
 
 create(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_user()),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_member()),
     entity_graph:add_relation(
         od_user, UserId,
         od_handle, HandleId,
@@ -165,7 +166,7 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}, data = Data})
     {ok, resource, {NewGRI, ?THROUGH_HANDLE(HandleId), {UserData, Rev}}};
 
 create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_user()),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_member()),
     entity_graph:add_relation(
         od_group, GroupId,
         od_handle, HandleId,
@@ -188,6 +189,12 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
 get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, HandleDocs} = od_handle:list(),
     {ok, [HandleId || #document{key = HandleId} <- HandleDocs]};
+
+get(#el_req{gri = #gri{aspect = privileges}}, _) ->
+    {ok, #{
+        <<"member">> => privileges:handle_member(),
+        <<"admin">> => privileges:handle_admin()
+    }};
 
 get(#el_req{gri = #gri{aspect = instance, scope = private}}, Handle) ->
     {ok, Handle};
@@ -376,6 +383,9 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, _}}}, Ha
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Handle) ->
     auth_by_privilege(Req, Handle, ?HANDLE_VIEW);
+
+authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
+    true;
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Handle) ->
     case {Req#el_req.auth, Req#el_req.auth_hint} of

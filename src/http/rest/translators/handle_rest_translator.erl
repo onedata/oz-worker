@@ -59,6 +59,9 @@ create_response(#gri{id = HandleId, aspect = {group, GroupId}}, _, resource, _) 
 get_response(#gri{id = undefined, aspect = list}, Handles) ->
     rest_translator:ok_body_reply(#{<<"handles">> => Handles});
 
+get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
+    rest_translator:ok_body_reply(Privileges);
+
 get_response(#gri{id = HandleId, aspect = instance, scope = protected}, HandleData) ->
     #{
         <<"handleServiceId">> := HandleService,

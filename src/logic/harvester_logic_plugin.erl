@@ -77,6 +77,7 @@ operation_supported(create, {query, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
 operation_supported(get, all_plugins, private) -> true;
+operation_supported(get, privileges, _) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
@@ -210,7 +211,7 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     Macaroon = maps:get(<<"token">>, Req#el_req.data),
     % In the future, privileges can be included in token
-    Privileges = privileges:harvester_user(),
+    Privileges = privileges:harvester_member(),
     JoinHarvesterFun = fun(od_harvester, HarvesterId) ->
         case Req#el_req.auth_hint of
             ?AS_USER(UserId) ->
@@ -274,7 +275,7 @@ create(Req = #el_req{gri = #gri{id = HarvesterId, aspect = invite_space_token}})
     {ok, value, Macaroon};
 
 create(#el_req{gri = #gri{id = HarvesterId, aspect = {user, UserId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data, privileges:harvester_user()),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:harvester_member()),
     entity_graph:add_relation(
         od_user, UserId,
         od_harvester, HarvesterId,
@@ -286,7 +287,7 @@ create(#el_req{gri = #gri{id = HarvesterId, aspect = {user, UserId}}, data = Dat
     {ok, resource, {NewGRI, ?THROUGH_HARVESTER(HarvesterId), {UserData, Rev}}};
 
 create(#el_req{gri = #gri{id = HarvesterId, aspect = {group, GroupId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data, privileges:harvester_user()),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:harvester_member()),
     entity_graph:add_relation(
         od_group, GroupId,
         od_harvester, HarvesterId,
@@ -314,7 +315,7 @@ create(Req = #el_req{gri = GRI = #gri{id = HarvesterId, aspect = group}}) ->
     {ok, resource, {NewGRI = #gri{id = GroupId}, _}} = group_logic_plugin:create(
         Req#el_req{gri = GRI#gri{type = od_group, id = undefined, aspect = instance}}
     ),
-    Privileges = privileges:harvester_user(),
+    Privileges = privileges:harvester_member(),
     entity_graph:add_relation(
         od_group, GroupId,
         od_harvester, HarvesterId,
@@ -406,6 +407,13 @@ create(#el_req{auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {submit_batch, 
 get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, HarvesterDocs} = od_harvester:list(),
     {ok, [HarvesterId || #document{key = HarvesterId} <- HarvesterDocs]};
+
+get(#el_req{gri = #gri{aspect = privileges}}, _) ->
+    {ok, #{
+        <<"member">> => privileges:harvester_member(),
+        <<"manager">> => privileges:harvester_manager(),
+        <<"admin">> => privileges:harvester_admin()
+    }};
 
 get(#el_req{gri = #gri{aspect = instance, scope = private}}, Harvester) ->
     {ok, Harvester};
@@ -789,6 +797,9 @@ authorize(#el_req{operation = create, gri = #gri{aspect = {query, _}}, auth = Au
             % client can be nobody
             Harvester#od_harvester.public
     end;
+
+authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
+    true;
 
 authorize(#el_req{operation = get, auth = Auth, gri = #gri{aspect = instance, scope = private}}, Harvester) ->
     case Auth of

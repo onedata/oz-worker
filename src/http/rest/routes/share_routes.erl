@@ -40,6 +40,7 @@ routes() -> [
     %% - oz_shares_list
     {<<"/shares">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_share, id = undefined, aspect = list}
     }},
     %% Get share details
@@ -48,6 +49,7 @@ routes() -> [
     %% - oz_shares_view
     {<<"/shares/:id">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_share, id = ?BINDING(id), aspect = instance, scope = private}
     }},
     %% Modify share details

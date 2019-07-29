@@ -39,13 +39,22 @@ routes() -> [
     %% - oz_spaces_list
     {<<"/spaces">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = undefined, aspect = list}
+    }},
+    %% Get all space privileges.
+    %% This operation requires one of the following privileges:
+    {<<"/spaces/privileges">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_space, id = undefined, aspect = privileges}
     }},
     %% Get space details
     %% This operation requires one of the following privileges:
     %% - oz_spaces_view
     {<<"/spaces/:id">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = instance, scope = protected}
     }},
     %% Modify space details
@@ -70,6 +79,7 @@ routes() -> [
     %% - oz_spaces_list_relationships
     {<<"/spaces/:id/users">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = users}
     }},
     %% Create space user invite token
@@ -78,6 +88,7 @@ routes() -> [
     %% - oz_spaces_add_relationships
     {<<"/spaces/:id/users/token">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = invite_user_token}
     }},
     %% Add user to space
@@ -97,6 +108,7 @@ routes() -> [
     %% - oz_users_view
     {<<"/spaces/:id/users/:uid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_SPACE(?BINDING(id))
     }},
@@ -115,6 +127,7 @@ routes() -> [
     %% - oz_spaces_view_privileges
     {<<"/spaces/:id/users/:uid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}
     }},
     %% Update user's space privileges
@@ -131,6 +144,7 @@ routes() -> [
     %% - oz_spaces_list_relationships
     {<<"/spaces/:id/effective_users">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = eff_users}
     }},
     %% Get effective space user details
@@ -139,6 +153,7 @@ routes() -> [
     %% - oz_users_view
     {<<"/spaces/:id/effective_users/:uid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_SPACE(?BINDING(id))
     }},
@@ -148,6 +163,7 @@ routes() -> [
     %% - oz_spaces_view_privileges
     {<<"/spaces/:id/effective_users/:uid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {eff_user_privileges, ?BINDING(uid)}}
     }},
     %% Get effective user's space membership intermediaries
@@ -156,6 +172,7 @@ routes() -> [
     %% - oz_spaces_view
     {<<"/spaces/:id/effective_users/:uid/membership">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {eff_user_membership, ?BINDING(uid)}}
     }},
     %% Create group in space
@@ -165,6 +182,7 @@ routes() -> [
     %% - oz_spaces_add_relationships
     {<<"/spaces/:id/groups">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = group},
         b_auth_hint = ?AS_USER(?CLIENT_ID)
     }},
@@ -174,6 +192,7 @@ routes() -> [
     %% - oz_spaces_list_relationships
     {<<"/spaces/:id/groups">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = groups}
     }},
     %% Create space invite token for group
@@ -182,6 +201,7 @@ routes() -> [
     %% - oz_spaces_add_relationships
     {<<"/spaces/:id/groups/token">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = invite_group_token}
     }},
     %% Add group to space
@@ -201,6 +221,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/spaces/:id/groups/:gid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_SPACE(?BINDING(id))
     }},
@@ -218,6 +239,7 @@ routes() -> [
     %% - oz_spaces_view_privileges
     {<<"/spaces/:id/groups/:gid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {group_privileges, ?BINDING(gid)}}
     }},
     %% Update group privileges to space
@@ -234,6 +256,7 @@ routes() -> [
     %% - oz_spaces_list_relationships
     {<<"/spaces/:id/effective_groups">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = eff_groups}
     }},
     %% Get effective space group details
@@ -242,6 +265,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/spaces/:id/effective_groups/:gid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_SPACE(?BINDING(id))
     }},
@@ -251,6 +275,7 @@ routes() -> [
     %% - oz_spaces_view_privileges
     {<<"/spaces/:id/effective_groups/:gid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {eff_group_privileges, ?BINDING(gid)}}
     }},
     %% Get effective group's space membership intermediaries
@@ -259,6 +284,7 @@ routes() -> [
     %% - oz_spaces_view
     {<<"/spaces/:id/effective_groups/:gid/membership">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {eff_group_membership, ?BINDING(gid)}}
     }},
     %% List space shares
@@ -267,6 +293,7 @@ routes() -> [
     %% - oz_spaces_list_relationships
     {<<"/spaces/:id/shares">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = shares}
     }},
     %% Get space share
@@ -284,6 +311,7 @@ routes() -> [
     %% - oz_spaces_list_relationships
     {<<"/spaces/:id/providers">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = providers}
     }},
     %% Create space support token
@@ -292,6 +320,7 @@ routes() -> [
     %% - oz_spaces_add_relationships
     {<<"/spaces/:id/providers/token">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = invite_provider_token}
     }},
     %% Get space provider details
@@ -300,6 +329,7 @@ routes() -> [
     %% - oz_providers_view
     {<<"/spaces/:id/providers/:pid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_SPACE(?BINDING(id))
     }},
@@ -317,6 +347,7 @@ routes() -> [
     %% - oz_spaces_list_relationships
     {<<"/spaces/:id/harvesters">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = harvesters}
     }},
     %% Join harvester by space
@@ -335,6 +366,7 @@ routes() -> [
     %% - oz_harvesters_view
     {<<"/spaces/:id/harvesters/:hid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(hid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_SPACE(?BINDING(id))
     }},

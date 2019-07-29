@@ -77,6 +77,9 @@ create_response(#gri{id = GroupId, aspect = {child, ChGrId}}, _, resource, _) ->
 get_response(#gri{id = undefined, aspect = list}, Groups) ->
     rest_translator:ok_body_reply(#{<<"groups">> => Groups});
 
+get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
+    rest_translator:ok_body_reply(Privileges);
+
 get_response(#gri{id = GroupId, aspect = instance, scope = _}, GroupData) ->
     % scope can be protected or shared
     #{<<"name">> := Name, <<"type">> := Type} = GroupData,

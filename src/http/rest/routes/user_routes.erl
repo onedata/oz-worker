@@ -39,6 +39,7 @@ routes() -> [
     %% - oz_users_list
     {<<"/users">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = undefined, aspect = list}
     }},
     %% Get user details
@@ -46,6 +47,7 @@ routes() -> [
     %% - oz_users_view
     {<<"/users/:id">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(id), aspect = instance, scope = protected}
     }},
     %% Remove user
@@ -66,6 +68,7 @@ routes() -> [
     %% - oz_view_privileges
     {<<"/users/:id/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(id), aspect = oz_privileges}
     }},
     %% Remove user's admin privileges
@@ -87,18 +90,21 @@ routes() -> [
     %% - oz_view_privileges
     {<<"/users/:id/effective_privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(id), aspect = eff_oz_privileges}
     }},
     %% Create provider registration token for a user
     %% This operation does not require any specific privileges.
     {<<"/users/:id/clusters/provider_registration_token">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(id), aspect = provider_registration_token}
     }},
     %% Get current user details
     %% This operation does not require any specific privileges.
     {<<"/user">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = instance, scope = protected}
     }},
     %% Modify current user
@@ -129,6 +135,7 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = oz_privileges}
     }},
     %% Remove current user's admin privileges
@@ -149,30 +156,35 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/effective_privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = eff_oz_privileges}
     }},
     %% Generate user access token
     %% This operation does not require any specific privileges.
     {<<"/user/client_tokens">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = client_tokens}
     }},
     %% List user access tokens
     %% This operation does not require any specific privileges.
     {<<"/user/client_tokens">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = client_tokens}
     }},
     %% Delete access token
     %% This operation does not require any specific privileges.
     {<<"/user/client_tokens/:tid">>, #rest_req{
         method = 'DELETE',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {client_token, ?BINDING(tid)}}
     }},
     %% Get default space
     %% This operation does not require any specific privileges.
     {<<"/user/default_space">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = default_space}
     }},
     %% Unset default space
@@ -191,6 +203,7 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/default_provider">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = default_provider}
     }},
     %% Unset default provider
@@ -209,6 +222,7 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/idp_access_token/:idp">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {idp_access_token, ?BINDING(idp)}}
     }},
     %% Create a new group for the current user
@@ -222,6 +236,7 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/groups">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = groups}
     }},
     %% Join group
@@ -235,6 +250,7 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/groups/:gid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
@@ -242,18 +258,21 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/groups/:gid">>, #rest_req{
         method = 'DELETE',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {group, ?BINDING(gid)}}
     }},
     %% List effective user groups
     %% This operation does not require any specific privileges.
     {<<"/user/effective_groups">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = eff_groups}
     }},
     %% Get effective group details
     %% This operation does not require any specific privileges.
     {<<"/user/effective_groups/:gid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
@@ -268,6 +287,7 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/spaces">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = spaces}
     }},
     %% Join space
@@ -281,6 +301,7 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/spaces/:sid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(sid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
@@ -288,18 +309,21 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/spaces/:sid">>, #rest_req{
         method = 'DELETE',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {space, ?BINDING(sid)}}
     }},
     %% Get user space alias
     %% This operation does not require any specific privileges.
     {<<"/user/spaces/:sid/alias">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {space_alias, ?BINDING(sid)}}
     }},
     %% Remove space alias
     %% This operation does not require any specific privileges.
     {<<"/user/spaces/:sid/alias">>, #rest_req{
         method = 'DELETE',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {space_alias, ?BINDING(sid)}}
     }},
     %% Set user space alias
@@ -312,12 +336,14 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/effective_spaces">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = eff_spaces}
     }},
     %% Get effective space details
     %% This operation does not require any specific privileges.
     {<<"/user/effective_spaces/:sid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(sid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
@@ -325,12 +351,14 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/effective_providers">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = eff_providers}
     }},
     %% Get user's effective provider details
     %% This operation does not require any specific privileges.
     {<<"/user/effective_providers/:pid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
@@ -338,6 +366,7 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/effective_providers/:pid/spaces">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = {user_spaces, ?CLIENT_ID}, scope = private}
     }},
     %% Create a new handle service for the current user
@@ -352,12 +381,14 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/handle_services">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = handle_services}
     }},
     %% Get user handle service details
     %% This operation does not require any specific privileges.
     {<<"/user/handle_services/:hsid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(hsid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
@@ -365,18 +396,21 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/handle_services/:hsid">>, #rest_req{
         method = 'DELETE',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {handle_service, ?BINDING(hsid)}}
     }},
     %% List user effective handle services
     %% This operation does not require any specific privileges.
     {<<"/user/effective_handle_services">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = eff_handle_services}
     }},
     %% Get effective handle service details
     %% This operation does not require any specific privileges.
     {<<"/user/effective_handle_services/:hsid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(hsid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
@@ -392,12 +426,14 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/handles">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = handles}
     }},
     %% Get handle details
     %% This operation does not require any specific privileges.
     {<<"/user/handles/:hid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
@@ -405,18 +441,21 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/handles/:hid">>, #rest_req{
         method = 'DELETE',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {handle, ?BINDING(hid)}}
     }},
     %% Get user effective handles
     %% This operation does not require any specific privileges.
     {<<"/user/effective_handles">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = eff_handles}
     }},
     %% Get effective handle details
     %% This operation does not require any specific privileges.
     {<<"/user/effective_handles/:hid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
@@ -431,6 +470,7 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/harvesters">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = harvesters}
     }},
     %% Join harvester
@@ -444,6 +484,7 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/harvesters/:hid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(hid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
@@ -451,18 +492,21 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/harvesters/:hid">>, #rest_req{
         method = 'DELETE',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {harvester, ?BINDING(hid)}}
     }},
     %% List effective user harvesters
     %% This operation does not require any specific privileges.
     {<<"/user/effective_harvesters">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = eff_harvesters}
     }},
     %% Get effective harvester details
     %% This operation does not require any specific privileges.
     {<<"/user/effective_harvesters/:hid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(hid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
@@ -470,12 +514,14 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/clusters">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = clusters}
     }},
     %% Create provider registration token for self
     %% This operation does not require any specific privileges.
     {<<"/user/clusters/provider_registration_token">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = provider_registration_token}
     }},
     %% Join cluster
@@ -489,6 +535,7 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/clusters/:cid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(cid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }},
@@ -496,18 +543,21 @@ routes() -> [
     %% This operation does not require any specific privileges.
     {<<"/user/clusters/:cid">>, #rest_req{
         method = 'DELETE',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {cluster, ?BINDING(cid)}}
     }},
     %% List user's effective clusters
     %% This operation does not require any specific privileges.
     {<<"/user/effective_clusters">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = eff_clusters}
     }},
     %% Get user's effective cluster details
     %% This operation does not require any specific privileges.
     {<<"/user/effective_clusters/:cid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = ?BINDING(cid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_USER(?CLIENT_ID)
     }}

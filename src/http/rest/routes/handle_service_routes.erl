@@ -39,13 +39,22 @@ routes() -> [
     %% - oz_handle_services_list
     {<<"/handle_services">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = undefined, aspect = list}
+    }},
+    %% Get all handle service privileges.
+    %% This operation requires one of the following privileges:
+    {<<"/handle_services/privileges">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_handle_service, id = undefined, aspect = privileges}
     }},
     %% Get handle service
     %% This operation requires one of the following privileges:
     %% - oz_handle_services_view
     {<<"/handle_services/:id">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = instance, scope = protected}
     }},
     %% Modify handle service
@@ -70,6 +79,7 @@ routes() -> [
     %% - oz_handle_services_list_relationships
     {<<"/handle_services/:id/users">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = users}
     }},
     %% Add handle service user
@@ -79,6 +89,7 @@ routes() -> [
     %% - oz_users_add_relationships
     {<<"/handle_services/:id/users/:uid">>, #rest_req{
         method = 'PUT',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = {user, ?BINDING(uid)}}
     }},
     %% Get handle service user
@@ -87,6 +98,7 @@ routes() -> [
     %% - oz_users_view
     {<<"/handle_services/:id/users/:uid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_HANDLE_SERVICE(?BINDING(id))
     }},
@@ -105,6 +117,7 @@ routes() -> [
     %% - oz_handle_services_view_privileges
     {<<"/handle_services/:id/users/:uid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}
     }},
     %% Update user's handle service privileges
@@ -121,6 +134,7 @@ routes() -> [
     %% - oz_handle_services_list_relationships
     {<<"/handle_services/:id/effective_users">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = eff_users}
     }},
     %% Get effective handle service user
@@ -129,6 +143,7 @@ routes() -> [
     %% - oz_users_view
     {<<"/handle_services/:id/effective_users/:uid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_HANDLE_SERVICE(?BINDING(id))
     }},
@@ -138,6 +153,7 @@ routes() -> [
     %% - oz_handle_services_view_privileges
     {<<"/handle_services/:id/effective_users/:uid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = {eff_user_privileges, ?BINDING(uid)}}
     }},
     %% List handle service groups
@@ -146,6 +162,7 @@ routes() -> [
     %% - oz_handle_services_list_relationships
     {<<"/handle_services/:id/groups">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = groups}
     }},
     %% Add handle service group
@@ -163,6 +180,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/handle_services/:id/groups/:gid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_HANDLE_SERVICE(?BINDING(id))
     }},
@@ -181,6 +199,7 @@ routes() -> [
     %% - oz_handle_services_view_privileges
     {<<"/handle_services/:id/groups/:gid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = {group_privileges, ?BINDING(gid)}}
     }},
     %% Update group's handle service privileges
@@ -197,6 +216,7 @@ routes() -> [
     %% - oz_handle_services_list_relationships
     {<<"/handle_services/:id/effective_groups">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = eff_groups}
     }},
     %% Get effective handle service group
@@ -205,6 +225,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/handle_services/:id/effective_groups/:gid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_HANDLE_SERVICE(?BINDING(id))
     }},
@@ -214,6 +235,7 @@ routes() -> [
     %% - oz_handle_services_view_privileges
     {<<"/handle_services/:id/effective_groups/:gid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = {eff_group_privileges, ?BINDING(gid)}}
     }},
     %% List handle service handles
@@ -222,6 +244,7 @@ routes() -> [
     %% - oz_handle_services_list_relationships
     {<<"/handle_services/:id/handles">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = ?BINDING(id), aspect = handles}
     }},
     %% Get handle from handle service
@@ -230,6 +253,7 @@ routes() -> [
     %% - oz_handles_view
     {<<"/handle_services/:id/handles/:hid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(hid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_HANDLE_SERVICE(?BINDING(id))
     }}

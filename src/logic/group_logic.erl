@@ -26,6 +26,7 @@
     get_protected_data/2,
     get_shared_data/2,
     list/1,
+    list_privileges/0,
     get_oz_privileges/2, get_eff_oz_privileges/2
 ]).
 -export([
@@ -208,6 +209,19 @@ list(Auth) ->
         operation = get,
         auth = Auth,
         gri = #gri{type = od_group, id = undefined, aspect = list}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get all possible group privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec list_privileges() -> {ok, map()} | {error, term()}.
+list_privileges() ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        gri = #gri{type = od_group, id = undefined, aspect = privileges}
     }).
 
 

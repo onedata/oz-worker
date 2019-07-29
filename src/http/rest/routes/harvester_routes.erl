@@ -39,13 +39,22 @@ routes() -> [
     %% - oz_harvesters_list
     {<<"/harvesters">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = undefined, aspect = list}
+    }},
+    %% Get all harvester privileges.
+    %% This operation requires one of the following privileges:
+    {<<"/harvesters/privileges">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_harvester, id = undefined, aspect = privileges}
     }},
     %% Get harvester details
     %% This operation requires one of the following privileges:
     %% - oz_harvesters_view
     {<<"/harvesters/:id">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = instance, scope = protected}
     }},
     %% Modify harvester details
@@ -78,6 +87,7 @@ routes() -> [
     %% - oz_harvesters_list_relationships
     {<<"/harvesters/:id/users">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = users}
     }},
     %% Create harvester user invite token
@@ -86,6 +96,7 @@ routes() -> [
     %% - oz_harvesters_add_relationships
     {<<"/harvesters/:id/users/token">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = invite_user_token}
     }},
     %% Add user to harvester
@@ -105,6 +116,7 @@ routes() -> [
     %% - oz_users_view
     {<<"/harvesters/:id/users/:uid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_HARVESTER(?BINDING(id))
     }},
@@ -123,6 +135,7 @@ routes() -> [
     %% - oz_harvesters_view_privileges
     {<<"/harvesters/:id/users/:uid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}
     }},
     %% Update user's harvester privileges
@@ -139,6 +152,7 @@ routes() -> [
     %% - oz_harvesters_list_relationships
     {<<"/harvesters/:id/effective_users">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = eff_users}
     }},
     %% Get effective harvester user details
@@ -147,6 +161,7 @@ routes() -> [
     %% - oz_users_view
     {<<"/harvesters/:id/effective_users/:uid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_HARVESTER(?BINDING(id))
     }},
@@ -156,6 +171,7 @@ routes() -> [
     %% - oz_harvesters_view_privileges
     {<<"/harvesters/:id/effective_users/:uid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {eff_user_privileges, ?BINDING(uid)}}
     }},
     %% Get effective user's harvester membership intermediaries
@@ -164,6 +180,7 @@ routes() -> [
     %% - oz_harvesters_view
     {<<"/harvesters/:id/effective_users/:uid/membership">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {eff_user_membership, ?BINDING(uid)}}
     }},
     %% Create group in harvester
@@ -173,6 +190,7 @@ routes() -> [
     %% - oz_harvesters_add_relationships
     {<<"/harvesters/:id/groups">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = group},
         b_auth_hint = ?AS_USER(?CLIENT_ID)
     }},
@@ -182,6 +200,7 @@ routes() -> [
     %% - oz_harvesters_list_relationships
     {<<"/harvesters/:id/groups">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = groups}
     }},
     %% Create harvester invite token for group
@@ -190,6 +209,7 @@ routes() -> [
     %% - oz_harvesters_add_relationships
     {<<"/harvesters/:id/groups/token">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = invite_group_token}
     }},
     %% Add group to harvester
@@ -209,6 +229,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/harvesters/:id/groups/:gid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_HARVESTER(?BINDING(id))
     }},
@@ -226,6 +247,7 @@ routes() -> [
     %% - oz_harvesters_view_privileges
     {<<"/harvesters/:id/groups/:gid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {group_privileges, ?BINDING(gid)}}
     }},
     %% Update group privileges to harvester
@@ -242,6 +264,7 @@ routes() -> [
     %% - oz_harvesters_list_relationships
     {<<"/harvesters/:id/effective_groups">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = eff_groups}
     }},
     %% Get effective harvester group details
@@ -250,6 +273,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/harvesters/:id/effective_groups/:gid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_HARVESTER(?BINDING(id))
     }},
@@ -259,6 +283,7 @@ routes() -> [
     %% - oz_harvesters_view_privileges
     {<<"/harvesters/:id/effective_groups/:gid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {eff_group_privileges, ?BINDING(gid)}}
     }},
     %% Get effective group's harvester membership intermediaries
@@ -267,6 +292,7 @@ routes() -> [
     %% - oz_harvesters_view
     {<<"/harvesters/:id/effective_groups/:gid/membership">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {eff_group_membership, ?BINDING(gid)}}
     }},
     %% List harvester spaces
@@ -275,6 +301,7 @@ routes() -> [
     %% - oz_harvesters_list_relationships
     {<<"/harvesters/:id/spaces">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = spaces}
     }},
     %% Create harvester invite token for space
@@ -283,6 +310,7 @@ routes() -> [
     %% - oz_harvesters_add_relationships
     {<<"/harvesters/:id/spaces/token">>, #rest_req{
         method = 'POST',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = invite_space_token}
     }},
     %% Add space to harvester
@@ -300,6 +328,7 @@ routes() -> [
     %% - oz_spaces_view
     {<<"/harvesters/:id/spaces/:sid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(sid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_HARVESTER(?BINDING(id))
     }},
@@ -316,6 +345,7 @@ routes() -> [
     %% - oz_harvesters_view
     {<<"/harvesters/:id/gui_plugin_config">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = gui_plugin_config, scope = private}
     }},
     %% Modify harvester configuration
@@ -339,9 +369,10 @@ routes() -> [
     %% - oz_harvesters_view
     {<<"/harvesters/:id/indices">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = indices}
     }},
-    %% Query harvester index.
+    %% Query harvester index
     %% This operation requires one of the following privileges:
     %% - oz_harvesters_view
     {<<"/harvesters/:id/indices/:idx/query">>, #rest_req{
@@ -354,6 +385,7 @@ routes() -> [
     %% - oz_harvesters_view
     {<<"/harvesters/:id/indices/:idx/stats">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {index_stats, ?BINDING(idx)}, scope = private}
     }},
     %% Get harvester index details
@@ -362,6 +394,7 @@ routes() -> [
     %% - oz_harvesters_view
     {<<"/harvesters/:id/indices/:idx">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = ?BINDING(id), aspect = {index, ?BINDING(idx)}, scope = private}
     }},
     %% Modify harvester index

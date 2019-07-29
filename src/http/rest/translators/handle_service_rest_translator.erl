@@ -60,6 +60,9 @@ create_response(#gri{id = HServiceId, aspect = {group, GrId}}, _, resource, _) -
 get_response(#gri{id = undefined, aspect = list}, HServices) ->
     rest_translator:ok_body_reply(#{<<"handle_services">> => HServices});
 
+get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
+    rest_translator:ok_body_reply(Privileges);
+
 get_response(#gri{id = HServiceId, aspect = instance, scope = protected}, HServiceData) ->
     #{
         <<"name">> := Name,

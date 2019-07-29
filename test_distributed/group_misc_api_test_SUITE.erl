@@ -33,6 +33,7 @@
 -export([
     create_test/1,
     list_test/1,
+    list_privileges_test/1,
     get_test/1,
     update_test/1,
     delete_test/1,
@@ -51,6 +52,7 @@ all() ->
     ?ALL([
         create_test,
         list_test,
+        list_privileges_test/1,
         get_test,
         update_test,
         delete_test,
@@ -200,6 +202,26 @@ list_test(Config) ->
     ?assert(not oz_test_utils:call_oz(
         Config, group_logic, exists, [<<"asdiucyaie827346w">>])
     ).
+
+
+list_privileges_test(Config) ->
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, nobody]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/groups/privileges">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{
+                <<"member">> => [atom_to_binary(P, utf8) || P <- privileges:group_member()],
+                <<"manager">> => [atom_to_binary(P, utf8) || P <- privileges:group_manager()],
+                <<"admin">> => [atom_to_binary(P, utf8) || P <- privileges:group_admin()]
+            }
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 get_test(Config) ->

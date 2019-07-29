@@ -40,7 +40,15 @@ routes() -> [
     %% - oz_handles_list
     {<<"/handles">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = undefined, aspect = list}
+    }},
+    %% Get all handle privileges.
+    %% This operation requires one of the following privileges:
+    {<<"/handles/privileges">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_handle, id = undefined, aspect = privileges}
     }},
     %% Get handle
     %% This operation requires one of the following privileges:
@@ -48,6 +56,7 @@ routes() -> [
     %% - oz_handles_view
     {<<"/handles/:id">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(id), aspect = instance, scope = protected}
     }},
     %% Modify handle
@@ -72,6 +81,7 @@ routes() -> [
     %% - oz_handles_list_relationships
     {<<"/handles/:id/users">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(id), aspect = users}
     }},
     %% Add handle user
@@ -81,6 +91,7 @@ routes() -> [
     %% - oz_users_add_relationships
     {<<"/handles/:id/users/:uid">>, #rest_req{
         method = 'PUT',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(id), aspect = {user, ?BINDING(uid)}}
     }},
     %% Get handle user
@@ -89,6 +100,7 @@ routes() -> [
     %% - oz_users_view
     {<<"/handles/:id/users/:uid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_HANDLE(?BINDING(id))
     }},
@@ -107,6 +119,7 @@ routes() -> [
     %% - oz_handles_view_privileges
     {<<"/handles/:id/users/:uid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(id), aspect = {user_privileges, ?BINDING(uid)}}
     }},
     %% Update user handle privileges
@@ -123,6 +136,7 @@ routes() -> [
     %% - oz_handles_list_relationships
     {<<"/handles/:id/effective_users">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(id), aspect = eff_users}
     }},
     %% Get effective handle user
@@ -131,6 +145,7 @@ routes() -> [
     %% - oz_users_view
     {<<"/handles/:id/effective_users/:uid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?BINDING(uid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_HANDLE(?BINDING(id))
     }},
@@ -140,6 +155,7 @@ routes() -> [
     %% - oz_handles_view_privileges
     {<<"/handles/:id/effective_users/:uid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(id), aspect = {eff_user_privileges, ?BINDING(uid)}}
     }},
     %% List handle groups
@@ -148,6 +164,7 @@ routes() -> [
     %% - oz_handles_list_relationships
     {<<"/handles/:id/groups">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(id), aspect = groups}
     }},
     %% Add handle group
@@ -157,6 +174,7 @@ routes() -> [
     %% - oz_groups_add_relationships
     {<<"/handles/:id/groups/:gid">>, #rest_req{
         method = 'PUT',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(id), aspect = {group, ?BINDING(gid)}}
     }},
     %% Get handle group
@@ -165,6 +183,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/handles/:id/groups/:gid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_HANDLE(?BINDING(id))
     }},
@@ -183,6 +202,7 @@ routes() -> [
     %% - oz_handles_view_privileges
     {<<"/handles/:id/groups/:gid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(id), aspect = {group_privileges, ?BINDING(gid)}}
     }},
     %% Update handle groups privileges
@@ -199,6 +219,7 @@ routes() -> [
     %% - oz_handles_list_relationships
     {<<"/handles/:id/effective_groups">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(id), aspect = eff_groups}
     }},
     %% Get effective handle group
@@ -207,6 +228,7 @@ routes() -> [
     %% - oz_groups_view
     {<<"/handles/:id/effective_groups/:gid">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = ?BINDING(gid), aspect = instance, scope = shared},
         b_auth_hint = ?THROUGH_HANDLE(?BINDING(id))
     }},
@@ -216,6 +238,7 @@ routes() -> [
     %% - oz_handles_view_privileges
     {<<"/handles/:id/effective_groups/:gid/privileges">>, #rest_req{
         method = 'GET',
+        produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle, id = ?BINDING(id), aspect = {eff_group_privileges, ?BINDING(gid)}}
     }}
 ].

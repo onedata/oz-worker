@@ -69,6 +69,7 @@ operation_supported(create, group, private) -> true;
 operation_supported(create, harvest_metadata, private) -> true;
 
 operation_supported(get, list, private) -> true;
+operation_supported(get, privileges, _) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
@@ -163,7 +164,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     Macaroon = maps:get(<<"token">>, Req#el_req.data),
     % In the future, privileges can be included in token
-    Privileges = privileges:space_user(),
+    Privileges = privileges:space_member(),
     JoinSpaceFun = fun(od_space, SpaceId) ->
         case Req#el_req.auth_hint of
             ?AS_USER(UserId) ->
@@ -220,7 +221,7 @@ create(Req = #el_req{gri = #gri{id = SpaceId, aspect = invite_provider_token}}) 
     {ok, value, Macaroon};
 
 create(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data, privileges:space_user()),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:space_member()),
     entity_graph:add_relation(
         od_user, UserId,
         od_space, SpaceId,
@@ -236,7 +237,7 @@ create(Req = #el_req{gri = GRI = #gri{id = SpaceId, aspect = group}}) ->
     {ok, resource, {NewGRI = #gri{id = GroupId}, _}} = group_logic_plugin:create(
         Req#el_req{gri = GRI#gri{type = od_group, id = undefined, aspect = instance}}
     ),
-    Privileges = privileges:space_user(),
+    Privileges = privileges:space_member(),
     entity_graph:add_relation(
         od_group, GroupId,
         od_space, SpaceId,
@@ -246,7 +247,7 @@ create(Req = #el_req{gri = GRI = #gri{id = SpaceId, aspect = group}}) ->
     {ok, resource, {NewGRI, {Group, Rev}}};
 
 create(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data, privileges:space_user()),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:space_member()),
     entity_graph:add_relation(
         od_group, GroupId,
         od_space, SpaceId,
@@ -291,6 +292,13 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
 get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, SpaceDocs} = od_space:list(),
     {ok, [SpaceId || #document{key = SpaceId} <- SpaceDocs]};
+
+get(#el_req{gri = #gri{aspect = privileges}}, _) ->
+    {ok, #{
+        <<"member">> => privileges:space_member(),
+        <<"manager">> => privileges:space_manager(),
+        <<"admin">> => privileges:space_admin()
+    }};
 
 get(#el_req{gri = #gri{aspect = instance, scope = private}}, Space) ->
     {ok, Space};
@@ -548,6 +556,9 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_tok
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_provider_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_PROVIDER);
+
+authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
+    true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Space) ->
     case Req#el_req.auth of
