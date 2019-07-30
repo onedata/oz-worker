@@ -480,7 +480,7 @@ map_entitlements(IdP, Entitlements) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec map_privileges(privileges()) -> [privileges:group_privilege()].
-map_privileges(member) -> privileges:group_user();
+map_privileges(member) -> privileges:group_member();
 map_privileges(manager) -> privileges:group_manager();
 map_privileges(admin) -> privileges:group_admin().
 

@@ -482,7 +482,7 @@ get_user_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:cluster_add_user(Config, C1, U3),
 
     AllPrivs = privileges:cluster_privileges(),
-    InitialPrivs = privileges:cluster_user(),
+    InitialPrivs = privileges:cluster_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:cluster_set_user_privileges(
@@ -755,7 +755,7 @@ get_eff_user_privileges_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = privileges:cluster_privileges(),
-    InitialPrivs = privileges:cluster_user(),
+    InitialPrivs = privileges:cluster_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->

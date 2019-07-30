@@ -90,6 +90,7 @@ list_privileges_test(Config) ->
             path = <<"/privileges">>,
             expected_code = ?HTTP_200_OK,
             expected_body = #{
+                <<"viewer">> => [atom_to_binary(P, utf8) || P <- privileges:oz_viewer()],
                 <<"admin">> => [atom_to_binary(P, utf8) || P <- privileges:oz_admin()]
             }
         }

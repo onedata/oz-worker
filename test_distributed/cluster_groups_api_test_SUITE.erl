@@ -544,7 +544,7 @@ get_group_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:cluster_add_group(Config, C1, G1),
 
     AllPrivs = privileges:cluster_privileges(),
-    InitialPrivs = privileges:cluster_user(),
+    InitialPrivs = privileges:cluster_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:cluster_set_group_privileges(
@@ -818,7 +818,7 @@ get_eff_group_privileges_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = privileges:cluster_privileges(),
-    InitialPrivs = privileges:cluster_user(),
+    InitialPrivs = privileges:cluster_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->

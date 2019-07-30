@@ -112,6 +112,7 @@ get(#el_req{gri = #gri{aspect = test_image}}, _) ->
 
 get(#el_req{gri = #gri{aspect = privileges}}, _) ->
     {ok, #{
+        <<"viewer">> => privileges:oz_viewer(),
         <<"admin">> => privileges:oz_admin()
     }}.
 
