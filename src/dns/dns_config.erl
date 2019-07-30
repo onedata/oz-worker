@@ -33,13 +33,17 @@
 %%--------------------------------------------------------------------
 %% @doc
 %% Joins subdomain with domain to build fully qualified domain.
+%% Makes the string lowercase to provide some normalization to
+%% names given in custom (app.config) entries.
+%% Note that the Onezone domain is expected to be already in lowercase
+%% and is not always passed through this function.
 %% @end
 %%--------------------------------------------------------------------
 -spec build_domain(Subdomain :: domain(), Domain :: domain()) -> domain().
 build_domain(<<>>, Domain) ->
-    Domain;
+    string:lowercase(Domain);
 build_domain(Subdomain, Domain) ->
-    <<Subdomain/binary, ".", Domain/binary>>.
+    string:lowercase(<<Subdomain/binary, ".", Domain/binary>>).
 
 
 %%--------------------------------------------------------------------
@@ -200,7 +204,10 @@ build_onezone_ns_entries(OneZoneIPs) ->
     {NSDomainsIPs, _} = lists:foldl(fun(IP, {DomainsIPs, Count}) ->
         Index = integer_to_binary(Count),
         Domain = build_domain(<<"ns", Index/binary>>, OneZoneDomain),
-        {[{Domain, [IP]} | DomainsIPs], Count + 1}
+        {
+            [{Domain, [IP]} | DomainsIPs],
+            Count + 1
+        }
     end, {[], 1}, NSIPsRepeated),
 
     % preserve ascending order
@@ -273,12 +280,14 @@ build_cname_records() ->
 %% by a provider, logging the fact.
 %% @end
 %%--------------------------------------------------------------------
+-spec filter_shadowed_entries([T]) -> [T] when T :: tuple().
 filter_shadowed_entries(StaticEntries) ->
-    ProviderEntries = maps:to_list(dns_state:get_subdomains_to_ips()),
+    ProviderSubdomains = dns_state:get_subdomains_to_ips(),
     % check if there are any overlapping records
     lists:filter(fun(Entry) ->
         Subdomain = element(1, Entry), % not all tuples are 2-element, eg. MX entries
-        case proplists:is_defined(Subdomain, ProviderEntries) of
+        NormalizedSubdomain = string:lowercase(Subdomain),
+        case maps:is_key(NormalizedSubdomain, ProviderSubdomains) of
             false -> true;
             _ ->
                 ?warning("Ignoring static entry for subdomain \"~s\" "

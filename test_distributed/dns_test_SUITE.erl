@@ -353,23 +353,37 @@ dns_server_resolves_static_records(Config) ->
     OZIPs = ?config(oz_ips, Config),
     OZDomain = ?config(oz_domain, Config),
 
+    % app.config entries can use upper/mixed case and should be lowercased
+    % for use by the DNS server.
+    % The DNS server should understand queries regardless of case.
     Records = [
-        {txt, dns_static_txt_records,
-            [{<<"txt">>, <<"txt-value">>}],
+        {
+            txt,
+            dns_static_txt_records,
+            [{<<"tXt">>, <<"txt-value">>}],
             {"txt." ++ OZDomain, [["txt-value"]]}},
-        {a, dns_static_a_records,
-            [{<<"a">>, ?PROVIDER_IPS1}], {"a." ++ OZDomain, ?PROVIDER_IPS1}},
-        {mx, dns_static_mx_records,
-            [{<<"mx">>, <<"mx-value">>, 10}],
+        {
+            a,
+            dns_static_a_records,
+            [{<<"A">>, ?PROVIDER_IPS1}],
+            {"a." ++ OZDomain, ?PROVIDER_IPS1}},
+        {
+            mx,
+            dns_static_mx_records,
+            [{<<"mX">>, <<"mx-value">>, 10}],
             {"mx." ++ OZDomain, [{10, "mx-value"}]}
-            },
-        {cname, dns_static_cname_records,
-            [{<<"cname">>, <<"cname-value">>}],
+        },
+        {
+            cname,
+            dns_static_cname_records,
+            [{<<"cName">>, <<"cname-value">>}],
             {"cname." ++ OZDomain, ["cname-value"]}
         },
-        {ns, dns_static_ns_records,
-            [{<<"ns">>, [<<"ns1-value">>, <<"ns2-value">>]}],
-            {"ns."++OZDomain, ["ns1-value", "ns2-value"]}}
+        {
+            ns,
+            dns_static_ns_records,
+            [{<<"nS">>, [<<"ns1-value">>, <<"ns2-value">>]}],
+            {"ns." ++ OZDomain, ["ns1-value", "ns2-value"]}}
     ],
 
     lists:foreach(fun({_, Env, Entries, _}) ->
@@ -379,7 +393,8 @@ dns_server_resolves_static_records(Config) ->
         node_manager_plugin, reconcile_dns_config, [])),
 
     lists:foreach(fun({Type, _, _, {Query, Expected}}) ->
-        assert_dns_answer(OZIPs, Query, Type, Expected)
+        assert_dns_answer(OZIPs, Query, Type, Expected),
+        assert_dns_answer(OZIPs, string:uppercase(Query), Type, Expected)
     end, Records).
 
 
@@ -388,6 +403,7 @@ dns_server_resolves_static_records(Config) ->
 %% @doc
 %% When a static subdomain entry is set after a provider has registered
 %% with the same subdomain the provider subdomain should take precedence.
+%% This detection of duplicates should be case insensitive.
 %% @end
 %%--------------------------------------------------------------------
 static_subdomain_does_not_shadow_provider_subdomain_test(Config) ->
@@ -400,8 +416,10 @@ static_subdomain_does_not_shadow_provider_subdomain_test(Config) ->
 
     Subdomain = ?PROVIDER_SUBDOMAIN1,
     SubdomainBin = <<?PROVIDER_SUBDOMAIN1>>,
+    UpperSubdomainBin = string:uppercase(<<?PROVIDER_SUBDOMAIN1>>),
     OZDomain = ?config(oz_domain, Config),
     FullDomain = Subdomain ++ "." ++ OZDomain,
+    UpperFullDomain = binary_to_list(UpperSubdomainBin) ++ "." ++ OZDomain,
 
     % provider uses a subdomain
     {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config,
@@ -410,14 +428,16 @@ static_subdomain_does_not_shadow_provider_subdomain_test(Config) ->
         Config, ProviderId, SubdomainBin, ProviderIPs1),
 
     % subdomain is set as static entry statically
-    oz_test_utils:set_env(Config, dns_static_a_records, [{SubdomainBin, StaticIPs}]),
+    oz_test_utils:set_env(Config, dns_static_a_records,
+        [{SubdomainBin, StaticIPs}, {UpperSubdomainBin, StaticIPs}]),
 
     % DNS update is sent
     ?assertEqual(ok, oz_test_utils:call_oz(Config,
         node_manager_plugin, reconcile_dns_config, [])),
 
     % provider IPs are still resolved
-    assert_dns_answer(OZIPs, FullDomain, a, ProviderIPs1).
+    assert_dns_answer(OZIPs, FullDomain, a, ProviderIPs1),
+    assert_dns_answer(OZIPs, UpperFullDomain, a, ProviderIPs1).
 
 
 %%--------------------------------------------------------------------
