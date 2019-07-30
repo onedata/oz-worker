@@ -35,7 +35,7 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_cluster, id = undefined, aspect = list}
     }},
-    %% Get all cluster privileges.
+    %% List all cluster privileges.
     %% This operation requires one of the following privileges:
     {<<"/clusters/privileges">>, #rest_req{
         method = 'GET',

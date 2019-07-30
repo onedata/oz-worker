@@ -42,7 +42,7 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_group, id = undefined, aspect = list}
     }},
-    %% Get all group privileges.
+    %% List all group privileges.
     %% This operation requires one of the following privileges:
     {<<"/groups/privileges">>, #rest_req{
         method = 'GET',

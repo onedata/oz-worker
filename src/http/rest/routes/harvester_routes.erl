@@ -42,7 +42,7 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_harvester, id = undefined, aspect = list}
     }},
-    %% Get all harvester privileges.
+    %% List all harvester privileges.
     %% This operation requires one of the following privileges:
     {<<"/harvesters/privileges">>, #rest_req{
         method = 'GET',

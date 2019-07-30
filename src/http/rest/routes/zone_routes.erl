@@ -41,7 +41,7 @@ routes() -> [
         produces = [<<"image/png">>],
         b_gri = #b_gri{type = oz_worker, id = undefined, aspect = test_image}
     }},
-    %% Get all admin privileges.
+    %% List all admin privileges.
     %% This operation requires one of the following privileges:
     {<<"/privileges">>, #rest_req{
         method = 'GET',

@@ -42,7 +42,7 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_handle_service, id = undefined, aspect = list}
     }},
-    %% Get all handle service privileges.
+    %% List all handle service privileges.
     %% This operation requires one of the following privileges:
     {<<"/handle_services/privileges">>, #rest_req{
         method = 'GET',
