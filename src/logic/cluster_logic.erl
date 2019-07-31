@@ -25,7 +25,8 @@
     get/2,
     get_protected_data/2,
     get_public_data/2,
-    list/1
+    list/1,
+    list_privileges/0
 ]).
 -export([
     update_version_info/4,
@@ -188,6 +189,19 @@ list(Auth) ->
         operation = get,
         auth = Auth,
         gri = #gri{type = od_cluster, id = undefined, aspect = list}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get all possible cluster privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec list_privileges() -> {ok, map()} | {error, term()}.
+list_privileges() ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        gri = #gri{type = od_cluster, id = undefined, aspect = privileges}
     }).
 
 

@@ -539,7 +539,7 @@ get_group_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:harvester_add_group(Config, H1, G1),
 
     AllPrivs = privileges:harvester_privileges(),
-    InitialPrivs = privileges:harvester_user(),
+    InitialPrivs = privileges:harvester_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->
         oz_test_utils:harvester_set_group_privileges(
@@ -809,7 +809,7 @@ get_eff_group_privileges_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = privileges:harvester_privileges(),
-    InitialPrivs = privileges:harvester_user(),
+    InitialPrivs = privileges:harvester_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
 
     SetPrivsFun = fun(PrivsToGrant, PrivsToRevoke) ->

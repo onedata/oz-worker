@@ -22,7 +22,8 @@
 -export([
     get/2,
     get_protected_data/2,
-    list/1
+    list/1,
+    list_privileges/0
 ]).
 -export([
     update/3
@@ -140,6 +141,19 @@ list(Auth) ->
         operation = get,
         auth = Auth,
         gri = #gri{type = od_handle_service, id = undefined, aspect = list}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Get all possible handle service privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec list_privileges() -> {ok, map()} | {error, term()}.
+list_privileges() ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        gri = #gri{type = od_handle_service, id = undefined, aspect = privileges}
     }).
 
 

@@ -85,6 +85,9 @@ create_response(#gri{id = SpaceId, aspect = harvester}, _, resource, {#gri{id = 
 get_response(#gri{id = undefined, aspect = list}, Spaces) ->
     rest_translator:ok_body_reply(#{<<"spaces">> => Spaces});
 
+get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
+    rest_translator:ok_body_reply(Privileges);
+
 get_response(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData) ->
     #{<<"name">> := Name, <<"providers">> := Providers} = SpaceData,
     rest_translator:ok_body_reply(#{

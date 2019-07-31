@@ -59,6 +59,7 @@ operation_supported(create, {user, _}, private) -> true;
 operation_supported(create, {group, _}, private) -> true;
 
 operation_supported(get, list, private) -> true;
+operation_supported(get, privileges, _) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
@@ -135,7 +136,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     {ok, resource, {GRI#gri{id = HServiceId}, {FetchedHandleService, Rev}}};
 
 create(#el_req{gri = #gri{id = HServiceId, aspect = {user, UserId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_service_user()),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_service_member()),
     entity_graph:add_relation(
         od_user, UserId,
         od_handle_service, HServiceId,
@@ -147,7 +148,7 @@ create(#el_req{gri = #gri{id = HServiceId, aspect = {user, UserId}}, data = Data
     {ok, resource, {NewGRI, ?THROUGH_HANDLE_SERVICE(HServiceId), {UserData, Rev}}};
 
 create(#el_req{gri = #gri{id = HServiceId, aspect = {group, GroupId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_service_user()),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:handle_service_member()),
     entity_graph:add_relation(
         od_group, GroupId,
         od_handle_service, HServiceId,
@@ -170,6 +171,12 @@ create(#el_req{gri = #gri{id = HServiceId, aspect = {group, GroupId}}, data = Da
 get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, HServiceDocs} = od_handle_service:list(),
     {ok, [HServiceId || #document{key = HServiceId} <- HServiceDocs]};
+
+get(#el_req{gri = #gri{aspect = privileges}}, _) ->
+    {ok, #{
+        <<"member">> => privileges:handle_service_member(),
+        <<"admin">> => privileges:handle_service_admin()
+    }};
 
 get(#el_req{gri = #gri{aspect = instance, scope = private}}, HService) ->
     {ok, HService};
@@ -339,6 +346,9 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = {group, _}}}, HS
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = list}}, _) ->
     user_logic_plugin:auth_by_oz_privilege(Req, ?OZ_HANDLE_SERVICES_LIST);
+
+authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
+    true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, HService) ->
     auth_by_privilege(Req, HService, ?HANDLE_SERVICE_VIEW);

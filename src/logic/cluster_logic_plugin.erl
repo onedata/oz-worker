@@ -65,6 +65,7 @@ operation_supported(create, {group, _}, private) -> true;
 operation_supported(create, group, private) -> true;
 
 operation_supported(get, list, private) -> true;
+operation_supported(get, privileges, _) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
@@ -127,7 +128,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     AuthHint = Req#el_req.auth_hint,
     Privileges = case AuthHint of
         ?AS_USER(_) -> privileges:cluster_admin();
-        ?AS_GROUP(_) -> privileges:cluster_user();
+        ?AS_GROUP(_) -> privileges:cluster_member();
         _ -> []
     end,
     JoinClusterFun = fun(od_cluster, ClusterId) ->
@@ -178,7 +179,7 @@ create(Req = #el_req{gri = #gri{id = ClusterId, aspect = invite_group_token}}) -
     {ok, value, Macaroon};
 
 create(#el_req{gri = #gri{id = ClusterId, aspect = {user, UserId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data, privileges:cluster_user()),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:cluster_member()),
     entity_graph:add_relation(
         od_user, UserId,
         od_cluster, ClusterId,
@@ -195,7 +196,7 @@ create(Req = #el_req{gri = GRI = #gri{id = ClusterId, aspect = group}}) ->
     {ok, resource, {NewGRI = #gri{id = GroupId}, _}} = group_logic_plugin:create(
         Req#el_req{gri = GRI#gri{type = od_group, id = undefined, aspect = instance}}
     ),
-    Privileges = privileges:cluster_user(),
+    Privileges = privileges:cluster_member(),
     entity_graph:add_relation(
         od_group, GroupId,
         od_cluster, ClusterId,
@@ -205,7 +206,7 @@ create(Req = #el_req{gri = GRI = #gri{id = ClusterId, aspect = group}}) ->
     {ok, resource, {NewGRI, {Group, Rev}}};
 
 create(#el_req{gri = #gri{id = ClusterId, aspect = {group, GroupId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data, privileges:cluster_user()),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:cluster_member()),
     entity_graph:add_relation(
         od_group, GroupId,
         od_cluster, ClusterId,
@@ -228,6 +229,13 @@ create(#el_req{gri = #gri{id = ClusterId, aspect = {group, GroupId}}, data = Dat
 get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, ClusterDocs} = od_cluster:list(),
     {ok, [ClusterId || #document{key = ClusterId} <- ClusterDocs]};
+
+get(#el_req{gri = #gri{aspect = privileges}}, _) ->
+    {ok, #{
+        <<"member">> => privileges:cluster_member(),
+        <<"manager">> => privileges:cluster_manager(),
+        <<"admin">> => privileges:cluster_admin()
+    }};
 
 get(#el_req{gri = #gri{aspect = instance, scope = private}}, Cluster) ->
     {ok, Cluster};
@@ -430,6 +438,9 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_tok
 
 authorize(#el_req{auth = ?USER(UserId), operation = get, gri = #gri{aspect = instance, scope = private}}, Cluster) ->
     auth_by_privilege(UserId, Cluster, ?CLUSTER_VIEW);
+
+authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
+    true;
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Cluster) ->
     case {Req#el_req.auth, Req#el_req.auth_hint} of

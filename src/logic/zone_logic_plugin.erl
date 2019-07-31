@@ -51,6 +51,7 @@ fetch_entity(_) ->
     entity_logic:scope()) -> boolean().
 operation_supported(get, configuration, _) -> true;
 operation_supported(get, test_image, _) -> true;
+operation_supported(get, privileges, _) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -107,7 +108,13 @@ get(#el_req{gri = #gri{aspect = test_image}}, _) ->
         112, 72, 89, 115, 0, 0, 14, 196, 0, 0, 14, 196, 1, 149, 43, 14, 27,
         0, 0, 0, 10, 73, 68, 65, 84, 8, 153, 99, 96, 0, 0, 0, 2, 0, 1, 244,
         113, 100, 166, 0, 0, 0, 0, 73, 69, 78, 68, 174, 66, 96, 130
-    >>}}.
+    >>}};
+
+get(#el_req{gri = #gri{aspect = privileges}}, _) ->
+    {ok, #{
+        <<"viewer">> => privileges:oz_viewer(),
+        <<"admin">> => privileges:oz_admin()
+    }}.
 
 
 
@@ -156,6 +163,9 @@ authorize(#el_req{operation = get, gri = #gri{aspect = configuration}}, _) ->
     true;
 
 authorize(#el_req{operation = get, gri = #gri{aspect = test_image}}, _) ->
+    true;
+
+authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
     true;
 
 authorize(_Req = #el_req{}, _) ->

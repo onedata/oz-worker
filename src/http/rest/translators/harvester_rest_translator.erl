@@ -94,6 +94,9 @@ create_response(#gri{aspect = {query, _}}, _, value, Response) ->
 get_response(#gri{id = undefined, aspect = list}, Harvesters) ->
     rest_translator:ok_body_reply(#{<<"harvesters">> => Harvesters});
 
+get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
+    rest_translator:ok_body_reply(Privileges);
+
 get_response(#gri{id = HarvesterId, aspect = instance, scope = protected}, HarvesterData) ->
     #{
         <<"name">> := Name,

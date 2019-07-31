@@ -66,6 +66,7 @@ operation_supported(create, {child, _}, private) -> true;
 operation_supported(create, child, private) -> true;
 
 operation_supported(get, list, private) -> true;
+operation_supported(get, privileges, _) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, protected) -> true;
@@ -186,7 +187,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     Macaroon = maps:get(<<"token">>, Req#el_req.data),
     % In the future, privileges can be included in token
-    Privileges = privileges:group_user(),
+    Privileges = privileges:group_member(),
     JoinGroupFun = fun(od_group, GroupId) ->
         case Req#el_req.auth_hint of
             ?AS_USER(UserId) ->
@@ -224,7 +225,7 @@ create(Req = #el_req{gri = GRI = #gri{id = ParentGroupId, aspect = child}}) ->
     {ok, resource, {NewGRI = #gri{id = ChildGroupId}, _}} = create(
         Req#el_req{gri = GRI#gri{id = undefined, aspect = instance}}
     ),
-    Privileges = privileges:group_user(),
+    Privileges = privileges:group_member(),
     entity_graph:add_relation(
         od_group, ChildGroupId,
         od_group, ParentGroupId,
@@ -250,7 +251,7 @@ create(Req = #el_req{gri = #gri{id = GrId, aspect = invite_group_token}}) ->
     {ok, value, Macaroon};
 
 create(#el_req{gri = #gri{id = GrId, aspect = {user, UserId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data, privileges:group_user()),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:group_member()),
     entity_graph:add_relation(
         od_user, UserId,
         od_group, GrId,
@@ -262,7 +263,7 @@ create(#el_req{gri = #gri{id = GrId, aspect = {user, UserId}}, data = Data}) ->
     {ok, resource, {NewGRI, ?THROUGH_GROUP(GrId), {UserData, Rev}}};
 
 create(#el_req{gri = #gri{id = GrId, aspect = {child, ChGrId}}, data = Data}) ->
-    Privileges = maps:get(<<"privileges">>, Data, privileges:group_user()),
+    Privileges = maps:get(<<"privileges">>, Data, privileges:group_member()),
     entity_graph:add_relation(
         od_group, ChGrId,
         od_group, GrId,
@@ -285,6 +286,13 @@ create(#el_req{gri = #gri{id = GrId, aspect = {child, ChGrId}}, data = Data}) ->
 get(#el_req{gri = #gri{aspect = list}}, _) ->
     {ok, GroupDocs} = od_group:list(),
     {ok, [GroupId || #document{key = GroupId} <- GroupDocs]};
+
+get(#el_req{gri = #gri{aspect = privileges}}, _) ->
+    {ok, #{
+        <<"member">> => privileges:group_member(),
+        <<"manager">> => privileges:group_manager(),
+        <<"admin">> => privileges:group_admin()
+    }};
 
 get(#el_req{gri = #gri{aspect = instance, scope = private}}, Group) ->
     {ok, Group};
@@ -620,6 +628,9 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_toke
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_token}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_ADD_CHILD);
+
+authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
+    true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Group) ->
     auth_by_privilege(Req, Group, ?GROUP_VIEW);

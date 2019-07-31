@@ -73,6 +73,9 @@ create_response(#gri{id = ClusterId, aspect = group}, _, resource, {#gri{id = Gr
 get_response(#gri{id = undefined, aspect = list}, Clusters) ->
     rest_translator:ok_body_reply(#{<<"clusters">> => Clusters});
 
+get_response(#gri{id = undefined, aspect = privileges}, Privileges) ->
+    rest_translator:ok_body_reply(Privileges);
+
 get_response(#gri{id = ClusterId, aspect = instance, scope = protected}, ClusterData) ->
     #{
         <<"type">> := Type,

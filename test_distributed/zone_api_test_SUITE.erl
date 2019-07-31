@@ -30,13 +30,15 @@
 ]).
 -export([
     get_configuration_test/1,
-    get_old_configuration_endpoint_test/1
+    get_old_configuration_endpoint_test/1,
+    list_privileges_test/1
 ]).
 
 all() ->
     ?ALL([
         get_configuration_test,
-        get_old_configuration_endpoint_test
+        get_old_configuration_endpoint_test,
+        list_privileges_test
     ]).
 
 %%%===================================================================
@@ -75,6 +77,25 @@ get_old_configuration_endpoint_test(Config) ->
     },
 
     ?assert(rest_test_utils:check_rest_call(Config, RestSpec)).
+
+
+list_privileges_test(Config) ->
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root, nobody]
+        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = <<"/privileges">>,
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{
+                <<"viewer">> => [atom_to_binary(P, utf8) || P <- privileges:oz_viewer()],
+                <<"admin">> => [atom_to_binary(P, utf8) || P <- privileges:oz_admin()]
+            }
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
 %%%===================================================================
