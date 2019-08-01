@@ -28,37 +28,22 @@
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Wrapper function to get oz_worker env variable.
-%% @end
-%%--------------------------------------------------------------------
 -spec get_env(Key :: atom()) -> term() | no_return().
 get_env(Key) ->
     case application:get_env(?APP_NAME, Key) of
         {ok, Value} ->
             Value;
         undefined ->
-            ?alert("Could not find required env variable: ~p", [Key]),
+            ?alert("Could not find required env variable for oz-worker: ~p", [Key]),
             error({missing_env_variable, Key})
     end.
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Wrapper function to get oz_worker env variable or default.
-%% @end
-%%--------------------------------------------------------------------
 -spec get_env(Key :: atom(), Default :: term()) -> term().
 get_env(Key, Default) ->
     application:get_env(?APP_NAME, Key, Default).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Wrapper function to set oz_worker env variable.
-%% @end
-%%--------------------------------------------------------------------
 -spec set_env(Key :: atom(), Value :: term()) -> ok.
 set_env(Key, Value) ->
     application:set_env(?APP_NAME, Key, Value).
