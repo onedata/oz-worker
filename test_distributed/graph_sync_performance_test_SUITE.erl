@@ -384,12 +384,12 @@ spawn_clients(Config, Type, Clients, RetryFlag, CallbackFunction, OnSuccessFun) 
             gui ->
                 {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, Client),
                 {ok, GuiToken} = oz_test_utils:request_gui_token(Config, CookieValue),
-                Auth = {macaroon, GuiToken, []},
+                Auth = {token, GuiToken},
                 Identity = ?SUB(user, Client),
                 {Auth, Identity};
             provider ->
                 {ProviderId, Macaroon} = Client,
-                Auth = {macaroon, Macaroon, []},
+                Auth = {token, Macaroon},
                 Identity = ?SUB(?ONEPROVIDER, ProviderId),
                 {Auth, Identity}
         end

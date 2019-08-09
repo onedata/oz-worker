@@ -41,7 +41,8 @@ od_handle_service | od_handle | od_harvester | od_cluster | oz_privileges.
 -type aspect() :: gs_protocol:aspect().
 -type scope() :: gs_protocol:scope().
 -type data_format() :: gs_protocol:data_format().
--type data() :: gs_protocol:data().
+-type sanitized_data() :: map().
+-type data() :: gs_protocol:data() | sanitized_data().
 -type gri() :: gs_protocol:gri().
 -type auth_hint() :: gs_protocol:auth_hint().
 
@@ -81,6 +82,7 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
 -type creation_time() :: non_neg_integer().  % UNIX timestamp in seconds
 
 -export_type([
+    req/0,
     el_plugin/0,
     operation/0,
     entity_id/0,
@@ -653,7 +655,7 @@ ensure_valid(State) ->
 %%--------------------------------------------------------------------
 -spec transform_and_check_value(Key :: binary(), Data :: data(),
     Validator :: #{type_validator() => value_validator()}) ->
-    {true, NewData :: data()} | false.
+    {true, sanitized_data()} | false.
 transform_and_check_value({aspect, Key}, Data, Validator) ->
     {TypeRule, ValueRule} = maps:get({aspect, Key}, Validator),
     %% Aspect validator supports only aspects that are tuples
@@ -682,7 +684,7 @@ transform_and_check_value(Key, Data, Validator) ->
 %%--------------------------------------------------------------------
 -spec transform_and_check_value(TypeRule :: type_validator(),
     ValueRule :: value_validator(), Key :: binary(), Value :: term()) ->
-    {true, NewData :: data()} | false.
+    NewValue :: term() | no_return().
 transform_and_check_value(TypeRule, ValueRule, Key, Value) ->
     try
         TransformedType = check_type(TypeRule, Key, Value),
@@ -792,7 +794,7 @@ check_type(token, Key, <<>>) ->
 check_type(token, Key, Serialized) when is_binary(Serialized) ->
     case tokens:deserialize(Serialized) of
         {ok, Token} -> Token;
-        ?ERROR_BAD_MACAROON -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
+        ?ERROR_BAD_TOKEN -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
     end;
 check_type(token, Key, Token) ->
     case tokens:is_token(Token) of
@@ -802,9 +804,9 @@ check_type(token, Key, Token) ->
 check_type(invite_token, Key, <<>>) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_type(invite_token, Key, Token) when is_binary(Token) ->
-    case invite_tokens:deserialize(Token) of
+    case macaroons:deserialize(Token) of
         {ok, Macaroon} -> Macaroon;
-        ?ERROR_BAD_MACAROON -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
+        ?ERROR_BAD_TOKEN -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
     end;
 check_type(invite_token, Key, Macaroon) ->
     case macaroon:is_macaroon(Macaroon) of

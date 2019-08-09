@@ -1204,7 +1204,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_privilege(entity_logic:req() | od_user:id(),
-    od_harvester:id() | od_harvester:info(), privileges:harvester_privilege()) -> boolean().
+    od_harvester:id() | od_harvester:record(), privileges:harvester_privilege()) -> boolean().
 auth_by_privilege(#el_req{auth = ?USER(UserId)}, HarvesterOrId, Privilege) ->
     auth_by_privilege(UserId, HarvesterOrId, Privilege);
 auth_by_privilege(#el_req{auth = _OtherAuth}, _HarvesterOrId, _Privilege) ->

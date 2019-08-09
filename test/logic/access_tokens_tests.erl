@@ -12,12 +12,14 @@
 -module(access_tokens_tests).
 -author("Lukasz Opiola").
 
+-ifdef(TEST).
+
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
--define(MOCK_MAX_PROVIDER_MACAROON_TTL, 3600).
 -define(TIME_MOCK_STARTING_TIMESTAMP, 1500000000).
+-define(NOW(), time_utils:cluster_time_seconds()).
 
 %%%===================================================================
 %%% Tests generator
@@ -28,7 +30,7 @@ access_tokens_test_() ->
         fun setup/0,
         fun teardown/1,
         [
-            fun create_provider_root_macaroon/0,
+            fun create_provider_root_token/0,
             fun verify_provider_auth/0,
             fun verify_provider_identity/0,
             fun reject_forged_tokens/0
@@ -65,8 +67,7 @@ setup() ->
         get_mocked_time()
     end),
 
-    oz_worker:set_env(http_domain, "dummy-location.org"),
-    oz_worker:set_env(max_provider_macaroon_ttl, ?MOCK_MAX_PROVIDER_MACAROON_TTL).
+    oz_worker:set_env(http_domain, "dummy-location.org").
 
 teardown(_) ->
     ?assert(meck:validate(macaroon_auth)),
@@ -82,78 +83,71 @@ get_mocked_time() ->
 %%% Tests
 %%%===================================================================
 
-create_provider_root_macaroon() ->
+create_provider_root_token() ->
     ProviderId = <<"12345">>,
-    {ok, _Macaroon, Identifier} = access_tokens:create_provider_root_macaroon(ProviderId),
+    {ok, _Token, Identifier} = access_tokens:create_provider_root_token(ProviderId),
     ?assertMatch({ok, _, _}, macaroon_auth:get(Identifier)).
 
 
 verify_provider_auth() ->
     ProviderId = <<"12345">>,
-    {ok, Macaroon, _Identifier} = access_tokens:create_provider_root_macaroon(ProviderId),
-    {ok, OtherMacaroon, _Identifier2} = access_tokens:create_provider_root_macaroon(<<"other-provider">>),
+    {ok, Token, _Identifier} = access_tokens:create_provider_root_token(ProviderId),
+    {ok, OtherToken, _Identifier2} = access_tokens:create_provider_root_token(<<"other-provider">>),
 
-    ?assertEqual({ok, ProviderId}, access_tokens:verify_provider_auth(Macaroon)),
-    ?assertNotEqual({ok, ProviderId}, access_tokens:verify_provider_auth(OtherMacaroon)),
+    ?assertEqual({ok, ProviderId}, access_tokens:verify_provider_auth(Token)),
+    ?assertNotEqual({ok, ProviderId}, access_tokens:verify_provider_auth(OtherToken)),
 
-    MacaroonWithAuthNone = tokens:add_caveat(Macaroon, ?AUTHORIZATION_NONE_CAVEAT),
-    ?assertEqual(?ERROR_MACAROON_INVALID, access_tokens:verify_provider_auth(MacaroonWithAuthNone)),
-
-    MacaroonWithTTL = tokens:add_caveat(Macaroon,
-        ?TIME_CAVEAT(time_utils:cluster_time_seconds(), 10)
-    ),
-    ?assertEqual({ok, ProviderId}, access_tokens:verify_provider_auth(MacaroonWithTTL)),
-
-    MacaroonWithTooLongTTL = tokens:add_caveat(Macaroon,
-        ?TIME_CAVEAT(time_utils:cluster_time_seconds(), ?MOCK_MAX_PROVIDER_MACAROON_TTL + 10)
-    ),
-    ?assertEqual(?ERROR_MACAROON_TTL_TO_LONG(?MOCK_MAX_PROVIDER_MACAROON_TTL),
-        access_tokens:verify_provider_auth(MacaroonWithTooLongTTL)
+    TokenWithAuthNone = tokens:confine(Token, #cv_authorization_none{}),
+    ?assertEqual(
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_authorization_none{})),
+        access_tokens:verify_provider_auth(TokenWithAuthNone)
     ),
 
-    MacaroonWithExpiredTTL = tokens:add_caveat(Macaroon,
-        ?TIME_CAVEAT(time_utils:cluster_time_seconds() - 100, 10)
-    ),
-    ?assertEqual(?ERROR_MACAROON_EXPIRED, access_tokens:verify_provider_auth(MacaroonWithExpiredTTL)),
+    TokenWithTTL = tokens:confine(Token, #cv_time{valid_until = ?NOW() + 10}),
+    ?assertEqual({ok, ProviderId}, access_tokens:verify_provider_auth(TokenWithTTL)),
 
-    MacaroonWithTTLAndNoAuth = tokens:add_caveat(MacaroonWithTTL,
-        ?AUTHORIZATION_NONE_CAVEAT
+    CvTimeExpired = #cv_time{valid_until = ?NOW() - 100},
+    TokenWithExpiredTTL = tokens:confine(Token, CvTimeExpired),
+    ?assertEqual(
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(CvTimeExpired)),
+        access_tokens:verify_provider_auth(TokenWithExpiredTTL)
     ),
-    ?assertEqual(?ERROR_MACAROON_INVALID, access_tokens:verify_provider_auth(MacaroonWithTTLAndNoAuth)).
+
+    TokenWithTTLAndAuthNone = tokens:confine(TokenWithTTL, #cv_authorization_none{}),
+    ?assertMatch(
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(_),
+        access_tokens:verify_provider_auth(TokenWithTTLAndAuthNone)
+    ),
+    ?ERROR_TOKEN_CAVEAT_UNVERIFIED(BadCaveat) = access_tokens:verify_provider_auth(TokenWithTTLAndAuthNone),
+    ?assert(lists:member(caveats:deserialize(BadCaveat), [
+        #cv_time{valid_until = ?NOW() - 100},
+        #cv_authorization_none{}
+    ])).
 
 
 verify_provider_identity() ->
     ProviderId = <<"12345">>,
-    {ok, Macaroon, _Identifier} = access_tokens:create_provider_root_macaroon(ProviderId),
-    {ok, OtherMacaroon, _Identifier2} = access_tokens:create_provider_root_macaroon(<<"other-provider">>),
+    {ok, Token, _Identifier} = access_tokens:create_provider_root_token(ProviderId),
+    {ok, OtherToken, _Identifier2} = access_tokens:create_provider_root_token(<<"other-provider">>),
 
-    ?assertEqual({ok, ProviderId}, access_tokens:verify_provider_identity(Macaroon)),
-    ?assertNotEqual({ok, ProviderId}, access_tokens:verify_provider_identity(OtherMacaroon)),
+    ?assertEqual({ok, ProviderId}, access_tokens:verify_provider_identity(Token)),
+    ?assertNotEqual({ok, ProviderId}, access_tokens:verify_provider_identity(OtherToken)),
 
-    MacaroonWithAuthNone = tokens:add_caveat(Macaroon, ?AUTHORIZATION_NONE_CAVEAT),
-    ?assertEqual({ok, ProviderId}, access_tokens:verify_provider_identity(MacaroonWithAuthNone)),
+    TokenWithAuthNone = tokens:confine(Token, #cv_authorization_none{}),
+    ?assertEqual({ok, ProviderId}, access_tokens:verify_provider_identity(TokenWithAuthNone)),
 
-    MacaroonWithTTL = tokens:add_caveat(Macaroon,
-        ?TIME_CAVEAT(time_utils:cluster_time_seconds(), 10)
-    ),
-    ?assertEqual({ok, ProviderId}, access_tokens:verify_provider_identity(MacaroonWithTTL)),
+    TokenWithTTL = tokens:confine(Token, #cv_time{valid_until = ?NOW() + 10}),
+    ?assertEqual({ok, ProviderId}, access_tokens:verify_provider_identity(TokenWithTTL)),
 
-    MacaroonWithTooLongTTL = tokens:add_caveat(Macaroon,
-        ?TIME_CAVEAT(time_utils:cluster_time_seconds(), ?MOCK_MAX_PROVIDER_MACAROON_TTL + 10)
-    ),
-    ?assertEqual(?ERROR_MACAROON_TTL_TO_LONG(?MOCK_MAX_PROVIDER_MACAROON_TTL),
-        access_tokens:verify_provider_identity(MacaroonWithTooLongTTL)
+    CvTimeExpired = #cv_time{valid_until = ?NOW() - 100},
+    TokenWithExpiredTTL = tokens:confine(Token, CvTimeExpired),
+    ?assertEqual(
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(CvTimeExpired)),
+        access_tokens:verify_provider_auth(TokenWithExpiredTTL)
     ),
 
-    MacaroonWithExpiredTTL = tokens:add_caveat(Macaroon,
-        ?TIME_CAVEAT(time_utils:cluster_time_seconds() - 100, 10)
-    ),
-    ?assertEqual(?ERROR_MACAROON_EXPIRED, access_tokens:verify_provider_identity(MacaroonWithExpiredTTL)),
-
-    MacaroonWithTTLAndNoAuth = tokens:add_caveat(MacaroonWithTTL,
-        ?AUTHORIZATION_NONE_CAVEAT
-    ),
-    ?assertEqual({ok, ProviderId}, access_tokens:verify_provider_identity(MacaroonWithTTLAndNoAuth)).
+    TokenWithTTLAndNoAuth = tokens:confine(TokenWithTTL, #cv_authorization_none{}),
+    ?assertEqual({ok, ProviderId}, access_tokens:verify_provider_identity(TokenWithTTLAndNoAuth)).
 
 
 reject_forged_tokens() ->
@@ -165,4 +159,6 @@ reject_forged_tokens() ->
         type = ?ACCESS_TOKEN
     },
     Token = tokens:construct(ForgedPrototype, <<"secret">>, []),
-    ?assertEqual(?ERROR_MACAROON_INVALID, access_tokens:verify_provider_auth(Token)).
+    ?assertEqual(?ERROR_TOKEN_INVALID, access_tokens:verify_provider_auth(Token)).
+
+-endif.

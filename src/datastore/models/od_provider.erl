@@ -267,6 +267,30 @@ get_record_struct(5) ->
         {creation_time, integer}, % New field
 
         {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(6) ->
+    % * root_macaroon renamed to root_token
+    {record, [
+        {name, string},
+        {admin_email, string},
+        {root_token, string},
+
+        {subdomain_delegation, boolean},
+        {domain, string},
+        {subdomain, string},
+
+        {latitude, float},
+        {longitude, float},
+
+        {spaces, #{string => integer}},
+
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}}, % New field
+
+        {creation_time, integer}, % New field
+
+        {bottom_up_dirty, boolean}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -403,10 +427,53 @@ upgrade_record(4, Provider) ->
 
         BottomUpDirty
     } = Provider,
-    {5, #od_provider{
+    {5, {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+        #{},
+
+        time_utils:system_time_seconds(),
+
+        BottomUpDirty
+    }};
+upgrade_record(5, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+        EffHarvesters,
+
+        CreationTime,
+
+        BottomUpDirty
+    } = Provider,
+    {6, #od_provider{
         name = Name,
         admin_email = AdminEmail,
-        root_macaroon = RootMacaroon,
+        root_token = RootMacaroon,
         subdomain_delegation = SubdomainDelegation,
         domain = Domain,
         subdomain = Subdomain,
@@ -418,9 +485,9 @@ upgrade_record(4, Provider) ->
 
         eff_users = EffUsers,
         eff_groups = EffGroups,
-        eff_harvesters = #{},
+        eff_harvesters = EffHarvesters,
 
-        creation_time = time_utils:system_time_seconds(),
+        creation_time = CreationTime,
 
         bottom_up_dirty = BottomUpDirty
     }}.

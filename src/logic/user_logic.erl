@@ -898,12 +898,12 @@ create_harvester(Auth, UserId, Data) ->
 %% @doc
 %% Joins a group on behalf of given user based on group_invite_user token.
 %% Has two variants:
-%% 1) Token is given explicitly (as binary() or macaroon())
+%% 1) Token is given explicitly
 %% 2) Token is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec join_group(Auth :: aai:auth(), UserId :: od_user:id(),
-    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
     {ok, od_group:id()} | {error, term()}.
 join_group(Auth, UserId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
@@ -921,12 +921,12 @@ join_group(Auth, UserId, Token) ->
 %% @doc
 %% Joins a space on behalf of given user based on space_invite_user token.
 %% Has two variants:
-%% 1) Token is given explicitly (as binary() or macaroon())
+%% 1) Token is given explicitly
 %% 2) Token is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec join_space(Auth :: aai:auth(), UserId :: od_user:id(),
-    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
     {ok, od_space:id()} | {error, term()}.
 join_space(Auth, UserId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
@@ -944,12 +944,12 @@ join_space(Auth, UserId, Token) ->
 %% @doc
 %% Joins a harvester on behalf of given user based on harvester_invite_user token.
 %% Has two variants:
-%% 1) Token is given explicitly (as binary() or macaroon())
+%% 1) Token is given explicitly
 %% 2) Token is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec join_harvester(Auth :: aai:auth(), UserId :: od_user:id(),
-    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
     {ok, od_harvester:id()} | {error, term()}.
 join_harvester(Auth, UserId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
@@ -967,12 +967,12 @@ join_harvester(Auth, UserId, Token) ->
 %% @doc
 %% Joins a cluster on behalf of given user based on cluster_invite_user token.
 %% Has two variants:
-%% 1) Token is given explicitly (as binary() or macaroon())
+%% 1) Token is given explicitly
 %% 2) Token is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec join_cluster(Auth :: aai:auth(), UserId :: od_user:id(),
-    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
     {ok, od_cluster:id()} | {error, term()}.
 join_cluster(Auth, UserId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{

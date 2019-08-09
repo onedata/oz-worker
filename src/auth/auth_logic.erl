@@ -48,7 +48,6 @@
 %% API
 -export([get_login_endpoint/4, validate_login/2]).
 -export([authorize_by_access_token/1]).
--export([authorize_by_macaroons/2]).
 -export([authorize_by_oz_worker_gui_token/1, authorize_by_oz_panel_gui_token/1]).
 -export([authorize_by_oneprovider_gui_token/1]).
 -export([authorize_by_gui_token/2]).
@@ -140,13 +139,18 @@ validate_login(Method, Req) ->
 %% {error, term()} - authorization invalid
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_access_token(tokens:serialized() | cowboy_req:req()) ->
+-spec authorize_by_access_token(tokens:serialized() | tokens:token() | cowboy_req:req()) ->
     {true, aai:auth()} | false | {error, term()}.
+authorize_by_access_token(Req) when is_map(Req) ->
+    case tokens:parse_access_token_header(Req) of
+        undefined -> false;
+        AccessToken -> authorize_by_access_token(AccessToken)
+    end;
 authorize_by_access_token(Serialized) when is_binary(Serialized) ->
-    case authorize_by_macaroons(Serialized, []) of
-        {true, Client1} ->
-            {true, Client1};
-        _ ->
+    case tokens:deserialize(Serialized) of
+        {ok, Token} ->
+            authorize_by_access_token(Token);
+        ?ERROR_BAD_TOKEN ->
             case openid_protocol:authorize_by_idp_access_token(Serialized) of
                 {true, {IdP, Attributes}} ->
                     LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
@@ -155,39 +159,11 @@ authorize_by_access_token(Serialized) when is_binary(Serialized) ->
                 {error, _} = Error ->
                     Error;
                 false ->
-                    ?ERROR_BAD_MACAROON
+                    ?ERROR_BAD_TOKEN
             end
     end;
-authorize_by_access_token(Req) when is_map(Req) ->
-    case tokens:parse_access_token_header(Req) of
-        undefined -> false;
-        AccessToken -> authorize_by_access_token(AccessToken)
-    end.
-
-
-%% @todo VFS-5554 The use of discharge macaroons is deprecated, kept for backward compatibility
--spec authorize_by_macaroons(Macaroon :: binary() | tokens:token(),
-    DischMacaroons :: binary() | [binary()] | [macaroon:macaroon()]) ->
-    {true, aai:auth()} | {error, term()}.
-authorize_by_macaroons(Serialized, DischMacaroons) when is_binary(Serialized) ->
-    case tokens:deserialize(Serialized) of
-        {ok, Token} -> authorize_by_macaroons(Token, DischMacaroons);
-        {error, _} -> ?ERROR_BAD_MACAROON
-    end;
-authorize_by_macaroons(Token, SerializedDischarges) when is_binary(SerializedDischarges) ->
-    authorize_by_macaroons(Token, binary:split(SerializedDischarges, <<" ">>, [global, trim_all]));
-authorize_by_macaroons(Token, [Bin | _] = DischMacaroons) when is_binary(Bin) ->
-    try
-        DeserializedDischMacaroons = [
-            begin {ok, DM} = macaroons:deserialize(S), DM end || S <- DischMacaroons
-        ],
-        authorize_by_macaroons(Token, DeserializedDischMacaroons)
-    catch
-        _:_ ->
-            ?ERROR_BAD_MACAROON
-    end;
-authorize_by_macaroons(Token, DischMacaroons) ->
-    case auth_tokens:validate_token(<<>>, Token, DischMacaroons, <<"">>, undefined) of
+authorize_by_access_token(Token) ->
+    case auth_tokens:validate_token(<<>>, Token, [], <<"">>, undefined) of
         {ok, UserId} ->
             {true, ?USER(UserId)};
         _ ->
@@ -195,7 +171,7 @@ authorize_by_macaroons(Token, DischMacaroons) ->
                 {ok, ProviderId} ->
                     {true, ?PROVIDER(ProviderId)};
                 {error, _} ->
-                    ?ERROR_BAD_MACAROON
+                    ?ERROR_BAD_TOKEN
             end
     end.
 

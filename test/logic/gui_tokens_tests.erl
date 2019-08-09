@@ -12,6 +12,8 @@
 -module(gui_tokens_tests).
 -author("Lukasz Opiola").
 
+-ifdef(TEST).
+
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/api_errors.hrl").
@@ -130,7 +132,7 @@ create_gui_token() ->
     create_gui_token(?AUD(?OP_PANEL, <<"provider-id-1234">>)).
 
 create_gui_token(Audience = ?AUD(Service, ServiceId)) ->
-    SessionId = <<(aai:encode_audience(Audience))/binary, "-session">>,
+    SessionId = <<(aai:serialize_audience(Audience))/binary, "-session">>,
     NotAMember = <<"user-not-a-member-of-service">>,
     ServiceMember = mocked_service_member(Service, ServiceId),
     case Service of
@@ -152,7 +154,7 @@ verify_gui_token() ->
 
 verify_gui_token(Audience = ?AUD(Service, ServiceId)) ->
     OtherServices = [?OZ_WORKER, ?OZ_PANEL, ?OP_WORKER, ?OP_PANEL] -- [Service],
-    SessionId = <<(aai:encode_audience(Audience))/binary, "-session">>,
+    SessionId = <<(aai:serialize_audience(Audience))/binary, "-session">>,
     UserId = mocked_service_member(Service, ServiceId),
     {ok, Token, Expires} = gui_tokens:create(UserId, SessionId, Audience),
 
@@ -163,22 +165,28 @@ verify_gui_token(Audience = ?AUD(Service, ServiceId)) ->
     ),
     lists:foreach(fun(OtherService) ->
         ?assertEqual(
-            ?ERROR_MACAROON_INVALID,
+            ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_audience{audience = Audience})),
             gui_tokens:verify(Token, ?AUD(OtherService, ServiceId))
         )
     end, OtherServices),
     ?assertEqual(
-        ?ERROR_MACAROON_INVALID,
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_audience{audience = Audience})),
         gui_tokens:verify(Token, ?AUD(Service, <<"asdad">>))
     ),
 
     simulate_time_passing(Expires - get_mocked_time() + 1),
-    ?assertEqual(
-        ?ERROR_MACAROON_INVALID,
+    ?assertMatch(
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(_),
         gui_tokens:verify(Token, ?AUD(Service, <<"asdad">>))
     ),
+    ?ERROR_TOKEN_CAVEAT_UNVERIFIED(BadCaveat) = gui_tokens:verify(Token, ?AUD(Service, <<"asdad">>)),
+    ?assert(lists:member(caveats:deserialize(BadCaveat), [
+        #cv_time{valid_until = Expires},
+        #cv_audience{audience = Audience}
+    ])),
+
     ?assertEqual(
-        ?ERROR_MACAROON_EXPIRED,
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_time{valid_until = Expires})),
         gui_tokens:verify(Token, Audience)
     ).
 
@@ -220,9 +228,11 @@ reject_forged_tokens() ->
         type = ?GUI_TOKEN(SessionId)
     },
     Token = tokens:construct(ForgedPrototype, <<"secret">>, [
-        ?AUDIENCE_CAVEAT(?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)),
-        ?TIME_CAVEAT(100, 500)
+        #cv_audience{audience = ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)},
+        #cv_time{valid_until = get_mocked_time() + 500}
     ]),
-    ?assertEqual(?ERROR_MACAROON_INVALID, access_tokens:verify_provider_auth(Token)),
+    ?assertEqual(?ERROR_TOKEN_INVALID, access_tokens:verify_provider_auth(Token)),
     mock_session_existence(SessionId, true),
-    ?assertEqual(?ERROR_MACAROON_INVALID, access_tokens:verify_provider_auth(Token)).
+    ?assertEqual(?ERROR_TOKEN_INVALID, access_tokens:verify_provider_auth(Token)).
+
+-endif.

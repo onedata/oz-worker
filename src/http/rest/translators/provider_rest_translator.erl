@@ -35,6 +35,8 @@ create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id =
 
     rest_translator:ok_body_reply(#{
         <<"providerId">> => ProvId,
+        <<"providerRootToken">> => Serialized,
+        % @todo VFS-5554 Deprecated, for backward compatibility
         <<"macaroon">> => Serialized
     });
 
@@ -42,6 +44,8 @@ create_response(#gri{id = undefined, aspect = instance_dev}, _, resource, {#gri{
     {ok, Serialized} = tokens:serialize(Token),
     rest_translator:ok_body_reply(#{
         <<"providerId">> => ProvId,
+        <<"providerRootToken">> => Serialized,
+        % @todo VFS-5554 Deprecated, for backward compatibility
         <<"macaroon">> => Serialized
     });
 

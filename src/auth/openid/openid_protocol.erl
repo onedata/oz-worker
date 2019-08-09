@@ -78,7 +78,7 @@ validate_login(IdP, QueryParams) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize_by_idp_access_token(AccessToken :: binary()) ->
-    {true, {auth_logic:idp(), auth_logic:idp_attributes()}} | false | {error, term()}.
+    {true, {auth_config:idp(), attribute_mapping:idp_attributes()}} | false | {error, term()}.
 authorize_by_idp_access_token(AccessTokenWithPrefix) ->
     case auth_config:find_openid_idp_by_access_token(AccessTokenWithPrefix) of
         false ->

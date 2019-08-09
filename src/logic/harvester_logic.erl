@@ -587,7 +587,7 @@ add_user(Auth, HarvesterId, UserId) ->
 %%--------------------------------------------------------------------
 -spec add_user(Auth :: aai:auth(),
     HarvesterId :: od_harvester:id(), UserId :: od_user:id(),
-    PrivilegesPrivilegesOrData :: [privileges:harvester_privileges()] | #{}) ->
+    PrivilegesPrivilegesOrData :: [privileges:harvester_privilege()] | #{}) ->
     {ok, od_user:id()} | {error, term()}.
 add_user(Auth, HarvesterId, UserId, Privileges) when is_list(Privileges) ->
     add_user(Auth, HarvesterId, UserId, #{
@@ -624,7 +624,7 @@ add_group(Auth, HarvesterId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec add_group(Auth :: aai:auth(),
     HarvesterId :: od_harvester:id(), GroupId :: od_group:id(),
-    PrivilegesOrData :: [privileges:harvester_privileges()] | #{}) ->
+    PrivilegesOrData :: [privileges:harvester_privilege()] | #{}) ->
     {ok, od_group:id()} | {error, term()}.
 add_group(Auth, HarvesterId, GroupId, Privileges) when is_list(Privileges) ->
     add_group(Auth, HarvesterId, GroupId, #{
@@ -757,7 +757,7 @@ get_eff_user(Auth, HarvesterId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_user_privileges(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:harvester_privileges()]} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, [privileges:harvester_privilege()]} | {error, term()}.
 get_user_privileges(Auth, HarvesterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -773,7 +773,7 @@ get_user_privileges(Auth, HarvesterId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_user_privileges(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:harvester_privileges()]} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, [privileges:harvester_privilege()]} | {error, term()}.
 get_eff_user_privileges(Auth, HarvesterId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -868,7 +868,7 @@ get_eff_group(Auth, HarvesterId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_group_privileges(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
-    GroupId :: od_group:id()) -> {ok, [privileges:harvester_privileges()]} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, [privileges:harvester_privilege()]} | {error, term()}.
 get_group_privileges(Auth, HarvesterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -884,7 +884,7 @@ get_group_privileges(Auth, HarvesterId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_group_privileges(Auth :: aai:auth(), HarvesterId :: od_harvester:id(),
-    GroupId :: od_group:id()) -> {ok, [privileges:harvester_privileges()]} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, [privileges:harvester_privilege()]} | {error, term()}.
 get_eff_group_privileges(Auth, HarvesterId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -1100,7 +1100,7 @@ exists(HarvesterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_privilege(HarvesterOrId :: od_harvester:id() | #od_harvester{},
-    UserId :: od_user:id(), Privilege :: privileges:harvester_privileges()) ->
+    UserId :: od_user:id(), Privilege :: privileges:harvester_privilege()) ->
     boolean().
 has_eff_privilege(HarvesterId, UserId, Privilege) when is_binary(HarvesterId) ->
     entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, od_harvester, HarvesterId);

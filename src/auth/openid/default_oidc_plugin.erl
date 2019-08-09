@@ -203,7 +203,7 @@ get_user_info(IdP, AccessToken) ->
 
 %% @private
 -spec acquire_access_token(auth_config:idp(), auth_logic:query_params()) ->
-    auth_config:access_token().
+    {auth_logic:access_token(), auth_logic:access_token_ttl(), auth_logic:refresh_token()}.
 acquire_access_token(IdP, Parameters) ->
     Parameters2 = parameters_append_auth(Parameters, IdP),
     Parameters3 = parameters_append_custom(Parameters2, IdP, accessToken),

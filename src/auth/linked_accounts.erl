@@ -241,7 +241,7 @@ merge_unsafe(UserId, LinkedAccount) ->
 %% Returns undefined upon failure.
 %% @end
 %%--------------------------------------------------------------------
--spec find_linked_account(od_user:info(), auth_config:idp(),
+-spec find_linked_account(od_user:record(), auth_config:idp(),
     SubjectId :: binary()) -> undefined | od_user:linked_account().
 find_linked_account(#od_user{linked_accounts = LinkedAccounts}, IdP, SubjectId) ->
     lists:foldl(fun(LinkedAccount, Acc) ->

@@ -19,6 +19,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 % String that will be placed in macaroons' location field
 -define(MACAROONS_LOCATION, oz_worker:get_domain()).

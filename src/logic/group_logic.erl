@@ -572,12 +572,12 @@ create_child_group(Auth, ParentGroupId, Data) ->
 %% @doc
 %% Joins a group on behalf of given user based on group_invite_user token.
 %% Has two variants:
-%% 1) Token is given explicitly (as binary() or macaroon())
+%% 1) Token is given explicitly
 %% 2) Token is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec join_group(Auth :: aai:auth(), GroupId :: od_group:id(),
-    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
     {ok, od_group:id()} | {error, term()}.
 join_group(Auth, GroupId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
@@ -595,12 +595,12 @@ join_group(Auth, GroupId, Token) ->
 %% @doc
 %% Joins a space on behalf of given user based on space_invite_user token.
 %% Has two variants:
-%% 1) Token is given explicitly (as binary() or macaroon())
+%% 1) Token is given explicitly
 %% 2) Token is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec join_space(Auth :: aai:auth(), GroupId :: od_group:id(),
-    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
     {ok, od_space:id()} | {error, term()}.
 join_space(Auth, GroupId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
@@ -618,12 +618,12 @@ join_space(Auth, GroupId, Token) ->
 %% @doc
 %% Joins a harvester on behalf of given group based on harvester_invite_group token.
 %% Has two variants:
-%% 1) Token is given explicitly (as binary() or macaroon())
+%% 1) Token is given explicitly
 %% 2) Token is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec join_harvester(Auth :: aai:auth(), GroupId :: od_group:id(),
-    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
     {ok, od_harvester:id()} | {error, term()}.
 join_harvester(Auth, GroupId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
@@ -641,12 +641,12 @@ join_harvester(Auth, GroupId, Token) ->
 %% @doc
 %% Joins a cluster on behalf of given group based on cluster_invite_group token.
 %% Has two variants:
-%% 1) Token is given explicitly (as binary() or macaroon())
+%% 1) Token is given explicitly
 %% 2) Token is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec join_cluster(Auth :: aai:auth(), GroupId :: od_group:id(),
-    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
     {ok, od_cluster:id()} | {error, term()}.
 join_cluster(Auth, GroupId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
@@ -682,7 +682,7 @@ add_user(Auth, GroupId, UserId) ->
 %%--------------------------------------------------------------------
 -spec add_user(Auth :: aai:auth(),
     GroupId :: od_group:id(), UserId :: od_user:id(),
-    PrivilegesPrivilegesOrData :: [privileges:group_privileges()] | #{}) ->
+    PrivilegesPrivilegesOrData :: [privileges:group_privilege()] | #{}) ->
     {ok, od_user:id()} | {error, term()}.
 add_user(Auth, GroupId, UserId, Privileges) when is_list(Privileges) ->
     add_user(Auth, GroupId, UserId, #{
@@ -719,7 +719,7 @@ add_group(Auth, GroupId, ChildGroupId) ->
 %%--------------------------------------------------------------------
 -spec add_group(Auth :: aai:auth(),
     GroupId :: od_group:id(), ChildGroupId :: od_group:id(),
-    PrivilegesOrData :: [privileges:group_privileges()] | #{}) ->
+    PrivilegesOrData :: [privileges:group_privilege()] | #{}) ->
     {ok, od_group:id()} | {error, term()}.
 add_group(Auth, GroupId, ChildGroupId, Privileges) when is_list(Privileges) ->
     add_group(Auth, GroupId, ChildGroupId, #{
@@ -875,7 +875,7 @@ get_eff_child(Auth, GroupId, ChildGroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_child_privileges(Auth :: aai:auth(), GroupId :: od_group:id(),
-    ChildGroupId :: od_group:id()) -> {ok, [privileges:group_privileges()]} | {error, term()}.
+    ChildGroupId :: od_group:id()) -> {ok, [privileges:group_privilege()]} | {error, term()}.
 get_child_privileges(Auth, GroupId, ChildGroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -891,7 +891,7 @@ get_child_privileges(Auth, GroupId, ChildGroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_child_privileges(Auth :: aai:auth(), GroupId :: od_group:id(),
-    ChildGroupId :: od_group:id()) -> {ok, [privileges:group_privileges()]} | {error, term()}.
+    ChildGroupId :: od_group:id()) -> {ok, [privileges:group_privilege()]} | {error, term()}.
 get_eff_child_privileges(Auth, GroupId, ChildGroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -986,7 +986,7 @@ get_eff_user(Auth, GroupId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_user_privileges(Auth :: aai:auth(), GroupId :: od_group:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:group_privileges()]} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, [privileges:group_privilege()]} | {error, term()}.
 get_user_privileges(Auth, GroupId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -1002,7 +1002,7 @@ get_user_privileges(Auth, GroupId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_user_privileges(Auth :: aai:auth(), GroupId :: od_group:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:group_privileges()]} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, [privileges:group_privilege()]} | {error, term()}.
 get_eff_user_privileges(Auth, GroupId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -1740,7 +1740,7 @@ has_eff_cluster(Group, ClusterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_privilege(GroupOrId :: od_group:id() | #od_group{},
-    UserId :: od_user:id(), Privilege :: privileges:group_privileges()) ->
+    UserId :: od_user:id(), Privilege :: privileges:group_privilege()) ->
     boolean().
 has_eff_privilege(GroupId, UserId, Privilege) when is_binary(GroupId) ->
     entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, od_group, GroupId);

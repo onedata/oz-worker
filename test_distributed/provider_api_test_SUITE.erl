@@ -1599,7 +1599,7 @@ support_space_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, BadMacaroon1} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
-    {ok, BadTokenType1} = invite_tokens:serialize(BadMacaroon1),
+    {ok, BadTokenType1} = macaroons:serialize(BadMacaroon1),
 
     % Reused in all specs
     BadValues = [
@@ -1663,7 +1663,7 @@ support_space_test(Config) ->
                     {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
                         Config, ?USER(U1), Space
                     ),
-                    {ok, TokenBin} = invite_tokens:serialize(Macaroon),
+                    {ok, TokenBin} = macaroons:serialize(Macaroon),
                     TokenBin
                 end],
                 <<"size">> => [MinSupportSize]
@@ -2163,7 +2163,6 @@ update_domain_test(Config) ->
         <<"subdomainDelegation">> => true
     },
     OZDomain = oz_test_utils:oz_domain(Config),
-    Nodes = ?config(oz_worker_nodes, Config),
 
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
@@ -2500,14 +2499,14 @@ verify_provider_identity_test(Config) ->
     Timestamp = oz_test_utils:call_oz(
         Config, time_utils, cluster_time_seconds, []
     ),
-    MacaroonNoAuth = tokens:add_caveat(
-        DeserializedMacaroon, ?AUTHORIZATION_NONE_CAVEAT
+    MacaroonNoAuth = tokens:confine(
+        DeserializedMacaroon, #cv_authorization_none{}
     ),
-    MacaroonNotExpired = tokens:add_caveat(
-        MacaroonNoAuth, ?TIME_CAVEAT(Timestamp, 100)
+    MacaroonNotExpired = tokens:confine(
+        MacaroonNoAuth, #cv_time{valid_until = Timestamp + 100}
     ),
-    MacaroonExpired = tokens:add_caveat(
-        MacaroonNoAuth, ?TIME_CAVEAT(Timestamp - 200, 100)
+    MacaroonExpired = tokens:confine(
+        MacaroonNoAuth, #cv_time{valid_until = Timestamp - 200}
     ),
     {ok, MacaroonNoAuthBin} = tokens:serialize(MacaroonNoAuth),
     {ok, MacaroonNotExpiredBin} = tokens:serialize(MacaroonNotExpired),
@@ -2545,11 +2544,13 @@ verify_provider_identity_test(Config) ->
                 {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"providerId">>)},
                 {<<"providerId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"providerId">>)},
                 {<<"providerId">>, <<"sdfagh2345qwefg">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
-                {<<"providerId">>, P2, ?ERROR_BAD_MACAROON},
+                {<<"providerId">>, P2, ?ERROR_BAD_TOKEN},
 
                 {<<"macaroon">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"macaroon">>)},
                 {<<"macaroon">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"macaroon">>)},
-                {<<"macaroon">>, MacaroonExpiredBin, ?ERROR_MACAROON_EXPIRED}
+                {<<"macaroon">>, MacaroonExpiredBin, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
+                    caveats:serialize(#cv_time{valid_until = Timestamp - 200})
+                )}
             ]
         }
     },
