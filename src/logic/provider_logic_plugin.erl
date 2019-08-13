@@ -184,10 +184,10 @@ create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
 
 create(#el_req{gri = #gri{aspect = verify_provider_identity}, data = Data}) ->
     ProviderId = maps:get(<<"providerId">>, Data),
-    Token = case maps:find(<<"token">>, Data) of
-        {ok, T} -> T;
-        %% @todo VFS-5554 Deprecated, included for backward compatibility
-        error -> maps:get(<<"macaroon">>, Data)
+    %% @todo VFS-5554 Deprecated, included for backward compatibility
+    Token = case maps:find(<<"macaroon">>, Data) of
+        {ok, M} -> M;
+        error -> maps:get(<<"token">>, Data)
     end,
     case access_tokens:verify_provider_identity(Token) of
         {ok, ProviderId} -> ok;

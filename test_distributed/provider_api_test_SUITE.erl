@@ -198,6 +198,7 @@ create_test(Config) ->
             expected_code = ?HTTP_200_OK,
             expected_body = ?OK_ENV(fun(_Env, Data) -> fun(Value) ->
                 ProviderToken = maps:get(<<"macaroon">>, Value),
+                ProviderToken = maps:get(<<"providerRootToken">>, Value),
                 ProviderId = maps:get(<<"providerId">>, Value),
                 VerifyFun(ProviderId, ProviderToken, Data)
             end
@@ -2488,36 +2489,36 @@ get_current_time_test(Config) ->
 
 
 verify_provider_identity_test(Config) ->
-    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
     {ok, {P2, _}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
 
-    {ok, DeserializedMacaroon} = tokens:deserialize(P1Macaroon),
+    {ok, DeserializedToken} = tokens:deserialize(P1Token),
     Timestamp = oz_test_utils:call_oz(
         Config, time_utils, cluster_time_seconds, []
     ),
-    MacaroonNoAuth = tokens:confine(
-        DeserializedMacaroon, #cv_authorization_none{}
+    TokenNoAuth = tokens:confine(
+        DeserializedToken, #cv_authorization_none{}
     ),
-    MacaroonNotExpired = tokens:confine(
-        MacaroonNoAuth, #cv_time{valid_until = Timestamp + 100}
+    TokenNotExpired = tokens:confine(
+        TokenNoAuth, #cv_time{valid_until = Timestamp + 100}
     ),
-    MacaroonExpired = tokens:confine(
-        MacaroonNoAuth, #cv_time{valid_until = Timestamp - 200}
+    TokenExpired = tokens:confine(
+        TokenNoAuth, #cv_time{valid_until = Timestamp - 200}
     ),
-    {ok, MacaroonNoAuthBin} = tokens:serialize(MacaroonNoAuth),
-    {ok, MacaroonNotExpiredBin} = tokens:serialize(MacaroonNotExpired),
-    {ok, MacaroonExpiredBin} = tokens:serialize(MacaroonExpired),
+    {ok, TokenNoAuthBin} = tokens:serialize(TokenNoAuth),
+    {ok, TokenNotExpiredBin} = tokens:serialize(TokenNotExpired),
+    {ok, TokenExpiredBin} = tokens:serialize(TokenExpired),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
                 nobody,
-                {provider, P1, P1Macaroon}
+                {provider, P1, P1Token}
             ]
         },
         rest_spec = #rest_spec{
@@ -2534,11 +2535,37 @@ verify_provider_identity_test(Config) ->
         % TODO gs
         data_spec = #data_spec{
             required = [
+                <<"providerId">>, <<"token">>
+            ],
+            correct_values = #{
+                <<"providerId">> => [P1],
+                <<"token">> => [TokenNoAuthBin, TokenNotExpiredBin]
+            },
+            bad_values = [
+                {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"providerId">>)},
+                {<<"providerId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"providerId">>)},
+                {<<"providerId">>, <<"sdfagh2345qwefg">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
+                {<<"providerId">>, P2, ?ERROR_BAD_TOKEN},
+
+                {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
+                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
+                {<<"token">>, TokenExpiredBin, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
+                    caveats:serialize(#cv_time{valid_until = Timestamp - 200})
+                )}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % Make sure "macaroon" field is accepted too (for backward compatibility)
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        data_spec = #data_spec{
+            required = [
                 <<"providerId">>, <<"macaroon">>
             ],
             correct_values = #{
                 <<"providerId">> => [P1],
-                <<"macaroon">> => [MacaroonNoAuthBin, MacaroonNotExpiredBin]
+                <<"macaroon">> => [TokenNoAuthBin, TokenNotExpiredBin]
             },
             bad_values = [
                 {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"providerId">>)},
@@ -2548,13 +2575,13 @@ verify_provider_identity_test(Config) ->
 
                 {<<"macaroon">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"macaroon">>)},
                 {<<"macaroon">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"macaroon">>)},
-                {<<"macaroon">>, MacaroonExpiredBin, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
+                {<<"macaroon">>, TokenExpiredBin, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
                     caveats:serialize(#cv_time{valid_until = Timestamp - 200})
                 )}
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 %%%===================================================================
