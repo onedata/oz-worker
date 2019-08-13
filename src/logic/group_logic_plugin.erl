@@ -1013,7 +1013,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = oz_privileges}}) -> #{
 %% Returns if given user belongs to the group represented by entity.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_membership(od_user:id(), od_group:id() | od_group:info()) -> boolean().
+-spec auth_by_membership(od_user:id(), od_group:id() | od_group:record()) -> boolean().
 auth_by_membership(UserId, GroupOrId) ->
     group_logic:has_eff_user(GroupOrId, UserId).
 
@@ -1027,7 +1027,7 @@ auth_by_membership(UserId, GroupOrId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_privilege(entity_logic:req() | od_user:id(),
-    od_group:id() | od_group:info(), privileges:group_privilege()) -> boolean().
+    od_group:id() | od_group:record(), privileges:group_privilege()) -> boolean().
 auth_by_privilege(#el_req{auth = ?USER(UserId)}, GroupOrId, Privilege) ->
     auth_by_privilege(UserId, GroupOrId, Privilege);
 auth_by_privilege(#el_req{auth = _OtherAuth}, _GroupOrId, _Privilege) ->

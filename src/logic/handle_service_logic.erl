@@ -211,7 +211,7 @@ add_user(Auth, HServiceId, UserId)  ->
 %%--------------------------------------------------------------------
 -spec add_user(Auth :: aai:auth(),
     HServiceId :: od_handle_service:id(), UserId :: od_user:id(),
-    PrivilegesPrivilegesOrData :: [privileges:handle_service_privileges()] | #{}) ->
+    PrivilegesPrivilegesOrData :: [privileges:handle_service_privilege()] | #{}) ->
     {ok, od_user:id()} | {error, term()}.
 add_user(Auth, HServiceId, UserId, Privileges) when is_list(Privileges) ->
     add_user(Auth, HServiceId, UserId, #{
@@ -248,7 +248,7 @@ add_group(Auth, HServiceId, GroupId)  ->
 %%--------------------------------------------------------------------
 -spec add_group(Auth :: aai:auth(),
     HServiceId :: od_handle_service:id(), GroupId :: od_group:id(),
-    PrivilegesOrData :: [privileges:handle_service_privileges()] | #{}) ->
+    PrivilegesOrData :: [privileges:handle_service_privilege()] | #{}) ->
     {ok, od_group:id()} | {error, term()}.
 add_group(Auth, HServiceId, GroupId, Privileges) when is_list(Privileges) ->
     add_group(Auth, HServiceId, GroupId, #{
@@ -332,7 +332,7 @@ get_eff_user(Auth, HServiceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_user_privileges(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, [privileges:handle_service_privilege()]} | {error, term()}.
 get_user_privileges(Auth, HServiceId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -348,7 +348,7 @@ get_user_privileges(Auth, HServiceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_user_privileges(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, [privileges:handle_service_privilege()]} | {error, term()}.
 get_eff_user_privileges(Auth, HServiceId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -426,7 +426,7 @@ get_eff_group(Auth, HServiceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_group_privileges(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    GroupId :: od_group:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, [privileges:handle_service_privilege()]} | {error, term()}.
 get_group_privileges(Auth, HServiceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -442,7 +442,7 @@ get_group_privileges(Auth, HServiceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_group_privileges(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    GroupId :: od_group:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, [privileges:handle_service_privilege()]} | {error, term()}.
 get_eff_group_privileges(Auth, HServiceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,

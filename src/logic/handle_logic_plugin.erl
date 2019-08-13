@@ -585,7 +585,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_privilege(entity_logic:req() | od_user:id(),
-    od_handle:id() | od_handle:info(), privileges:handle_privilege()) ->
+    od_handle:id() | od_handle:record(), privileges:handle_privilege()) ->
     boolean().
 auth_by_privilege(#el_req{auth = ?USER(UserId)}, HandleOrId, Privilege) ->
     auth_by_privilege(UserId, HandleOrId, Privilege);

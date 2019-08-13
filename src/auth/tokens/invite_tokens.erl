@@ -34,33 +34,11 @@
 -export_type([token_type/0, resource_type/0]).
 
 %% API
--export([serialize/1, deserialize/1]).
 -export([validate/2, create/3, consume/2, delete/1]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Serializes a macaroon into a binary token.
-%% @end
-%%--------------------------------------------------------------------
--spec serialize(macaroon:macaroon()) -> {ok, Token :: binary()} | {error, term()}.
-serialize(Macaroon) ->
-    macaroons:serialize(Macaroon).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Deserializes a macaroon from a binary token.
-%% @end
-%%--------------------------------------------------------------------
--spec deserialize(Token :: binary()) ->
-    {ok, macaroon:macaroon()} | {error, term()}.
-deserialize(Token) ->
-    macaroons:deserialize(Token).
-
 
 %%--------------------------------------------------------------------
 %% @doc Checks if a given token is a valid macaroon of a given type.
@@ -126,7 +104,7 @@ create(Issuer, TokenType, {ResourceType, ResourceId}) ->
     term().
 consume(M, ConsumeFun) ->
     case set_locked(M, true) of
-        {error, already_locked} -> throw(?ERROR_MACAROON_INVALID);
+        {error, already_locked} -> throw(?ERROR_TOKEN_INVALID);
         {ok, TokenDoc} ->
             #document{value = #token{resource = ResourceType,
                 resource_id = ResourceId}} = TokenDoc,
@@ -164,7 +142,7 @@ delete(M) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec set_locked(M :: macaroon:macaroon(), Value :: boolean()) -> 
-    {ok, token:doc(#token{})} | {error, term()}.
+    {ok, token:record()} | {error, term()}.
 set_locked(M, Value) ->
     TokenId = macaroon:identifier(M),
     token:update(TokenId, fun(Token) ->

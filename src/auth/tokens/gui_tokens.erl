@@ -17,11 +17,9 @@
 -include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
-% Timestamp (in seconds) when the token expires
--type expires() :: non_neg_integer().
-
 -define(NOW(), time_utils:cluster_time_seconds()).
 -define(GUI_TOKEN_TTL, oz_worker:get_env(gui_token_ttl, 600)).
+-define(SUPPORTED_CAVEATS, [cv_time, cv_audience]).
 
 -export([create/3]).
 -export([verify/2]).
@@ -40,14 +38,12 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec create(od_user:id(), session:id(), aai:audience()) ->
-    {ok, tokens:token(), expires()} | {error, token_audience_forbidden}.
+    {ok, tokens:token(), time_utils:seconds()} | {error, token_audience_forbidden}.
 create(UserId, SessionId, Audience) ->
     case is_audience_allowed(UserId, Audience) of
         true ->
             Secret = shared_token_secret:get(),
-            Now = ?NOW(),
-            TTL = ?GUI_TOKEN_TTL,
-            Expires = Now + TTL,
+            ValidUntil = ?NOW() + ?GUI_TOKEN_TTL,
             Prototype = #auth_token{
                 onezone_domain = oz_worker:get_domain(),
                 nonce = datastore_utils:gen_key(),
@@ -56,10 +52,10 @@ create(UserId, SessionId, Audience) ->
                 type = ?GUI_TOKEN(SessionId)
             },
             Token = tokens:construct(Prototype, Secret, [
-                ?AUDIENCE_CAVEAT(Audience),
-                ?TIME_CAVEAT(Now, TTL)
+                #cv_time{valid_until = ValidUntil},
+                #cv_audience{audience = Audience}
             ]),
-            {ok, Token, Expires};
+            {ok, Token, ValidUntil};
         false ->
             ?ERROR_TOKEN_AUDIENCE_FORBIDDEN
     end.
@@ -71,19 +67,13 @@ create(UserId, SessionId, Audience) ->
 %% an existing session and is intended for given Audience.
 %% @end
 %%--------------------------------------------------------------------
--spec verify(tokens:token(), aai:audience()) -> {ok, aai:auth()} | {error, term()}.
+-spec verify(tokens:token(), undefined | aai:audience()) -> {ok, aai:auth()} | {error, term()}.
 verify(AuthToken = #auth_token{type = ?GUI_TOKEN(SessionId)}, Audience) ->
     case session:exists(SessionId) of
         {ok, true} ->
             Secret = shared_token_secret:get(),
-            CaveatVerifiers = lists:flatten([
-                case Audience of
-                    undefined -> [];
-                    _ -> ?AUDIENCE_CAVEAT(Audience)
-                end,
-                ?TIME_CAVEAT(?NOW(), ?GUI_TOKEN_TTL)
-            ]),
-            case tokens:verify(AuthToken, Secret, [], CaveatVerifiers) of
+            AuthCtx = #auth_ctx{current_timestamp = ?NOW(), audience = Audience},
+            case tokens:verify(AuthToken, Secret, AuthCtx, ?SUPPORTED_CAVEATS) of
                 {ok, ?SUB(user, UserId) = Subject} ->
                     case is_audience_allowed(UserId, Audience) of
                         false -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN;
@@ -100,7 +90,7 @@ verify(AuthToken = #auth_token{type = ?GUI_TOKEN(SessionId)}, Audience) ->
             ?ERROR_TOKEN_SESSION_INVALID
     end;
 verify(_, _) ->
-    ?ERROR_MACAROON_INVALID.
+    ?ERROR_TOKEN_INVALID.
 
 %%%===================================================================
 %%% Internal functions

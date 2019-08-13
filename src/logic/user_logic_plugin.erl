@@ -19,7 +19,6 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/utils/utils.hrl").
 -include_lib("ctool/include/api_errors.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
@@ -247,12 +246,12 @@ create(#el_req{gri = #gri{aspect = {idp_access_token, IdP}}}) ->
     end;
 
 create(Req = #el_req{gri = #gri{id = UserId, aspect = provider_registration_token}}) ->
-    {ok, Macaroon} = invite_tokens:create(
+    {ok, Token} = invite_tokens:create(
         Req#el_req.auth,
         ?PROVIDER_REGISTRATION_TOKEN,
         {od_user, UserId}
     ),
-    {ok, value, Macaroon}.
+    {ok, value, Token}.
 
 
 %%--------------------------------------------------------------------
@@ -919,7 +918,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = oz_privileges}}) -> #{
 %% on user id, user record or entity logic request client.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_oz_privilege(entity_logic:req() | od_user:id() | od_user:info(),
+-spec auth_by_oz_privilege(entity_logic:req() | od_user:id() | od_user:record(),
     privileges:oz_privilege()) -> boolean().
 auth_by_oz_privilege(#el_req{auth = ?USER(UserId)}, Privilege) ->
     auth_by_oz_privilege(UserId, Privilege);

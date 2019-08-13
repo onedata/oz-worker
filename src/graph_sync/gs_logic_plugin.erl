@@ -46,12 +46,12 @@ verify_handshake_auth(undefined) ->
     {ok, ?NOBODY};
 verify_handshake_auth(nobody) ->
     {ok, ?NOBODY};
-verify_handshake_auth({macaroon, Macaroon, DischargeMacaroons}) ->
-    case auth_logic:authorize_by_oz_worker_gui_token(Macaroon) of
+verify_handshake_auth({token, Token}) ->
+    case auth_logic:authorize_by_oz_worker_gui_token(Token) of
         {true, Auth} ->
             {ok, Auth};
         {error, _} ->
-            case auth_logic:authorize_by_macaroons(Macaroon, DischargeMacaroons) of
+            case auth_logic:authorize_by_access_token(Token) of
                 {true, Auth} -> {ok, Auth};
                 {error, _} -> ?ERROR_UNAUTHORIZED
             end
@@ -121,14 +121,14 @@ client_disconnected(_, _) ->
 %%--------------------------------------------------------------------
 -spec verify_auth_override(aai:auth(), gs_protocol:auth_override()) ->
     {ok, aai:auth()} | gs_protocol:error().
-verify_auth_override(Auth, {macaroon, Macaroon, DischMacaroons}) ->
-    case auth_logic:authorize_by_macaroons(Macaroon, DischMacaroons) of
+verify_auth_override(Auth, {token, Token}) ->
+    case auth_logic:authorize_by_access_token(Token) of
         {true, OverridenAuth1} ->
             {ok, OverridenAuth1};
         {error, _} = Error1 ->
             case Auth of
                 ?PROVIDER(ProviderId) ->
-                    case auth_logic:authorize_by_gui_token(Macaroon, ?AUD(?OP_WORKER, ProviderId)) of
+                    case auth_logic:authorize_by_gui_token(Token, ?AUD(?OP_WORKER, ProviderId)) of
                         {true, OverridenAuth2} ->
                             {ok, OverridenAuth2};
                         {error, _} = Error2 ->

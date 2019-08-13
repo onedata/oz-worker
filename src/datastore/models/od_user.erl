@@ -30,7 +30,7 @@
 -type record() :: #od_user{}.
 -type doc() :: datastore_doc:doc(record()).
 -type diff() :: datastore_doc:diff(record()).
--export_type([id/0, record/0]).
+-export_type([id/0, record/0, doc/0]).
 
 -type full_name() :: binary().
 -type username() :: binary().

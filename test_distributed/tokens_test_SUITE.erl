@@ -55,6 +55,11 @@ all() ->
 -define(OPP_AUD(ServiceId), ?AUD(?OP_PANEL, ServiceId)).
 -define(USR_AUD(UserId), ?AUD(user, UserId)).
 
+-define(assertUnverifiedAudience(ExpAudience, Term), ?assertEqual(
+    ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_audience{audience = ExpAudience})),
+    Term
+)).
+
 %%%===================================================================
 %%% Test functions
 %%%===================================================================
@@ -75,11 +80,12 @@ gui_tokens_are_bound_to_specific_audience(Config) ->
         {ok, ?EXP_AUTH(UserId, ?OZW_AUD(?ONEZONE_CLUSTER_ID), Session1)},
         verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))
     ),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token1, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token1, ?OPW_AUD(<<"p1-a">>))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token1, ?OPP_AUD(<<"p1-a">>))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token1, ?USR_AUD(UserId))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token1, undefined)),
+
+    ?assertUnverifiedAudience(?OZW_AUD(?ONEZONE_CLUSTER_ID), verify_token(Config, Token1, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
+    ?assertUnverifiedAudience(?OZW_AUD(?ONEZONE_CLUSTER_ID), verify_token(Config, Token1, ?OPW_AUD(<<"p1-a">>))),
+    ?assertUnverifiedAudience(?OZW_AUD(?ONEZONE_CLUSTER_ID), verify_token(Config, Token1, ?OPP_AUD(<<"p1-a">>))),
+    ?assertUnverifiedAudience(?OZW_AUD(?ONEZONE_CLUSTER_ID), verify_token(Config, Token1, ?USR_AUD(UserId))),
+    ?assertUnverifiedAudience(?OZW_AUD(?ONEZONE_CLUSTER_ID), verify_token(Config, Token1, undefined)),
 
     % Only users supported by a provider can create tokens for op-worker
     {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ?UNIQUE_STRING),
@@ -95,11 +101,11 @@ gui_tokens_are_bound_to_specific_audience(Config) ->
         {ok, ?EXP_AUTH(UserId, ?OPW_AUD(ProviderId), Session2)},
         verify_token(Config, Token2, ?OPW_AUD(ProviderId))
     ),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token2, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token2, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token2, ?OPP_AUD(ProviderId))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token2, ?USR_AUD(UserId))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token2, undefined)),
+    ?assertUnverifiedAudience(?OPW_AUD(ProviderId), verify_token(Config, Token2, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
+    ?assertUnverifiedAudience(?OPW_AUD(ProviderId), verify_token(Config, Token2, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
+    ?assertUnverifiedAudience(?OPW_AUD(ProviderId), verify_token(Config, Token2, ?OPP_AUD(ProviderId))),
+    ?assertUnverifiedAudience(?OPW_AUD(ProviderId), verify_token(Config, Token2, ?USR_AUD(UserId))),
+    ?assertUnverifiedAudience(?OPW_AUD(ProviderId), verify_token(Config, Token2, undefined)),
 
     % Only members of given cluster can generate tokens for oz/op-panel
     OzClusterId = ?ONEZONE_CLUSTER_ID,
@@ -117,21 +123,21 @@ gui_tokens_are_bound_to_specific_audience(Config) ->
         {ok, ?EXP_AUTH(UserId, ?OZP_AUD(OzClusterId), Session2)},
         verify_token(Config, Token3, ?OZP_AUD(OzClusterId))
     ),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token3, ?OZW_AUD(OzClusterId))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token3, ?OPW_AUD(OpClusterId))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token3, ?OPP_AUD(OpClusterId))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token3, ?USR_AUD(UserId))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token3, undefined)),
+    ?assertUnverifiedAudience(?OZP_AUD(OzClusterId), verify_token(Config, Token3, ?OZW_AUD(OzClusterId))),
+    ?assertUnverifiedAudience(?OZP_AUD(OzClusterId), verify_token(Config, Token3, ?OPW_AUD(OpClusterId))),
+    ?assertUnverifiedAudience(?OZP_AUD(OzClusterId), verify_token(Config, Token3, ?OPP_AUD(OpClusterId))),
+    ?assertUnverifiedAudience(?OZP_AUD(OzClusterId), verify_token(Config, Token3, ?USR_AUD(UserId))),
+    ?assertUnverifiedAudience(?OZP_AUD(OzClusterId), verify_token(Config, Token3, undefined)),
 
     ?assertMatch(
         {ok, ?EXP_AUTH(UserId, ?OPP_AUD(OpClusterId), Session1)},
         verify_token(Config, Token4, ?OPP_AUD(OpClusterId))
     ),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token4, ?OZW_AUD(OzClusterId))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token4, ?OZP_AUD(OzClusterId))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token4, ?OPW_AUD(OpClusterId))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token4, ?USR_AUD(UserId))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token4, undefined)).
+    ?assertUnverifiedAudience(?OPP_AUD(OpClusterId), verify_token(Config, Token4, ?OZW_AUD(OzClusterId))),
+    ?assertUnverifiedAudience(?OPP_AUD(OpClusterId), verify_token(Config, Token4, ?OZP_AUD(OzClusterId))),
+    ?assertUnverifiedAudience(?OPP_AUD(OpClusterId), verify_token(Config, Token4, ?OPW_AUD(OpClusterId))),
+    ?assertUnverifiedAudience(?OPP_AUD(OpClusterId), verify_token(Config, Token4, ?USR_AUD(UserId))),
+    ?assertUnverifiedAudience(?OPP_AUD(OpClusterId), verify_token(Config, Token4, undefined)).
 
 
 gui_tokens_can_be_created_via_endpoint(Config) ->
@@ -169,8 +175,8 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
         {ok, ?EXP_AUTH(UserId, ?OPW_AUD(ProviderId), Session)},
         verify_token(Config, Token2, ?OPW_AUD(ProviderId))
     ),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token2, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token1, ?OPW_AUD(ProviderId))),
+    ?assertUnverifiedAudience(?OPW_AUD(ProviderId), verify_token(Config, Token2, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
+    ?assertUnverifiedAudience(?OZW_AUD(?ONEZONE_CLUSTER_ID), verify_token(Config, Token1, ?OPW_AUD(ProviderId))),
 
     % A user not belonging to the provider/cluster cannot generate GUI tokens for it
     {ok, User2} = oz_test_utils:create_user(Config),
@@ -216,7 +222,7 @@ gui_tokens_expire(Config) ->
 
     {ok, Token1, Expires1} = create_token(Config, UserId, Session1, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
     oz_test_utils:simulate_time_passing(Config, 10),
-    {ok, Token2, _} = create_token(Config, UserId, Session2, ?OPW_AUD(ProviderId)),
+    {ok, Token2, Expires2} = create_token(Config, UserId, Session2, ?OPW_AUD(ProviderId)),
 
     ?assertMatch(
         {ok, ?EXP_AUTH(UserId, ?OZW_AUD(?ONEZONE_CLUSTER_ID), Session1)},
@@ -228,15 +234,24 @@ gui_tokens_expire(Config) ->
     ),
 
     wait_for_expiration(Config, Expires1),
-    ?assertMatch(?ERROR_MACAROON_EXPIRED, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
+    ?assertEqual(
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_time{valid_until = Expires1})),
+        verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))
+    ),
     ?assertMatch(
         {ok, ?EXP_AUTH(UserId, ?OPW_AUD(ProviderId), Session2)},
         verify_token(Config, Token2, ?OPW_AUD(ProviderId))
     ),
 
     oz_test_utils:simulate_time_passing(Config, 10),
-    ?assertMatch(?ERROR_MACAROON_EXPIRED, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_MACAROON_EXPIRED, verify_token(Config, Token2, ?OPW_AUD(ProviderId))).
+    ?assertEqual(
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_time{valid_until = Expires1})),
+        verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))
+    ),
+    ?assertEqual(
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_time{valid_until = Expires2})),
+        verify_token(Config, Token2, ?OPW_AUD(ProviderId))
+    ).
 
 
 gui_tokens_are_invalidated_upon_logout(Config) ->
@@ -328,10 +343,10 @@ gui_tokens_are_invalidated_upon_shared_token_secret_change(Config) ->
 
     oz_test_utils:call_oz(Config, shared_token_secret, regenerate, []),
 
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token2, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token3, ?OPW_AUD(ProviderId))),
-    ?assertMatch(?ERROR_MACAROON_INVALID, verify_token(Config, Token4, ?OPP_AUD(ProviderId))).
+    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token2, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token3, ?OPW_AUD(ProviderId))),
+    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token4, ?OPP_AUD(ProviderId))).
 
 %%%===================================================================
 %%% Setup/teardown functions

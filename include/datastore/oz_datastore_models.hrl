@@ -264,7 +264,7 @@
 -record(od_provider, {
     name = <<"">> :: od_provider:name(),
     admin_email = undefined :: undefined | binary(),
-    root_macaroon = undefined :: undefined | tokens:nonce(),
+    root_token = undefined :: undefined | tokens:nonce(),
 
     subdomain_delegation = false :: boolean(),
     domain :: binary(),

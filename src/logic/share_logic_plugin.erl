@@ -286,7 +286,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_space_privilege(entity_logic:req() | od_user:id(),
-    od_share:info() | od_space:id(), privileges:space_privilege()) ->
+    od_share:record() | od_space:id(), privileges:space_privilege()) ->
     boolean().
 auth_by_space_privilege(#el_req{auth = ?USER(UserId)}, Share, Privilege) ->
     auth_by_space_privilege(UserId, Share, Privilege);
@@ -305,7 +305,7 @@ auth_by_space_privilege(UserId, SpaceId, Privilege) ->
 %% by entity belongs.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_space_support(od_provider:id(), od_share:info()) ->
+-spec auth_by_space_support(od_provider:id(), od_share:record()) ->
     boolean().
 auth_by_space_support(ProviderId, Share) ->
     space_logic:has_provider(Share#od_share.space, ProviderId).

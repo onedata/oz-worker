@@ -270,7 +270,7 @@ add_user(Auth, SpaceId, UserId) ->
 %%--------------------------------------------------------------------
 -spec add_user(Auth :: aai:auth(),
     SpaceId :: od_space:id(), UserId :: od_user:id(),
-    PrivilegesPrivilegesOrData :: [privileges:space_privileges()] | #{}) ->
+    PrivilegesPrivilegesOrData :: [privileges:space_privilege()] | #{}) ->
     {ok, od_user:id()} | {error, term()}.
 add_user(Auth, SpaceId, UserId, Privileges) when is_list(Privileges) ->
     add_user(Auth, SpaceId, UserId, #{
@@ -307,7 +307,7 @@ add_group(Auth, SpaceId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec add_group(Auth :: aai:auth(),
     SpaceId :: od_space:id(), GroupId :: od_group:id(),
-    PrivilegesOrData :: [privileges:space_privileges()] | #{}) ->
+    PrivilegesOrData :: [privileges:space_privilege()] | #{}) ->
     {ok, od_group:id()} | {error, term()}.
 add_group(Auth, SpaceId, GroupId, Privileges) when is_list(Privileges) ->
     add_group(Auth, SpaceId, GroupId, #{
@@ -360,12 +360,12 @@ create_group(Auth, SpaceId, Data) ->
 %% @doc
 %% Joins a harvester on behalf of given group based on harvester_invite_space token.
 %% Has two variants:
-%% 1) Token is given explicitly (as binary() or macaroon())
+%% 1) Token is given explicitly
 %% 2) Token is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec join_harvester(Auth :: aai:auth(), SpaceId :: od_group:id(),
-    TokenOrData :: token:id() | macaroon:macaroon() | #{}) ->
+    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
     {ok, od_harvester:id()} | {error, term()}.
 join_harvester(Auth, SpaceId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
@@ -483,7 +483,7 @@ get_eff_user(Auth, SpaceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_user_privileges(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:space_privileges()]} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, [privileges:space_privilege()]} | {error, term()}.
 get_user_privileges(Auth, SpaceId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -499,7 +499,7 @@ get_user_privileges(Auth, SpaceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_user_privileges(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:space_privileges()]} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, [privileges:space_privilege()]} | {error, term()}.
 get_eff_user_privileges(Auth, SpaceId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -594,7 +594,7 @@ get_eff_group(Auth, SpaceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_group_privileges(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    GroupId :: od_group:id()) -> {ok, [privileges:space_privileges()]} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, [privileges:space_privilege()]} | {error, term()}.
 get_group_privileges(Auth, SpaceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -610,7 +610,7 @@ get_group_privileges(Auth, SpaceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_group_privileges(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    GroupId :: od_group:id()) -> {ok, [privileges:space_privileges()]} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, [privileges:space_privilege()]} | {error, term()}.
 get_eff_group_privileges(Auth, SpaceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -875,7 +875,7 @@ exists(SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec has_eff_privilege(SpaceOrId :: od_space:id() | #od_space{},
-    UserId :: od_user:id(), Privilege :: privileges:space_privileges()) ->
+    UserId :: od_user:id(), Privilege :: privileges:space_privilege()) ->
     boolean().
 has_eff_privilege(SpaceId, UserId, Privilege) when is_binary(SpaceId) ->
     entity_graph:has_privilege(effective, bottom_up, od_user, UserId, Privilege, od_space, SpaceId);

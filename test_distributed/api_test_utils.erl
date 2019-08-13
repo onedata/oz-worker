@@ -471,16 +471,16 @@ prepare_gs_client(Config, {user, UserId}) ->
     prepare_gs_client(
         Config,
         ?SUB(user, UserId),
-        {macaroon, GuiToken, []},
+        {token, GuiToken},
         [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
     );
 prepare_gs_client(_Config, nobody) ->
     ok;
-prepare_gs_client(Config, {provider, ProviderId, Macaroon}) ->
+prepare_gs_client(Config, {provider, ProviderId, Token}) ->
     prepare_gs_client(
         Config,
         ?SUB(?ONEPROVIDER, ProviderId),
-        {macaroon, Macaroon, []},
+        {token, Token},
         [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
     ).
 
