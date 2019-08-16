@@ -41,7 +41,6 @@
     get/2,
     get_protected_data/2, get_protected_data/3,
     get_shared_data/2, get_shared_data/3,
-    get_as_user_details/1, get_as_user_details/2,
     get_oz_privileges/2, get_eff_oz_privileges/2,
     list_client_tokens/2,
     get_default_space/2,
@@ -147,7 +146,7 @@ create(Auth) ->
 %% can be provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Auth :: aai:auth(), Data :: #{}) ->
+-spec create(Auth :: aai:auth(), Data :: map()) ->
     {ok, od_user:id()} | {error, term()}.
 create(Auth, Data) ->
     create(Auth, undefined, Data).
@@ -159,7 +158,7 @@ create(Auth, Data) ->
 %% full_name, username and password can be provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Auth :: aai:auth(), ProposedUserId :: undefined | od_user:id(), Data :: #{}) ->
+-spec create(Auth :: aai:auth(), ProposedUserId :: undefined | od_user:id(), Data :: map()) ->
     {ok, od_user:id()} | {error, term()}.
 create(Auth, ProposedUserId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
@@ -297,43 +296,6 @@ get_shared_data(Auth, UserId, AuthHint) ->
         gri = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
         auth_hint = AuthHint
     }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns protected data of current user emulating format returned by
-%% {@link oz_users:get_details/1}
-%% @end
-%%--------------------------------------------------------------------
--spec get_as_user_details(Auth :: aai:auth()) ->
-    {ok, #user_details{}} | {error, term()}.
-get_as_user_details(#auth{subject = ?SUB(user, UserId)} = Auth) ->
-    get_as_user_details(Auth, UserId).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns protected data of given user emulating format returned by
-%% {@link oz_users:get_details/1}
-%% @end
-%%--------------------------------------------------------------------
--spec get_as_user_details(Auth :: aai:auth(), UserId :: od_user:id()) ->
-    {ok, #user_details{}} | {error, term()}.
-get_as_user_details(Auth, UserId) ->
-    case get_protected_data(Auth, UserId) of
-        {ok, Map} ->
-            #{<<"fullName">> := FullName, <<"username">> := Username,
-                <<"linkedAccounts">> := Accounts, <<"emails">> := Emails
-            } = Map,
-            {ok, #user_details{
-                id = UserId,
-                full_name = FullName,
-                username = Username,
-                linked_accounts = Accounts,
-                emails = Emails
-            }};
-        {error, _} = Error ->
-            Error
-    end.
 
 
 %%--------------------------------------------------------------------
@@ -1325,6 +1287,8 @@ get_eff_handle(Auth, UserId, HandleId) ->
 %% Retrieves the list of clusters of the authenticated user.
 %% @end
 %%--------------------------------------------------------------------
+-spec get_clusters(Auth :: aai:auth()) ->
+    {ok, [od_cluster:id()]} | {error, term()}.
 get_clusters(#auth{subject = ?SUB(user, UserId)} = Auth) ->
     get_clusters(Auth, UserId).
 
