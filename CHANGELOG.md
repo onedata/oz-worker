@@ -4,6 +4,28 @@
 CHANGELOG
 ---------
 
+### 19.02.0-rc1
+
+* VFS-5689 Increase default GUI token TTL
+* VFS-5678 change indices privileges to views privileges
+* VFS-5524 Add MaxMind's GeoLite2 database for geolocation queries
+* VFS-5635 Make all records added to DNS server lowercase
+* VFS-4893 Created endpoint to retrieve full list of privileges
+* VFS-5498 Enable GUI package verification by default
+* VFS-5657 Enabled Ubuntu distribution package tag
+* VFS-5544 Fix create operation always returning the revision of original resource (rather than the newly created)
+* VFS-5498 Do not check oz-worker gui-sha256 (OZ GUI needn't be verified)
+* VFS-5498 Disable GUI verification until acceptance tests are aware of it
+* VFS-5498 Enable GUI package verification by default, fix errors in user cleanup procedure
+* VFS-5544 Add awareness of record revision to GraphSync
+* VFS-5551 Allow nobody auth override
+* VFS-5508 Add browserDebugLogs field to GUI context
+* VFS-4698 Implemented onepanel rest proxy
+* VFS-4547 update ctool and od_space rec to account for privs changes
+* VFS-5398 Restore the order in which auth is checked in REST
+* VFS-5398 Implement the concept of audience in authorization * Rework GUI tokens * Reorganize code related to tokens of all kinds * Refactor code related to auth * Prepare ground for comprehensive tokens refactor
+
+
 ### 18.02.3
 
 * Releasing new version 18.02.3
