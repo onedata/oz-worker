@@ -20,7 +20,8 @@
 %% node_manager_plugin_default callbacks
 -export([app_name/0, cm_nodes/0, db_nodes/0]).
 -export([listeners/0, modules_with_args/0]).
--export([before_init/1, on_cluster_initialized/1, after_init/1]).
+-export([before_init/1, after_init/1]).
+-export([upgrade_cluster/1]).
 -export([handle_call/3, handle_cast/2]).
 
 -export([reconcile_dns_config/0]).
@@ -85,6 +86,7 @@ modules_with_args() ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Overrides {@link node_manager_plugin_default:before_init/1}.
+%% This callback is executed on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
 -spec before_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
@@ -101,17 +103,8 @@ before_init([]) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% This callback is executed when the cluster has been initialized, i.e. all
-%% nodes have connected to cluster manager.
-%% @end
-%%--------------------------------------------------------------------
--spec on_cluster_initialized(Nodes :: [node()]) -> Result :: ok | {error, Reason :: term()}.
-on_cluster_initialized(_Nodes) ->
-    ok.
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Overrides {@link node_manager_plugin_default:after_init/1}.
+%% This callback is executed on all cluster nodes.
 %% @end
 %%--------------------------------------------------------------------
 -spec after_init(Args :: term()) -> Result :: ok | {error, Reason :: term()}.
@@ -134,6 +127,17 @@ after_init([]) ->
                 [Error]),
             {error, cannot_start_node_manager_plugin}
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:upgrade_cluster/1}.
+%% This callback is executed only on one cluster node.
+%% @end
+%%--------------------------------------------------------------------
+-spec upgrade_cluster(integer()) -> no_return().
+upgrade_cluster(_CurrentGeneration) ->
+    error(not_supported).
 
 
 %%--------------------------------------------------------------------
