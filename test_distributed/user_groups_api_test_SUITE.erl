@@ -218,9 +218,7 @@ create_group_test(Config) ->
                     <<"spaces">> => [],
                     <<"type">> => atom_to_binary(ExpType, utf8),
                     <<"gri">> => fun(EncodedGri) ->
-                        #gri{id = Id} = oz_test_utils:decode_gri(
-                            Config, EncodedGri
-                        ),
+                        #gri{id = Id} = gri:deserialize(EncodedGri),
                         VerifyFun(Id, ExpName, ExpType)
                     end
                 })
@@ -241,9 +239,9 @@ join_group_test(Config) ->
         ),
         {ok, Token} = macaroons:serialize(Macaroon),
         #{macaroonId => macaroon:identifier(Macaroon),
-          token => Token}
+            token => Token}
     end,
-    
+
     VerifyEndFun = fun
         (true = _ShouldSucceed, #{macaroonId := MacaroonId}, _) ->
             {ok, Groups} = oz_test_utils:user_get_groups(Config, U1),
@@ -310,7 +308,7 @@ join_group_test(Config) ->
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
     )),
-    
+
     % Check that token is not consumed upon failed operation
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1),
         #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
@@ -319,7 +317,7 @@ join_group_test(Config) ->
         Config, ?ROOT, Group
     ),
     {ok, Token} = macaroons:serialize(Macaroon),
-    
+
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -343,8 +341,8 @@ join_group_test(Config) ->
             correct_values = #{<<"token">> => [Token]}
         }
     },
-    VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
-            oz_test_utils:assert_token_exists(Config, macaroon:identifier(Macaroon))
+    VerifyEndFun1 = fun(_ShouldSucceed, _Env, _) ->
+        oz_test_utils:assert_token_exists(Config, macaroon:identifier(Macaroon))
     end,
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1
@@ -415,9 +413,7 @@ get_group_test(Config) ->
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1_BIN,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, G1)
                 end
             })
@@ -595,9 +591,7 @@ get_eff_group_test(Config) ->
                     expected_result = ?OK_MAP_CONTAINS(GroupDetails#{
                         <<"type">> => atom_to_binary(ExpType, utf8),
                         <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
+                            #gri{id = Id} = gri:deserialize(EncodedGri),
                             ?assertEqual(Id, GroupId)
                         end
                     })

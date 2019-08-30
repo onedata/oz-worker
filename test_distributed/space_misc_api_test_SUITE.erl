@@ -113,9 +113,7 @@ create_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?CORRECT_NAME,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     VerifyFun(Id)
                 end
             })
@@ -292,9 +290,7 @@ get_test(Config) ->
                 },
                 <<"effectiveGroups">> => #{},
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(S1, Id)
                 end
             })
@@ -345,9 +341,7 @@ get_test(Config) ->
                 <<"name">> => ?SPACE_NAME1,
                 <<"providers">> => #{P1 => SupportSize},
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(S1, Id)
                 end
             })
@@ -597,9 +591,7 @@ get_share_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(ExpShareDetails#{
                 <<"handleId">> => null,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, ShareId)
                 end
             })
@@ -778,9 +770,7 @@ get_provider_test(Config) ->
             auth_hint = ?THROUGH_SPACE(S1),
             expected_result = ?OK_MAP_CONTAINS(ExpDetails#{
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, P1)
                 end
             })
@@ -797,9 +787,7 @@ get_provider_test(Config) ->
         gs_spec = GsSpec#gs_spec{
             expected_result = ?OK_MAP_CONTAINS(ExpDetails2#{
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, P1)
                 end
             })

@@ -44,7 +44,7 @@ handshake_attributes(_) ->
 %% {@link gs_translator_behaviour} callback translate_value/3.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_value(gs_protocol:protocol_version(), gs_protocol:gri(),
+-spec translate_value(gs_protocol:protocol_version(), gri:gri(),
     Value :: term()) -> Result | fun((aai:auth()) -> Result) when
     Result :: gs_protocol:data() | gs_protocol:error().
 translate_value(ProtoVersion, #gri{aspect = invite_group_token}, Macaroon) ->
@@ -58,6 +58,11 @@ translate_value(_, #gri{aspect = invite_user_token}, Macaroon) ->
     Token;
 translate_value(_, #gri{type = od_provider, aspect = map_idp_group}, Id) ->
     Id;
+translate_value(_, #gri{type = od_user, aspect = preauthorize}, {Subject, Caveats}) ->
+    #{
+        <<"subject">> => aai:serialize_subject(Subject),
+        <<"caveats">> => [caveats:serialize(C) || C <- Caveats]
+    };
 translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {AccessToken, Expires}) ->
     #{
         <<"token">> => AccessToken,
@@ -96,7 +101,7 @@ translate_value(ProtocolVersion, GRI, Data) ->
 %% {@link gs_translator_behaviour} callback translate_resource/3.
 %% @end
 %%--------------------------------------------------------------------
--spec translate_resource(gs_protocol:protocol_version(), gs_protocol:gri(),
+-spec translate_resource(gs_protocol:protocol_version(), gri:gri(),
     ResourceData :: term()) -> Result | fun((aai:auth()) -> Result) when
     Result :: gs_protocol:data() | gs_protocol:error().
 translate_resource(_, #gri{type = od_provider, aspect = current_time}, TimeMillis) ->

@@ -34,6 +34,7 @@
     create_test/1,
     create_with_predefined_id_test/1,
     authorize_test/1,
+    preauthorize_test/1,
     list_test/1,
     get_test/1,
     get_self_test/1,
@@ -62,6 +63,7 @@ all() ->
         create_test,
         create_with_predefined_id_test,
         authorize_test,
+        preauthorize_test,
         list_test,
         get_test,
         get_self_test,
@@ -171,9 +173,7 @@ create_test(Config) ->
                 gri = #gri{type = od_user, aspect = instance},
                 expected_result = ?OK_MAP_CONTAINS(#{
                     <<"gri">> => fun(EncodedGri) ->
-                        #gri{id = Id} = oz_test_utils:decode_gri(
-                            Config, EncodedGri
-                        ),
+                        #gri{id = Id} = gri:deserialize(EncodedGri),
                         VerifyFun(Id)
                     end
                 })
@@ -276,6 +276,81 @@ authorize_test(Config) ->
             ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
         end, Caveats
     ).
+
+
+preauthorize_test(Config) ->
+    {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, SubjectUser} = oz_test_utils:create_user(Config),
+    {ok, AnotherUser} = oz_test_utils:create_user(Config),
+
+    {ok, Space} = oz_test_utils:create_space(Config, ?USER(SubjectUser), ?UNIQUE_STRING),
+    {ok, Space} = oz_test_utils:support_space(Config, Provider, Space),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    TokenCaveats = [
+        #cv_time{valid_until = 3600 + oz_test_utils:call_oz(Config, time_utils, cluster_time_seconds, [])},
+        #cv_audience{audience = ?AUD(?OP_WORKER, Provider)}
+    ],
+
+    {ok, OldAccessToken} = oz_test_utils:create_client_token(Config, SubjectUser),
+    {ok, NewAccessTokenDeserialized} = oz_test_utils:call_oz(
+        Config, new_access_tokens, create, [?SUB(user, SubjectUser), TokenCaveats]
+    ),
+    {ok, NewAccessToken} = tokens:serialize(NewAccessTokenDeserialized),
+
+    ErrAudCavUnverified = ?ERROR_REASON(
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_audience{audience = ?AUD(?OP_WORKER, Provider)})
+    ),
+    CheckSuccess = fun(ExpCaveats) ->
+        ?OK_TERM(fun({Subject, Caveats}) ->
+            Subject =:= ?SUB(user, SubjectUser) andalso Caveats =:= ExpCaveats
+        end)
+    end,
+
+    Testcases = [
+        {{user, SubjectUser}, OldAccessToken, CheckSuccess([])},
+        {{user, SubjectUser}, NewAccessToken, ErrAudCavUnverified},
+        {{user, AnotherUser}, OldAccessToken, CheckSuccess([])},
+        {{user, AnotherUser}, NewAccessToken, ErrAudCavUnverified},
+        {{provider, Provider, ProviderToken}, OldAccessToken, CheckSuccess([])},
+        {{provider, Provider, ProviderToken}, NewAccessToken, CheckSuccess(TokenCaveats)}
+    ],
+
+    lists:foreach(fun({Client, Token, ExpResult}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [Client]
+            },
+            %% @TODO VFS-5727 - implement REST API for new tokens
+            logic_spec = #logic_spec{
+                module = user_logic,
+                function = preauthorize,
+                args = [auth, data],
+                expected_result = ExpResult
+            },
+            data_spec = #data_spec{
+                required = [<<"token">>],
+                optional = [<<"peerIp">>],
+                correct_values = #{
+                    <<"peerIp">> => [<<"187.10.4.217">>],
+                    <<"token">> => [Token]
+                },
+                bad_values = [
+                    {<<"peerIp">>, <<"">>,
+                        ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
+                    {<<"peerIp">>, 123,
+                        ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
+                    {<<"peerIp">>, <<"187.257.4.217">>,
+                        ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
+                    {<<"token">>, <<"Sdfsdf">>,
+                        ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
+                    {<<"token">>, 123,
+                        ?ERROR_BAD_VALUE_TOKEN(<<"token">>)}
+                ]
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end, Testcases).
 
 
 list_test(Config) ->
@@ -427,9 +502,7 @@ get_test(Config) ->
                 <<"username">> => ExpUsername,
                 <<"spaceAliases">> => #{},
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(User, Id)
                 end,
 
@@ -485,9 +558,7 @@ get_test(Config) ->
             },
             expected_result = ?OK_MAP_CONTAINS(ProtectedData#{
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, User)
                 end,
 
@@ -519,9 +590,7 @@ get_test(Config) ->
                 <<"fullName">> => ExpFullName,
                 <<"username">> => ExpUsername,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, User)
                 end,
 
@@ -577,9 +646,7 @@ get_self_test(Config) ->
             },
             expected_result = ?OK_MAP_CONTAINS(ProtectedData#{
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, User)
                 end
             })

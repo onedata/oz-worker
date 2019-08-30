@@ -247,7 +247,7 @@ log_rest_test_result(RestSpec, Client, Data, Description,
         RestSpec#rest_spec.method,
         RestSpec#rest_spec.path,
         Data,
-        aai:auth_to_string(prepare_logic_auth(Client)),
+        aai:auth_to_printable(prepare_logic_auth(Client)),
         UnmetExp, Got, Expected, Code, Headers, Body
     ]),
     throw(fail).
@@ -398,7 +398,7 @@ log_logic_test_result(LogicSpec, Client, Description, {result, Result}) ->
         LogicSpec#logic_spec.module,
         LogicSpec#logic_spec.function,
         LogicSpec#logic_spec.args,
-        aai:auth_to_string(Client),
+        aai:auth_to_printable(Client),
         LogicSpec#logic_spec.expected_result,
         Result
     ]),
@@ -628,7 +628,7 @@ log_gs_test_result(GsSpec, Client, Data, Description, {result, Result}) ->
     "Expected: ~p~n"
     "Got: ~p", [
         Description,
-        aai:auth_to_string(prepare_logic_auth(Client)),
+        aai:auth_to_printable(prepare_logic_auth(Client)),
         GsSpec#gs_spec.operation,
         GsSpec#gs_spec.gri,
         Data,

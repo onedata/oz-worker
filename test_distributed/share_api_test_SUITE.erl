@@ -184,9 +184,7 @@ create_test(Config) ->
                 <<"rootFileId">> => ?ROOT_FILE_ID,
                 <<"spaceId">> => S1,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     VerifyFun(Id)
                 end
             })
@@ -295,9 +293,7 @@ get_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(SharePrivateDetails#{
                 <<"handleId">> => null,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(ShareId, Id)
                 end
             })
@@ -329,9 +325,7 @@ get_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(SharePublicDetails#{
                 <<"handleId">> => null,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(ShareId, Id)
                 end
             })

@@ -46,8 +46,8 @@ all() ->
         gui_tokens_are_invalidated_upon_shared_token_secret_change
     ]).
 
--define(EXP_AUTH(UserId, Audience, SessionId), #auth{
-    subject = ?SUB(user, UserId), audience = Audience, session_id = SessionId
+-define(EXP_AUTH(UserId, SessionId), #auth{
+    subject = ?SUB(user, UserId), session_id = SessionId
 }).
 -define(OZW_AUD(ServiceId), ?AUD(?OZ_WORKER, ServiceId)).
 -define(OZP_AUD(ServiceId), ?AUD(?OZ_PANEL, ServiceId)).
@@ -56,7 +56,7 @@ all() ->
 -define(USR_AUD(UserId), ?AUD(user, UserId)).
 
 -define(assertUnverifiedAudience(ExpAudience, Term), ?assertEqual(
-    ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_audience{audience = ExpAudience})),
+    ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_audience{audience = ExpAudience}),
     Term
 )).
 
@@ -77,7 +77,7 @@ gui_tokens_are_bound_to_specific_audience(Config) ->
     % All users are allowed to create tokens for oz-worker
     {ok, Token1, _} = create_token(Config, UserId, Session1, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
     ?assertMatch(
-        {ok, ?EXP_AUTH(UserId, ?OZW_AUD(?ONEZONE_CLUSTER_ID), Session1)},
+        {ok, ?EXP_AUTH(UserId, Session1)},
         verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))
     ),
 
@@ -98,7 +98,7 @@ gui_tokens_are_bound_to_specific_audience(Config) ->
 
     {ok, Token2, _} = create_token(Config, UserId, Session2, ?OPW_AUD(ProviderId)),
     ?assertMatch(
-        {ok, ?EXP_AUTH(UserId, ?OPW_AUD(ProviderId), Session2)},
+        {ok, ?EXP_AUTH(UserId, Session2)},
         verify_token(Config, Token2, ?OPW_AUD(ProviderId))
     ),
     ?assertUnverifiedAudience(?OPW_AUD(ProviderId), verify_token(Config, Token2, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
@@ -120,7 +120,7 @@ gui_tokens_are_bound_to_specific_audience(Config) ->
     {ok, Token4, _} = create_token(Config, UserId, Session1, ?OPP_AUD(OpClusterId)),
 
     ?assertMatch(
-        {ok, ?EXP_AUTH(UserId, ?OZP_AUD(OzClusterId), Session2)},
+        {ok, ?EXP_AUTH(UserId, Session2)},
         verify_token(Config, Token3, ?OZP_AUD(OzClusterId))
     ),
     ?assertUnverifiedAudience(?OZP_AUD(OzClusterId), verify_token(Config, Token3, ?OZW_AUD(OzClusterId))),
@@ -130,7 +130,7 @@ gui_tokens_are_bound_to_specific_audience(Config) ->
     ?assertUnverifiedAudience(?OZP_AUD(OzClusterId), verify_token(Config, Token3, undefined)),
 
     ?assertMatch(
-        {ok, ?EXP_AUTH(UserId, ?OPP_AUD(OpClusterId), Session1)},
+        {ok, ?EXP_AUTH(UserId, Session1)},
         verify_token(Config, Token4, ?OPP_AUD(OpClusterId))
     ),
     ?assertUnverifiedAudience(?OPP_AUD(OpClusterId), verify_token(Config, Token4, ?OZW_AUD(OzClusterId))),
@@ -151,7 +151,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     {ok, SerializedToken1} = ?assertMatch({ok, _}, AcquireGuiToken(Cookie, ?OZ_WORKER_GUI, ?ONEZONE_CLUSTER_ID)),
     {ok, Token1} = tokens:deserialize(SerializedToken1),
     ?assertMatch(
-        {ok, ?EXP_AUTH(UserId, ?OZW_AUD(?ONEZONE_CLUSTER_ID), Session)},
+        {ok, ?EXP_AUTH(UserId, Session)},
         verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))
     ),
 
@@ -172,7 +172,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     {ok, Token2} = tokens:deserialize(SerializedToken2),
 
     ?assertMatch(
-        {ok, ?EXP_AUTH(UserId, ?OPW_AUD(ProviderId), Session)},
+        {ok, ?EXP_AUTH(UserId, Session)},
         verify_token(Config, Token2, ?OPW_AUD(ProviderId))
     ),
     ?assertUnverifiedAudience(?OPW_AUD(ProviderId), verify_token(Config, Token2, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
@@ -193,7 +193,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     ?assertMatch(?ERROR_FORBIDDEN, AcquireGuiToken(Cookie2, ?ONEPANEL_GUI, ProviderId)),
     {ok, Token3} = tokens:deserialize(SerializedToken3),
     ?assertMatch(
-        {ok, ?EXP_AUTH(User2, ?OPW_AUD(ProviderId), Session2)},
+        {ok, ?EXP_AUTH(User2, Session2)},
         verify_token(Config, Token3, ?OPW_AUD(ProviderId))
     ),
 
@@ -225,31 +225,31 @@ gui_tokens_expire(Config) ->
     {ok, Token2, Expires2} = create_token(Config, UserId, Session2, ?OPW_AUD(ProviderId)),
 
     ?assertMatch(
-        {ok, ?EXP_AUTH(UserId, ?OZW_AUD(?ONEZONE_CLUSTER_ID), Session1)},
+        {ok, ?EXP_AUTH(UserId, Session1)},
         verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))
     ),
     ?assertMatch(
-        {ok, ?EXP_AUTH(UserId, ?OPW_AUD(ProviderId), Session2)},
+        {ok, ?EXP_AUTH(UserId, Session2)},
         verify_token(Config, Token2, ?OPW_AUD(ProviderId))
     ),
 
     wait_for_expiration(Config, Expires1),
     ?assertEqual(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_time{valid_until = Expires1})),
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = Expires1}),
         verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))
     ),
     ?assertMatch(
-        {ok, ?EXP_AUTH(UserId, ?OPW_AUD(ProviderId), Session2)},
+        {ok, ?EXP_AUTH(UserId, Session2)},
         verify_token(Config, Token2, ?OPW_AUD(ProviderId))
     ),
 
     oz_test_utils:simulate_time_passing(Config, 10),
     ?assertEqual(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_time{valid_until = Expires1})),
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = Expires1}),
         verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))
     ),
     ?assertEqual(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_time{valid_until = Expires2})),
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = Expires2}),
         verify_token(Config, Token2, ?OPW_AUD(ProviderId))
     ).
 
@@ -273,7 +273,7 @@ gui_tokens_are_invalidated_upon_logout(Config) ->
     ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token2, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
     ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, Token3, ?OPW_AUD(ProviderId))),
     ?assertMatch(
-        {ok, ?EXP_AUTH(UserId, ?OPP_AUD(ProviderId), Session2)},
+        {ok, ?EXP_AUTH(UserId, Session2)},
         verify_token(Config, Token4, ?OPP_AUD(ProviderId))
     ),
 

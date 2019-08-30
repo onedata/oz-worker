@@ -159,18 +159,18 @@ verify_gui_token(Audience = ?AUD(Service, ServiceId)) ->
     {ok, Token, Expires} = gui_tokens:create(UserId, SessionId, Audience),
 
     mock_session_existence(SessionId, true),
-    ?assertEqual(
-        {ok, #auth{subject = ?SUB(user, UserId), audience = Audience, session_id = SessionId}},
+    ?assertMatch(
+        {ok, #auth{subject = ?SUB(user, UserId), session_id = SessionId}},
         gui_tokens:verify(Token, Audience)
     ),
     lists:foreach(fun(OtherService) ->
         ?assertEqual(
-            ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_audience{audience = Audience})),
+            ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_audience{audience = Audience}),
             gui_tokens:verify(Token, ?AUD(OtherService, ServiceId))
         )
     end, OtherServices),
     ?assertEqual(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_audience{audience = Audience})),
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_audience{audience = Audience}),
         gui_tokens:verify(Token, ?AUD(Service, <<"asdad">>))
     ),
 
@@ -180,13 +180,13 @@ verify_gui_token(Audience = ?AUD(Service, ServiceId)) ->
         gui_tokens:verify(Token, ?AUD(Service, <<"asdad">>))
     ),
     ?ERROR_TOKEN_CAVEAT_UNVERIFIED(BadCaveat) = gui_tokens:verify(Token, ?AUD(Service, <<"asdad">>)),
-    ?assert(lists:member(caveats:deserialize(BadCaveat), [
+    ?assert(lists:member(BadCaveat, [
         #cv_time{valid_until = Expires},
         #cv_audience{audience = Audience}
     ])),
 
     ?assertEqual(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_time{valid_until = Expires})),
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = Expires}),
         gui_tokens:verify(Token, Audience)
     ).
 
@@ -205,8 +205,8 @@ invalidate_tokens_when_session_ends(Audience = ?AUD(Service, ServiceId)) ->
     ),
 
     mock_session_existence(SessionId, true),
-    ?assertEqual(
-        {ok, #auth{subject = ?SUB(user, UserId), audience = Audience, session_id = SessionId}},
+    ?assertMatch(
+        {ok, #auth{subject = ?SUB(user, UserId), session_id = SessionId}},
         gui_tokens:verify(Token, Audience)
     ),
 

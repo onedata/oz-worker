@@ -341,9 +341,7 @@ get_space_test(Config) ->
                 <<"name">> => ?SPACE_NAME1,
                 <<"providers">> => #{},
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, S1)
                 end
             })

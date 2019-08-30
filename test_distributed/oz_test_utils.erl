@@ -291,7 +291,6 @@
     log_in/2, log_out/2,
     graph_sync_url/2,
     get_gs_supported_proto_versions/1,
-    decode_gri/2,
     request_gui_token/2,
     request_gui_token/4
 ]).
@@ -3442,18 +3441,6 @@ graph_sync_url(Config, gui) ->
 get_gs_supported_proto_versions(Config) ->
     ?assertMatch([_ | _], call_oz(
         Config, gs_protocol, supported_versions, [])
-    ).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Get supported graph sync protocol versions.
-%% @end
-%%--------------------------------------------------------------------
--spec decode_gri(Config :: term(), EncodedGri :: binary()) -> #gri{}.
-decode_gri(Config, EncodedGri) ->
-    ?assertMatch(#gri{}, call_oz(
-        Config, gs_protocol, string_to_gri, [EncodedGri])
     ).
 
 

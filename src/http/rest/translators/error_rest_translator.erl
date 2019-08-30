@@ -92,7 +92,7 @@ translate(?ERROR_TOKEN_INVALID) ->
     };
 translate(?ERROR_TOKEN_CAVEAT_UNVERIFIED(Caveat)) ->
     {?HTTP_401_UNAUTHORIZED,
-        <<"Provided access token is not valid - unverified caveat: '", Caveat/binary, "'">>
+        {<<"Provided access token is not valid - ~ts">>, [caveats:unverified_description(Caveat)]}
     };
 translate(?ERROR_TOKEN_SUBJECT_INVALID) ->
     {?HTTP_401_UNAUTHORIZED,
@@ -175,6 +175,10 @@ translate(?ERROR_BAD_VALUE_JSON(Key)) ->
 translate(?ERROR_BAD_VALUE_TOKEN(Key)) ->
     {?HTTP_400_BAD_REQUEST,
         {<<"Bad value: provided \"~s\" is not a valid token">>, [Key]}
+    };
+translate(?ERROR_BAD_VALUE_IPV4_ADDRESS(Key)) ->
+    {?HTTP_400_BAD_REQUEST,
+        {<<"Bad value: provided \"~s\" is not a valid IPv4 address">>, [Key]}
     };
 translate(?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(Key)) ->
     {?HTTP_400_BAD_REQUEST,

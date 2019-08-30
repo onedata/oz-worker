@@ -47,10 +47,10 @@
 
 %% API
 -export([get_login_endpoint/4, validate_login/2]).
--export([authorize_by_access_token/1]).
--export([authorize_by_oz_worker_gui_token/1, authorize_by_oz_panel_gui_token/1]).
+-export([authorize_by_access_token/1, authorize_by_access_token/2]).
+-export([authorize_by_oz_worker_gui_token/2, authorize_by_oz_panel_gui_token/1]).
 -export([authorize_by_oneprovider_gui_token/1]).
--export([authorize_by_gui_token/2]).
+-export([authorize_by_gui_token/3]).
 -export([authorize_by_basic_auth/1]).
 -export([acquire_idp_access_token/2, refresh_idp_access_token/2]).
 
@@ -143,13 +143,22 @@ validate_login(Method, Req) ->
     {true, aai:auth()} | false | {error, term()}.
 authorize_by_access_token(Req) when is_map(Req) ->
     case tokens:parse_access_token_header(Req) of
-        undefined -> false;
-        AccessToken -> authorize_by_access_token(AccessToken)
+        undefined ->
+            false;
+        AccessToken ->
+            {PeerIp, _} = cowboy_req:peer(Req),
+            authorize_by_access_token(AccessToken, PeerIp)
     end;
-authorize_by_access_token(Serialized) when is_binary(Serialized) ->
+authorize_by_access_token(Serialized) ->
+    authorize_by_access_token(Serialized, undefined).
+
+
+-spec authorize_by_access_token(tokens:serialized() | tokens:token(), undefined | ip_utils:ip()) ->
+    {true, aai:auth()} | false | {error, term()}.
+authorize_by_access_token(Serialized, PeerIp) when is_binary(Serialized) ->
     case tokens:deserialize(Serialized) of
         {ok, Token} ->
-            authorize_by_access_token(Token);
+            authorize_by_access_token(Token, PeerIp);
         ?ERROR_BAD_TOKEN ->
             case openid_protocol:authorize_by_idp_access_token(Serialized) of
                 {true, {IdP, Attributes}} ->
@@ -162,7 +171,7 @@ authorize_by_access_token(Serialized) when is_binary(Serialized) ->
                     ?ERROR_BAD_TOKEN
             end
     end;
-authorize_by_access_token(Token) ->
+authorize_by_access_token(Token, PeerIp) ->
     case auth_tokens:validate_token(<<>>, Token, [], <<"">>, undefined) of
         {ok, UserId} ->
             {true, ?USER(UserId)};
@@ -170,8 +179,13 @@ authorize_by_access_token(Token) ->
             case access_tokens:verify_provider_auth(Token) of
                 {ok, ProviderId} ->
                     {true, ?PROVIDER(ProviderId)};
-                {error, _} ->
-                    ?ERROR_BAD_TOKEN
+                _ ->
+                    case new_access_tokens:verify(Token, PeerIp, undefined) of
+                        {ok, Auth} ->
+                            {true, Auth};
+                        {error, _} = Error ->
+                            Error
+                    end
             end
     end.
 
@@ -181,10 +195,10 @@ authorize_by_access_token(Token) ->
 %% Tries to a authorize a client by a GUI token issued for the oz_worker service.
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_oz_worker_gui_token(tokens:token() | tokens:serialized()) ->
+-spec authorize_by_oz_worker_gui_token(tokens:token() | tokens:serialized(), undefined | ip_utils:ip()) ->
     {true, aai:auth()} | {error, term()}.
-authorize_by_oz_worker_gui_token(Token) ->
-    authorize_by_gui_token(Token, ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)).
+authorize_by_oz_worker_gui_token(Token, PeerIp) ->
+    authorize_by_gui_token(Token, ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID), PeerIp).
 
 
 %%--------------------------------------------------------------------
@@ -195,7 +209,7 @@ authorize_by_oz_worker_gui_token(Token) ->
 -spec authorize_by_oz_panel_gui_token(tokens:token() | tokens:serialized()) ->
     {true, aai:auth()} | {error, term()}.
 authorize_by_oz_panel_gui_token(Token) ->
-    authorize_by_gui_token(Token, ?AUD(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)).
+    authorize_by_gui_token(Token, ?AUD(?OZ_PANEL, ?ONEZONE_CLUSTER_ID), undefined).
 
 
 %%--------------------------------------------------------------------
@@ -213,41 +227,42 @@ authorize_by_oneprovider_gui_token(Req) ->
         {undefined, _} ->
             false;
         {SerializedToken, SerializedAudToken} ->
-            authorize_by_oneprovider_gui_token(SerializedToken, SerializedAudToken)
+            {PeerIp, _} = cowboy_req:peer(Req),
+            authorize_by_oneprovider_gui_token(SerializedToken, SerializedAudToken, PeerIp)
     end.
 
 %% @private
--spec authorize_by_oneprovider_gui_token(
-    tokens:token() | tokens:serialized(), tokens:audience_token() | tokens:serialized()) ->
+-spec authorize_by_oneprovider_gui_token(tokens:token() | tokens:serialized(),
+    tokens:audience_token() | tokens:serialized(), undefined | ip_utils:ip()) ->
     {true, aai:auth()} | {error, term()}.
-authorize_by_oneprovider_gui_token(SerializedToken, AudToken) when is_binary(SerializedToken) ->
+authorize_by_oneprovider_gui_token(SerializedToken, AudToken, PeerIp) when is_binary(SerializedToken) ->
     case tokens:deserialize(SerializedToken) of
-        {ok, Token} -> authorize_by_oneprovider_gui_token(Token, AudToken);
+        {ok, Token} -> authorize_by_oneprovider_gui_token(Token, AudToken, PeerIp);
         {error, _} = Error -> Error
     end;
-authorize_by_oneprovider_gui_token(Token, SerializedAudToken) when is_binary(SerializedAudToken) ->
+authorize_by_oneprovider_gui_token(Token, SerializedAudToken, PeerIp) when is_binary(SerializedAudToken) ->
     case tokens:deserialize_audience_token(SerializedAudToken) of
-        {ok, AudToken} -> authorize_by_oneprovider_gui_token(Token, AudToken);
+        {ok, AudToken} -> authorize_by_oneprovider_gui_token(Token, AudToken, PeerIp);
         {error, _} = Error -> Error
     end;
-authorize_by_oneprovider_gui_token(Token, AudToken) ->
+authorize_by_oneprovider_gui_token(Token, AudToken, PeerIp) ->
     case access_tokens:verify_provider_auth(AudToken#audience_token.token) of
         {ok, ProviderId} ->
-            authorize_by_gui_token(Token, ?AUD(AudToken#audience_token.audience_type, ProviderId));
+            authorize_by_gui_token(Token, ?AUD(AudToken#audience_token.audience_type, ProviderId), PeerIp);
         {error, _} = Error ->
             Error
     end.
 
 
 %% @private
--spec authorize_by_gui_token(tokens:token() | tokens:serialized(), aai:audience()) ->
+-spec authorize_by_gui_token(tokens:token() | tokens:serialized(), aai:audience(), undefined | ip_utils:ip()) ->
     {true, aai:auth()} | {error, term()}.
-authorize_by_gui_token(Serialized, Audience) when is_binary(Serialized) ->
+authorize_by_gui_token(Serialized, Audience, PeerIp) when is_binary(Serialized) ->
     case tokens:deserialize(Serialized) of
-        {ok, Token} -> authorize_by_gui_token(Token, Audience);
+        {ok, Token} -> authorize_by_gui_token(Token, Audience, PeerIp);
         {error, _} = Error -> Error
     end;
-authorize_by_gui_token(Token, Audience) ->
+authorize_by_gui_token(Token, Audience, PeerIp) ->
     case gui_tokens:verify(Token, Audience) of
         {ok, Auth} -> {true, Auth};
         {error, _} = Error -> Error

@@ -193,9 +193,7 @@ create_handle_test(Config) ->
                 <<"resourceType">> => ExpResourceType,
                 <<"resourceId">> => ShareId,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = HandleId} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = HandleId} = gri:deserialize(EncodedGri),
                     VerifyFun(HandleId)
                 end
             })

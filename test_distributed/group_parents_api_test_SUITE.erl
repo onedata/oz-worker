@@ -189,9 +189,7 @@ create_parent_test(Config) ->
                     <<"spaces">> => [],
                     <<"type">> => atom_to_binary(ExpType, utf8),
                     <<"gri">> => fun(EncodedGri) ->
-                        #gri{id = Id} = oz_test_utils:decode_gri(
-                            Config, EncodedGri
-                        ),
+                        #gri{id = Id} = gri:deserialize(EncodedGri),
                         VerifyFun(Id, Data)
                     end
                 })
@@ -310,7 +308,7 @@ join_parent_test(Config) ->
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )),
-    
+
     % Check that token is not consumed upon failed operation
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1),
         #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
@@ -344,14 +342,14 @@ join_parent_test(Config) ->
         }
     },
     VerifyEndFun1 = fun(MacaroonId) ->
-        fun(_ShouldSucceed,_Env,_) ->
+        fun(_ShouldSucceed, _Env, _) ->
             oz_test_utils:assert_token_exists(Config, macaroon:identifier(MacaroonId))
         end
     end,
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1(Macaroon1)
     )),
-    
+
     {ok, Macaroon2} = oz_test_utils:group_invite_group_token(
         Config, ?ROOT, Child
     ),
@@ -361,13 +359,13 @@ join_parent_test(Config) ->
             expected_result = ?ERROR_REASON(?ERROR_CANNOT_ADD_RELATION_TO_SELF)
         },
         data_spec = #data_spec{
-        required = [<<"token">>],
-        correct_values = #{<<"token">> => [Token2]}
+            required = [<<"token">>],
+            correct_values = #{<<"token">> => [Token2]}
         }
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, undefined, undefined, VerifyEndFun1(Macaroon2)
-    )). 
+    )).
 
 
 leave_parent_test(Config) ->
@@ -481,9 +479,7 @@ get_parent_details_test(Config) ->
                 <<"name">> => ?GROUP_NAME2,
                 <<"type">> => ?GROUP_TYPE2_BIN,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(ParentGroup, Id)
                 end
             })
@@ -592,9 +588,7 @@ get_eff_parent_details_test(Config) ->
                         GroupDetails#{
                             <<"type">> => atom_to_binary(ExpType, utf8),
                             <<"gri">> => fun(EncodedGri) ->
-                                #gri{id = Id} = oz_test_utils:decode_gri(
-                                    Config, EncodedGri
-                                ),
+                                #gri{id = Id} = gri:deserialize(EncodedGri),
                                 ?assertEqual(Id, GroupId)
                             end
                         })

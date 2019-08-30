@@ -99,7 +99,7 @@ verify_provider_auth() ->
 
     TokenWithAuthNone = tokens:confine(Token, #cv_authorization_none{}),
     ?assertEqual(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(#cv_authorization_none{})),
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_authorization_none{}),
         access_tokens:verify_provider_auth(TokenWithAuthNone)
     ),
 
@@ -109,7 +109,7 @@ verify_provider_auth() ->
     CvTimeExpired = #cv_time{valid_until = ?NOW() - 100},
     TokenWithExpiredTTL = tokens:confine(Token, CvTimeExpired),
     ?assertEqual(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(CvTimeExpired)),
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(CvTimeExpired),
         access_tokens:verify_provider_auth(TokenWithExpiredTTL)
     ),
 
@@ -119,7 +119,7 @@ verify_provider_auth() ->
         access_tokens:verify_provider_auth(TokenWithTTLAndAuthNone)
     ),
     ?ERROR_TOKEN_CAVEAT_UNVERIFIED(BadCaveat) = access_tokens:verify_provider_auth(TokenWithTTLAndAuthNone),
-    ?assert(lists:member(caveats:deserialize(BadCaveat), [
+    ?assert(lists:member(BadCaveat, [
         #cv_time{valid_until = ?NOW() - 100},
         #cv_authorization_none{}
     ])).
@@ -142,7 +142,7 @@ verify_provider_identity() ->
     CvTimeExpired = #cv_time{valid_until = ?NOW() - 100},
     TokenWithExpiredTTL = tokens:confine(Token, CvTimeExpired),
     ?assertEqual(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(caveats:serialize(CvTimeExpired)),
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(CvTimeExpired),
         access_tokens:verify_provider_auth(TokenWithExpiredTTL)
     ),
 

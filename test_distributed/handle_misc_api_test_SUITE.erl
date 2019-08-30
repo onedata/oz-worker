@@ -342,9 +342,7 @@ get_test(Config) ->
                 <<"resourceId">> => ShareId,
                 <<"resourceType">> => <<"Share">>,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(HandleId, Id)
                 end
             })
