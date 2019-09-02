@@ -185,9 +185,7 @@ create_handle_service_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"name">> => ?HANDLE_SERVICE_NAME1,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     VerifyFun(Id)
                 end
             })

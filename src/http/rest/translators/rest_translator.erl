@@ -118,7 +118,7 @@ deleted_reply() ->
 -spec ok_encoded_intermediaries_reply(entity_graph:intermediaries()) -> #rest_resp{}.
 ok_encoded_intermediaries_reply(Intermediaries) ->
     ok_body_reply(#{<<"intermediaries">> => lists:map(fun({Type, Id}) ->
-        #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+        #{<<"type">> => gri:serialize_type(Type, regular), <<"id">> => Id}
     end, Intermediaries)}).
 
 %%%===================================================================

@@ -71,7 +71,7 @@
 
 -record(gs_spec, {
     operation = get :: gs_protocol:operation(),
-    gri :: gs_protocol:gri(),
+    gri :: gri:gri(),
     subscribe = false :: boolean(),
     auth_hint = undefined :: gs_protocol:auth_hint(),
     expected_result = undefined :: undefined | gs_expectation()

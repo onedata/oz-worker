@@ -290,9 +290,7 @@ get_child_details_test(Config) ->
                 <<"name">> => ?GROUP_NAME2,
                 <<"type">> => ?GROUP_TYPE2_BIN,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, G2)
                 end
             })
@@ -772,9 +770,7 @@ get_eff_child_details_test(Config) ->
                     auth_hint = ?THROUGH_GROUP(G1),
                     expected_result = ?OK_MAP_CONTAINS(GroupDetailsBinary#{
                         <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Gid} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
+                            #gri{id = Gid} = gri:deserialize(EncodedGri),
                             ?assertEqual(Gid, GroupId)
                         end
                     })
@@ -999,7 +995,7 @@ get_eff_child_membership_intermediaries(Config) ->
 
     lists:foreach(fun({ParentId, ChildId, CorrectUsers, ExpIntermediariesRaw}) ->
         ExpIntermediaries = lists:map(fun({Type, Id}) ->
-            #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+            #{<<"type">> => gri:serialize_type(Type, regular), <<"id">> => Id}
         end, ExpIntermediariesRaw),
         CorrectUserClients = [{user, U} || U <- CorrectUsers],
         ApiTestSpec = #api_test_spec{

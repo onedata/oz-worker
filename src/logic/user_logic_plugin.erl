@@ -58,6 +58,7 @@ fetch_entity(UserId) ->
 %%--------------------------------------------------------------------
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
+operation_supported(create, preauthorize, public) -> true;
 operation_supported(create, authorize, private) -> true;
 operation_supported(create, instance, private) -> true;
 operation_supported(create, client_tokens, private) -> true;
@@ -162,6 +163,28 @@ create(#el_req{gri = #gri{aspect = authorize}, data = Data}) ->
             {ok, value, DischargeMacaroonToken};
         _ ->
             ?ERROR_BAD_VALUE_IDENTIFIER(<<"identifier">>)
+    end;
+
+create(#el_req{auth = Auth, gri = #gri{aspect = preauthorize}, data = Data}) ->
+    Token = maps:get(<<"token">>, Data),
+    PeerIp = maps:get(<<"peerIp">>, Data, undefined),
+    Audience = case Auth of
+        ?PROVIDER(PId) -> ?AUD(?OP_WORKER, PId);
+        ?USER(UId) -> ?AUD(user, UId);
+        _ -> undefined
+    end,
+    case new_access_tokens:verify(Token, PeerIp, Audience) of
+        {ok, #auth{subject = Subject, caveats = Caveats}} ->
+            {ok, value, {Subject, Caveats}};
+        {error, _} = Error ->
+            %% @TODO VFS-5726 - temporarily fall back to old access tokens,
+            %% until upgrade procedures are in place
+            case auth_tokens:validate_token(<<>>, Token, [], <<"">>, undefined) of
+                {ok, UserId} ->
+                    {ok, value, {?SUB(user, UserId), []}};
+                _ ->
+                    Error
+            end
     end;
 
 create(#el_req{gri = GRI = #gri{id = ProposedUserId, aspect = instance}, data = Data}) ->
@@ -607,6 +630,9 @@ exists(#el_req{gri = #gri{id = Id}}, #od_user{}) ->
 authorize(#el_req{operation = create, gri = #gri{aspect = authorize}}, _) ->
     true;
 
+authorize(#el_req{operation = create, gri = #gri{aspect = preauthorize}}, _) ->
+    true;
+
 
 %% Operations reserved for admins or available to users in certain circumstances
 authorize(Req = #el_req{operation = create, gri = #gri{id = UserId, aspect = provider_registration_token}}, _) ->
@@ -816,6 +842,16 @@ required_admin_privileges(_) ->
 validate(#el_req{operation = create, gri = #gri{aspect = authorize}}) -> #{
     required => #{
         <<"identifier">> => {binary, non_empty}
+    }
+};
+
+validate(#el_req{operation = create, gri = #gri{aspect = preauthorize}}) -> #{
+    required => #{
+        %% @TODO VFS-5727 better validators for token types
+        <<"token">> => {token, any}
+    },
+    optional => #{
+        <<"peerIp">> => {ipv4_address, any}
     }
 };
 

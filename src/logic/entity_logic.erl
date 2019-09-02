@@ -24,6 +24,7 @@
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/posix/errors.hrl").
 
 % Some of the types are just aliases for types from gs_protocol, this is
 % for better readability of logic modules.
@@ -43,7 +44,7 @@ od_handle_service | od_handle | od_harvester | od_cluster | oz_privileges.
 -type data_format() :: gs_protocol:data_format().
 -type sanitized_data() :: map().
 -type data() :: gs_protocol:data() | sanitized_data().
--type gri() :: gs_protocol:gri().
+-type gri() :: gri:gri().
 -type auth_hint() :: gs_protocol:auth_hint().
 
 -type create_result() :: gs_protocol:graph_create_result().
@@ -55,7 +56,7 @@ od_handle_service | od_handle | od_harvester | od_cluster | oz_privileges.
 
 -type type_validator() :: any | atom | list_of_atoms | binary |
 list_of_binaries | integer | float | json | token | invite_token |
-boolean | list_of_ipv4_addresses.
+boolean | ipv4_address | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
 fun((term()) -> boolean()) |
@@ -166,7 +167,7 @@ handle(#el_req{gri = #gri{type = EntityType}} = ElReq, VersionedEntity) ->
 %% in the #el_req{} record. Entity can be provided if it was prefetched.
 %% @end
 %%--------------------------------------------------------------------
--spec is_authorized(req(), versioned_entity()) -> {true, gs_protocol:gri()} | false.
+-spec is_authorized(req(), versioned_entity()) -> {true, gri:gri()} | false.
 is_authorized(#el_req{gri = #gri{type = EntityType}} = ElReq, VersionedEntity) ->
     try
         ElPlugin = EntityType:entity_logic_plugin(),
@@ -297,7 +298,7 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = create}}) ->
             end,
             ?debug("~s has been created by client: ~s", [
                 EntType:to_string(EntId),
-                aai:auth_to_string(Auth)
+                aai:auth_to_printable(Auth)
             ]);
         _ ->
             ok
@@ -340,7 +341,7 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = delete}}) ->
             % (it's a significant operation and this information might be useful).
             ?debug("~s has been deleted by client: ~s", [
                 Type:to_string(Id),
-                aai:auth_to_string(Auth)
+                aai:auth_to_printable(Auth)
             ]),
             ok;
         _ ->
@@ -520,6 +521,7 @@ ensure_authorized_internal(#state{req = #el_req{auth = ?ROOT}}) ->
     % internally).
     true;
 ensure_authorized_internal(State) ->
+    ensure_api_caveat_verifies(State),
     is_client_authorized(State) orelse is_authorized_as_admin(State).
 
 
@@ -563,6 +565,19 @@ is_authorized_as_admin(#state{req = ElReq} = State) ->
         end
     catch _:_ ->
         false
+    end.
+
+
+-spec ensure_api_caveat_verifies(#state{}) -> ok | no_return().
+ensure_api_caveat_verifies(#state{req = #el_req{operation = Operation, gri = GRI, auth = Auth}}) ->
+    case caveats:find(cv_api, Auth#auth.caveats) of
+        false ->
+            ok;
+        {true, ApiCaveats} ->
+            lists:foreach(fun(ApiCaveat) ->
+                cv_api:verify(ApiCaveat, ?OZ_WORKER, Operation, GRI) orelse
+                    throw(?ERROR_TOKEN_CAVEAT_UNVERIFIED(ApiCaveat))
+            end, ApiCaveats)
     end.
 
 
@@ -813,19 +828,18 @@ check_type(invite_token, Key, Macaroon) ->
         true -> Macaroon;
         false -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
     end;
+check_type(ipv4_address, _Key, undefined) ->
+    undefined;
+check_type(ipv4_address, _Key, null) ->
+    undefined;
+check_type(ipv4_address, Key, IPAddress) ->
+    case ip_utils:to_ip4_address(IPAddress) of
+        {ok, Ip4Address} -> Ip4Address;
+        {error, ?EINVAL} -> throw(?ERROR_BAD_VALUE_IPV4_ADDRESS(Key))
+    end;
 check_type(list_of_ipv4_addresses, Key, ListOfIPs) ->
     try
-        lists:map(fun(IP) ->
-            case IP of
-                _ when is_binary(IP) ->
-                    {ok, IPTuple} = inet:parse_ipv4strict_address(
-                        binary_to_list(IP)),
-                    IPTuple;
-                _ when is_tuple(IP) ->
-                    {ok, IPTuple} = inet:getaddr(IP, inet),
-                    IPTuple
-            end
-        end, ListOfIPs)
+        [check_type(ipv4_address, Key, IP) || IP <- ListOfIPs]
     catch _:_ ->
         throw(?ERROR_BAD_VALUE_LIST_OF_IPV4_ADDRESSES(Key))
     end;

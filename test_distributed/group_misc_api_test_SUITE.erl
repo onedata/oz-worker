@@ -123,9 +123,7 @@ create_test(Config) ->
                     <<"name">> => ?CORRECT_NAME,
                     <<"type">> => atom_to_binary(ExpType, utf8),
                     <<"gri">> => fun(EncodedGri) ->
-                        #gri{id = Id} = oz_test_utils:decode_gri(
-                            Config, EncodedGri
-                        ),
+                        #gri{id = Id} = gri:deserialize(EncodedGri),
                         VerifyFun(Id, ExpType)
                     end
                 })
@@ -309,9 +307,7 @@ get_test(Config) ->
                     U2 => [<<"group_view">>]
                 },
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(G1, Id)
                 end
             })
@@ -349,9 +345,7 @@ get_test(Config) ->
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1_BIN,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(G1, Id)
                 end
             })

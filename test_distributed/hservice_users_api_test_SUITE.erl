@@ -333,7 +333,7 @@ get_user_test(Config) ->
                     <<"gri">> => fun(EncodedGri) ->
                         ?assertMatch(
                             #gri{id = SubjectUser},
-                            oz_test_utils:decode_gri(Config, EncodedGri)
+                            gri:deserialize(EncodedGri)
                         )
                     end,
 
@@ -578,9 +578,7 @@ get_eff_user_test(Config) ->
                     auth_hint = ?THROUGH_HANDLE_SERVICE(HService),
                     expected_result = ?OK_MAP_CONTAINS(UserDetails#{
                         <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
+                            #gri{id = Id} = gri:deserialize(EncodedGri),
                             ?assertEqual(Id, UserId)
                         end,
 

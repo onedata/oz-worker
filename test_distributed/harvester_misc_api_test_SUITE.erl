@@ -302,9 +302,7 @@ get_test(Config) ->
                 <<"indices">> => [],
                 <<"spaces">> => [S],
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(H1, Id)
                 end
 

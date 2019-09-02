@@ -19,6 +19,7 @@
 
 -define(NOW(), time_utils:cluster_time_seconds()).
 -define(GUI_TOKEN_TTL, oz_worker:get_env(gui_token_ttl, 600)).
+-define(SHARED_SECRET, shared_token_secret:get()).
 -define(SUPPORTED_CAVEATS, [cv_time, cv_audience]).
 
 -export([create/3]).
@@ -42,7 +43,6 @@
 create(UserId, SessionId, Audience) ->
     case is_audience_allowed(UserId, Audience) of
         true ->
-            Secret = shared_token_secret:get(),
             ValidUntil = ?NOW() + ?GUI_TOKEN_TTL,
             Prototype = #auth_token{
                 onezone_domain = oz_worker:get_domain(),
@@ -51,7 +51,7 @@ create(UserId, SessionId, Audience) ->
                 subject = ?SUB(user, UserId),
                 type = ?GUI_TOKEN(SessionId)
             },
-            Token = tokens:construct(Prototype, Secret, [
+            Token = tokens:construct(Prototype, ?SHARED_SECRET, [
                 #cv_time{valid_until = ValidUntil},
                 #cv_audience{audience = Audience}
             ]),
@@ -68,29 +68,18 @@ create(UserId, SessionId, Audience) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec verify(tokens:token(), undefined | aai:audience()) -> {ok, aai:auth()} | {error, term()}.
-verify(AuthToken = #auth_token{type = ?GUI_TOKEN(SessionId)}, Audience) ->
-    case session:exists(SessionId) of
-        {ok, true} ->
-            Secret = shared_token_secret:get(),
-            AuthCtx = #auth_ctx{current_timestamp = ?NOW(), audience = Audience},
-            case tokens:verify(AuthToken, Secret, AuthCtx, ?SUPPORTED_CAVEATS) of
-                {ok, ?SUB(user, UserId) = Subject} ->
-                    case is_audience_allowed(UserId, Audience) of
-                        false -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN;
-                        true -> {ok, #auth{
-                            subject = Subject,
-                            audience = Audience,
-                            session_id = SessionId
-                        }}
-                    end;
-                {error, _} = Error ->
-                    Error
+verify(Token, Audience) ->
+    AuthCtx = #auth_ctx{current_timestamp = ?NOW(), audience = Audience},
+    case tokens:verify(Token, ?SHARED_SECRET, AuthCtx, ?SUPPORTED_CAVEATS) of
+        {ok, ?USER(UserId, SessionId) = Auth} ->
+            case {session:exists(SessionId), is_audience_allowed(UserId, Audience)} of
+                {{ok, true}, true} -> {ok, Auth};
+                {{ok, false}, _} -> ?ERROR_TOKEN_SESSION_INVALID;
+                {_, false} -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN
             end;
-        _ ->
-            ?ERROR_TOKEN_SESSION_INVALID
-    end;
-verify(_, _) ->
-    ?ERROR_TOKEN_INVALID.
+        {error, _} = Error ->
+            Error
+    end.
 
 %%%===================================================================
 %%% Internal functions

@@ -112,7 +112,8 @@ validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
         T -> T
     end,
 
-    case auth_logic:authorize_by_oz_worker_gui_token(Token) of
+    {PeerIp, _} = cowboy_req:peer(Req),
+    case auth_logic:authorize_by_oz_worker_gui_token(Token, PeerIp) of
         {true, ?USER(UserId)} ->
             case harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_UPDATE)
                 orelse user_logic:has_eff_oz_privilege(UserId, ?OZ_HARVESTERS_UPDATE) of

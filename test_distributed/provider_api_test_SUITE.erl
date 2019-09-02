@@ -407,9 +407,7 @@ get_test(Config) ->
                 <<"subdomainDelegation">> => false,
                 <<"adminEmail">> => ExpAdminEmail,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(P1, Id)
                 end
             })
@@ -459,9 +457,7 @@ get_test(Config) ->
             },
             expected_result = ?OK_MAP_CONTAINS(ExpProtectedDetails#{
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(P1, Id)
                 end
             })
@@ -499,9 +495,7 @@ get_self_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(ExpDetails#{
                 <<"online">> => true,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(P1, Id)
                 end
             })
@@ -931,9 +925,7 @@ get_eff_user_test(Config) ->
                     auth_hint = ?THROUGH_PROVIDER(P1),
                     expected_result = ?OK_MAP_CONTAINS(ExpDetails#{
                         <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
+                            #gri{id = Id} = gri:deserialize(EncodedGri),
                             ?assertEqual(Id, UserId)
                         end,
 
@@ -1033,7 +1025,7 @@ get_eff_user_membership_intermediaries(Config) ->
 
     lists:foreach(fun({ProviderId, SubjectUser, CorrectClients, ExpIntermediariesRaw}) ->
         ExpIntermediaries = lists:map(fun({Type, Id}) ->
-            #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+            #{<<"type">> => gri:serialize_type(Type, regular), <<"id">> => Id}
         end, ExpIntermediariesRaw),
         ApiTestSpec = #api_test_spec{
             client_spec = #client_spec{
@@ -1191,9 +1183,7 @@ get_eff_group_test(Config) ->
                     auth_hint = ?THROUGH_PROVIDER(P1),
                     expected_result = ?OK_MAP_CONTAINS(GroupDetailsBinary#{
                         <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
+                            #gri{id = Id} = gri:deserialize(EncodedGri),
                             ?assertEqual(Id, GroupId)
                         end
                     })
@@ -1323,7 +1313,7 @@ get_eff_group_membership_intermediaries(Config) ->
 
     lists:foreach(fun({ProviderId, SubjectGroup, CorrectClients, ExpIntermediariesRaw}) ->
         ExpIntermediaries = lists:map(fun({Type, Id}) ->
-            #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+            #{<<"type">> => gri:serialize_type(Type, regular), <<"id">> => Id}
         end, ExpIntermediariesRaw),
         ApiTestSpec = #api_test_spec{
             client_spec = #client_spec{
@@ -1549,9 +1539,7 @@ get_space_test(Config) ->
                     auth_hint = ?THROUGH_PROVIDER(P1),
                     expected_result = ?OK_MAP_CONTAINS(SpaceDetails#{
                         <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
+                            #gri{id = Id} = gri:deserialize(EncodedGri),
                             ?assertEqual(Id, SpaceId)
                         end
                     })
@@ -2372,9 +2360,7 @@ get_domain_config_test(Config) ->
             gri = #gri{type = od_provider, id = P1, aspect = domain_config},
             expected_result = ?OK_MAP_CONTAINS(ExpBody#{
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, P1)
                 end
             })
@@ -2404,9 +2390,7 @@ get_domain_config_test(Config) ->
         gs_spec = GsSpec#gs_spec{
             expected_result = ?OK_MAP_CONTAINS(ExpBody2Bin#{
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, P1)
                 end
             })
@@ -2443,9 +2427,7 @@ get_own_domain_config_test(Config) ->
             gri = #gri{type = od_provider, id = ?SELF, aspect = domain_config},
             expected_result = ?OK_MAP_CONTAINS(ExpBody#{
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, P1)
                 end
             })
@@ -2550,7 +2532,7 @@ verify_provider_identity_test(Config) ->
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
                 {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
                 {<<"token">>, TokenExpiredBin, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
-                    caveats:serialize(#cv_time{valid_until = Timestamp - 200})
+                    #cv_time{valid_until = Timestamp - 200}
                 )}
             ]
         }
@@ -2576,7 +2558,7 @@ verify_provider_identity_test(Config) ->
                 {<<"macaroon">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"macaroon">>)},
                 {<<"macaroon">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"macaroon">>)},
                 {<<"macaroon">>, TokenExpiredBin, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
-                    caveats:serialize(#cv_time{valid_until = Timestamp - 200})
+                    #cv_time{valid_until = Timestamp - 200}
                 )}
             ]
         }

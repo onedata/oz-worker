@@ -163,9 +163,7 @@ create_test(Config) ->
                 ?OK_MAP_CONTAINS(#{
                     <<"name">> => ?HANDLE_SERVICE_NAME1,
                     <<"gri">> => fun(EncodedGri) ->
-                        #gri{id = Id} = oz_test_utils:decode_gri(
-                            Config, EncodedGri
-                        ),
+                        #gri{id = Id} = gri:deserialize(EncodedGri),
                         VerifyFun(Id, ExpProperties)
                     end
                 })
@@ -319,9 +317,7 @@ get_test(Config) ->
                 },
                 <<"effectiveGroups">> => #{},
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(HService, Id)
                 end
             })

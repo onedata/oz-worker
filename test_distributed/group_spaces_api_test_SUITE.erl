@@ -147,9 +147,7 @@ get_space_details_test(Config) ->
             auth_hint = ?THROUGH_GROUP(G1),
             expected_result = ?OK_MAP_CONTAINS(ExpDetails#{
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, S1)
                 end
             })
@@ -228,9 +226,7 @@ create_space_test(Config) ->
                 <<"shares">> => [],
                 <<"users">> => #{},
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     VerifyFun(Id)
                 end
             })
@@ -329,7 +325,7 @@ join_space_test(Config) ->
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )),
-    
+
     % Check that token is not consumed upon failed operation
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(U1),
         #{<<"name">> => ?SPACE_NAME1}
@@ -339,7 +335,7 @@ join_space_test(Config) ->
     ),
     {ok, Token} = macaroons:serialize(Macaroon1),
     oz_test_utils:space_add_group(Config, Space, G1),
-    
+
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -363,8 +359,8 @@ join_space_test(Config) ->
             correct_values = #{<<"token">> => [Token]}
         }
     },
-    VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
-            oz_test_utils:assert_token_exists(Config, macaroon:identifier(Macaroon1))
+    VerifyEndFun1 = fun(_ShouldSucceed, _Env, _) ->
+        oz_test_utils:assert_token_exists(Config, macaroon:identifier(Macaroon1))
     end,
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1
@@ -519,9 +515,7 @@ get_eff_space_details_test(Config) ->
                     auth_hint = ?THROUGH_GROUP(G1),
                     expected_result = ?OK_MAP_CONTAINS(SpaceDetails#{
                         <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
+                            #gri{id = Id} = gri:deserialize(EncodedGri),
                             ?assertEqual(Id, SpaceId)
                         end
                     })

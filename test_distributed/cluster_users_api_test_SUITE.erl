@@ -451,7 +451,7 @@ get_user_test(Config) ->
                     <<"gri">> => fun(EncodedGri) ->
                         ?assertMatch(
                             #gri{id = SubjectUser},
-                            oz_test_utils:decode_gri(Config, EncodedGri)
+                            gri:deserialize(EncodedGri)
                         )
                     end,
 
@@ -689,9 +689,7 @@ get_eff_user_test(Config) ->
                     auth_hint = ?THROUGH_CLUSTER(C1),
                     expected_result = ?OK_MAP_CONTAINS(UserDetails#{
                         <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
+                            #gri{id = Id} = gri:deserialize(EncodedGri),
                             ?assertEqual(Id, UserId)
                         end,
 
@@ -887,7 +885,7 @@ get_eff_user_membership_intermediaries(Config) ->
 
     lists:foreach(fun({ClusterId, SubjectUser, CorrectProviderClients, CorrectUsers, ExpIntermediariesRaw}) ->
         ExpIntermediaries = lists:map(fun({Type, Id}) ->
-            #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+            #{<<"type">> => gri:serialize_type(Type, regular), <<"id">> => Id}
         end, ExpIntermediariesRaw),
         CorrectUserClients = [{user, U} || U <- CorrectUsers],
         ApiTestSpec = #api_test_spec{
