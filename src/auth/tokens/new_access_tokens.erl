@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module present a high level API for creating and validating access
+%%% This module presents a high level API for creating and validating access
 %%% tokens issued by the Onezone service.
 %%%
 %%% @TODO VFS-5726 - this module is currently unused, but fully functional.

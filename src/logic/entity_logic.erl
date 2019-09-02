@@ -24,6 +24,7 @@
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/posix/errors.hrl").
 
 % Some of the types are just aliases for types from gs_protocol, this is
 % for better readability of logic modules.
@@ -567,6 +568,7 @@ is_authorized_as_admin(#state{req = ElReq} = State) ->
     end.
 
 
+-spec ensure_api_caveat_verifies(#state{}) -> ok | no_return().
 ensure_api_caveat_verifies(#state{req = #el_req{operation = Operation, gri = GRI, auth = Auth}}) ->
     case caveats:find(cv_api, Auth#auth.caveats) of
         false ->
@@ -833,7 +835,7 @@ check_type(ipv4_address, _Key, null) ->
 check_type(ipv4_address, Key, IPAddress) ->
     case ip_utils:to_ip4_address(IPAddress) of
         {ok, Ip4Address} -> Ip4Address;
-        {error, einval} -> throw(?ERROR_BAD_VALUE_IPV4_ADDRESS(Key))
+        {error, ?EINVAL} -> throw(?ERROR_BAD_VALUE_IPV4_ADDRESS(Key))
     end;
 check_type(list_of_ipv4_addresses, Key, ListOfIPs) ->
     try

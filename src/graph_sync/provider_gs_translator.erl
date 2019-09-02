@@ -60,7 +60,7 @@ translate_value(_, #gri{type = od_provider, aspect = map_idp_group}, Id) ->
     Id;
 translate_value(_, #gri{type = od_user, aspect = preauthorize}, {Subject, Caveats}) ->
     #{
-        <<"subject">> => aai:serialize_subject(Subject),
+        <<"subject">> => aai:subject_to_json(Subject),
         <<"caveats">> => [caveats:serialize(C) || C <- Caveats]
     };
 translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {AccessToken, Expires}) ->
