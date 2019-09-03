@@ -70,52 +70,51 @@ authorize_by_access_token(Token)  ->
     auth_logic:authorize_by_access_token(Token).
 
 
--spec get_protected_provider_data(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
+-spec get_protected_provider_data(aai:auth(), od_provider:id()) ->
     {ok, map()} | {error, term()}.
 get_protected_provider_data(Auth, ProviderId) ->
     provider_logic:get_protected_data(Auth, ProviderId).
 
 
--spec deploy_static_gui_package(onedata:gui(), onedata:release_version(), file:name_all(), VerifyGuiHash :: boolean()) ->
+-spec deploy_static_gui_package(onedata:gui(), onedata:release_version(),
+    file:name_all(), VerifyGuiHash :: boolean()) ->
     {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE |
     ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED.
 deploy_static_gui_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
     gui_static:deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash).
 
 
--spec update_cluster_version_info(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
-    onedata:service_type(), VersionInfo :: od_cluster:version_info()) ->
+-spec update_cluster_version_info(aai:auth(), od_cluster:id(),
+    onedata:service_type(), od_cluster:version_info()) ->
     ok | {error, term()}.
 update_cluster_version_info(Auth, ClusterId, ServiceType, VersionInfo) ->
     cluster_logic:update_version_info(Auth, ClusterId, ServiceType, VersionInfo).
 
 
--spec set_user_password(Auth :: aai:auth(), UserId :: od_user:id(),
+-spec set_user_password(aai:auth(), od_user:id(),
     NewPassword :: basic_auth:password()) -> ok | {error, term()}.
 set_user_password(Auth, UserId, NewPassword) ->
     user_logic:set_password(Auth, UserId, NewPassword).
 
 
--spec create_user(Auth :: aai:auth(), Data :: map()) ->
+-spec create_user(aai:auth(), Data :: map()) ->
     {ok, od_user:id()} | {error, term()}.
 create_user(Auth, Data) ->
     user_logic:create(Auth, Data).
 
 
--spec add_user_to_group(Auth :: aai:auth(),
-    GroupId :: od_group:id(), UserId :: od_user:id()) ->
+-spec add_user_to_group(aai:auth(), od_group:id(), od_user:id()) ->
     {ok, od_user:id()} | {error, term()}.
 add_user_to_group(Auth, GroupId, UserId) ->
     group_logic:add_user(Auth, GroupId, UserId).
 
 
--spec list_users(Auth :: aai:auth()) ->
-    {ok, [od_user:id()]} | {error, term()}.
+-spec list_users(aai:auth()) -> {ok, [od_user:id()]} | {error, term()}.
 list_users(Auth) ->
     user_logic:list(Auth).
 
 
--spec user_exists(UserId :: od_user:id()) -> boolean().
+-spec user_exists(od_user:id()) -> boolean().
 user_exists(UserId) ->
     user_logic:exists(UserId).
 
@@ -128,12 +127,11 @@ username_exists(Username) ->
     end.
 
 
--spec get_user_details(Auth :: aai:auth()) ->
-    {ok, #user_details{}} | {error, term()}.
+-spec get_user_details(aai:auth()) -> {ok, #user_details{}} | {error, term()}.
 get_user_details(#auth{subject = ?SUB(user, UserId)} = Auth) ->
     get_user_details(Auth, UserId).
 
--spec get_user_details(Auth :: aai:auth(), UserId :: od_user:id()) ->
+-spec get_user_details(aai:auth(), od_user:id()) ->
     {ok, #user_details{}} | {error, term()}.
 get_user_details(Auth, UserId) ->
     case user_logic:get_protected_data(Auth, UserId) of
@@ -155,50 +153,50 @@ get_user_details(Auth, UserId) ->
 
 
 -spec migrate_onepanel_user_to_onezone(OnepanelUserId :: binary(),
-    OnepanelUsername :: binary(), basic_auth:password_hash(), Role :: regular | admin) ->
-    {ok, od_user:id()}.
+    OnepanelUsername :: binary(), basic_auth:password_hash(),
+    Role :: regular | admin) -> {ok, od_user:id()}.
 migrate_onepanel_user_to_onezone(OnepanelUserId, OnepanelUsername, PasswordHash, Role) ->
     basic_auth:migrate_onepanel_user_to_onezone(
         OnepanelUserId, OnepanelUsername, PasswordHash, Role).
 
 
--spec cluster_get_eff_user_privileges(Auth :: aai:auth(), ClusterId :: od_cluster:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:cluster_privilege()]} | {error, term()}.
+-spec cluster_get_eff_user_privileges(aai:auth(), od_cluster:id(),
+    od_user:id()) -> {ok, [privileges:cluster_privilege()]} | {error, term()}.
 cluster_get_eff_user_privileges(Auth, ClusterId, UserId) ->
     cluster_logic:get_eff_user_privileges(Auth, ClusterId, UserId).
 
 
--spec get_protected_cluster_data(Auth :: aai:auth(), ClusterId :: od_cluster:id()) ->
+-spec get_protected_cluster_data(aai:auth(), od_cluster:id()) ->
     {ok, map()} | {error, term()}.
 get_protected_cluster_data(Auth, ClusterId) ->
     cluster_logic:get_protected_data(Auth, ClusterId).
 
 
--spec get_clusters_by_user_auth(Auth :: aai:auth()) ->
+-spec get_clusters_by_user_auth(aai:auth()) ->
     {ok, [od_cluster:id()]} | {error, term()}.
 get_clusters_by_user_auth(Auth) ->
     user_logic:get_clusters(Auth).
 
 
--spec cluster_logic_get_users(Auth :: aai:auth(), ClusterId :: od_cluster:id()) ->
+-spec cluster_logic_get_users(aai:auth(), od_cluster:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
 cluster_logic_get_users(Auth, ClusterId) ->
     cluster_logic:get_users(Auth, ClusterId).
 
 
--spec cluster_logic_get_eff_users(Auth :: aai:auth(), ClusterId :: od_cluster:id()) ->
+-spec cluster_logic_get_eff_users(aai:auth(), od_cluster:id()) ->
     {ok, [od_user:id()]} | {error, term()}.
 cluster_logic_get_eff_users(Auth, ClusterId) ->
     cluster_logic:get_eff_users(Auth, ClusterId).
 
 
--spec cluster_logic_get_groups(Auth :: aai:auth(), ClusterId :: od_cluster:id()) ->
+-spec cluster_logic_get_groups(aai:auth(), od_cluster:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
 cluster_logic_get_groups(Auth, ClusterId) ->
     cluster_logic:get_groups(Auth, ClusterId).
 
 
--spec cluster_logic_get_eff_groups(Auth :: aai:auth(), ClusterId :: od_cluster:id()) ->
+-spec cluster_logic_get_eff_groups(aai:auth(), od_cluster:id()) ->
     {ok, [od_group:id()]} | {error, term()}.
 cluster_logic_get_eff_groups(Auth, ClusterId) ->
     cluster_logic:get_eff_groups(Auth, ClusterId).
