@@ -16,7 +16,7 @@
 -include_lib("ctool/include/api_errors.hrl").
 -include_lib("ctool/include/oz/oz_users.hrl").
 
-%% API
+-export([apply/2]).
 -export([
     authorize_by_oz_panel_gui_token/1, authorize_by_access_token/1,
     get_protected_provider_data/2, deploy_static_gui_package/4,
@@ -32,7 +32,30 @@
 
 
 %%%===================================================================
-%%% API functions
+%%% API entrypoint
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Wraps function invocation to wrap 'throw' exceptions in badrpc tuple
+%% as if they were 'error' exceptions.
+%% @end
+%%--------------------------------------------------------------------
+-spec apply(Function :: atom(), Args :: [term()]) ->
+    Result :: term() | {badrpc, {'EXIT', {Reason, Stacktrace}}} when
+    Reason :: term(), Stacktrace :: list().
+apply(Function, Args) ->
+    try
+        erlang:apply(?MODULE, Function, Args)
+    catch
+        throw:Error ->
+            Stacktrace = erlang:get_stacktrace(),
+            {badrpc, {'EXIT', {Error, Stacktrace}}}
+    end.
+
+
+%%%===================================================================
+%%% Exposed functions
 %%%===================================================================
 
 -spec authorize_by_oz_panel_gui_token(tokens:token() | tokens:serialized()) ->
