@@ -20,7 +20,7 @@
 -export([create/2, get/1, delete/1]).
 
 %% datastore_model callbacks
--export([get_record_struct/1]).
+-export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
 
 -define(CTX, #{
     model => ?MODULE
@@ -75,6 +75,15 @@ delete(Id) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Returns model's record version.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_record_version() -> datastore_model:record_version().
+get_record_version() ->
+    2.
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Returns model's record structure in provided version.
 %% @end
 %%--------------------------------------------------------------------
@@ -88,4 +97,35 @@ get_record_struct(1) ->
             {type, atom},
             {id, string}
         ]}}
+    ]};
+get_record_struct(2) ->
+    {record, [
+        {secret, string},
+        {type, atom},
+        {issuer, {record, [ % nested record changed from #client{} to #subject{}
+            {type, atom},
+            {id, string}
+        ]}}
     ]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades model's record from provided version to the next one.
+%% @end
+%%--------------------------------------------------------------------
+-spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
+    {datastore_model:record_version(), datastore_model:record()}.
+upgrade_record(1, MacaroonAuth) ->
+    {
+        macaroon_auth,
+        Secret,
+        Type,
+        Creator
+    } = MacaroonAuth,
+
+    {2, #macaroon_auth{
+        secret = Secret,
+        type = Type,
+        issuer = upgrade_common:client_to_subject(Creator)
+    }}.

@@ -139,7 +139,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    4.
+    5.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -192,6 +192,28 @@ get_record_struct(4) ->
 
         {creation_time, integer}, % New field
         {creator, {record, [ % New field
+            {type, atom},
+            {id, string}
+        ]}},
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(5) ->
+    % creator field - nested record changed from #client{} to #subject{}
+    {record, [
+        {name, string},
+        {proxy_endpoint, string},
+        {service_properties, #{term => term}},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {handles, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+
+        {creation_time, integer},
+        {creator, {record, [ % nested record changed from #client{} to #subject{}
             {type, atom},
             {id, string}
         ]}},
@@ -280,7 +302,44 @@ upgrade_record(3, HandleService) ->
 
         BottomUpDirty
     } = HandleService,
-    {4, #od_handle_service{
+    {4, {
+        od_handle_service,
+        Name,
+        ProxyEndpoint,
+        ServiceProperties,
+
+        Users,
+        Groups,
+        Handles,
+
+        EffUsers,
+        EffGroups,
+
+        time_utils:system_time_seconds(),
+        undefined,
+
+        BottomUpDirty
+    }};
+upgrade_record(4, HandleService) ->
+    {
+        od_handle_service,
+        Name,
+        ProxyEndpoint,
+        ServiceProperties,
+
+        Users,
+        Groups,
+        Handles,
+
+        EffUsers,
+        EffGroups,
+
+        CreationTime,
+        Creator,
+
+        BottomUpDirty
+    } = HandleService,
+    {5, #od_handle_service{
         name = Name,
         proxy_endpoint = ProxyEndpoint,
         service_properties = ServiceProperties,
@@ -292,8 +351,8 @@ upgrade_record(3, HandleService) ->
         eff_users = EffUsers,
         eff_groups = EffGroups,
 
-        creation_time = time_utils:system_time_seconds(),
-        creator = undefined,
+        creation_time = CreationTime,
+        creator = upgrade_common:client_to_subject(Creator),
 
         bottom_up_dirty = BottomUpDirty
     }}.
