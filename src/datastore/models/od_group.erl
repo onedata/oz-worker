@@ -203,7 +203,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    6.
+    7.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -310,6 +310,44 @@ get_record_struct(6) ->
 
         {creation_time, integer}, % New field
         {creator, {record, [ % New field
+            {type, atom},
+            {id, string}
+        ]}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(7) ->
+    % creator field - nested record changed from #client{} to #subject{}
+    {record, [
+        {name, string},
+        {type, atom},
+        {protected, boolean},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {parents, [string]},
+        {children, #{string => [atom]}},
+        {eff_parents, #{string => [{atom, string}]}},
+        {eff_children, #{string => {[atom], [{atom, string}]}}},
+
+        {users, #{string => [atom]}},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {creator, {record, [ % nested record changed from #client{} to #subject{}
             {type, atom},
             {id, string}
         ]}},
@@ -615,37 +653,106 @@ upgrade_record(5, Group) ->
         end, Field)
     end,
 
-    {6, #od_group{
+    {6, {
+        od_group,
+        Name,
+        Type,
+        false,
+        TranslatePrivileges(OzPrivileges),
+        TranslatePrivileges(EffOzPrivileges),
+
+        Parents,
+        TranslateField(Children),
+        EffParents,
+        TranslateField(EffChildren),
+
+        TranslateField(Users),
+        Spaces,
+        HandleServices,
+        Handles,
+        [],
+        [],
+
+        TranslateField(EffUsers),
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        #{},
+        #{},
+
+        time_utils:system_time_seconds(),
+        undefined,
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(6, Group) ->
+    {
+        od_group,
+        Name,
+        Type,
+        Protected,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Group,
+
+    {7, #od_group{
         name = Name,
         type = Type,
-        protected = false,
-        oz_privileges = TranslatePrivileges(OzPrivileges),
-        eff_oz_privileges = TranslatePrivileges(EffOzPrivileges),
+        protected = Protected,
+        oz_privileges = OzPrivileges,
+        eff_oz_privileges = EffOzPrivileges,
 
         parents = Parents,
-        children = TranslateField(Children),
+        children = Children,
         eff_parents = EffParents,
-        eff_children = TranslateField(EffChildren),
+        eff_children = EffChildren,
 
-        users = TranslateField(Users),
+        users = Users,
         spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles,
-        harvesters = [],
-        clusters = [],
+        harvesters = Harvesters,
+        clusters = Clusters,
 
-        eff_users = TranslateField(EffUsers),
+        eff_users = EffUsers,
         eff_spaces = EffSpaces,
         eff_providers = EffProviders,
         eff_handle_services = EffHandleServices,
         eff_handles = EffHandles,
-        eff_harvesters = #{},
-        eff_clusters = #{},
+        eff_harvesters = EffHarvesters,
+        eff_clusters = EffClusters,
 
-        creation_time = time_utils:system_time_seconds(),
-        creator = undefined,
+        creation_time = CreationTime,
+        creator = upgrade_common:client_to_subject(Creator),
 
         top_down_dirty = TopDownDirty,
         bottom_up_dirty = BottomUpDirty
     }}.
-

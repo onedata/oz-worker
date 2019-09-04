@@ -150,7 +150,7 @@ actual_timestamp() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    4.
+    5.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -210,6 +210,30 @@ get_record_struct(4) ->
 
         {creation_time, integer}, % New field
         {creator, {record, [ % New field
+            {type, atom},
+            {id, string}
+        ]}},
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(5) ->
+    % creator field - nested record changed from #client{} to #subject{}
+    {record, [
+        {public_handle, string},
+        {resource_type, string},
+        {metadata, string},
+        {timestamp, {{integer, integer, integer}, {integer, integer, integer}}},
+        {resource_id, string},
+
+        {handle_service, string},
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+
+        {creation_time, integer},
+        {creator, {record, [ % nested record changed from #client{} to #subject{}
             {type, atom},
             {id, string}
         ]}},
@@ -309,7 +333,48 @@ upgrade_record(3, Handle) ->
 
         BottomUpDirty
     } = Handle,
-    {4, #od_handle{
+    {4, {
+        od_handle,
+        PublicHandle,
+        ResourceType,
+        Metadata,
+        Timestamp,
+
+        ResourceId,
+        HandleService,
+        Users,
+        Groups,
+
+        EffUsers,
+        EffGroups,
+
+        time_utils:system_time_seconds(),
+        undefined,
+
+        BottomUpDirty
+    }};
+upgrade_record(4, Handle) ->
+    {
+        od_handle,
+        PublicHandle,
+        ResourceType,
+        Metadata,
+        Timestamp,
+
+        ResourceId,
+        HandleService,
+        Users,
+        Groups,
+
+        EffUsers,
+        EffGroups,
+
+        CreationTime,
+        Creator,
+
+        BottomUpDirty
+    } = Handle,
+    {5, #od_handle{
         public_handle = PublicHandle,
         resource_type = ResourceType,
         metadata = Metadata,
@@ -323,8 +388,8 @@ upgrade_record(3, Handle) ->
         eff_users = EffUsers,
         eff_groups = EffGroups,
 
-        creation_time = time_utils:system_time_seconds(),
-        creator = undefined,
+        creation_time = CreationTime,
+        creator = upgrade_common:client_to_subject(Creator),
 
         bottom_up_dirty = BottomUpDirty
     }}.
