@@ -82,7 +82,7 @@ update(TokenId, Diff) ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    3.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -111,6 +111,17 @@ get_record_struct(2) ->
             {id, string}
         ]}},
         {locked, boolean}
+    ]};
+get_record_struct(3) ->
+    {record, [
+        {secret, binary},
+        {resource, atom},
+        {resource_id, string},
+        {issuer, {record, [ % nested record changed from #client{} to #subject{}
+            {type, atom},
+            {id, string}
+        ]}},
+        {locked, boolean}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -128,11 +139,29 @@ upgrade_record(1, Token) ->
         ResourceId,
         Issuer
     } = Token,
-    
-    {2, #token{
+
+    {2, {
+        token,
+        Secret,
+        Resource,
+        ResourceId,
+        Issuer,
+        false
+    }};
+upgrade_record(2, Token) ->
+    {
+        token,
+        Secret,
+        Resource,
+        ResourceId,
+        Creator,
+        _Locked
+    } = Token,
+
+    {3, #token{
         secret = Secret,
         resource = Resource,
         resource_id = ResourceId,
-        issuer = Issuer,
+        issuer = upgrade_common:client_to_subject(Creator),
         locked = false
     }}.

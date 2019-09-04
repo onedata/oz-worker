@@ -188,7 +188,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    5.
+    6.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -258,7 +258,32 @@ get_record_struct(4) ->
 get_record_struct(5) ->
     % The structure does not change, but some privileges change names and some are added
     % so all records must be marked dirty to recalculate effective relations.
-    get_record_struct(4).
+    get_record_struct(4);
+get_record_struct(6) ->
+    % creator field - nested record changed from #client{} to #subject{}
+    {record, [
+        {name, string},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {providers, #{string => integer}},
+        {shares, [string]},
+        {harvesters, [string]}, % New field
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}}, % New field
+
+        {creation_time, integer},
+        {creator, {record, [ % nested record changed from #client{} to #subject{}
+            {type, atom},
+            {id, string}
+        ]}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]}.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -433,23 +458,68 @@ upgrade_record(4, Space) ->
         end, Field)
     end,
 
-    {5, #od_space{
+    {5, {
+        od_space,
+        Name,
+
+        TranslateField(Users),
+        TranslateField(Groups),
+        Providers,
+        Shares,
+        Harvesters,
+
+        TranslateField(EffUsers),
+        TranslateField(EffGroups),
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        true,
+        true
+    }};
+upgrade_record(5, Space) ->
+    {
+        od_space,
+        Name,
+
+        Users,
+        Groups,
+        Providers,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+
+    } = Space,
+
+    {6, #od_space{
         name = Name,
 
-        users = TranslateField(Users),
-        groups = TranslateField(Groups),
+        users = Users,
+        groups = Groups,
         providers = Providers,
         shares = Shares,
         harvesters = Harvesters,
 
-        eff_users = TranslateField(EffUsers),
-        eff_groups = TranslateField(EffGroups),
+        eff_users = EffUsers,
+        eff_groups = EffGroups,
         eff_providers = EffProviders,
         eff_harvesters = EffHarvesters,
 
         creation_time = CreationTime,
-        creator = Creator,
+        creator = upgrade_common:client_to_subject(Creator),
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        top_down_dirty = TopDownDirty,
+        bottom_up_dirty = BottomUpDirty
     }}.

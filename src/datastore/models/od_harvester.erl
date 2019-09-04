@@ -21,7 +21,7 @@
 -export([entity_logic_plugin/0]).
 
 %% datastore_model callbacks
--export([get_record_version/0, get_record_struct/1]).
+-export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
 
 -type id() :: binary().
 -type record() :: #od_harvester{}.
@@ -165,7 +165,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    1.
+    2.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -180,23 +180,21 @@ get_record_struct(1) ->
         {plugin, atom},
         {endpoint, string},
 
-        {config, {custom, {json_utils, encode, decode}}},
+        {gui_plugin_config, {custom, {json_utils, encode, decode}}},
         {public, boolean},
-        
-        {indices, #{string => 
-            {record, [
-                {name, string},
-                {schema, string},
-                {guiPluginName, string},
-                {stats, #{string => #{string => {record, [
-                    {current_seq, integer},
-                    {max_seq, integer},
-                    {last_update, integer},
-                    {error, string},
-                    {archival, boolean}
-                ]}}}}
-            ]}
-        }},
+
+        {indices, #{string => {record, [
+            {name, string},
+            {schema, string},
+            {guiPluginName, string},
+            {stats, #{string => #{string => {record, [
+                {current_seq, integer},
+                {max_seq, integer},
+                {last_update, integer},
+                {error, string},
+                {archival, boolean}
+            ]}}}}
+        ]}}},
 
         {users, #{string => [atom]}},
         {groups, #{string => [atom]}},
@@ -204,10 +202,50 @@ get_record_struct(1) ->
 
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
-        {eff_providers, #{string => [{atom, string}]}}, 
+        {eff_providers, #{string => [{atom, string}]}},
 
-        {creation_time, integer}, 
-        {creator, {record, [ 
+        {creation_time, integer},
+        {creator, {record, [
+            {type, atom},
+            {id, string}
+        ]}},
+
+        {bottom_up_dirty, boolean},
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(2) ->
+    % creator field - nested record changed from #client{} to #subject{}
+    {record, [
+        {name, string},
+        {plugin, atom},
+        {endpoint, string},
+
+        {gui_plugin_config, {custom, {json_utils, encode, decode}}},
+        {public, boolean},
+
+        {indices, #{string => {record, [
+            {name, string},
+            {schema, string},
+            {guiPluginName, string},
+            {stats, #{string => #{string => {record, [
+                {current_seq, integer},
+                {max_seq, integer},
+                {last_update, integer},
+                {error, string},
+                {archival, boolean}
+            ]}}}}
+        ]}}},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {spaces, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {creator, {record, [ % nested record changed from #client{} to #subject{}
             {type, atom},
             {id, string}
         ]}},
@@ -215,4 +253,63 @@ get_record_struct(1) ->
         {bottom_up_dirty, boolean},
         {top_down_dirty, boolean}
     ]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades model's record from provided version to the next one.
+%% @end
+%%--------------------------------------------------------------------
+-spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
+    {datastore_model:record_version(), datastore_model:record()}.
+upgrade_record(1, Harvester) ->
+    {
+        od_harvester,
+        Name,
+        Plugin,
+        Endpoint,
+
+        GuiPluginConfig,
+        Public,
+
+        Indices,
+
+        Users,
+        Groups,
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+
+        CreationTime,
+        Creator,
+
+        BottomUpDirty,
+        TopDownDirty
+    } = Harvester,
+    {2, #od_harvester{
+        name = Name,
+        plugin = Plugin,
+        endpoint = Endpoint,
+
+        gui_plugin_config = GuiPluginConfig,
+        public = Public,
+
+        indices = Indices,
+
+        users = Users,
+        groups = Groups,
+        spaces = Spaces,
+
+        eff_users = EffUsers,
+        eff_groups = EffGroups,
+        eff_providers = EffProviders,
+
+        creation_time = CreationTime,
+        creator = upgrade_common:client_to_subject(Creator),
+
+        bottom_up_dirty = BottomUpDirty,
+        top_down_dirty = TopDownDirty
+    }}.
 

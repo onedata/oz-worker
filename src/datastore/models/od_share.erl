@@ -136,7 +136,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    3.
+    4.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -179,6 +179,21 @@ get_record_struct(3) ->
             {type, atom},
             {id, string}
         ]}}
+    ]};
+get_record_struct(4) ->
+    % creator field - nested record changed from #client{} to #subject{}
+    {record, [
+        {name, string},
+        {public_url, string},
+        {space, string},
+        {handle, string},
+        {root_file, string},
+
+        {creation_time, integer},
+        {creator, {record, [ % nested record changed from #client{} to #subject{}
+            {type, atom},
+            {id, string}
+        ]}}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -218,13 +233,36 @@ upgrade_record(2, Share) ->
         HandleId,
         RootFileId
     } = Share,
-    {3, #od_share{
+    {3, {
+        od_share,
+        Name,
+        PublicUrl,
+        SpaceId,
+        HandleId,
+        RootFileId,
+
+        time_utils:system_time_seconds(),
+        undefined
+    }};
+upgrade_record(3, Share) ->
+    {
+        od_share,
+        Name,
+        PublicUrl,
+        SpaceId,
+        HandleId,
+        RootFileId,
+
+        CreationTime,
+        Creator
+    } = Share,
+    {4, #od_share{
         name = Name,
         public_url = PublicUrl,
         space = SpaceId,
         handle = HandleId,
         root_file = RootFileId,
 
-        creation_time = time_utils:system_time_seconds(),
-        creator = undefined
+        creation_time = CreationTime,
+        creator = upgrade_common:client_to_subject(Creator)
     }}.

@@ -24,7 +24,7 @@
 -export([ensure_onezone_cluster/0]).
 
 %% datastore_model callbacks
--export([get_record_version/0, get_record_struct/1]).
+-export([get_record_version/0, get_record_struct/1, upgrade_record/2]).
 
 % The Id of corresponding service:
 %   <<"onezone">> for onezone cluster
@@ -204,7 +204,7 @@ ensure_cluster_for_legacy_provider(ClusterId) ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    1.
+    2.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -234,4 +234,74 @@ get_record_struct(1) ->
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
 
         {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(2) ->
+    {record, [
+        {type, atom},
+
+        {worker_version, {string, string, string}},
+        {onepanel_version, {string, string, string}},
+        {onepanel_proxy, boolean},
+
+        {creation_time, integer},
+        {creator, {record, [ % nested record changed from #client{} to #subject{}
+            {type, atom},
+            {id, string}
+        ]}},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+
+        {bottom_up_dirty, boolean}
     ]}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Upgrades model's record from provided version to the next one.
+%% @end
+%%--------------------------------------------------------------------
+-spec upgrade_record(datastore_model:record_version(), datastore_model:record()) ->
+    {datastore_model:record_version(), datastore_model:record()}.
+upgrade_record(1, Cluster) ->
+    {
+        od_cluster,
+        Type,
+
+        WorkerVersion,
+        OnepanelVersion,
+        OnepanelProxy,
+
+        CreationTime,
+        Creator,
+
+        Users,
+        Groups,
+
+        EffUsers,
+        EffGroups,
+
+        BottomUpDirty
+    } = Cluster,
+
+    {2, #od_cluster{
+        type = Type,
+
+        worker_version = WorkerVersion,
+        onepanel_version = OnepanelVersion,
+        onepanel_proxy = OnepanelProxy,
+
+        creation_time = CreationTime,
+        creator = upgrade_common:client_to_subject(Creator),
+
+        users = Users,
+        groups = Groups,
+
+        eff_users = EffUsers,
+        eff_groups = EffGroups,
+
+        bottom_up_dirty = BottomUpDirty
+    }}.
