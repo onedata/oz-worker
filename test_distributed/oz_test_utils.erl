@@ -2361,7 +2361,7 @@ harvester_remove_group(Config, HarvesterId, GroupId) ->
 %% Creates index in given harvester.
 %% @end
 %%--------------------------------------------------------------------
--spec harvester_create_index(Config :: term(), HarvesterId :: od_harvester:id(), 
+-spec harvester_create_index(Config :: term(), HarvesterId :: od_harvester:id(),
     Data :: map()) -> ok.
 harvester_create_index(Config, HarvesterId, Data) ->
     ?assertMatch({ok, _}, call_oz(
@@ -2434,7 +2434,6 @@ harvester_submit_batch(Config, ProviderId, HarvesterId, Indices, SpaceId, Batch,
         Config, harvester_logic, submit_batch,
         [?PROVIDER(ProviderId), HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq]
     )).
-
 
 
 %%--------------------------------------------------------------------
@@ -2963,10 +2962,10 @@ mock_harvester_plugin(Config, Nodes, PluginName) ->
     test_utils:mock_expect(Nodes, PluginName, type, fun() -> harvester_plugin end),
     test_utils:mock_expect(Nodes, PluginName, ping,
         fun(?HARVESTER_ENDPOINT1) -> ok;
-           (?HARVESTER_ENDPOINT2) -> ok;
-           (_) -> ?ERROR_TEMPORARY_FAILURE
+            (?HARVESTER_ENDPOINT2) -> ok;
+            (_) -> ?ERROR_TEMPORARY_FAILURE
         end),
-    test_utils:mock_expect(Nodes, PluginName, submit_batch, fun(_,HarvesterId,Indices, Batch) ->
+    test_utils:mock_expect(Nodes, PluginName, submit_batch, fun(_, HarvesterId, Indices, Batch) ->
         FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),
         {LastSeq, ErrorSeq} = lists:foldl(
             fun(BatchEntry, {A, undefined}) ->
@@ -2988,9 +2987,9 @@ mock_harvester_plugin(Config, Nodes, PluginName) ->
             end
         end, Indices)}
     end),
-    test_utils:mock_expect(Nodes, PluginName, create_index, fun(_,_,_) -> ok end),
-    test_utils:mock_expect(Nodes, PluginName, delete_index, fun(_,_) -> ok end),
-    test_utils:mock_expect(Nodes, PluginName, query_index, fun(_,_,_) -> {ok, ?HARVESTER_MOCKED_QUERY_DATA_MAP} end),
+    test_utils:mock_expect(Nodes, PluginName, create_index, fun(_, _, _) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, delete_index, fun(_, _) -> ok end),
+    test_utils:mock_expect(Nodes, PluginName, query_index, fun(_, _, _) -> {ok, ?HARVESTER_MOCKED_QUERY_DATA_MAP} end),
     test_utils:mock_expect(Nodes, PluginName, query_validator, fun() -> ?HARVESTER_PLUGIN:query_validator() end).
 
 
@@ -3199,9 +3198,9 @@ overwrite_test_auth_config(TestConfig, AuthConfigData) ->
 %%--------------------------------------------------------------------
 overwrite_compatibility_registry(TestConfig, Registry) ->
     {ok, RegistryPath} = call_oz(TestConfig, application, get_env, [ctool, compatibility_registry_path]),
-    rpc:multicall(?OZ_NODES(TestConfig), file, write_file, [
-        RegistryPath, json_utils:encode(Registry)
-    ]),
+    {ok, DefaultRegistryPath} = call_oz(TestConfig, application, get_env, [ctool, default_compatibility_registry]),
+    rpc:multicall(?OZ_NODES(TestConfig), file, write_file, [RegistryPath, json_utils:encode(Registry)]),
+    rpc:multicall(?OZ_NODES(TestConfig), file, write_file, [DefaultRegistryPath, json_utils:encode(Registry)]),
     rpc:multicall(?OZ_NODES(TestConfig), compatibility, clear_registry_cache, []),
     ok.
 
@@ -3350,7 +3349,6 @@ set_env(Config, Name, Value) ->
 set_app_env(Config, App, Name, Value) ->
     {_, []} = rpc:multicall(?OZ_NODES(Config), application, set_env, [App, Name, Value]),
     ok.
-
 
 
 %%--------------------------------------------------------------------
