@@ -13,6 +13,7 @@
 -module(zone_api_test_SUITE).
 -author("Wojciech Geisler").
 
+-include("datastore/oz_datastore_models.hrl").
 -include("http/rest.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/onedata.hrl").
@@ -31,14 +32,18 @@
 -export([
     get_configuration_test/1,
     get_old_configuration_endpoint_test/1,
-    list_privileges_test/1
+    list_privileges_test/1,
+    default_gui_messages_are_empty/1,
+    unknown_gui_messages_are_not_found/1
 ]).
 
 all() ->
     ?ALL([
         get_configuration_test,
         get_old_configuration_endpoint_test,
-        list_privileges_test
+        list_privileges_test,
+        default_gui_messages_are_empty,
+        unknown_gui_messages_are_not_found
     ]).
 
 %%%===================================================================
@@ -46,7 +51,6 @@ all() ->
 %%%===================================================================
 
 get_configuration_test(Config) ->
-
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [root, nobody]
@@ -80,7 +84,6 @@ get_old_configuration_endpoint_test(Config) ->
 
 
 list_privileges_test(Config) ->
-
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [root, nobody]
@@ -96,6 +99,19 @@ list_privileges_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+default_gui_messages_are_empty(Config) ->
+    lists:foreach(fun(MessageId) ->
+        {ok, #document{value = Record}} = ?assertMatch({ok, #document{}},
+            oz_test_utils:call_oz(Config, gui_message, get, [MessageId])),
+        ?assertEqual(#gui_message{enabled = true, body = <<>>}, Record)
+    end, gui_message_ids()).
+
+
+unknown_gui_messages_are_not_found(Config) ->
+    ?assertEqual({error, not_found},
+        oz_test_utils:call_oz(Config, gui_message, get, [<<"unknownId">>])).
 
 
 %%%===================================================================
@@ -192,3 +208,11 @@ expected_configuration(Config) ->
         <<"subdomainDelegationSupported">> => SubdomainDelegationSupported,
         <<"supportedIdPs">> => MockedSupportedIdPs
     }.
+
+
+-spec gui_message_ids() -> [binary()].
+gui_message_ids() -> [
+    <<"cookie_consent_notification">>,
+    <<"privacy_policy">>,
+    <<"signin_notification">>
+].

@@ -52,6 +52,7 @@ fetch_entity(_) ->
 operation_supported(get, configuration, _) -> true;
 operation_supported(get, test_image, _) -> true;
 operation_supported(get, privileges, _) -> true;
+operation_supported(get, {gui_message, _}, _) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -114,8 +115,16 @@ get(#el_req{gri = #gri{aspect = privileges}}, _) ->
     {ok, #{
         <<"viewer">> => privileges:oz_viewer(),
         <<"admin">> => privileges:oz_admin()
-    }}.
+    }};
 
+get(#el_req{gri = #gri{aspect = {gui_message, MessageId}}}, _) ->
+    case gui_message:get(MessageId) of
+        {ok, #document{value = Message}} -> {ok, Message};
+        Error ->
+            % the error has to be thrown rather than returned
+            % to prevent badmatch displayed as internal server error
+            throw(Error)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -145,11 +154,9 @@ delete(_GRI) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
-exists(#el_req{gri = #gri{aspect = configuration}}, _) ->
-    true;
-
-exists(_Req, _) ->
-    false.
+exists(#el_req{gri = #gri{aspect = _}}, _) ->
+    % this function is never called when gri.id = undefined
+    ?ERROR_NOT_SUPPORTED.
 
 
 %%--------------------------------------------------------------------
@@ -166,6 +173,9 @@ authorize(#el_req{operation = get, gri = #gri{aspect = test_image}}, _) ->
     true;
 
 authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
+    true;
+
+authorize(#el_req{operation = get, gri = #gri{aspect = {gui_message, _}}}, _) ->
     true;
 
 authorize(_Req = #el_req{}, _) ->

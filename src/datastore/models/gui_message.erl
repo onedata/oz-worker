@@ -22,13 +22,14 @@
 -include_lib("ctool/include/api_errors.hrl").
 
 %% API
--export([get/1, update/2]).
+-export([exists/1, get/1, get_as_map/1, update/2]).
 
 %% datastore_model callbacks
 -export([get_record_struct/1, get_record_version/0]).
 
 -type id() :: binary().
 -type record() :: #gui_message{}.
+-type map_repr() :: #{enabled := boolean(), body := binary()}.
 -type diff_map() :: #{enabled => boolean(), body => binary()}.
 -type doc() :: datastore_doc:doc(record()).
 -export_type([id/0, record/0]).
@@ -45,6 +46,16 @@
 %%% API
 %%%===================================================================
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Checks whether given message Id exists, which is equivalent
+%% to its presence on the list of expected Ids.
+%% @end
+%%--------------------------------------------------------------------
+-spec exists(id()) -> boolean().
+exists(MessageId) ->
+    is_allowed_id(MessageId).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -53,7 +64,7 @@
 %%--------------------------------------------------------------------
 -spec get(id()) -> {ok, doc()} | {error, term()}.
 get(MessageId) ->
-    case allowed_id(MessageId) of
+    case is_allowed_id(MessageId) of
         true ->
             case datastore_model:get(?CTX, MessageId) of
                 {ok, #document{} = Doc} ->
@@ -70,6 +81,21 @@ get(MessageId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Returns message record as a map for use by Onepanel.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_as_map(id()) -> {ok, map_repr()} | {error, term()}.
+get_as_map(MessageId) ->
+    case ?MODULE:get(MessageId) of
+        {ok, #document{value = #gui_message{enabled = Enabled, body = Body}}} ->
+            {ok, #{enabled => Enabled, body => Body}};
+        Error ->
+            Error
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Toggles message state or body.
 %% @end
 %%--------------------------------------------------------------------
@@ -81,7 +107,7 @@ update(MessageId, Diff) ->
             body = maps:get(body, Diff, Record#gui_message.body)
         }}
     end,
-    case allowed_id(MessageId) of
+    case is_allowed_id(MessageId) of
         true ->
             {ok, Default} = DiffFun(default_record()),
             datastore_model:update(?CTX, MessageId, DiffFun, Default);
@@ -127,6 +153,6 @@ default_record() ->
     #gui_message{}.
 
 
--spec allowed_id(id()) -> boolean().
-allowed_id(MessageId) ->
+-spec is_allowed_id(id()) -> boolean().
+is_allowed_id(MessageId) ->
     lists:member(MessageId, ?ALLOWED_IDS).

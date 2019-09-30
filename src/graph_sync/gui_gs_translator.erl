@@ -102,6 +102,8 @@ translate_resource(_, GRI = #gri{type = od_harvester}, Data) ->
     translate_harvester(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_cluster}, Data) ->
     translate_cluster(GRI, Data);
+translate_resource(_, GRI = #gri{type = oz_worker}, Data) ->
+    translate_zone(GRI, Data);
 
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync get result for:~n
@@ -958,6 +960,22 @@ translate_cluster(#gri{aspect = {group_privileges, _GroupId}}, Privileges) ->
 translate_cluster(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
     #{
         <<"privileges">> => Privileges
+    }.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Translates GET result for aspects handled by zone_logic_plugin.
+%% @end
+%%--------------------------------------------------------------------
+-spec translate_zone(gri:gri(), Data :: term()) ->
+    gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_zone(#gri{aspect = {gui_message, _MessageId}}, GuiMessage) ->
+    #gui_message{enabled = Enabled, body = Body} = GuiMessage,
+    #{
+        <<"enabled">> => Enabled,
+        <<"body">> => Body
     }.
 
 
