@@ -38,17 +38,20 @@ all: test_rel
 ## Rebar targets
 ##
 
+get-deps:
+	$(REBAR) get-deps
+
 upgrade:
 	$(REBAR) upgrade
-
-deps:
-	$(LIB_DIR)/gui/pull-gui.sh gui-image.conf
 
 compile:
 	$(REBAR) compile
 
+inject-gui:
+	$(LIB_DIR)/gui/pull-gui.sh gui-image.conf
+
 ## Generates a production release
-generate: template compile deps
+generate: template compile inject-gui
 	$(REBAR) release $(OVERLAY_VARS)
 
 clean:
@@ -125,7 +128,7 @@ package/$(PKG_ID).tar.gz:
 	rm -rf package/$(PKG_ID)
 	git archive --format=tar --prefix=$(PKG_ID)/ $(PKG_REVISION) | (cd package && tar -xf -)
 	git submodule foreach "git archive --prefix=$(PKG_ID)/\$$path/ \$$sha1 | (cd \$$toplevel/package && tar -xf -)"
-	${MAKE} -C package/$(PKG_ID) deps
+	${MAKE} -C package/$(PKG_ID) get-deps inject-gui
 	for dep in package/$(PKG_ID) package/$(PKG_ID)/$(LIB_DIR)/*; do \
 	     echo "Processing dependency: `basename $${dep}`"; \
 	     vsn=`git --git-dir=$${dep}/.git describe --tags 2>/dev/null`; \
