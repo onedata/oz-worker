@@ -70,7 +70,7 @@ get(MessageId) ->
                 {ok, #document{} = Doc} ->
                     {ok, Doc};
                 {error, not_found} ->
-                    {ok, #document{key = MessageId, value = default_record()}};
+                    {ok, #document{key = MessageId, value = default_record(MessageId)}};
                 Error ->
                     Error
             end;
@@ -109,7 +109,7 @@ update(MessageId, Diff) ->
     end,
     case is_allowed_id(MessageId) of
         true ->
-            {ok, Default} = DiffFun(default_record()),
+            {ok, Default} = DiffFun(default_record(MessageId)),
             datastore_model:update(?CTX, MessageId, DiffFun, Default);
         false ->
             {error, not_found}
@@ -148,8 +148,15 @@ get_record_struct(1) ->
 %%% Internal functions
 %%%===================================================================
 
--spec default_record() -> record().
-default_record() ->
+-spec default_record(id()) -> record().
+default_record(<<"signin_notification">>) ->
+    LoginNotification = oz_worker:get_env(login_notification, ""),
+    #gui_message{
+        % preserve existing login notification
+        body = str_utils:unicode_list_to_binary(LoginNotification)
+    };
+
+default_record(_MessageId) ->
     #gui_message{}.
 
 

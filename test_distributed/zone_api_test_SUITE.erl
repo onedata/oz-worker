@@ -33,7 +33,7 @@
     get_configuration_test/1,
     get_old_configuration_endpoint_test/1,
     list_privileges_test/1,
-    default_gui_messages_are_empty/1,
+    default_gui_messages_are_empty_or_migrated/1,
     unknown_gui_messages_are_not_found/1
 ]).
 
@@ -42,9 +42,11 @@ all() ->
         get_configuration_test,
         get_old_configuration_endpoint_test,
         list_privileges_test,
-        default_gui_messages_are_empty,
+        default_gui_messages_are_empty_or_migrated,
         unknown_gui_messages_are_not_found
     ]).
+
+-define(SIGNIN_NOTIFICATION, "custom login notification").
 
 %%%===================================================================
 %%% Test functions
@@ -101,12 +103,17 @@ list_privileges_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
-default_gui_messages_are_empty(Config) ->
+default_gui_messages_are_empty_or_migrated(Config) ->
+    oz_test_utils:set_env(Config, login_notification, ?SIGNIN_NOTIFICATION),
     lists:foreach(fun(MessageId) ->
         {ok, #document{value = Record}} = ?assertMatch({ok, #document{}},
             oz_test_utils:call_oz(Config, gui_message, get, [MessageId])),
         ?assertEqual(#gui_message{enabled = true, body = <<>>}, Record)
-    end, gui_message_ids()).
+    end, gui_message_ids() -- [<<"signin_notification">>]),
+
+    {ok, #document{value = Record}} = ?assertMatch({ok, #document{}},
+        oz_test_utils:call_oz(Config, gui_message, get, [<<"signin_notification">>])),
+    ?assertEqual(#gui_message{enabled = true, body = <<?SIGNIN_NOTIFICATION>>}, Record).
 
 
 unknown_gui_messages_are_not_found(Config) ->
