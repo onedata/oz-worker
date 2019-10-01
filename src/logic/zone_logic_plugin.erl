@@ -120,10 +120,7 @@ get(#el_req{gri = #gri{aspect = privileges}}, _) ->
 get(#el_req{gri = #gri{aspect = {gui_message, MessageId}}}, _) ->
     case gui_message:get(MessageId) of
         {ok, #document{value = Message}} -> {ok, Message};
-        Error ->
-            % the error has to be thrown rather than returned
-            % to prevent badmatch displayed as internal server error
-            throw(Error)
+        {error, not_found} -> throw(?ERROR_NOT_FOUND)
     end.
 
 

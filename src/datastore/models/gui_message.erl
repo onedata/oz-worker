@@ -99,12 +99,12 @@ get_as_map(MessageId) ->
 %% Toggles message state or body.
 %% @end
 %%--------------------------------------------------------------------
--spec update(id(), Diff :: diff_map()) -> {ok, doc()} | {error, term()}.
-update(MessageId, Diff) ->
+-spec update(id(), diff_map()) -> {ok, doc()} | {error, term()}.
+update(MessageId, DiffMap) ->
     DiffFun = fun(Record) ->
         {ok, Record#gui_message{
-            enabled = maps:get(enabled, Diff, Record#gui_message.enabled),
-            body = maps:get(body, Diff, Record#gui_message.body)
+            enabled = maps:get(enabled, DiffMap, Record#gui_message.enabled),
+            body = maps:get(body, DiffMap, Record#gui_message.body)
         }}
     end,
     case is_allowed_id(MessageId) of
