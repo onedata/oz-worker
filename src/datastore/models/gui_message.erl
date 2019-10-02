@@ -22,7 +22,7 @@
 -include_lib("ctool/include/api_errors.hrl").
 
 %% API
--export([exists/1, get/1, get_as_map/1, update/2]).
+-export([exists/1, get/1, update/2]).
 
 %% datastore_model callbacks
 -export([get_record_struct/1, get_record_version/0]).
@@ -30,9 +30,9 @@
 -type id() :: binary().
 -type record() :: #gui_message{}.
 -type map_repr() :: #{enabled := boolean(), body := binary()}.
--type diff_map() :: #{enabled => boolean(), body => binary()}.
+-type diff() :: datastore_doc:diff(record()).
 -type doc() :: datastore_doc:doc(record()).
--export_type([id/0, record/0]).
+-export_type([id/0, record/0, map_repr/0]).
 
 -define(CTX, #{model => ?MODULE}).
 
@@ -81,36 +81,15 @@ get(MessageId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns message record as a map for use by Onepanel.
-%% @end
-%%--------------------------------------------------------------------
--spec get_as_map(id()) -> {ok, map_repr()} | {error, term()}.
-get_as_map(MessageId) ->
-    case ?MODULE:get(MessageId) of
-        {ok, #document{value = #gui_message{enabled = Enabled, body = Body}}} ->
-            {ok, #{enabled => Enabled, body => Body}};
-        Error ->
-            Error
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Toggles message state or body.
 %% @end
 %%--------------------------------------------------------------------
--spec update(id(), diff_map()) -> {ok, doc()} | {error, term()}.
-update(MessageId, DiffMap) ->
-    DiffFun = fun(Record) ->
-        {ok, Record#gui_message{
-            enabled = maps:get(enabled, DiffMap, Record#gui_message.enabled),
-            body = maps:get(body, DiffMap, Record#gui_message.body)
-        }}
-    end,
+-spec update(id(), diff()) -> {ok, doc()} | {error, term()}.
+update(MessageId, Diff) ->
     case is_allowed_id(MessageId) of
         true ->
-            {ok, Default} = DiffFun(default_record(MessageId)),
-            datastore_model:update(?CTX, MessageId, DiffFun, Default);
+            {ok, Default} = Diff(default_record(MessageId)),
+            datastore_model:update(?CTX, MessageId, Diff, Default);
         false ->
             {error, not_found}
     end.

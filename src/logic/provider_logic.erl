@@ -115,7 +115,7 @@ create(Auth, Name, Domain, AdminEmail, Latitude, Longitude) ->
 %% proper Data object, Latitude and Longitude are optional.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Auth :: aai:auth(), Data :: #{}) ->
+-spec create(Auth :: aai:auth(), Data :: map()) ->
     {ok, {od_provider:id(), ProviderMacaroon :: macaroon:macaroon()}} | {error, term()}.
 create(Auth, Data) ->
     Res = entity_logic:handle(#el_req{
@@ -141,7 +141,7 @@ create(Auth, Data) ->
 %% proper Data object, Latitude and Longitude are optional.
 %% @end
 %%--------------------------------------------------------------------
--spec create_dev(Auth :: aai:auth(), Data :: #{}) ->
+-spec create_dev(Auth :: aai:auth(), Data :: map()) ->
     {ok, od_provider:id()} | {error, term()}.
 create_dev(Auth, Data) ->
     Res = entity_logic:handle(#el_req{
@@ -210,7 +210,7 @@ list(Auth) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Auth :: aai:auth(), ProviderId :: od_provider:id(),
-    Data :: #{}) -> ok | {error, term()}.
+    Data :: map()) -> ok | {error, term()}.
 update(Auth, ProviderId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
@@ -256,7 +256,7 @@ support_space(Auth, ProviderId, Token, SupportSize) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec support_space(Auth :: aai:auth(), ProviderId :: od_provider:id(),
-    Data :: #{}) -> {ok, od_space:id()} | {error, term()}.
+    Data :: map()) -> {ok, od_space:id()} | {error, term()}.
 support_space(Auth, ProviderId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
@@ -272,7 +272,7 @@ support_space(Auth, ProviderId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_domain_config(Auth :: aai:auth(),
-    ProviderId :: od_provider:id(), Data :: #{}) -> ok | {error, term()}.
+    ProviderId :: od_provider:id(), Data :: map()) -> ok | {error, term()}.
 update_domain_config(Auth, ProviderId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
@@ -527,7 +527,7 @@ revoke_support(Auth, ProviderId, SpaceId) ->
 %% whether the requests succeeded.
 %% @end
 %%--------------------------------------------------------------------
--spec check_my_ports(Auth :: aai:auth(), Data :: #{}) ->
+-spec check_my_ports(Auth :: aai:auth(), Data :: map()) ->
     ok | {error, term()}.
 check_my_ports(Auth, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
