@@ -153,7 +153,7 @@ delete(_GRI) ->
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
 exists(#el_req{gri = #gri{aspect = _}}, _) ->
     % this function is never called when gri.id = undefined
-    ?ERROR_NOT_SUPPORTED.
+    false.
 
 
 %%--------------------------------------------------------------------
