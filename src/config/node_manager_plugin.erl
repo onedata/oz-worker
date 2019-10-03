@@ -18,6 +18,8 @@
 -include_lib("ctool/include/global_definitions.hrl").
 
 %% node_manager_plugin_default callbacks
+-export([installed_cluster_generation/0]).
+-export([oldest_known_cluster_generation/0]).
 -export([app_name/0, cm_nodes/0, db_nodes/0]).
 -export([listeners/0, modules_with_args/0]).
 -export([before_init/1, after_init/1]).
@@ -30,9 +32,37 @@
 
 -define(DNS_UPDATE_RETRY_INTERVAL, 5000).
 
+% When cluster is not in newest generation it will be upgraded during initialization.
+% This can be used to e.g. move models between services.
+% Oldest known generation is the lowest one that can be directly upgraded to newest.
+% Human readable version is included to for logging purposes.
+-define(INSTALLED_CLUSTER_GENERATION, 1).
+-define(OLDEST_KNOWN_CLUSTER_GENERATION, {1, <<"19.02.*">>}).
+
 %%%===================================================================
 %%% node_manager_plugin_default callbacks
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:installed_cluster_generation/0}.
+%% @end
+%%--------------------------------------------------------------------
+-spec installed_cluster_generation() -> node_manager:cluster_generation().
+installed_cluster_generation() ->
+    ?INSTALLED_CLUSTER_GENERATION.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Overrides {@link node_manager_plugin_default:oldest_known_cluster_generation/0}.
+%% @end
+%%--------------------------------------------------------------------
+-spec oldest_known_cluster_generation() ->
+    {node_manager:cluster_generation(), HumanReadableVersion :: binary()}.
+oldest_known_cluster_generation() ->
+    ?OLDEST_KNOWN_CLUSTER_GENERATION.
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -135,7 +165,7 @@ after_init([]) ->
 %% This callback is executed only on one cluster node.
 %% @end
 %%--------------------------------------------------------------------
--spec upgrade_cluster(integer()) -> no_return().
+-spec upgrade_cluster(node_manager:cluster_generation()) -> no_return().
 upgrade_cluster(_CurrentGeneration) ->
     error(not_supported).
 
