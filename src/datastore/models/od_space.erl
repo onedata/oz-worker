@@ -188,7 +188,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    6.
+    7.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -280,6 +280,30 @@ get_record_struct(6) ->
             {type, atom},
             {id, string}
         ]}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(7) ->
+    % creator field - nested #subject{} record and encoding changed
+    {record, [
+        {name, string},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {providers, #{string => integer}},
+        {shares, [string]},
+        {harvesters, [string]}, % New field
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}}, % New field
+
+        {creation_time, integer},
+        % nested #subject{} record was extended and is now encoded as string
+        % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
 
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
@@ -503,7 +527,53 @@ upgrade_record(5, Space) ->
 
     } = Space,
 
-    {6, #od_space{
+    {6, {
+        od_space,
+        Name,
+
+        Users,
+        Groups,
+        Providers,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        upgrade_common:client_to_subject(Creator),
+
+        TopDownDirty,
+        BottomUpDirty
+
+    }};
+upgrade_record(6, Space) ->
+    {
+        od_space,
+        Name,
+
+        Users,
+        Groups,
+        Providers,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+
+    } = Space,
+
+    {7, #od_space{
         name = Name,
 
         users = Users,
@@ -518,7 +588,7 @@ upgrade_record(5, Space) ->
         eff_harvesters = EffHarvesters,
 
         creation_time = CreationTime,
-        creator = upgrade_common:client_to_subject(Creator),
+        creator = upgrade_common:upgrade_subject_record(Creator),
 
         top_down_dirty = TopDownDirty,
         bottom_up_dirty = BottomUpDirty

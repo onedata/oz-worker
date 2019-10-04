@@ -31,8 +31,13 @@
 %%% API
 %%%===================================================================
 
-response(_, {error, _} = Err) ->
-    error_rest_translator:response(Err);
+-spec response(entity_logic:req(), entity_logic:result()) ->
+    #rest_resp{}.
+response(_, {error, _} = Error) ->
+    #rest_resp{
+        code = errors:http_code(Error),
+        body = #{<<"error">> => errors:to_json(Error)}
+    };
 response(#el_req{operation = create}, ok) ->
     % No need for translation, 'ok' means success with no response data
     rest_translator:ok_no_content_reply();

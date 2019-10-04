@@ -23,8 +23,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
--include_lib("ctool/include/posix/errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 % Some of the types are just aliases for types from gs_protocol, this is
 % for better readability of logic modules.
@@ -52,11 +51,10 @@ od_handle_service | od_handle | od_harvester | od_cluster | oz_privileges.
 -type delete_result() :: gs_protocol:graph_delete_result().
 -type update_result() :: gs_protocol:graph_update_result().
 -type result() :: create_result() | get_result() | update_result() | delete_result().
--type error() :: gs_protocol:error().
 
 -type type_validator() :: any | atom | list_of_atoms | binary |
-list_of_binaries | integer | float | json | token | invite_token |
-boolean | ipv4_address | list_of_ipv4_addresses.
+list_of_binaries | integer | float | json | token | invite_token | token_type |
+caveats | boolean | ipv4_address | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
 fun((term()) -> boolean()) |
@@ -66,7 +64,7 @@ fun((term()) -> boolean()) |
 {exists, fun((entity_id()) -> boolean())} |
 {not_exists, fun((entity_id()) -> boolean())} |
 {relation_exists, atom(), binary(), atom(), binary(), fun((entity_id()) -> boolean())} |
-invite_tokens:token_type() | % Compatible only with 'invite_token' type validator
+tokens:invite_token_type() | % Compatible only with 'invite_token' type validator
 subdomain | domain |
 email | name |
 full_name | username | password.
@@ -101,7 +99,6 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
     get_result/0,
     update_result/0,
     delete_result/0,
-    error/0,
     result/0,
     type_validator/0,
     value_validator/0,
@@ -353,8 +350,9 @@ handle_unsafe(State = #state{req = Req = #el_req{operation = delete}}) ->
 %% @private
 %% @doc
 %% Retrieves the entity specified in request by calling back proper entity
-%% logic plugin. Does nothing if the entity is prefetched, or GRI of the
-%% request is not related to any entity.
+%% logic plugin. Does nothing if the entity is prefetched, GRI of the
+%% request is not related to any entity or fetching is not applicable to
+%% given operation.
 %% @end
 %%--------------------------------------------------------------------
 -spec fetch_entity(State :: #state{}) -> #state{}.
@@ -363,14 +361,19 @@ fetch_entity(State = #state{versioned_entity = {Entity, _}}) when Entity /= unde
 fetch_entity(State = #state{req = #el_req{gri = #gri{id = undefined}}}) ->
     State;
 fetch_entity(State = #state{req = #el_req{operation = create, gri = #gri{aspect = instance}}}) ->
-    % Skip when creating an instance with predefined Id, set revision to 1
+    % Skip when creating an instance with predefined Id
     State#state{versioned_entity = {undefined, 1}};
 fetch_entity(State) ->
     case call_plugin(fetch_entity, State) of
-        {ok, {Entity, Revision}} ->
+        {true, {Entity, Revision}} ->
+            % The entity was fetched
             State#state{versioned_entity = {Entity, Revision}};
-        ?ERROR_NOT_FOUND ->
-            throw(?ERROR_NOT_FOUND)
+        false ->
+            % Fetch is not applicable to this operation, execution should continue
+            State#state{versioned_entity = {undefined, 1}};
+        {error, _} = Error ->
+            % There was an error, fail
+            throw(Error)
     end.
 
 
@@ -547,8 +550,11 @@ resolve_auto_scope([Scope | Rest], State = #state{req = Req = #el_req{operation 
 is_client_authorized(State) ->
     try
         call_plugin(authorize, State)
-    catch _:_ ->
-        false
+    catch
+        throw:{error, _} = Error ->
+            throw(Error);
+        _:_ ->
+            false
     end.
 
 
@@ -599,19 +605,19 @@ report_unauthorized(_) ->
 -spec ensure_valid(State :: #state{}) -> #state{}.
 ensure_valid(State) ->
     #state{
-        req = #el_req{gri = #gri{aspect = Aspect}, data = Data} = Req
+        req = #el_req{gri = #gri{id = Id, aspect = Aspect}, data = Data} = Req
     } = State,
     ValidatorsMap = call_plugin(validate, State),
     % Get all types of validators
     Required = maps:get(required, ValidatorsMap, #{}),
     Optional = maps:get(optional, ValidatorsMap, #{}),
     AtLeastOne = maps:get(at_least_one, ValidatorsMap, #{}),
-    % Artificially add 'aspect' key to Data to simplify validation code.
-    % This key word allows to verify if data provided in aspect identifier
+    % Artificially add 'id' and 'aspect' key to Data to simplify validation code.
+    % Those keywords allow verifying if data provided in id / aspect identifier
     % is valid.
-    DataWithAspect = case Data of
-        undefined -> #{aspect => Aspect};
-        _ -> Data#{aspect => Aspect}
+    DataWithIdAndAspect = case Data of
+        undefined -> #{id => Id, aspect => Aspect};
+        _ -> Data#{id => Id, aspect => Aspect}
     end,
     % Start with required parameters. Transform the data if needed, fail when
     % any key is missing or cannot be validated.
@@ -623,7 +629,7 @@ ensure_valid(State) ->
                 {true, NewData} ->
                     NewData
             end
-        end, DataWithAspect, maps:keys(Required)),
+        end, DataWithIdAndAspect, maps:keys(Required)),
     % Now, optional parameters. Transform the data if needed, fail when
     % any of the keys exists in the data but cannot be validated.
     Data3 = lists:foldl(
@@ -655,8 +661,8 @@ ensure_valid(State) ->
         {_, false} ->
             throw(?ERROR_MISSING_AT_LEAST_ONE_VALUE(maps:keys(AtLeastOne)))
     end,
-    % Remove 'aspect' key from data as it is no longer needed
-    State#state{req = Req#el_req{data = maps:remove(aspect, Data4)}}.
+    % Remove 'id' and 'aspect' keys from data as they are no longer needed
+    State#state{req = Req#el_req{data = maps:without([id, aspect], Data4)}}.
 
 
 %%--------------------------------------------------------------------
@@ -664,13 +670,21 @@ ensure_valid(State) ->
 %% @doc
 %% Performs simple value conversion (if possible) and checks the type and value
 %% of value for Key in Data. Takes into consideration special keys which are
-%% in form {aspect, binary()}, that allows to validate data in aspect.
-%% Data map must include 'aspect' key, that holds the aspect.
+%% in form {id, binary()} or {aspect, binary()}, that allows to validate data in
+%% entity id or aspect. In such case, the Data map must include the
+%% 'id' and/or 'aspect' key that hold the values.
 %% @end
 %%--------------------------------------------------------------------
 -spec transform_and_check_value(Key :: binary(), Data :: data(),
     Validator :: #{type_validator() => value_validator()}) ->
     {true, sanitized_data()} | false.
+transform_and_check_value({id, Key}, Data, Validator) ->
+    {TypeRule, ValueRule} = maps:get({id, Key}, Validator),
+    Value = maps:get(id, Data),
+    % Ignore the returned value - the check will throw in case the value is
+    % not valid
+    transform_and_check_value(TypeRule, ValueRule, Key, Value),
+    {true, Data};
 transform_and_check_value({aspect, Key}, Data, Validator) ->
     {TypeRule, ValueRule} = maps:get({aspect, Key}, Validator),
     %% Aspect validator supports only aspects that are tuples
@@ -809,24 +823,41 @@ check_type(token, Key, <<>>) ->
 check_type(token, Key, Serialized) when is_binary(Serialized) ->
     case tokens:deserialize(Serialized) of
         {ok, Token} -> Token;
-        ?ERROR_BAD_TOKEN -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
+        {error, _} = Error -> throw(?ERROR_BAD_VALUE_TOKEN(Key, Error))
     end;
 check_type(token, Key, Token) ->
     case tokens:is_token(Token) of
         true -> Token;
-        false -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
+        false -> throw(?ERROR_BAD_VALUE_TOKEN(Key, ?ERROR_BAD_TOKEN))
     end;
 check_type(invite_token, Key, <<>>) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
-check_type(invite_token, Key, Token) when is_binary(Token) ->
-    case macaroons:deserialize(Token) of
-        {ok, Macaroon} -> Macaroon;
-        ?ERROR_BAD_TOKEN -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
+check_type(invite_token, Key, Serialized) when is_binary(Serialized) ->
+    case tokens:deserialize(Serialized) of
+        {ok, Token} -> Token;
+        {error, _} = Error -> throw(?ERROR_BAD_VALUE_TOKEN(Key, Error))
     end;
-check_type(invite_token, Key, Macaroon) ->
-    case macaroon:is_macaroon(Macaroon) of
-        true -> Macaroon;
-        false -> throw(?ERROR_BAD_VALUE_TOKEN(Key))
+check_type(invite_token, Key, Token) ->
+    case tokens:is_token(Token) of
+        true -> Token;
+        false -> throw(?ERROR_BAD_VALUE_TOKEN(Key, ?ERROR_BAD_TOKEN))
+    end;
+check_type(token_type, Key, TokenType) ->
+    case tokens:sanitize_type(TokenType) of
+        {true, Sanitized} -> Sanitized;
+        %% @TODO VFS-5727 consider supporting type in json
+        false -> throw(?ERROR_BAD_VALUE_TOKEN_TYPE(Key))
+    end;
+check_type(caveats, _, Caveats) ->
+    try
+        lists:map(fun(Caveat) ->
+            case caveats:sanitize(Caveat) of
+                {true, Sanitized} -> Sanitized;
+                false -> throw(?ERROR_BAD_VALUE_CAVEATS)
+            end
+        end, Caveats)
+    catch _:_ ->
+        throw(?ERROR_BAD_VALUE_CAVEATS)
     end;
 check_type(ipv4_address, _Key, undefined) ->
     undefined;
@@ -896,14 +927,14 @@ check_value(_, {between, Low, High}, Key, Value) ->
     end;
 check_value(binary, domain, Key, <<"">>) ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
-check_value(binary, domain, Key, Value) ->
+check_value(binary, domain, _Key, Value) ->
     case size(Value) =< ?MAX_DOMAIN_LENGTH of
         true ->
             case re:run(Value, ?DOMAIN_VALIDATION_REGEXP, [{capture, none}]) of
                 match -> Value;
-                _ -> throw(?ERROR_BAD_VALUE_DOMAIN(Key))
+                _ -> throw(?ERROR_BAD_VALUE_DOMAIN)
             end;
-        _ -> throw(?ERROR_BAD_VALUE_DOMAIN(Key))
+        _ -> throw(?ERROR_BAD_VALUE_DOMAIN)
     end;
 
 check_value(binary, subdomain, Key, <<"">>) ->
@@ -938,6 +969,13 @@ check_value(json, JsonValidator, Key, Map) ->
                 transform_and_check_value(NestedTypeRule, NestedValueRule, FullKey, Value)
         end
     end, JsonValidator);
+check_value(token_type, VerifyFun, Key, Val) when is_function(VerifyFun, 1) ->
+    case VerifyFun(Val) of
+        true ->
+            Val;
+        false ->
+            throw(?ERROR_BAD_VALUE_TOKEN_TYPE(Key))
+    end;
 
 check_value(_, AllowedVals, Key, Vals) when is_list(AllowedVals) andalso is_list(Vals) ->
     case ordsets:subtract(ordsets:from_list(Vals), ordsets:from_list(AllowedVals)) of
@@ -990,18 +1028,14 @@ check_value(_, {relation_exists, ChType, ChId, ParType, ParId, VerifyFun}, _Key,
         false ->
             throw(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId))
     end;
-check_value(token, any, _Key, _Macaroon) ->
+check_value(token, any, _Key, _Token) ->
     ok;
-check_value(invite_token, TokenType, Key, Macaroon) ->
-    case invite_tokens:validate(Macaroon, TokenType) of
-        ok ->
-            Macaroon;
-        inexistent ->
-            throw(?ERROR_BAD_VALUE_TOKEN(Key));
-        bad_macaroon ->
-            throw(?ERROR_BAD_VALUE_TOKEN(Key));
-        bad_type ->
-            throw(?ERROR_BAD_VALUE_BAD_TOKEN_TYPE(Key))
+check_value(invite_token, any, _Key, _Token) ->
+    ok;
+check_value(invite_token, TokenType, Key, Token) ->
+    case Token#token.type of
+        ?INVITE_TOKEN(TokenType, _) -> Token;
+        _ -> throw(?ERROR_BAD_VALUE_TOKEN(Key, ?ERROR_NOT_AN_INVITE_TOKEN(TokenType)))
     end;
 check_value(binary, username, _Key, Value) ->
     case user_logic:validate_username(Value) of
@@ -1039,13 +1073,10 @@ check_value(TypeRule, ValueRule, Key, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec call_plugin(Operation :: atom(), #state{}) -> term().
-call_plugin(fetch_entity, #state{plugin = Plugin, req = #el_req{gri = #gri{id = Id}}}) when is_binary(Id) ->
-    Plugin:fetch_entity(Id);
-call_plugin(fetch_entity, _) ->
-    ?ERROR_NOT_FOUND;
-call_plugin(operation_supported, #state{plugin = Plugin, req = #el_req{operation = Operation,
-    gri = #gri{aspect = Aspect, scope = Scope}}}) ->
-    Plugin:operation_supported(Operation, Aspect, Scope);
+call_plugin(fetch_entity, #state{plugin = Plugin, req = #el_req{gri = GRI}}) ->
+    Plugin:fetch_entity(GRI);
+call_plugin(operation_supported, #state{plugin = Plugin, req = #el_req{operation = Operation, gri = GRI}}) ->
+    Plugin:operation_supported(Operation, GRI#gri.aspect, GRI#gri.scope);
 call_plugin(exists, #state{plugin = Plugin, req = ElReq, versioned_entity = {Entity, _}}) ->
     Plugin:exists(ElReq, Entity);
 call_plugin(authorize, #state{plugin = Plugin, req = ElReq, versioned_entity = {Entity, _}}) ->

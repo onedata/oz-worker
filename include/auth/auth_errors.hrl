@@ -61,7 +61,7 @@
 ).
 
 % Other possible auth errors include:
-% 1) ?ERROR_INTERNAL_SERVER_ERROR (api_errors.hrl)
+% 1) ?ERROR_INTERNAL_SERVER_ERROR (errors.hrl)
 
 
 -endif.

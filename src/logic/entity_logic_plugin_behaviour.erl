@@ -15,12 +15,18 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity and its revision from datastore based on EntityId.
-%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% Retrieves an entity and its revision from datastore, if applicable.
+%% Should return:
+%%  * {true, entity_logic:versioned_entity()}
+%%      if the fetch was successful
+%%  * false
+%%      if fetch is not applicable for this operation
+%%  * {error, _}
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
--callback fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:versioned_entity()} | entity_logic:error().
+-callback fetch_entity(gri:gri()) ->
+    {true, entity_logic:versioned_entity()} | false | errors:error().
 
 
 %%--------------------------------------------------------------------

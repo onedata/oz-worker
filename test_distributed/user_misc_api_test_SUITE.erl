@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -33,7 +33,6 @@
 -export([
     create_test/1,
     create_with_predefined_id_test/1,
-    authorize_test/1,
     preauthorize_test/1,
     list_test/1,
     get_test/1,
@@ -62,7 +61,6 @@ all() ->
     ?ALL([
         create_test,
         create_with_predefined_id_test,
-        authorize_test,
         preauthorize_test,
         list_test,
         get_test,
@@ -106,7 +104,7 @@ create_test(Config) ->
     ],
 
     lists:foreach(fun({FullName, Username, Password}) ->
-        {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
 
         ExpFullName = case FullName of
             default_value -> ?DEFAULT_FULL_NAME;
@@ -123,6 +121,15 @@ create_test(Config) ->
             _ -> true
         end,
 
+        EnvSetUp = fun() ->
+            {ok, NonAdmin} = oz_test_utils:create_user(Config),
+            #{non_admin => NonAdmin}
+        end,
+
+        EnvTearDown = fun(_) ->
+            oz_test_utils:delete_all_entities(Config)
+        end,
+
         VerifyFun = fun(UserId) ->
             {ok, User} = oz_test_utils:get_user(Config, UserId),
             ?assertEqual(ExpFullName, User#od_user.full_name),
@@ -137,10 +144,6 @@ create_test(Config) ->
             true
         end,
 
-        EnvTearDownFun = fun(_) ->
-            oz_test_utils:delete_all_entities(Config)
-        end,
-
         ApiTestSpec = #api_test_spec{
             client_spec = #client_spec{
                 correct = [
@@ -149,7 +152,7 @@ create_test(Config) ->
                 ],
                 unauthorized = [nobody],
                 forbidden = [
-                    {user, NonAdmin}
+                    {user, non_admin}
                 ]
             },
             rest_spec = #rest_spec{
@@ -192,7 +195,7 @@ create_test(Config) ->
                 bad_values = ?BAD_VALUES_FULL_NAME(?ERROR_BAD_VALUE_FULL_NAME)
             }
         },
-        ?assert(api_test_utils:run_tests(Config, ApiTestSpec, undefined, EnvTearDownFun, undefined))
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUp, EnvTearDown, undefined))
     end, TestCases).
 
 
@@ -211,7 +214,7 @@ create_with_predefined_id_test(Config) ->
     ?assertEqual(ExpUsername, User#od_user.username),
 
     % Second try should fail (such id exists)
-    ?assertMatch(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"userId">>),
+    ?assertMatch(?ERROR_ALREADY_EXISTS,
         oz_test_utils:call_oz(
             Config, user_logic, create, [?ROOT, PredefinedUserId, #{<<"fullName">> => ?UNIQUE_STRING}]
         )
@@ -225,59 +228,6 @@ create_with_predefined_id_test(Config) ->
     ).
 
 
-authorize_test(Config) ->
-    % Create a provider and a user.
-    {ok, {Provider, _}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_NAME1
-    ),
-    {ok, User} = oz_test_utils:create_user(Config),
-    % Generate an auth token, parse the token for 3rd party caveats and check
-    % if authorize endpoint works as expected.
-    SerializedToken = oz_test_utils:call_oz(
-        Config, auth_tokens, gen_token, [User, Provider]
-    ),
-    {ok, Token} = macaroons:deserialize(SerializedToken),
-    Caveats = macaroon:third_party_caveats(Token),
-
-    lists:foreach(
-        fun({_, CaveatId}) ->
-            ApiTestSpec = #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [{user, User}]
-                },
-                rest_spec = #rest_spec{
-                    method = post,
-                    path = <<"/user/authorize">>,
-                    expected_code = ?HTTP_200_OK,
-                    expected_body = {check_type, binary}
-                },
-                logic_spec = #logic_spec{
-                    module = user_logic,
-                    function = authorize,
-                    args = [data],
-                    expected_result = ?OK_BINARY
-                },
-                % TODO gs
-                data_spec = #data_spec{
-                    required = [<<"identifier">>],
-                    correct_values = #{
-                        <<"identifier">> => [CaveatId]
-                    },
-                    bad_values = [
-                        {<<"identifier">>, <<"">>,
-                            ?ERROR_BAD_VALUE_EMPTY(<<"identifier">>)},
-                        {<<"identifier">>, 123,
-                            ?ERROR_BAD_VALUE_BINARY(<<"identifier">>)},
-                        {<<"identifier">>, <<"Sdfsdf">>,
-                            ?ERROR_BAD_VALUE_IDENTIFIER(<<"identifier">>)}
-                    ]
-                }
-            },
-            ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
-        end, Caveats
-    ).
-
-
 preauthorize_test(Config) ->
     {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, SubjectUser} = oz_test_utils:create_user(Config),
@@ -288,18 +238,22 @@ preauthorize_test(Config) ->
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     TokenCaveats = [
-        #cv_time{valid_until = 3600 + oz_test_utils:call_oz(Config, time_utils, cluster_time_seconds, [])},
-        #cv_audience{audience = ?AUD(?OP_WORKER, Provider)}
+        #cv_time{valid_until = 3600 + oz_test_utils:cluster_time_seconds(Config)},
+        #cv_audience{whitelist = [?AUD(?OP_WORKER, Provider)]}
     ],
 
     {ok, OldAccessToken} = oz_test_utils:create_client_token(Config, SubjectUser),
     {ok, NewAccessTokenDeserialized} = oz_test_utils:call_oz(
-        Config, new_access_tokens, create, [?SUB(user, SubjectUser), TokenCaveats]
+        Config, token_logic, create_user_named_token, [?USER(SubjectUser), SubjectUser, ?UNIQUE_STRING, ?ACCESS_TOKEN, TokenCaveats, #{}]
     ),
     {ok, NewAccessToken} = tokens:serialize(NewAccessTokenDeserialized),
+    {ok, TemporaryTokenDeserialized} = oz_test_utils:call_oz(
+        Config, token_logic, create_user_temporary_token, [?USER(SubjectUser), SubjectUser, ?ACCESS_TOKEN, TokenCaveats]
+    ),
+    {ok, TemporaryToken} = tokens:serialize(TemporaryTokenDeserialized),
 
     ErrAudCavUnverified = ?ERROR_REASON(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_audience{audience = ?AUD(?OP_WORKER, Provider)})
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_audience{whitelist = [?AUD(?OP_WORKER, Provider)]})
     ),
     CheckSuccess = fun(ExpCaveats) ->
         ?OK_TERM(fun({Subject, Caveats}) ->
@@ -310,10 +264,13 @@ preauthorize_test(Config) ->
     Testcases = [
         {{user, SubjectUser}, OldAccessToken, CheckSuccess([])},
         {{user, SubjectUser}, NewAccessToken, ErrAudCavUnverified},
+        {{user, SubjectUser}, TemporaryToken, ErrAudCavUnverified},
         {{user, AnotherUser}, OldAccessToken, CheckSuccess([])},
         {{user, AnotherUser}, NewAccessToken, ErrAudCavUnverified},
+        {{user, AnotherUser}, TemporaryToken, ErrAudCavUnverified},
         {{provider, Provider, ProviderToken}, OldAccessToken, CheckSuccess([])},
-        {{provider, Provider, ProviderToken}, NewAccessToken, CheckSuccess(TokenCaveats)}
+        {{provider, Provider, ProviderToken}, NewAccessToken, CheckSuccess(TokenCaveats)},
+        {{provider, Provider, ProviderToken}, TemporaryToken, CheckSuccess(TokenCaveats)}
     ],
 
     lists:foreach(fun({Client, Token, ExpResult}) ->
@@ -343,9 +300,9 @@ preauthorize_test(Config) ->
                     {<<"peerIp">>, <<"187.257.4.217">>,
                         ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
                     {<<"token">>, <<"Sdfsdf">>,
-                        ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
+                        ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
                     {<<"token">>, 123,
-                        ?ERROR_BAD_VALUE_TOKEN(<<"token">>)}
+                        ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)}
                 ]
             }
         },
@@ -365,7 +322,7 @@ list_test(Config) ->
     oz_test_utils:user_set_oz_privileges(Config, Admin, [
         ?OZ_USERS_LIST
     ], []),
-    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
 
@@ -379,7 +336,7 @@ list_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {provider, P1, P1Macaroon}
+                {provider, P1, P1Token}
             ]
         },
         rest_spec = #rest_spec{
@@ -411,7 +368,7 @@ list_test(Config) ->
 
 
 get_test(Config) ->
-    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
     {ok, User} = oz_test_utils:create_user(Config, #{
@@ -448,7 +405,7 @@ get_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {provider, P1, P1Macaroon},
+                {provider, P1, P1Token},
                 {user, NonAdmin},
                 {admin, [?OZ_USERS_VIEW]}
             ]
@@ -527,7 +484,7 @@ get_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {provider, P1, P1Macaroon}
+                {provider, P1, P1Token}
             ]
         },
         rest_spec = #rest_spec{
@@ -699,7 +656,7 @@ update_test(Config) ->
         gs_spec = GsSpec = #gs_spec{
             operation = update,
             gri = #gri{type = od_user, id = ?SELF, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         data_spec = DataSpec = #data_spec{
             at_least_one = [<<"fullName">>, <<"username">>],
@@ -742,7 +699,7 @@ update_test(Config) ->
             module = user_logic,
             function = update,
             args = [auth, userId, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = GsSpec#gs_spec{
             gri = #gri{type = od_user, id = userId, aspect = instance}
@@ -763,8 +720,8 @@ change_password_test(Config) ->
     TestCases = [
         % {WasBasicAuthEnabled, OldPassword, ExpHttpCode, ExpResult}
         {false, undefined, ?HTTP_400_BAD_REQUEST, ?ERROR_REASON(?ERROR_BASIC_AUTH_DISABLED)},
-        {true, undefined, ?HTTP_204_NO_CONTENT, ?OK},
-        {true, ?UNIQUE_STRING, ?HTTP_204_NO_CONTENT, ?OK}
+        {true, undefined, ?HTTP_204_NO_CONTENT, ?OK_RES},
+        {true, ?UNIQUE_STRING, ?HTTP_204_NO_CONTENT, ?OK_RES}
     ],
 
     lists:foreach(fun({WasBasicAuthEnabled, OldPassword, ExpHttpCode, ExpResult}) ->
@@ -853,11 +810,11 @@ update_basic_auth_config(Config) ->
         },
         {
             true, undefined, #{<<"newPassword">> => ?UNIQUE_STRING},
-            ?HTTP_204_NO_CONTENT, ?OK
+            ?HTTP_204_NO_CONTENT, ?OK_RES
         },
         {
             true, ?UNIQUE_STRING, #{<<"newPassword">> => ?UNIQUE_STRING},
-            ?HTTP_204_NO_CONTENT, ?OK
+            ?HTTP_204_NO_CONTENT, ?OK_RES
         },
 
         {
@@ -879,53 +836,53 @@ update_basic_auth_config(Config) ->
 
         {
             false, undefined, #{<<"basicAuthEnabled">> => false},
-            ?HTTP_204_NO_CONTENT, ?OK
+            ?HTTP_204_NO_CONTENT, ?OK_RES
         },
         {
             true, undefined, #{<<"basicAuthEnabled">> => false},
-            ?HTTP_204_NO_CONTENT, ?OK
+            ?HTTP_204_NO_CONTENT, ?OK_RES
         },
         {
             false, ?UNIQUE_STRING, #{<<"basicAuthEnabled">> => false},
-            ?HTTP_204_NO_CONTENT, ?OK
+            ?HTTP_204_NO_CONTENT, ?OK_RES
         },
         {
             true, ?UNIQUE_STRING, #{<<"basicAuthEnabled">> => false},
-            ?HTTP_204_NO_CONTENT, ?OK
+            ?HTTP_204_NO_CONTENT, ?OK_RES
         },
 
         {
             false, undefined, #{<<"basicAuthEnabled">> => true},
-            ?HTTP_204_NO_CONTENT, ?OK
+            ?HTTP_204_NO_CONTENT, ?OK_RES
         },
         {
             true, undefined, #{<<"basicAuthEnabled">> => true},
-            ?HTTP_204_NO_CONTENT, ?OK
+            ?HTTP_204_NO_CONTENT, ?OK_RES
         },
         {
             false, ?UNIQUE_STRING, #{<<"basicAuthEnabled">> => true},
-            ?HTTP_204_NO_CONTENT, ?OK
+            ?HTTP_204_NO_CONTENT, ?OK_RES
         },
         {
             true, ?UNIQUE_STRING, #{<<"basicAuthEnabled">> => true},
-            ?HTTP_204_NO_CONTENT, ?OK
+            ?HTTP_204_NO_CONTENT, ?OK_RES
         },
 
         {
             false, undefined, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => true},
-            ?HTTP_204_NO_CONTENT, ?OK
+            ?HTTP_204_NO_CONTENT, ?OK_RES
         },
         {
             false, ?UNIQUE_STRING, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => true},
-            ?HTTP_204_NO_CONTENT, ?OK
+            ?HTTP_204_NO_CONTENT, ?OK_RES
         },
         {
             true, undefined, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => true},
-            ?HTTP_204_NO_CONTENT, ?OK
+            ?HTTP_204_NO_CONTENT, ?OK_RES
         },
         {
             true, ?UNIQUE_STRING, #{<<"newPassword">> => ?UNIQUE_STRING, <<"basicAuthEnabled">> => true},
-            ?HTTP_204_NO_CONTENT, ?OK
+            ?HTTP_204_NO_CONTENT, ?OK_RES
         }
     ],
 
@@ -947,7 +904,7 @@ update_basic_auth_config(Config) ->
             % Success depends if the test case generator picked correct data and
             % we expected the whole operation to be successful (it might fail
             % due to different reasons than request Data).
-            ShouldSucceed = WasDataCorrect andalso ExpResult =:= ?OK,
+            ShouldSucceed = WasDataCorrect andalso ExpResult =:= ?OK_RES,
             {ok, User} = oz_test_utils:get_user(Config, UserId),
             case ShouldSucceed of
                 true ->
@@ -1049,12 +1006,12 @@ delete_test(Config) ->
             module = user_logic,
             function = delete,
             args = [auth, userId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_user, id = userId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -1090,7 +1047,7 @@ delete_self_test(Config) ->
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_user, id = ?SELF, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_utils:run_tests(
@@ -1103,9 +1060,8 @@ create_client_token_test(Config) ->
 
     VerifyFun = fun(ClientToken) ->
         {ok, Token} = tokens:deserialize(ClientToken),
-        ?assertEqual({ok, User}, oz_test_utils:call_oz(
-            Config, auth_tokens, validate_token,
-            [<<>>, Token, [], undefined, undefined]
+        ?assertEqual({true, ?USER(User)}, oz_test_utils:call_oz(
+            Config, token_auth, check_token_auth, [Token, undefined, undefined]
         )),
         true
     end,
@@ -1148,12 +1104,12 @@ create_client_token_test(Config) ->
 
 list_client_tokens_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
-    {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
+    {ok, Token} = oz_test_utils:create_client_token(Config, User),
 
-    ExpTokens = [Macaroon | lists:map(
+    ExpTokens = [Token | lists:map(
         fun(_) ->
-            {ok, Token} = oz_test_utils:create_client_token(Config, User),
-            Token
+            {ok, Serialized} = oz_test_utils:create_client_token(Config, User),
+            Serialized
         end, lists:seq(1, 5)
     )],
 
@@ -1161,7 +1117,7 @@ list_client_tokens_test(Config) ->
         client_spec = ClientSpec = #client_spec{
             correct = [
                 root,
-                {user, User, Macaroon}
+                {user, User, Token}
             ]
         },
         rest_spec = #rest_spec{
@@ -1236,7 +1192,7 @@ delete_client_token_test(Config) ->
             module = user_logic,
             function = delete_client_token,
             args = [auth, User, token],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -1321,7 +1277,7 @@ set_default_provider_test(Config) ->
             module = user_logic,
             function = set_default_provider,
             args = [auth, U1, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -1473,7 +1429,7 @@ unset_default_provider_test(Config) ->
             module = user_logic,
             function = unset_default_provider,
             args = [auth, U1],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -1567,7 +1523,7 @@ acquire_idp_access_token_test(Config) ->
 
     % Simulate user login
     DummyAccessToken = <<"abcdef">>,
-    Now = oz_test_utils:call_oz(Config, time_utils, cluster_time_seconds, []),
+    Now = oz_test_utils:cluster_time_seconds(Config),
     oz_test_utils:call_oz(Config, linked_accounts, merge, [
         U1, #linked_account{
             idp = dummyIdP,

@@ -19,7 +19,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -497,12 +497,12 @@ update_test(Config) ->
             module = harvester_logic,
             function = update,
             args = [auth, harvesterId, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"public">>],
@@ -583,12 +583,12 @@ update_gui_plugin_config_test(Config) ->
             module = harvester_logic,
             function = update_gui_plugin_config,
             args = [auth, harvesterId, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = gui_plugin_config},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         data_spec = #data_spec{
             required = [<<"guiPluginConfig">>],
@@ -653,12 +653,12 @@ delete_test(Config) ->
             module = harvester_logic,
             function = delete,
             args = [auth, harvesterId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -723,12 +723,12 @@ delete_harvested_metadata_test(Config) ->
             module = harvester_logic,
             function = delete_harvested_metadata,
             args = [auth, harvesterId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = metadata},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
@@ -1013,12 +1013,12 @@ update_index_test(Config) ->
             module = harvester_logic,
             function = update_index,
             args = [auth, harvesterId, indexId, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = {index, indexId}},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [<<"name">>, <<"guiPluginName">>],
@@ -1083,12 +1083,12 @@ delete_index_test(Config) ->
             module = harvester_logic,
             function = delete_index,
             args = [auth, harvesterId, indexId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = {index, indexId}},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
@@ -1145,12 +1145,12 @@ delete_index_metadata_test(Config) ->
             module = harvester_logic,
             function = delete_index_metadata,
             args = [auth, harvesterId, indexId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = {index_metadata, indexId}},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).

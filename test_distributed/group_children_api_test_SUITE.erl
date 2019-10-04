@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -133,7 +133,6 @@ create_group_invite_token_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
                 {user, U2},
                 {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]}
             ],
@@ -504,7 +503,7 @@ remove_child_test(Config) ->
             module = group_logic,
             function = remove_group,
             args = [auth, G1, groupId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -631,7 +630,7 @@ update_child_privileges_test(Config) ->
             module = group_logic,
             function = update_child_privileges,
             args = [auth, G1, G2, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },

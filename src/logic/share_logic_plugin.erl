@@ -18,7 +18,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
@@ -30,17 +30,25 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity and its revision from datastore based on EntityId.
-%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% Retrieves an entity and its revision from datastore, if applicable.
+%% Should return:
+%%  * {true, entity_logic:versioned_entity()}
+%%      if the fetch was successful
+%%  * {true, gri:gri(), entity_logic:versioned_entity()}
+%%      if the fetch was successful and new GRI was resolved
+%%  * false
+%%      if fetch is not applicable for this operation
+%%  * {error, _}
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:versioned_entity()} | entity_logic:error().
-fetch_entity(ShareId) ->
+-spec fetch_entity(gri:gri()) ->
+    {true, entity_logic:versioned_entity()} | false | errors:error().
+fetch_entity(#gri{id = ShareId}) ->
     case od_share:get(ShareId) of
         {ok, #document{value = Share, revs = [DbRev | _]}} ->
             {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
-            {ok, {Share, Revision}};
+            {true, {Share, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -103,7 +111,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
                 od_share, ShareId,
                 od_space, SpaceId
             ),
-            {ok, {Share, Rev}} = fetch_entity(ShareId),
+            {true, {Share, Rev}} = fetch_entity(#gri{aspect = instance, id = ShareId}),
             {ok, resource, {GRI#gri{id = ShareId}, {Share, Rev}}};
         _ ->
             % This can potentially happen if a share with given share id

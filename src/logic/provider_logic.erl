@@ -116,7 +116,7 @@ create(Auth, Name, Domain, AdminEmail, Latitude, Longitude) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Auth :: aai:auth(), Data :: #{}) ->
-    {ok, {od_provider:id(), ProviderMacaroon :: macaroon:macaroon()}} | {error, term()}.
+    {ok, {od_provider:id(), ProviderRootToken :: tokens:token()}} | {error, term()}.
 create(Auth, Data) ->
     Res = entity_logic:handle(#el_req{
         operation = create,
@@ -127,15 +127,15 @@ create(Auth, Data) ->
     case Res of
         Error = {error, _} ->
             Error;
-        {ok, resource, {#gri{id = ProviderId}, {{_, Macaroon}, _Rev}}} ->
-            {ok, {ProviderId, Macaroon}}
+        {ok, resource, {#gri{id = ProviderId}, {{_, RootToken}, _Rev}}} ->
+            {ok, {ProviderId, RootToken}}
     end.
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% TODO This is a developer functionality and should be removed when
-%% TODO VFS-2550 is ready.
+%% @TODO This is a developer functionality and should be removed when
+%% @TODO VFS-2550 is ready.
 %% Creates a new provider document in database. UUID, Name,
 %% Domain and CSR (Certificate Signing Request) are provided in a
 %% proper Data object, Latitude and Longitude are optional.
@@ -153,8 +153,8 @@ create_dev(Auth, Data) ->
     case Res of
         Error = {error, _} ->
             Error;
-        {ok, resource, {#gri{id = ProviderId}, {{_, Macaroon}, _Rev}}} ->
-            {ok, {ProviderId, Macaroon}}
+        {ok, resource, {#gri{id = ProviderId}, {{_, RootToken}, _Rev}}} ->
+            {ok, {ProviderId, RootToken}}
     end.
 
 
@@ -241,7 +241,7 @@ delete(Auth, ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec support_space(Auth :: aai:auth(), ProviderId :: od_provider:id(),
-    Token :: token:id() | macaroon:macaroon(), SupportSize :: integer()) ->
+    Token :: tokens:serialized() | tokens:token(), SupportSize :: integer()) ->
     {ok, od_space:id()} | {error, term()}.
 support_space(Auth, ProviderId, Token, SupportSize) ->
     support_space(Auth, ProviderId, #{
@@ -557,23 +557,23 @@ get_current_time(Auth) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Verifies provider identity based on provided identity macaroon and alleged
+%% Verifies provider identity based on provided identity token and alleged
 %% provider id.
 %% @end
 %%--------------------------------------------------------------------
--spec verify_provider_identity(Auth :: aai:auth(), od_provider:id(),
-    Macaroon :: token:id() | macaroon:macaroon()) -> ok | {error, term()}.
-verify_provider_identity(Auth, ProviderId, Macaroon) ->
+-spec verify_provider_identity(aai:auth(), od_provider:id(),
+    tokens:serialized() | tokens:token()) -> ok | {error, term()}.
+verify_provider_identity(Auth, ProviderId, Token) ->
     verify_provider_identity(Auth, #{
         <<"providerId">> => ProviderId,
-        <<"macaroon">> => Macaroon
+        <<"token">> => Token
     }).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Verifies provider identity based on provided identity macaroon and alleged
-%% provider id. The macaroon and ProviderId are provided in a proper Data object.
+%% Verifies provider identity based on provided identity token and alleged
+%% provider id. The token and ProviderId are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_provider_identity(Auth :: aai:auth(), entity_logic:data()) ->

@@ -223,11 +223,11 @@ group_chain_performance_base(Config) ->
     GroupChainLength = ?GROUP_CHAIN_LENGTH,
     ApiType = ?API_TYPE,
     {ok, User} = oz_test_utils:create_user(Config),
-    {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
+    {ok, Token} = oz_test_utils:create_client_token(Config, User),
 
 
     ?begin_measurement(groups_creation_time),
-    create_group_chain(Config, ApiType, {User, Macaroon}, GroupChainLength),
+    create_group_chain(Config, ApiType, {User, Token}, GroupChainLength),
     ?end_measurement(groups_creation_time),
 
     ?begin_measurement(reconciliation_time),
@@ -272,14 +272,14 @@ group_chain_append_performance_base(Config) ->
     ApiType = ?API_TYPE,
     ToAppendGroupNum = EndingGroupNum - StartingGroupNum,
     {ok, User} = oz_test_utils:create_user(Config),
-    {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
+    {ok, Token} = oz_test_utils:create_client_token(Config, User),
 
-    {_BottomGroup, TopGroup} = create_group_chain(Config, ApiType, {User, Macaroon}, StartingGroupNum),
+    {_BottomGroup, TopGroup} = create_group_chain(Config, ApiType, {User, Token}, StartingGroupNum),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
 
     ?begin_measurement(group_appending_time),
-    create_group_chain(Config, ApiType, {User, Macaroon}, ToAppendGroupNum, TopGroup),
+    create_group_chain(Config, ApiType, {User, Token}, ToAppendGroupNum, TopGroup),
     ?end_measurement(group_appending_time),
 
     ?begin_measurement(reconciliation_time),
@@ -325,7 +325,7 @@ big_group_performance_base(Config) ->
     ToAddUserNum = EndingUserNum - StartingUserNum,
 
     {ok, Admin} = oz_test_utils:create_user(Config),
-    {ok, AdminMacaroon} = oz_test_utils:create_client_token(Config, Admin),
+    {ok, AdminToken} = oz_test_utils:create_client_token(Config, Admin),
     oz_test_utils:user_set_oz_privileges(Config, Admin, privileges:oz_admin(), []),
 
     {ok, User} = oz_test_utils:create_user(Config),
@@ -345,7 +345,7 @@ big_group_performance_base(Config) ->
 
     ?begin_measurement(user_adding_time),
     ok = parallel_foreach(fun(UserToAdd) ->
-        group_add_user(Config, ApiType, {Admin, AdminMacaroon}, Group, UserToAdd)
+        group_add_user(Config, ApiType, {Admin, AdminToken}, Group, UserToAdd)
     end, UsersToAdd),
     ?end_measurement(user_adding_time),
 
@@ -391,7 +391,7 @@ update_privileges_performance_base(Config) ->
     GroupPrivileges = privileges:group_privileges(),
 
     {ok, Admin} = oz_test_utils:create_user(Config),
-    {ok, AdminMacaroon} = oz_test_utils:create_client_token(Config, Admin),
+    {ok, AdminToken} = oz_test_utils:create_client_token(Config, Admin),
     oz_test_utils:user_set_oz_privileges(Config, Admin, privileges:oz_admin(), []),
 
     {ok, GroupCreator} = oz_test_utils:create_user(Config),
@@ -409,7 +409,7 @@ update_privileges_performance_base(Config) ->
     ok = parallel_foreach(fun(User) ->
         RandomPrivileges = lists:sublist(GroupPrivileges, rand:uniform(length(GroupPrivileges))),
         group_set_user_privileges(
-            Config, ApiType, {Admin, AdminMacaroon}, Group, User, RandomPrivileges, RandomPrivileges -- GroupPrivileges
+            Config, ApiType, {Admin, AdminToken}, Group, User, RandomPrivileges, RandomPrivileges -- GroupPrivileges
         )
     end, Users),
     ?end_measurement(privileges_updating_time),
@@ -457,8 +457,8 @@ reconcile_privileges_in_group_chain_performance_base(Config) ->
     UserNum = ?USER_NUM,
     GroupPrivileges = privileges:group_privileges(),
     {ok, User} = oz_test_utils:create_user(Config),
-    {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
-    {BottomGroup, TopGroup} = create_group_chain(Config, rpc, {User, Macaroon}, GroupChainLength),
+    {ok, Token} = oz_test_utils:create_client_token(Config, User),
+    {BottomGroup, TopGroup} = create_group_chain(Config, rpc, {User, Token}, GroupChainLength),
 
     lists:foreach(fun(_) ->
         {ok, NewUser} = oz_test_utils:create_user(Config),
@@ -519,8 +519,8 @@ create_group_chain(Config, ApiType, Client, NumberOfGroups, BottomGroup) ->
 create_n_users(Config, Number) ->
     lists:map(fun(_) ->
         {ok, User} = oz_test_utils:create_user(Config),
-        {ok, Macaroon} = oz_test_utils:create_client_token(Config, User),
-        {User, Macaroon}
+        {ok, Token} = oz_test_utils:create_client_token(Config, User),
+        {User, Token}
     end, lists:seq(1, Number)).
 
 %%%===================================================================
@@ -559,38 +559,38 @@ split_into_sublists(List) ->
     Sublists.
 
 
-create_group(Config, rpc, {User, _Macaroon}, Name) ->
+create_group(Config, rpc, {User, _Token}, Name) ->
     oz_test_utils:create_group(Config, ?USER(User), Name);
-create_group(Config, rest, {_User, Macaroon}, Name) ->
+create_group(Config, rest, {_User, Token}, Name) ->
     {ok, 201, #{<<"Location">> := Location}, _} = rest_req(
-        Config, Macaroon, post, <<"/user/groups/">>, #{<<"name">> => Name}
+        Config, Token, post, <<"/user/groups/">>, #{<<"name">> => Name}
     ),
     {ok, lists:last(binary:split(Location, <<"/">>, [global, trim_all]))}.
 
 
-group_add_user(Config, rpc, {User, _Macaroon}, Group, NewUser) ->
+group_add_user(Config, rpc, {User, _Token}, Group, NewUser) ->
     oz_test_utils:group_add_user(Config, ?USER(User), Group, NewUser);
-group_add_user(Config, rest, {_User, Macaroon}, Group, NewUser) ->
+group_add_user(Config, rest, {_User, Token}, Group, NewUser) ->
     {ok, 201, #{<<"Location">> := Location}, _} = rest_req(
-        Config, Macaroon, put, [<<"/groups/">>, Group, <<"/users/">>, NewUser]
+        Config, Token, put, [<<"/groups/">>, Group, <<"/users/">>, NewUser]
     ),
     {ok, lists:last(binary:split(Location, <<"/">>, [global, trim_all]))}.
 
 
-group_add_group(Config, rpc, {User, _Macaroon}, Group, ChildGroup) ->
+group_add_group(Config, rpc, {User, _Token}, Group, ChildGroup) ->
     oz_test_utils:group_add_group(Config, ?USER(User), Group, ChildGroup);
-group_add_group(Config, rest, {_User, Macaroon}, Group, ChildGroup) ->
+group_add_group(Config, rest, {_User, Token}, Group, ChildGroup) ->
     {ok, 201, #{<<"Location">> := Location}, _} = rest_req(
-        Config, Macaroon, put, [<<"/groups/">>, Group, <<"/children/">>, ChildGroup]
+        Config, Token, put, [<<"/groups/">>, Group, <<"/children/">>, ChildGroup]
     ),
     {ok, lists:last(binary:split(Location, <<"/">>, [global, trim_all]))}.
 
 
-group_set_user_privileges(Config, rpc, {User, _Macaroon}, Group, User, PrivsToGrant, PrivsToRevoke) ->
+group_set_user_privileges(Config, rpc, {User, _Token}, Group, User, PrivsToGrant, PrivsToRevoke) ->
     oz_test_utils:group_set_user_privileges(Config, ?USER(User), Group, User, PrivsToGrant, PrivsToRevoke);
-group_set_user_privileges(Config, rest, {_User, Macaroon}, Group, User, PrivsToGrant, PrivsToRevoke) ->
+group_set_user_privileges(Config, rest, {_User, Token}, Group, User, PrivsToGrant, PrivsToRevoke) ->
     {ok, 204, _, _} = rest_req(
-        Config, Macaroon, put, [<<"/groups/">>, Group, <<"/users/">>, User, <<"/privileges">>], #{
+        Config, Token, put, [<<"/groups/">>, Group, <<"/users/">>, User, <<"/privileges">>], #{
             <<"grant">> => [atom_to_binary(P, utf8) || P <- PrivsToGrant],
             <<"revoke">> => [atom_to_binary(P, utf8) || P <- PrivsToRevoke]
         }
@@ -598,23 +598,23 @@ group_set_user_privileges(Config, rest, {_User, Macaroon}, Group, User, PrivsToG
     ok.
 
 
-create_space(Config, rpc, {User, _Macaroon}, Name) ->
+create_space(Config, rpc, {User, _Token}, Name) ->
     oz_test_utils:create_space(Config, ?USER(User), Name);
-create_space(Config, rest, {_User, Macaroon}, Name) ->
+create_space(Config, rest, {_User, Token}, Name) ->
     {ok, 201, #{<<"Location">> := Location}, _} = rest_req(
-        Config, Macaroon, post, <<"/user/spaces/">>, #{<<"name">> => Name}
+        Config, Token, post, <<"/user/spaces/">>, #{<<"name">> => Name}
     ),
     {ok, lists:last(binary:split(Location, <<"/">>, [global, trim_all]))}.
 
 
-rest_req(Config, Macaroon, Method, Path) ->
-    rest_req(Config, Macaroon, Method, Path, #{}).
+rest_req(Config, Token, Method, Path) ->
+    rest_req(Config, Token, Method, Path, #{}).
 
-rest_req(Config, Macaroon, Method, Path, Body) ->
+rest_req(Config, Token, Method, Path, Body) ->
     Opts = [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}],
     URL = oz_test_utils:oz_rest_url(Config, Path),
     Headers = #{
         <<"content-type">> => <<"application/json">>,
-        <<"macaroon">> => Macaroon
+        <<"x-auth-token">> => Token
     },
     http_client:request(Method, URL, Headers, json_utils:encode(Body), Opts).

@@ -17,7 +17,7 @@
 -include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([run_scenario/2]).
 -export([delete_entity/5]).
@@ -738,7 +738,7 @@ create_basic_cluster_env(Config, Privs) ->
 
     AllClusterPrivs = privileges:cluster_privileges(),
 
-    {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(
         Config, U1, ?PROVIDER_NAME1
     ),
     ClusterId = ProviderId,
@@ -751,7 +751,7 @@ create_basic_cluster_env(Config, Privs) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {ClusterId, U1, U2, {ProviderId, Macaroon}}.
+    {ClusterId, U1, U2, {ProviderId, ProviderToken}}.
 
 
 create_eff_parent_groups_env(Config) ->
@@ -945,7 +945,7 @@ create_provider_eff_users_env(Config) ->
         S1, Groups, Users, {U1, U2, NonAdmin}
     } = create_space_eff_users_env(Config),
 
-    {ok, {P1, Macaroon}} = oz_test_utils:create_provider(
+    {ok, {P1, ProviderToken}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
     {ok, S1} = oz_test_utils:support_space(
@@ -954,7 +954,7 @@ create_provider_eff_users_env(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {{P1, Macaroon}, S1, Groups, Users, {U1, U2, NonAdmin}}.
+    {{P1, ProviderToken}, S1, Groups, Users, {U1, U2, NonAdmin}}.
 
 
 create_hservice_eff_users_env(Config) ->
@@ -1156,7 +1156,7 @@ create_cluster_eff_users_env(Config) ->
     AllClusterPrivs = privileges:cluster_privileges(),
 
 
-    {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(
         Config, U1, ?PROVIDER_NAME1
     ),
     ClusterId = ProviderId,
@@ -1172,7 +1172,7 @@ create_cluster_eff_users_env(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
-    {ClusterId, Groups, Users, {U1, U2, NonAdmin}, {ProviderId, Macaroon}}.
+    {ClusterId, Groups, Users, {U1, U2, NonAdmin}, {ProviderId, ProviderToken}}.
 
 
 create_eff_spaces_env(Config) ->
@@ -1264,14 +1264,7 @@ create_eff_providers_env(Config) ->
 
     lists:foreach(
         fun({ProvId, SpaceId}) ->
-            {ok, Macaroon} = oz_test_utils:space_invite_provider_token(
-                Config, ?ROOT, SpaceId
-            ),
-            {ok, Token} = macaroons:serialize(Macaroon),
-            {ok, SpaceId} = oz_test_utils:support_space(
-                Config, ?ROOT, ProvId, Token,
-                oz_test_utils:minimum_support_size(Config)
-            )
+            {ok, SpaceId} = oz_test_utils:support_space(Config, ProvId, SpaceId)
         end, [{P1, S1}, {P2, S2}, {P2, S3}, {P3, S4}, {P4, S5}]
     ),
 
@@ -1301,10 +1294,10 @@ create_harvester_eff_providers_env(Config) ->
 
     Providers = [{P1, _}, {P2, _}, {P3, _}] = lists:map(fun(_) ->
         Name = ?UNIQUE_STRING,
-        {ok, {P, PMacaroon}} = oz_test_utils:create_provider(Config, Name),
+        {ok, {P, PToken}} = oz_test_utils:create_provider(Config, Name),
         {P, #{
             <<"name">> => Name,
-            <<"macaroon">> => PMacaroon
+            <<"providerRootToken">> => PToken
         }}
     end, lists:seq(1,3)),
 

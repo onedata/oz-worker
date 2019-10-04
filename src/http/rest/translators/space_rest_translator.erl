@@ -43,17 +43,17 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#g
 create_response(#gri{aspect = join} = Gri, AuthHint, resource, Result) ->
     create_response(Gri#gri{aspect = instance}, AuthHint, resource, Result);
 
-create_response(#gri{aspect = invite_user_token}, _, value, Macaroon) ->
-    {ok, Token} = macaroons:serialize(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
+create_response(#gri{aspect = invite_user_token}, _, value, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
-create_response(#gri{aspect = invite_group_token}, _, value, Macaroon) ->
-    {ok, Token} = macaroons:serialize(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
+create_response(#gri{aspect = invite_group_token}, _, value, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
-create_response(#gri{aspect = invite_provider_token}, _, value, Macaroon) ->
-    {ok, Token} = macaroons:serialize(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
+create_response(#gri{aspect = invite_provider_token}, _, value, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
 create_response(#gri{id = SpaceId, aspect = {user, UserId}}, _, resource, _) ->
     rest_translator:created_reply(

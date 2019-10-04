@@ -6,21 +6,21 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Plugin implementing auth_protocol_behaviour, used to handle authentication
+%%% Plugin implementing idp_auth_protocol_behaviour, used to handle authentication
 %%% over SAML protocol. These callbacks are called by auth_logic module.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(saml_protocol).
--behavior(auth_protocol_behaviour).
+-behavior(idp_auth_protocol_behaviour).
 -author("Lukasz Opiola").
 
 -include("auth/auth_common.hrl").
 -include("auth/auth_errors.hrl").
 -include_lib("esaml/include/esaml.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
-%% auth_protocol_behaviour callbacks
+%% idp_auth_protocol_behaviour callbacks
 -export([get_login_endpoint/2, validate_login/2]).
 
 %%%===================================================================
@@ -29,7 +29,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link auth_protocol_behaviour} callback get_login_endpoint/2.
+%% {@link idp_auth_protocol_behaviour} callback get_login_endpoint/2.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_login_endpoint(auth_config:idp(), state_token:state_token()) ->
@@ -71,10 +71,10 @@ get_login_endpoint(IdP, State) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link auth_protocol_behaviour} callback validate_login/2.
+%% {@link idp_auth_protocol_behaviour} callback validate_login/2.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login(auth_config:idp(), auth_logic:query_params()) ->
+-spec validate_login(auth_config:idp(), idp_auth:query_params()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
 validate_login(IdP, QueryParams) ->
     {ok, SPConfig} = auth_config:get_saml_sp_config(),

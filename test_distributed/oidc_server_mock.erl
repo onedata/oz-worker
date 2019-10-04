@@ -97,14 +97,14 @@ simulate_user_login(Config, OidcSpec, Url, UserAttributesByEndpoint) ->
 %%%===================================================================
 
 -spec mock_request_idp(get | post, http_client:code(), http_client:url(),
-    http_client:headers(), auth_logic:query_params()) ->
+    http_client:headers(), idp_auth:query_params()) ->
     {ResultHeaders :: http_client:headers(), ResultBody :: binary()}.
 mock_request_idp(Method, ExpCode, Endpoint, Headers, Parameters) ->
     mock_request_idp(Method, ExpCode, Endpoint, Headers, Parameters, []).
 
 
 -spec mock_request_idp(get | post, http_client:code(), http_client:url(),
-    http_client:headers(), auth_logic:query_params(), http_client:opts()) ->
+    http_client:headers(), idp_auth:query_params(), http_client:opts()) ->
     {ResultHeaders :: http_client:headers(), ResultBody :: binary()}.
 mock_request_idp(Method, ExpCode, Endpoint, Headers, Parameters, _Opts) ->
     {ok, OidcSpec} = onezone_get_saved(mock_spec),

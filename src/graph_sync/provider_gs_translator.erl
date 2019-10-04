@@ -17,7 +17,7 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 %% API
@@ -46,21 +46,15 @@ handshake_attributes(_) ->
 %%--------------------------------------------------------------------
 -spec translate_value(gs_protocol:protocol_version(), gri:gri(),
     Value :: term()) -> Result | fun((aai:auth()) -> Result) when
-    Result :: gs_protocol:data() | gs_protocol:error().
-translate_value(ProtoVersion, #gri{aspect = invite_group_token}, Macaroon) ->
-    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
-translate_value(ProtoVersion, #gri{aspect = invite_provider_token}, Macaroon) ->
-    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
-translate_value(ProtoVersion, #gri{aspect = provider_registration_token}, Macaroon) ->
-    translate_value(ProtoVersion, #gri{aspect = invite_user_token}, Macaroon);
-translate_value(_, #gri{aspect = invite_user_token}, Macaroon) ->
-    {ok, Token} = macaroons:serialize(Macaroon),
-    Token;
+    Result :: gs_protocol:data() | errors:error().
 translate_value(_, #gri{type = od_provider, aspect = map_idp_group}, Id) ->
     Id;
-translate_value(_, #gri{type = od_user, aspect = preauthorize}, {Subject, Caveats}) ->
+translate_value(ProtocolVersion, #gri{type = od_user, aspect = preauthorize}, {Subject, Caveats}) ->
     #{
-        <<"subject">> => aai:subject_to_json(Subject),
+        <<"subject">> => case ProtocolVersion >= 5 of
+            true -> aai:serialize_subject(Subject);
+            false -> deprecated_subject_to_json(Subject)
+        end,
         <<"caveats">> => [caveats:serialize(C) || C <- Caveats]
     };
 translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {AccessToken, Expires}) ->
@@ -68,14 +62,14 @@ translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {Access
         <<"token">> => AccessToken,
         <<"ttl">> => Expires
     };
-translate_value(ProtoVersion, #gri{type = od_space, aspect = harvest_metadata}, Result) ->
+translate_value(_, #gri{type = od_space, aspect = harvest_metadata}, Result) ->
     case Result of
         {error, _} = Error ->
             Error;
         _ ->
             maps:fold(fun
                 (HarvesterId, #{<<"error">> := Error}, Acc) ->
-                    Acc#{HarvesterId => #{<<"error">> => gs_protocol_errors:error_to_json(ProtoVersion, Error)}};
+                    Acc#{HarvesterId => #{<<"error">> => errors:to_json(Error)}};
                 (HarvesterId, Indices, Acc) ->
                     Acc#{HarvesterId => Indices}
             end, #{}, Result)
@@ -103,7 +97,7 @@ translate_value(ProtocolVersion, GRI, Data) ->
 %%--------------------------------------------------------------------
 -spec translate_resource(gs_protocol:protocol_version(), gri:gri(),
     ResourceData :: term()) -> Result | fun((aai:auth()) -> Result) when
-    Result :: gs_protocol:data() | gs_protocol:error().
+    Result :: gs_protocol:data() | errors:error().
 translate_resource(_, #gri{type = od_provider, aspect = current_time}, TimeMillis) ->
     #{<<"timeMillis">> => TimeMillis};
 
@@ -129,7 +123,7 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
         <<"effectiveHandles">> => entity_graph:get_relations(effective, top_down, od_handle, User),
         <<"effectiveHandleServices">> => entity_graph:get_relations(effective, top_down, od_handle_service, User),
 
-        % TODO VFS-4506 deprecated fields, included for backward compatibility
+        %% @TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"name">> => FullName,
         <<"login">> => gs_protocol:undefined_to_null(Username),
         <<"alias">> => gs_protocol:undefined_to_null(Username),
@@ -149,7 +143,7 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = protected}
         <<"emails">> => Emails,
         <<"linkedAccounts">> => LinkedAccountMaps,
 
-        % TODO VFS-4506 deprecated fields, included for backward compatibility
+        %% @TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"name">> => FullName,
         <<"login">> => gs_protocol:undefined_to_null(Username),
         <<"alias">> => gs_protocol:undefined_to_null(Username),
@@ -165,7 +159,7 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = shared}, U
         <<"fullName">> => FullName,
         <<"username">> => gs_protocol:undefined_to_null(Username),
 
-        % TODO VFS-4506 deprecated field, included for backward compatibility
+        %% @TODO VFS-4506 deprecated field, included for backward compatibility
         <<"name">> => FullName,
         <<"login">> => gs_protocol:undefined_to_null(Username),
         <<"alias">> => gs_protocol:undefined_to_null(Username)
@@ -367,3 +361,13 @@ translate_resource(ProtocolVersion, GRI, Data) ->
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
 
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Deprecated - used for backward compatibility with 19.02.* (proto version < 5).
+%% @end
+%%--------------------------------------------------------------------
+-spec deprecated_subject_to_json(aai:subject()) -> json_utils:json_term().
+deprecated_subject_to_json(?SUB(user, UserId)) -> #{<<"user">> => UserId};
+deprecated_subject_to_json(?SUB(?ONEPROVIDER, PrId)) -> #{<<"provider">> => PrId}.

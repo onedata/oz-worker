@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -115,24 +115,25 @@ join_cluster_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     EnvSetUpFun = fun() ->
-        {ok, {P1, _Macaroon1}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
+        {ok, Creator} = oz_test_utils:create_user(Config),
+        {ok, {P1, _Token1}} = oz_test_utils:create_provider(Config, Creator, ?PROVIDER_NAME1),
         ClusterId = P1,
-        {ok, Macaroon} = oz_test_utils:cluster_invite_group_token(
-            Config, ?ROOT, ClusterId
+        {ok, Token} = oz_test_utils:cluster_invite_group_token(
+            Config, ?USER(Creator), ClusterId
         ),
-        {ok, Token} = macaroons:serialize(Macaroon),
+        {ok, Serialized} = tokens:serialize(Token),
         #{
             clusterId => ClusterId,
-            token => Token,
-            macaroonId => macaroon:identifier(Macaroon)
+            token => Serialized,
+            tokenNonce => Token#token.nonce
         }
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{clusterId := ClusterId, macaroonId := MacaroonId} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{clusterId := ClusterId, tokenNonce := TokenNonce} = _Env, _) ->
         {ok, Clusters} = oz_test_utils:group_get_clusters(Config, G1),
         ?assertEqual(lists:member(ClusterId, Clusters), ShouldSucceed),
         case ShouldSucceed of
             true ->
-                oz_test_utils:assert_token_not_exists(Config, MacaroonId);
+                oz_test_utils:assert_token_not_exists(Config, TokenNonce);
             false -> ok
         end
     end,
@@ -140,7 +141,6 @@ join_cluster_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
                 {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
@@ -182,9 +182,8 @@ join_cluster_test(Config) ->
             },
             bad_values = [
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
-                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
-                {<<"token">>, <<"123qwe">>,
-                    ?ERROR_BAD_VALUE_TOKEN(<<"token">>)}
+                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
+                {<<"token">>, <<"123qwe">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)}
             ]
         }
     },
@@ -193,19 +192,20 @@ join_cluster_test(Config) ->
     )),
 
     % Check that token is not consumed upon failed operation
-    {ok, {P2, _Macaroon2}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
+    {ok, {P2, _}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
     NewCluster = P2,
     oz_test_utils:cluster_add_group(Config, NewCluster, G1),
 
-    {ok, Macaroon1} = oz_test_utils:cluster_invite_group_token(
-        Config, ?ROOT, NewCluster
+    {ok, Token} = oz_test_utils:cluster_invite_group_token(
+        Config, ?USER(U1), NewCluster
     ),
-    {ok, Token} = macaroons:serialize(Macaroon1),
+    {ok, Serialized} = tokens:serialize(Token),
 
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root
+                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]},
+                {user, U2}
             ]
         },
         rest_spec = #rest_spec{
@@ -222,11 +222,11 @@ join_cluster_test(Config) ->
         % TODO gs
         data_spec = #data_spec{
             required = [<<"token">>],
-            correct_values = #{<<"token">> => [Token]}
+            correct_values = #{<<"token">> => [Serialized]}
         }
     },
     VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
-        oz_test_utils:assert_token_exists(Config, macaroon:identifier(Macaroon1))
+        oz_test_utils:assert_token_exists(Config, Token#token.nonce)
     end,
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1
@@ -337,7 +337,7 @@ leave_cluster_test(Config) ->
             module = group_logic,
             function = leave_cluster,
             args = [auth, G1, clusterId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -354,7 +354,7 @@ list_eff_clusters_test(Config) ->
         [{G1, _}, {G2, _}, {G3, _}, {G4, _}, {G5, _} | _] = _Groups,
         {U1, U2, NonAdmin}
     } = api_test_scenarios:create_eff_providers_env(Config),
-    {ok, {P5, _Macaroon5}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
+    {ok, {P5, _Token5}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
 
     C1 = P1,
     C2 = P2,

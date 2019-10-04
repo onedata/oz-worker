@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -244,7 +244,6 @@ create_user_invite_token_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
                 {admin, [?OZ_HARVESTERS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
@@ -315,7 +314,7 @@ remove_user_test(Config) ->
             module = harvester_logic,
             function = remove_user,
             args = [auth, H1, userId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -570,7 +569,7 @@ update_user_privileges_test(Config) ->
             module = harvester_logic,
             function = update_user_privileges,
             args = [auth, H1, U3, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },

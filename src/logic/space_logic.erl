@@ -204,7 +204,7 @@ delete(Auth, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_user_invite_token(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, macaroon:macaroon()} | {error, term()}.
+    {ok, tokens:token()} | {error, term()}.
 create_user_invite_token(Auth, SpaceId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
@@ -221,7 +221,7 @@ create_user_invite_token(Auth, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_group_invite_token(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, macaroon:macaroon()} | {error, term()}.
+    {ok, tokens:token()} | {error, term()}.
 create_group_invite_token(Auth, SpaceId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
@@ -238,7 +238,7 @@ create_group_invite_token(Auth, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_provider_invite_token(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, macaroon:macaroon()} | {error, term()}.
+    {ok, tokens:token()} | {error, term()}.
 create_provider_invite_token(Auth, SpaceId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
@@ -365,7 +365,7 @@ create_group(Auth, SpaceId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec join_harvester(Auth :: aai:auth(), SpaceId :: od_group:id(),
-    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
+    TokenOrData :: tokens:serialized() | tokens:token() | map()) ->
     {ok, od_harvester:id()} | {error, term()}.
 join_harvester(Auth, SpaceId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{

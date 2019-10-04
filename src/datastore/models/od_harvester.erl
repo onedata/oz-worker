@@ -165,7 +165,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    3.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -180,7 +180,7 @@ get_record_struct(1) ->
         {plugin, atom},
         {endpoint, string},
 
-        {gui_plugin_config, {custom, {json_utils, encode, decode}}},
+        {gui_plugin_config, {custom, json, {json_utils, encode, decode}}},
         {public, boolean},
 
         {indices, #{string => {record, [
@@ -220,7 +220,7 @@ get_record_struct(2) ->
         {plugin, atom},
         {endpoint, string},
 
-        {gui_plugin_config, {custom, {json_utils, encode, decode}}},
+        {gui_plugin_config, {custom, json, {json_utils, encode, decode}}},
         {public, boolean},
 
         {indices, #{string => {record, [
@@ -249,6 +249,45 @@ get_record_struct(2) ->
             {type, atom},
             {id, string}
         ]}},
+
+        {bottom_up_dirty, boolean},
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(3) ->
+    % creator field - nested #subject{} record and encoding changed
+    {record, [
+        {name, string},
+        {plugin, atom},
+        {endpoint, string},
+
+        {gui_plugin_config, {custom, json, {json_utils, encode, decode}}},
+        {public, boolean},
+
+        {indices, #{string => {record, [
+            {name, string},
+            {schema, string},
+            {guiPluginName, string},
+            {stats, #{string => #{string => {record, [
+                {current_seq, integer},
+                {max_seq, integer},
+                {last_update, integer},
+                {error, string},
+                {archival, boolean}
+            ]}}}}
+        ]}}},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {spaces, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        % nested #subject{} record was extended and is now encoded as string
+        % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
 
         {bottom_up_dirty, boolean},
         {top_down_dirty, boolean}
@@ -288,7 +327,58 @@ upgrade_record(1, Harvester) ->
         BottomUpDirty,
         TopDownDirty
     } = Harvester,
-    {2, #od_harvester{
+    {2, {
+        od_harvester,
+        Name,
+        Plugin,
+        Endpoint,
+
+        GuiPluginConfig,
+        Public,
+
+        Indices,
+
+        Users,
+        Groups,
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+
+        CreationTime,
+        upgrade_common:client_to_subject(Creator),
+
+        BottomUpDirty,
+        TopDownDirty
+    }};
+upgrade_record(2, Harvester) ->
+    {
+        od_harvester,
+        Name,
+        Plugin,
+        Endpoint,
+
+        GuiPluginConfig,
+        Public,
+
+        Indices,
+
+        Users,
+        Groups,
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+
+        CreationTime,
+        Creator,
+
+        BottomUpDirty,
+        TopDownDirty
+    } = Harvester,
+    {3, #od_harvester{
         name = Name,
         plugin = Plugin,
         endpoint = Endpoint,
@@ -307,7 +397,7 @@ upgrade_record(1, Harvester) ->
         eff_providers = EffProviders,
 
         creation_time = CreationTime,
-        creator = upgrade_common:client_to_subject(Creator),
+        creator = upgrade_common:upgrade_subject_record(Creator),
 
         bottom_up_dirty = BottomUpDirty,
         top_down_dirty = TopDownDirty

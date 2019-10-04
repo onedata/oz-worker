@@ -14,7 +14,7 @@
 -module(elasticsearch_plugin).
 -author("Michal Stanisz").
 
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([type/0]).

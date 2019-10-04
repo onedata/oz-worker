@@ -13,7 +13,7 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").

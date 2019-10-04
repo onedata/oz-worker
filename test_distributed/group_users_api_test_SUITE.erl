@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -113,7 +113,7 @@ list_users_test(Config) ->
 
 create_user_invite_token_test(Config) ->
     % create group with 2 users:
-    %   U2 gets the GROUP_INVITE_USER privilege
+    %   U2 gets the GROUP_INVITE_USER_TOKEN privilege
     %   U1 gets all remaining privileges
     {G1, U1, U2} = api_test_scenarios:create_basic_group_env(
         Config, ?GROUP_ADD_USER
@@ -125,7 +125,6 @@ create_user_invite_token_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
                 {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
@@ -450,7 +449,7 @@ remove_user_test(Config) ->
             module = group_logic,
             function = remove_user,
             args = [auth, G1, userId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -568,7 +567,7 @@ update_user_privileges_test(Config) ->
             module = group_logic,
             function = update_user_privileges,
             args = [auth, G1, U3, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },

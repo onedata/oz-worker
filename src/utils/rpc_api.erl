@@ -13,12 +13,12 @@
 -author("Wojciech Geisler").
 
 -include_lib("ctool/include/aai/aai.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/oz/oz_users.hrl").
 
 -export([apply/2]).
 -export([
-    authorize_by_oz_panel_gui_token/1, authorize_by_access_token/1,
+    check_token_auth/3,
     get_protected_provider_data/2, deploy_static_gui_package/4,
     update_cluster_version_info/4, set_user_password/3, create_user/2,
     add_user_to_group/3, list_users/1, user_exists/1, username_exists/1,
@@ -58,16 +58,11 @@ apply(Function, Args) ->
 %%% Exposed functions
 %%%===================================================================
 
--spec authorize_by_oz_panel_gui_token(tokens:token() | tokens:serialized()) ->
-    {true, aai:auth()} | {error, term()}.
-authorize_by_oz_panel_gui_token(Token) ->
-    auth_logic:authorize_by_oz_panel_gui_token(Token).
-
-
--spec authorize_by_access_token(tokens:serialized() | tokens:token()) ->
+-spec check_token_auth(tokens:serialized() | tokens:token(),
+    undefined | ip_utils:ip(), undefined | aai:audience()) ->
     {true, aai:auth()} | false | {error, term()}.
-authorize_by_access_token(Token)  ->
-    auth_logic:authorize_by_access_token(Token).
+check_token_auth(Token, PeerIp, Audience)  ->
+    token_auth:check_token_auth(Token, PeerIp, Audience).
 
 
 -spec get_protected_provider_data(aai:auth(), od_provider:id()) ->
@@ -203,7 +198,7 @@ cluster_logic_get_eff_groups(Auth, ClusterId) ->
 
 
 -spec cluster_logic_create_user_invite_token(aai:auth(), od_cluster:id()) ->
-    {ok, macaroon:macaroon()} | {error, term()}.
+    {ok, tokens:token()} | {error, term()}.
 cluster_logic_create_user_invite_token(Auth, ClusterId) ->
     cluster_logic:create_user_invite_token(Auth, ClusterId).
 

@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -192,7 +192,7 @@ remove_group_test(Config) ->
             module = handle_logic,
             function = remove_group,
             args = [auth, HandleId, groupId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -430,7 +430,7 @@ update_group_privileges_test(Config) ->
             module = handle_logic,
             function = update_group_privileges,
             args = [auth, HandleId, G1, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },

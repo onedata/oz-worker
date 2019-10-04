@@ -18,7 +18,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
@@ -30,17 +30,25 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity and its revision from datastore based on EntityId.
-%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% Retrieves an entity and its revision from datastore, if applicable.
+%% Should return:
+%%  * {true, entity_logic:versioned_entity()}
+%%      if the fetch was successful
+%%  * {true, gri:gri(), entity_logic:versioned_entity()}
+%%      if the fetch was successful and new GRI was resolved
+%%  * false
+%%      if fetch is not applicable for this operation
+%%  * {error, _}
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:versioned_entity()} | entity_logic:error().
-fetch_entity(HServiceId) ->
+-spec fetch_entity(gri:gri()) ->
+    {true, entity_logic:versioned_entity()} | false | errors:error().
+fetch_entity(#gri{id = HServiceId}) ->
     case od_handle_service:get(HServiceId) of
         {ok, #document{value = HandleService, revs = [DbRev | _]}} ->
             {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
-            {ok, {HandleService, Revision}};
+            {true, {HandleService, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -132,7 +140,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         _ ->
             ok
     end,
-    {ok, {FetchedHandleService, Rev}} = fetch_entity(HServiceId),
+    {true, {FetchedHandleService, Rev}} = fetch_entity(#gri{aspect = instance, id = HServiceId}),
     {ok, resource, {GRI#gri{id = HServiceId}, {FetchedHandleService, Rev}}};
 
 create(#el_req{gri = #gri{id = HServiceId, aspect = {user, UserId}}, data = Data}) ->
@@ -143,7 +151,7 @@ create(#el_req{gri = #gri{id = HServiceId, aspect = {user, UserId}}, data = Data
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, {User, Rev}} = user_logic_plugin:fetch_entity(UserId),
+    {true, {User, Rev}} = user_logic_plugin:fetch_entity(#gri{id = UserId}),
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
     {ok, resource, {NewGRI, ?THROUGH_HANDLE_SERVICE(HServiceId), {UserData, Rev}}};
 
@@ -155,7 +163,7 @@ create(#el_req{gri = #gri{id = HServiceId, aspect = {group, GroupId}}, data = Da
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
-    {ok, {Group, Rev}} = group_logic_plugin:fetch_entity(GroupId),
+    {true, {Group, Rev}} = group_logic_plugin:fetch_entity(#gri{id = GroupId}),
     {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
     {ok, resource, {NewGRI, ?THROUGH_HANDLE_SERVICE(HServiceId), {GroupData, Rev}}}.
 
