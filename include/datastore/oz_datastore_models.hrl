@@ -410,6 +410,15 @@
     }
 }).
 
+
+% stores static content to be displayed in GUI
+-record(gui_message, {
+    % the default state is 'enabled' to encourage admin setting the message
+    enabled = true :: boolean(),
+    body = <<>> :: binary()
+}).
+
+
 -record(entity_graph_state, {
     refresh_in_progress = false :: boolean(),
     bottom_up_dirty = ordsets:new() :: entity_graph_state:dirty_queue(),

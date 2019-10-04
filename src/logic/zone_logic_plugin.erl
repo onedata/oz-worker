@@ -52,6 +52,8 @@ fetch_entity(_) ->
 operation_supported(get, configuration, _) -> true;
 operation_supported(get, test_image, _) -> true;
 operation_supported(get, privileges, _) -> true;
+operation_supported(get, {gui_message, _}, _) -> true;
+operation_supported(update, {gui_message, _}, _) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -114,8 +116,13 @@ get(#el_req{gri = #gri{aspect = privileges}}, _) ->
     {ok, #{
         <<"viewer">> => privileges:oz_viewer(),
         <<"admin">> => privileges:oz_admin()
-    }}.
+    }};
 
+get(#el_req{gri = #gri{aspect = {gui_message, MessageId}}}, _) ->
+    case gui_message:get(MessageId) of
+        {ok, #document{value = Message}} -> {ok, Message};
+        {error, not_found} -> throw(?ERROR_NOT_FOUND)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -124,8 +131,17 @@ get(#el_req{gri = #gri{aspect = privileges}}, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
-update(_GRI) ->
-    ?ERROR_NOT_SUPPORTED.
+update(#el_req{gri = #gri{aspect = {gui_message, MessageId}}, data = Data}) ->
+    UpdateFun = fun(Message) ->
+        {ok, Message#gui_message{
+            enabled = maps:get(<<"enabled">>, Data, Message#gui_message.enabled),
+            body = maps:get(<<"body">>, Data, Message#gui_message.body)
+        }}
+    end,
+    case gui_message:update(MessageId, UpdateFun) of
+        {ok, _} -> ok;
+        {error, not_found} -> throw(?ERROR_NOT_FOUND)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -145,10 +161,8 @@ delete(_GRI) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec exists(entity_logic:req(), entity_logic:entity()) -> boolean().
-exists(#el_req{gri = #gri{aspect = configuration}}, _) ->
-    true;
-
-exists(_Req, _) ->
+exists(#el_req{gri = #gri{aspect = _}}, _) ->
+    % this function is never called when gri.id = undefined
     false.
 
 
@@ -168,6 +182,13 @@ authorize(#el_req{operation = get, gri = #gri{aspect = test_image}}, _) ->
 authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
     true;
 
+authorize(#el_req{operation = get, gri = #gri{aspect = {gui_message, _}}}, _) ->
+    true;
+
+authorize(#el_req{operation = update, gri = #gri{aspect = {gui_message, _}}}, _) ->
+    % only root (onepanel) can perform this operation
+    false;
+
 authorize(_Req = #el_req{}, _) ->
     false.
 
@@ -178,7 +199,7 @@ authorize(_Req = #el_req{}, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
-required_admin_privileges(_) -> [].
+required_admin_privileges(_) -> forbidden.
 
 
 %%--------------------------------------------------------------------
@@ -191,4 +212,10 @@ required_admin_privileges(_) -> [].
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
-validate(_Req) -> #{}.
+validate(#el_req{operation = update, gri = #gri{aspect = {gui_message, _}}}) ->
+    #{
+        optional => #{
+            <<"enabled">> => {boolean, any},
+            <<"body">> => {binary, any}
+        }
+    }.
