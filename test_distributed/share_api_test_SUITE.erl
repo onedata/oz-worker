@@ -220,8 +220,8 @@ create_test(Config) ->
         },
         data_spec = DataSpec#data_spec{
             bad_values = lists:append([
-                [{<<"spaceId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"spaceId">>)},
-                    {<<"spaceId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"spaceId">>)}],
+                [{<<"spaceId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"spaceId">>)},
+                    {<<"spaceId">>, 1234, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"spaceId">>)}],
                 BadDataValues,
                 ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)])
         }

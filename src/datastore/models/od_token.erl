@@ -7,9 +7,12 @@
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% API for records that store information about named tokens. Named tokens can
-%%% be viewed through REST API and GUI, confined and revoked at will (as opposed
-%%% to temporary tokens). Each token must have a unique name and can be
-%%% referenced by that name (link tree is used for underlying implementation).
+%%% be viewed through REST API / GUI and revoked at will (as opposed to
+%%% temporary tokens). They can be created in the name of a user or provider,
+%%% which is called token subject. Each token must have a unique name
+%%% (per given subject, i.e. a user cannot have two tokens with the same name,
+%%% but two different users can). Named tokens can be referenced by their name -
+%%% link tree is used for underlying implementation.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(od_token).

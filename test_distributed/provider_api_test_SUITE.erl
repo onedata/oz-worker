@@ -2524,8 +2524,8 @@ verify_provider_identity_test(Config) ->
                 <<"token">> => [TokenNoAuthBin, TokenNotExpiredBin]
             },
             bad_values = [
-                {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"providerId">>)},
-                {<<"providerId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"providerId">>)},
+                {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
+                {<<"providerId">>, 1234, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
                 {<<"providerId">>, <<"sdfagh2345qwefg">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
                 {<<"providerId">>, P2, ?ERROR_TOKEN_INVALID},
 
@@ -2550,8 +2550,8 @@ verify_provider_identity_test(Config) ->
                 <<"macaroon">> => [TokenNoAuthBin, TokenNotExpiredBin]
             },
             bad_values = [
-                {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"providerId">>)},
-                {<<"providerId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"providerId">>)},
+                {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
+                {<<"providerId">>, 1234, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
                 {<<"providerId">>, <<"sdfagh2345qwefg">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
                 {<<"providerId">>, P2, ?ERROR_TOKEN_INVALID},
 

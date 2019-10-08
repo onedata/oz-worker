@@ -700,7 +700,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = verify_provider_identit
     end,
     #{
         required => #{
-            <<"providerId">> => {binary, {exists, fun provider_logic:exists/1}},
+            <<"providerId">> => {any, {exists, fun provider_logic:exists/1}},
             TokenKey => {token, any}
         }
     };

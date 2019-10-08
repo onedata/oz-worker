@@ -60,7 +60,7 @@ apply(Function, Args) ->
 
 -spec check_token_auth(tokens:serialized() | tokens:token(),
     undefined | ip_utils:ip(), undefined | aai:audience()) ->
-    {true, aai:auth()} | false | {error, term()}.
+    {true, aai:auth()} | {error, term()}.
 check_token_auth(Token, PeerIp, Audience)  ->
     token_auth:check_token_auth(Token, PeerIp, Audience).
 

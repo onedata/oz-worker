@@ -3513,5 +3513,6 @@ request_gui_token(Config, Cookie, GuiType, ClusterId) ->
             #{<<"token">> := Token} = json_utils:decode(Response),
             {ok, Token};
         {ok, _, _, Response} ->
-            errors:from_json(json_utils:decode(Response))
+            #{<<"error">> := Error} = json_utils:decode(Response),
+            errors:from_json(Error)
     end.

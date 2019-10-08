@@ -200,7 +200,16 @@ is_audience_allowed(_, _) ->
 %%% Internal functions
 %%%===================================================================
 
+%%--------------------------------------------------------------------
 %% @private
+%% @doc
+%% Checks if an audience token is present in the request and if so, verifies it.
+%% The audience token is a regular access token put in a proper header and sent
+%% along with the subject's access token. It is used to prove the identity of
+%% requesting party, which may be required to satisfy an audience caveat of the
+%% subject's access token.
+%% @end
+%%--------------------------------------------------------------------
 -spec resolve_audience(cowboy_req:req()) -> {ok, undefined | aai:audience()} | errors:error().
 resolve_audience(Req) ->
     case tokens:parse_audience_token_header(Req) of
@@ -218,8 +227,8 @@ resolve_audience(Req) ->
 
 -spec resolve_audience(tokens:token(), undefined | ip_utils:ip()) ->
     {ok, undefined | aai:audience()} | errors:error().
-resolve_audience(Token, PeerIp) ->
-    case verify_access_token(Token, PeerIp, undefined) of
+resolve_audience(AudienceToken, PeerIp) ->
+    case verify_access_token(AudienceToken, PeerIp, undefined) of
         {ok, Auth} -> {ok, aai:auth_to_audience(Auth)};
         {error, _} = Error -> ?ERROR_BAD_AUDIENCE_TOKEN(Error)
     end.

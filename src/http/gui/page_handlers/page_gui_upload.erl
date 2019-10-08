@@ -57,7 +57,7 @@ handle(<<"POST">>, Req) ->
         handle_gui_upload(Req)
     catch
         throw:{error, _} = Error ->
-            cowboy_req:reply(errors:http_code(Error), #{}, json_utils:encode(errors:to_json(Error)), Req);
+            cowboy_req:reply(errors:to_http_code(Error), #{}, json_utils:encode(errors:to_json(Error)), Req);
         throw:Code when is_integer(Code) ->
             cowboy_req:reply(Code, Req);
         Type:Reason ->
@@ -90,7 +90,7 @@ handle_gui_upload(Req) ->
             GuiType =:= ?HARVESTER_GUI andalso gui_static:link_gui(GuiType, GuiId, GuiHash),
             cowboy_req:reply(?HTTP_200_OK, Req2);
         {error, _} = Error ->
-            cowboy_req:reply(errors:http_code(Error), #{}, json_utils:encode(errors:to_json(Error)), Req)
+            cowboy_req:reply(errors:to_http_code(Error), #{}, json_utils:encode(errors:to_json(Error)), Req)
     end.
 
 

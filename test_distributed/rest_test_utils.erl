@@ -19,7 +19,7 @@
 % Use "Macaroon", "X-Auth-Token" and "Authorization: Bearer" headers variably,
 % as they all should be accepted.
 -define(ACCESS_TOKEN_HEADER(AccessToken), case rand:uniform(3) of
-    1 -> #{<<"x-auth-token">> => AccessToken};
+    1 -> #{<<"macaroon">> => AccessToken};
     2 -> #{<<"x-auth-token">> => AccessToken};
     3 -> #{<<"authorization">> => <<"Bearer ", AccessToken/binary>>}
 end).

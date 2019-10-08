@@ -670,9 +670,11 @@ ensure_valid(State) ->
 %% @doc
 %% Performs simple value conversion (if possible) and checks the type and value
 %% of value for Key in Data. Takes into consideration special keys which are
-%% in form {id, binary()} or {aspect, binary()}, that allows to validate data in
-%% entity id or aspect. In such case, the Data map must include the
-%% 'id' and/or 'aspect' key that hold the values.
+%% in form {id, Key :: binary()} or {aspect, Key :: binary()}, that allows to
+%% validate data in entity id or aspect. In such case, the Data map must include
+%% the 'id' and/or 'aspect' key that hold the values.
+%% The Key is an arbitrary name for the validated attribute, useful when
+%% generating error messages.
 %% @end
 %%--------------------------------------------------------------------
 -spec transform_and_check_value(Key :: binary(), Data :: data(),
@@ -959,7 +961,7 @@ check_value(binary, email, _Key, Value) ->
         false -> throw(?ERROR_BAD_VALUE_EMAIL)
     end;
 
-check_value(json, JsonValidator, Key, Map) ->
+check_value(json, JsonValidator, Key, Map) when is_map(JsonValidator) ->
     maps:map(fun(NestedKey, {NestedTypeRule, NestedValueRule}) ->
         FullKey = <<Key/binary, ".", NestedKey/binary>>,
         case maps:find(NestedKey, Map) of
@@ -1005,28 +1007,33 @@ check_value(_, VerifyFun, Key, Val) when is_function(VerifyFun, 1) ->
         false ->
             throw(?ERROR_BAD_DATA(Key))
     end;
-check_value(Type, {exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
-    check_value(Type, non_empty, Key, Val),
-    case VerifyFun(Val) of
+check_value(_, {exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
+    try VerifyFun(Val) of
         true ->
             Val;
         false ->
             throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(Key))
+    catch _:_ ->
+        throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(Key))
     end;
 check_value(Type, {not_exists, VerifyFun}, Key, Val) when is_function(VerifyFun, 1) ->
     check_value(Type, non_empty, Key, Val),
-    case VerifyFun(Val) of
+    try VerifyFun(Val) of
         true ->
             Val;
         false ->
             throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(Key))
+    catch _:_ ->
+        throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(Key))
     end;
 check_value(_, {relation_exists, ChType, ChId, ParType, ParId, VerifyFun}, _Key, Val) when is_function(VerifyFun, 1) ->
-    case VerifyFun(Val) of
+    try VerifyFun(Val) of
         true ->
             Val;
         false ->
             throw(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId))
+    catch _:_ ->
+        throw(?ERROR_RELATION_DOES_NOT_EXIST(ChType, ChId, ParType, ParId))
     end;
 check_value(token, any, _Key, _Token) ->
     ok;

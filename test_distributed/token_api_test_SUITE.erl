@@ -48,7 +48,12 @@
     update_provider_named_token_metadata/1,
     toggle_named_token_revoked_by_nonce/1,
     toggle_user_named_token_revoked/1,
-    toggle_provider_named_token_revoked/1
+    toggle_provider_named_token_revoked/1,
+    delete_named_token_by_nonce/1,
+    delete_user_named_token/1,
+    delete_provider_named_token/1,
+    delete_all_user_named_tokens/1,
+    delete_all_provider_named_tokens/1
 ]).
 
 all() ->
@@ -69,7 +74,12 @@ all() ->
         update_provider_named_token_metadata,
         toggle_named_token_revoked_by_nonce,
         toggle_user_named_token_revoked,
-        toggle_provider_named_token_revoked
+        toggle_provider_named_token_revoked,
+        delete_named_token_by_nonce,
+        delete_user_named_token,
+        delete_provider_named_token,
+        delete_all_user_named_tokens,
+        delete_all_provider_named_tokens
     ]).
 
 %%%===================================================================
@@ -78,11 +88,12 @@ all() ->
 
 -define(USER_ALPHA, userAlpha).
 -define(USER_BETA, userBeta).
--define(PROVIDER_GAMMA, providerGamma).
--define(PROVIDER_DELTA, providerDelta).
+-define(PROV_GAMMA, providerGamma).
+-define(PROV_DELTA, providerDelta).
 
 -define(ROOT_TOKEN(Provider), {root_token, Provider}).
 -define(TOKENS_OF(UserOrProvider), {tokens_of, UserOrProvider}).
+-define(ADMIN_OF(Provider), {admin_of, Provider}).
 
 % Record used for clearer test code
 -record(named_token_data, {
@@ -104,25 +115,45 @@ all() ->
     % Decides if there is one test for all tokens_to_check, or a test for each
     % of the tokens
     testing_strategy :: one_token_at_a_time | all_tokens_at_the_same_time,
+    % Id of the subject whose tokens are tested - macro binding
+    % (?USER_ALPHA, ?PROV_DELTA etc.). It is resolved and fed to logic_args_generator)
+    subject_id = undefined,
     % Clients that are allowed to perform the operation expressed by macro bindings
-    % (?USER_ALPHA, ?PROVIDER_GAMMA...)
+    % (?USER_ALPHA, ?PROVIDER_GAMMA...) or ?ADMIN_OF (which resolves to the provider's
+    % cluster creator).
     correct_clients = [] :: atom(),
     % token_logic function to call
     logic_function :: atom(),
-    % Returns logic function call args based on resolved ClientId (UserId / ProviderId)
+    % Returns logic function call args based on resolved subject_id (UserId / ProviderId)
     % and the expanded list of tokens to check
     logic_args_generator = fun(_, _) -> [] end :: logic_args_generator(),
     % Returns logic_expectation based on the expanded list of tokens to check
     logic_expectation_generator = fun(_) -> ?OK end :: logic_expectation_generator(),
     % Returns data_spec based on the expanded list of tokens to check
-    data_spec_generator = fun(_) -> undefined end :: data_spec_generator()
+    data_spec = undefined :: #data_spec{},
+    env_set_up_fun_generator = fun(_) -> undefined end :: env_set_up_fun_generator(),
+    verify_end_fun_generator = fun(_) -> undefined end :: verify_end_fun_generator()
+}).
+
+% Record holding information about a basic env composed of two providers with two
+% corresponding cluster admins and two regular users.
+-record(basic_env, {
+    user_alpha :: od_user:id(),
+    user_beta :: od_user:id(),
+    prov_gamma :: od_provider:id(),
+    prov_gamma_token :: tokens:serialized(),
+    prov_gamma_admin :: od_user:id(),
+    prov_delta :: od_provider:id(),
+    prov_delta_token :: tokens:serialized(),
+    prov_delta_admin :: od_user:id()
 }).
 
 % Depends on the testing strategy: one_token_at_a_time | all_tokens_at_the_same_time
 -type token_or_tokens() :: #named_token_data{} | [#named_token_data{}].
--type logic_args_generator() :: fun((ClientId :: binary(), token_or_tokens()) -> logic_expectation()).
+-type logic_args_generator() :: fun((SubjectId :: binary(), token_or_tokens()) -> logic_expectation()).
 -type logic_expectation_generator() :: fun((token_or_tokens()) -> logic_expectation()).
--type data_spec_generator() :: fun((token_or_tokens()) -> #data_spec{}).
+-type env_set_up_fun_generator() :: fun((token_or_tokens()) -> undefined | api_test_utils:env_setup_fun()).
+-type verify_end_fun_generator() :: fun((token_or_tokens()) -> undefined | api_test_utils:verify_fun()).
 
 -define(INVITE_TOKEN_TYPE_EXAMPLES, [
     ?INVITE_TOKEN(?GROUP_INVITE_USER_TOKEN, <<"123">>),
@@ -227,7 +258,8 @@ end, ?INVITE_TOKEN_TYPE_EXAMPLES -- ?PROVIDER_ALLOWED_INVITE_TOKEN_TYPES)).
     {<<"metadata">>, <<>>, ?ERROR_BAD_VALUE_JSON(<<"metadata">>)},
     {<<"metadata">>, 345345, ?ERROR_BAD_VALUE_JSON(<<"metadata">>)},
     {<<"metadata">>, 1.56, ?ERROR_BAD_VALUE_JSON(<<"metadata">>)},
-    {<<"metadata">>, <<"string literal">>, ?ERROR_BAD_VALUE_JSON(<<"metadata">>)}
+    {<<"metadata">>, <<"string literal">>, ?ERROR_BAD_VALUE_JSON(<<"metadata">>)},
+    {<<"metadata">>, #{<<"$$$_internal_$$$">> => <<"this-is-forbidden">>}, ?ERROR_BAD_DATA(<<"metadata">>)}
 ]).
 
 -define(BAD_REVOKED_VALUES, [
@@ -255,10 +287,6 @@ verify_token_fun(Config, Subject, Persistence, Audience) ->
                 ok;
             _ ->
                 % ACCESS_TOKEN, GUI_ACCESS_TOKEN
-                case oz_test_utils:call_oz(Config, token_auth, check_token_auth, [Token, undefined, Audience]) of
-                    {true, _} -> ok;
-                    _ -> ct:print("Audience: ~p", [Audience])  % @fixme
-                end,
                 ?assertMatch(
                     {true, #auth{subject = Subject}},
                     oz_test_utils:call_oz(Config, token_auth, check_token_auth, [Token, undefined, Audience])
@@ -331,16 +359,22 @@ create_provider_temporary_token(Config, ProviderId, Type) ->
     Token.
 
 
-% Creates some named and temporary tokens for given users and providers.
+% Creates some named and temporary tokens for users and providers from a basic env setup.
 % Returns the named tokens represented by #named_token_data{} records.
--spec create_some_tokens(Config :: term(), od_user:id(), od_user:id(), od_provider:id(), od_provider:id()) ->
-    #{atom => [#named_token_data{}]}.
-create_some_tokens(Config, UserAlpha, UserBeta, ProviderGamma, ProviderDelta) ->
+-spec create_some_tokens(Config :: term(), #basic_env{}) ->
+    #{gri:entity_id() => [#named_token_data{}]}.
+create_some_tokens(Config, BasicEnv) ->
+    #basic_env{
+        user_alpha = UserAlpha, user_beta = UserBeta,
+        prov_gamma = PrGamma, prov_gamma_admin = PrGammaAdmin,
+        prov_delta = PrDelta, prov_delta_admin = PrDeltaAdmin
+    } = BasicEnv,
+
     {ok, {SessionAlpha, _}} = oz_test_utils:log_in(Config, UserAlpha),
     {ok, {SessionBeta, _}} = oz_test_utils:log_in(Config, UserBeta),
 
     {ok, SpaceAlpha} = oz_test_utils:create_space(Config, ?USER(UserAlpha)),
-    {ok, GroupBeta} = oz_test_utils:create_space(Config, ?USER(UserBeta)),
+    {ok, GroupBeta} = oz_test_utils:create_group(Config, ?USER(UserBeta)),
 
     UAlphaT1 = create_user_named_token(Config, UserAlpha, ?ACCESS_TOKEN),
     UAlphaT2 = create_user_named_token(Config, UserAlpha, ?ACCESS_TOKEN),
@@ -356,11 +390,17 @@ create_some_tokens(Config, UserAlpha, UserBeta, ProviderGamma, ProviderDelta) ->
     UBetaT6 = create_user_named_token(Config, UserBeta, ?INVITE_TOKEN(?GROUP_INVITE_USER_TOKEN, GroupBeta)),
     UBetaT7 = create_user_named_token(Config, UserBeta, ?INVITE_TOKEN(?GROUP_INVITE_GROUP_TOKEN, GroupBeta)),
 
-    PGammaT1 = create_provider_named_token(Config, ProviderGamma, ?ACCESS_TOKEN),
-    PGammaT2 = create_provider_named_token(Config, ProviderGamma, ?INVITE_TOKEN(?CLUSTER_INVITE_USER_TOKEN, ProviderGamma)),
+    PrGammaT1 = create_provider_named_token(Config, PrGamma, ?ACCESS_TOKEN),
+    PrGammaT2 = create_provider_named_token(Config, PrGamma, ?INVITE_TOKEN(?CLUSTER_INVITE_USER_TOKEN, PrGamma)),
 
-    PDeltaT1 = create_provider_named_token(Config, ProviderDelta, ?ACCESS_TOKEN),
-    PDeltaT2 = create_provider_named_token(Config, ProviderDelta, ?INVITE_TOKEN(?CLUSTER_INVITE_GROUP_TOKEN, ProviderDelta)),
+    PrGammaAdminT1 = create_user_named_token(Config, PrGammaAdmin, ?INVITE_TOKEN(?CLUSTER_INVITE_USER_TOKEN, PrGamma)),
+    PrGammaAdminT2 = create_user_named_token(Config, PrGammaAdmin, ?ACCESS_TOKEN),
+
+    PrDeltaT1 = create_provider_named_token(Config, PrDelta, ?ACCESS_TOKEN),
+    PrDeltaT2 = create_provider_named_token(Config, PrDelta, ?INVITE_TOKEN(?CLUSTER_INVITE_GROUP_TOKEN, PrDelta)),
+
+    PrDeltaAdminT1 = create_user_named_token(Config, PrDeltaAdmin, ?INVITE_TOKEN(?CLUSTER_INVITE_GROUP_TOKEN, PrDelta)),
+    PrDeltaAdminT2 = create_user_named_token(Config, PrDeltaAdmin, ?ACCESS_TOKEN),
 
     % Create some temporary tokens, which should not be listed
     create_user_temporary_token(Config, UserAlpha, ?ACCESS_TOKEN),
@@ -376,72 +416,125 @@ create_some_tokens(Config, UserAlpha, UserBeta, ProviderGamma, ProviderDelta) ->
     create_user_temporary_token(Config, UserBeta, ?INVITE_TOKEN(?GROUP_INVITE_USER_TOKEN, GroupBeta)),
     create_user_temporary_token(Config, UserBeta, ?INVITE_TOKEN(?GROUP_INVITE_GROUP_TOKEN, GroupBeta)),
 
-    create_provider_temporary_token(Config, ProviderGamma, ?ACCESS_TOKEN),
-    create_provider_temporary_token(Config, ProviderGamma, ?INVITE_TOKEN(?CLUSTER_INVITE_USER_TOKEN, ProviderGamma)),
+    create_provider_temporary_token(Config, PrGamma, ?ACCESS_TOKEN),
+    create_provider_temporary_token(Config, PrGamma, ?INVITE_TOKEN(?CLUSTER_INVITE_USER_TOKEN, PrGamma)),
 
-    create_provider_temporary_token(Config, ProviderDelta, ?ACCESS_TOKEN),
-    create_provider_temporary_token(Config, ProviderDelta, ?INVITE_TOKEN(?CLUSTER_INVITE_GROUP_TOKEN, ProviderDelta)),
+    create_provider_temporary_token(Config, PrDelta, ?ACCESS_TOKEN),
+    create_provider_temporary_token(Config, PrDelta, ?INVITE_TOKEN(?CLUSTER_INVITE_GROUP_TOKEN, PrDelta)),
 
     #{
         UserAlpha => [UAlphaT1, UAlphaT2, UAlphaT3, UAlphaT4, UAlphaT5],
         UserBeta => [UBetaT1, UBetaT2, UBetaT3, UBetaT4, UBetaT5, UBetaT6, UBetaT7],
-        ProviderGamma => [PGammaT1, PGammaT2],
-        ProviderDelta => [PDeltaT1, PDeltaT2]
+        PrGamma => [PrGammaT1, PrGammaT2],
+        PrGammaAdmin => [PrGammaAdminT1, PrGammaAdminT2],
+        PrDelta => [PrDeltaT1, PrDeltaT2],
+        PrDeltaAdmin => [PrDeltaAdminT1, PrDeltaAdminT2]
     }.
 
 
-% See the #token_api_test_spec{} record for description.
-run_token_tests(Config, TestSpec) ->
+create_basic_env(Config) ->
     {ok, UserAlpha} = oz_test_utils:create_user(Config),
     {ok, UserBeta} = oz_test_utils:create_user(Config),
-    {ok, {ProviderGamma, PGammaToken}} = oz_test_utils:create_provider(Config),
-    {ok, {ProviderDelta, PDeltaToken}} = oz_test_utils:create_provider(Config),
+    {ok, PrGammaAdmin} = oz_test_utils:create_user(Config),
+    {ok, PrDeltaAdmin} = oz_test_utils:create_user(Config),
+    {ok, {PrGamma, PrGammaToken}} = oz_test_utils:create_provider(Config, PrGammaAdmin, ?UNIQUE_STRING),
+    {ok, {PrDelta, PrDeltaToken}} = oz_test_utils:create_provider(Config, PrDeltaAdmin, ?UNIQUE_STRING),
+    #basic_env{
+        user_alpha = UserAlpha,
+        user_beta = UserBeta,
+        prov_gamma = PrGamma,
+        prov_gamma_token = PrGammaToken,
+        prov_gamma_admin = PrGammaAdmin,
+        prov_delta = PrDelta,
+        prov_delta_token = PrDeltaToken,
+        prov_delta_admin = PrDeltaAdmin
+    }.
+
+
+map_client(#basic_env{user_alpha = Id}, ?USER_ALPHA) -> {user, Id};
+map_client(#basic_env{user_beta = Id}, ?USER_BETA) -> {user, Id};
+map_client(#basic_env{prov_gamma = Id, prov_gamma_token = Tk}, ?PROV_GAMMA) -> {provider, Id, Tk};
+map_client(#basic_env{prov_gamma_admin = Id}, ?ADMIN_OF(?PROV_GAMMA)) -> {user, Id};
+map_client(#basic_env{prov_delta = Id, prov_delta_token = Tk}, ?PROV_DELTA) -> {provider, Id, Tk};
+map_client(#basic_env{prov_delta_admin = Id}, ?ADMIN_OF(?PROV_DELTA)) -> {user, Id}.
+
+
+all_clients(BasicEnv) ->
+    ClientBindings = [
+        ?USER_ALPHA, ?USER_BETA,
+        ?PROV_GAMMA, ?PROV_DELTA,
+        ?ADMIN_OF(?PROV_GAMMA), ?ADMIN_OF(?PROV_DELTA)
+    ],
+    [map_client(BasicEnv, C) || C <- ClientBindings].
+
+
+% Common function for running test related to tokens.
+% Covers get / update / delete operations.
+% See the #token_api_test_spec{} record for description.
+run_token_tests(Config, TestSpec) ->
+    #basic_env{
+        user_alpha = UserAlpha,
+        user_beta = UserBeta,
+        prov_gamma = PrGamma,
+        prov_gamma_token = PrGammaToken,
+        prov_gamma_admin = PrGammaAdmin,
+        prov_delta = PrDelta,
+        prov_delta_token = PrDeltaToken,
+        prov_delta_admin = PrDeltaAdmin
+    } = BasicEnv = create_basic_env(Config),
 
     #{
         UserAlpha := UserAlphaNamedTokens,
         UserBeta := UserBetaNamedTokens,
-        ProviderGamma := ProviderGammaNamedTokens,
-        ProviderDelta := ProviderDeltaNamedTokens
-    } = create_some_tokens(Config, UserAlpha, UserBeta, ProviderGamma, ProviderDelta),
+        PrGamma := PrGammaNamedTokens,
+        PrGammaAdmin := PrGammaAdminNamedTokens,
+        PrDelta := PrDeltaNamedTokens,
+        PrDeltaAdmin := PrDeltaAdminNamedTokens
+    } = create_some_tokens(Config, BasicEnv),
 
     #token_api_test_spec{
         tokens_to_check = TokensToCheckBindings,
         testing_strategy = TestingStrategy,
+        subject_id = SubjectIdBinding,
         correct_clients = CorrectClientsBindings,
         logic_function = LogicFunction,
         logic_args_generator = LogicArgsGenerator,
         logic_expectation_generator = LogicExpectationGenerator,
-        data_spec_generator = DataSpecGenerator
+        data_spec = DataSpec,
+        env_set_up_fun_generator = EnvSetUpFunGenerator,
+        verify_end_fun_generator = VerifyEndFunGenerator
     } = TestSpec,
 
-    MapClient = fun
-        (?USER_ALPHA) -> {user, UserAlpha};
-        (?USER_BETA) -> {user, UserBeta};
-        (?PROVIDER_GAMMA) -> {provider, ProviderGamma, PGammaToken};
-        (?PROVIDER_DELTA) -> {provider, ProviderDelta, PDeltaToken}
+    AllClients = all_clients(BasicEnv),
+    CorrectClients = [map_client(BasicEnv, C) || C <- CorrectClientsBindings],
+    ForbiddenClients = AllClients -- CorrectClients,
+    SubjectId = case SubjectIdBinding of
+        undefined ->
+            undefined;
+        _ ->
+            case map_client(BasicEnv, SubjectIdBinding) of
+                {user, UserId} -> UserId;
+                {provider, ProviderId, _} -> ProviderId
+            end
     end,
 
-    CorrectClients = lists:map(MapClient, CorrectClientsBindings),
-    ForbiddenClients = [
-        {user, UserAlpha},
-        {user, UserBeta},
-        {provider, ProviderGamma, PGammaToken},
-        {provider, ProviderDelta, PDeltaToken}
-    ] -- CorrectClients,
-
     TokensToCheck = lists:flatmap(fun
-        (?ROOT_TOKEN(?PROVIDER_GAMMA)) ->
-            [#named_token_data{name = ?PROVIDER_ROOT_TOKEN_NAME, token = PGammaToken}];
-        (?ROOT_TOKEN(?PROVIDER_DELTA)) ->
-            [#named_token_data{name = ?PROVIDER_ROOT_TOKEN_NAME, token = PDeltaToken}];
+        (?ROOT_TOKEN(?PROV_GAMMA)) ->
+            [#named_token_data{name = ?PROVIDER_ROOT_TOKEN_NAME, token = PrGammaToken}];
+        (?ROOT_TOKEN(?PROV_DELTA)) ->
+            [#named_token_data{name = ?PROVIDER_ROOT_TOKEN_NAME, token = PrDeltaToken}];
         (?TOKENS_OF(?USER_ALPHA)) ->
             UserAlphaNamedTokens;
         (?TOKENS_OF(?USER_BETA)) ->
             UserBetaNamedTokens;
-        (?TOKENS_OF(?PROVIDER_GAMMA)) ->
-            ProviderGammaNamedTokens;
-        (?TOKENS_OF(?PROVIDER_DELTA)) ->
-            ProviderDeltaNamedTokens;
+        (?TOKENS_OF(?PROV_GAMMA)) ->
+            PrGammaNamedTokens;
+        (?TOKENS_OF(?ADMIN_OF(?PROV_GAMMA))) ->
+            PrGammaAdminNamedTokens;
+        (?TOKENS_OF(?PROV_DELTA)) ->
+            PrDeltaNamedTokens;
+        (?TOKENS_OF(?ADMIN_OF(?PROV_DELTA))) ->
+            PrDeltaAdminNamedTokens;
         (#named_token_data{} = Token) ->
             [Token]
     end, TokensToCheckBindings),
@@ -451,33 +544,29 @@ run_token_tests(Config, TestSpec) ->
         all_tokens_at_the_same_time -> [TokensToCheck]
     end,
 
-    lists:all(fun(CurrentClientBinding) ->
-        lists:all(fun(TokenOrTokens) ->
-            CurrentClient = MapClient(CurrentClientBinding),
-            CurrentClientId = case CurrentClient of
-                {user, UserId} -> UserId;
-                {provider, ProviderId, _} -> ProviderId
-            end,
-            api_test_utils:run_tests(Config, #api_test_spec{
-                client_spec = #client_spec{
-                    correct = [
-                        root,
-                        {admin, [?OZ_MANAGE_TOKENS]},
-                        CurrentClient
-                    ],
-                    unauthorized = [nobody],
-                    forbidden = ForbiddenClients
-                },
-                logic_spec = #logic_spec{
-                    module = token_logic,
-                    function = LogicFunction,
-                    args = LogicArgsGenerator(CurrentClientId, TokenOrTokens),
-                    expected_result = LogicExpectationGenerator(TokenOrTokens)
-                },
-                data_spec = DataSpecGenerator(TokenOrTokens)
-            })
-        end, Testcases)
-    end, CorrectClientsBindings).
+    lists:all(fun(TokenOrTokens) ->
+        EnvSetUpFun = EnvSetUpFunGenerator(TokenOrTokens),
+        VerifyEndFun = VerifyEndFunGenerator(TokenOrTokens),
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, [?OZ_MANAGE_TOKENS]} |
+                    CorrectClients
+                ],
+                unauthorized = [nobody],
+                forbidden = ForbiddenClients
+            },
+            logic_spec = #logic_spec{
+                module = token_logic,
+                function = LogicFunction,
+                args = LogicArgsGenerator(SubjectId, TokenOrTokens),
+                expected_result = LogicExpectationGenerator(TokenOrTokens)
+            },
+            data_spec = DataSpec
+        },
+        api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)
+    end, Testcases).
 
 %%%===================================================================
 %%% Test functions
@@ -485,7 +574,8 @@ run_token_tests(Config, TestSpec) ->
 
 create_user_named_token(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
-    {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(Config),
+    {ok, ProviderAdmin} = oz_test_utils:create_user(Config),
+    {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(Config, ProviderAdmin, ?UNIQUE_STRING),
     AlreadyExistingToken = <<"alreadyExistingName">>,
 
     % Create a token to later check if name duplicates are disallowed
@@ -509,7 +599,8 @@ create_user_named_token(Config) ->
                 ],
                 unauthorized = [nobody],
                 forbidden = [
-                    {provider, Provider, ProviderToken}
+                    {provider, Provider, ProviderToken},
+                    {user, ProviderAdmin}
                 ]
             },
             logic_spec = #logic_spec{
@@ -540,7 +631,9 @@ create_user_named_token(Config) ->
 
 create_provider_named_token(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
-    {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(Config),
+    {ok, ProviderAdmin} = oz_test_utils:create_user(Config),
+    {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(Config, ProviderAdmin, ?UNIQUE_STRING),
+    {ok, {AnotherProvider, AnotherProviderToken}} = oz_test_utils:create_provider(Config),
     AlreadyExistingToken = <<"subdubpubsubbub">>,
 
     % Create a token to later check if name duplicates are disallowed
@@ -560,11 +653,13 @@ create_provider_named_token(Config) ->
                 correct = [
                     root,
                     {provider, Provider, ProviderToken},
+                    {user, ProviderAdmin},
                     {admin, [?OZ_MANAGE_TOKENS, ?OZ_PROVIDERS_INVITE]}
                 ],
                 unauthorized = [nobody],
                 forbidden = [
-                    {user, User}
+                    {user, User},
+                    {provider, AnotherProvider, AnotherProviderToken}
                 ]
             },
             logic_spec = #logic_spec{
@@ -595,7 +690,8 @@ create_provider_named_token(Config) ->
 create_user_temporary_token(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, {SessionId, _}} = oz_test_utils:log_in(Config, User),
-    {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(Config),
+    {ok, ProviderAdmin} = oz_test_utils:create_user(Config),
+    {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(Config, ProviderAdmin, ?UNIQUE_STRING),
 
     Now = oz_test_utils:cluster_time_seconds(Config),
     MaxTtl = oz_test_utils:get_env(Config, max_temporary_token_ttl),
@@ -609,7 +705,8 @@ create_user_temporary_token(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-                {provider, Provider, ProviderToken}
+                {provider, Provider, ProviderToken},
+                {user, ProviderAdmin}
             ]
         },
         logic_spec = #logic_spec{
@@ -646,7 +743,9 @@ create_user_temporary_token(Config) ->
 create_provider_temporary_token(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, {SessionId, _}} = oz_test_utils:log_in(Config, User),
-    {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(Config),
+    {ok, ProviderAdmin} = oz_test_utils:create_user(Config),
+    {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(Config, ProviderAdmin, ?UNIQUE_STRING),
+    {ok, {AnotherProvider, AnotherProviderToken}} = oz_test_utils:create_provider(Config),
 
     Now = oz_test_utils:cluster_time_seconds(Config),
     MaxTtl = oz_test_utils:get_env(Config, max_temporary_token_ttl),
@@ -656,11 +755,13 @@ create_provider_temporary_token(Config) ->
             correct = [
                 root,
                 {provider, Provider, ProviderToken},
+                {user, ProviderAdmin},
                 {admin, [?OZ_MANAGE_TOKENS, ?OZ_PROVIDERS_INVITE]}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, User}
+                {user, User},
+                {provider, AnotherProvider, AnotherProviderToken}
             ]
         },
         logic_spec = #logic_spec{
@@ -696,6 +797,7 @@ create_provider_temporary_token(Config) ->
 
 create_gui_access_token(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
+    {ok, AnotherUser} = oz_test_utils:create_user(Config),
     {ok, {SessionId, _}} = oz_test_utils:log_in(Config, User),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(User)),
     {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(Config, User, ?UNIQUE_STRING),
@@ -740,7 +842,8 @@ create_gui_access_token(Config) ->
                 ],
                 unauthorized = [nobody],
                 forbidden = [
-                    {provider, Provider, ProviderToken}
+                    {provider, Provider, ProviderToken},
+                    {user, AnotherUser}
                 ]
             },
             logic_spec = #logic_spec{
@@ -756,10 +859,11 @@ create_gui_access_token(Config) ->
 list(Config) ->
     ?assert(run_token_tests(Config, #token_api_test_spec{
         tokens_to_check = [
-            ?ROOT_TOKEN(?PROVIDER_GAMMA),
-            ?ROOT_TOKEN(?PROVIDER_DELTA),
+            ?ROOT_TOKEN(?PROV_GAMMA),
+            ?ROOT_TOKEN(?PROV_DELTA),
             ?TOKENS_OF(?USER_ALPHA), ?TOKENS_OF(?USER_BETA),
-            ?TOKENS_OF(?PROVIDER_GAMMA), ?TOKENS_OF(?PROVIDER_DELTA)
+            ?TOKENS_OF(?PROV_GAMMA), ?TOKENS_OF(?ADMIN_OF(?PROV_GAMMA)),
+            ?TOKENS_OF(?PROV_DELTA), ?TOKENS_OF(?ADMIN_OF(?PROV_DELTA))
         ],
         testing_strategy = all_tokens_at_the_same_time,
         correct_clients = [], % only root & admin are authorized
@@ -773,12 +877,15 @@ list(Config) ->
 
 list_user_named_tokens(Config) ->
     list_user_named_tokens(Config, ?USER_ALPHA),
-    list_user_named_tokens(Config, ?USER_BETA).
+    list_user_named_tokens(Config, ?USER_BETA),
+    list_user_named_tokens(Config, ?ADMIN_OF(?PROV_GAMMA)),
+    list_user_named_tokens(Config, ?ADMIN_OF(?PROV_DELTA)).
 
 list_user_named_tokens(Config, User) ->
     ?assert(run_token_tests(Config, #token_api_test_spec{
         tokens_to_check = [?TOKENS_OF(User)],
         testing_strategy = all_tokens_at_the_same_time,
+        subject_id = User,
         correct_clients = [User],
         logic_function = list_user_named_tokens,
         logic_args_generator = fun(UserId, _) -> [auth, UserId] end,
@@ -789,14 +896,15 @@ list_user_named_tokens(Config, User) ->
 
 
 list_provider_named_tokens(Config) ->
-    list_provider_named_tokens(Config, ?PROVIDER_GAMMA),
-    list_provider_named_tokens(Config, ?PROVIDER_DELTA).
+    list_provider_named_tokens(Config, ?PROV_GAMMA, [?PROV_GAMMA, ?ADMIN_OF(?PROV_GAMMA)]),
+    list_provider_named_tokens(Config, ?PROV_DELTA, [?PROV_DELTA, ?ADMIN_OF(?PROV_DELTA)]).
 
-list_provider_named_tokens(Config, Provider) ->
+list_provider_named_tokens(Config, Provider, CorrectClients) ->
     ?assert(run_token_tests(Config, #token_api_test_spec{
         tokens_to_check = [?ROOT_TOKEN(Provider), ?TOKENS_OF(Provider)],
         testing_strategy = all_tokens_at_the_same_time,
-        correct_clients = [Provider],
+        subject_id = Provider,
+        correct_clients = CorrectClients,
         logic_function = list_provider_named_tokens,
         logic_args_generator = fun(ProviderId, _) -> [auth, ProviderId] end,
         logic_expectation_generator = fun(TokensToCheck) ->
@@ -806,19 +914,21 @@ list_provider_named_tokens(Config, Provider) ->
 
 
 get_named_token_by_nonce(Config) ->
-    get_named_token_by_nonce(Config, ?USER_ALPHA),
-    get_named_token_by_nonce(Config, ?USER_BETA),
-    get_named_token_by_nonce(Config, ?PROVIDER_GAMMA),
-    get_named_token_by_nonce(Config, ?PROVIDER_DELTA).
+    get_named_token_by_nonce(Config, ?USER_ALPHA, [?USER_ALPHA]),
+    get_named_token_by_nonce(Config, ?USER_BETA, [?USER_BETA]),
+    get_named_token_by_nonce(Config, ?PROV_GAMMA, [?PROV_GAMMA, ?ADMIN_OF(?PROV_GAMMA)]),
+    get_named_token_by_nonce(Config, ?PROV_DELTA, [?PROV_DELTA, ?ADMIN_OF(?PROV_DELTA)]),
+    get_named_token_by_nonce(Config, ?ADMIN_OF(?PROV_GAMMA), [?ADMIN_OF(?PROV_GAMMA)]),
+    get_named_token_by_nonce(Config, ?ADMIN_OF(?PROV_DELTA), [?ADMIN_OF(?PROV_DELTA)]).
 
-get_named_token_by_nonce(Config, UserOrProvider) ->
+get_named_token_by_nonce(Config, UserOrProvider, CorrectClients) ->
     ?assert(run_token_tests(Config, #token_api_test_spec{
         tokens_to_check = [?TOKENS_OF(UserOrProvider)],
         testing_strategy = one_token_at_a_time,
-        correct_clients = [UserOrProvider],
+        correct_clients = CorrectClients,
         logic_function = get_named_token_by_nonce,
-        logic_args_generator = fun(UserOrProviderId, TokenToCheck) ->
-            [auth, UserOrProviderId, token_data_to_nonce(TokenToCheck)]
+        logic_args_generator = fun(_, TokenToCheck) ->
+            [auth, token_data_to_nonce(TokenToCheck)]
         end,
         logic_expectation_generator = fun(TokenToCheck) ->
             Token = #token{
@@ -843,12 +953,15 @@ get_named_token_by_nonce(Config, UserOrProvider) ->
 
 get_user_named_token(Config) ->
     get_user_named_token(Config, ?USER_ALPHA),
-    get_user_named_token(Config, ?USER_BETA).
+    get_user_named_token(Config, ?USER_BETA),
+    get_user_named_token(Config, ?ADMIN_OF(?PROV_GAMMA)),
+    get_user_named_token(Config, ?ADMIN_OF(?PROV_DELTA)).
 
 get_user_named_token(Config, User) ->
     ?assert(run_token_tests(Config, #token_api_test_spec{
         tokens_to_check = [?TOKENS_OF(User)],
         testing_strategy = one_token_at_a_time,
+        subject_id = User,
         correct_clients = [User],
         logic_function = get_user_named_token,
         logic_args_generator = fun(UserId, TokenToCheck) ->
@@ -876,14 +989,15 @@ get_user_named_token(Config, User) ->
 
 
 get_provider_named_token(Config) ->
-    get_provider_named_token(Config, ?PROVIDER_GAMMA),
-    get_provider_named_token(Config, ?PROVIDER_DELTA).
+    get_provider_named_token(Config, ?PROV_GAMMA, [?PROV_GAMMA, ?ADMIN_OF(?PROV_GAMMA)]),
+    get_provider_named_token(Config, ?PROV_DELTA, [?PROV_DELTA, ?ADMIN_OF(?PROV_DELTA)]).
 
-get_provider_named_token(Config, Provider) ->
+get_provider_named_token(Config, Provider, CorrectClients) ->
     ?assert(run_token_tests(Config, #token_api_test_spec{
         tokens_to_check = [?TOKENS_OF(Provider)],
         testing_strategy = one_token_at_a_time,
-        correct_clients = [Provider],
+        subject_id = Provider,
+        correct_clients = CorrectClients,
         logic_function = get_provider_named_token,
         logic_args_generator = fun(ProviderId, TokenToCheck) ->
             [auth, ProviderId, token_data_to_name(TokenToCheck)]
@@ -910,288 +1024,385 @@ get_provider_named_token(Config, Provider) ->
 
 
 update_named_token_metadata_by_nonce(Config) ->
-    {ok, UserAlpha} = oz_test_utils:create_user(Config),
-    {ok, UserBeta} = oz_test_utils:create_user(Config),
-    {ok, {ProviderGamma, PGammaToken}} = oz_test_utils:create_provider(Config),
-    {ok, {ProviderDelta, PDeltaToken}} = oz_test_utils:create_provider(Config),
+    update_named_token_metadata_by_nonce(Config, ?USER_ALPHA, [?USER_ALPHA]),
+    update_named_token_metadata_by_nonce(Config, ?USER_BETA, [?USER_BETA]),
+    update_named_token_metadata_by_nonce(Config, ?PROV_GAMMA, [?PROV_GAMMA, ?ADMIN_OF(?PROV_GAMMA)]),
+    update_named_token_metadata_by_nonce(Config, ?PROV_DELTA, [?PROV_DELTA, ?ADMIN_OF(?PROV_DELTA)]),
+    update_named_token_metadata_by_nonce(Config, ?ADMIN_OF(?PROV_GAMMA), [?ADMIN_OF(?PROV_GAMMA)]),
+    update_named_token_metadata_by_nonce(Config, ?ADMIN_OF(?PROV_DELTA), [?ADMIN_OF(?PROV_DELTA)]).
 
-    UserAlphaToken = create_user_named_token(Config, UserAlpha, ?ACCESS_TOKEN),
-    UserBetaToken = create_user_named_token(Config, UserBeta, ?ACCESS_TOKEN),
-    ProviderGammaToken = create_provider_named_token(Config, ProviderGamma, ?ACCESS_TOKEN),
-    ProviderDeltaToken = create_provider_named_token(Config, ProviderDelta, ?ACCESS_TOKEN),
-
-    AllClients = [
-        {user, UserAlpha},
-        {user, UserBeta},
-        {provider, ProviderGamma, PGammaToken},
-        {provider, ProviderDelta, PDeltaToken}
-    ],
-
-    Testcases = [
-        {{user, UserAlpha}, token_data_to_nonce(UserAlphaToken)},
-        {{user, UserBeta}, token_data_to_nonce(UserBetaToken)},
-        {{provider, ProviderGamma, PGammaToken}, token_data_to_nonce(ProviderGammaToken)},
-        {{provider, ProviderDelta, PDeltaToken}, token_data_to_nonce(ProviderDeltaToken)}
-    ],
-
-    lists:foreach(fun({Client, TokenNonce}) ->
-        update_named_token_metadata_base(
-            Config, AllClients, Client, TokenNonce,
-            update_named_token_metadata_by_nonce, [auth, TokenNonce, data]
-        )
-    end, Testcases).
+update_named_token_metadata_by_nonce(Config, ProviderOrUser, CorrectClients) ->
+    update_named_token_metadata_base(
+        Config, CorrectClients, ProviderOrUser, update_named_token_metadata_by_nonce, fun(_, TokenToCheck) ->
+            [auth, token_data_to_nonce(TokenToCheck), data]
+        end
+    ).
 
 
 update_user_named_token_metadata(Config) ->
-    {ok, UserAlpha} = oz_test_utils:create_user(Config),
-    {ok, UserBeta} = oz_test_utils:create_user(Config),
-    {ok, {ProviderGamma, PGammaToken}} = oz_test_utils:create_provider(Config),
-    {ok, {ProviderDelta, PDeltaToken}} = oz_test_utils:create_provider(Config),
+    update_user_named_token_metadata(Config, ?USER_ALPHA),
+    update_user_named_token_metadata(Config, ?USER_BETA),
+    update_user_named_token_metadata(Config, ?ADMIN_OF(?PROV_GAMMA)),
+    update_user_named_token_metadata(Config, ?ADMIN_OF(?PROV_DELTA)).
 
-    UserAlphaToken = create_user_named_token(Config, UserAlpha, ?ACCESS_TOKEN),
-    UserBetaToken = create_user_named_token(Config, UserBeta, ?ACCESS_TOKEN),
-
-    AllClients = [
-        {user, UserAlpha},
-        {user, UserBeta},
-        {provider, ProviderGamma, PGammaToken},
-        {provider, ProviderDelta, PDeltaToken}
-    ],
-
-    Testcases = [
-        {{user, UserAlpha}, token_data_to_name_and_nonce(UserAlphaToken)},
-        {{user, UserBeta}, token_data_to_name_and_nonce(UserBetaToken)}
-    ],
-
-    lists:foreach(fun({Client = {user, User}, {TokenName, TokenNonce}}) ->
-        update_named_token_metadata_base(
-            Config, AllClients, Client, TokenNonce,
-            update_user_named_token_metadata, [auth, User, TokenName, data]
-        )
-    end, Testcases).
+update_user_named_token_metadata(Config, User) ->
+    update_named_token_metadata_base(
+        Config, [User], User, update_user_named_token_metadata, fun(SubjectId, TokenToCheck) ->
+            [auth, SubjectId, token_data_to_name(TokenToCheck), data]
+        end
+    ).
 
 
 update_provider_named_token_metadata(Config) ->
-    {ok, UserAlpha} = oz_test_utils:create_user(Config),
-    {ok, UserBeta} = oz_test_utils:create_user(Config),
-    {ok, {ProviderGamma, PGammaToken}} = oz_test_utils:create_provider(Config),
-    {ok, {ProviderDelta, PDeltaToken}} = oz_test_utils:create_provider(Config),
+    update_provider_named_token_metadata(Config, ?PROV_GAMMA, [?PROV_GAMMA, ?ADMIN_OF(?PROV_GAMMA)]),
+    update_provider_named_token_metadata(Config, ?PROV_DELTA, [?PROV_DELTA, ?ADMIN_OF(?PROV_DELTA)]).
 
-    ProviderGammaToken = create_provider_named_token(Config, ProviderGamma, ?ACCESS_TOKEN),
-    ProviderDeltaToken = create_provider_named_token(Config, ProviderDelta, ?ACCESS_TOKEN),
-
-    AllClients = [
-        {user, UserAlpha},
-        {user, UserBeta},
-        {provider, ProviderGamma, PGammaToken},
-        {provider, ProviderDelta, PDeltaToken}
-    ],
-
-    Testcases = [
-        {{provider, ProviderGamma, PGammaToken}, token_data_to_name_and_nonce(ProviderGammaToken)},
-        {{provider, ProviderDelta, PDeltaToken}, token_data_to_name_and_nonce(ProviderDeltaToken)}
-    ],
-
-    lists:foreach(fun({Client = {provider, Provider, _}, {TokenName, TokenNonce}}) ->
-        update_named_token_metadata_base(
-            Config, AllClients, Client, TokenNonce,
-            update_provider_named_token_metadata, [auth, Provider, TokenName, data]
-        )
-    end, Testcases).
+update_provider_named_token_metadata(Config, Provider, CorrectClients) ->
+    update_named_token_metadata_base(
+        Config, CorrectClients, Provider, update_provider_named_token_metadata, fun(SubjectId, TokenToCheck) ->
+            [auth, SubjectId, token_data_to_name(TokenToCheck), data]
+        end
+    ).
 
 
-update_named_token_metadata_base(Config, AllClients, CorrectClient, TokenNonce, Function, Args) ->
-    EnvSetUpFun = fun() ->
-        InitialMetadata = case rand:uniform(2) of
-            1 -> #{};
-            % Internal metadata section is dedicated for internal logic and cannot be modified.
-            2 -> #{<<"$$$_internal_$$$">> => <<"reserved">>}
-        end,
-        % Reset the metadata to the initial value
-        oz_test_utils:call_oz(Config, od_token, update, [TokenNonce, fun(Token) ->
-            {ok, Token#od_token{metadata = InitialMetadata}}
-        end]),
-        #{initialMetadata => InitialMetadata}
-    end,
-
-    VerifyEndFun = fun(ShouldSucceed, #{initialMetadata := InitialMetadata}, Data) ->
-        ExpMetadata = case ShouldSucceed of
-            false -> InitialMetadata;
-            % Merge so that ExpMetadata always includes the internal values from InitialMetadata
-            true -> maps:merge(Data, InitialMetadata)
-        end,
-        ct:print("ExpMetadata: ~p", [ExpMetadata]),  % @fixme
-        ?assertMatch(
-            {ok, #od_token{metadata = ExpMetadata}},
-            oz_test_utils:call_oz(Config, token_logic, get_named_token_by_nonce, [?ROOT, TokenNonce])
-        )
-    end,
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_MANAGE_TOKENS]},
-                CorrectClient
-            ],
-            unauthorized = [nobody],
-            forbidden = AllClients -- [CorrectClient]
-        },
-        logic_spec = #logic_spec{
-            module = token_logic,
-            function = Function,
-            args = Args,
-            expected_result = ?OK
-        },
+update_named_token_metadata_base(Config, CorrectClients, SubjectId, LogicFunction, LogicArgsGenerator) ->
+    ?assert(run_token_tests(Config, #token_api_test_spec{
+        tokens_to_check = [?TOKENS_OF(SubjectId)],
+        testing_strategy = one_token_at_a_time,
+        subject_id = SubjectId,
+        correct_clients = CorrectClients,
+        logic_function = LogicFunction,
+        logic_args_generator = LogicArgsGenerator,
+        logic_expectation_generator = fun(_) -> ?OK end,
         data_spec = #data_spec{
             required = [<<"metadata">>],
             correct_values = #{
-                <<"metadata">> => [
-                    #{<<"$$$_internal_$$$">> => <<"overwriting-should-not-be-possible">>} |
-                    ?METADATA_EXAMPLES
-                ]
+                <<"metadata">> => ?METADATA_EXAMPLES
+
             },
             bad_values = ?BAD_METADATA_VALUES
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
+        },
+        env_set_up_fun_generator = fun(TokenToCheck) ->
+            fun() ->
+                TokenNonce = token_data_to_nonce(TokenToCheck),
+                InitialMetadata = case rand:uniform(2) of
+                    1 -> #{};
+                    % Internal metadata section is dedicated for internal logic and cannot be modified.
+                    2 -> #{<<"$$$_internal_$$$">> => <<"reserved">>}
+                end,
+                % Reset the metadata to the initial value
+                oz_test_utils:call_oz(Config, od_token, update, [TokenNonce, fun(Token) ->
+                    {ok, Token#od_token{metadata = InitialMetadata}}
+                end]),
+                #{initialMetadata => InitialMetadata}
+            end
+        end,
+        verify_end_fun_generator = fun(TokenToCheck) ->
+            fun(ShouldSucceed, #{initialMetadata := InitialMetadata}, Data) ->
+                TokenNonce = token_data_to_nonce(TokenToCheck),
+                ExpMetadata = case ShouldSucceed of
+                    false ->
+                        InitialMetadata;
+                    true ->
+                        MetadataParam = maps:get(<<"metadata">>, Data, #{}),
+                        MetadataParamWithoutInternal = maps:remove(<<"$$$_internal_$$$">>, MetadataParam),
+                        maps:merge(MetadataParamWithoutInternal, InitialMetadata)
+                end,
+                ?assertMatch(
+                    {ok, #document{value = #od_token{metadata = ExpMetadata}}},
+                    oz_test_utils:call_oz(Config, od_token, get, [TokenNonce])
+                ),
+                ?assertMatch(
+                    {ok, #od_token{metadata = ExpMetadata}},
+                    oz_test_utils:call_oz(Config, token_logic, get_named_token_by_nonce, [?ROOT, TokenNonce])
+                )
+            end
+        end
+    })).
 
 
 toggle_named_token_revoked_by_nonce(Config) ->
-    {ok, UserAlpha} = oz_test_utils:create_user(Config),
-    {ok, UserBeta} = oz_test_utils:create_user(Config),
-    {ok, {ProviderGamma, PGammaToken}} = oz_test_utils:create_provider(Config),
-    {ok, {ProviderDelta, PDeltaToken}} = oz_test_utils:create_provider(Config),
+    toggle_named_token_revoked_by_nonce(Config, ?USER_ALPHA, [?USER_ALPHA]),
+    toggle_named_token_revoked_by_nonce(Config, ?USER_BETA, [?USER_BETA]),
+    toggle_named_token_revoked_by_nonce(Config, ?PROV_GAMMA, [?PROV_GAMMA, ?ADMIN_OF(?PROV_GAMMA)]),
+    toggle_named_token_revoked_by_nonce(Config, ?PROV_DELTA, [?PROV_DELTA, ?ADMIN_OF(?PROV_DELTA)]),
+    toggle_named_token_revoked_by_nonce(Config, ?ADMIN_OF(?PROV_GAMMA), [?ADMIN_OF(?PROV_GAMMA)]),
+    toggle_named_token_revoked_by_nonce(Config, ?ADMIN_OF(?PROV_DELTA), [?ADMIN_OF(?PROV_DELTA)]).
 
-    UserAlphaToken = create_user_named_token(Config, UserAlpha, ?ACCESS_TOKEN),
-    UserBetaToken = create_user_named_token(Config, UserBeta, ?ACCESS_TOKEN),
-    ProviderGammaToken = create_provider_named_token(Config, ProviderGamma, ?ACCESS_TOKEN),
-    ProviderDeltaToken = create_provider_named_token(Config, ProviderDelta, ?ACCESS_TOKEN),
-
-    AllClients = [
-        {user, UserAlpha},
-        {user, UserBeta},
-        {provider, ProviderGamma, PGammaToken},
-        {provider, ProviderDelta, PDeltaToken}
-    ],
-
-    Testcases = [
-        {{user, UserAlpha}, token_data_to_nonce(UserAlphaToken)},
-        {{user, UserBeta}, token_data_to_nonce(UserBetaToken)},
-        {{provider, ProviderGamma, PGammaToken}, token_data_to_nonce(ProviderGammaToken)},
-        {{provider, ProviderDelta, PDeltaToken}, token_data_to_nonce(ProviderDeltaToken)}
-    ],
-
-    lists:foreach(fun({Client, TokenNonce}) ->
-        toggle_named_token_revoked_base(
-            Config, AllClients, Client, TokenNonce,
-            toggle_named_token_revoked_by_nonce, [auth, TokenNonce, data]
-        )
-    end, Testcases).
+toggle_named_token_revoked_by_nonce(Config, ProviderOrUser, CorrectClients) ->
+    toggle_named_token_revoked_base(
+        Config, CorrectClients, ProviderOrUser, toggle_named_token_revoked_by_nonce, fun(_, TokenToCheck) ->
+            [auth, token_data_to_nonce(TokenToCheck), data]
+        end
+    ).
 
 
 toggle_user_named_token_revoked(Config) ->
-    {ok, UserAlpha} = oz_test_utils:create_user(Config),
-    {ok, UserBeta} = oz_test_utils:create_user(Config),
-    {ok, {ProviderGamma, PGammaToken}} = oz_test_utils:create_provider(Config),
-    {ok, {ProviderDelta, PDeltaToken}} = oz_test_utils:create_provider(Config),
+    toggle_user_named_token_revoked(Config, ?USER_ALPHA),
+    toggle_user_named_token_revoked(Config, ?USER_BETA),
+    toggle_user_named_token_revoked(Config, ?ADMIN_OF(?PROV_GAMMA)),
+    toggle_user_named_token_revoked(Config, ?ADMIN_OF(?PROV_DELTA)).
 
-    UserAlphaToken = create_user_named_token(Config, UserAlpha, ?ACCESS_TOKEN),
-    UserBetaToken = create_user_named_token(Config, UserBeta, ?ACCESS_TOKEN),
-
-    AllClients = [
-        {user, UserAlpha},
-        {user, UserBeta},
-        {provider, ProviderGamma, PGammaToken},
-        {provider, ProviderDelta, PDeltaToken}
-    ],
-
-    Testcases = [
-        {{user, UserAlpha}, token_data_to_name_and_nonce(UserAlphaToken)},
-        {{user, UserBeta}, token_data_to_name_and_nonce(UserBetaToken)}
-    ],
-
-    lists:foreach(fun({Client = {user, User}, {TokenName, TokenNonce}}) ->
-        toggle_named_token_revoked_base(
-            Config, AllClients, Client, TokenNonce,
-            toggle_user_named_token_revoked, [auth, User, TokenName, data]
-        )
-    end, Testcases).
+toggle_user_named_token_revoked(Config, User) ->
+    toggle_named_token_revoked_base(
+        Config, [User], User, toggle_user_named_token_revoked, fun(SubjectId, TokenToCheck) ->
+            [auth, SubjectId, token_data_to_name(TokenToCheck), data]
+        end
+    ).
 
 
 toggle_provider_named_token_revoked(Config) ->
-    {ok, UserAlpha} = oz_test_utils:create_user(Config),
-    {ok, UserBeta} = oz_test_utils:create_user(Config),
-    {ok, {ProviderGamma, PGammaToken}} = oz_test_utils:create_provider(Config),
-    {ok, {ProviderDelta, PDeltaToken}} = oz_test_utils:create_provider(Config),
+    toggle_provider_named_token_revoked(Config, ?PROV_GAMMA, [?PROV_GAMMA, ?ADMIN_OF(?PROV_GAMMA)]),
+    toggle_provider_named_token_revoked(Config, ?PROV_DELTA, [?PROV_DELTA, ?ADMIN_OF(?PROV_DELTA)]).
 
-    ProviderGammaToken = create_provider_named_token(Config, ProviderGamma, ?ACCESS_TOKEN),
-    ProviderDeltaToken = create_provider_named_token(Config, ProviderDelta, ?ACCESS_TOKEN),
-
-    AllClients = [
-        {user, UserAlpha},
-        {user, UserBeta},
-        {provider, ProviderGamma, PGammaToken},
-        {provider, ProviderDelta, PDeltaToken}
-    ],
-
-    Testcases = [
-        {{provider, ProviderGamma, PGammaToken}, token_data_to_name_and_nonce(ProviderGammaToken)},
-        {{provider, ProviderDelta, PDeltaToken}, token_data_to_name_and_nonce(ProviderDeltaToken)}
-    ],
-
-    lists:foreach(fun({Client = {provider, Provider, _}, {TokenName, TokenNonce}}) ->
-        toggle_named_token_revoked_base(
-            Config, AllClients, Client, TokenNonce,
-            toggle_provider_named_token_revoked, [auth, Provider, TokenName, data]
-        )
-    end, Testcases).
+toggle_provider_named_token_revoked(Config, Provider, CorrectClients) ->
+    toggle_named_token_revoked_base(
+        Config, CorrectClients, Provider, toggle_provider_named_token_revoked, fun(SubjectId, TokenToCheck) ->
+            [auth, SubjectId, token_data_to_name(TokenToCheck), data]
+        end
+    ).
 
 
-toggle_named_token_revoked_base(Config, AllClients, CorrectClient, TokenNonce, Function, Args) ->
-    EnvSetUpFun = fun() ->
-        {ok, #od_token{revoked = Revoked}} = oz_test_utils:call_oz(
-            Config, token_logic, get_named_token_by_nonce, [?ROOT, TokenNonce]
-        ),
-        #{previousRevokedState => Revoked}
-    end,
-
-    VerifyEndFun = fun(ShouldSucceed, #{previousRevokedState := PreviousRevokedState}, Data) ->
-        ExpRevoked = case ShouldSucceed of
-            false -> PreviousRevokedState;
-            true -> maps:get(<<"revoked">>, Data)
-        end,
-        ?assertMatch(
-            {ok, #od_token{revoked = ExpRevoked}},
-            oz_test_utils:call_oz(Config, token_logic, get_named_token_by_nonce, [?ROOT, TokenNonce])
-        )
-    end,
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_MANAGE_TOKENS]},
-                CorrectClient
-            ],
-            unauthorized = [nobody],
-            forbidden = AllClients -- [CorrectClient]
-        },
-        logic_spec = #logic_spec{
-            module = token_logic,
-            function = Function,
-            args = Args,
-            expected_result = ?OK
-        },
+toggle_named_token_revoked_base(Config, CorrectClients, SubjectId, LogicFunction, LogicArgsGenerator) ->
+    ?assert(run_token_tests(Config, #token_api_test_spec{
+        tokens_to_check = [?TOKENS_OF(SubjectId)],
+        testing_strategy = one_token_at_a_time,
+        subject_id = SubjectId,
+        correct_clients = CorrectClients,
+        logic_function = LogicFunction,
+        logic_args_generator = LogicArgsGenerator,
+        logic_expectation_generator = fun(_) -> ?OK end,
         data_spec = #data_spec{
             required = [<<"revoked">>],
             correct_values = #{
                 <<"revoked">> => [true, false]
             },
             bad_values = ?BAD_REVOKED_VALUES
+        },
+        env_set_up_fun_generator = fun(TokenToCheck) ->
+            fun() ->
+                TokenNonce = token_data_to_nonce(TokenToCheck),
+                {ok, #od_token{revoked = Revoked}} = oz_test_utils:call_oz(
+                    Config, token_logic, get_named_token_by_nonce, [?ROOT, TokenNonce]
+                ),
+                #{previousRevokedState => Revoked}
+            end
+        end,
+        verify_end_fun_generator = fun(TokenToCheck) ->
+            TokenNonce = token_data_to_nonce(TokenToCheck),
+            fun(ShouldSucceed, #{previousRevokedState := PreviousRevokedState}, Data) ->
+                ExpRevoked = case ShouldSucceed of
+                    false -> PreviousRevokedState;
+                    true -> maps:get(<<"revoked">>, Data)
+                end,
+                ?assertMatch(
+                    {ok, #od_token{revoked = ExpRevoked}},
+                    oz_test_utils:call_oz(Config, token_logic, get_named_token_by_nonce, [?ROOT, TokenNonce])
+                )
+            end
+        end
+    })).
+
+
+delete_named_token_by_nonce(Config) ->
+    BasicEnv = create_basic_env(Config),
+    delete_named_token_by_nonce(Config, BasicEnv, ?USER_ALPHA, [?USER_ALPHA]),
+    delete_named_token_by_nonce(Config, BasicEnv, ?USER_BETA, [?USER_BETA]),
+    delete_named_token_by_nonce(Config, BasicEnv, ?PROV_GAMMA, [?PROV_GAMMA, ?ADMIN_OF(?PROV_GAMMA)]),
+    delete_named_token_by_nonce(Config, BasicEnv, ?ADMIN_OF(?PROV_GAMMA), [?ADMIN_OF(?PROV_GAMMA)]),
+    delete_named_token_by_nonce(Config, BasicEnv, ?PROV_DELTA, [?PROV_DELTA, ?ADMIN_OF(?PROV_DELTA)]),
+    delete_named_token_by_nonce(Config, BasicEnv, ?ADMIN_OF(?PROV_DELTA), [?ADMIN_OF(?PROV_DELTA)]).
+
+delete_named_token_by_nonce(Config, BasicEnv, SubjectIdBinding, CorrectClientsBindings) ->
+    delete_named_token_base(
+        Config, BasicEnv, CorrectClientsBindings, SubjectIdBinding, delete_named_token_by_nonce, [auth, nonce]
+    ).
+
+
+delete_user_named_token(Config) ->
+    BasicEnv = create_basic_env(Config),
+    delete_user_named_token(Config, BasicEnv, ?USER_ALPHA),
+    delete_user_named_token(Config, BasicEnv, ?USER_BETA),
+    delete_user_named_token(Config, BasicEnv, ?ADMIN_OF(?PROV_GAMMA)),
+    delete_user_named_token(Config, BasicEnv, ?ADMIN_OF(?PROV_DELTA)).
+
+delete_user_named_token(Config, BasicEnv, UserId) ->
+    delete_named_token_base(
+        Config, BasicEnv, [UserId], UserId, delete_user_named_token, [auth, subjectId, name]
+    ).
+
+
+delete_provider_named_token(Config) ->
+    BasicEnv = create_basic_env(Config),
+    delete_provider_named_token(Config, BasicEnv, ?PROV_GAMMA, [?PROV_GAMMA, ?ADMIN_OF(?PROV_GAMMA)]),
+    delete_provider_named_token(Config, BasicEnv, ?PROV_DELTA, [?PROV_DELTA, ?ADMIN_OF(?PROV_DELTA)]).
+
+delete_provider_named_token(Config, BasicEnv, PrId, CorrectClientsBindings) ->
+    delete_named_token_base(
+        Config, BasicEnv, CorrectClientsBindings, PrId, delete_provider_named_token, [auth, subjectId, name]
+    ).
+
+
+delete_named_token_base(Config, BasicEnv, CorrectClientsBindings, SubjectIdBinding, LogicFunction, LogicArgs) ->
+    CorrectClients = [map_client(BasicEnv, C) || C <- CorrectClientsBindings],
+    EnvSetUpFun = fun() ->
+        #named_token_data{token = Token, name = TokenName} = case map_client(BasicEnv, SubjectIdBinding) of
+            {user, UserId} -> create_user_named_token(Config, UserId, ?ACCESS_TOKEN);
+            {provider, ProviderId, _} -> create_provider_named_token(Config, ProviderId, ?ACCESS_TOKEN)
+        end,
+        ?SUB(_, SubjectId) = Token#token.subject,
+        #{
+            token => Token,
+            % name, nonce and subjectId are used in logic args
+            name => TokenName,
+            nonce => Token#token.nonce,
+            subjectId => SubjectId
+        }
+    end,
+
+    VerifyEndFun = fun(ShouldSucceed, #{token := Token, name := TokenName}, _Data) ->
+        assert_token_deleted(ShouldSucceed, Config, Token, TokenName)
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_MANAGE_TOKENS]} |
+                CorrectClients
+            ],
+            unauthorized = [nobody],
+            forbidden = all_clients(BasicEnv) -- CorrectClients
+        },
+        logic_spec = #logic_spec{
+            module = token_logic,
+            function = LogicFunction,
+            args = LogicArgs,
+            expected_result = ?OK
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
+
+
+delete_all_user_named_tokens(Config) ->
+    BasicEnv = create_basic_env(Config),
+    delete_all_user_named_tokens(Config, BasicEnv, ?USER_ALPHA),
+    delete_all_user_named_tokens(Config, BasicEnv, ?USER_BETA),
+    delete_all_user_named_tokens(Config, BasicEnv, ?ADMIN_OF(?PROV_GAMMA)),
+    delete_all_user_named_tokens(Config, BasicEnv, ?ADMIN_OF(?PROV_DELTA)).
+
+delete_all_user_named_tokens(Config, BasicEnv, UserIdBinding) ->
+    {user, UserId} = map_client(BasicEnv, UserIdBinding),
+
+    EnvSetUpFun = fun() ->
+        #{UserId := UserTokens} = create_some_tokens(Config, BasicEnv),
+        #{userTokens => UserTokens}
+    end,
+
+    VerifyEndFun = fun(ShouldSucceed, #{userTokens := UserTokens}, _Data) ->
+        lists:foreach(fun(#named_token_data{name = TokenName, token = Token}) ->
+            assert_token_deleted(ShouldSucceed, Config, Token, TokenName)
+        end, UserTokens)
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_MANAGE_TOKENS]},
+                {user, UserId}
+            ],
+            unauthorized = [nobody],
+            forbidden = all_clients(BasicEnv) -- [{user, UserId}]
+        },
+        logic_spec = #logic_spec{
+            module = token_logic,
+            function = delete_all_user_named_tokens,
+            args = [auth, UserId],
+            expected_result = ?OK
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
+
+
+delete_all_provider_named_tokens(Config) ->
+    BasicEnv = create_basic_env(Config),
+    delete_all_provider_named_tokens(Config, BasicEnv, ?PROV_GAMMA, [?PROV_GAMMA, ?ADMIN_OF(?PROV_GAMMA)]),
+    delete_all_provider_named_tokens(Config, BasicEnv, ?PROV_DELTA, [?PROV_DELTA, ?ADMIN_OF(?PROV_DELTA)]).
+
+delete_all_provider_named_tokens(Config, BasicEnv, ProviderIdBinding, CorrectClientsBindings) ->
+    {provider, ProviderId, _} = map_client(BasicEnv, ProviderIdBinding),
+    CorrectClients = [map_client(BasicEnv, C) || C <- CorrectClientsBindings],
+
+    EnvSetUpFun = fun() ->
+        #{ProviderId := ProviderTokens} = create_some_tokens(Config, BasicEnv),
+        #{providerTokens => ProviderTokens}
+    end,
+
+    VerifyEndFun = fun(ShouldSucceed, #{providerTokens := ProviderTokens}, _Data) ->
+        lists:foreach(fun(#named_token_data{name = TokenName, token = Token}) ->
+            assert_token_deleted(ShouldSucceed, Config, Token, TokenName)
+        end, ProviderTokens)
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_MANAGE_TOKENS]} |
+                CorrectClients
+            ],
+            unauthorized = [nobody],
+            forbidden = all_clients(BasicEnv) -- CorrectClients
+        },
+        logic_spec = #logic_spec{
+            module = token_logic,
+            function = delete_all_provider_named_tokens,
+            args = [auth, ProviderId],
+            expected_result = ?OK
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
+
+
+assert_token_deleted(true, Config, Token, TokenName) ->
+    #token{subject = Subject, nonce = TokenNonce, type = Type} = Token,
+    ?assertMatch(
+        {error, not_found},
+        oz_test_utils:call_oz(Config, od_token, get, [TokenNonce])
+    ),
+    ?assertMatch(
+        {error, not_found},
+        oz_test_utils:call_oz(Config, named_tokens, get, [Subject, TokenName])
+    ),
+    case Type of
+        ?ACCESS_TOKEN ->
+            ?assertEqual(
+                ?ERROR_TOKEN_INVALID,
+                oz_test_utils:call_oz(Config, token_auth, check_token_auth, [Token, undefined, undefined])
+            );
+        _ ->
+            ok
+    end;
+assert_token_deleted(false, Config, Token, TokenName) ->
+    #token{subject = Subject, nonce = TokenNonce, type = Type} = Token,
+    ?assertMatch(
+        {ok, _},
+        oz_test_utils:call_oz(Config, od_token, get, [TokenNonce])
+    ),
+    ?assertMatch(
+        {ok, _},
+        oz_test_utils:call_oz(Config, named_tokens, get, [Subject, TokenName])
+    ),
+    case Type of
+        ?ACCESS_TOKEN ->
+            ?assertEqual(
+                {true, #auth{subject = Subject}},
+                oz_test_utils:call_oz(Config, token_auth, check_token_auth, [Token, undefined, undefined])
+            );
+        _ ->
+            ok
+    end.
 
 
 %%%===================================================================

@@ -268,7 +268,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         end}},
         <<"name">> => {binary, name},
         <<"rootFileId">> => {binary, non_empty},
-        <<"spaceId">> => {binary, {exists, fun(Value) ->
+        <<"spaceId">> => {any, {exists, fun(Value) ->
             space_logic:exists(Value)
         end}}
     }

@@ -25,9 +25,9 @@
 -export([handle/2]).
 
 -define(ERROR_REPLY(Error, Req), cowboy_req:reply(
-    errors:http_code(Error),
+    errors:to_http_code(Error),
     #{},
-    json_utils:encode(errors:to_json(Error)),
+    json_utils:encode(#{<<"error">> => errors:to_json(Error)}),
     Req
 )).
 

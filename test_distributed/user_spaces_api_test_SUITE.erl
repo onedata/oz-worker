@@ -497,7 +497,7 @@ set_default_space_test(Config) ->
             },
             bad_values = [
                 {<<"spaceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"spaceId">>)},
+                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"spaceId">>)},
                 {<<"spaceId">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"spaceId">>)},
                 {<<"spaceId">>, S1,

@@ -20,7 +20,7 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/errors.hrl").
 
--type is_authorized_to_invite_fun() :: fun((aai:auth(), tokens:invite_token_type(), od_group:id()) -> boolean()).
+-type is_authorized_to_invite_fun() :: fun((aai:auth(), tokens:invite_token_type(), gri:entity_id()) -> boolean()).
 -type consume_fun() :: fun((gri:entity_id()) -> Result :: term() | errors:error()).
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
@@ -31,7 +31,7 @@
 -define(MAX_TEMPORARY_TOKEN_TTL, oz_worker:get_env(max_temporary_token_ttl, 604800)). % 1 week
 
 % Internal token metadata is used to keep track of multi-use invite tokens and
-% is not available to read/update/delete by the token owner.
+% is not available to update by the token owner (but can be read).
 -define(INTERNAL_METADATA_KEY, <<"$$$_internal_$$$">>).
 
 %%%===================================================================
@@ -148,13 +148,13 @@ get(#el_req{gri = #gri{aspect = {provider_named_tokens, ProviderId}}}, _) ->
     named_tokens:list_by_subject(?SUB(?ONEPROVIDER, ProviderId));
 
 get(#el_req{gri = #gri{aspect = instance}}, Token) ->
-    {ok, filter_out_internal_metadata(Token)};
+    {ok, Token};
 
 get(#el_req{gri = #gri{id = TokenName, aspect = {user_named_token, UserId}}}, _) ->
-    {ok, filter_out_internal_metadata(lookup_token(?SUB(user, UserId), TokenName))};
+    {ok, lookup_token(?SUB(user, UserId), TokenName)};
 
 get(#el_req{gri = #gri{id = TokenName, aspect = {provider_named_token, PrId}}}, _) ->
-    {ok, filter_out_internal_metadata(lookup_token(?SUB(?ONEPROVIDER, PrId), TokenName))}.
+    {ok, lookup_token(?SUB(?ONEPROVIDER, PrId), TokenName)}.
 
 
 %%--------------------------------------------------------------------
@@ -248,11 +248,25 @@ authorize(#el_req{auth = ?PROVIDER(PrId), gri = #gri{aspect = {provider_named_to
 authorize(#el_req{auth = ?PROVIDER(PrId), gri = #gri{aspect = {provider_temporary_token, PrId}}}, _) ->
     true;
 
+% Provider's admin with CLUSTER_UPDATE is allowed to manage its tokens
+authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {provider_named_tokens, PrId}}}, _) ->
+    cluster_logic:has_eff_privilege(PrId, UserId, ?CLUSTER_UPDATE);
+
+authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {provider_named_token, PrId}}}, _) ->
+    cluster_logic:has_eff_privilege(PrId, UserId, ?CLUSTER_UPDATE);
+
+authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {provider_temporary_token, PrId}}}, _) ->
+    cluster_logic:has_eff_privilege(PrId, UserId, ?CLUSTER_UPDATE);
+
 % When a token is referenced by its id, check if token's subject matches the auth
-authorize(#el_req{auth = #auth{subject = ?SUB(SubType, SubId)}, gri = #gri{aspect = instance}}, Token) ->
-    case Token#od_token.subject of
-        ?SUB(SubType, SubId) -> true;
-        _ -> false
+authorize(#el_req{auth = Auth, gri = #gri{aspect = instance}}, #od_token{subject = TokenSubject}) ->
+    case {Auth, TokenSubject} of
+        {#auth{subject = ?SUB(SubType, SubId)}, ?SUB(SubType, SubId)} ->
+            true;
+        {?USER(UserId), ?SUB(?ONEPROVIDER, ProviderId)} ->
+            cluster_logic:has_eff_privilege(ProviderId, UserId, ?CLUSTER_UPDATE);
+        _ ->
+            false
     end;
 
 authorize(_, _) ->
@@ -279,7 +293,7 @@ required_admin_privileges(_) ->
     optional => #{
         <<"type">> => {token_type, fun(Type) -> validate_type(Subject, named, Type) end},
         <<"caveats">> => {caveats, fun(Caveat) -> validate_caveat(Subject, Caveat) end},
-        <<"metadata">> => {json, any}
+        <<"metadata">> => {json, fun validate_metadata/1}
     }
 }).
 -define(TEMPORARY_TOKEN_VALIDATOR(Subject), #{
@@ -315,7 +329,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = {provider_named_token, 
     validate(#el_req{operation = update, gri = #gri{aspect = instance}});
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
-        <<"metadata">> => {json, any},
+        <<"metadata">> => {json, fun validate_metadata/1},
         <<"revoked">> => {boolean, any}
     }
 }.
@@ -350,12 +364,6 @@ consume_invite_token(Auth, Token, ExpectedType, IsAuthorizedToInviteFun, Consume
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
-
-%% @private
--spec filter_out_internal_metadata(od_token:record()) -> od_token:record().
-filter_out_internal_metadata(Token = #od_token{metadata = Metadata}) ->
-    Token#od_token{metadata = maps:remove(?INTERNAL_METADATA_KEY, Metadata)}.
-
 
 %% @private
 -spec lookup_nonce(aai:subject(), od_token:name()) -> tokens:nonce() | no_return().
@@ -433,6 +441,13 @@ validate_type(?SUB(user), _, ?INVITE_TOKEN(_, _)) ->
     true;
 validate_type(_, _, _) ->
     false.
+
+
+%% @private
+-spec validate_metadata(json_utils:json_term()) -> boolean().
+validate_metadata(Metadata) ->
+    % Modifying the internal metadata is not allowed
+    not maps:is_key(?INTERNAL_METADATA_KEY, Metadata).
 
 
 %% @private

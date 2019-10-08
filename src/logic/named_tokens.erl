@@ -6,8 +6,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module handles storing named tokens in a links tree attached to
-%%% od_user / od_provider documents.
+%%% This module handles storing named tokens mapping (token name -> token nonce)
+%%% in a links tree attached to od_user / od_provider documents.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(named_tokens).
@@ -27,7 +27,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Adds a new named token for given subject (user / provider).
+%% Adds a new named token mapping for given subject (user / provider).
 %% @end
 %%--------------------------------------------------------------------
 -spec add(aai:subject(), od_token:name(), tokens:nonce()) ->
@@ -42,7 +42,7 @@ add(?SUB(SubjectType, SubjectId), TokenName, TokenNonce) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves a subject's named token by name.
+%% Retrieves a subject's named token nonce by name.
 %% @end
 %%--------------------------------------------------------------------
 -spec get(aai:subject(), od_token:name()) -> {ok, tokens:nonce()} | {error, term()}.
@@ -87,7 +87,7 @@ list_by_subject(?SUB(SubjectType, SubjectId)) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Removes a named token of given subject (user / provider).
+%% Removes a named token mapping of given subject (user / provider).
 %% @end
 %%--------------------------------------------------------------------
 -spec remove(aai:subject(), od_token:name()) -> ok | {error, term()}.

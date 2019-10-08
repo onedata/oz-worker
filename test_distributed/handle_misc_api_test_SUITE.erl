@@ -228,18 +228,18 @@ create_test(Config) ->
             },
             bad_values = [
                 {<<"handleServiceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"handleServiceId">>)},
+                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
                 {<<"handleServiceId">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"handleServiceId">>)},
+                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
                 {<<"resourceType">>, <<"">>,
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"resourceType">>,
                         [<<"Share">>])},
                 {<<"resourceType">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
                 {<<"resourceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"resourceId">>)},
+                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"resourceId">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"resourceId">>)},
+                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"metadata">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]

@@ -362,22 +362,32 @@ exists(#el_req{gri = #gri{id = Id}}, #od_handle{}) ->
 authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = instance}}, _) ->
     HServiceId = maps:get(<<"handleServiceId">>, Req#el_req.data, <<"">>),
     ShareId = maps:get(<<"resourceId">>, Req#el_req.data, <<"">>),
-    SpaceId = case share_logic_plugin:fetch_entity(#gri{id = ShareId}) of
+    SpaceId = try share_logic_plugin:fetch_entity(#gri{id = ShareId}) of
         {error, _} ->
             throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>));
         {true, {#od_share{space = SpId}, _}} ->
             SpId
+    catch _:_ ->
+        throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>))
+    end,
+    HandleService = try handle_service_logic_plugin:fetch_entity(#gri{id = HServiceId}) of
+        {error, _} ->
+            throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>));
+        {true, {HService, _}} ->
+            HService
+    catch _:_ ->
+        throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>))
     end,
     case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES) andalso
-                handle_service_logic:has_eff_privilege(HServiceId, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
+                handle_service_logic:has_eff_privilege(HandleService, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
 
         {?USER(UserId), ?AS_GROUP(GroupId)} ->
-            handle_service_logic:has_eff_group(HServiceId, GroupId) andalso
+            handle_service_logic:has_eff_group(HandleService, GroupId) andalso
                 space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES) andalso
                 group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_CREATE_HANDLE) andalso
-                handle_service_logic:has_eff_privilege(HServiceId, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
+                handle_service_logic:has_eff_privilege(HandleService, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
 
         _ ->
             false
@@ -529,11 +539,11 @@ required_admin_privileges(_) ->
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
-        <<"handleServiceId">> => {binary, {exists, fun(Value) ->
+        <<"handleServiceId">> => {any, {exists, fun(Value) ->
             handle_service_logic:exists(Value)
         end}},
         <<"resourceType">> => {binary, [<<"Share">>]},
-        <<"resourceId">> => {binary, {exists, fun(Value) ->
+        <<"resourceId">> => {any, {exists, fun(Value) ->
             share_logic:exists(Value) end
         }},
         <<"metadata">> => {binary, any}

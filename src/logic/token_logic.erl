@@ -427,8 +427,8 @@ migrate_user_token(UserId, Serialized, Counter) ->
         secret = Secret
     }}),
     named_tokens:add(?SUB(user, UserId), TokenName, Nonce),
-    od_user:update(UserId, fun(User) ->
-        {ok, User#od_user{client_tokens = []}}
+    od_user:update(UserId, fun(User = #od_user{client_tokens = ClientTokens}) ->
+        {ok, User#od_user{client_tokens = lists:delete(Serialized, ClientTokens)}}
     end),
     onedata_auth:delete(Nonce),
     Counter + 1.

@@ -145,7 +145,6 @@ create_handle_test(Config) ->
     {ok, U2} = oz_test_utils:handle_service_add_user(Config, HService, U2),
 
     AllPrivs = privileges:handle_privileges(),
-    AllPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- AllPrivs],
 
     ExpResourceType = <<"Share">>,
     VerifyFun = fun(HandleId) ->
@@ -191,19 +190,15 @@ create_handle_test(Config) ->
                 <<"metadata">> => [?DC_METADATA]
             },
             bad_values = [
-                % authorization is checked before request validation
-                % so incorrect ids result in 403 rather than other errors
-                {<<"handleServiceId">>, <<"">>, ?ERROR_FORBIDDEN},
-                {<<"handleServiceId">>, 1234, ?ERROR_FORBIDDEN},
+                {<<"handleServiceId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
+                {<<"handleServiceId">>, 1234, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
                 {<<"resourceType">>, <<"">>,
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"resourceType">>,
                         [<<"Share">>])},
                 {<<"resourceType">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
-                % one cannot check privileges of resource
-                % if it does not exist so 403
-                {<<"resourceId">>, <<"">>, ?ERROR_FORBIDDEN},
-                {<<"resourceId">>, 1234, ?ERROR_FORBIDDEN},
+                {<<"resourceId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
+                {<<"resourceId">>, 1234, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"metadata">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)}
             ]
@@ -265,18 +260,18 @@ create_handle_test(Config) ->
         data_spec = DataSpec#data_spec{
             bad_values = [
                 {<<"handleServiceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"handleServiceId">>)},
+                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
                 {<<"handleServiceId">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"handleServiceId">>)},
+                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>)},
                 {<<"resourceType">>, <<"">>,
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"resourceType">>,
                         [<<"Share">>])},
                 {<<"resourceType">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"resourceType">>)},
                 {<<"resourceId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"resourceId">>)},
+                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"resourceId">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"resourceId">>)},
+                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>)},
                 {<<"metadata">>, 1234,
                     ?ERROR_BAD_VALUE_BINARY(<<"metadata">>)},
                 {<<"metadata">>, <<"">>,

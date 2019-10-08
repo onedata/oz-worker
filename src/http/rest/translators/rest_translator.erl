@@ -35,7 +35,7 @@
     #rest_resp{}.
 response(_, {error, _} = Error) ->
     #rest_resp{
-        code = errors:http_code(Error),
+        code = errors:to_http_code(Error),
         body = #{<<"error">> => errors:to_json(Error)}
     };
 response(#el_req{operation = create}, ok) ->

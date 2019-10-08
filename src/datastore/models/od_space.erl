@@ -293,12 +293,12 @@ get_record_struct(7) ->
         {groups, #{string => [atom]}},
         {providers, #{string => integer}},
         {shares, [string]},
-        {harvesters, [string]}, % New field
+        {harvesters, [string]},
 
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
         {eff_providers, #{string => [{atom, string}]}},
-        {eff_harvesters, #{string => [{atom, string}]}}, % New field
+        {eff_harvesters, #{string => [{atom, string}]}},
 
         {creation_time, integer},
         % nested #subject{} record was extended and is now encoded as string

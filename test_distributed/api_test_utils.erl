@@ -25,6 +25,13 @@
 -define(NO_DATA, undefined).
 -define(GS_RESP(Result), #gs_resp_graph{data = Result}).
 
+% Arbitrary test env that will be available in teardown / verify functions
+-type env() :: map().
+-type env_setup_fun() :: fun(() -> env()).
+-type env_teardown_fun() :: fun((env()) -> any()).
+-type verify_fun() :: fun((ShouldSucceed :: boolean(), env(), entity_logic:data()) -> any()).
+-export_type([env/0, env_setup_fun/0, env_teardown_fun/0, verify_fun/0]).
+
 %% API
 -export([
     default_env_setup/0, default_env_teardown/1,
