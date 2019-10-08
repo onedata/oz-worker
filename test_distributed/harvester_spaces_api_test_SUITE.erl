@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -154,7 +154,6 @@ create_space_invite_token_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
                 {admin, [?OZ_HARVESTERS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
@@ -226,7 +225,7 @@ remove_space_test(Config) ->
             module = harvester_logic,
             function = remove_space,
             args = [auth, H1, spaceId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -366,7 +365,7 @@ list_eff_providers_test(Config) ->
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {provider, P2, maps:get(<<"macaroon">>, P2Details)}
+                {provider, P2, maps:get(<<"providerRootToken">>, P2Details)}
             ]
         },
         logic_spec = #logic_spec{

@@ -19,7 +19,7 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 %% API
@@ -42,20 +42,15 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_handshake_auth(gs_protocol:client_auth(), ip_utils:ip()) ->
-    {ok, aai:auth()} | gs_protocol:error().
+    {ok, aai:auth()} | errors:error().
 verify_handshake_auth(undefined, _) ->
     {ok, ?NOBODY};
 verify_handshake_auth(nobody, _) ->
     {ok, ?NOBODY};
 verify_handshake_auth({token, Token}, PeerIp) ->
-    case auth_logic:authorize_by_oz_worker_gui_token(Token, PeerIp) of
-        {true, Auth} ->
-            {ok, Auth};
-        {error, _} ->
-            case auth_logic:authorize_by_access_token(Token, PeerIp) of
-                {true, Auth} -> {ok, Auth};
-                {error, _} -> ?ERROR_UNAUTHORIZED
-            end
+    case token_auth:check_token_auth(Token, PeerIp, undefined) of
+        {true, Auth} -> {ok, Auth};
+        {error, _} = Error -> Error
     end.
 
 
@@ -121,18 +116,11 @@ client_disconnected(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_auth_override(aai:auth(), gs_protocol:auth_override()) ->
-    {ok, aai:auth()} | gs_protocol:error().
+    {ok, aai:auth()} | errors:error().
 verify_auth_override(?PROVIDER(ProviderId), {{token, Token}, PeerIp}) ->
-    case auth_logic:authorize_by_access_token(Token, PeerIp) of
-        {true, OverridenAuth1} ->
-            {ok, OverridenAuth1};
-        {error, _} ->
-            case auth_logic:authorize_by_gui_token(Token, ?AUD(?OP_WORKER, ProviderId), PeerIp) of
-                {true, OverridenAuth2} ->
-                    {ok, OverridenAuth2};
-                {error, _} = Error2 ->
-                    Error2
-            end
+    case token_auth:check_token_auth(Token, PeerIp, ?AUD(?OP_WORKER, ProviderId)) of
+        {true, OverridenAuth1} -> {ok, OverridenAuth1};
+        {error, _} = Error -> Error
     end;
 verify_auth_override(_Auth, {nobody, _}) ->
     {ok, ?NOBODY};
@@ -166,11 +154,9 @@ is_authorized(Auth, AuthHint, GRI, Operation, VersionedEntity) ->
 -spec handle_rpc(gs_protocol:protocol_version(), aai:auth(),
     gs_protocol:rpc_function(), gs_protocol:rpc_args()) ->
     gs_protocol:rpc_result().
-handle_rpc(_, _, <<"authorizeUser">>, Args) ->
-    user_logic:authorize(Args);
 handle_rpc(_, _, <<"getSupportedIdPs">>, Data) ->
     TestMode = maps:get(<<"testMode">>, Data, false),
-    TestMode andalso auth_test_mode:process_enable_test_mode(),
+    TestMode andalso idp_auth_test_mode:process_enable_test_mode(),
     case oz_worker:get_env(dev_mode, false) of
         true ->
             % If dev mode is enabled, always return basic auth and just one
@@ -218,16 +204,8 @@ handle_rpc(_, Auth, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
             end,
             RedirectAfterLogin = maps:get(<<"redirectUrl">>, Data, <<?AFTER_LOGIN_PAGE_PATH>>),
             TestMode = maps:get(<<"testMode">>, Data, false),
-            auth_logic:get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode)
+            idp_auth:get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode)
     end;
-handle_rpc(_, ?USER(UserId), <<"getProviderRedirectURL">>, Args) ->
-    ProviderId = maps:get(<<"providerId">>, Args),
-    RedirectPath = case maps:get(<<"path">>, Args, <<"/">>) of
-        null -> <<"/">>;
-        P -> P
-    end,
-    {ok, URL} = auth_tokens:get_redirection_uri(UserId, ProviderId, RedirectPath),
-    {ok, #{<<"url">> => URL}};
 handle_rpc(_, _, _, _) ->
     ?ERROR_RPC_UNDEFINED.
 

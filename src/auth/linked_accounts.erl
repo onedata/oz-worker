@@ -50,7 +50,7 @@ to_map(LinkedAccount) ->
         <<"entitlements">> => Entitlements,
         <<"custom">> => Custom,
 
-        % TODO VFS-4506 deprecated, included for backward compatibility
+        %% @TODO VFS-4506 deprecated, included for backward compatibility
         <<"name">> => gs_protocol:undefined_to_null(FullName),
         <<"login">> => gs_protocol:undefined_to_null(Username),
         <<"alias">> => gs_protocol:undefined_to_null(Username),

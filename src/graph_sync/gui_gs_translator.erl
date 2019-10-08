@@ -20,7 +20,7 @@
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/global_definitions.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
@@ -59,16 +59,16 @@ handshake_attributes(_Client) ->
 %%--------------------------------------------------------------------
 -spec translate_value(gs_protocol:protocol_version(), gri:gri(),
     Value :: term()) -> Result | fun((aai:auth()) -> Result) when
-    Result :: gs_protocol:data() | gs_protocol:error().
-translate_value(_, #gri{aspect = TokenType}, Macaroon) when
+    Result :: gs_protocol:data() | errors:error().
+translate_value(_, #gri{aspect = TokenType}, Token) when
     TokenType == invite_user_token;
     TokenType == invite_group_token;
     TokenType == invite_space_token;
     TokenType == invite_provider_token;
     TokenType == provider_registration_token ->
 
-    {ok, Token} = macaroons:serialize(Macaroon),
-    Token;
+    {ok, Serialized} = tokens:serialize(Token),
+    Serialized;
 translate_value(_, #gri{type = od_harvester, aspect = {query, _}}, Response) ->
     Response;
 
@@ -89,7 +89,7 @@ translate_value(ProtocolVersion, GRI, Data) ->
 %%--------------------------------------------------------------------
 -spec translate_resource(gs_protocol:protocol_version(), gri:gri(),
     ResourceData :: term()) -> Result | fun((aai:auth()) -> Result) when
-    Result :: gs_protocol:data() | gs_protocol:error().
+    Result :: gs_protocol:data() | errors:error().
 translate_resource(_, GRI = #gri{type = od_user}, Data) ->
     translate_user(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_group}, Data) ->

@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -189,7 +189,7 @@ remove_user_test(Config) ->
             module = handle_logic,
             function = remove_user,
             args = [auth, HandleId, userId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -459,7 +459,7 @@ update_user_privileges_test(Config) ->
             module = handle_logic,
             function = update_user_privileges,
             args = [auth, HandleId, U3, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },

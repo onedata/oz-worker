@@ -57,7 +57,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -define(ENTITY_GRAPH_LOCK, entity_graph).
 % How often should effective graph state be checked during ensure_up_to_date -

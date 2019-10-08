@@ -136,7 +136,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    4.
+    5.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -194,6 +194,20 @@ get_record_struct(4) ->
             {type, atom},
             {id, string}
         ]}}
+    ]};
+get_record_struct(5) ->
+    % creator field - nested #subject{} record and encoding changed
+    {record, [
+        {name, string},
+        {public_url, string},
+        {space, string},
+        {handle, string},
+        {root_file, string},
+
+        {creation_time, integer},
+        % nested #subject{} record was extended and is now encoded as string
+        % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}}
     ]}.
 
 %%--------------------------------------------------------------------
@@ -256,7 +270,30 @@ upgrade_record(3, Share) ->
         CreationTime,
         Creator
     } = Share,
-    {4, #od_share{
+    {4, {
+        od_share,
+        Name,
+        PublicUrl,
+        SpaceId,
+        HandleId,
+        RootFileId,
+
+        CreationTime,
+        upgrade_common:client_to_subject(Creator)
+    }};
+upgrade_record(4, Share) ->
+    {
+        od_share,
+        Name,
+        PublicUrl,
+        SpaceId,
+        HandleId,
+        RootFileId,
+
+        CreationTime,
+        Creator
+    } = Share,
+    {5, #od_share{
         name = Name,
         public_url = PublicUrl,
         space = SpaceId,
@@ -264,5 +301,5 @@ upgrade_record(3, Share) ->
         root_file = RootFileId,
 
         creation_time = CreationTime,
-        creator = upgrade_common:client_to_subject(Creator)
+        creator = upgrade_common:upgrade_subject_record(Creator)
     }}.

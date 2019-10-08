@@ -18,7 +18,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
@@ -214,7 +214,7 @@ gui_is_unlinked_after_provider_deletion(Config) ->
 
 
 gui_upload_requires_provider_auth(Config) ->
-    {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     ClusterId = ProviderId,
     {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
 
@@ -228,19 +228,19 @@ gui_upload_requires_provider_auth(Config) ->
 
     % With auth
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"opw">>, ClusterId, GuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"opw">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )),
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"onp">>, ClusterId, GuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"onp">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )),
 
     % Upload is only possible for own cluster
-    {ok, {_AnotherProvider, AnotherProviderMacaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {_AnotherProvider, AnotherProviderToken}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     ?assertMatch({ok, 403, _, _}, perform_upload(
-        Config, <<"opw">>, ClusterId, GuiPackage, #{<<"macaroon">> => AnotherProviderMacaroon}
+        Config, <<"opw">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => AnotherProviderToken}
     )),
     ?assertMatch({ok, 403, _, _}, perform_upload(
-        Config, <<"onp">>, ClusterId, GuiPackage, #{<<"macaroon">> => AnotherProviderMacaroon}
+        Config, <<"onp">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => AnotherProviderToken}
     )).
 
 
@@ -256,25 +256,25 @@ gui_upload_is_not_possible_for_onezone_services(Config) ->
     )),
 
     % With provider auth
-    {ok, {_Provider, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?UNIQUE_STRING),
+    {ok, {_Provider, ProviderToken}} = oz_test_utils:create_provider(Config),
     ?assertMatch({ok, 404, _, _}, perform_upload(
-        Config, <<"ozw">>, ?ONEZONE_CLUSTER_ID, GuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"ozw">>, ?ONEZONE_CLUSTER_ID, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )),
     ?assertMatch({ok, 404, _, _}, perform_upload(
-        Config, <<"onp">>, ?ONEZONE_CLUSTER_ID, GuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"onp">>, ?ONEZONE_CLUSTER_ID, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )).
 
 
 gui_upload_for_inexistent_service_returns_not_found(Config) ->
-    {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     ClusterId = ProviderId,
     {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
 
     ?assertMatch({ok, 404, _, _}, perform_upload(
-        Config, <<"abc">>, ClusterId, GuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"abc">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )),
     ?assertMatch({ok, 404, _, _}, perform_upload(
-        Config, <<"xyz">>, ClusterId, GuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"xyz">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )).
 
 
@@ -290,43 +290,43 @@ gui_upload_for_inexistent_cluster_returns_not_found(Config) ->
 
 
 gui_upload_with_invalid_package_returns_proper_error(Config) ->
-    {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     ClusterId = ProviderId,
     {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
     % Break the package a little bit
     {ok, Contents} = file:read_file(GuiPackage),
     ok = file:write_file(GuiPackage, <<"lalalalala-bad-bytes", Contents/binary>>),
 
-    ExpError = json_utils:encode(gs_protocol_errors:error_to_json(1, ?ERROR_BAD_GUI_PACKAGE)),
+    ExpError = json_utils:encode(errors:to_json(?ERROR_BAD_GUI_PACKAGE)),
 
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"opw">>, ClusterId, GuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"opw">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )),
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"onp">>, ClusterId, GuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"onp">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )).
 
 
 gui_upload_with_too_large_package_returns_proper_error(Config) ->
-    {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     ClusterId = ProviderId,
     {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
 
     % Set the package limit to one byte
     oz_test_utils:set_app_env(Config, gui, max_gui_package_size_mb, 1 / 1048576),
 
-    ExpError = json_utils:encode(gs_protocol_errors:error_to_json(1, ?ERROR_GUI_PACKAGE_TOO_LARGE)),
+    ExpError = json_utils:encode(errors:to_json(?ERROR_GUI_PACKAGE_TOO_LARGE)),
 
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"opw">>, ClusterId, GuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"opw">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )),
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"onp">>, ClusterId, GuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"onp">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )).
 
 
 gui_upload_page_deploys_op_worker_gui_on_all_nodes(Config) ->
-    {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?UNIQUE_STRING),
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config),
     ClusterId = ProviderId,
 
     {OpGuiPackage, OpIndexContent} = oz_test_utils:create_dummy_gui_package(),
@@ -342,7 +342,7 @@ gui_upload_page_deploys_op_worker_gui_on_all_nodes(Config) ->
     ?assert(version_info_is_set(Config, ClusterId, ?WORKER, {<<"18.07.1">>, <<"build">>, ?EMPTY_GUI_HASH})),
 
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"opw">>, ClusterId, OpGuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"opw">>, ClusterId, OpGuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )),
 
     ?assert(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?OP_WORKER_GUI, OpGuiHash])),
@@ -360,7 +360,7 @@ gui_upload_page_deploys_op_worker_gui_on_all_nodes(Config) ->
 
 
 gui_upload_page_deploys_op_panel_gui_on_all_nodes(Config) ->
-    {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?UNIQUE_STRING),
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config),
     ClusterId = ProviderId,
 
     {OppGuiPackage, OppIndexContent} = oz_test_utils:create_dummy_gui_package(),
@@ -376,7 +376,7 @@ gui_upload_page_deploys_op_panel_gui_on_all_nodes(Config) ->
     ?assert(version_info_is_set(Config, ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build">>, ?EMPTY_GUI_HASH})),
 
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"onp">>, ClusterId, OppGuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"onp">>, ClusterId, OppGuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )),
 
     ?assert(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?ONEPANEL_GUI, OppGuiHash])),
@@ -420,21 +420,21 @@ gui_upload_page_deploys_harvester_gui_on_all_nodes(Config) ->
 
 
 gui_package_verification_works(Config) ->
-    oz_test_utils:set_env(Config, disable_gui_package_verification, false),
+    oz_test_utils:set_env(Config, gui_package_verification, true),
     oz_test_utils:set_app_env(Config, ctool, compatibility_registry_mirrors, []),
     OnezoneVersion = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
 
-    {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?UNIQUE_STRING),
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config),
     ClusterId = ProviderId,
 
     {OpGuiPackage, _OpIndexContent} = oz_test_utils:create_dummy_gui_package(),
     {ok, OpGuiHash} = gui:package_hash(OpGuiPackage),
 
-    ExpError = json_utils:encode(gs_protocol_errors:error_to_json(1, ?ERROR_GUI_PACKAGE_UNVERIFIED)),
+    ExpError = json_utils:encode(errors:to_json(?ERROR_GUI_PACKAGE_UNVERIFIED)),
 
     % GUI hash is not whitelisted
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"opw">>, ClusterId, OpGuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"opw">>, ClusterId, OpGuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )),
 
     % Whitelist the GUI hash:
@@ -449,26 +449,26 @@ gui_package_verification_works(Config) ->
 
     % Now, upload should work
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"opw">>, ClusterId, OpGuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"opw">>, ClusterId, OpGuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )),
 
     % Make sure that only packages for op-worker with such hash are accepted
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"onp">>, ClusterId, OpGuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"onp">>, ClusterId, OpGuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )),
 
     % When verification is disabled, any package should be accepted
-    oz_test_utils:set_env(Config, disable_gui_package_verification, true),
+    oz_test_utils:set_env(Config, gui_package_verification, false),
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"opw">>, ClusterId, OpGuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"opw">>, ClusterId, OpGuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )),
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"onp">>, ClusterId, OpGuiPackage, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"onp">>, ClusterId, OpGuiPackage, #{<<"x-auth-token">> => ProviderToken}
     )),
 
     % Harvester GUI package verification can be turned off using a separate env
-    oz_test_utils:set_env(Config, disable_gui_package_verification, false),
-    oz_test_utils:set_env(Config, disable_harvester_gui_package_verification, false),
+    oz_test_utils:set_env(Config, gui_package_verification, true),
+    oz_test_utils:set_env(Config, harvester_gui_package_verification, true),
 
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
@@ -509,20 +509,20 @@ gui_package_verification_works(Config) ->
     )),
 
     % Disable GUI package verification for harvesters only
-    oz_test_utils:set_env(Config, disable_harvester_gui_package_verification, true),
+    oz_test_utils:set_env(Config, harvester_gui_package_verification, false),
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
         Config, <<"hrv">>, HarvesterId, HrvGuiPackage2, #{<<"x-auth-token">> => GuiToken}
     )),
 
     % It should not work for other services
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"onp">>, ClusterId, HrvGuiPackage2, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"onp">>, ClusterId, HrvGuiPackage2, #{<<"x-auth-token">> => ProviderToken}
     )),
 
     % When verification is disabled, any package for any service should be accepted
-    oz_test_utils:set_env(Config, disable_gui_package_verification, true),
+    oz_test_utils:set_env(Config, gui_package_verification, false),
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"onp">>, ClusterId, HrvGuiPackage2, #{<<"macaroon">> => ProviderMacaroon}
+        Config, <<"onp">>, ClusterId, HrvGuiPackage2, #{<<"x-auth-token">> => ProviderToken}
     )),
 
     {HrvGuiPackage3, _HrvIndexContent3} = oz_test_utils:create_dummy_gui_package(),
@@ -544,8 +544,8 @@ unused_packages_are_cleaned(Config) ->
         ))
     end,
 
-    {ok, {P1, _}} = oz_test_utils:create_provider(Config, ?UNIQUE_STRING),
-    {ok, {P2, _}} = oz_test_utils:create_provider(Config, ?UNIQUE_STRING),
+    {ok, {P1, _}} = oz_test_utils:create_provider(Config),
+    {ok, {P2, _}} = oz_test_utils:create_provider(Config),
 
     {HashAlpha, _} = oz_test_utils:deploy_dummy_gui(Config, ?OP_WORKER_GUI),
     {HashBeta, _} = oz_test_utils:deploy_dummy_gui(Config, ?OP_WORKER_GUI),
@@ -593,7 +593,7 @@ unused_packages_are_cleaned(Config) ->
 
 
 empty_gui_is_linked_after_failed_op_worker_version_update(Config) ->
-    {ok, {ProviderId, _ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?UNIQUE_STRING),
+    {ok, {ProviderId, _ProviderToken}} = oz_test_utils:create_provider(Config),
     ClusterId = ProviderId,
 
     % First link correct GUI to provider
@@ -621,7 +621,7 @@ empty_gui_is_linked_after_failed_op_worker_version_update(Config) ->
 
 
 empty_gui_is_linked_after_failed_op_panel_version_update(Config) ->
-    {ok, {ProviderId, _ProviderMacaroon}} = oz_test_utils:create_provider(Config, ?UNIQUE_STRING),
+    {ok, {ProviderId, _ProviderToken}} = oz_test_utils:create_provider(Config),
     ClusterId = ProviderId,
 
     % First link correct GUI to onepanel
@@ -704,7 +704,7 @@ init_per_testcase(unused_packages_are_cleaned, Config) ->
     end),
     init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
-    oz_test_utils:set_env(Config, disable_gui_package_verification, true),
+    oz_test_utils:set_env(Config, gui_package_verification, false),
     oz_test_utils:set_app_env(Config, gui, max_gui_package_size_mb, 50),
     oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
     Config.

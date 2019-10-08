@@ -86,7 +86,7 @@
 }).
 
 % Convenience macros for expressing gs and/or logic result expectations
--define(OK, ok).
+-define(OK_RES, ok).
 -define(OK_BINARY, ok_binary).
 -define(OK_BINARY(__ExactValue), {ok_binary, __ExactValue}).
 -define(OK_MAP(__ExactValue), {ok_map, __ExactValue}).

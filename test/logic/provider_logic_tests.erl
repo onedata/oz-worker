@@ -62,7 +62,7 @@ test_connection() ->
         <<"unknown_service">> => <<"https://172.16.67.194:123/wrong_url">>
     },
 
-    Ans = provider_logic:check_my_ports(#auth{}, Args),
+    Ans = provider_logic:check_my_ports(?NOBODY, Args),
     Expected = {ok, #{
         <<"https://172.16.67.194:443/test">> => ok,
         <<"https://172.16.67.194:8443/rest/latest/test">> => ok,

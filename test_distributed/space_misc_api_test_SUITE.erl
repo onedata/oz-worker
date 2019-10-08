@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -217,7 +217,7 @@ get_test(Config) ->
         [?SPACE_VIEW], AllPrivs -- [?SPACE_VIEW]
     ),
 
-    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
     SupportSize = oz_test_utils:minimum_support_size(Config),
@@ -235,7 +235,7 @@ get_test(Config) ->
             correct = [
                 root,
                 {user, U2},
-                {provider, P1, P1Macaroon}
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -306,7 +306,7 @@ get_test(Config) ->
                 {admin, [?OZ_SPACES_VIEW]},
                 {user, U1},
                 {user, U2},
-                {provider, P1, P1Macaroon}
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -397,12 +397,12 @@ update_test(Config) ->
             module = space_logic,
             function = update,
             args = [auth, spaceId, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_space, id = spaceId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [<<"name">>],
@@ -463,12 +463,12 @@ delete_test(Config) ->
             module = space_logic,
             function = delete,
             args = [auth, spaceId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_space, id = spaceId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -678,7 +678,6 @@ create_provider_support_token(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
                 {admin, [?OZ_SPACES_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
@@ -710,13 +709,13 @@ get_provider_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     ProviderDetails = ?PROVIDER_DETAILS(?PROVIDER_NAME1),
-    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
         Config, ProviderDetails#{<<"subdomainDelegation">> => false}
     ),
-    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
+    {ok, {P2, P2Token}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, {P3, P3Macaroon}} = oz_test_utils:create_provider(
+    {ok, {P3, P3Token}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
 
@@ -739,12 +738,12 @@ get_provider_test(Config) ->
                 root,
                 {admin, [?OZ_PROVIDERS_VIEW]},
                 {user, User},
-                {provider, P2, P2Macaroon}
+                {provider, P2, P2Token}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin},
-                {provider, P3, P3Macaroon}
+                {provider, P3, P3Token}
             ]
         },
         rest_spec = #rest_spec{
@@ -782,7 +781,7 @@ get_provider_test(Config) ->
     ExpDetails2 = ExpDetails#{<<"online">> => true},
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
-            correct = [{provider, P1, P1Macaroon}]
+            correct = [{provider, P1, P1Token}]
         },
         gs_spec = GsSpec#gs_spec{
             expected_result = ?OK_MAP_CONTAINS(ExpDetails2#{
@@ -844,7 +843,7 @@ leave_provider_test(Config) ->
             module = space_logic,
             function = leave_provider,
             args = [auth, S1, providerId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },

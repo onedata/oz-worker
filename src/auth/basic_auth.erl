@@ -16,7 +16,7 @@
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -type password() :: binary().
 -type password_hash() :: binary().
@@ -24,7 +24,7 @@
 -export_type([password/0, password_hash/0]).
 
 %% API
--export([authenticate/2]).
+-export([check_basic_auth/1, check_basic_auth/2]).
 -export([toggle_basic_auth/2]).
 -export([change_password/3, set_password/2]).
 -export([migrate_onepanel_user_to_onezone/4]).
@@ -40,11 +40,31 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Authenticates a user by basic credentials (username & password).
+%% Tries to a authorize a client by username and password.
+%%      {true, Auth} - the client was authorized
+%%      false - credentials were not found
+%%      errors:error() - provided credentials are invalid
 %% @end
 %%--------------------------------------------------------------------
--spec authenticate(od_user:username(), password()) -> {ok, od_user:id()} | {error, term()}.
-authenticate(Username, Password) ->
+-spec check_basic_auth(cowboy_req:req()) ->
+    {true, aai:auth()} | false | errors:error().
+check_basic_auth(Req) ->
+    case cowboy_req:header(<<"authorization">>, Req, undefined) of
+        <<"Basic ", UserPasswdB64/binary>> ->
+            try
+                UsernamePassword = base64:decode(UserPasswdB64),
+                [Username, Password] = binary:split(UsernamePassword, <<":">>),
+                check_basic_auth(Username, Password)
+            catch _:_ ->
+                ?ERROR_BAD_BASIC_CREDENTIALS
+            end;
+        _ ->
+            false
+    end.
+
+-spec check_basic_auth(od_user:username(), password()) ->
+    {true, aai:auth()} | errors:error().
+check_basic_auth(Username, Password) ->
     case auth_config:is_basic_auth_enabled() of
         false ->
             ?ERROR_BASIC_AUTH_NOT_SUPPORTED;
@@ -56,10 +76,8 @@ authenticate(Username, Password) ->
                     ?ERROR_BASIC_AUTH_DISABLED;
                 {ok, #document{value = #od_user{password_hash = Hash}, key = UserId}} ->
                     case onedata_passwords:verify(Password, Hash) of
-                        true ->
-                            {ok, UserId};
-                        false ->
-                            ?ERROR_BAD_BASIC_CREDENTIALS
+                        true -> {true, ?USER(UserId)};
+                        false -> ?ERROR_BAD_BASIC_CREDENTIALS
                     end;
                 {error, not_found} ->
                     ?ERROR_BAD_BASIC_CREDENTIALS
@@ -84,7 +102,7 @@ toggle_basic_auth(UserRecord, Flag) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec change_password(od_user:record(), OldPass :: password(), NewPass :: password()) ->
-    {ok, od_user:record()} | {error, term()}.
+    {ok, od_user:record()} | errors:error().
 change_password(#od_user{basic_auth_enabled = false} = _User, _OldPass, _NewPass) ->
     ?ERROR_BASIC_AUTH_DISABLED;
 change_password(#od_user{password_hash = undefined} = User, undefined, NewPass) ->
@@ -108,7 +126,7 @@ change_password(#od_user{password_hash = Hash} = User, OldPass, NewPass) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec set_password(od_user:record(), NewPass :: password()) ->
-    {ok, od_user:record()} | {error, term()}.
+    {ok, od_user:record()} | errors:error().
 set_password(#od_user{basic_auth_enabled = false}, _) ->
     ?ERROR_BASIC_AUTH_DISABLED;
 set_password(User, NewPass) ->
@@ -216,7 +234,7 @@ add_user_to_groups(UserId, GroupIds) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec maybe_make_cluster_admin(od_user:id(), Role :: admin | regular) ->
-    ok | {error, term()}.
+    ok | errors:error().
 maybe_make_cluster_admin(UserId, admin) ->
     case cluster_logic:add_user(
         ?ROOT, ?ONEZONE_CLUSTER_ID, UserId, privileges:cluster_admin()

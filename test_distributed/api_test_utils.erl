@@ -19,11 +19,18 @@
 -include_lib("gui/include/gui_session.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 -define(NO_DATA, undefined).
 -define(GS_RESP(Result), #gs_resp_graph{data = Result}).
+
+% Arbitrary test env that will be available in teardown / verify functions
+-type env() :: map().
+-type env_setup_fun() :: fun(() -> env()).
+-type env_teardown_fun() :: fun((env()) -> any()).
+-type verify_fun() :: fun((ShouldSucceed :: boolean(), env(), entity_logic:data()) -> any()).
+-export_type([env/0, env_setup_fun/0, env_teardown_fun/0, verify_fun/0]).
 
 %% API
 -export([
@@ -195,7 +202,7 @@ error_to_rest_expectations(Config, ErrorType) ->
         headers = Headers,
         body = Body
     } = oz_test_utils:call_oz(
-        Config, error_rest_translator, response, [ErrorType]
+        Config, rest_translator, response, [#el_req{}, ErrorType]
     ),
     ExpHeaders = case Headers of
         #{} -> undefined;
@@ -291,9 +298,9 @@ prepare_logic_auth(root) ->
     ?ROOT;
 prepare_logic_auth({user, UserId}) ->
     ?USER(UserId);
-prepare_logic_auth({user, UserId, _Macaroon}) ->
+prepare_logic_auth({user, UserId, _Token}) ->
     ?USER(UserId);
-prepare_logic_auth({provider, ProviderId, _Macaroon}) ->
+prepare_logic_auth({provider, ProviderId, _Token}) ->
     ?PROVIDER(ProviderId).
 
 
@@ -316,6 +323,7 @@ prepare_logic_args(Args, Client, Data, Env) ->
         fun
             (auth) -> Client;
             (data) -> Data;
+            (Fun) when is_function(Fun, 0) -> Fun();
             (Arg) -> maps:get(Arg, Env, Arg)
         end, Args
     ).
@@ -351,7 +359,7 @@ check_logic_call(Config, LogicSpec) ->
 
 
 % Verifies if logic result is as expected
-verify_logic_result(ok, ?OK) ->
+verify_logic_result(ok, ?OK_RES) ->
     true;
 verify_logic_result({ok, Bin}, ?OK_BINARY) when is_binary(Bin) ->
     true;
@@ -453,17 +461,15 @@ run_gs_test(Config, GsSpec, Client, Data, DescFmt, Env, ExpError) ->
 % To change atoms in error, it is required to
 % fully jsonify error and dejsonify it
 error_to_gs_expectations(Config, ErrorType) ->
-    ProtoVer = hd(oz_test_utils:get_gs_supported_proto_versions(Config)),
     ErrorJson = json_utils:encode(oz_test_utils:call_oz(
-        Config, gs_protocol_errors, error_to_json, [ProtoVer, ErrorType]
+        Config, errors, to_json, [ErrorType]
     )),
     oz_test_utils:call_oz(
-        Config, gs_protocol_errors, json_to_error,
-        [ProtoVer, json_utils:decode(ErrorJson)]
+        Config, errors, from_json, [json_utils:decode(ErrorJson)]
     ).
 
 
-prepare_gs_client(Config, {user, UserId, _Macaroon}) ->
+prepare_gs_client(Config, {user, UserId, _Token}) ->
     prepare_gs_client(Config, {user, UserId});
 prepare_gs_client(Config, {user, UserId}) ->
     {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, UserId),
@@ -578,7 +584,7 @@ check_gs_call(GsSpec, GsClient, Data) ->
 
 
 % Verifies if gs result is as expected
-verify_gs_result({ok, ?GS_RESP(undefined)}, ?OK) ->
+verify_gs_result({ok, ?GS_RESP(undefined)}, ?OK_RES) ->
     true;
 verify_gs_result({error, Error}, ?ERROR_REASON({error, Error})) ->
     true;
@@ -736,10 +742,10 @@ prepare_error(Data, Description, ExpError) ->
 % Converts placeholders in auth into real data
 prepare_auth({user, User}, Env, _Config) when is_atom(User) ->
     {user, maps:get(User, Env, User)};
-prepare_auth({user, User, Macaroon}, Env, _Config) when is_atom(User) ->
-    {user, maps:get(User, Env, User), Macaroon};
-prepare_auth({provider, Provider, Macaroon}, Env, _Config) when is_atom(Provider) orelse is_atom(Macaroon) ->
-    {provider, maps:get(Provider, Env, Provider), maps:get(Macaroon, Env, Macaroon)};
+prepare_auth({user, User, Token}, Env, _Config) when is_atom(User) ->
+    {user, maps:get(User, Env, User), Token};
+prepare_auth({provider, Provider, Token}, Env, _Config) when is_atom(Provider) orelse is_atom(Token) ->
+    {provider, maps:get(Provider, Env, Provider), maps:get(Token, Env, Token)};
 prepare_auth({admin, Privs}, _Env, Config) ->
     {ok, Admin} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, Admin, Privs, []),
@@ -952,9 +958,9 @@ resolve_auth(root, _Env) ->
     root;
 resolve_auth({user, UserId}, _Env) ->
     {user, UserId};
-resolve_auth({user, UserId, Macaroon}, _Env) ->
-    {user, UserId, Macaroon};
-resolve_auth({provider, ProviderId, Macaroon}, _Env) ->
-    {provider, ProviderId, Macaroon};
+resolve_auth({user, UserId, Token}, _Env) ->
+    {user, UserId, Token};
+resolve_auth({provider, ProviderId, Token}, _Env) ->
+    {provider, ProviderId, Token};
 resolve_auth(Arg, Env) ->
     maps:get(Arg, Env).

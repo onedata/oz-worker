@@ -501,7 +501,7 @@ create_harvester(Auth, GroupId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_user_invite_token(Auth :: aai:auth(), GroupId :: od_group:id()) ->
-    {ok, macaroon:macaroon()} | {error, term()}.
+    {ok, tokens:token()} | {error, term()}.
 create_user_invite_token(Auth, GroupId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
@@ -518,7 +518,7 @@ create_user_invite_token(Auth, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_group_invite_token(Auth :: aai:auth(), GroupId :: od_group:id()) ->
-    {ok, macaroon:macaroon()} | {error, term()}.
+    {ok, tokens:token()} | {error, term()}.
 create_group_invite_token(Auth, GroupId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
@@ -577,7 +577,7 @@ create_child_group(Auth, ParentGroupId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec join_group(Auth :: aai:auth(), GroupId :: od_group:id(),
-    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
+    TokenOrData :: tokens:serialized() | tokens:token() | map()) ->
     {ok, od_group:id()} | {error, term()}.
 join_group(Auth, GroupId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
@@ -600,7 +600,7 @@ join_group(Auth, GroupId, Token) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec join_space(Auth :: aai:auth(), GroupId :: od_group:id(),
-    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
+    TokenOrData :: tokens:serialized() | tokens:token() | map()) ->
     {ok, od_space:id()} | {error, term()}.
 join_space(Auth, GroupId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
@@ -623,7 +623,7 @@ join_space(Auth, GroupId, Token) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec join_harvester(Auth :: aai:auth(), GroupId :: od_group:id(),
-    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
+    TokenOrData :: tokens:serialized() | tokens:token() | map()) ->
     {ok, od_harvester:id()} | {error, term()}.
 join_harvester(Auth, GroupId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
@@ -646,7 +646,7 @@ join_harvester(Auth, GroupId, Token) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec join_cluster(Auth :: aai:auth(), GroupId :: od_group:id(),
-    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
+    TokenOrData :: tokens:serialized() | tokens:token() | map()) ->
     {ok, od_cluster:id()} | {error, term()}.
 join_cluster(Auth, GroupId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{

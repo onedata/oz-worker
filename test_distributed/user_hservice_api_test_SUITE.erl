@@ -22,7 +22,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -356,7 +356,7 @@ leave_handle_service_test(Config) ->
             module = user_logic,
             function = leave_handle_service,
             args = [auth, U1, hserviceId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },

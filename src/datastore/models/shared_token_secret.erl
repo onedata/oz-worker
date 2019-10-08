@@ -98,5 +98,5 @@ regenerate() ->
     datastore_model:record_struct().
 get_record_struct(1) ->
     {record, [
-        {secret, binary}
+        {secret, string}
     ]}.

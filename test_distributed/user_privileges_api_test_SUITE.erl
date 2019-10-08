@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -154,7 +154,7 @@ update_oz_privileges_test(Config) ->
             module = user_logic,
             function = update_oz_privileges,
             args = [auth, User, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -230,7 +230,7 @@ delete_oz_privileges_test(Config) ->
             module = user_logic,
             function = delete_oz_privileges,
             args = [auth, User],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
