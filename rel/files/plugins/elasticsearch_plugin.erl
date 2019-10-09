@@ -16,6 +16,7 @@
 
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([type/0]).
 -export([
@@ -108,7 +109,7 @@ submit_batch(Endpoint, HarvesterId, Indices, Batch) ->
     FirstSeq = maps:get(<<"seq">>, lists:nth(1, Batch)),
     {ok, utils:pmap(fun(IndexId) ->
         case do_request(post, Endpoint, IndexId, ?ENTRY_PATH(<<"_bulk">>), PreparedBatch,
-            #{<<"content-type">> => <<"application/x-ndjson">>}, [{recv_timeout, ?REQUEST_TIMEOUT}], [{200,300}]) of
+            #{?HDR_CONTENT_TYPE => <<"application/x-ndjson">>}, [{recv_timeout, ?REQUEST_TIMEOUT}], [{200,300}]) of
             {ok,_,_,Body} ->
                 Res = json_utils:decode(Body),
                 case maps:get(<<"errors">>, Res) of
@@ -190,7 +191,7 @@ do_request(Method, Endpoint, IndexId, Path, Data) ->
 %% @private
 %% @doc
 %% @equiv do_request(Method, Endpoint, HarvesterId, IndexId, Path, Data, 
-%%          #{<<"content-type">> => <<"application/json">>}, [], ExpectedCodes).
+%%          #{?HDR_CONTENT_TYPE => <<"application/json">>}, [], ExpectedCodes).
 %% @end
 %%--------------------------------------------------------------------
 -spec do_request(http_client:method(), od_harvester:endpoint(),
@@ -198,7 +199,7 @@ do_request(Method, Endpoint, IndexId, Path, Data) ->
     ExpectedCodes :: [integer() | {integer(), integer()}] | undefined) -> http_client:response().
 do_request(Method, Endpoint, IndexId, Path, Data, ExpectedCodes) ->
     do_request(Method, Endpoint, IndexId, Path, Data,
-        #{<<"content-type">> => <<"application/json">>}, [], ExpectedCodes).
+        #{?HDR_CONTENT_TYPE => <<"application/json">>}, [], ExpectedCodes).
 
 
 %%--------------------------------------------------------------------

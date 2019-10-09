@@ -16,6 +16,7 @@
 -behaviour(dynamic_page_behaviour).
 
 -include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/errors.hrl").
@@ -40,7 +41,7 @@ handle(<<"POST">>, Req) ->
                 {ok, FullName} = user_logic:get_full_name(?ROOT, UserId),
                 ?info("User '~ts' has logged in (~s)", [FullName, UserId]),
                 Req2 = gui_session:log_in(UserId, Req),
-                JSONHeader = #{<<"content-type">> => <<"application/json">>},
+                JSONHeader = #{?HDR_CONTENT_TYPE => <<"application/json">>},
                 Body = json_utils:encode(#{<<"url">> => <<"/">>}),
                 cowboy_req:reply(?HTTP_200_OK, JSONHeader, Body, Req2);
             false ->

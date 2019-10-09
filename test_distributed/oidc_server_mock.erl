@@ -18,6 +18,7 @@
 -include("oidc_server_mock.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([mock/2, unmock/1, simulate_user_login/4]).
 
@@ -131,7 +132,7 @@ mock_request_idp(Method, ExpCode, Endpoint, Headers, Parameters, _Opts) ->
 
 
 mock_xrds_endpoint(OidcSpec) ->
-    {200, #{<<"content-type">> => <<"application/json">>}, json_utils:encode(build_xrds(OidcSpec))}.
+    {200, #{?HDR_CONTENT_TYPE => <<"application/json">>}, json_utils:encode(build_xrds(OidcSpec))}.
 
 
 mock_access_token_endpoint(OidcSpec, Headers, #{<<"grant_type">> := <<"authorization_code">>} = Parameters) ->
@@ -160,7 +161,7 @@ mock_access_token_endpoint(OidcSpec, Headers, Parameters, Token, RefreshToken) -
     ExpClientSecret = list_to_binary(OidcSpec#oidc_spec.clientSecret),
     AuthValid = case ClientSecretPassMethod of
         inAuthHeader ->
-            AuthHeader = maps:get(<<"authorization">>, Headers, <<"">>),
+            AuthHeader = maps:get(?HDR_AUTHORIZATION, Headers, <<"">>),
             ExpectedAuth = base64:encode(<<ExpClientId/binary, ":", ExpClientSecret/binary>>),
             <<"Basic ", ExpectedAuth/binary>> =:= AuthHeader;
         urlencoded ->
@@ -189,11 +190,11 @@ mock_access_token_endpoint(OidcSpec, Headers, Parameters, Token, RefreshToken) -
             case rand:uniform(2) of
                 1 ->
                     {200, #{
-                        <<"content-type">> => <<"application/x-www-form-urlencoded">>
+                        ?HDR_CONTENT_TYPE => <<"application/x-www-form-urlencoded">>
                     }, http_utils:encode_http_parameters(Response2)};
                 2 ->
                     {200, #{
-                        <<"content-type">> => <<"application/json">>
+                        ?HDR_CONTENT_TYPE => <<"application/json">>
                     }, json_utils:encode(Response2)}
             end
     end.
@@ -203,7 +204,7 @@ mock_userinfo_endpoint(OidcSpec, Headers, Parameters) ->
     AccessTokenPassMethod = OidcSpec#oidc_spec.accessTokenPassMethod,
     Token = case AccessTokenPassMethod of
         inAuthHeader ->
-            <<"Bearer ", AccessToken/binary>> = maps:get(<<"authorization">>, Headers, <<"Bearer ">>),
+            <<"Bearer ", AccessToken/binary>> = maps:get(?HDR_AUTHORIZATION, Headers, <<"Bearer ">>),
             AccessToken;
         urlencoded ->
             maps:get(<<"access_token">>, Parameters, <<"">>)

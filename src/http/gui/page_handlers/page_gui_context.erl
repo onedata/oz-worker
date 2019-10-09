@@ -17,6 +17,7 @@
 -behaviour(dynamic_page_behaviour).
 
 -include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
@@ -63,7 +64,7 @@ handle(<<"GET">>, Req) ->
 
         cowboy_req:reply(
             ?HTTP_200_OK,
-            #{<<"content-type">> => <<"application/json">>},
+            #{?HDR_CONTENT_TYPE => <<"application/json">>},
             json_utils:encode(#{
                 <<"clusterType">> => ClusterType,
                 <<"clusterId">> => ClusterId,

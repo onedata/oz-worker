@@ -13,15 +13,16 @@
 -include("registered_names.hrl").
 -include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
 
 % Use "Macaroon", "X-Auth-Token" and "Authorization: Bearer" headers variably,
 % as they all should be accepted.
 -define(ACCESS_TOKEN_HEADER(AccessToken), case rand:uniform(3) of
-    1 -> #{<<"macaroon">> => AccessToken};
-    2 -> #{<<"x-auth-token">> => AccessToken};
-    3 -> #{<<"authorization">> => <<"Bearer ", AccessToken/binary>>}
+    1 -> #{?HDR_MACAROON => AccessToken};
+    2 -> #{?HDR_X_AUTH_TOKEN => AccessToken};
+    3 -> #{?HDR_AUTHORIZATION => <<"Bearer ", AccessToken/binary>>}
 end).
 
 
@@ -94,7 +95,7 @@ check_rest_call(Config, ArgsMap) ->
         end,
         ReqHeaders = case maps:get(headers, RequestMap, undefined) of
             undefined ->
-                #{<<"content-type">> => <<"application/json">>};
+                #{?HDR_CONTENT_TYPE => <<"application/json">>};
             Map2 when is_map(Map2) ->
                 Map2
         end,

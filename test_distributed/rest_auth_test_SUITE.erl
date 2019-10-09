@@ -16,6 +16,7 @@
 -include("auth/auth_errors.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
@@ -65,7 +66,7 @@ access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"x-auth-token">> => Token}
+            headers => #{?HDR_X_AUTH_TOKEN => Token}
         },
         expect => #{
             code => 200,
@@ -77,7 +78,7 @@ access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"x-auth-token">> => Token}
+            headers => #{?HDR_X_AUTH_TOKEN => Token}
         },
         expect => #{
             code => 200,
@@ -89,7 +90,7 @@ access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"x-auth-token">> => <<"bad-token">>}
+            headers => #{?HDR_X_AUTH_TOKEN => <<"bad-token">>}
         },
         expect => #{
             code => 401
@@ -179,7 +180,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"x-auth-token">> => XAuthTokenFun(DummyIdP)}
+            headers => #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(DummyIdP)}
         },
         expect => #{
             code => 200,
@@ -194,7 +195,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"x-auth-token">> => XAuthTokenFun(AnotherIdP)}
+            headers => #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(AnotherIdP)}
         },
         expect => #{
             code => 200,
@@ -210,7 +211,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"x-auth-token">> => XAuthTokenFun(DisabledIdP)}
+            headers => #{?HDR_X_AUTH_TOKEN => XAuthTokenFun(DisabledIdP)}
         },
         expect => #{
             code => 401
@@ -222,7 +223,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"x-auth-token">> => <<
+            headers => #{?HDR_X_AUTH_TOKEN => <<
                 (PrefixFun(DummyIdP))/binary, (CorrectAccessTokenFun(AnotherIdP))/binary
             >>}
         },
@@ -235,7 +236,7 @@ external_access_token_test(Config) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"x-auth-token">> => <<"completely-bad-token">>}
+            headers => #{?HDR_X_AUTH_TOKEN => <<"completely-bad-token">>}
         },
         expect => #{
             code => 401
@@ -276,8 +277,8 @@ gui_token_test(Config) ->
             method => get,
             path => <<"/user">>,
             headers => #{
-                <<"X-Auth-Token">> => SerializedGuiToken1,
-                <<"X-Onedata-Audience-Token">> => Provider1AudToken
+                ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
+                ?HDR_X_ONEDATA_AUDIENCE_TOKEN => Provider1AudToken
             }
         },
         expect => #{
@@ -291,8 +292,8 @@ gui_token_test(Config) ->
             method => get,
             path => <<"/user">>,
             headers => #{
-                <<"Authorization">> => <<"Bearer ", SerializedGuiToken2/binary>>,
-                <<"x-onedata-audience-token">> => Provider2AudToken
+                ?HDR_AUTHORIZATION => <<"Bearer ", SerializedGuiToken2/binary>>,
+                ?HDR_X_ONEDATA_AUDIENCE_TOKEN => Provider2AudToken
             }
         },
         expect => #{
@@ -305,7 +306,7 @@ gui_token_test(Config) ->
             method => get,
             path => <<"/user">>,
             headers => #{
-                <<"x-auth-token">> => SerializedGuiToken1
+                ?HDR_X_AUTH_TOKEN => SerializedGuiToken1
             }
         },
         expect => #{
@@ -320,8 +321,8 @@ gui_token_test(Config) ->
             method => get,
             path => <<"/user">>,
             headers => #{
-                <<"x-auth-token">> => SerializedGuiToken1,
-                <<"x-onedata-audience-token">> => Provider1AudToken
+                ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
+                ?HDR_X_ONEDATA_AUDIENCE_TOKEN => Provider1AudToken
             }
         },
         expect => #{
@@ -336,7 +337,7 @@ gui_token_test(Config) ->
 
 basic_auth_header(Username, Password) ->
     UserPasswdB64 = base64:encode(<<Username/binary, ":", Password/binary>>),
-    #{<<"authorization">> => <<"Basic ", UserPasswdB64/binary>>}.
+    #{?HDR_AUTHORIZATION => <<"Basic ", UserPasswdB64/binary>>}.
 
 %%%===================================================================
 %%% Setup/teardown functions

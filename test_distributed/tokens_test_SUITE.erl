@@ -13,11 +13,12 @@
 -author("Lukasz Opiola").
 
 -include_lib("ctool/include/aai/aai.hrl").
--include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/errors.hrl").
--include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/http/headers.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -238,8 +239,8 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     {ok, _, _, UserData} = ?assertMatch({ok, 200, _, _}, http_client:get(
         ?URL(Config, [<<"/user">>]),
         #{
-            <<"X-Auth-Token">> => SerializedToken3,
-            <<"X-Onedata-Audience-Token">> => tokens:build_service_access_token(?OP_WORKER, ProviderToken)
+            ?HDR_X_AUTH_TOKEN => SerializedToken3,
+            ?HDR_X_ONEDATA_AUDIENCE_TOKEN => tokens:build_service_access_token(?OP_WORKER, ProviderToken)
         },
         <<"">>,
         [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
