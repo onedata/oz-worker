@@ -17,7 +17,7 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/oz/oz_users.hrl").
 
 % SSL Opts used to connect to onepanel.
@@ -33,7 +33,6 @@
 -export([
     create/1, create/2, create/3,
     create_client_token/2,
-    authorize/1,
     preauthorize/2, preauthorize/3
 ]).
 -export([
@@ -183,27 +182,6 @@ create_client_token(Auth, UserId) ->
         auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = client_tokens},
         data = #{}
-    })).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Asserts authorization based on given identifier (retrieved from third party
-%% caveats by the client). Has two variants:
-%% 1) Identifier is given explicitly
-%% 2) Identifier is provided in a proper Data object.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize(Data :: binary() | #{}) ->
-    {ok, DischargeMacaroon :: binary()} | {error, term()}.
-authorize(Identifier) when is_binary(Identifier) ->
-    authorize(#{<<"identifier">> => Identifier});
-authorize(Data) ->
-    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
-        operation = create,
-        auth = ?NOBODY,
-        gri = #gri{type = od_user, id = undefined, aspect = authorize},
-        data = Data
     })).
 
 
@@ -383,7 +361,7 @@ get_default_provider(Auth, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec acquire_idp_access_token(aai:auth(), od_user:id(), auth_config:idp()) ->
-    {ok, {auth_logic:access_token(), auth_logic:access_token_ttl()}} | {error, term()}.
+    {ok, {idp_auth:access_token(), idp_auth:access_token_ttl()}} | {error, term()}.
 acquire_idp_access_token(Auth, UserId, IdP) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
@@ -398,7 +376,7 @@ acquire_idp_access_token(Auth, UserId, IdP) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec list_client_tokens(Auth :: aai:auth(), UserId :: od_user:id()) ->
-    {ok, [token:id()]} | {error, term()}.
+    {ok, [tokens:serialized()]} | {error, term()}.
 list_client_tokens(Auth, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -643,12 +621,12 @@ delete_oz_privileges(Auth, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete_client_token(Auth :: aai:auth(), UserId :: od_user:id(),
-    TokenId :: token:id()) -> ok | {error, term()}.
-delete_client_token(Auth, UserId, TokenId) ->
+    Serialized :: tokens:serialized()) -> ok | {error, term()}.
+delete_client_token(Auth, UserId, Serialized) ->
     entity_logic:handle(#el_req{
         operation = delete,
         auth = Auth,
-        gri = #gri{type = od_user, id = UserId, aspect = {client_token, TokenId}}
+        gri = #gri{type = od_user, id = UserId, aspect = {client_token, Serialized}}
     }).
 
 
@@ -706,7 +684,7 @@ unset_default_provider(Auth, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_provider_registration_token(Auth :: aai:auth(),
-    UserId :: od_user:id()) -> {ok, macaroon:macaroon()} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, tokens:token()} | {error, term()}.
 create_provider_registration_token(Auth, UserId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
@@ -888,7 +866,7 @@ create_harvester(Auth, UserId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec join_group(Auth :: aai:auth(), UserId :: od_user:id(),
-    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
+    TokenOrData :: tokens:serialized() | tokens:token() | map()) ->
     {ok, od_group:id()} | {error, term()}.
 join_group(Auth, UserId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
@@ -911,7 +889,7 @@ join_group(Auth, UserId, Token) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec join_space(Auth :: aai:auth(), UserId :: od_user:id(),
-    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
+    TokenOrData :: tokens:serialized() | tokens:token() | map()) ->
     {ok, od_space:id()} | {error, term()}.
 join_space(Auth, UserId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
@@ -934,7 +912,7 @@ join_space(Auth, UserId, Token) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec join_harvester(Auth :: aai:auth(), UserId :: od_user:id(),
-    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
+    TokenOrData :: tokens:serialized() | tokens:token() | map()) ->
     {ok, od_harvester:id()} | {error, term()}.
 join_harvester(Auth, UserId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
@@ -957,7 +935,7 @@ join_harvester(Auth, UserId, Token) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec join_cluster(Auth :: aai:auth(), UserId :: od_user:id(),
-    TokenOrData :: tokens:serialized() | macaroon:macaroon() | map()) ->
+    TokenOrData :: tokens:serialized() | tokens:token() | map()) ->
     {ok, od_cluster:id()} | {error, term()}.
 join_cluster(Auth, UserId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{

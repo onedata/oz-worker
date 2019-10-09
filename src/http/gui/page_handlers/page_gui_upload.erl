@@ -25,7 +25,7 @@
 -include("http/rest.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
@@ -57,8 +57,7 @@ handle(<<"POST">>, Req) ->
         handle_gui_upload(Req)
     catch
         throw:{error, _} = Error ->
-            EncodedError = gs_protocol_errors:error_to_json(1, Error),
-            cowboy_req:reply(?HTTP_400_BAD_REQUEST, #{}, json_utils:encode(EncodedError), Req);
+            cowboy_req:reply(errors:to_http_code(Error), #{}, json_utils:encode(errors:to_json(Error)), Req);
         throw:Code when is_integer(Code) ->
             cowboy_req:reply(Code, Req);
         Type:Reason ->
@@ -91,8 +90,7 @@ handle_gui_upload(Req) ->
             GuiType =:= ?HARVESTER_GUI andalso gui_static:link_gui(GuiType, GuiId, GuiHash),
             cowboy_req:reply(?HTTP_200_OK, Req2);
         {error, _} = Error ->
-            EncodedError = gs_protocol_errors:error_to_json(1, Error),
-            cowboy_req:reply(?HTTP_400_BAD_REQUEST, #{}, json_utils:encode(EncodedError), Req)
+            cowboy_req:reply(errors:to_http_code(Error), #{}, json_utils:encode(errors:to_json(Error)), Req)
     end.
 
 
@@ -106,14 +104,7 @@ handle_gui_upload(Req) ->
     onedata:release_version() | no_return().
 validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
     harvester_logic:exists(HarvesterId) orelse throw(?HTTP_404_NOT_FOUND),
-
-    Token = case tokens:parse_access_token_header(Req) of
-        undefined -> throw(?HTTP_401_UNAUTHORIZED);
-        T -> T
-    end,
-
-    {PeerIp, _} = cowboy_req:peer(Req),
-    case auth_logic:authorize_by_oz_worker_gui_token(Token, PeerIp) of
+    case token_auth:check_token_auth(Req) of
         {true, ?USER(UserId)} ->
             case harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_UPDATE)
                 orelse user_logic:has_eff_oz_privilege(UserId, ?OZ_HARVESTERS_UPDATE) of
@@ -142,7 +133,7 @@ validate_and_authorize(GuiType, ClusterId, Req) ->
         ?OP_PANEL -> Cluster#od_cluster.onepanel_version
     end,
 
-    case auth_logic:authorize_by_access_token(Req) of
+    case token_auth:check_token_auth(Req) of
         {true, ?PROVIDER(ClusterId)} ->
             ReleaseVersion;
         {true, _} ->

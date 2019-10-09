@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -426,12 +426,12 @@ update_test(Config) ->
             module = group_logic,
             function = update,
             args = [auth, groupId, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_group, id = groupId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [<<"name">>, <<"type">>],
@@ -496,12 +496,12 @@ delete_test(Config) ->
             module = group_logic,
             function = delete,
             args = [auth, groupId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_group, id = groupId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -636,7 +636,7 @@ update_oz_privileges_test(Config) ->
             module = group_logic,
             function = update_oz_privileges,
             args = [auth, G1, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -684,7 +684,7 @@ delete_oz_privileges_test(Config) ->
             module = group_logic,
             function = delete_oz_privileges,
             args = [auth, G1],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },

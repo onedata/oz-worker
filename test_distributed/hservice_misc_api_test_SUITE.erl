@@ -22,7 +22,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -412,14 +412,14 @@ update_test(Config) ->
             module = handle_service_logic,
             function = update,
             args = [auth, hserviceId, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{
                 type = od_handle_service, id = hserviceId, aspect = instance
             },
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [
@@ -499,14 +499,14 @@ delete_test(Config) ->
             module = handle_service_logic,
             function = delete,
             args = [auth, hserviceId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{
                 type = od_handle_service, id = hserviceId, aspect = instance
             },
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,

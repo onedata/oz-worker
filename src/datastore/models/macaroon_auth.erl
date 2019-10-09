@@ -8,7 +8,7 @@
 %%% @doc
 %%% API for macaroon_auth record - used to store information about authorization
 %%% carried by macaroons. Record id is used as macaroon identifier.
-%%% @todo VFS-5554 This module is deprecated, kept for backward compatibility
+%%% @TODO VFS-5554 This module is deprecated, kept for backward compatibility
 %%% @end
 %%%-------------------------------------------------------------------
 -module(macaroon_auth).
@@ -80,7 +80,7 @@ delete(Id) ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    2.
+    3.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -106,6 +106,14 @@ get_record_struct(2) ->
             {type, atom},
             {id, string}
         ]}}
+    ]};
+get_record_struct(3) ->
+    {record, [
+        {secret, string},
+        {type, atom},
+        % nested #subject{} record was extended and is now encoded as string
+        % rather than record tuple
+        {issuer, {custom, string, {aai, serialize_subject, deserialize_subject}}}
     ]}.
 
 
@@ -124,8 +132,22 @@ upgrade_record(1, MacaroonAuth) ->
         Creator
     } = MacaroonAuth,
 
-    {2, #macaroon_auth{
+    {2, {
+        macaroon_auth,
+        Secret,
+        Type,
+        upgrade_common:client_to_subject(Creator)
+    }};
+upgrade_record(2, MacaroonAuth) ->
+    {
+        macaroon_auth,
+        Secret,
+        Type,
+        Creator
+    } = MacaroonAuth,
+
+    {3, #macaroon_auth{
         secret = Secret,
         type = Type,
-        issuer = upgrade_common:client_to_subject(Creator)
+        issuer = upgrade_common:upgrade_subject_record(Creator)
     }}.

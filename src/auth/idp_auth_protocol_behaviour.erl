@@ -10,7 +10,7 @@
 %%% such as OpenID or SAML.
 %%% @end
 %%%-------------------------------------------------------------------
--module(auth_protocol_behaviour).
+-module(idp_auth_protocol_behaviour).
 
 
 %%--------------------------------------------------------------------
@@ -32,5 +32,5 @@
 %% Validates a login request coming from given IdP.
 %% @end
 %%--------------------------------------------------------------------
--callback validate_login(auth_config:idp(), auth_logic:query_params()) ->
+-callback validate_login(auth_config:idp(), idp_auth:query_params()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.

@@ -18,7 +18,7 @@
 -include("http/gui_paths.hrl").
 -include_lib("ctool/include/http/codes.hrl").
 -include("auth/auth_errors.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -export([handle/2]).
@@ -34,8 +34,8 @@
 %%--------------------------------------------------------------------
 -spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(Method, Req) ->
-    ValidateResult = auth_logic:validate_login(Method, Req),
-    case auth_test_mode:process_is_test_mode_enabled() of
+    ValidateResult = idp_auth:validate_login(Method, Req),
+    case idp_auth_test_mode:process_is_test_mode_enabled() of
         true ->
             cowboy_req:reply(?HTTP_200_OK, #{
                 <<"content-type">> => <<"text/html">>
@@ -99,7 +99,7 @@ format_error_reason(?ERROR_INTERNAL_SERVER_ERROR) ->
 render_test_login_results(ValidateResult) ->
     StatusHeaders = case ValidateResult of
         {ok, _, _} ->
-            UserData = auth_test_mode:get_user_data(),
+            UserData = idp_auth_test_mode:get_user_data(),
             str_utils:unicode_list_to_binary(str_utils:format(
                 "<h3 style='color: #1c8e23;'>Login successful, gathered user data:</h3>~n"
                 "<pre><code>~ts</code></pre>",
@@ -112,7 +112,7 @@ render_test_login_results(ValidateResult) ->
                 [Error]
             ))
     end,
-    test_login_page_html(StatusHeaders, str_utils:unicode_list_to_binary(auth_test_mode:get_logs())).
+    test_login_page_html(StatusHeaders, str_utils:unicode_list_to_binary(idp_auth_test_mode:get_logs())).
 
 
 %% @private

@@ -521,7 +521,7 @@ get_all_plugins() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_user_invite_token(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
-    {ok, macaroon:macaroon()} | {error, term()}.
+    {ok, tokens:token()} | {error, term()}.
 create_user_invite_token(Auth, HarvesterId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
@@ -538,7 +538,7 @@ create_user_invite_token(Auth, HarvesterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_group_invite_token(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
-    {ok, macaroon:macaroon()} | {error, term()}.
+    {ok, tokens:token()} | {error, term()}.
 create_group_invite_token(Auth, HarvesterId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
@@ -555,7 +555,7 @@ create_group_invite_token(Auth, HarvesterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_space_invite_token(Auth :: aai:auth(), HarvesterId :: od_harvester:id()) ->
-    {ok, macaroon:macaroon()} | {error, term()}.
+    {ok, tokens:token()} | {error, term()}.
 create_space_invite_token(Auth, HarvesterId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,

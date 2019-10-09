@@ -14,7 +14,6 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("invite_tokens.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
@@ -22,13 +21,14 @@
 -include_lib("ctool/include/global_definitions.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/api_errors.hrl").
-
--define(MINIMUM_SUPPORT_SIZE, oz_worker:get_env(minimum_space_support_size, 1000000)).
+-include_lib("ctool/include/errors.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
+-export([is_authorized_to_request_support/3]).
+
+-define(MINIMUM_SUPPORT_SIZE, oz_worker:get_env(minimum_space_support_size, 1000000)).
 
 %%%===================================================================
 %%% API
@@ -36,17 +36,25 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity and its revision from datastore based on EntityId.
-%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% Retrieves an entity and its revision from datastore, if applicable.
+%% Should return:
+%%  * {true, entity_logic:versioned_entity()}
+%%      if the fetch was successful
+%%  * {true, gri:gri(), entity_logic:versioned_entity()}
+%%      if the fetch was successful and new GRI was resolved
+%%  * false
+%%      if fetch is not applicable for this operation
+%%  * {error, _}
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:versioned_entity()} | entity_logic:error().
-fetch_entity(ProviderId) ->
+-spec fetch_entity(gri:gri()) ->
+    {true, entity_logic:versioned_entity()} | false | errors:error().
+fetch_entity(#gri{id = ProviderId}) ->
     case od_provider:get(ProviderId) of
         {ok, #document{value = Provider, revs = [DbRev | _]}} ->
             {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
-            {ok, {Provider, Revision}};
+            {true, {Provider, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -119,35 +127,38 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
+create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     Data = Req#el_req.data,
-    create_provider(Data, datastore_utils:gen_key(), GRI);
+    create_provider(Auth, Data, datastore_utils:gen_key(), GRI);
 
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) ->
+create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = instance_dev} = GRI}) ->
     Data = Req#el_req.data,
-    create_provider(Data, maps:get(<<"uuid">>, Data, undefined), GRI);
+    create_provider(Auth, Data, maps:get(<<"uuid">>, Data, undefined), GRI);
 
-create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
+create(#el_req{auth = Auth, gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     SupportSize = maps:get(<<"size">>, Data),
     Token = maps:get(<<"token">>, Data),
-    SupportSpaceFun = fun(od_space, SpaceId) ->
+    ExpType = ?SPACE_SUPPORT_TOKEN,
+
+    token_logic_plugin:consume_invite_token(Auth, Token, ExpType, fun is_authorized_to_request_support/3, fun(SpaceId) ->
         entity_graph:add_relation(
             od_space, SpaceId, od_provider, ProviderId, SupportSize
         ),
-        SpaceId
-    end,
-    SpaceId = invite_tokens:consume(Token, SupportSpaceFun),
+        NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
+        {true, {
+            #od_space{harvesters = Harvesters} = Space,
+            Rev
+        }} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
 
-    NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
-    {ok, {#od_space{harvesters = Harvesters} = Space, Rev}} = space_logic_plugin:fetch_entity(SpaceId),
+        lists:foreach(fun(HarvesterId) ->
+            harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->
+                harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, false)
+            end)
+        end, Harvesters),
 
-    lists:foreach(fun(HarvesterId) ->
-        harvester_indices:update_stats(HarvesterId, all,
-            fun(ExistingStats) -> harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, false) end)
-    end, Harvesters),
-
-    {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
-    {ok, resource, {NewGRI, {SpaceData, Rev}}};
+        {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
+        {ok, resource, {NewGRI, {SpaceData, Rev}}}
+    end);
 
 create(Req = #el_req{gri = #gri{aspect = check_my_ports}}) ->
     try
@@ -157,12 +168,12 @@ create(Req = #el_req{gri = #gri{aspect = check_my_ports}}) ->
     end;
 
 create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}, data = Data}) ->
-    case fetch_entity(ProviderId) of
-        {ok, {#od_provider{subdomain_delegation = true}, _}} ->
+    case fetch_entity(#gri{id = ProviderId}) of
+        {true, {#od_provider{subdomain_delegation = true}, _}} ->
             #{<<"content">> := Content} = Data,
             TTL = maps:get(<<"ttl">>, Data, undefined),
             ok = dns_state:set_txt_record(ProviderId, RecordName, Content, TTL);
-        {ok, {#od_provider{subdomain_delegation = false}, _}} ->
+        {true, {#od_provider{subdomain_delegation = false}, _}} ->
             ?ERROR_SUBDOMAIN_DELEGATION_DISABLED;
         Error ->
             Error
@@ -182,16 +193,16 @@ create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
             ?ERROR_MALFORMED_DATA
     end;
 
-create(#el_req{gri = #gri{aspect = verify_provider_identity}, data = Data}) ->
+create(#el_req{auth = Auth, gri = #gri{aspect = verify_provider_identity}, data = Data}) ->
     ProviderId = maps:get(<<"providerId">>, Data),
-    %% @todo VFS-5554 Deprecated, included for backward compatibility
+    %% @TODO VFS-5554 Deprecated, included for backward compatibility
     Token = case maps:find(<<"macaroon">>, Data) of
         {ok, M} -> M;
         error -> maps:get(<<"token">>, Data)
     end,
-    case access_tokens:verify_provider_identity(Token) of
-        {ok, ProviderId} -> ok;
-        {ok, _OtherProvider} -> ?ERROR_BAD_TOKEN;
+    case token_auth:verify_identity(Token, Auth#auth.peer_ip, aai:auth_to_audience(Auth)) of
+        {ok, ?SUB(?ONEPROVIDER, ProviderId)} -> ok;
+        {ok, _} -> ?ERROR_TOKEN_INVALID;
         Error -> Error
     end.
 
@@ -329,13 +340,13 @@ update(Req = #el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     ok = dns_state:remove_delegation_config(ProviderId),
-    {ok, {#od_provider{
-        root_token = RootToken,
+    {true, {#od_provider{
         spaces = Spaces,
         eff_harvesters = Harvesters
-    }, _}} = fetch_entity(ProviderId),
+    }, _}} = fetch_entity(#gri{aspect = instance, id = ProviderId}),
 
-    ok = access_tokens:invalidate_provider_root_token(RootToken),
+    % Invalidate client tokens
+    token_logic:delete_all_provider_named_tokens(?PROVIDER(ProviderId), ProviderId),
 
     lists:foreach(fun(HarvesterId) ->
         harvester_indices:update_stats(HarvesterId, all,
@@ -358,11 +369,12 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
                 gs_server:terminate_connection(ConnRef)
             end),
             ok;
-        _ -> ok
+        _ ->
+            ok
     end;
 
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
-    {ok, {#od_space{harvesters = Harvesters}, _}} = space_logic_plugin:fetch_entity(SpaceId),
+    {true, {#od_space{harvesters = Harvesters}, _}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
     lists:foreach(fun(HarvesterId) ->
         harvester_indices:update_stats(HarvesterId, all,
             fun(ExistingStats) ->
@@ -629,8 +641,8 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}
         <<"longitude">> => {float, {between, -180, 180}}
     },
 
-    % @TODO VFS-5207 Registration token is not required for compatibility with
-    % legacy providers, but can be forced by the env variable
+    %% @TODO VFS-5207 Registration token is not required for compatibility with
+    %% legacy providers, but can be forced by the env variable
     case oz_worker:get_env(require_token_for_provider_registration, false) of
         false ->
             #{
@@ -681,14 +693,14 @@ validate(#el_req{operation = create, gri = #gri{aspect = map_idp_group}}) -> #{
 };
 
 validate(#el_req{operation = create, gri = #gri{aspect = verify_provider_identity}, data = Data}) ->
-    %% @todo VFS-5554 Deprecated, included for backward compatibility
+    %% @TODO VFS-5554 Deprecated, included for backward compatibility
     TokenKey = case maps:is_key(<<"macaroon">>, Data) of
         true -> <<"macaroon">>;
         false -> <<"token">>
     end,
     #{
         required => #{
-            <<"providerId">> => {binary, {exists, fun provider_logic:exists/1}},
+            <<"providerId">> => {any, {exists, fun provider_logic:exists/1}},
             TokenKey => {token, any}
         }
     };
@@ -728,6 +740,15 @@ validate(#el_req{operation = update, gri = #gri{aspect = domain_config}, data = 
                 <<"subdomainDelegation">> => {boolean, any}
             }}
     end.
+
+
+-spec is_authorized_to_request_support(aai:auth(), tokens:invite_token_type(), od_group:id()) ->
+    boolean().
+is_authorized_to_request_support(?USER(UserId), ?SPACE_SUPPORT_TOKEN, SpaceId) ->
+    space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_ADD_PROVIDER) orelse
+        user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_ADD_RELATIONSHIPS);
+is_authorized_to_request_support(_, _, _) ->
+    false.
 
 
 %%%===================================================================
@@ -899,18 +920,19 @@ update_provider_subomain(ProviderId, Data) ->
 %% Creates a new provider document in database.
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider(Data :: map(), ProviderId :: od_provider:id(),
+-spec create_provider(aai:auth(), Data :: map(), ProviderId :: od_provider:id(),
     GRI :: entity_logic:gri()) -> entity_logic:create_result().
-create_provider(Data, ProviderId, GRI) ->
-    Token = maps:get(<<"token">>, Data, undefined),
+create_provider(Auth, Data, ProviderId, GRI) ->
     Name = maps:get(<<"name">>, Data),
     Latitude = maps:get(<<"latitude">>, Data, 0.0),
     Longitude = maps:get(<<"longitude">>, Data, 0.0),
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
     AdminEmail = maps:get(<<"adminEmail">>, Data),
 
-    CreateProviderFun = fun(od_user, CreatorUserId) ->
-        {ok, RootToken, Identity} = access_tokens:create_provider_root_token(ProviderId),
+    CreateProviderFun = fun(CreatorUserId) ->
+        {ok, RootToken} = token_logic:create_provider_named_token(
+            ?ROOT, ProviderId, ?PROVIDER_ROOT_TOKEN_NAME, ?ACCESS_TOKEN, [], #{}
+        ),
 
         {Domain, Subdomain} = case SubdomainDelegation of
             false ->
@@ -927,7 +949,7 @@ create_provider(Data, ProviderId, GRI) ->
         end,
 
         ProviderRecord = #od_provider{
-            name = Name, root_token = Identity,
+            name = Name, root_token = RootToken#token.nonce,
             subdomain_delegation = SubdomainDelegation,
             domain = Domain, subdomain = Subdomain,
             latitude = Latitude, longitude = Longitude,
@@ -937,7 +959,7 @@ create_provider(Data, ProviderId, GRI) ->
         try
             {ok, _} = od_provider:create(#document{key = ProviderId, value = ProviderRecord}),
             cluster_logic:create_oneprovider_cluster(CreatorUserId, ProviderId),
-            {ok, {Provider, Rev}} = fetch_entity(ProviderId),
+            {true, {Provider, Rev}} = fetch_entity(#gri{aspect = instance, id = ProviderId}),
             ?info("Provider '~ts' has registered (~s)", [Name, ProviderId]),
             {ok, resource, {GRI#gri{id = ProviderId}, {{Provider, RootToken}, Rev}}}
         catch Type:Reason ->
@@ -946,8 +968,15 @@ create_provider(Data, ProviderId, GRI) ->
             ?ERROR_INTERNAL_SERVER_ERROR
         end
     end,
-    % @TODO VFS-5207 Registration token is not required for compatibility with legacy providers
-    case Token of
-        undefined -> CreateProviderFun(od_user, undefined);
-        _ -> invite_tokens:consume(Token, CreateProviderFun)
+
+    %% @TODO VFS-5207 Registration token is not required for compatibility with legacy providers
+    case maps:find(<<"token">>, Data) of
+        error ->
+            CreateProviderFun(undefined);
+        {ok, Token} ->
+            IsAuthorizedFun = fun(_, _, _) -> true end,
+            token_logic_plugin:consume_invite_token(
+                Auth, Token, ?PROVIDER_REGISTRATION_TOKEN,
+                IsAuthorizedFun, CreateProviderFun
+            )
     end.

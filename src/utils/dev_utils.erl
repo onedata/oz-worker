@@ -54,6 +54,7 @@
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 %% API
 -export([dev_provider_registration_route/0]).
@@ -159,13 +160,6 @@ set_up_test_entities(Users, Groups, Spaces) ->
                     SpaceName ->
                         create_space_with_uuid(Member, SpaceName, SpaceId)
                 end,
-                % Support the space by all providers
-                lists:foreach(
-                    fun({ProviderId, ProviderProps}) ->
-                        SupportedSize = proplists:get_value(<<"supported_size">>, ProviderProps),
-                        {ok, Token} = space_logic:create_provider_invite_token(?ROOT, SpaceId),
-                        {ok, SpaceId} = provider_logic:support_space(?ROOT, ProviderId, Token, SupportedSize)
-                    end, ProviderList),
                 % Add all users to space
                 lists:foreach(
                     fun(UserId) ->
@@ -175,7 +169,16 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 lists:foreach(
                     fun(GroupId) ->
                         space_logic:add_user(?ROOT, SpaceId, GroupId)
-                    end, GroupsToAdd)
+                    end, GroupsToAdd),
+                % Support the space by all providers
+                lists:foreach(
+                    fun({ProviderId, ProviderProps}) ->
+                        FirstUser = hd(UserList),
+                        SupportedSize = proplists:get_value(<<"supported_size">>, ProviderProps),
+                        ok = space_logic:update_user_privileges(?ROOT, SpaceId, FirstUser, [?SPACE_ADD_PROVIDER], []),
+                        {ok, Token} = space_logic:create_provider_invite_token(?USER(FirstUser), SpaceId),
+                        {ok, SpaceId} = provider_logic:support_space(?ROOT, ProviderId, Token, SupportedSize)
+                    end, ProviderList)
             end, Spaces),
 
         % Give all space perms to users that have it as default space
@@ -276,7 +279,7 @@ create_space_with_provider({MemberType, MemberId}, Name, Supports, SpaceId) ->
     ),
     maps:map(
         fun(ProviderId, SupportSize) ->
-            {ok, Macaroon} = space_logic:create_provider_invite_token(?ROOT, SpaceId),
-            {ok, SpaceId} = provider_logic:support_space(?ROOT, ProviderId, Macaroon, SupportSize)
+            {ok, Token} = space_logic:create_provider_invite_token(?ROOT, SpaceId),
+            {ok, SpaceId} = provider_logic:support_space(?ROOT, ProviderId, Token, SupportSize)
         end, Supports),
     {ok, SpaceId}.

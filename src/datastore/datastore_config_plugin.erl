@@ -35,15 +35,17 @@ get_models() -> [
     od_handle,
     od_harvester,
     od_cluster,
+    od_token,
+
     gs_server_state,
-    onedata_auth,
-    macaroon_auth,
-    session,
-    shared_token_secret,
-    token,
     entity_graph_state,
+    session,
+    state_token,
     dns_state,
     provider_connection,
     user_connections,
-    state_token
+    shared_token_secret,
+
+    onedata_auth,
+    macaroon_auth
 ].

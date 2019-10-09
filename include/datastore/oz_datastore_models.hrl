@@ -384,9 +384,32 @@
     bottom_up_dirty = true :: boolean()
 }).
 
+%% Stores information about a named token.
+-record(od_token, {
+    name :: od_token:name(),
+    version = ?CURRENT_TOKEN_VERSION :: tokens:version(),
+    subject :: aai:subject(),
+    type :: tokens:type(),
+    caveats = [] :: [caveats:caveat()],
+    secret :: tokens:secret(),
+    metadata = #{} :: od_token:metadata(),
+    revoked = false :: boolean()
+}).
+
 %%%===================================================================
 %%% Records specific for onezone
 %%%===================================================================
+
+%% Model that holds the last processed seq for Graph Sync server.
+-record(gs_server_state, {
+    seq = 1 :: couchbase_changes:seq()
+}).
+
+-record(entity_graph_state, {
+    refresh_in_progress = false :: boolean(),
+    bottom_up_dirty = ordsets:new() :: entity_graph_state:dirty_queue(),
+    top_down_dirty = ordsets:new() :: entity_graph_state:dirty_queue()
+}).
 
 %% This record defines a GUI session
 -record(session, {
@@ -396,9 +419,12 @@
     previous_nonce = <<"">> :: binary()
 }).
 
-%% Singleton record that stores a global, shared token secret for temporary tokens.
--record(shared_token_secret, {
-    secret :: tokens:secret()
+% Token used to match together OIDC/SAML requests and responses and protect
+% against replay attacks. It is correlated with some state, defining for example
+% to which IdP the client was redirected.
+-record(state_token, {
+    timestamp = 0 :: integer(),  % In seconds since epoch
+    state_info = #{} :: state_token:state_info()
 }).
 
 -record(dns_state, {
@@ -408,17 +434,6 @@
     provider_to_txt_records = #{} :: #{
         od_provider:id() => [{binary(), binary(), integer() | undefined}]
     }
-}).
-
--record(entity_graph_state, {
-    refresh_in_progress = false :: boolean(),
-    bottom_up_dirty = ordsets:new() :: entity_graph_state:dirty_queue(),
-    top_down_dirty = ordsets:new() :: entity_graph_state:dirty_queue()
-}).
-
-%% Model that holds the last processed seq for Graph Sync server.
--record(gs_server_state, {
-    seq = 1 :: couchbase_changes:seq()
 }).
 
 %% Stores information about active provider connection
@@ -431,23 +446,9 @@
     connections = [] :: [gs_server:conn_ref()]
 }).
 
-% Token used to match together OIDC/SAML requests and responses and protect
-% against replay attacks. It is correlated with some state, defining for example
-% to which IdP the client was redirected.
--record(state_token, {
-    timestamp = 0 :: integer(),  % In seconds since epoch
-    state_info = #{} :: state_token:state_info()
-}).
-
-% @todo VFS-5524 deemed for deletion when invite tokens are reworked
-%% This record defines a token that can be used by user to do something
--record(token, {
-    secret :: undefined | binary(),
-    resource :: undefined | atom(),
-    resource_id :: undefined | binary(),
-    issuer :: undefined | aai:subject(),
-    % Locked token cannot be consumed.
-    locked = false :: boolean()
+%% Singleton record that stores a global, shared token secret for temporary tokens.
+-record(shared_token_secret, {
+    secret :: tokens:secret()
 }).
 
 %% @todo VFS-5554 This record is deprecated, kept for backward compatibility

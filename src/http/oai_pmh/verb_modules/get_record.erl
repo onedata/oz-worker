@@ -78,7 +78,7 @@ get_response(<<"record">>, Args) ->
     OaiId = proplists:get_value(<<"identifier">>, Args),
     MetadataPrefix = proplists:get_value(<<"metadataPrefix">>, Args),
     Handle = get_handle_safe(OaiId),
-    %% TODO check if metadataPrefix is available for given identifier
+    %% @TODO check if metadataPrefix is available for given identifier
     case lists:member(MetadataPrefix, metadata_formats:supported_formats()) of
         true ->
             oai_utils:build_oai_record(MetadataPrefix, OaiId, Handle);

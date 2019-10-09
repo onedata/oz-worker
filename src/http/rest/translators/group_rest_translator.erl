@@ -49,13 +49,13 @@ create_response(#gri{aspect = join} = Gri, AuthHint, resource, Result) ->
 create_response(#gri{id = ParentGroupId, aspect = child}, _, resource, {#gri{id = GroupId}, _}) ->
     rest_translator:created_reply([<<"groups">>, ParentGroupId, <<"children">>, GroupId]);
 
-create_response(#gri{aspect = invite_user_token}, _, value, Macaroon) ->
-    {ok, Token} = macaroons:serialize(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
+create_response(#gri{aspect = invite_user_token}, _, value, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
-create_response(#gri{aspect = invite_group_token}, _, value, Macaroon) ->
-    {ok, Token} = macaroons:serialize(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token});
+create_response(#gri{aspect = invite_group_token}, _, value, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
 create_response(#gri{id = GroupId, aspect = {user, UserId}}, _, resource, _) ->
     rest_translator:created_reply(

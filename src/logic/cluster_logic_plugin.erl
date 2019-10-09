@@ -14,34 +14,43 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("invite_tokens.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
+-export([is_authorized_to_invite/3]).
+
 %%%===================================================================
 %%% API
 %%%===================================================================
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity and its revision from datastore based on EntityId.
-%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% Retrieves an entity and its revision from datastore, if applicable.
+%% Should return:
+%%  * {true, entity_logic:versioned_entity()}
+%%      if the fetch was successful
+%%  * {true, gri:gri(), entity_logic:versioned_entity()}
+%%      if the fetch was successful and new GRI was resolved
+%%  * false
+%%      if fetch is not applicable for this operation
+%%  * {error, _}
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:versioned_entity()} | entity_logic:error().
-fetch_entity(ClusterId) ->
+-spec fetch_entity(gri:gri()) ->
+    {true, entity_logic:versioned_entity()} | false | errors:error().
+fetch_entity(#gri{id = ClusterId}) ->
     case od_cluster:get(ClusterId) of
         {ok, #document{value = Cluster, revs = [DbRev | _]}} ->
             {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
-            {ok, {Cluster, Revision}};
+            {true, {Cluster, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -123,16 +132,15 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
-    Macaroon = maps:get(<<"token">>, Req#el_req.data),
-    AuthHint = Req#el_req.auth_hint,
-    Privileges = case AuthHint of
-        ?AS_USER(_) -> privileges:cluster_admin();
-        ?AS_GROUP(_) -> privileges:cluster_member();
-        _ -> []
+create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
+    Token = maps:get(<<"token">>, Req#el_req.data),
+    {ExpType, Privileges} = case Req#el_req.auth_hint of
+        ?AS_USER(_) -> {?CLUSTER_INVITE_USER_TOKEN, privileges:cluster_admin()};
+        ?AS_GROUP(_) -> {?CLUSTER_INVITE_GROUP_TOKEN, privileges:cluster_member()}
     end,
-    JoinClusterFun = fun(od_cluster, ClusterId) ->
-        case AuthHint of
+
+    token_logic_plugin:consume_invite_token(Auth, Token, ExpType, fun is_authorized_to_invite/3, fun(ClusterId) ->
+        case Req#el_req.auth_hint of
             ?AS_USER(UserId) ->
                 entity_graph:add_relation(
                     od_user, UserId,
@@ -144,39 +152,48 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
                     od_group, GroupId,
                     od_cluster, ClusterId,
                     Privileges
-                );
-            _ ->
-                ok
+                )
         end,
-        ClusterId
+        NewGRI = #gri{type = od_cluster, id = ClusterId, aspect = instance,
+            scope = case lists:member(?CLUSTER_VIEW, Privileges) of
+                true -> private;
+                false -> protected
+            end
+        },
+        {true, {Cluster, Rev}} = fetch_entity(#gri{aspect = instance, id = ClusterId}),
+        {ok, ClusterData} = get(#el_req{gri = NewGRI}, Cluster),
+        {ok, resource, {NewGRI, {ClusterData, Rev}}}
+    end);
+
+create(#el_req{auth = Auth, gri = #gri{id = ClusterId, aspect = invite_user_token}}) ->
+    %% @TODO VFS-5727 move entirely to token_logic
+    Name = ?INVITE_TOKEN_NAME(?CLUSTER_INVITE_USER_TOKEN),
+    Type = ?INVITE_TOKEN(?CLUSTER_INVITE_USER_TOKEN, ClusterId),
+    Result = case Auth of
+        ?USER(UserId) ->
+            token_logic:create_user_named_token(Auth, UserId, Name, Type, [], #{});
+        ?PROVIDER(PrId) ->
+            token_logic:create_provider_named_token(Auth, PrId, Name, Type, [], #{})
     end,
-    ClusterId = invite_tokens:consume(Macaroon, JoinClusterFun),
+    case Result of
+        {ok, Token} -> {ok, value, Token};
+        {error, _} = Error -> Error
+    end;
 
-    NewGRI = #gri{type = od_cluster, id = ClusterId, aspect = instance,
-        scope = case lists:member(?CLUSTER_VIEW, Privileges) of
-            true -> private;
-            false -> protected
-        end
-    },
-    {ok, {Cluster, Rev}} = fetch_entity(ClusterId),
-    {ok, ClusterData} = get(#el_req{gri = NewGRI}, Cluster),
-    {ok, resource, {NewGRI, {ClusterData, Rev}}};
-
-create(Req = #el_req{gri = #gri{id = ClusterId, aspect = invite_user_token}}) ->
-    {ok, Macaroon} = invite_tokens:create(
-        Req#el_req.auth,
-        ?CLUSTER_INVITE_USER_TOKEN,
-        {od_cluster, ClusterId}
-    ),
-    {ok, value, Macaroon};
-
-create(Req = #el_req{gri = #gri{id = ClusterId, aspect = invite_group_token}}) ->
-    {ok, Macaroon} = invite_tokens:create(
-        Req#el_req.auth,
-        ?CLUSTER_INVITE_GROUP_TOKEN,
-        {od_cluster, ClusterId}
-    ),
-    {ok, value, Macaroon};
+create(#el_req{auth = Auth, gri = #gri{id = ClusterId, aspect = invite_group_token}}) ->
+    %% @TODO VFS-5727 move entirely to token_logic
+    Name = ?INVITE_TOKEN_NAME(?CLUSTER_INVITE_GROUP_TOKEN),
+    Type = ?INVITE_TOKEN(?CLUSTER_INVITE_GROUP_TOKEN, ClusterId),
+    Result = case Auth of
+        ?USER(UserId) ->
+            token_logic:create_user_named_token(Auth, UserId, Name, Type, [], #{});
+        ?PROVIDER(PrId) ->
+            token_logic:create_provider_named_token(Auth, PrId, Name, Type, [], #{})
+    end,
+    case Result of
+        {ok, Token} -> {ok, value, Token};
+        {error, _} = Error -> Error
+    end;
 
 create(#el_req{gri = #gri{id = ClusterId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:cluster_member()),
@@ -186,7 +203,7 @@ create(#el_req{gri = #gri{id = ClusterId, aspect = {user, UserId}}, data = Data}
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, {User, Rev}} = user_logic_plugin:fetch_entity(UserId),
+    {true, {User, Rev}} = user_logic_plugin:fetch_entity(#gri{id = UserId}),
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
     {ok, resource, {NewGRI, ?THROUGH_CLUSTER(ClusterId), {UserData, Rev}}};
 
@@ -202,7 +219,7 @@ create(Req = #el_req{gri = GRI = #gri{id = ClusterId, aspect = group}}) ->
         od_cluster, ClusterId,
         Privileges
     ),
-    {ok, {Group, Rev}} = group_logic_plugin:fetch_entity(GroupId),
+    {true, {Group, Rev}} = group_logic_plugin:fetch_entity(#gri{id = GroupId}),
     {ok, resource, {NewGRI, {Group, Rev}}};
 
 create(#el_req{gri = #gri{id = ClusterId, aspect = {group, GroupId}}, data = Data}) ->
@@ -213,7 +230,7 @@ create(#el_req{gri = #gri{id = ClusterId, aspect = {group, GroupId}}, data = Dat
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
-    {ok, {Group, Rev}} = group_logic_plugin:fetch_entity(GroupId),
+    {true, {Group, Rev}} = group_logic_plugin:fetch_entity(#gri{id = GroupId}),
     {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
     {ok, resource, {NewGRI, ?THROUGH_GROUP(ClusterId), {GroupData, Rev}}}.
 
@@ -606,13 +623,12 @@ required_admin_privileges(_) ->
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
 validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
-    TokenType = case Req#el_req.auth_hint of
-        ?AS_USER(_) -> ?CLUSTER_INVITE_USER_TOKEN;
-        ?AS_GROUP(_) -> ?CLUSTER_INVITE_GROUP_TOKEN
-    end,
     #{
         required => #{
-            <<"token">> => {invite_token, TokenType}
+            <<"token">> => {invite_token, case Req#el_req.auth_hint of
+                ?AS_USER(_) -> ?CLUSTER_INVITE_USER_TOKEN;
+                ?AS_GROUP(_) -> ?CLUSTER_INVITE_GROUP_TOKEN
+            end}
         }
     };
 
@@ -677,6 +693,17 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
     validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}}).
 
 
+-spec is_authorized_to_invite(aai:auth(), tokens:invite_token_type(), od_group:id()) ->
+    boolean().
+is_authorized_to_invite(?USER(UserId), ?CLUSTER_INVITE_USER_TOKEN, ClusterId) ->
+    auth_by_privilege(UserId, ClusterId, ?CLUSTER_ADD_USER) orelse
+        user_logic:has_eff_oz_privilege(UserId, ?OZ_CLUSTERS_ADD_RELATIONSHIPS);
+is_authorized_to_invite(?USER(UserId), ?CLUSTER_INVITE_GROUP_TOKEN, ClusterId) ->
+    auth_by_privilege(UserId, ClusterId, ?CLUSTER_ADD_GROUP) orelse
+        user_logic:has_eff_oz_privilege(UserId, ?OZ_CLUSTERS_ADD_RELATIONSHIPS);
+is_authorized_to_invite(_, _, _) ->
+    false.
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -689,7 +716,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 %% Auths of type other than user are discarded.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_privilege(entity_logic:req() | od_user:id(),
+-spec auth_by_privilege(entity_logic:req() | od_user:id() | aai:auth(),
     od_cluster:id() | od_cluster:record(), privileges:cluster_privilege()) -> boolean().
 auth_by_privilege(#el_req{auth = ?USER(UserId)}, ClusterOrId, Privilege) ->
     auth_by_privilege(UserId, ClusterOrId, Privilege);

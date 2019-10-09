@@ -19,14 +19,14 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -type method() :: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'.
 -type binding() :: {binding, atom()} | client_id | client_ip.
 -type bound_gri() :: #b_gri{}.
 -type bound_auth_hint() :: undefined | {
     throughUser | throughGroup | throughSpace | throughProvider |
-    throughHandleService | throughHandle | throughHarvester | throughCluster | 
+    throughHandleService | throughHandle | throughHarvester | throughCluster |
     asUser | asGroup | asSpace,
     binding()
 }.
@@ -135,15 +135,14 @@ content_types_provided(Req, #state{rest_req = #rest_req{produces = Produces}} = 
 %% @end
 %%--------------------------------------------------------------------
 -spec is_authorized(Req :: cowboy_req:req(), State :: #state{}) ->
-    {true | {false, binary()}, cowboy_req:req(), #state{}}.
+    {true | {false, binary()} | stop, cowboy_req:req(), #state{}}.
 is_authorized(Req, State) ->
     % Check if the request carries any authorization
     Result = try
         % Try to authorize the client using several methods.
         authorize(Req, [
-            fun auth_logic:authorize_by_basic_auth/1,
-            fun auth_logic:authorize_by_oneprovider_gui_token/1,
-            fun auth_logic:authorize_by_access_token/1
+            fun basic_auth:check_basic_auth/1,
+            fun token_auth:check_token_auth/1
         ])
     catch
         throw:Err ->
@@ -160,8 +159,7 @@ is_authorized(Req, State) ->
         {true, Client} ->
             {true, Req, State#state{auth = Client}};
         {error, _} = Error ->
-            RestResp = error_rest_translator:response(Error),
-            {stop, send_response(RestResp, Req), State}
+            {stop, send_error_response(Error, Req), State}
     end.
 
 
@@ -277,8 +275,7 @@ process_request(Req, State) ->
         {stop, send_response(RestResp, Req2), State}
     catch
         throw:Error ->
-            ErrorResp = error_rest_translator:response(Error),
-            {stop, send_response(ErrorResp, Req), State};
+            {stop, send_error_response(Error, Req), State};
         Type:Message ->
             ?error_stacktrace("Unexpected error in ~p:process_request - ~p:~p", [
                 ?MODULE, Type, Message
@@ -303,6 +300,14 @@ send_response(#rest_resp{code = Code, headers = Headers, body = Body}, Req) ->
             json_utils:encode(Map)
     end,
     cowboy_req:reply(Code, Headers, RespBody, Req).
+
+
+-spec send_error_response(errors:error(), cowboy_req:req()) -> cowboy_req:req().
+send_error_response(Error = {error, _}, Req) ->
+    send_response(#rest_resp{
+        code = errors:to_http_code(Error),
+        body = #{<<"error">> => errors:to_json(Error)}
+    }, Req).
 
 
 %%--------------------------------------------------------------------

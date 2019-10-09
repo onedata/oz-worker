@@ -14,16 +14,16 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("invite_tokens.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
+-export([is_authorized_to_invite/3]).
 
 %%%===================================================================
 %%% API
@@ -31,17 +31,25 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity and its revision from datastore based on EntityId.
-%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% Retrieves an entity and its revision from datastore, if applicable.
+%% Should return:
+%%  * {true, entity_logic:versioned_entity()}
+%%      if the fetch was successful
+%%  * {true, gri:gri(), entity_logic:versioned_entity()}
+%%      if the fetch was successful and new GRI was resolved
+%%  * false
+%%      if fetch is not applicable for this operation
+%%  * {error, _}
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:versioned_entity()} | entity_logic:error().
-fetch_entity(GroupId) ->
+-spec fetch_entity(gri:gri()) ->
+    {true, entity_logic:versioned_entity()} | false | errors:error().
+fetch_entity(#gri{id = GroupId}) ->
     case od_group:get(GroupId) of
         {ok, #document{value = Group, revs = [DbRev | _]}} ->
             {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
-            {ok, {Group, Revision}};
+            {true, {Group, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -181,14 +189,20 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         _ ->
             ok
     end,
-    {ok, {Group, Rev}} = fetch_entity(GroupId),
+    {true, {Group, Rev}} = fetch_entity(#gri{aspect = instance, id = GroupId}),
     {ok, resource, {GRI#gri{id = GroupId}, {Group, Rev}}};
 
-create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
-    Macaroon = maps:get(<<"token">>, Req#el_req.data),
+create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
+    Token = maps:get(<<"token">>, Req#el_req.data),
     % In the future, privileges can be included in token
     Privileges = privileges:group_member(),
-    JoinGroupFun = fun(od_group, GroupId) ->
+
+    ExpType = case Req#el_req.auth_hint of
+        ?AS_USER(_) -> ?GROUP_INVITE_USER_TOKEN;
+        ?AS_GROUP(_) -> ?GROUP_INVITE_GROUP_TOKEN
+    end,
+
+    token_logic_plugin:consume_invite_token(Auth, Token, ExpType, fun is_authorized_to_invite/3, fun(GroupId) ->
         case Req#el_req.auth_hint of
             ?AS_USER(UserId) ->
                 entity_graph:add_relation(
@@ -201,23 +215,18 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
                     od_group, ChildGroupId,
                     od_group, GroupId,
                     Privileges
-                );
-            _ ->
-                ok
+                )
         end,
-        GroupId
-    end,
-    GroupId = invite_tokens:consume(Macaroon, JoinGroupFun),
-
-    NewGRI = #gri{type = od_group, id = GroupId, aspect = instance,
-        scope = case lists:member(?GROUP_VIEW, Privileges) of
-            true -> private;
-            false -> protected
-        end
-    },
-    {ok, {Group, Rev}} = fetch_entity(GroupId),
-    {ok, GroupData} = get(#el_req{gri = NewGRI}, Group),
-    {ok, resource, {NewGRI, {GroupData, Rev}}};
+        NewGRI = #gri{type = od_group, id = GroupId, aspect = instance,
+            scope = case lists:member(?GROUP_VIEW, Privileges) of
+                true -> private;
+                false -> protected
+            end
+        },
+        {true, {Group, Rev}} = fetch_entity(#gri{aspect = instance, id = GroupId}),
+        {ok, GroupData} = get(#el_req{gri = NewGRI}, Group),
+        {ok, resource, {NewGRI, {GroupData, Rev}}}
+    end);
 
 create(Req = #el_req{gri = GRI = #gri{id = ParentGroupId, aspect = child}}) ->
     % Create a new group for user/group (authHint is checked in authorize) and
@@ -231,24 +240,30 @@ create(Req = #el_req{gri = GRI = #gri{id = ParentGroupId, aspect = child}}) ->
         od_group, ParentGroupId,
         Privileges
     ),
-    {ok, {Group, Rev}} = fetch_entity(ChildGroupId),
+    {true, {Group, Rev}} = fetch_entity(#gri{aspect = instance, id = ChildGroupId}),
     {ok, resource, {NewGRI, {Group, Rev}}};
 
-create(Req = #el_req{gri = #gri{id = GrId, aspect = invite_user_token}}) ->
-    {ok, Macaroon} = invite_tokens:create(
-        Req#el_req.auth,
-        ?GROUP_INVITE_USER_TOKEN,
-        {od_group, GrId}
+create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = GrId, aspect = invite_user_token}}) ->
+    %% @TODO VFS-5727 move entirely to token_logic
+    Result = token_logic:create_user_named_token(
+        Auth, UserId, ?INVITE_TOKEN_NAME(?GROUP_INVITE_USER_TOKEN),
+        ?INVITE_TOKEN(?GROUP_INVITE_USER_TOKEN, GrId), [], #{}
     ),
-    {ok, value, Macaroon};
+    case Result of
+        {ok, Token} -> {ok, value, Token};
+        {error, _} = Error -> Error
+    end;
 
-create(Req = #el_req{gri = #gri{id = GrId, aspect = invite_group_token}}) ->
-    {ok, Macaroon} = invite_tokens:create(
-        Req#el_req.auth,
-        ?GROUP_INVITE_GROUP_TOKEN,
-        {od_group, GrId}
+create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = GrId, aspect = invite_group_token}}) ->
+    %% @TODO VFS-5727 move entirely to token_logic
+    Result = token_logic:create_user_named_token(
+        Auth, UserId, ?INVITE_TOKEN_NAME(?GROUP_INVITE_GROUP_TOKEN),
+        ?INVITE_TOKEN(?GROUP_INVITE_GROUP_TOKEN, GrId), [], #{}
     ),
-    {ok, value, Macaroon};
+    case Result of
+        {ok, Token} -> {ok, value, Token};
+        {error, _} = Error -> Error
+    end;
 
 create(#el_req{gri = #gri{id = GrId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:group_member()),
@@ -258,7 +273,7 @@ create(#el_req{gri = #gri{id = GrId, aspect = {user, UserId}}, data = Data}) ->
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, {User, Rev}} = user_logic_plugin:fetch_entity(UserId),
+    {true, {User, Rev}} = user_logic_plugin:fetch_entity(#gri{id = UserId}),
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
     {ok, resource, {NewGRI, ?THROUGH_GROUP(GrId), {UserData, Rev}}};
 
@@ -270,7 +285,7 @@ create(#el_req{gri = #gri{id = GrId, aspect = {child, ChGrId}}, data = Data}) ->
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = ChGrId, aspect = instance, scope = shared},
-    {ok, {ChildGroup, Rev}} = fetch_entity(ChGrId),
+    {true, {ChildGroup, Rev}} = fetch_entity(#gri{aspect = instance, id = ChGrId}),
     {ok, ChildGroupData} = get(#el_req{gri = NewGRI}, ChildGroup),
     {ok, resource, {NewGRI, ?THROUGH_GROUP(GrId), {ChildGroupData, Rev}}}.
 
@@ -422,7 +437,7 @@ update(Req = #el_req{gri = #gri{id = ParGrId, aspect = {child_privileges, ChGrId
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = GroupId, aspect = instance}}) ->
-    {ok, {Group, _}} = fetch_entity(GroupId),
+    {true, {Group, _}} = fetch_entity(#gri{aspect = instance, id = GroupId}),
     case Group#od_group.protected of
         true ->
             throw(?ERROR_PROTECTED_GROUP);
@@ -936,13 +951,12 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
 };
 
 validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
-    TokenType = case Req#el_req.auth_hint of
-        ?AS_USER(_) -> ?GROUP_INVITE_USER_TOKEN;
-        ?AS_GROUP(_) -> ?GROUP_INVITE_GROUP_TOKEN
-    end,
     #{
         required => #{
-            <<"token">> => {invite_token, TokenType}
+            <<"token">> => {invite_token, case Req#el_req.auth_hint of
+                ?AS_USER(_) -> ?GROUP_INVITE_USER_TOKEN;
+                ?AS_GROUP(_) -> ?GROUP_INVITE_GROUP_TOKEN
+            end}
         }
     };
 
@@ -1002,6 +1016,17 @@ validate(#el_req{operation = update, gri = #gri{aspect = oz_privileges}}) -> #{
     }
 }.
 
+
+-spec is_authorized_to_invite(aai:auth(), tokens:invite_token_type(), od_group:id()) ->
+    boolean().
+is_authorized_to_invite(?USER(UserId), ?GROUP_INVITE_USER_TOKEN, GroupId) ->
+    auth_by_privilege(UserId, GroupId, ?GROUP_ADD_USER) orelse
+        user_logic:has_eff_oz_privilege(UserId, ?OZ_GROUPS_ADD_RELATIONSHIPS);
+is_authorized_to_invite(?USER(UserId), ?GROUP_INVITE_GROUP_TOKEN, GroupId) ->
+    auth_by_privilege(UserId, GroupId, ?GROUP_ADD_CHILD) orelse
+        user_logic:has_eff_oz_privilege(UserId, ?OZ_GROUPS_ADD_RELATIONSHIPS);
+is_authorized_to_invite(_, _, _) ->
+    false.
 
 %%%===================================================================
 %%% Internal functions
