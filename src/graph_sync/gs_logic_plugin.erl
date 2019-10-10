@@ -256,4 +256,5 @@ is_type_supported(#gri{type = od_handle_service}) -> true;
 is_type_supported(#gri{type = od_handle}) -> true;
 is_type_supported(#gri{type = od_cluster}) -> true;
 is_type_supported(#gri{type = od_harvester}) -> true;
+is_type_supported(#gri{type = od_token}) -> true;
 is_type_supported(#gri{type = _}) -> false.

@@ -80,6 +80,11 @@ translate_value(_, #gri{type = od_harvester, aspect = {submit_entry, _}}, Failed
 translate_value(_, #gri{type = od_harvester, aspect = {delete_entry, _}}, FailedIndices) ->
     FailedIndices;
 
+translate_value(_, #gri{type = od_token, aspect = preauthorize}, Subject) ->
+    #{<<"subject">> => aai:serialize_subject(Subject)};
+translate_value(_, #gri{type = od_token, aspect = verify_identity}, Subject) ->
+    #{<<"subject">> => aai:serialize_subject(Subject)};
+
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n
     ProtocolVersion: ~p~n
