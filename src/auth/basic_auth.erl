@@ -15,8 +15,9 @@
 
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/http/headers.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 -type password() :: binary().
 -type password_hash() :: binary().
@@ -49,7 +50,7 @@
 -spec check_basic_auth(cowboy_req:req()) ->
     {true, aai:auth()} | false | errors:error().
 check_basic_auth(Req) ->
-    case cowboy_req:header(<<"authorization">>, Req, undefined) of
+    case cowboy_req:header(?HDR_AUTHORIZATION, Req, undefined) of
         <<"Basic ", UserPasswdB64/binary>> ->
             try
                 UsernamePassword = base64:decode(UserPasswdB64),

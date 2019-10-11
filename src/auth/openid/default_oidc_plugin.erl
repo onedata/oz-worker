@@ -17,6 +17,7 @@
 
 -include("auth/auth_common.hrl").
 -include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 % Default configuration of the handler
 -define(DEFAULT_SCOPE, "openid email profile").
@@ -175,7 +176,7 @@ get_user_info(IdP, AccessToken) ->
 
     Headers1 = case Parameters2 of
         Map when map_size(Map) == 0 -> #{};
-        _ -> #{<<"content-type">> => <<"application/x-www-form-urlencoded">>}
+        _ -> #{?HDR_CONTENT_TYPE => <<"application/x-www-form-urlencoded">>}
     end,
     Headers2 = headers_append_access_token(Headers1, IdP, AccessToken),
     Headers3 = headers_append_custom(Headers2, IdP, userInfo),
@@ -209,7 +210,7 @@ acquire_access_token(IdP, Parameters) ->
     Parameters3 = parameters_append_custom(Parameters2, IdP, accessToken),
 
     Headers1 = #{
-        <<"content-type">> => <<"application/x-www-form-urlencoded">>
+        ?HDR_CONTENT_TYPE => <<"application/x-www-form-urlencoded">>
     },
     Headers2 = headers_append_auth(Headers1, IdP),
     Headers3 = headers_append_custom(Headers2, IdP, accessToken),
@@ -220,7 +221,7 @@ acquire_access_token(IdP, Parameters) ->
         Method, 200, AccessTokenEndpoint, Headers3, Parameters3
     ),
 
-    case maps:get(<<"content-type">>, RespHeaders, maps:get(<<"Content-Type">>, RespHeaders, undefined)) of
+    case maps:get(?HDR_CONTENT_TYPE, RespHeaders, maps:get(?HDR_CONTENT_TYPE, RespHeaders, undefined)) of
         <<"application/json", _/binary>> ->
             Response = json_utils:decode(RespBinary),
             AccessToken = maps:get(<<"access_token">>, Response, undefined),
@@ -331,7 +332,7 @@ headers_append_auth(Headers, IdP) ->
             ClientId = ?CFG_CLIENT_ID(IdP),
             ClientSecret = ?CFG_CLIENT_SECRET(IdP),
             B64 = base64:encode(<<ClientId/binary, ":", ClientSecret/binary>>),
-            Headers#{<<"authorization">> => <<"Basic ", B64/binary>>};
+            Headers#{?HDR_AUTHORIZATION => <<"Basic ", B64/binary>>};
         urlencoded ->
             Headers
     end.
@@ -343,7 +344,7 @@ headers_append_auth(Headers, IdP) ->
 headers_append_access_token(Headers, IdP, AccessToken) ->
     case ?CFG_ACCESS_TOKEN_PASS_METHOD(IdP) of
         inAuthHeader ->
-            Headers#{<<"authorization">> => <<"Bearer ", AccessToken/binary>>};
+            Headers#{?HDR_AUTHORIZATION => <<"Bearer ", AccessToken/binary>>};
         urlencoded ->
             Headers
     end.

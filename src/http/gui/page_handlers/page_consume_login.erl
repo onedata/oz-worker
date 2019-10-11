@@ -17,6 +17,7 @@
 
 -include("http/gui_paths.hrl").
 -include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include("auth/auth_errors.hrl").
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/logging.hrl").
@@ -38,7 +39,7 @@ handle(Method, Req) ->
     case idp_auth_test_mode:process_is_test_mode_enabled() of
         true ->
             cowboy_req:reply(?HTTP_200_OK, #{
-                <<"content-type">> => <<"text/html">>
+                ?HDR_CONTENT_TYPE => <<"text/html">>
             }, render_test_login_results(ValidateResult), Req);
         false ->
             {NewReq, RedirectURL} = case ValidateResult of
@@ -62,7 +63,7 @@ handle(Method, Req) ->
                 <<"location">> => RedirectURL,
                 % Connection close is required, otherwise chrome/safari can get stuck
                 % stalled waiting for data.
-                <<"connection">> => <<"close">>
+                ?HDR_CONNECTION => <<"close">>
             }, NewReq)
     end.
 

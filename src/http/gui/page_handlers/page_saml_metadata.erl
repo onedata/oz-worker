@@ -16,6 +16,7 @@
 -behaviour(dynamic_page_behaviour).
 
 -include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([handle/2]).
 
@@ -40,6 +41,6 @@ handle(<<"GET">>, Req) ->
             SignedXml = esaml_sp:generate_metadata(SpConfig),
             Metadata = xmerl:export([SignedXml], xmerl_xml),
             cowboy_req:reply(?HTTP_200_OK, #{
-                <<"content-type">> => <<"text/xml">>
+                ?HDR_CONTENT_TYPE => <<"text/xml">>
             }, Metadata, Req)
     end.

@@ -17,10 +17,11 @@
 -include("auth/entitlement_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/errors.hrl").
--include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/global_definitions.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/global_definitions.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
 
 -define(DUMMY_IDP, dummyIdP).
 -define(FIRST_IDP, firstIdP).
@@ -379,8 +380,8 @@ authority_delegation(Config) ->
             method => get,
             path => <<"/user">>,
             headers => case AuthType of
-                bearer -> #{<<"authorization">> => <<"Bearer dummy/", AccessToken/binary>>};
-                xAuthToken -> #{<<"x-auth-token">> => <<"dummy/", AccessToken/binary>>}
+                bearer -> #{?HDR_AUTHORIZATION => <<"Bearer dummy/", AccessToken/binary>>};
+                xAuthToken -> #{?HDR_X_AUTH_TOKEN => <<"dummy/", AccessToken/binary>>}
             end
         },
         expect => case Success of
@@ -775,7 +776,7 @@ bad_userinfo_endpoint_in_authority_delegation(Config, TestMode) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"authorization">> => <<"Bearer dummy/", AccessToken/binary>>}
+            headers => #{?HDR_AUTHORIZATION => <<"Bearer dummy/", AccessToken/binary>>}
         },
         expect => #{
             code => 500
@@ -885,7 +886,7 @@ bad_access_token_pass_method_in_authority_delegation(Config, TestMode) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"authorization">> => <<"Bearer dummy/", AccessToken/binary>>}
+            headers => #{?HDR_AUTHORIZATION => <<"Bearer dummy/", AccessToken/binary>>}
         },
         expect => #{
             code => 500

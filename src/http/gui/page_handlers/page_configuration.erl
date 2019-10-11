@@ -16,6 +16,7 @@
 -behaviour(dynamic_page_behaviour).
 
 -include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([handle/2]).
 
@@ -32,7 +33,7 @@
 handle(<<"GET">>, Req) ->
     {ok, Config} = oz_worker:get_config(),
     cowboy_req:reply(?HTTP_200_OK,
-        #{<<"content-type">> => <<"application/json">>},
+        #{?HDR_CONTENT_TYPE => <<"application/json">>},
         json_utils:encode(Config),
         Req
     ).

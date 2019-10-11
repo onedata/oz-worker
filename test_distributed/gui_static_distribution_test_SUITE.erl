@@ -19,6 +19,7 @@
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
@@ -228,19 +229,19 @@ gui_upload_requires_provider_auth(Config) ->
 
     % With auth
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"opw">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"opw">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"onp">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"onp">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
 
     % Upload is only possible for own cluster
     {ok, {_AnotherProvider, AnotherProviderToken}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     ?assertMatch({ok, 403, _, _}, perform_upload(
-        Config, <<"opw">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => AnotherProviderToken}
+        Config, <<"opw">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => AnotherProviderToken}
     )),
     ?assertMatch({ok, 403, _, _}, perform_upload(
-        Config, <<"onp">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => AnotherProviderToken}
+        Config, <<"onp">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => AnotherProviderToken}
     )).
 
 
@@ -258,10 +259,10 @@ gui_upload_is_not_possible_for_onezone_services(Config) ->
     % With provider auth
     {ok, {_Provider, ProviderToken}} = oz_test_utils:create_provider(Config),
     ?assertMatch({ok, 404, _, _}, perform_upload(
-        Config, <<"ozw">>, ?ONEZONE_CLUSTER_ID, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"ozw">>, ?ONEZONE_CLUSTER_ID, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
     ?assertMatch({ok, 404, _, _}, perform_upload(
-        Config, <<"onp">>, ?ONEZONE_CLUSTER_ID, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"onp">>, ?ONEZONE_CLUSTER_ID, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )).
 
 
@@ -271,10 +272,10 @@ gui_upload_for_inexistent_service_returns_not_found(Config) ->
     {GuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
 
     ?assertMatch({ok, 404, _, _}, perform_upload(
-        Config, <<"abc">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"abc">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
     ?assertMatch({ok, 404, _, _}, perform_upload(
-        Config, <<"xyz">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"xyz">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )).
 
 
@@ -300,10 +301,10 @@ gui_upload_with_invalid_package_returns_proper_error(Config) ->
     ExpError = json_utils:encode(errors:to_json(?ERROR_BAD_GUI_PACKAGE)),
 
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"opw">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"opw">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"onp">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"onp">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )).
 
 
@@ -318,10 +319,10 @@ gui_upload_with_too_large_package_returns_proper_error(Config) ->
     ExpError = json_utils:encode(errors:to_json(?ERROR_GUI_PACKAGE_TOO_LARGE)),
 
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"opw">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"opw">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"onp">>, ClusterId, GuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"onp">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )).
 
 
@@ -342,7 +343,7 @@ gui_upload_page_deploys_op_worker_gui_on_all_nodes(Config) ->
     ?assert(version_info_is_set(Config, ClusterId, ?WORKER, {<<"18.07.1">>, <<"build">>, ?EMPTY_GUI_HASH})),
 
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"opw">>, ClusterId, OpGuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"opw">>, ClusterId, OpGuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
 
     ?assert(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?OP_WORKER_GUI, OpGuiHash])),
@@ -376,7 +377,7 @@ gui_upload_page_deploys_op_panel_gui_on_all_nodes(Config) ->
     ?assert(version_info_is_set(Config, ClusterId, ?ONEPANEL, {<<"18.07.1">>, <<"build">>, ?EMPTY_GUI_HASH})),
 
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"onp">>, ClusterId, OppGuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"onp">>, ClusterId, OppGuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
 
     ?assert(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?ONEPANEL_GUI, OppGuiHash])),
@@ -408,7 +409,7 @@ gui_upload_page_deploys_harvester_gui_on_all_nodes(Config) ->
     ?assertNot(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?HARVESTER_GUI, HrvGuiHash])),
 
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"hrv">>, HarvesterId, HrvGuiPackage, #{<<"x-auth-token">> => GuiToken}
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage, #{?HDR_X_AUTH_TOKEN => GuiToken}
     )),
 
     ?assert(oz_test_utils:call_oz(Config, gui_static, gui_exists, [?HARVESTER_GUI, HrvGuiHash])),
@@ -434,7 +435,7 @@ gui_package_verification_works(Config) ->
 
     % GUI hash is not whitelisted
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"opw">>, ClusterId, OpGuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"opw">>, ClusterId, OpGuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
 
     % Whitelist the GUI hash:
@@ -449,21 +450,21 @@ gui_package_verification_works(Config) ->
 
     % Now, upload should work
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"opw">>, ClusterId, OpGuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"opw">>, ClusterId, OpGuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
 
     % Make sure that only packages for op-worker with such hash are accepted
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"onp">>, ClusterId, OpGuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"onp">>, ClusterId, OpGuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
 
     % When verification is disabled, any package should be accepted
     oz_test_utils:set_env(Config, gui_package_verification, false),
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"opw">>, ClusterId, OpGuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"opw">>, ClusterId, OpGuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"onp">>, ClusterId, OpGuiPackage, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"onp">>, ClusterId, OpGuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
 
     % Harvester GUI package verification can be turned off using a separate env
@@ -482,7 +483,7 @@ gui_package_verification_works(Config) ->
 
     % GUI hash is not whitelisted
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"hrv">>, HarvesterId, HrvGuiPackage1, #{<<"x-auth-token">> => GuiToken}
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage1, #{?HDR_X_AUTH_TOKEN => GuiToken}
     )),
 
     % Whitelist the GUI hash:
@@ -498,36 +499,36 @@ gui_package_verification_works(Config) ->
         }
     }),
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"hrv">>, HarvesterId, HrvGuiPackage1, #{<<"x-auth-token">> => GuiToken}
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage1, #{?HDR_X_AUTH_TOKEN => GuiToken}
     )),
 
     % Unknown hash should not be accepted
     {HrvGuiPackage2, _HrvIndexContent2} = oz_test_utils:create_dummy_gui_package(),
 
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"hrv">>, HarvesterId, HrvGuiPackage2, #{<<"x-auth-token">> => GuiToken}
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage2, #{?HDR_X_AUTH_TOKEN => GuiToken}
     )),
 
     % Disable GUI package verification for harvesters only
     oz_test_utils:set_env(Config, harvester_gui_package_verification, false),
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"hrv">>, HarvesterId, HrvGuiPackage2, #{<<"x-auth-token">> => GuiToken}
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage2, #{?HDR_X_AUTH_TOKEN => GuiToken}
     )),
 
     % It should not work for other services
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
-        Config, <<"onp">>, ClusterId, HrvGuiPackage2, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"onp">>, ClusterId, HrvGuiPackage2, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
 
     % When verification is disabled, any package for any service should be accepted
     oz_test_utils:set_env(Config, gui_package_verification, false),
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"onp">>, ClusterId, HrvGuiPackage2, #{<<"x-auth-token">> => ProviderToken}
+        Config, <<"onp">>, ClusterId, HrvGuiPackage2, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
 
     {HrvGuiPackage3, _HrvIndexContent3} = oz_test_utils:create_dummy_gui_package(),
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
-        Config, <<"hrv">>, HarvesterId, HrvGuiPackage3, #{<<"x-auth-token">> => GuiToken}
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage3, #{?HDR_X_AUTH_TOKEN => GuiToken}
     )).
 
 
@@ -809,7 +810,7 @@ file_is_served(ExpState, Config, ExpectedContent, ExpectedContentType, Path) ->
         Url = str_utils:format("https://~s~s", [Ip, Path]),
         {ok, Code, Headers, Body} = http_client:get(Url, #{}, <<>>, Opts),
         Result = Code =:= 200 andalso
-            maps:get(<<"content-type">>, Headers) =:= ExpectedContentType andalso
+            maps:get(?HDR_CONTENT_TYPE, Headers) =:= ExpectedContentType andalso
             Body =:= ExpectedContent,
         case Result of
             ExpState ->
