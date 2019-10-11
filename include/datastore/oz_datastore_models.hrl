@@ -436,6 +436,14 @@
     }
 }).
 
+
+% stores static content to be displayed in GUI
+-record(gui_message, {
+    % the default state is 'enabled' to encourage admin setting the message
+    enabled = true :: boolean(),
+    body = <<>> :: binary()
+}).
+
 %% Stores information about active provider connection
 -record(provider_connection, {
     connection_ref :: gs_server:conn_ref()

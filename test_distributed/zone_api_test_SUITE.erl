@@ -13,12 +13,14 @@
 -module(zone_api_test_SUITE).
 -author("Wojciech Geisler").
 
+-include("datastore/oz_datastore_models.hrl").
 -include("http/rest.hrl").
 -include("registered_names.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -31,22 +33,29 @@
 -export([
     get_configuration_test/1,
     get_old_configuration_endpoint_test/1,
-    list_privileges_test/1
+    list_privileges_test/1,
+    default_gui_messages_are_empty_or_migrated/1,
+    unknown_gui_messages_are_not_found/1,
+    gui_message_is_updated/1
 ]).
 
 all() ->
     ?ALL([
         get_configuration_test,
         get_old_configuration_endpoint_test,
-        list_privileges_test
+        list_privileges_test,
+        default_gui_messages_are_empty_or_migrated,
+        unknown_gui_messages_are_not_found,
+        gui_message_is_updated
     ]).
+
+-define(SIGNIN_NOTIFICATION_BODY, "custom login notification").
 
 %%%===================================================================
 %%% Test functions
 %%%===================================================================
 
 get_configuration_test(Config) ->
-
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [root, nobody]
@@ -80,7 +89,6 @@ get_old_configuration_endpoint_test(Config) ->
 
 
 list_privileges_test(Config) ->
-
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [root, nobody]
@@ -96,6 +104,118 @@ list_privileges_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+default_gui_messages_are_empty_or_migrated(Config) ->
+    oz_test_utils:set_env(Config, login_notification, ?SIGNIN_NOTIFICATION_BODY),
+
+    EmptyBodies = [
+        {MessageId, <<>>} ||
+        MessageId <- gui_message_ids(), MessageId /= <<"signin_notification">>
+    ],
+    ExpectedBodies = [
+        {<<"signin_notification">>, <<?SIGNIN_NOTIFICATION_BODY>>} | EmptyBodies
+    ],
+
+    lists:foreach(fun({MessageId, Body}) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    root,
+                    {admin, []},
+                    nobody
+                ]},
+
+            logic_spec = #logic_spec{
+                operation = get,
+                module = zone_logic,
+                function = get_gui_message_as_map,
+                args = [MessageId],
+                expected_result = ?OK_MAP(#{
+                    enabled => true, body => Body
+                })
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end, ExpectedBodies).
+
+
+unknown_gui_messages_are_not_found(Config) ->
+    GetApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, []},
+                nobody
+            ]},
+
+        logic_spec = #logic_spec{
+            operation = get,
+            module = zone_logic,
+            function = get_gui_message_as_map,
+            args = [<<"badMessageId">>],
+            expected_result = ?ERROR_REASON({error, not_found})
+        }
+    },
+    UpdateApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root], forbidden = [{admin, []}]},
+        logic_spec = #logic_spec{
+            operation = update,
+            module = zone_logic,
+            function = update_gui_message,
+            args = [auth, <<"badMessageId">>, data],
+            expected_result = ?ERROR_REASON({error, not_found})
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, GetApiTestSpec)),
+    ?assert(api_test_utils:run_tests(Config, UpdateApiTestSpec)).
+
+
+gui_message_is_updated(Config) ->
+    MessageId = hd(gui_message_ids()),
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [root],
+            forbidden = [{admin, []}],
+            unauthorized = [nobody]
+        },
+        logic_spec = #logic_spec{
+            operation = update,
+            module = zone_logic,
+            function = update_gui_message,
+            args = [auth, MessageId, data],
+            expected_result = ?OK
+
+        },
+        data_spec = #data_spec{
+            optional = [<<"enabled">>, <<"body">>],
+            correct_values = #{
+                <<"enabled">> => [true, false],
+                <<"body">> => [<<"some <span>html text</span>">>]
+            },
+            bad_values = [
+                {<<"enabled">>, 1234, ?ERROR_BAD_VALUE_BOOLEAN(<<"enabled">>)},
+                {<<"enabled">>, atom, ?ERROR_BAD_VALUE_BOOLEAN(<<"enabled">>)},
+                {<<"body">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"body">>)}
+            ]
+        }
+    },
+    VerifyFun = fun
+        (_ShouldSucceed = false, _, _Data) -> ok;
+        (_ShouldSucceed = true, _, Data) ->
+            {ok, NewMap} = ?assertMatch({ok, _}, oz_test_utils:call_oz(Config,
+                zone_logic, get_gui_message_as_map, [MessageId])),
+            NewMapBin = keys_to_binary(NewMap),
+            maps:map(fun(Key, Value) ->
+                ?assertEqual(Value, maps:get(Key, NewMapBin))
+            end, Data),
+            true
+    end,
+
+    ?assert(api_test_utils:run_tests(Config,
+        ApiTestSpec, undefined, undefined, VerifyFun)).
+
 
 
 %%%===================================================================
@@ -192,3 +312,18 @@ expected_configuration(Config) ->
         <<"subdomainDelegationSupported">> => SubdomainDelegationSupported,
         <<"supportedIdPs">> => MockedSupportedIdPs
     }.
+
+
+-spec gui_message_ids() -> [binary()].
+gui_message_ids() -> [
+    <<"cookie_consent_notification">>,
+    <<"privacy_policy">>,
+    <<"signin_notification">>
+].
+
+
+-spec keys_to_binary(#{atom() => V}) -> #{binary() => V}.
+keys_to_binary(Map) ->
+    maps:from_list(
+        [{atom_to_binary(Key, utf8), Value} || {Key, Value} <- maps:to_list(Map)]
+    ).

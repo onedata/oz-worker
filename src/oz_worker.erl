@@ -21,7 +21,6 @@
 -export([get_name/0]).
 -export([get_domain/0, get_url/0, get_uri/1]).
 -export([get_release_version/0, get_build_version/0]).
--export([get_config/0]).
 -export([entity_logic_plugin/0]).
 
 %%%===================================================================
@@ -131,18 +130,3 @@ get_build_version() ->
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     zone_logic_plugin.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns Onezone configuration details, as needed by the configuration
-%% endpoint.
-%% @end
-%%--------------------------------------------------------------------
--spec get_config() -> {ok, #{atom() := term()}} | {error, Reason :: term()}.
-get_config() ->
-    entity_logic:handle(#el_req{
-        operation = get,
-        auth = ?NOBODY,
-        gri = #gri{type = oz_worker, id = undefined, aspect = configuration}
-    }).

@@ -42,6 +42,7 @@ get_models() -> [
     session,
     state_token,
     dns_state,
+    gui_message,
     provider_connection,
     user_connections,
     shared_token_secret,

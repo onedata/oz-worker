@@ -31,7 +31,7 @@
 %%--------------------------------------------------------------------
 -spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"GET">>, Req) ->
-    {ok, Config} = oz_worker:get_config(),
+    {ok, Config} = zone_logic:get_configuration(),
     cowboy_req:reply(?HTTP_200_OK,
         #{?HDR_CONTENT_TYPE => <<"application/json">>},
         json_utils:encode(Config),
