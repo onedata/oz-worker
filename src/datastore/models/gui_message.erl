@@ -19,7 +19,7 @@
 -author("Wojciech Geisler").
 
 -include("datastore/oz_datastore_models.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 %% API
 -export([exists/1, get/1, update/2]).
