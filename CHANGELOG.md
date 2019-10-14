@@ -4,6 +4,14 @@
 CHANGELOG
 ---------
 
+### 19.02.0-rc2
+
+* VFS-1891 GUI update Added privacy policy and cookie consent notification
+* VFS-5708 Implement gui_message management through zone_logic
+* VFS-5708 Migrate login_notification configured in app.config to gui_message model
+* VFS-5699 Implement cluster upgrade procedure
+
+
 ### 19.02.0-rc1
 
 * VFS-5689 Increase default GUI token TTL
