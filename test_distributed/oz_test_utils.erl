@@ -18,6 +18,7 @@
 -include("api_test_utils.hrl").
 -include("auth/auth_common.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/errors.hrl").
@@ -3326,7 +3327,7 @@ log_in(Config, UserId) ->
 log_out(Config, Cookie) ->
     MockedReq = #{
         resp_headers => #{},
-        headers => #{<<"cookie">> => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>}
+        headers => #{?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>}
     },
     ?assertMatch(#{}, call_oz(
         Config, gui_session, log_out, [MockedReq]
@@ -3502,8 +3503,8 @@ request_gui_token(Config, Cookie, GuiType, ClusterId) ->
     Result = http_client:post(
         oz_url(Config, str_utils:format_bin("/~s/~s/gui-preauthorize", [GuiPrefix, ClusterId])),
         #{
-            <<"content-type">> => <<"application/json">>,
-            <<"cookie">> => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
+            ?HDR_CONTENT_TYPE => <<"application/json">>,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
         },
         <<"">>,
         [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]

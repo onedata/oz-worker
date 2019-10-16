@@ -76,6 +76,9 @@ fetch_entity(#gri{id = TokenNonce}) ->
 %%--------------------------------------------------------------------
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
+operation_supported(create, preauthorize, public) -> true;
+operation_supported(create, verify_identity, public) -> true;
+
 operation_supported(create, {user_named_token, _}, private) -> true;
 operation_supported(create, {provider_named_token, _}, private) -> true;
 operation_supported(create, {user_temporary_token, _}, private) -> true;
@@ -127,7 +130,27 @@ create(#el_req{gri = #gri{id = undefined, aspect = {user_temporary_token, UserId
     create_temporary_token(?SUB(user, UserId), Data);
 
 create(#el_req{gri = #gri{id = undefined, aspect = {provider_temporary_token, ProviderId}}, data = Data}) ->
-    create_temporary_token(?SUB(?ONEPROVIDER, ProviderId), Data).
+    create_temporary_token(?SUB(?ONEPROVIDER, ProviderId), Data);
+
+create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = preauthorize}, data = Data}) ->
+    Token = maps:get(<<"token">>, Data),
+    PeerIp = maps:get(<<"peerIp">>, Data, undefined),
+    case token_auth:verify_access_token(Token, PeerIp, aai:auth_to_audience(Auth)) of
+        {ok, #auth{subject = Subject}} ->
+            {ok, value, Subject};
+        {error, _} = Error ->
+            Error
+    end;
+
+create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_identity}, data = Data}) ->
+    Token = maps:get(<<"token">>, Data),
+    PeerIp = maps:get(<<"peerIp">>, Data, undefined),
+    case token_auth:verify_identity(Token, PeerIp, aai:auth_to_audience(Auth)) of
+        {ok, Subject} ->
+            {ok, value, Subject};
+        {error, _} = Error ->
+            Error
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -235,6 +258,11 @@ exists(_, _) ->
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
 % Users and providers are authorized to perform all operations on their tokens
+authorize(#el_req{operation = create, gri = #gri{aspect = preauthorize}}, _) ->
+    true;
+authorize(#el_req{operation = create, gri = #gri{aspect = verify_identity}}, _) ->
+    true;
+
 authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {user_named_tokens, UserId}}}, _) ->
     true;
 authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {user_named_token, UserId}}}, _) ->
@@ -313,6 +341,23 @@ required_admin_privileges(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
+validate(#el_req{operation = create, gri = #gri{aspect = preauthorize}}) -> #{
+    required => #{
+        <<"token">> => {token, any}
+    },
+    optional => #{
+        <<"peerIp">> => {ipv4_address, any}
+    }
+};
+validate(#el_req{operation = create, gri = #gri{aspect = verify_identity}}) -> #{
+    required => #{
+        <<"token">> => {token, any}
+    },
+    optional => #{
+        <<"peerIp">> => {ipv4_address, any}
+    }
+};
+
 validate(#el_req{operation = create, gri = #gri{aspect = {user_named_token, UserId}}}) ->
     ?NAMED_TOKEN_VALIDATOR(?SUB(user, UserId));
 validate(#el_req{operation = create, gri = #gri{aspect = {provider_named_token, ProviderId}}}) ->

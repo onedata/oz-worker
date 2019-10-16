@@ -13,6 +13,7 @@
 -author("Lukasz Opiola").
 
 -include("datastore/oz_datastore_models.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("cluster_worker/test_distributed/performance_test_utils.hrl").
 
 %% API
@@ -614,7 +615,7 @@ rest_req(Config, Token, Method, Path, Body) ->
     Opts = [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}],
     URL = oz_test_utils:oz_rest_url(Config, Path),
     Headers = #{
-        <<"content-type">> => <<"application/json">>,
-        <<"x-auth-token">> => Token
+        ?HDR_CONTENT_TYPE => <<"application/json">>,
+        ?HDR_X_AUTH_TOKEN => Token
     },
     http_client:request(Method, URL, Headers, json_utils:encode(Body), Opts).

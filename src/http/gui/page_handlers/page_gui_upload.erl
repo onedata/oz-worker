@@ -24,9 +24,10 @@
 
 -include("http/rest.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
 %% Cowboy API

@@ -20,12 +20,13 @@
 -include("auth/entitlement_mapping.hrl").
 -include("http/gui_paths.hrl").
 -include("api_test_utils.hrl").
--include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("gui/include/gui_session.hrl").
 
 %% API
@@ -101,7 +102,7 @@ basic_auth_endpoint_test(Config) ->
     Endpoint = oz_test_utils:oz_url(Config, <<?LOGIN_PATH>>),
     UserPasswordB64 = base64:encode(<<Username/binary, ":", Pass/binary>>),
     BasicAuthHeaders = #{
-        <<"authorization">> => <<"Basic ", UserPasswordB64/binary>>
+        ?HDR_AUTHORIZATION => <<"Basic ", UserPasswordB64/binary>>
     },
     Opts = [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}],
     Response = http_client:post(Endpoint, BasicAuthHeaders, [], Opts),
@@ -128,7 +129,7 @@ basic_auth_endpoint_test(Config) ->
     % Try some inexistent user credentials
     WrongUserPasswordB64 = base64:encode(<<"lol:wut">>),
     WrongBasicAuthHeaders = #{
-        <<"authorization">> => <<"Basic ", WrongUserPasswordB64/binary>>
+        ?HDR_AUTHORIZATION => <<"Basic ", WrongUserPasswordB64/binary>>
     },
     ?assertMatch({ok, 401, _, _}, http_client:post(Endpoint, WrongBasicAuthHeaders, [], Opts)),
 

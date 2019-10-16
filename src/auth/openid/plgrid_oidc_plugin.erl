@@ -18,6 +18,7 @@
 -include("auth/auth_common.hrl").
 -include("auth/auth_errors.hrl").
 -include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
 
@@ -103,7 +104,7 @@ validate_login(IdP, QueryParams, _RedirectUri) ->
 
     % Send validation request, check if server responded positively
     {_, <<"is_valid:true\n">>} = openid_protocol:request_idp(post, 200, ReceivedEndpoint, #{
-        <<"content-type">> => <<"application/x-www-form-urlencoded">>
+        ?HDR_CONTENT_TYPE => <<"application/x-www-form-urlencoded">>
     }, Params),
 
     % Return signed attributes
@@ -166,8 +167,8 @@ plgrid_endpoint(IdP) ->
 -spec discover_plgrid_endpoint(auth_config:idp()) -> binary().
 discover_plgrid_endpoint(IdP) ->
     {_, Xrds} = openid_protocol:request_idp(get, 200, ?CFG_XRDS_ENDPOINT(IdP), #{
-        <<"Accept">> => <<"application/xrds+xml;level=1, */*">>,
-        <<"Connection">> => <<"close">>
+        ?HDR_ACCEPT => <<"application/xrds+xml;level=1, */*">>,
+        ?HDR_CONNECTION => <<"close">>
     }, #{}, [{follow_redirect, true}, {max_redirect, 5}]),
     {Xml, _} = xmerl_scan:string(binary_to_list(Xrds)),
     [#xmlElement{content = [#xmlText{value = Uri} | _]}] = xmerl_xpath:string("//URI", Xml),
