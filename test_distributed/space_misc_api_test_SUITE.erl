@@ -567,7 +567,11 @@ get_share_test(Config) ->
             method = get,
             path = [<<"/spaces/">>, S1, <<"/shares/">>, ShareId],
             expected_code = ?HTTP_200_OK,
-            expected_body = ExpShareDetails#{<<"shareId">> => ShareId}
+            expected_body = ExpShareDetails#{
+                <<"shareId">> => ShareId,
+                % In REST, the rootFileId GUID is converted to ObjectID
+                <<"rootFileId">> => element(2, {ok, _} = file_id:guid_to_objectid(?ROOT_FILE_ID))
+            }
         },
         logic_spec = #logic_spec{
             module = space_logic,

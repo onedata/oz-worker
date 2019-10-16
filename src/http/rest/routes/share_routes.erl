@@ -27,14 +27,6 @@
 %%--------------------------------------------------------------------
 -spec routes() -> [{binary(), #rest_req{}}].
 routes() -> [
-    %% Create share
-    %% This operation requires one of the following privileges:
-    %% - space_manage_shares
-    %% - oz_shares_create
-    {<<"/shares">>, #rest_req{
-        method = 'POST',
-        b_gri = #b_gri{type = od_share, id = undefined, aspect = instance}
-    }},
     %% List all shares
     %% This operation requires one of the following privileges:
     %% - oz_shares_list
@@ -58,14 +50,6 @@ routes() -> [
     %% - oz_shares_update
     {<<"/shares/:id">>, #rest_req{
         method = 'PATCH',
-        b_gri = #b_gri{type = od_share, id = ?BINDING(id), aspect = instance}
-    }},
-    %% Remove share
-    %% This operation requires one of the following privileges:
-    %% - space_manage_shares
-    %% - oz_shares_delete
-    {<<"/shares/:id">>, #rest_req{
-        method = 'DELETE',
         b_gri = #b_gri{type = od_share, id = ?BINDING(id), aspect = instance}
     }}
 ].

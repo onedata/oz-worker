@@ -48,7 +48,7 @@ get_response(#gri{id = ShareId, aspect = instance, scope = private}, Share) ->
     rest_translator:ok_body_reply(#{
         <<"shareId">> => ShareId, <<"name">> => Name,
         <<"publicUrl">> => PublicUrl, <<"spaceId">> => SpaceId,
-        <<"rootFileId">> => RootFileId,
+        <<"rootFileId">> => element(2, {ok, _} = file_id:guid_to_objectid(RootFileId)),
         <<"handleId">> => gs_protocol:undefined_to_null(HandleId)
     });
 get_response(#gri{id = undefined, aspect = list, scope = private}, Shares) ->
