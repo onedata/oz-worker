@@ -142,7 +142,7 @@
 -define(SHARE_NAME2, <<"share2">>).
 -define(SHARE_ID_1, <<"shareId1">>).
 -define(SHARE_ID_2, <<"shareId2">>).
--define(ROOT_FILE_ID, <<"root_file">>).
+-define(ROOT_FILE_ID, <<"c2hhcmVHdWlkIzkxNzg0ZjM3ZmRjOTg3MGFiNzcyNDg2Y2Y2MTYzNmUyIzkxNTM4ZDQwMmYwOWY0MzVhY2JjZDJlMzA2YTViZmIxIzFhNTgxMDUyYTExODRhOGZiYjA5OWI5ZDA1MzhiZmUy">>).
 -define(SHARE_PUBLIC_URL(ZoneDomain, ShareId),
     str_utils:format_bin("https://~s/share/~s", [ZoneDomain, ShareId])
 ).

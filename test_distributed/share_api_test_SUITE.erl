@@ -159,16 +159,7 @@ create_test(Config) ->
                 {user, NonAdmin}
             ]
         },
-        rest_spec = #rest_spec{
-            method = post,
-            path = <<"/shares">>,
-            expected_code = ?HTTP_201_CREATED,
-            expected_headers = fun(#{<<"Location">> := Location} = _Headers) ->
-                BaseURL = ?URL(Config, [<<"/shares/">>]),
-                [ShareId] = binary:split(Location, [BaseURL], [global, trim_all]),
-                VerifyFun(ShareId)
-            end
-        },
+        % CREATE operation is not supported in REST API (reserved for Oneprovider logic via GraphSync)
         logic_spec = #logic_spec{
             module = share_logic,
             function = create,
@@ -243,8 +234,10 @@ get_test(Config) ->
     ),
     SharePublicURL = oz_test_utils:get_share_public_url(Config, ShareId),
     SharePublicDetails = #{
-        <<"name">> => ?SHARE_NAME1, <<"publicUrl">> => SharePublicURL,
-        <<"rootFileId">> => ?ROOT_FILE_ID, <<"handleId">> => null
+        <<"name">> => ?SHARE_NAME1,
+        <<"publicUrl">> => SharePublicURL,
+        <<"rootFileId">> => ?ROOT_FILE_ID,
+        <<"handleId">> => null
     },
     SharePrivateDetails = SharePublicDetails#{<<"spaceId">> => S1},
 
@@ -268,6 +261,8 @@ get_test(Config) ->
             expected_code = ?HTTP_200_OK,
             expected_body = SharePrivateDetails#{
                 <<"handleId">> => null,
+                % In REST, the rootFileId GUID is converted to ObjectID
+                <<"rootFileId">> => element(2, {ok, _} = file_id:guid_to_objectid(?ROOT_FILE_ID)),
                 <<"shareId">> => ShareId
             }
         },
@@ -436,11 +431,7 @@ delete_test(Config) ->
                 {user, NonAdmin}
             ]
         },
-        rest_spec = #rest_spec{
-            method = delete,
-            path = [<<"/shares/">>, shareId],
-            expected_code = ?HTTP_204_NO_CONTENT
-        },
+        % DELETE operation is not supported in REST API (reserved for Oneprovider logic via GraphSync)
         logic_spec = #logic_spec{
             module = share_logic,
             function = delete,
