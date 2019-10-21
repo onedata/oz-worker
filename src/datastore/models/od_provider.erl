@@ -151,8 +151,8 @@ print_summary(SortPos) when is_integer(SortPos) ->
             case provider_connection:is_online(Id) of true -> "online"; false -> "-" end,
             P#od_provider.name,
             P#od_provider.domain,
-            maps:size(P#od_provider.spaces),
-            lists:sum(maps:values(P#od_provider.spaces)),
+            maps:size(P#od_provider.eff_spaces),
+            lists:foldl(fun({Support, _}, TotalSupport) -> TotalSupport + Support end, 0, maps:values(P#od_provider.eff_spaces)),
             maps:size(P#od_provider.eff_users),
             maps:size(P#od_provider.eff_groups)
         }
@@ -193,7 +193,7 @@ get_ctx() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    5.
+    6.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -275,6 +275,9 @@ get_record_struct(5) ->
     ]};
 get_record_struct(6) ->
     % * root_macaroon renamed to root_token
+    % * removed field - spaces
+    % * new field - storages
+    % * new field - eff spaces
     {record, [
         {name, string},
         {admin_email, string},
@@ -287,13 +290,14 @@ get_record_struct(6) ->
         {latitude, float},
         {longitude, float},
 
-        {spaces, #{string => integer}},
+        {storages, [string]}, % New field
 
         {eff_users, #{string => [{atom, string}]}},
         {eff_groups, #{string => [{atom, string}]}},
-        {eff_harvesters, #{string => [{atom, string}]}}, % New field
+        {eff_spaces, #{string => {integer, [{atom, string}]}}}, % New field
+        {eff_harvesters, #{string => [{atom, string}]}},
 
-        {creation_time, integer}, % New field
+        {creation_time, integer},
 
         {bottom_up_dirty, boolean}
     ]}.
@@ -465,7 +469,7 @@ upgrade_record(5, Provider) ->
         Latitude,
         Longitude,
 
-        Spaces,
+        _Spaces,
 
         EffUsers,
         EffGroups,
@@ -475,6 +479,7 @@ upgrade_record(5, Provider) ->
 
         BottomUpDirty
     } = Provider,
+    %% @TODO VFS-5854 Implement upgrade procedure using cluster upgrade
     {6, #od_provider{
         name = Name,
         admin_email = AdminEmail,
@@ -486,11 +491,12 @@ upgrade_record(5, Provider) ->
         latitude = Latitude,
         longitude = Longitude,
 
-        spaces = Spaces,
+        storages = [],
 
         eff_users = EffUsers,
         eff_groups = EffGroups,
         eff_harvesters = EffHarvesters,
+        eff_spaces = #{},
 
         creation_time = CreationTime,
 

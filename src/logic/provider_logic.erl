@@ -38,10 +38,7 @@
     get_eff_groups/2, get_eff_group/3,
     get_eff_group_membership_intermediaries/3,
     get_eff_harvesters/2,
-    get_spaces/2, get_space/3,
-    support_space/4, support_space/3,
-    update_support_size/4,
-    revoke_support/3
+    get_spaces/2, get_space/3
 ]).
 -export([
     update_domain_config/3,
@@ -57,10 +54,11 @@
 ]).
 -export([
     exists/1,
+    has_storage/2,
     has_eff_user/2,
     has_eff_group/2,
-    has_eff_harvester/2,
-    supports_space/2
+    has_eff_space/2,
+    has_eff_harvester/2
 ]).
 -export([
     get_url/1,
@@ -233,38 +231,6 @@ delete(Auth, ProviderId) ->
         auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = instance}
     }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Supports a space based on support_space_token and support size.
-%% @end
-%%--------------------------------------------------------------------
--spec support_space(Auth :: aai:auth(), ProviderId :: od_provider:id(),
-    Token :: tokens:serialized() | tokens:token(), SupportSize :: integer()) ->
-    {ok, od_space:id()} | {error, term()}.
-support_space(Auth, ProviderId, Token, SupportSize) ->
-    support_space(Auth, ProviderId, #{
-        <<"token">> => Token, <<"size">> => SupportSize
-    }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Supports a space. Token (support_space_token) and SupportSize
-%% are provided in a proper Data object.
-%% @end
-%%--------------------------------------------------------------------
--spec support_space(Auth :: aai:auth(), ProviderId :: od_provider:id(),
-    Data :: map()) -> {ok, od_space:id()} | {error, term()}.
-support_space(Auth, ProviderId, Data) ->
-    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
-        operation = create,
-        auth = Auth,
-        gri = #gri{type = od_provider, id = ProviderId, aspect = support},
-        data = Data
-    })).
-
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -486,43 +452,6 @@ get_space(Auth, ProviderId, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates support size for specified space of given provider. Has two variants:
-%% 1) New support size is given explicitly
-%% 2) New support size is provided in a proper Data object.
-%% @end
-%%--------------------------------------------------------------------
--spec update_support_size(Auth :: aai:auth(), ProviderId :: od_provider:id(),
-    SpaceId :: od_space:id(), SupSizeOrData :: integer() | #{}) -> ok | {error, term()}.
-update_support_size(Auth, ProviderId, SpaceId, SupSize) when is_integer(SupSize) ->
-    update_support_size(Auth, ProviderId, SpaceId, #{
-        <<"size">> => SupSize
-    });
-update_support_size(Auth, ProviderId, SpaceId, Data) ->
-    entity_logic:handle(#el_req{
-        operation = update,
-        auth = Auth,
-        gri = #gri{type = od_provider, id = ProviderId, aspect = {space, SpaceId}},
-        data = Data
-    }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Revokes support for specified space on behalf of given provider.
-%% @end
-%%--------------------------------------------------------------------
--spec revoke_support(Auth :: aai:auth(), ProviderId :: od_provider:id(),
-    SpaceId :: od_space:id()) -> ok | {error, term()}.
-revoke_support(Auth, ProviderId, SpaceId) ->
-    entity_logic:handle(#el_req{
-        operation = delete,
-        auth = Auth,
-        gri = #gri{type = od_provider, id = ProviderId, aspect = {space, SpaceId}}
-    }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Performs port check operation by requesting all specified URLs and returning
 %% whether the requests succeeded.
 %% @end
@@ -600,6 +529,19 @@ exists(ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Predicate saying whether specified provider has given storage.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_storage(ProviderOrId :: od_provider:id() | #od_provider{},
+    StorageId :: od_storage:id()) -> boolean().
+has_storage(ProviderId, StorageId) when is_binary(ProviderId) ->
+    entity_graph:has_relation(direct, bottom_up, od_storage, StorageId, od_provider, ProviderId);
+has_storage(Provider, StorageId) ->
+    entity_graph:has_relation(direct, bottom_up, od_storage, StorageId, Provider).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Predicate saying whether specified user is an effective user of given provider.
 %% @end
 %%--------------------------------------------------------------------
@@ -626,6 +568,19 @@ has_eff_group(Provider, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Predicate saying whether specified space is an effective space of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_eff_space(ProviderOrId :: od_provider:id() | #od_provider{},
+    SpaceId :: od_provider:id()) -> boolean().
+has_eff_space(ProviderId, SpaceId) when is_binary(ProviderId) ->
+    entity_graph:has_relation(effective, bottom_up, od_space, SpaceId, od_provider, ProviderId);
+has_eff_space(Provider, SpaceId) ->
+    entity_graph:has_relation(effective, bottom_up, od_space, SpaceId, Provider).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Predicate saying whether specified harvester is an effective harvester of given provider.
 %% @end
 %%--------------------------------------------------------------------
@@ -635,19 +590,6 @@ has_eff_harvester(ProviderId, HarvesterId) when is_binary(ProviderId) ->
     entity_graph:has_relation(effective, bottom_up, od_harvester, HarvesterId, od_provider, ProviderId);
 has_eff_harvester(Provider, HarvesterId) ->
     entity_graph:has_relation(effective, bottom_up, od_harvester, HarvesterId, Provider).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Predicate saying whether specified space is supported by given provider.
-%% @end
-%%--------------------------------------------------------------------
--spec supports_space(ProviderOrId :: od_provider:id() | #od_provider{},
-    SpaceId :: od_space:id()) -> boolean().
-supports_space(ProviderId, SpaceId) when is_binary(ProviderId) ->
-    entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, od_provider, ProviderId);
-supports_space(Provider, SpaceId) ->
-    entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, Provider).
 
 
 %%--------------------------------------------------------------------
@@ -684,7 +626,7 @@ choose_provider_for_user(UserId) ->
             undefined ->
                 {ok, []};
             _ ->
-                space_logic:get_providers(?ROOT, DefaultSpace)
+                space_logic:get_eff_providers(?ROOT, DefaultSpace)
         end,
     case DSProviders of
         List when length(List) > 0 ->
@@ -694,7 +636,7 @@ choose_provider_for_user(UserId) ->
             % Default space does not have a provider, look in other spaces
             ProviderIds = lists:foldl(
                 fun(Space, Acc) ->
-                    {ok, Providers} = space_logic:get_providers(?ROOT, Space),
+                    {ok, Providers} = space_logic:get_eff_providers(?ROOT, Space),
                     Providers ++ Acc
                 end, [], Spaces),
 

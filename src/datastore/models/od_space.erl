@@ -150,8 +150,8 @@ print_summary(SortPos) when is_integer(SortPos) ->
             {maps:size(S#od_space.users), maps:size(S#od_space.eff_users)},
             {maps:size(S#od_space.groups), maps:size(S#od_space.eff_groups)},
             length(S#od_space.shares),
-            maps:size(S#od_space.providers),
-            lists:sum(maps:values(S#od_space.providers))
+            maps:size(S#od_space.eff_providers),
+            lists:foldl(fun({Support, _}, TotalSupport) -> TotalSupport + Support end, 0, maps:values(S#od_space.eff_providers))
         }
     end, Spaces),
     Sorted = lists:keysort(SortPos, SpaceAttrs),
@@ -268,12 +268,12 @@ get_record_struct(6) ->
         {groups, #{string => [atom]}},
         {providers, #{string => integer}},
         {shares, [string]},
-        {harvesters, [string]}, % New field
+        {harvesters, [string]},
 
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
         {eff_providers, #{string => [{atom, string}]}},
-        {eff_harvesters, #{string => [{atom, string}]}}, % New field
+        {eff_harvesters, #{string => [{atom, string}]}},
 
         {creation_time, integer},
         {creator, {record, [ % nested record changed from #client{} to #subject{}
@@ -286,18 +286,20 @@ get_record_struct(6) ->
     ]};
 get_record_struct(7) ->
     % creator field - nested #subject{} record and encoding changed
+    % * removed field - providers
+    % * new field - storages
     {record, [
         {name, string},
 
         {users, #{string => [atom]}},
         {groups, #{string => [atom]}},
-        {providers, #{string => integer}},
+        {storages, #{string => integer}}, % New field
         {shares, [string]},
         {harvesters, [string]},
 
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
-        {eff_providers, #{string => [{atom, string}]}},
+        {eff_providers, #{string => {integer, [{atom, string}]}}}, % Modified field
         {eff_harvesters, #{string => [{atom, string}]}},
 
         {creation_time, integer},
@@ -410,7 +412,7 @@ upgrade_record(3, Space) ->
             (space_view) -> [?SPACE_VIEW, ?SPACE_VIEW_PRIVILEGES];
             (space_invite_user) -> [?SPACE_ADD_USER];
             (space_invite_group) -> [?SPACE_ADD_GROUP];
-            (space_invite_provider) -> [?SPACE_ADD_PROVIDER];
+            (space_invite_provider) -> [?SPACE_ADD_SUPPORT];
             (Other) -> [Other]
         end, Privileges))
     end,
@@ -422,25 +424,25 @@ upgrade_record(3, Space) ->
         end, Field)
     end,
 
-    {4, #od_space{
-        name = Name,
+    {4, {od_space,
+        Name,
 
-        users = TranslateField(Users),
-        groups = TranslateField(Groups),
-        providers = Providers,
-        shares = Shares,
-        harvesters = [],
+        TranslateField(Users),
+        TranslateField(Groups),
+        Providers,
+        Shares,
+        [],
 
-        eff_users = TranslateField(EffUsers),
-        eff_groups = TranslateField(EffGroups),
-        eff_providers = EffProviders,
-        eff_harvesters = #{},
+        TranslateField(EffUsers),
+        TranslateField(EffGroups),
+        EffProviders,
+        #{},
 
-        creation_time = time_utils:system_time_seconds(),
-        creator = undefined,
+        time_utils:system_time_seconds(),
+        undefined,
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        true,
+        true
     }};
 upgrade_record(4, Space) ->
     {
@@ -556,7 +558,7 @@ upgrade_record(6, Space) ->
 
         Users,
         Groups,
-        Providers,
+        _Providers,
         Shares,
         Harvesters,
 
@@ -573,14 +575,31 @@ upgrade_record(6, Space) ->
 
     } = Space,
 
+    %% @TODO VFS-5854 Implement upgrade procedure using cluster upgrade
+
+    TranslatePrivileges = fun(Privileges) ->
+        privileges:from_list(lists:flatmap(fun
+            (space_add_provider) -> [?SPACE_ADD_SUPPORT];
+            (space_remove_provider) -> [?SPACE_REMOVE_SUPPORT];
+            (Other) -> [Other]
+        end, Privileges))
+    end,
+
+    TranslateField = fun(Field) ->
+        maps:map(fun
+            (_, {Privs, Relation}) -> {TranslatePrivileges(Privs), Relation};
+            (_, Privs) -> TranslatePrivileges(Privs)
+        end, Field)
+    end,
+
     {7, #od_space{
         name = Name,
 
-        users = Users,
-        groups = Groups,
-        providers = Providers,
+        users = TranslateField(Users),
+        groups = TranslateField(Groups),
         shares = Shares,
         harvesters = Harvesters,
+        storages = #{},
 
         eff_users = EffUsers,
         eff_groups = EffGroups,

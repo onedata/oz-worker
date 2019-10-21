@@ -803,7 +803,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = index}}, Harvest
 authorize(#el_req{operation = create, gri = #gri{aspect = {submit_batch, SpaceId}}, auth = Auth}, Harvester) ->
     case Auth of
         ?PROVIDER(ProviderId) ->
-            provider_logic:supports_space(ProviderId, SpaceId) andalso harvester_logic:has_space(Harvester, SpaceId);
+            provider_logic:has_eff_space(ProviderId, SpaceId) andalso harvester_logic:has_space(Harvester, SpaceId);
         _Other ->
             false
     end;
@@ -825,7 +825,7 @@ authorize(#el_req{operation = get, auth = Auth, gri = #gri{aspect = instance, sc
         ?USER(UserId) ->
             auth_by_privilege(UserId, Harvester, ?HARVESTER_VIEW);
         ?PROVIDER(ProviderId) ->
-            lists:any(fun(SpaceId) -> provider_logic:supports_space(ProviderId, SpaceId) end,
+            lists:any(fun(SpaceId) -> provider_logic:has_eff_space(ProviderId, SpaceId) end,
                 Harvester#od_harvester.spaces)
     end;
 

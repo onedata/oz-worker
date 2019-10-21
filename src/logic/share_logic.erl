@@ -190,7 +190,7 @@ share_id_to_redirect_url(ShareId) ->
         value = #od_share{space = ParentSpaceId}
     }} = od_share:get(ShareId),
     {ok, #document{
-        value = #od_space{providers = Providers}
+        value = #od_space{eff_providers = Providers}
     }} = od_space:get(ParentSpaceId),
     % Prefer online providers
     {Online, Offline} = lists:partition(

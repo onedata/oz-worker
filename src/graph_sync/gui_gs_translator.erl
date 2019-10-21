@@ -396,7 +396,7 @@ translate_group(#gri{aspect = eff_harvesters}, Harvesters) ->
 -spec translate_space(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) ->
-    #od_space{name = Name, providers = Providers, shares = Shares} = Space,
+    #od_space{name = Name, shares = Shares} = Space,
     fun(?USER(UserId)) -> #{
         <<"name">> => Name,
         <<"scope">> => <<"private">>,
@@ -406,8 +406,8 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
         <<"effUserList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_users}),
         <<"groupList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = groups}),
         <<"effGroupList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_groups}),
-        <<"supportSizes">> => Providers,
-        <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = providers}),
+        <<"supportSizes">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
+        <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_providers}),
         <<"harvesterList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = harvesters}),
         <<"info">> => maps:merge(translate_creator(Space#od_space.creator), #{
             <<"creationTime">> => Space#od_space.creation_time,
@@ -418,7 +418,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
 translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceData) ->
     #{
         <<"name">> := Name,
-        <<"providers">> := Providers,
+        <<"providers">> := SupportSizes,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator,
         <<"sharedDirectories">> := SharedDirectories
@@ -427,7 +427,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"name">> => Name,
         <<"scope">> => <<"protected">>,
         <<"directMembership">> => space_logic:has_direct_user(SpaceId, UserId),
-        <<"supportSizes">> => Providers,
+        <<"supportSizes">> => SupportSizes,
         <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = providers}),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime,
@@ -493,7 +493,7 @@ translate_space(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
         <<"privileges">> => Privileges
     };
 
-translate_space(#gri{aspect = providers, scope = private}, Providers) ->
+translate_space(#gri{aspect = eff_providers, scope = private}, Providers) ->
     #{
         <<"list">> => lists:map(
             fun(ProviderId) ->

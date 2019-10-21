@@ -34,7 +34,7 @@
 -export([
     create_user_invite_token/2,
     create_group_invite_token/2,
-    create_provider_invite_token/2,
+    create_storage_invite_token/2,
 
     add_user/3, add_user/4,
     add_group/3, add_group/4,
@@ -55,14 +55,16 @@
 
     get_shares/2, get_share/3,
 
-    get_providers/2, get_provider/3,
+    get_eff_providers/2, get_provider/3,
 
     get_harvesters/2, get_harvester/3,
+
+    get_storages/2,
 
     update_user_privileges/5, update_user_privileges/4,
     update_group_privileges/5, update_group_privileges/4,
 
-    leave_provider/3,
+    leave_storage/3,
     remove_harvester/3,
 
     remove_user/3,
@@ -75,7 +77,8 @@
     has_eff_user/2,
     has_eff_group/2,
     has_provider/2,
-    has_harvester/2
+    has_harvester/2,
+    has_storage/2
 ]).
 
 %%%===================================================================
@@ -233,17 +236,17 @@ create_group_invite_token(Auth, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a provider invite token (support token), which can be used by any
-%% provider to grant support to given space.
+%% Creates a storage invite token (support token), which can be used by any
+%% storage to grant support to given space.
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider_invite_token(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
+-spec create_storage_invite_token(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
     {ok, tokens:token()} | {error, term()}.
-create_provider_invite_token(Auth, SpaceId) ->
+create_storage_invite_token(Auth, SpaceId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
         auth = Auth,
-        gri = #gri{type = od_space, id = SpaceId, aspect = invite_provider_token},
+        gri = #gri{type = od_space, id = SpaceId, aspect = invite_storage_token},
         data = #{}
     })).
 
@@ -672,13 +675,13 @@ get_share(Auth, SpaceId, ShareId) ->
 %% Retrieves the list of providers of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_providers(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
+-spec get_eff_providers(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
     {ok, [od_provider:id()]} | {error, term()}.
-get_providers(Auth, SpaceId) ->
+get_eff_providers(Auth, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
         auth = Auth,
-        gri = #gri{type = od_space, id = SpaceId, aspect = providers}
+        gri = #gri{type = od_space, id = SpaceId, aspect = eff_providers}
     }).
 
 
@@ -730,6 +733,19 @@ get_harvester(Auth, SpaceId, HarvesterId) ->
 
 
 %%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of storages of given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_storages(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
+    {ok, [od_storage:id()]} | {error, term()}.
+get_storages(Auth, SpaceId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = storages}
+    }).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -799,16 +815,16 @@ update_group_privileges(Auth, SpaceId, GroupId, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Leaves specified provider (ceases support for given space).
+%% Leaves specified storage (ceases support for given space).
 %% @end
 %%--------------------------------------------------------------------
--spec leave_provider(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    ProviderId :: od_provider:id()) -> ok | {error, term()}.
-leave_provider(Auth, SpaceId, ProviderId) ->
+-spec leave_storage(Auth :: aai:auth(), SpaceId :: od_space:id(),
+    StorageId :: od_provider:id()) -> ok | {error, term()}.
+leave_storage(Auth, SpaceId, StorageId) ->
     entity_logic:handle(#el_req{
         operation = delete,
         auth = Auth,
-        gri = #gri{type = od_space, id = SpaceId, aspect = {provider, ProviderId}}
+        gri = #gri{type = od_space, id = SpaceId, aspect = {storage, StorageId}}
     }).
 
 
@@ -930,9 +946,9 @@ has_eff_group(Space, GroupId) ->
 -spec has_provider(SpaceOrId :: od_space:id() | #od_space{},
     ProviderId :: od_provider:id()) -> boolean().
 has_provider(SpaceId, ProviderId) when is_binary(SpaceId) ->
-    entity_graph:has_relation(direct, top_down, od_provider, ProviderId, od_space, SpaceId);
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, od_space, SpaceId);
 has_provider(Space, ProviderId) ->
-    entity_graph:has_relation(direct, top_down, od_provider, ProviderId, Space).
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Space).
 
 
 %%--------------------------------------------------------------------
@@ -946,3 +962,16 @@ has_harvester(SpaceId, HarvesterId) when is_binary(SpaceId) ->
     entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, od_space, SpaceId);
 has_harvester(Space, HarvesterId) ->
     entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, Space).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether given space is member of specified storage.
+%% @end
+%%--------------------------------------------------------------------
+-spec has_storage(SpaceOrId :: od_space:id() | #od_space{},
+    StorageId :: od_storage:id()) -> boolean().
+has_storage(SpaceId, StorageId) when is_binary(SpaceId) ->
+    entity_graph:has_relation(direct, top_down, od_storage, StorageId, od_space, SpaceId);
+has_storage(Space, StorageId) ->
+    entity_graph:has_relation(direct, top_down, od_storage, StorageId, Space).
