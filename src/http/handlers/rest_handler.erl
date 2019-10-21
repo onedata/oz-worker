@@ -141,8 +141,8 @@ is_authorized(Req, State) ->
     Result = try
         % Try to authorize the client using several methods.
         authorize(Req, [
-            fun basic_auth:check_basic_auth/1,
-            fun token_auth:check_token_auth/1
+            fun token_auth:check_token_auth/1,
+            fun basic_auth:check_basic_auth/1
         ])
     catch
         throw:Err ->
