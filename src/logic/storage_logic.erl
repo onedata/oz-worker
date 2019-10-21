@@ -39,7 +39,7 @@
     exists/1,
     has_eff_user/2,
     has_eff_group/2,
-    has_provider/2,
+    belongs_to_provider/2,
     supports_space/2
 ]).
 
@@ -54,13 +54,13 @@
 %% 2) Storage name is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec create(Auth :: aai:auth(), NameOrData :: binary() | #{}) ->
-    {ok, od_storage:id()} | {error, term()}.
+-spec create(aai:auth(), NameOrData :: binary() | map()) ->
+    {ok, od_storage:id()} | errors:error().
 create(Auth, NameOrData) ->
     create(Auth, datastore_utils:gen_key(), NameOrData).
 
--spec create(Auth :: aai:auth(), Id :: od_storage:id(), NameOrData :: binary() | #{}) ->
-    {ok, od_storage:id()} | {error, term()}.
+-spec create(aai:auth(), Id :: od_storage:id(), NameOrData :: binary() | map()) ->
+    {ok, od_storage:id()} | errors:error().
 create(Auth, Id, Name) when is_binary(Name) ->
     create(Auth, Id, #{<<"name">> => Name});
 create(Auth, Id, Data) ->
@@ -77,9 +77,9 @@ create(Auth, Id, Data) ->
 %% Supports a space based on support_space_token and support size.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Auth :: aai:auth(), StorageId :: od_provider:id(),
-    Token :: tokens:token() | macaroon:macaroon(), SupportSize :: integer()) ->
-    {ok, od_space:id()} | {error, term()}.
+-spec support_space(aai:auth(), od_storage:id(),
+    tokens:token() | macaroon:macaroon(), SupportSize :: integer()) ->
+    {ok, od_space:id()} | errors:error().
 support_space(Auth, StorageId, Token, SupportSize) ->
     support_space(Auth, StorageId, #{
         <<"token">> => Token, <<"size">> => SupportSize
@@ -92,8 +92,8 @@ support_space(Auth, StorageId, Token, SupportSize) ->
 %% are provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Auth :: aai:auth(), StorageId :: od_provider:id(),
-    Data :: #{}) -> {ok, od_space:id()} | {error, term()}.
+-spec support_space(aai:auth(), od_storage:id(), Data :: map()) ->
+    {ok, od_space:id()} | errors:error().
 support_space(Auth, StorageId, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
@@ -110,8 +110,8 @@ support_space(Auth, StorageId, Data) ->
 %% 2) New support size is provided in a proper Data object.
 %% @end
 %%--------------------------------------------------------------------
--spec update_support_size(Auth :: aai:auth(), ProviderId :: od_provider:id(),
-    SpaceId :: od_space:id(), SupSizeOrData :: integer() | #{}) -> ok | {error, term()}.
+-spec update_support_size(aai:auth(), od_storage:id(),
+    od_space:id(), SupSizeOrData :: integer() | map()) -> ok | errors:error().
 update_support_size(Auth, StorageId, SpaceId, SupSize) when is_integer(SupSize) ->
     update_support_size(Auth, StorageId, SpaceId, #{
         <<"size">> => SupSize
@@ -130,8 +130,8 @@ update_support_size(Auth, StorageId, SpaceId, Data) ->
 %% Revokes support for specified space on behalf of given storage.
 %% @end
 %%--------------------------------------------------------------------
--spec revoke_support(Auth :: aai:auth(), StorageId :: od_storage:id(),
-    SpaceId :: od_space:id()) -> ok | {error, term()}.
+-spec revoke_support(aai:auth(), od_storage:id(), od_space:id()) ->
+    ok | errors:error().
 revoke_support(Auth, StorageId, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = delete,
@@ -139,13 +139,13 @@ revoke_support(Auth, StorageId, SpaceId) ->
         gri = #gri{type = od_storage, id = StorageId, aspect = {space, SpaceId}}
     }).
 
+
 %%--------------------------------------------------------------------
 %% @doc
 %% Retrieves a storage record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get(Auth :: aai:auth(), StorageId :: od_storage:id()) ->
-    {ok, #od_storage{}} | {error, term()}.
+-spec get(aai:auth(), od_storage:id()) -> {ok, #od_storage{}} | errors:error().
 get(Auth, StorageId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -159,8 +159,7 @@ get(Auth, StorageId) ->
 %% Retrieves protected storage data from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_protected_data(Auth :: aai:auth(), StorageId :: od_storage:id()) ->
-    {ok, map()} | {error, term()}.
+-spec get_protected_data(aai:auth(), od_storage:id()) -> {ok, map()} | errors:error().
 get_protected_data(Auth, StorageId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -174,8 +173,7 @@ get_protected_data(Auth, StorageId) ->
 %% Updates information of given storage.
 %% @end
 %%--------------------------------------------------------------------
--spec update(Auth :: aai:auth(), StorageId :: od_storage:id(),
-    Data :: #{}) -> ok | {error, term()}.
+-spec update(aai:auth(), od_storage:id(), Data :: map()) -> ok | errors:error().
 update(Auth, StorageId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
@@ -190,8 +188,7 @@ update(Auth, StorageId, Data) ->
 %% Deletes given storage from database.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(Auth :: aai:auth(), StorageId :: od_storage:id()) ->
-    ok | {error, term()}.
+-spec delete(aai:auth(), od_storage:id()) -> ok | errors:error().
 delete(Auth, StorageId) ->
     entity_logic:handle(#el_req{
         operation = delete,
@@ -205,8 +202,8 @@ delete(Auth, StorageId) ->
 %% Returns list of spaces supported by given storage.
 %% @end
 %%--------------------------------------------------------------------
--spec get_spaces(Auth :: aai:auth(), StorageId :: od_storage:id()) ->
-    {ok, [od_space:id()]} | {error, term()}.
+-spec get_spaces(aai:auth(), od_storage:id()) ->
+    {ok, [od_space:id()]} | errors:error().
 get_spaces(Auth, StorageId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -220,7 +217,7 @@ get_spaces(Auth, StorageId) ->
 %% Returns whether a storage exists.
 %% @end
 %%--------------------------------------------------------------------
--spec exists(StorageId :: od_storage:id()) -> boolean().
+-spec exists(od_storage:id()) -> boolean().
 exists(StorageId) ->
     {ok, Exists} = od_storage:exists(StorageId),
     Exists.
@@ -228,11 +225,11 @@ exists(StorageId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Predicate saying whether specified user is an effective user of given storage.
+%% Predicate saying whether specified user is an effective user
+%% of spaces supported by the storage.
 %% @end
 %%--------------------------------------------------------------------
--spec has_eff_user(StorageOrId :: od_storage:id() | #od_storage{},
-    UserId :: od_user:id()) -> boolean().
+-spec has_eff_user(od_storage:id() | #od_storage{}, od_user:id()) -> boolean().
 has_eff_user(StorageId, UserId) when is_binary(StorageId) ->
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, od_storage, StorageId);
 has_eff_user(Storage, UserId) ->
@@ -244,8 +241,7 @@ has_eff_user(Storage, UserId) ->
 %% Predicate saying whether specified group is an effective group of given storage.
 %% @end
 %%--------------------------------------------------------------------
--spec has_eff_group(StorageOrId :: od_storage:id() | #od_storage{},
-    GroupId :: od_group:id()) -> boolean().
+-spec has_eff_group(od_storage:id() | #od_storage{}, od_group:id()) -> boolean().
 has_eff_group(StorageId, GroupId) when is_binary(StorageId) ->
     entity_graph:has_relation(effective, bottom_up, od_group, GroupId, od_storage, StorageId);
 has_eff_group(Storage, GroupId) ->
@@ -257,11 +253,10 @@ has_eff_group(Storage, GroupId) ->
 %% Predicate saying whether specified provider is parent of given storage.
 %% @end
 %%--------------------------------------------------------------------
--spec has_provider(StorageOrId :: od_storage:id() | #od_storage{},
-    ProviderId :: od_provider:id()) -> boolean().
-has_provider(StorageId, ProviderId) when is_binary(StorageId) ->
+-spec belongs_to_provider(od_storage:id() | #od_storage{}, od_provider:id()) -> boolean().
+belongs_to_provider(StorageId, ProviderId) when is_binary(StorageId) ->
     entity_graph:has_relation(direct, top_down, od_provider, ProviderId, od_storage, StorageId);
-has_provider(Storage, ProviderId) ->
+belongs_to_provider(Storage, ProviderId) ->
     entity_graph:has_relation(direct, top_down, od_provider, ProviderId, Storage).
 
 
@@ -270,8 +265,7 @@ has_provider(Storage, ProviderId) ->
 %% Predicate saying whether specified space is supported by given storage.
 %% @end
 %%--------------------------------------------------------------------
--spec supports_space(StorageOrId :: od_storage:id() | #od_storage{},
-    SpaceId :: od_space:id()) -> boolean().
+-spec supports_space(od_storage:id() | #od_storage{}, od_space:id()) -> boolean().
 supports_space(StorageId, SpaceId) when is_binary(StorageId) ->
     entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, od_storage, StorageId);
 supports_space(Storage, SpaceId) ->

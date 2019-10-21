@@ -42,8 +42,8 @@
     get_share_test/1,
 
     list_storages_test/1,
-    create_storage_support_token/1,
-    leave_storage_test/1,
+    create_space_support_token/1,
+    remove_storage_test/1,
 
     list_effective_providers_test/1,
     get_provider_test/1
@@ -62,8 +62,8 @@ all() ->
         get_share_test,
 
         list_storages_test,
-        create_storage_support_token,
-        leave_storage_test,
+        create_space_support_token,
+        remove_storage_test,
 
         list_effective_providers_test,
         get_provider_test
@@ -656,16 +656,16 @@ list_storages_test(Config) ->
     lists:foreach(
         fun(StorageId) ->
             ?assert(oz_test_utils:call_oz(
-                Config, space_logic, has_storage, [S1, StorageId])
+                Config, space_logic, is_supported_by_storage, [S1, StorageId])
             )
         end, ExpStorages
     ),
     ?assert(not oz_test_utils:call_oz(
-        Config, space_logic, has_storage, [S1, <<"asdiucyaie827346w">>])
+        Config, space_logic, is_supported_by_storage, [S1, <<"asdiucyaie827346w">>])
     ).
 
 
-create_storage_support_token(Config) ->
+create_space_support_token(Config) ->
     % create space with 2 users:
     %   U2 gets the SPACE_ADD_STORAGE privilege
     %   U1 gets all remaining privileges
@@ -690,14 +690,13 @@ create_storage_support_token(Config) ->
         },
         rest_spec = #rest_spec{
             method = post,
-            % fixme add todo and ticket
             path = [<<"/spaces/">>, S1, <<"/providers/token">>],
             expected_code = ?HTTP_200_OK,
             expected_body = fun(#{<<"token">> := Token}) -> VerifyFun(Token) end
         },
         logic_spec = #logic_spec{
             module = space_logic,
-            function = create_storage_invite_token,
+            function = create_space_support_token,
             args = [auth, S1],
             expected_result = ?OK_TERM(VerifyFun)
         }
@@ -706,7 +705,7 @@ create_storage_support_token(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
-leave_storage_test(Config) ->
+remove_storage_test(Config) ->
     % create space with 2 users:
     %   U2 gets the SPACE_REMOVE_SUPPORT privilege
     %   U1 gets all remaining privileges
@@ -726,7 +725,7 @@ leave_storage_test(Config) ->
         #{storageId => StorageId}
     end,
     DeleteEntityFun = fun(#{storageId := StorageId} = _Env) ->
-        oz_test_utils:space_leave_storage(Config, S1, StorageId)
+        oz_test_utils:space_remove_storage(Config, S1, StorageId)
     end,
     VerifyEndFun = fun(ShouldSucceed, #{storageId := StorageId} = _Env, _) ->
         {ok, Storages} = oz_test_utils:space_get_storages(Config, S1),
@@ -746,15 +745,9 @@ leave_storage_test(Config) ->
                 {user, NonAdmin}
             ]
         },
-        % fixme
-%%        rest_spec = #rest_spec{
-%%            method = delete,
-%%            path = [<<"/spaces/">>, S1, <<"/storages/">>, storageId],
-%%            expected_code = ?HTTP_204_NO_CONTENT
-%%        },
         logic_spec = #logic_spec{
             module = space_logic,
-            function = leave_storage,
+            function = remove_storage,
             args = [auth, S1, storageId],
             expected_result = ?OK_RES
         }
@@ -799,13 +792,12 @@ list_effective_providers_test(Config) ->
                 {user, U1}
             ]
         },
-        % fixme
-%%        rest_spec = #rest_spec{
-%%            method = get,
-%%            path = [<<"/spaces/">>, S1, <<"/providers">>],
-%%            expected_code = ?HTTP_200_OK,
-%%            expected_body = #{<<"providers">> => ExpProviders}
-%%        },
+        rest_spec = #rest_spec{
+            method = get,
+            path = [<<"/spaces/">>, S1, <<"/providers">>],
+            expected_code = ?HTTP_200_OK,
+            expected_body = #{<<"providers">> => ExpProviders}
+        },
         logic_spec = #logic_spec{
             module = space_logic,
             function = get_eff_providers,
@@ -820,12 +812,12 @@ list_effective_providers_test(Config) ->
     lists:foreach(
         fun(ProviderId) ->
             ?assert(oz_test_utils:call_oz(
-                Config, space_logic, has_provider, [S1, ProviderId])
+                Config, space_logic, is_supported_by_provider, [S1, ProviderId])
             )
         end, ExpProviders
     ),
     ?assert(not oz_test_utils:call_oz(
-        Config, space_logic, has_provider, [S1, <<"asdiucyaie827346w">>])
+        Config, space_logic, is_supported_by_provider, [S1, <<"asdiucyaie827346w">>])
     ).
 
 

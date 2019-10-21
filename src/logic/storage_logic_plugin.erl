@@ -37,8 +37,6 @@
 %% Should return:
 %%  * {true, entity_logic:versioned_entity()}
 %%      if the fetch was successful
-%%  * {true, gri:gri(), entity_logic:versioned_entity()}
-%%      if the fetch was successful and new GRI was resolved
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
@@ -100,20 +98,20 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(#el_req{gri = #gri{id = StorageId, aspect = instance} = GRI, auth = Auth}) ->
+create(#el_req{gri = #gri{id = StorageId, aspect = instance} = GRI, auth = ?PROVIDER(ProviderId) = Auth, data = Data}) ->
+    Name = maps:get(<<"name">>, Data),
     {ok, _} = od_storage:create(#document{
         key = StorageId,
-        value = #od_storage{creator = Auth#auth.subject}
+        value = #od_storage{
+            name = Name,
+            creator = Auth#auth.subject,
+            provider = ProviderId
+        }
     }),
-    case Auth of
-        ?PROVIDER(ProviderId) ->
-            entity_graph:add_relation(
-                od_storage, StorageId,
-                od_provider, ProviderId
-            );
-        _ ->
-            ok
-    end,
+    entity_graph:add_relation(
+        od_storage, StorageId,
+        od_provider, ProviderId
+    ),
     {true, {Storage, Rev}} = fetch_entity(#gri{id = StorageId}),
     {ok, resource, {GRI#gri{id = StorageId}, {Storage, Rev}}};
 
@@ -157,11 +155,11 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Storage) ->
     {ok, Storage};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Storage) ->
     #od_storage{
-        name = Name, provider = Provider, creation_time = CreationTime, creator = Creator
+        qos_parameters = QosParameters,
+        creation_time = CreationTime, creator = Creator
     } = Storage,
     {ok, #{
-        <<"name">> => Name,
-        <<"provider">> => Provider,
+        <<"qos_parameters">> => QosParameters,
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator
     }};
@@ -233,7 +231,7 @@ delete(#el_req{gri = #gri{id = StorageId, aspect = {space, SpaceId}}}) ->
 exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Storage) ->
     case Req#el_req.auth_hint of
         ?THROUGH_PROVIDER(ProviderId) ->
-            storage_logic:has_provider(Storage, ProviderId);
+            storage_logic:belongs_to_provider(Storage, ProviderId);
         undefined ->
             true
     end;
@@ -262,34 +260,37 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) -
     end;
 
 authorize(#el_req{operation = create, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = support}}, Storage) ->
-    storage_logic:has_provider(Storage, ProviderId);
+    storage_logic:belongs_to_provider(Storage, ProviderId);
 
 authorize(#el_req{operation = get, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = instance, scope = private}}, Storage) ->
-    storage_logic:has_provider(Storage, ProviderId);
+    storage_logic:belongs_to_provider(Storage, ProviderId);
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Storage) ->
     case Req#el_req.auth of
         ?USER(ClientUserId) ->
             storage_logic:has_eff_user(Storage, ClientUserId);
+        ?PROVIDER(_) ->
+            % Any provider can access storage protected data
+            true;
         _ ->
             % Access to private data also allows access to protected data
             authorize(Req#el_req{gri = GRI#gri{scope = private}}, Storage)
     end;
 
 authorize(#el_req{operation = get, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = spaces}}, Storage) ->
-    storage_logic:has_provider(Storage, ProviderId);
+    storage_logic:belongs_to_provider(Storage, ProviderId);
 
 authorize(#el_req{operation = update, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = instance}}, Storage) ->
-    storage_logic:has_provider(Storage, ProviderId);
+    storage_logic:belongs_to_provider(Storage, ProviderId);
 
 authorize(#el_req{operation = update, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {space, _}}}, Storage) ->
-    storage_logic:has_provider(Storage, ProviderId);
+    storage_logic:belongs_to_provider(Storage, ProviderId);
 
 authorize(#el_req{operation = delete, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = instance}}, Storage) ->
-    storage_logic:has_provider(Storage, ProviderId);
+    storage_logic:belongs_to_provider(Storage, ProviderId);
 
 authorize(#el_req{operation = delete, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {space, _}}}, Storage) ->
-    storage_logic:has_provider(Storage, ProviderId);
+    storage_logic:belongs_to_provider(Storage, ProviderId);
 
 authorize(_, _) ->
     false.
@@ -313,9 +314,11 @@ required_admin_privileges(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
-validate(#el_req{operation = create, gri = #gri{aspect = instance}}) ->
-    #{
-    };
+validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
+    required => #{
+        <<"name">> => {binary, name}
+    }
+};
 
 validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     required => #{

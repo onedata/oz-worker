@@ -117,6 +117,9 @@ get_test(Config) ->
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
+    ExpectedQosParameters = #{<<"key">> => <<"value">>},
+    oz_test_utils:update_storage(Config, St1, #{<<"qos_parameters">> => ExpectedQosParameters}),
+
     % Get and check private data
     GetPrivateDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -126,7 +129,6 @@ get_test(Config) ->
             ],
             unauthorized = [nobody],
             forbidden = [
-%%                {admin, [?OZ_STORAGES_VIEW]},
                 {user, NonAdmin},
                 {user, U1},
                 {provider, P2, P2Token}
@@ -138,47 +140,38 @@ get_test(Config) ->
             args = [auth, St1],
             expected_result = ?OK_TERM(
                 fun(#od_storage{
-                    qos_parameters = #{},
+                    qos_parameters = QosParameters,
                     provider = Provider, spaces = Spaces,
                     eff_users = EffUsers, eff_groups = #{},
                     eff_harvesters = #{},
+                    eff_providers = EffProviders,
+                    eff_spaces = EffSpaces,
                     top_down_dirty = false, bottom_up_dirty = false
                 }) ->
+                    ?assertEqual(QosParameters, ExpectedQosParameters),
                     ?assertEqual(Spaces, #{
                         S => SupportSize
                     }),
                     ?assertEqual(EffUsers, #{
                         U1 => [{od_space, S}]
                     }),
-                    ?assertEqual(Provider, P1)
-                % fixme
-%%                    ?assertEqual(EffProviders, #{P1 => [{od_storage, <<"self">>}]})
+                    ?assertEqual(Provider, P1),
+                    ?assertEqual(EffProviders, #{P1 => [{od_storage, <<"self">>}]}),
+                    ?assertEqual(EffSpaces, #{S => {SupportSize, [{od_storage, <<"self">>}]}})
                 end
             )
-%%        },
-%%        gs_spec = #gs_spec{
-%%            operation = get,
-%%            gri = #gri{type = od_storage, id = S1, aspect = instance},
-%%            expected_result = ?OK_MAP_CONTAINS(#{
-%%                <<"name">> => ?STORAGE_NAME1,
-%%                <<"users">> => #{
-%%                    U1 => AllPrivsBin -- [<<"storage_view">>],
-%%                    U2 => [<<"storage_view">>]
-%%                },
-%%                <<"groups">> => #{},
-%%                <<"shares">> => [],
-%%                <<"providers">> => #{P1 => SupportSize},
-%%                <<"harvesters">> => [],
-%%                <<"effectiveUsers">> => #{
-%%                    U1 => AllPrivsBin -- [<<"storage_view">>],
-%%                    U2 => [<<"storage_view">>]
-%%                },
-%%                <<"effectiveGroups">> => #{},
-%%                <<"gri">> => fun(EncodedGri) ->
-%%                    #gri{id = Id} = gri:deserialize(EncodedGri),
-%%                    ?assertEqual(S1, Id)
-%%                end
-%%            })
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = od_storage, id = St1, aspect = instance},
+            expected_result = ?OK_MAP_CONTAINS(#{
+                <<"provider">> => P1,
+                <<"qos_parameters">> => ExpectedQosParameters,
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
+                    ?assertEqual(St1, Id)
+                end
+            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
@@ -188,47 +181,33 @@ get_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-%%                {admin, [?OZ_STORAGES_VIEW]},
                 {user, U1},
-                {provider, P1, P1Token}
+                {provider, P1, P1Token},
+                {provider, P2, P2Token}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, NonAdmin}
             ]
         },
-%%        rest_spec = #rest_spec{
-%%            method = get,
-%%            path = [<<"/storages/">>, S1],
-%%            expected_code = ?HTTP_200_OK,
-%%            expected_body = #{
-%%                <<"storageId">> => S1,
-%%                <<"name">> => ?STORAGE_NAME1,
-%%                <<"providers">> => #{P1 => SupportSize}
-%%            }
-%%        },
         logic_spec = #logic_spec{
             module = storage_logic,
             function = get_protected_data,
             args = [auth, St1],
             expected_result = ?OK_MAP_CONTAINS(#{
-                <<"provider">> => P1
-                % fixme
+                <<"qos_parameters">> => ExpectedQosParameters
             })
-%%        },
-%%        gs_spec = #gs_spec{
-%%            operation = get,
-%%            gri = #gri{
-%%                type = od_storage, id = S1, aspect = instance, scope = protected
-%%            },
-%%            expected_result = ?OK_MAP_CONTAINS(#{
-%%                <<"name">> => ?STORAGE_NAME1,
-%%                <<"providers">> => #{P1 => SupportSize},
-%%                <<"gri">> => fun(EncodedGri) ->
-%%                    #gri{id = Id} = gri:deserialize(EncodedGri),
-%%                    ?assertEqual(S1, Id)
-%%                end
-%%            })
+        },
+        gs_spec = #gs_spec{
+            operation = get,
+            gri = #gri{type = od_storage, id = St1, aspect = instance, scope = protected},
+            expected_result = ?OK_MAP_CONTAINS(#{
+                <<"qos_parameters">> => ExpectedQosParameters,
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
+                    ?assertEqual(St1, Id)
+                end
+            })
         }
     },
     ?assert(api_test_utils:run_tests(Config, GetSharedDataApiTestSpec)).
@@ -399,7 +378,7 @@ support_space_test(Config) ->
                     {ok, Space} = oz_test_utils:create_space(
                         Config, ?USER(U1), ?SPACE_NAME2
                     ),
-                    {ok, SpInvProvToken} = oz_test_utils:space_invite_storage_token(
+                    {ok, SpInvProvToken} = oz_test_utils:create_space_support_token(
                         Config, ?USER(U1), Space
                     ),
                     element(2, {ok, _} = tokens:serialize(SpInvProvToken))
@@ -428,7 +407,7 @@ support_space_test(Config) ->
                     {ok, Space} = oz_test_utils:create_space(
                         Config, ?USER(U1), <<"space">>
                     ),
-                    {ok, SpInvProvToken} = oz_test_utils:space_invite_storage_token(
+                    {ok, SpInvProvToken} = oz_test_utils:create_space_support_token(
                         Config, ?USER(U1), Space
                     ),
                     SpInvProvToken
@@ -598,7 +577,6 @@ list_spaces_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-%%                {admin, [?OZ_STORAGES_LIST_RELATIONSHIPS]},
                 {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
@@ -607,12 +585,6 @@ list_spaces_test(Config) ->
                 {user, NonAdmin}
             ]
         },
-%%        rest_spec = #rest_spec{
-%%            method = get,
-%%            path = [<<"/storages/">>, St1, <<"/spaces">>],
-%%            expected_code = ?HTTP_200_OK,
-%%            expected_body = #{<<"shares">> => ExpShares}
-%%        },
         logic_spec = #logic_spec{
             module = storage_logic,
             function = get_spaces,

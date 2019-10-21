@@ -389,7 +389,7 @@
     qos_parameters = #{} :: #{binary() => binary()},
 
     % Direct relations to other entities
-    provider = undefined :: od_provider:id() | undefined,
+    provider :: od_provider:id(),
     spaces = #{} :: entity_graph:relations_with_attrs(od_space:id(), Size :: pos_integer()),
 
     % Effective relations to other entities

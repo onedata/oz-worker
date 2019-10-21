@@ -412,7 +412,7 @@ upgrade_record(3, Space) ->
             (space_view) -> [?SPACE_VIEW, ?SPACE_VIEW_PRIVILEGES];
             (space_invite_user) -> [?SPACE_ADD_USER];
             (space_invite_group) -> [?SPACE_ADD_GROUP];
-            (space_invite_provider) -> [?SPACE_ADD_SUPPORT];
+            (space_invite_provider) -> [space_add_provider];
             (Other) -> [Other]
         end, Privileges))
     end,

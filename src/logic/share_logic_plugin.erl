@@ -316,5 +316,5 @@ auth_by_space_privilege(UserId, SpaceId, Privilege) ->
 -spec auth_by_space_support(od_provider:id(), od_share:record()) ->
     boolean().
 auth_by_space_support(ProviderId, Share) ->
-    space_logic:has_provider(Share#od_share.space, ProviderId).
+    space_logic:is_supported_by_provider(Share#od_share.space, ProviderId).
 

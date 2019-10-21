@@ -38,7 +38,7 @@
     get_eff_groups/2, get_eff_group/3,
     get_eff_group_membership_intermediaries/3,
     get_eff_harvesters/2,
-    get_spaces/2, get_space/3
+    get_eff_spaces/2, get_eff_space/3
 ]).
 -export([
     update_domain_config/3,
@@ -57,7 +57,7 @@
     has_storage/2,
     has_eff_user/2,
     has_eff_group/2,
-    has_eff_space/2,
+    supports_space/2,
     has_eff_harvester/2
 ]).
 -export([
@@ -77,7 +77,7 @@
 %%--------------------------------------------------------------------
 -spec create(Auth :: aai:auth(), Name :: binary(),
     Domain :: binary(), AdminEmail :: binary()) ->
-    {ok, od_provider:id()} | {error, term()}.
+    {ok, od_provider:id()} | errors:error().
 create(Auth, Name, Domain, AdminEmail) ->
     create(Auth, #{
         <<"name">> => Name,
@@ -95,7 +95,7 @@ create(Auth, Name, Domain, AdminEmail) ->
 %%--------------------------------------------------------------------
 -spec create(Auth :: aai:auth(), Name :: binary(),
     Domain :: binary(), AdminEmail :: binary(), Latitude :: float(),
-    Longitude :: float()) -> {ok, od_provider:id()} | {error, term()}.
+    Longitude :: float()) -> {ok, od_provider:id()} | errors:error().
 create(Auth, Name, Domain, AdminEmail, Latitude, Longitude) ->
     create(Auth, #{
         <<"name">> => Name,
@@ -114,7 +114,7 @@ create(Auth, Name, Domain, AdminEmail, Latitude, Longitude) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Auth :: aai:auth(), Data :: #{}) ->
-    {ok, {od_provider:id(), ProviderRootToken :: tokens:token()}} | {error, term()}.
+    {ok, {od_provider:id(), ProviderRootToken :: tokens:token()}} | errors:error().
 create(Auth, Data) ->
     Res = entity_logic:handle(#el_req{
         operation = create,
@@ -140,7 +140,7 @@ create(Auth, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_dev(Auth :: aai:auth(), Data :: map()) ->
-    {ok, od_provider:id()} | {error, term()}.
+    {ok, od_provider:id()} | errors:error().
 create_dev(Auth, Data) ->
     Res = entity_logic:handle(#el_req{
         operation = create,
@@ -162,7 +162,7 @@ create_dev(Auth, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
-    {ok, #od_provider{}} | {error, term()}.
+    {ok, #od_provider{}} | errors:error().
 get(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -177,7 +177,7 @@ get(Auth, ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_protected_data(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
-    {ok, map()} | {error, term()}.
+    {ok, map()} | errors:error().
 get_protected_data(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -192,7 +192,7 @@ get_protected_data(Auth, ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec list(Auth :: aai:auth()) ->
-    {ok, [od_provider:id()]} | {error, term()}.
+    {ok, [od_provider:id()]} | errors:error().
 list(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -208,7 +208,7 @@ list(Auth) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Auth :: aai:auth(), ProviderId :: od_provider:id(),
-    Data :: map()) -> ok | {error, term()}.
+    Data :: map()) -> ok | errors:error().
 update(Auth, ProviderId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
@@ -224,7 +224,7 @@ update(Auth, ProviderId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
-    ok | {error, term()}.
+    ok | errors:error().
 delete(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = delete,
@@ -238,7 +238,7 @@ delete(Auth, ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_domain_config(Auth :: aai:auth(),
-    ProviderId :: od_provider:id(), Data :: map()) -> ok | {error, term()}.
+    ProviderId :: od_provider:id(), Data :: map()) -> ok | errors:error().
 update_domain_config(Auth, ProviderId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
@@ -253,7 +253,7 @@ update_domain_config(Auth, ProviderId, Data) ->
 %%--------------------------------------------------------------------
 -spec set_dns_txt_record(Auth :: aai:auth(),
     ProviderId :: od_provider:id(), Name :: binary(), Content :: binary()) ->
-    ok | {error, term()}.
+    ok | errors:error().
 set_dns_txt_record(Auth, ProviderId, Name, Content) ->
     set_dns_txt_record(Auth, ProviderId, Name, Content, undefined).
 
@@ -265,7 +265,7 @@ set_dns_txt_record(Auth, ProviderId, Name, Content) ->
 -spec set_dns_txt_record(Auth :: aai:auth(),
     ProviderId :: od_provider:id(), Name :: binary(), Content :: binary(),
     TTL :: dns_state:ttl()) ->
-    ok | {error, term()}.
+    ok | errors:error().
 set_dns_txt_record(Auth, ProviderId, Name, Content, TTL) ->
     entity_logic:handle(#el_req{
         operation = create,
@@ -284,7 +284,7 @@ set_dns_txt_record(Auth, ProviderId, Name, Content, TTL) ->
 %%--------------------------------------------------------------------
 -spec remove_dns_txt_record(Auth :: aai:auth(),
     ProviderId :: od_provider:id(), Name :: binary()) ->
-    ok | {error, term()}.
+    ok | errors:error().
 remove_dns_txt_record(Auth, ProviderId, Name) ->
     entity_logic:handle(#el_req{
         operation = delete,
@@ -298,7 +298,7 @@ remove_dns_txt_record(Auth, ProviderId, Name) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_domain_config(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
-    {ok, map()} | {error, term()}.
+    {ok, map()} | errors:error().
 get_domain_config(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -312,7 +312,7 @@ get_domain_config(Auth, ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_users(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
-    {ok, [od_user:id()]} | {error, term()}.
+    {ok, [od_user:id()]} | errors:error().
 get_eff_users(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -328,7 +328,7 @@ get_eff_users(Auth, ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_user(Auth :: aai:auth(), ProviderId :: od_provider:id(),
-    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, #{}} | errors:error().
 get_eff_user(Auth, ProviderId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -346,7 +346,7 @@ get_eff_user(Auth, ProviderId, UserId) ->
 %%--------------------------------------------------------------------
 -spec get_eff_user_membership_intermediaries(Auth :: aai:auth(),
     ProviderId :: od_provider:id(), UserId :: od_user:id()) ->
-    {ok, entity_graph:intermediaries()} | {error, term()}.
+    {ok, entity_graph:intermediaries()} | errors:error().
 get_eff_user_membership_intermediaries(Auth, ProviderId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -361,7 +361,7 @@ get_eff_user_membership_intermediaries(Auth, ProviderId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_groups(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
-    {ok, [od_group:id()]} | {error, term()}.
+    {ok, [od_group:id()]} | errors:error().
 get_eff_groups(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -377,7 +377,7 @@ get_eff_groups(Auth, ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_group(Auth :: aai:auth(), ProviderId :: od_provider:id(),
-    GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, #{}} | errors:error().
 get_eff_group(Auth, ProviderId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -395,7 +395,7 @@ get_eff_group(Auth, ProviderId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec get_eff_group_membership_intermediaries(Auth :: aai:auth(),
     ProviderId :: od_provider:id(), GroupId :: od_group:id()) ->
-    {ok, entity_graph:intermediaries()} | {error, term()}.
+    {ok, entity_graph:intermediaries()} | errors:error().
 get_eff_group_membership_intermediaries(Auth, ProviderId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -410,7 +410,7 @@ get_eff_group_membership_intermediaries(Auth, ProviderId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_harvesters(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
-    {ok, [od_harvester:id()]} | {error, term()}.
+    {ok, [od_harvester:id()]} | errors:error().
 get_eff_harvesters(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -424,13 +424,13 @@ get_eff_harvesters(Auth, ProviderId) ->
 %% Retrieves the list of spaces of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_spaces(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
-    {ok, [od_space:id()]} | {error, term()}.
-get_spaces(Auth, ProviderId) ->
+-spec get_eff_spaces(Auth :: aai:auth(), ProviderId :: od_provider:id()) ->
+    {ok, [od_space:id()]} | errors:error().
+get_eff_spaces(Auth, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
         auth = Auth,
-        gri = #gri{type = od_provider, id = ProviderId, aspect = spaces}
+        gri = #gri{type = od_provider, id = ProviderId, aspect = eff_spaces}
     }).
 
 
@@ -439,9 +439,9 @@ get_spaces(Auth, ProviderId) ->
 %% Retrieves the information about specific space among spaces of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec get_space(Auth :: aai:auth(), ProviderId :: od_provider:id(),
-    SpaceId :: od_space:id()) -> {ok, #{}} | {error, term()}.
-get_space(Auth, ProviderId, SpaceId) ->
+-spec get_eff_space(Auth :: aai:auth(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> {ok, #{}} | errors:error().
+get_eff_space(Auth, ProviderId, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
         auth = Auth,
@@ -457,7 +457,7 @@ get_space(Auth, ProviderId, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec check_my_ports(Auth :: aai:auth(), Data :: map()) ->
-    ok | {error, term()}.
+    ok | errors:error().
 check_my_ports(Auth, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
@@ -475,7 +475,7 @@ check_my_ports(Auth, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_current_time(Auth :: aai:auth()) ->
-    {ok, non_neg_integer()} | {error, term()}.
+    {ok, non_neg_integer()} | errors:error().
 get_current_time(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -491,7 +491,7 @@ get_current_time(Auth) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_provider_identity(aai:auth(), od_provider:id(),
-    tokens:serialized() | tokens:token()) -> ok | {error, term()}.
+    tokens:serialized() | tokens:token()) -> ok | errors:error().
 verify_provider_identity(Auth, ProviderId, Token) ->
     verify_provider_identity(Auth, #{
         <<"providerId">> => ProviderId,
@@ -506,7 +506,7 @@ verify_provider_identity(Auth, ProviderId, Token) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_provider_identity(Auth :: aai:auth(), entity_logic:data()) ->
-    ok | {error, term()}.
+    ok | errors:error().
 verify_provider_identity(Auth, Data) ->
     ?CREATE_RETURN_OK(entity_logic:handle(#el_req{
         operation = create,
@@ -571,11 +571,11 @@ has_eff_group(Provider, GroupId) ->
 %% Predicate saying whether specified space is an effective space of given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec has_eff_space(ProviderOrId :: od_provider:id() | #od_provider{},
+-spec supports_space(ProviderOrId :: od_provider:id() | #od_provider{},
     SpaceId :: od_provider:id()) -> boolean().
-has_eff_space(ProviderId, SpaceId) when is_binary(ProviderId) ->
+supports_space(ProviderId, SpaceId) when is_binary(ProviderId) ->
     entity_graph:has_relation(effective, bottom_up, od_space, SpaceId, od_provider, ProviderId);
-has_eff_space(Provider, SpaceId) ->
+supports_space(Provider, SpaceId) ->
     entity_graph:has_relation(effective, bottom_up, od_space, SpaceId, Provider).
 
 

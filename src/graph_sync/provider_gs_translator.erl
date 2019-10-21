@@ -367,6 +367,14 @@ translate_resource(_, #gri{type = od_storage, aspect = instance, scope = private
         <<"qos_parameters">> => QosParams
     };
 
+translate_resource(_, #gri{type = od_storage, aspect = instance, scope = protected}, StorageDetails) ->
+    #{
+        <<"qos_parameters">> := QosParams
+    } = StorageDetails,
+    #{
+        <<"qos_parameters">> => QosParams
+    };
+
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync get result for:~n
     ProtocolVersion: ~p~n

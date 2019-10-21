@@ -99,4 +99,8 @@
 >>).
 
 
+%% @TODO VFS-5856 This is needed for providers in previous version,
+%% for which default storage supporting all their spaces will be created
+-define(STORAGE_DEFAULT_NAME, <<"default_storage">>).
+
 -endif.

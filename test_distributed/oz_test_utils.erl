@@ -125,7 +125,7 @@
     space_get_harvesters/2,
     space_get_storages/2,
 
-    space_leave_storage/3,
+    space_remove_storage/3,
     space_remove_harvester/3,
 
     space_add_user/3,
@@ -137,7 +137,7 @@
     space_set_group_privileges/5,
     space_invite_user_token/3,
     space_invite_group_token/3,
-    space_invite_storage_token/3,
+    create_space_support_token/3,
     space_has_effective_user/3,
 
     space_remove_group/3,
@@ -257,7 +257,6 @@
 -export([
     create_storage/3,
     get_storage/2,
-    list_storages/1,
     update_storage/3,
     delete_storage/2
 ]).
@@ -1228,11 +1227,11 @@ space_get_storages(Config, SpaceId) ->
 %% Leave space from given provider.
 %% @end
 %%--------------------------------------------------------------------
--spec space_leave_storage(Config :: term(),
+-spec space_remove_storage(Config :: term(),
     SpaceId :: od_space:id(), ProviderId :: od_provider:id()) -> ok.
-space_leave_storage(Config, SpaceId, StorageId) ->
+space_remove_storage(Config, SpaceId, StorageId) ->
     ?assertMatch(ok, call_oz(
-        Config, space_logic, leave_storage, [?ROOT, SpaceId, StorageId]
+        Config, space_logic, remove_storage, [?ROOT, SpaceId, StorageId]
     )).
 
 
@@ -1375,12 +1374,12 @@ space_invite_group_token(Config, Client, SpaceId) ->
 %% Creates a provider invite token to given space.
 %% @end
 %%--------------------------------------------------------------------
--spec space_invite_storage_token(Config :: term(),
+-spec create_space_support_token(Config :: term(),
     Client :: aai:auth(), SpaceId :: od_space:id()) ->
     {ok, tokens:token()}.
-space_invite_storage_token(Config, Client, SpaceId) ->
+create_space_support_token(Config, Client, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, space_logic, create_storage_invite_token, [Client, SpaceId]
+        Config, space_logic, create_space_support_token, [Client, SpaceId]
     )).
 
 
@@ -1601,7 +1600,7 @@ support_space(Config, Client, StorageId, SpaceId, Size) ->
     {ok, TmpUser} = create_user(Config),
     {ok, TmpUser} = space_add_user(Config, SpaceId, TmpUser),
     ok = space_set_user_privileges(Config, SpaceId, TmpUser, [?SPACE_ADD_SUPPORT], []),
-    {ok, Token} = space_invite_storage_token(Config, ?USER(TmpUser), SpaceId),
+    {ok, Token} = create_space_support_token(Config, ?USER(TmpUser), SpaceId),
     Res = support_space_using_token(Config, Client, StorageId, Token, Size),
     delete_user(Config, TmpUser),
     Res.
@@ -2865,24 +2864,14 @@ get_storage(Config, StorageId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns list of all storages in onezone.
-%% @end
-%%--------------------------------------------------------------------
--spec list_storages(Config :: term()) -> {ok, [od_storage:id()]}.
-list_storages(Config) ->
-    ?assertMatch({ok, _}, call_oz(Config, storage_logic, list, [?ROOT])).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Updates storage.
 %% @end
 %%--------------------------------------------------------------------
 -spec update_storage(Config :: term(), StorageId :: od_storage:id(),
-    Name :: od_storage:name()) -> ok.
-update_storage(Config, StorageId, Name) ->
+    Data :: map()) -> ok.
+update_storage(Config, StorageId, Data) ->
     ?assertMatch(ok, call_oz(
-        Config, storage_logic, update, [?ROOT, StorageId, Name]
+        Config, storage_logic, update, [?ROOT, StorageId, Data]
     )).
 
 

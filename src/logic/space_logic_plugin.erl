@@ -67,7 +67,7 @@ fetch_entity(#gri{id = SpaceId}) ->
 operation_supported(create, invite_user_token, private) -> true;
 operation_supported(create, invite_group_token, private) -> true;
 operation_supported(create, invite_provider_token, private) -> true;
-operation_supported(create, invite_storage_token, private) -> true;
+operation_supported(create, space_support_token, private) -> true;
 
 operation_supported(create, instance, private) -> true;
 operation_supported(create, join, private) -> true;
@@ -231,8 +231,8 @@ create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = SpaceId, aspect = in
 
     %% @TODO VFS-5856 deprecated, remove in future release
 create(Req = #el_req{gri = #gri{aspect = invite_provider_token} = GRI}) ->
-    create(Req#el_req{gri = GRI#gri{aspect = invite_storage_token}});
-create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = SpaceId, aspect = invite_storage_token}}) ->
+    create(Req#el_req{gri = GRI#gri{aspect = space_support_token}});
+create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = SpaceId, aspect = space_support_token}}) ->
     %% @TODO VFS-5727 move entirely to token_logic
     Result = token_logic:create_user_named_token(
         Auth, UserId, ?INVITE_TOKEN_NAME(?SPACE_SUPPORT_TOKEN),
@@ -481,7 +481,7 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Space) -
         ?THROUGH_GROUP(GroupId) ->
             space_logic:has_eff_group(Space, GroupId);
         ?THROUGH_PROVIDER(ProviderId) ->
-            space_logic:has_provider(Space, ProviderId);
+            space_logic:is_supported_by_provider(Space, ProviderId);
         ?THROUGH_HARVESTER(HarvesterId) ->
             space_logic:has_harvester(Space, HarvesterId);
         undefined ->
@@ -574,7 +574,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Space) 
 authorize(#el_req{operation = create, gri = #gri{id = SpaceId, aspect = harvest_metadata},
     auth = ?PROVIDER(ProviderId), data = #{<<"batch">> := Batch}}, Space) ->
 
-    space_logic:has_provider(Space, ProviderId) andalso
+    space_logic:is_supported_by_provider(Space, ProviderId) andalso
         lists:all(fun(#{<<"fileId">> := FileId}) ->
             {ok, Guid} = file_id:objectid_to_guid(FileId),
             file_id:guid_to_space_id(Guid) == SpaceId
@@ -587,8 +587,8 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_tok
     auth_by_privilege(Req, Space, ?SPACE_ADD_GROUP);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_provider_token} = GRI}, Space) ->
-    authorize(Req#el_req{gri = GRI#gri{aspect = invite_storage_token}}, Space);
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_storage_token}}, Space) ->
+    authorize(Req#el_req{gri = GRI#gri{aspect = space_support_token}}, Space);
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = space_support_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_SUPPORT);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
@@ -599,7 +599,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
         ?USER(UserId) ->
             auth_by_privilege(UserId, Space, ?SPACE_VIEW);
         ?PROVIDER(ProviderId) ->
-            space_logic:has_provider(Space, ProviderId)
+            space_logic:is_supported_by_provider(Space, ProviderId)
     end;
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Space) ->
@@ -713,8 +713,8 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = invite
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = invite_group_token}}) ->
     [?OZ_SPACES_ADD_RELATIONSHIPS];
 required_admin_privileges(Req = #el_req{operation = create, gri = #gri{aspect = invite_provider_token} = GRI}) ->
-    required_admin_privileges(Req#el_req{gri = GRI#gri{aspect = invite_storage_token}});
-required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = invite_storage_token}}) ->
+    required_admin_privileges(Req#el_req{gri = GRI#gri{aspect = space_support_token}});
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = space_support_token}}) ->
     [?OZ_SPACES_ADD_RELATIONSHIPS];
 
 required_admin_privileges(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
@@ -834,7 +834,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = invite_group_token}}) -
     #{
     };
 
-validate(#el_req{operation = create, gri = #gri{aspect = invite_storage_token}}) ->
+validate(#el_req{operation = create, gri = #gri{aspect = space_support_token}}) ->
     #{
     };
 

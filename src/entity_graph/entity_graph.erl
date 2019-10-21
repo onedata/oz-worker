@@ -2183,9 +2183,6 @@ get_successors(top_down, #od_space{} = Space) ->
         od_group => get_ids(Groups),
         od_harvester => get_ids(Harvesters)
     };
-%%get_successors(top_down, #od_provider{} = Provider) ->
-%%    #{od_storage := Storages} = get_all_direct_relations(bottom_up, Provider),
-%%    #{od_storage => get_ids(Storages)};
 get_successors(top_down, #od_handle_service{} = HService) ->
     #{
         od_user := Users, od_group := Groups

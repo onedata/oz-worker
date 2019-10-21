@@ -54,9 +54,9 @@
     get_eff_group_membership_intermediaries/1,
     list_eff_harvesters_test/1,
 
-    list_spaces_test/1,
+    list_eff_spaces_test/1,
     list_self_spaces_test/1,
-    get_space_test/1,
+    get_eff_space_test/1,
     get_own_space_test/1,
 
     check_my_ports_test/1,
@@ -89,9 +89,9 @@ all() ->
         get_eff_group_membership_intermediaries,
         list_eff_harvesters_test,
 
-        list_spaces_test,
+        list_eff_spaces_test,
         list_self_spaces_test,
-        get_space_test,
+        get_eff_space_test,
         get_own_space_test,
 
         check_my_ports_test,
@@ -504,8 +504,6 @@ get_self_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
-
-% fixme list_storages_test
 
 list_test(Config) ->
     % Make sure that providers created in other tests are deleted.
@@ -1431,7 +1429,7 @@ list_eff_harvesters_test(Config) ->
     ).
 
 
-list_spaces_test(Config) ->
+list_eff_spaces_test(Config) ->
     {
         {P1, P1Token}, {P2, P2Token},
         [{S1, _}, {S2, _}, {S3, _}, {S4, _}, {S5, _}], _Storages
@@ -1467,7 +1465,7 @@ list_spaces_test(Config) ->
         logic_spec = #logic_spec{
             operation = get,
             module = provider_logic,
-            function = get_spaces,
+            function = get_eff_spaces,
             args = [auth, P1],
             expected_result = ?OK_LIST(ExpSpaces)
         }
@@ -1500,7 +1498,7 @@ list_self_spaces_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
-get_space_test(Config) ->
+get_eff_space_test(Config) ->
     {
         {P1, P1Token}, {P2, P2Token}, Spaces, _Storages
     } = create_2_providers_and_5_supported_spaces(Config),
@@ -1537,7 +1535,7 @@ get_space_test(Config) ->
                 logic_spec = #logic_spec{
                     operation = get,
                     module = provider_logic,
-                    function = get_space,
+                    function = get_eff_space,
                     args = [auth, P1, SpaceId],
                     expected_result = ?OK_MAP_CONTAINS(SpaceDetails)
                 },
