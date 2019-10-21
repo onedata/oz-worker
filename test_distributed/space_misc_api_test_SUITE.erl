@@ -41,10 +41,12 @@
     list_shares_test/1,
     get_share_test/1,
 
-    list_providers_test/1,
-    create_provider_support_token/1,
-    get_provider_test/1,
-    leave_provider_test/1
+    list_storages_test/1,
+    create_storage_support_token/1,
+    leave_storage_test/1,
+
+    list_effective_providers_test/1,
+    get_provider_test/1
 ]).
 
 all() ->
@@ -59,10 +61,12 @@ all() ->
         list_shares_test,
         get_share_test,
 
-        list_providers_test,
-        create_provider_support_token,
-        get_provider_test,
-        leave_provider_test
+        list_storages_test,
+        create_storage_support_token,
+        leave_storage_test,
+
+        list_effective_providers_test,
+        get_provider_test
     ]).
 
 
@@ -217,13 +221,10 @@ get_test(Config) ->
         [?SPACE_VIEW], AllPrivs -- [?SPACE_VIEW]
     ),
 
-    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_NAME1
-    ),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     SupportSize = oz_test_utils:minimum_support_size(Config),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, P1, S1, SupportSize
-    ),
+    {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+    {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1, SupportSize),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -251,7 +252,7 @@ get_test(Config) ->
             expected_result = ?OK_TERM(
                 fun(#od_space{
                     name = Name, users = Users, groups = #{},
-                    providers = Providers, shares = [],
+                    storages = Storages, shares = [],
                     harvesters = [],
                     eff_users = EffUsers, eff_groups = #{},
                     eff_providers = EffProviders,
@@ -266,8 +267,8 @@ get_test(Config) ->
                         U1 => {AllPrivs -- [?SPACE_VIEW], [{od_space, <<"self">>}]},
                         U2 => {[?SPACE_VIEW], [{od_space, <<"self">>}]}
                     }),
-                    ?assertEqual(Providers, #{P1 => SupportSize}),
-                    ?assertEqual(EffProviders, #{P1 => [{od_space, <<"self">>}]})
+                    ?assertEqual(Storages, #{St1 => SupportSize}),
+                    ?assertEqual(EffProviders, #{P1 => {SupportSize, [{od_storage, St1}]}})
                 end
             )
         },
@@ -604,7 +605,7 @@ get_share_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
-list_providers_test(Config) ->
+list_storages_test(Config) ->
     % create space with 2 users:
     %   U2 gets the SPACE_VIEW privilege
     %   U1 gets all remaining privileges
@@ -612,19 +613,21 @@ list_providers_test(Config) ->
         Config, ?SPACE_VIEW
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
 
-    SupportSize = oz_test_utils:minimum_support_size(Config),
-    ExpProviders = lists:map(
+    ExpStorages = lists:map(
         fun(_) ->
-            {ok, {ProviderId, _}} = oz_test_utils:create_provider(
-                Config, ?PROVIDER_NAME1
+            {ok, StorageId} = oz_test_utils:create_storage(
+                Config, ?PROVIDER(ProviderId), ?STORAGE_NAME1
             ),
             {ok, S1} = oz_test_utils:support_space(
-                Config, ProviderId, S1, SupportSize
+                Config, ?PROVIDER(ProviderId), StorageId, S1
             ),
-            ProviderId
+            StorageId
         end, lists:seq(1, 5)
     ),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -639,15 +642,173 @@ list_providers_test(Config) ->
                 {user, U1}
             ]
         },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = get_storages,
+            args = [auth, S1],
+            expected_result = ?OK_LIST(ExpStorages)
+        }
+        % TODO gs
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % check also space_logic:has_storage function
+    lists:foreach(
+        fun(StorageId) ->
+            ?assert(oz_test_utils:call_oz(
+                Config, space_logic, has_storage, [S1, StorageId])
+            )
+        end, ExpStorages
+    ),
+    ?assert(not oz_test_utils:call_oz(
+        Config, space_logic, has_storage, [S1, <<"asdiucyaie827346w">>])
+    ).
+
+
+create_storage_support_token(Config) ->
+    % create space with 2 users:
+    %   U2 gets the SPACE_ADD_STORAGE privilege
+    %   U1 gets all remaining privileges
+    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_ADD_SUPPORT
+    ),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    VerifyFun = api_test_scenarios:collect_unique_tokens_fun(),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {admin, [?OZ_SPACES_ADD_RELATIONSHIPS]},
+                {user, U2}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
+                {user, NonAdmin}
+            ]
+        },
         rest_spec = #rest_spec{
-            method = get,
-            path = [<<"/spaces/">>, S1, <<"/providers">>],
+            method = post,
+            % fixme add todo and ticket
+            path = [<<"/spaces/">>, S1, <<"/providers/token">>],
             expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"providers">> => ExpProviders}
+            expected_body = fun(#{<<"token">> := Token}) -> VerifyFun(Token) end
         },
         logic_spec = #logic_spec{
             module = space_logic,
-            function = get_providers,
+            function = create_storage_invite_token,
+            args = [auth, S1],
+            expected_result = ?OK_TERM(VerifyFun)
+        }
+        % TODO gs
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+
+
+leave_storage_test(Config) ->
+    % create space with 2 users:
+    %   U2 gets the SPACE_REMOVE_SUPPORT privilege
+    %   U1 gets all remaining privileges
+    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_REMOVE_SUPPORT
+    ),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+
+    EnvSetUpFun = fun() ->
+        {ok, StorageId} = oz_test_utils:create_storage(
+            Config, ?PROVIDER(ProviderId), ?STORAGE_NAME1
+        ),
+        {ok, S1} = oz_test_utils:support_space(
+            Config, ?PROVIDER(ProviderId), StorageId, S1
+        ),
+        #{storageId => StorageId}
+    end,
+    DeleteEntityFun = fun(#{storageId := StorageId} = _Env) ->
+        oz_test_utils:space_leave_storage(Config, S1, StorageId)
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{storageId := StorageId} = _Env, _) ->
+        {ok, Storages} = oz_test_utils:space_get_storages(Config, S1),
+        ?assertEqual(lists:member(StorageId, Storages), not ShouldSucceed)
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_SPACES_REMOVE_RELATIONSHIPS]},
+                {user, U2}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
+                {user, NonAdmin}
+            ]
+        },
+        % fixme
+%%        rest_spec = #rest_spec{
+%%            method = delete,
+%%            path = [<<"/spaces/">>, S1, <<"/storages/">>, storageId],
+%%            expected_code = ?HTTP_204_NO_CONTENT
+%%        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = leave_storage,
+            args = [auth, S1, storageId],
+            expected_result = ?OK_RES
+        }
+        % TODO gs
+    },
+    ?assert(api_test_scenarios:run_scenario(delete_entity,
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
+    )).
+
+
+list_effective_providers_test(Config) ->
+    % create space with 2 users:
+    %   U2 gets the SPACE_VIEW privilege
+    %   U1 gets all remaining privileges
+    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
+        Config, ?SPACE_VIEW
+    ),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+
+    ExpProviders = lists:map(
+        fun(_) ->
+            {ok, {ProviderId, _}} = oz_test_utils:create_provider(
+                Config, ?PROVIDER_NAME1
+            ),
+            {ok, S1} = oz_test_utils:support_space_by_provider(Config, ProviderId, S1),
+            ProviderId
+        end, lists:seq(1, 5)
+    ),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]},
+                {user, U2}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, NonAdmin},
+                {user, U1}
+            ]
+        },
+        % fixme
+%%        rest_spec = #rest_spec{
+%%            method = get,
+%%            path = [<<"/spaces/">>, S1, <<"/providers">>],
+%%            expected_code = ?HTTP_200_OK,
+%%            expected_body = #{<<"providers">> => ExpProviders}
+%%        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = get_eff_providers,
             args = [auth, S1],
             expected_result = ?OK_LIST(ExpProviders)
         }
@@ -668,46 +829,6 @@ list_providers_test(Config) ->
     ).
 
 
-create_provider_support_token(Config) ->
-    % create space with 2 users:
-    %   U2 gets the SPACE_INVITE_PROVIDER privilege
-    %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
-        Config, ?SPACE_ADD_PROVIDER
-    ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config),
-
-    VerifyFun = api_test_scenarios:collect_unique_tokens_fun(),
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                {admin, [?OZ_SPACES_ADD_RELATIONSHIPS]},
-                {user, U2}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = post,
-            path = [<<"/spaces/">>, S1, <<"/providers/token">>],
-            expected_code = ?HTTP_200_OK,
-            expected_body = fun(#{<<"token">> := Token}) -> VerifyFun(Token) end
-        },
-        logic_spec = #logic_spec{
-            module = space_logic,
-            function = create_provider_invite_token,
-            args = [auth, S1],
-            expected_result = ?OK_TERM(VerifyFun)
-        }
-        % TODO gs
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
-
-
 get_provider_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -726,12 +847,11 @@ get_provider_test(Config) ->
     SpacePrivs = privileges:space_privileges(),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     oz_test_utils:space_set_user_privileges(Config, S1, User, [], SpacePrivs),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, P1, S1, oz_test_utils:minimum_support_size(Config)
-    ),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, P2, S1, oz_test_utils:minimum_support_size(Config)
-    ),
+
+    {ok, S1} = oz_test_utils:support_space_by_provider(Config, P1, S1),
+    {ok, S1} = oz_test_utils:support_space_by_provider(Config, P2, S1),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ExpDetails = maps:remove(<<"adminEmail">>, ProviderDetails#{
         <<"online">> => false
@@ -797,63 +917,6 @@ get_provider_test(Config) ->
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
-
-
-leave_provider_test(Config) ->
-    % create space with 2 users:
-    %   U2 gets the SPACE_REMOVE_PROVIDER privilege
-    %   U1 gets all remaining privileges
-    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(
-        Config, ?SPACE_REMOVE_PROVIDER
-    ),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config),
-
-    EnvSetUpFun = fun() ->
-        {ok, {ProviderId, _}} = oz_test_utils:create_provider(
-            Config, ?PROVIDER_NAME1
-        ),
-        {ok, S1} = oz_test_utils:support_space(
-            Config, ProviderId, S1, oz_test_utils:minimum_support_size(Config)
-        ),
-        #{providerId => ProviderId}
-    end,
-    DeleteEntityFun = fun(#{providerId := ProviderId} = _Env) ->
-        oz_test_utils:space_leave_provider(Config, S1, ProviderId)
-    end,
-    VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId} = _Env, _) ->
-        {ok, Providers} = oz_test_utils:space_get_providers(Config, S1),
-        ?assertEqual(lists:member(ProviderId, Providers), not ShouldSucceed)
-    end,
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {admin, [?OZ_SPACES_REMOVE_RELATIONSHIPS]},
-                {user, U2}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U1},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = delete,
-            path = [<<"/spaces/">>, S1, <<"/providers/">>, providerId],
-            expected_code = ?HTTP_204_NO_CONTENT
-        },
-        logic_spec = #logic_spec{
-            module = space_logic,
-            function = leave_provider,
-            args = [auth, S1, providerId],
-            expected_result = ?OK_RES
-        }
-        % TODO gs
-    },
-    ?assert(api_test_scenarios:run_scenario(delete_entity,
-        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
-    )).
 
 
 %%%===================================================================
