@@ -367,7 +367,7 @@ translate_resource(_, #gri{type = od_storage, aspect = instance, scope = private
         <<"qos_parameters">> => QosParams
     };
 
-translate_resource(_, #gri{type = od_storage, aspect = instance, scope = protected}, StorageDetails) ->
+translate_resource(_, #gri{type = od_storage, aspect = instance, scope = shared}, StorageDetails) ->
     #{
         <<"qos_parameters">> := QosParams
     } = StorageDetails,

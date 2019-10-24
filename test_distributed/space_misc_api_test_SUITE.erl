@@ -46,7 +46,7 @@
     remove_storage_test/1,
 
     list_effective_providers_test/1,
-    get_provider_test/1
+    get_eff_provider_test/1
 ]).
 
 all() ->
@@ -66,7 +66,7 @@ all() ->
         remove_storage_test,
 
         list_effective_providers_test,
-        get_provider_test
+        get_eff_provider_test
     ]).
 
 
@@ -821,7 +821,7 @@ list_effective_providers_test(Config) ->
     ).
 
 
-get_provider_test(Config) ->
+get_eff_provider_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 

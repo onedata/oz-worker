@@ -135,8 +135,12 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = instance_d
     Data = Req#el_req.data,
     create_provider(Auth, Data, maps:get(<<"uuid">>, Data, undefined), GRI);
 
-%% @TODO VFS-5856 deprecated, remove in future release
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% Used by providers, that do not keep storages in onezone
 create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
+    %% Virtual storage record with id equal to providers is created.
+    %% This record will be used to keep support information of all provider spaces.
+    %% It will be deleted during provider upgrade.
     case provider_logic:has_storage(ProviderId, ProviderId) of
         true -> ok;
         false -> storage_logic:create(?PROVIDER(ProviderId), ProviderId, ?STORAGE_DEFAULT_NAME)
@@ -260,7 +264,8 @@ get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Provider) ->
 get(#el_req{gri = #gri{aspect = eff_harvesters}}, Provider) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_harvester, Provider)};
 
-%% @TODO VFS-5856 deprecated, remove in future release
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% Used by providers, that do not keep storages in onezone
 get(#el_req{gri = #gri{aspect = spaces}}, Provider) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_space, Provider)};
 get(#el_req{gri = #gri{aspect = eff_spaces}}, Provider) ->
@@ -309,6 +314,11 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = instance}, data = Data}) ->
         }}
     end),
     ok;
+
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% Used by providers, that do not keep storages in onezone
+update(#el_req{gri = #gri{id = ProviderId, aspect = {space, _SpaceId}}, data = Data}) ->
+    storage_logic:update(?PROVIDER(ProviderId), ProviderId, Data);
 
 update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}) ->
     % prevent race condition with simultaneous updates
@@ -361,7 +371,8 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
             ok
     end;
 
-%% @TODO VFS-5856 deprecated, remove in future release
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% Used by providers, that do not keep storages in onezone
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
     storage_logic:revoke_support(?PROVIDER(ProviderId), ProviderId, SpaceId);
 
@@ -526,6 +537,9 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = domain_config}}, _)
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, _) ->
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
+
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = {space, _}}}, _) ->
+    auth_by_self(Req);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = domain_config}}, _) ->
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
@@ -693,6 +707,12 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
         <<"adminEmail">> => {binary, email},
         <<"latitude">> => {float, {between, -90, 90}},
         <<"longitude">> => {float, {between, -180, 180}}
+    }
+};
+
+validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
+    required => #{
+        <<"size">> => {integer, {not_lower_than, ?MINIMUM_SUPPORT_SIZE}}
     }
 };
 

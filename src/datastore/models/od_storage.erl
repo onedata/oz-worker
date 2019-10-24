@@ -27,7 +27,9 @@
 -type record() :: #od_storage{}.
 -type doc() :: datastore_doc:doc(record()).
 -type diff() :: datastore_doc:diff(record()).
--export_type([id/0, record/0]).
+% Map with key-value pairs used for describing storage QoS parameters
+-type qos_parameters() :: #{binary() => binary()}.
+-export_type([id/0, record/0, qos_parameters/0]).
 
 -type name() :: binary().
 -export_type([name/0]).
@@ -199,7 +201,7 @@ get_record_struct(1) ->
     {record, [
         {name, string},
 
-        {qos_parameters, #{binary => binary}},
+        {qos_parameters, #{string => string}},
 
         {provider, string},
         {spaces, #{string => integer}},

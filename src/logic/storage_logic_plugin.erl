@@ -67,7 +67,7 @@ operation_supported(create, instance, private) -> true;
 operation_supported(create, support, private) -> true;
 
 operation_supported(get, instance, private) -> true;
-operation_supported(get, instance, protected) -> true;
+operation_supported(get, instance, shared) -> true;
 
 operation_supported(get, spaces, private) -> true;
 
@@ -98,7 +98,11 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(#el_req{gri = #gri{id = StorageId, aspect = instance} = GRI, auth = ?PROVIDER(ProviderId) = Auth, data = Data}) ->
+create(#el_req{gri = #gri{id = Id, aspect = instance} = GRI, auth = ?PROVIDER(ProviderId) = Auth, data = Data}) ->
+    StorageId = case Id of
+        undefined -> datastore_utils:gen_key();
+        _ -> Id
+    end,
     Name = maps:get(<<"name">>, Data),
     {ok, _} = od_storage:create(#document{
         key = StorageId,
@@ -153,7 +157,7 @@ create(#el_req{auth = Auth, gri = #gri{id = StorageId, aspect = support}, data =
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = instance, scope = private}}, Storage) ->
     {ok, Storage};
-get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Storage) ->
+get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Storage) ->
     #od_storage{
         qos_parameters = QosParameters,
         creation_time = CreationTime, creator = Creator
@@ -253,10 +257,8 @@ exists(#el_req{gri = #gri{id = Id}}, #od_storage{}) ->
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) ->
     case Req#el_req.auth of
-        ?PROVIDER(_) ->
-            true;
-        _ ->
-            false
+        ?PROVIDER(_) -> true;
+        _ -> false
     end;
 
 authorize(#el_req{operation = create, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = support}}, Storage) ->
@@ -265,13 +267,11 @@ authorize(#el_req{operation = create, auth = ?PROVIDER(ProviderId), gri = #gri{a
 authorize(#el_req{operation = get, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = instance, scope = private}}, Storage) ->
     storage_logic:belongs_to_provider(Storage, ProviderId);
 
-authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Storage) ->
-    case Req#el_req.auth of
-        ?USER(ClientUserId) ->
-            storage_logic:has_eff_user(Storage, ClientUserId);
-        ?PROVIDER(_) ->
-            % Any provider can access storage protected data
-            true;
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, id = StorageId, scope = shared}}, Storage) ->
+    case {Req#el_req.auth, Req#el_req.auth_hint} of
+        {?PROVIDER(ProviderId), ?THROUGH_SPACE(SpaceId)} ->
+            storage_logic:supports_space(StorageId, SpaceId)
+                andalso provider_logic:supports_space(ProviderId, SpaceId);
         _ ->
             % Access to private data also allows access to protected data
             authorize(Req#el_req{gri = GRI#gri{scope = private}}, Storage)
@@ -330,7 +330,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
         <<"name">> => {binary, name},
-        <<"qos_parameters">> => {json, any}
+        <<"qos_parameters">> => {json, qos_parameters}
     }
 };
 

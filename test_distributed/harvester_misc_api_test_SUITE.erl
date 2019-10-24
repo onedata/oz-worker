@@ -233,8 +233,8 @@ get_test(Config) ->
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
-    {ok, {P1, M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    {ok, {P2, M2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P1, T1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P2, T2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
 
     AllPrivs = privileges:harvester_privileges(),
     {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
@@ -258,13 +258,13 @@ get_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {provider, P1,M1},
+                {provider, P1, T1},
                 {user, U2}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {admin, [?OZ_HARVESTERS_VIEW]},
-                {provider, P2,M2},
+                {provider, P2, T2},
                 {user, NonAdmin},
                 {user, U1}
             ]
@@ -1303,10 +1303,10 @@ submit_batch_test(Config) ->
         ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)),
     oz_test_utils:harvester_add_user(Config, H1, U1),
 
-    {ok, {P1, M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P1, T1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, S1} = oz_test_utils:support_space_by_provider(Config, P1, S1),
-    {ok, {P2, M2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P2, T2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
 
     oz_test_utils:harvester_add_space(Config, H1, S1),
 
@@ -1317,12 +1317,12 @@ submit_batch_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                {provider, P1,M1}
+                {provider, P1, T1}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
-                {provider, P2,M2}
+                {provider, P2, T2}
             ]
         },
         logic_spec = #logic_spec{
@@ -1351,7 +1351,7 @@ submit_batch_index_stats_test(Config) ->
         ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)),
     oz_test_utils:harvester_add_user(Config, H1, U1),
 
-    {ok, {P1, _M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P1, _T1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, S1} = oz_test_utils:support_space_by_provider(Config, P1, S1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),

@@ -386,7 +386,7 @@
 
 -record(od_storage, {
     name = <<>> :: binary(),
-    qos_parameters = #{} :: #{binary() => binary()},
+    qos_parameters = #{} :: od_storage:qos_parameters(),
 
     % Direct relations to other entities
     provider :: od_provider:id(),

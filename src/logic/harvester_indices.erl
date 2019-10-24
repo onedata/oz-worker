@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module encapsulates all harvester indices functionalities.
+%%% This module encapsulates all harvester indices functionality.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(harvester_indices).

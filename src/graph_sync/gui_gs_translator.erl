@@ -62,7 +62,7 @@ translate_value(_, #gri{aspect = TokenType}, Token) when
     TokenType == invite_user_token;
     TokenType == invite_group_token;
     TokenType == invite_space_token;
-    TokenType == invite_provider_token;
+    TokenType == space_support_token;
     TokenType == provider_registration_token ->
 
     {ok, Serialized} = tokens:serialize(Token),

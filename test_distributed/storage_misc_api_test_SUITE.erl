@@ -68,7 +68,8 @@ create_test(Config) ->
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
 
     VerifyFun = fun(StorageId) ->
-        {ok, _Storage} = oz_test_utils:get_storage(Config, StorageId),
+        {ok, Storage} = oz_test_utils:get_storage(Config, StorageId),
+        ?assertEqual(?CORRECT_NAME, Storage#od_storage.name),
         true
     end,
 
@@ -98,6 +99,11 @@ create_test(Config) ->
                     VerifyFun(StorageId)
                 end
             })
+        },
+        data_spec = #data_spec{
+            required = [<<"name">>],
+            correct_values = #{<<"name">> => [?CORRECT_NAME]},
+            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -109,11 +115,13 @@ get_test(Config) ->
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, {P2, P2Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P3, P3Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
 
     {ok, S} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     SupportSize = oz_test_utils:minimum_support_size(Config),
     {ok, S} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S, SupportSize),
+    {ok, S} = oz_test_utils:support_space_by_provider(Config, P2, S),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -131,7 +139,8 @@ get_test(Config) ->
             forbidden = [
                 {user, NonAdmin},
                 {user, U1},
-                {provider, P2, P2Token}
+                {provider, P2, P2Token},
+                {provider, P3, P3Token}
             ]
         },
         logic_spec = #logic_spec{
@@ -176,31 +185,32 @@ get_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, GetPrivateDataApiTestSpec)),
 
-    % Get and check protected data
+    % Get and check shared data
     GetSharedDataApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
-                {user, U1},
                 {provider, P1, P1Token},
                 {provider, P2, P2Token}
             ],
             unauthorized = [nobody],
             forbidden = [
-                {user, NonAdmin}
+                {user, NonAdmin},
+                {provider, P3, P3Token}
             ]
         },
         logic_spec = #logic_spec{
             module = storage_logic,
-            function = get_protected_data,
-            args = [auth, St1],
+            function = get_shared_data,
+            args = [auth, St1, S],
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"qos_parameters">> => ExpectedQosParameters
             })
         },
         gs_spec = #gs_spec{
             operation = get,
-            gri = #gri{type = od_storage, id = St1, aspect = instance, scope = protected},
+            gri = #gri{type = od_storage, id = St1, aspect = instance, scope = shared},
+            auth_hint = ?THROUGH_SPACE(S),
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"qos_parameters">> => ExpectedQosParameters,
                 <<"gri">> => fun(EncodedGri) ->
@@ -259,7 +269,11 @@ update_test(Config) ->
             correct_values = #{
                 <<"qos_parameters">> => [#{<<"key">> => <<"value">>}]
             },
-            bad_values = [{<<"qos_parameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qos_parameters">>)}]
+            bad_values = [
+                {<<"qos_parameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qos_parameters">>)},
+                {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS}
+            ]
         }
     },
     ?assert(api_test_utils:run_tests(

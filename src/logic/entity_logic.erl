@@ -971,6 +971,13 @@ check_value(json, JsonValidator, Key, Map) when is_map(JsonValidator) ->
                 transform_and_check_value(NestedTypeRule, NestedValueRule, FullKey, Value)
         end
     end, JsonValidator);
+
+check_value(json, qos_parameters, _Key, Map) ->
+    case maps:fold(fun(K, V, Acc) -> Acc andalso is_binary(K) andalso is_binary(V) end, true, Map) of
+        true -> Map;
+        false -> throw(?ERROR_BAD_VALUE_QOS_PARAMETERS)
+    end;
+
 check_value(token_type, VerifyFun, Key, Val) when is_function(VerifyFun, 1) ->
     case VerifyFun(Val) of
         true ->

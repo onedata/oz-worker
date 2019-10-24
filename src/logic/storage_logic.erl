@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module encapsulates all storage logic functionalities.
+%%% This module encapsulates all storage logic functionality.
 %%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
@@ -21,7 +21,7 @@
 ]).
 -export([
     get/2,
-    get_protected_data/2
+    get_shared_data/3
 ]).
 -export([
     update/3
@@ -156,15 +156,17 @@ get(Auth, StorageId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves protected storage data from database.
+%% Retrieves storage data shared through space from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get_protected_data(aai:auth(), od_storage:id()) -> {ok, map()} | errors:error().
-get_protected_data(Auth, StorageId) ->
+-spec get_shared_data(aai:auth(), od_storage:id(), od_space:id()) ->
+    {ok, map()} | errors:error().
+get_shared_data(Auth, StorageId, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
         auth = Auth,
-        gri = #gri{type = od_storage, id = StorageId, aspect = instance, scope = protected}
+        gri = #gri{type = od_storage, id = StorageId, aspect = instance, scope = shared},
+        auth_hint = ?THROUGH_SPACE(SpaceId)
     }).
 
 
