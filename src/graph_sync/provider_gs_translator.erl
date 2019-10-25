@@ -283,7 +283,9 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         <<"online">> => provider_connection:is_online(Id),
 
         <<"storages">> => entity_graph:get_relations(direct, bottom_up, od_storage, Provider),
+        %% @TODO VFS-5554 Deprecated, included for backward compatibility
         <<"spaces">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_space, Provider),
+        <<"effectiveSpaces">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_space, Provider),
         <<"effectiveUsers">> => entity_graph:get_relations(effective, bottom_up, od_user, Provider),
         <<"effectiveGroups">> => entity_graph:get_relations(effective, bottom_up, od_group, Provider)
     };
