@@ -237,18 +237,18 @@ get(#el_req{gri = #gri{aspect = users}}, Handle) ->
 get(#el_req{gri = #gri{aspect = eff_users}}, Handle) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_user, Handle)};
 get(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, Handle) ->
-    {ok, entity_graph:get_privileges(direct, bottom_up, od_user, UserId, Handle)};
+    {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_user, UserId, Handle)};
 get(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, Handle) ->
-    {ok, entity_graph:get_privileges(effective, bottom_up, od_user, UserId, Handle)};
+    {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Handle)};
 
 get(#el_req{gri = #gri{aspect = groups}}, Handle) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_group, Handle)};
 get(#el_req{gri = #gri{aspect = eff_groups}}, Handle) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_group, Handle)};
 get(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, Handle) ->
-    {ok, entity_graph:get_privileges(direct, bottom_up, od_group, GroupId, Handle)};
+    {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_group, GroupId, Handle)};
 get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Handle) ->
-    {ok, entity_graph:get_privileges(effective, bottom_up, od_group, GroupId, Handle)}.
+    {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_group, GroupId, Handle)}.
 
 
 %%--------------------------------------------------------------------

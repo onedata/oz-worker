@@ -294,9 +294,9 @@ get(#el_req{gri = #gri{aspect = users}}, Cluster) ->
 get(#el_req{gri = #gri{aspect = eff_users}}, Cluster) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_user, Cluster)};
 get(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, Cluster) ->
-    {ok, entity_graph:get_privileges(direct, bottom_up, od_user, UserId, Cluster)};
+    {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_user, UserId, Cluster)};
 get(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, Cluster) ->
-    {ok, entity_graph:get_privileges(effective, bottom_up, od_user, UserId, Cluster)};
+    {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Cluster)};
 get(#el_req{gri = #gri{aspect = {eff_user_membership, UserId}}}, Cluster) ->
     {ok, entity_graph:get_intermediaries(bottom_up, od_user, UserId, Cluster)};
 
@@ -305,9 +305,9 @@ get(#el_req{gri = #gri{aspect = groups}}, Cluster) ->
 get(#el_req{gri = #gri{aspect = eff_groups}}, Cluster) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_group, Cluster)};
 get(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, Cluster) ->
-    {ok, entity_graph:get_privileges(direct, bottom_up, od_group, GroupId, Cluster)};
+    {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_group, GroupId, Cluster)};
 get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Cluster) ->
-    {ok, entity_graph:get_privileges(effective, bottom_up, od_group, GroupId, Cluster)};
+    {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_group, GroupId, Cluster)};
 get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Cluster) ->
     {ok, entity_graph:get_intermediaries(bottom_up, od_group, GroupId, Cluster)}.
 

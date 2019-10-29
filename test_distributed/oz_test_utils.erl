@@ -1562,17 +1562,20 @@ delete_provider(Config, ProviderId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Supports a space by a provider based on space id
-%% (with default support size and new dummy storage).
+%% (with default support size and virtual storage with id equal to providers).
 %% @end
 %%--------------------------------------------------------------------
 -spec support_space_by_provider(Config :: term(), ProviderId :: od_provider:id(),
     SpaceId :: od_space:id()) -> {ok, SpaceId :: od_space:id()}.
 support_space_by_provider(Config, ProviderId, SpaceId) ->
-    % Create dummy storage
-    {ok, StorageId} = ?assertMatch({ok, _}, create_storage(
-        Config, ?PROVIDER(ProviderId), ?STORAGE_NAME1)
-    ),
-    support_space(Config, ?PROVIDER(ProviderId), StorageId, SpaceId, minimum_support_size(Config)).
+    case call_oz(Config, provider_logic, has_storage, [ProviderId, ProviderId]) of
+        true -> ok;
+        false ->
+            ?assertMatch({ok, _}, create_storage(
+                Config, ?PROVIDER(ProviderId), ProviderId, ?STORAGE_NAME1)
+            )
+    end,
+    support_space(Config, ?PROVIDER(ProviderId), ProviderId, SpaceId, minimum_support_size(Config)).
 
 
 %%--------------------------------------------------------------------
@@ -2846,6 +2849,19 @@ group_invite_user_token(Config, Client, GroupId) ->    ?assertMatch({ok, _}, cal
 create_storage(Config, Client, Name) ->
     ?assertMatch({ok, _}, call_oz(
         Config, storage_logic, create, [Client, Name]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a storage in onezone with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_storage(Config :: term(), Client :: aai:auth(),
+    od_storage:id(), od_storage:name()) -> {ok, od_storage:id()}.
+create_storage(Config, Client, Id, Name) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, storage_logic, create, [Client, Id, Name]
     )).
 
 

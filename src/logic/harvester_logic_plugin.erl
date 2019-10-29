@@ -475,9 +475,9 @@ get(#el_req{gri = #gri{aspect = users}}, Harvester) ->
 get(#el_req{gri = #gri{aspect = eff_users}}, Harvester) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_user, Harvester)};
 get(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, Harvester) ->
-    {ok, entity_graph:get_privileges(direct, bottom_up, od_user, UserId, Harvester)};
+    {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_user, UserId, Harvester)};
 get(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, Harvester) ->
-    {ok, entity_graph:get_privileges(effective, bottom_up, od_user, UserId, Harvester)};
+    {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Harvester)};
 get(#el_req{gri = #gri{aspect = {eff_user_membership, UserId}}}, Harvester) ->
     {ok, entity_graph:get_intermediaries(bottom_up, od_user, UserId, Harvester)};
 
@@ -486,9 +486,9 @@ get(#el_req{gri = #gri{aspect = groups}}, Harvester) ->
 get(#el_req{gri = #gri{aspect = eff_groups}}, Harvester) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_group, Harvester)};
 get(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, Harvester) ->
-    {ok, entity_graph:get_privileges(direct, bottom_up, od_group, GroupId, Harvester)};
+    {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_group, GroupId, Harvester)};
 get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Harvester) ->
-    {ok, entity_graph:get_privileges(effective, bottom_up, od_group, GroupId, Harvester)};
+    {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_group, GroupId, Harvester)};
 get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Harvester) ->
     {ok, entity_graph:get_intermediaries(bottom_up, od_group, GroupId, Harvester)};
 

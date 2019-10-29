@@ -171,6 +171,7 @@ after_init([]) ->
     {ok, node_manager:cluster_generation()}.
 upgrade_cluster(1) ->
     token_logic:migrate_deprecated_tokens(),
+    storage_logic:migrate_legacy_supports(),
     {ok, 2}.
 
 

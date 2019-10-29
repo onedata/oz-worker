@@ -61,7 +61,9 @@
     has_eff_harvester/2
 ]).
 -export([
-    get_url/1
+    get_url/1,
+    get_legacy_spaces/1,
+    remove_legacy_space/2
 ]).
 
 %%%===================================================================
@@ -602,3 +604,30 @@ get_url(#od_provider{domain = Domain}) ->
 get_url(ProviderId) ->
     {ok, Provider} = get(?ROOT, ProviderId),
     get_url(Provider).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns all legacy spaces in given provider.
+%% Dedicated for upgrading Onezone from 19.02.* to the next major release.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_legacy_spaces(od_provider:record() | od_provider:doc()) ->
+    {ok, #{od_space:id() => integer()}}.
+get_legacy_spaces(#document{value = Value}) ->
+    get_legacy_spaces(Value);
+get_legacy_spaces(#od_provider{legacy_spaces = Spaces}) ->
+    {ok, Spaces}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes given space from legacy spaces in given provider.
+%% Dedicated for upgrading Onezone from 19.02.* to the next major release.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_legacy_space(od_provider:id(), od_space:id()) -> {ok, od_provider:doc()}.
+remove_legacy_space(ProviderId, SpaceId) ->
+    od_provider:update(ProviderId, fun(#od_provider{legacy_spaces = Spaces} = Provider) ->
+        {ok, Provider#od_provider{legacy_spaces = maps:remove(SpaceId, Spaces)}}
+    end).

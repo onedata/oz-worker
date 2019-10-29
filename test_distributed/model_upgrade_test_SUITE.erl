@@ -1063,7 +1063,7 @@ get_record(od_space, 1) -> {od_space,
     ],
     [
         {<<"group1">>, [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_invite_provider]},
-        {<<"group2">>, [?SPACE_REMOVE_SUPPORT, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]}
+        {<<"group2">>, [space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]}
     ],
     [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
     [],  % eff_users
@@ -1079,7 +1079,7 @@ get_record(od_space, 2) -> {od_space,
     },
     #{
         <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_invite_provider],
-        <<"group2">> => [?SPACE_REMOVE_SUPPORT, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
+        <<"group2">> => [space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
     },
     #{
         <<"prov1">> => 1000,
@@ -1103,7 +1103,7 @@ get_record(od_space, 3) -> {od_space,
     },
     #{
         <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_invite_provider],
-        <<"group2">> => [?SPACE_REMOVE_SUPPORT, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
+        <<"group2">> => [space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
     },
     #{
         <<"prov1">> => 1000,
@@ -1138,7 +1138,7 @@ get_record(od_space, 4) -> {od_space,
             ?SPACE_READ_DATA, space_manage_indexes, space_query_indexes, ?SPACE_VIEW_STATISTICS
         ]),
         <<"group2">> => privileges:from_list([
-            ?SPACE_REMOVE_SUPPORT, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+            space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
             ?SPACE_READ_DATA, space_manage_indexes, space_query_indexes, ?SPACE_VIEW_STATISTICS
         ])
     },
@@ -1186,7 +1186,7 @@ get_record(od_space, 5) -> {
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ]),
             <<"group2">> => privileges:from_list([
-                ?SPACE_REMOVE_SUPPORT, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+                space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
                 ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ])
@@ -1231,7 +1231,7 @@ get_record(od_space, 5) -> {
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ]),
             <<"group2">> => privileges:from_list([
-                ?SPACE_REMOVE_SUPPORT, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+                space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
                 ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ])
@@ -1278,7 +1278,7 @@ get_record(od_space, 6) -> {od_space,
             ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
         ]),
         <<"group2">> => privileges:from_list([
-            ?SPACE_REMOVE_SUPPORT, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+            space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
             ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
             ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
         ])
@@ -1527,6 +1527,12 @@ get_record(od_provider, 6) -> #od_provider{
     latitude = -93.2341,
     longitude = 17,
 
+    legacy_spaces = #{
+        <<"space1">> => 0,
+        <<"space2">> => 0,
+        <<"space3">> => 0,
+        <<"space4">> => 0
+    },
     storages = [],
 
     eff_users = #{},
