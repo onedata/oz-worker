@@ -187,11 +187,11 @@ translate_resource(_, #gri{type = od_group, aspect = instance, scope = private},
         <<"type">> => Type,
 
         <<"children">> => Children,
-        <<"effectiveChildren">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, Group),
+        <<"effectiveChildren">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_group, Group),
         <<"parents">> => Parents,
 
         <<"users">> => Users,
-        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, Group),
+        <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, Group),
 
         <<"spaces">> => maps:keys(EffSpaces)
     };
@@ -211,7 +211,7 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
 
         groups = Groups,
 
-        providers = Providers,
+        storages = Storages,
         shares = Shares,
         harvesters = Harvesters
     } = Space,
@@ -219,12 +219,13 @@ translate_resource(_, #gri{type = od_space, aspect = instance, scope = private},
         <<"name">> => Name,
 
         <<"users">> => Users,
-        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, Space),
+        <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, Space),
 
         <<"groups">> => Groups,
-        <<"effectiveGroups">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, Space),
+        <<"effectiveGroups">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_group, Space),
 
-        <<"providers">> => Providers,
+        <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
+        <<"storages">> => Storages,
         <<"shares">> => Shares,
         <<"harvesters">> => Harvesters
     };
@@ -266,9 +267,7 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         subdomain = Subdomain,
         admin_email = AdminEmail,
         latitude = Latitude,
-        longitude = Longitude,
-
-        spaces = Spaces
+        longitude = Longitude
     } = Provider,
     #{
         <<"name">> => Name,
@@ -283,7 +282,10 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
 
         <<"online">> => provider_connection:is_online(Id),
 
-        <<"spaces">> => Spaces,
+        <<"storages">> => entity_graph:get_relations(direct, bottom_up, od_storage, Provider),
+        %% @TODO VFS-5554 Deprecated, included for backward compatibility
+        <<"spaces">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_space, Provider),
+        <<"effectiveSpaces">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_space, Provider),
         <<"effectiveUsers">> => entity_graph:get_relations(effective, bottom_up, od_user, Provider),
         <<"effectiveGroups">> => entity_graph:get_relations(effective, bottom_up, od_group, Provider)
     };
@@ -313,8 +315,8 @@ translate_resource(_, #gri{type = od_handle_service, aspect = instance, scope = 
     #{
         <<"name">> => HService#od_handle_service.name,
 
-        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, HService),
-        <<"effectiveGroups">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, HService)
+        <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, HService),
+        <<"effectiveGroups">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_group, HService)
     };
 
 translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}, Handle) ->
@@ -334,8 +336,8 @@ translate_resource(_, #gri{type = od_handle, aspect = instance, scope = private}
         <<"timestamp">> => time_utils:datetime_to_datestamp(Timestamp),
         <<"handleServiceId">> => HandleServiceId,
 
-        <<"effectiveUsers">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_user, Handle),
-        <<"effectiveGroups">> => entity_graph:get_relations_with_privileges(effective, bottom_up, od_group, Handle)
+        <<"effectiveUsers">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_user, Handle),
+        <<"effectiveGroups">> => entity_graph:get_relations_with_attrs(effective, bottom_up, od_group, Handle)
     };
 
 translate_resource(_, #gri{type = od_handle, aspect = instance, scope = public}, HandleData) ->
@@ -355,6 +357,24 @@ translate_resource(_, #gri{type = od_harvester, aspect = instance, scope = priva
     #{
         <<"indices">> => maps:keys(Indices),
         <<"spaces">> => entity_graph:get_relations(direct, top_down, od_space, Harvester)
+    };
+
+translate_resource(_, #gri{type = od_storage, aspect = instance, scope = private}, Storage) ->
+    #od_storage{
+        provider = Provider,
+        qos_parameters = QosParams
+    } = Storage,
+    #{
+        <<"provider">> => Provider,
+        <<"qos_parameters">> => QosParams
+    };
+
+translate_resource(_, #gri{type = od_storage, aspect = instance, scope = shared}, StorageDetails) ->
+    #{
+        <<"qos_parameters">> := QosParams
+    } = StorageDetails,
+    #{
+        <<"qos_parameters">> => QosParams
     };
 
 translate_resource(ProtocolVersion, GRI, Data) ->

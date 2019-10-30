@@ -175,9 +175,10 @@ set_up_test_entities(Users, Groups, Spaces) ->
                     fun({ProviderId, ProviderProps}) ->
                         FirstUser = hd(UserList),
                         SupportedSize = proplists:get_value(<<"supported_size">>, ProviderProps),
-                        ok = space_logic:update_user_privileges(?ROOT, SpaceId, FirstUser, [?SPACE_ADD_PROVIDER], []),
-                        {ok, Token} = space_logic:create_provider_invite_token(?USER(FirstUser), SpaceId),
-                        {ok, SpaceId} = provider_logic:support_space(?ROOT, ProviderId, Token, SupportedSize)
+                        ok = space_logic:update_user_privileges(?ROOT, SpaceId, FirstUser, [?SPACE_ADD_SUPPORT], []),
+                        {ok, Token} = space_logic:create_space_support_token(?USER(FirstUser), SpaceId),
+                        {ok, ProviderId} = storage_logic:create(?PROVIDER(ProviderId), ProviderId, ?STORAGE_DEFAULT_NAME),
+                        {ok, SpaceId} = storage_logic:support_space(?ROOT, ProviderId, Token, SupportedSize)
                     end, ProviderList)
             end, Spaces),
 
@@ -279,7 +280,8 @@ create_space_with_provider({MemberType, MemberId}, Name, Supports, SpaceId) ->
     ),
     maps:map(
         fun(ProviderId, SupportSize) ->
-            {ok, Token} = space_logic:create_provider_invite_token(?ROOT, SpaceId),
-            {ok, SpaceId} = provider_logic:support_space(?ROOT, ProviderId, Token, SupportSize)
+            {ok, Token} = space_logic:create_space_support_token(?ROOT, SpaceId),
+            storage_logic:create(?PROVIDER(ProviderId), ProviderId, ?STORAGE_DEFAULT_NAME),
+            {ok, SpaceId} = storage_logic:support_space(?ROOT, ProviderId, Token, SupportSize)
         end, Supports),
     {ok, SpaceId}.

@@ -99,4 +99,9 @@
 >>).
 
 
+%% @TODO VFS-5856 This is needed for providers in previous version, for which virtual
+%% storage record supporting all their spaces will be created. This storage record
+%% does not represent actual storage, it is provider that keeps knowledge of storages.
+-define(STORAGE_DEFAULT_NAME, <<"default_storage">>).
+
 -endif.

@@ -31,11 +31,11 @@
 -type el_plugin() :: module().
 -type operation() :: gs_protocol:operation().
 -type entity_id() :: undefined | od_user:id() | od_group:id() | od_space:id() |
-od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id() | od_cluster:id().
+od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id() | od_cluster:id() | od_storage:id().
 -type entity_type() :: od_user | od_group | od_space | od_share | od_provider |
-od_handle_service | od_handle | od_harvester | od_cluster | oz_privileges.
+od_handle_service | od_handle | od_harvester | od_cluster | od_storage | oz_privileges.
 -type entity() :: undefined | #od_user{} | #od_group{} | #od_space{} |
-#od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{} | #od_harvester{} | #od_cluster{}.
+#od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{} | #od_harvester{} | #od_cluster{} | #od_storage{}.
 -type revision() :: gs_protocol:revision().
 -type versioned_entity() :: gs_protocol:versioned_entity().
 -type aspect() :: gs_protocol:aspect().
@@ -971,6 +971,13 @@ check_value(json, JsonValidator, Key, Map) when is_map(JsonValidator) ->
                 transform_and_check_value(NestedTypeRule, NestedValueRule, FullKey, Value)
         end
     end, JsonValidator);
+
+check_value(json, qos_parameters, _Key, Map) ->
+    case maps:fold(fun(K, V, Acc) -> Acc andalso is_binary(K) andalso is_binary(V) end, true, Map) of
+        true -> Map;
+        false -> throw(?ERROR_BAD_VALUE_QOS_PARAMETERS)
+    end;
+
 check_value(token_type, VerifyFun, Key, Val) when is_function(VerifyFun, 1) ->
     case VerifyFun(Val) of
         true ->

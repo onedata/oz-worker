@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module encapsulates all harvester indices functionalities.
+%%% This module encapsulates all harvester indices functionality.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(harvester_indices).
@@ -97,7 +97,7 @@ update_index_stats(Indices, IndexId, UpdateFun) ->
 -spec coalesce_index_stats(od_harvester:indices_stats(), od_space:id(), boolean()) ->
     od_harvester:indices_stats().
 coalesce_index_stats(ExistingStats, SpaceId, ArchivalFlagValue) ->
-    {true, {#od_space{providers = Providers}, _}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
+    {true, {#od_space{eff_providers = Providers}, _}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
     coalesce_index_stats(ExistingStats, SpaceId, maps:keys(Providers), ArchivalFlagValue).
 
 

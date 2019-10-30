@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module encapsulates all space logic functionalities.
+%%% This module encapsulates all space logic functionality.
 %%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
@@ -34,7 +34,7 @@
 -export([
     create_user_invite_token/2,
     create_group_invite_token/2,
-    create_provider_invite_token/2,
+    create_space_support_token/2,
 
     add_user/3, add_user/4,
     add_group/3, add_group/4,
@@ -55,14 +55,16 @@
 
     get_shares/2, get_share/3,
 
-    get_providers/2, get_provider/3,
+    get_eff_providers/2, get_provider/3,
 
     get_harvesters/2, get_harvester/3,
+
+    get_storages/2,
 
     update_user_privileges/5, update_user_privileges/4,
     update_group_privileges/5, update_group_privileges/4,
 
-    leave_provider/3,
+    remove_storage/3,
     remove_harvester/3,
 
     remove_user/3,
@@ -74,8 +76,9 @@
     has_direct_user/2,
     has_eff_user/2,
     has_eff_group/2,
-    has_provider/2,
-    has_harvester/2
+    is_supported_by_provider/2,
+    has_harvester/2,
+    is_supported_by_storage/2
 ]).
 
 %%%===================================================================
@@ -91,7 +94,7 @@
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Auth :: aai:auth(), NameOrData :: binary() | #{}) ->
-    {ok, od_space:id()} | {error, term()}.
+    {ok, od_space:id()} | errors:error().
 create(Auth, Name) when is_binary(Name) ->
     create(Auth, #{<<"name">> => Name});
 create(Auth, Data) ->
@@ -109,7 +112,7 @@ create(Auth, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, #od_space{}} | {error, term()}.
+    {ok, #od_space{}} | errors:error().
 get(Auth, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -124,7 +127,7 @@ get(Auth, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_protected_data(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, map()} | {error, term()}.
+    {ok, map()} | errors:error().
 get_protected_data(Auth, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -139,7 +142,7 @@ get_protected_data(Auth, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec list(Auth :: aai:auth()) ->
-    {ok, [od_space:id()]} | {error, term()}.
+    {ok, [od_space:id()]} | errors:error().
 list(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -153,7 +156,7 @@ list(Auth) ->
 %% Get all possible space privileges.
 %% @end
 %%--------------------------------------------------------------------
--spec list_privileges() -> {ok, map()} | {error, term()}.
+-spec list_privileges() -> {ok, map()} | errors:error().
 list_privileges() ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -170,7 +173,7 @@ list_privileges() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    NameOrData :: binary() | #{}) -> ok | {error, term()}.
+    NameOrData :: binary() | #{}) -> ok | errors:error().
 update(Auth, SpaceId, NewName) when is_binary(NewName) ->
     update(Auth, SpaceId, #{<<"name">> => NewName});
 update(Auth, SpaceId, Data) ->
@@ -188,7 +191,7 @@ update(Auth, SpaceId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    ok | {error, term()}.
+    ok | errors:error().
 delete(Auth, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = delete,
@@ -204,7 +207,7 @@ delete(Auth, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_user_invite_token(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, tokens:token()} | {error, term()}.
+    {ok, tokens:token()} | errors:error().
 create_user_invite_token(Auth, SpaceId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
@@ -221,7 +224,7 @@ create_user_invite_token(Auth, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_group_invite_token(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, tokens:token()} | {error, term()}.
+    {ok, tokens:token()} | errors:error().
 create_group_invite_token(Auth, SpaceId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
@@ -233,17 +236,17 @@ create_group_invite_token(Auth, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a provider invite token (support token), which can be used by any
+%% Creates a space support token, which can be used by any
 %% provider to grant support to given space.
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider_invite_token(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, tokens:token()} | {error, term()}.
-create_provider_invite_token(Auth, SpaceId) ->
+-spec create_space_support_token(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
+    {ok, tokens:token()} | errors:error().
+create_space_support_token(Auth, SpaceId) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
         auth = Auth,
-        gri = #gri{type = od_space, id = SpaceId, aspect = invite_provider_token},
+        gri = #gri{type = od_space, id = SpaceId, aspect = space_support_token},
         data = #{}
     })).
 
@@ -255,7 +258,7 @@ create_provider_invite_token(Auth, SpaceId) ->
 %%--------------------------------------------------------------------
 -spec add_user(Auth :: aai:auth(),
     SpaceId :: od_space:id(), UserId :: od_user:id()) ->
-    {ok, od_user:id()} | {error, term()}.
+    {ok, od_user:id()} | errors:error().
 add_user(Auth, SpaceId, UserId) ->
     add_user(Auth, SpaceId, UserId, #{}).
 
@@ -271,7 +274,7 @@ add_user(Auth, SpaceId, UserId) ->
 -spec add_user(Auth :: aai:auth(),
     SpaceId :: od_space:id(), UserId :: od_user:id(),
     PrivilegesPrivilegesOrData :: [privileges:space_privilege()] | #{}) ->
-    {ok, od_user:id()} | {error, term()}.
+    {ok, od_user:id()} | errors:error().
 add_user(Auth, SpaceId, UserId, Privileges) when is_list(Privileges) ->
     add_user(Auth, SpaceId, UserId, #{
         <<"privileges">> => Privileges
@@ -292,7 +295,7 @@ add_user(Auth, SpaceId, UserId, Data) ->
 %%--------------------------------------------------------------------
 -spec add_group(Auth :: aai:auth(),
     SpaceId :: od_space:id(), GroupId :: od_group:id()) ->
-    {ok, od_group:id()} | {error, term()}.
+    {ok, od_group:id()} | errors:error().
 add_group(Auth, SpaceId, GroupId) ->
     add_group(Auth, SpaceId, GroupId, #{}).
 
@@ -308,7 +311,7 @@ add_group(Auth, SpaceId, GroupId) ->
 -spec add_group(Auth :: aai:auth(),
     SpaceId :: od_space:id(), GroupId :: od_group:id(),
     PrivilegesOrData :: [privileges:space_privilege()] | #{}) ->
-    {ok, od_group:id()} | {error, term()}.
+    {ok, od_group:id()} | errors:error().
 add_group(Auth, SpaceId, GroupId, Privileges) when is_list(Privileges) ->
     add_group(Auth, SpaceId, GroupId, #{
         <<"privileges">> => Privileges
@@ -327,7 +330,7 @@ add_group(Auth, SpaceId, GroupId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_group(Auth :: aai:auth(), od_space:id(), od_group:name(),
-    od_group:type()) -> {ok, od_group:id()} | {error, term()}.
+    od_group:type()) -> {ok, od_group:id()} | errors:error().
 create_group(Auth, SpaceId, Name, Type) ->
     create_group(Auth, SpaceId, #{<<"name">> => Name, <<"type">> => Type}).
 
@@ -339,7 +342,7 @@ create_group(Auth, SpaceId, Name, Type) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_group(Auth :: aai:auth(), od_space:id(),
-    NameOrData :: od_group:name() | #{}) -> {ok, od_group:id()} | {error, term()}.
+    NameOrData :: od_group:name() | #{}) -> {ok, od_group:id()} | errors:error().
 create_group(Auth, SpaceId, Name) when is_binary(Name) ->
     create_group(Auth, SpaceId, #{<<"name">> => Name});
 create_group(Auth, SpaceId, Data) ->
@@ -366,7 +369,7 @@ create_group(Auth, SpaceId, Data) ->
 %%--------------------------------------------------------------------
 -spec join_harvester(Auth :: aai:auth(), SpaceId :: od_group:id(),
     TokenOrData :: tokens:serialized() | tokens:token() | map()) ->
-    {ok, od_harvester:id()} | {error, term()}.
+    {ok, od_harvester:id()} | errors:error().
 join_harvester(Auth, SpaceId, Data) when is_map(Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
@@ -387,7 +390,7 @@ join_harvester(Auth, SpaceId, Token) ->
 %%--------------------------------------------------------------------
 -spec harvest_metadata(Auth :: aai:auth(), SpaceId :: od_space:id(),
     Destination :: map(), MaxStreamSeq :: integer(), MaxSeq :: non_neg_integer(), Batch :: map()) ->
-    {ok, map()} | {error, term()}.
+    {ok, map()} | errors:error().
 harvest_metadata(Auth, SpaceId, Destination, MaxStreamSeq, MaxSeq, Batch) ->
     harvest_metadata(Auth, SpaceId, #{
         <<"destination">> => Destination,
@@ -404,7 +407,7 @@ harvest_metadata(Auth, SpaceId, Destination, MaxStreamSeq, MaxSeq, Batch) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec harvest_metadata(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    Data :: map()) -> {ok, map()} | {error, term()}.
+    Data :: map()) -> {ok, map()} | errors:error().
 harvest_metadata(Auth, SpaceId, Data) ->
     ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
         operation = create,
@@ -420,7 +423,7 @@ harvest_metadata(Auth, SpaceId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_users(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, [od_user:id()]} | {error, term()}.
+    {ok, [od_user:id()]} | errors:error().
 get_users(Auth, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -435,7 +438,7 @@ get_users(Auth, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_users(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, [od_user:id()]} | {error, term()}.
+    {ok, [od_user:id()]} | errors:error().
 get_eff_users(Auth, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -450,7 +453,7 @@ get_eff_users(Auth, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_user(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, #{}} | errors:error().
 get_user(Auth, SpaceId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -467,7 +470,7 @@ get_user(Auth, SpaceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_user(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, #{}} | errors:error().
 get_eff_user(Auth, SpaceId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -483,7 +486,7 @@ get_eff_user(Auth, SpaceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_user_privileges(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:space_privilege()]} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, [privileges:space_privilege()]} | errors:error().
 get_user_privileges(Auth, SpaceId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -499,7 +502,7 @@ get_user_privileges(Auth, SpaceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_user_privileges(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:space_privilege()]} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, [privileges:space_privilege()]} | errors:error().
 get_eff_user_privileges(Auth, SpaceId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -516,7 +519,7 @@ get_eff_user_privileges(Auth, SpaceId, UserId) ->
 %%--------------------------------------------------------------------
 -spec get_eff_user_membership_intermediaries(Auth :: aai:auth(),
     SpaceId :: od_space:id(), UserId :: od_user:id()) ->
-    {ok, entity_graph:intermediaries()} | {error, term()}.
+    {ok, entity_graph:intermediaries()} | errors:error().
 get_eff_user_membership_intermediaries(Auth, SpaceId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -531,7 +534,7 @@ get_eff_user_membership_intermediaries(Auth, SpaceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_groups(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, [od_group:id()]} | {error, term()}.
+    {ok, [od_group:id()]} | errors:error().
 get_groups(Auth, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -546,7 +549,7 @@ get_groups(Auth, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_groups(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, [od_group:id()]} | {error, term()}.
+    {ok, [od_group:id()]} | errors:error().
 get_eff_groups(Auth, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -561,7 +564,7 @@ get_eff_groups(Auth, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_group(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, #{}} | errors:error().
 get_group(Auth, SpaceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -578,7 +581,7 @@ get_group(Auth, SpaceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_group(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, #{}} | errors:error().
 get_eff_group(Auth, SpaceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -594,7 +597,7 @@ get_eff_group(Auth, SpaceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_group_privileges(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    GroupId :: od_group:id()) -> {ok, [privileges:space_privilege()]} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, [privileges:space_privilege()]} | errors:error().
 get_group_privileges(Auth, SpaceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -610,7 +613,7 @@ get_group_privileges(Auth, SpaceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_group_privileges(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    GroupId :: od_group:id()) -> {ok, [privileges:space_privilege()]} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, [privileges:space_privilege()]} | errors:error().
 get_eff_group_privileges(Auth, SpaceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -627,7 +630,7 @@ get_eff_group_privileges(Auth, SpaceId, GroupId) ->
 %%--------------------------------------------------------------------
 -spec get_eff_group_membership_intermediaries(Auth :: aai:auth(),
     SpaceId :: od_space:id(), GroupId :: od_group:id()) ->
-    {ok, entity_graph:intermediaries()} | {error, term()}.
+    {ok, entity_graph:intermediaries()} | errors:error().
 get_eff_group_membership_intermediaries(Auth, SpaceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -642,7 +645,7 @@ get_eff_group_membership_intermediaries(Auth, SpaceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_shares(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, [od_share:id()]} | {error, term()}.
+    {ok, [od_share:id()]} | errors:error().
 get_shares(Auth, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -657,7 +660,7 @@ get_shares(Auth, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_share(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    ShareId :: od_share:id()) -> {ok, #{}} | {error, term()}.
+    ShareId :: od_share:id()) -> {ok, #{}} | errors:error().
 get_share(Auth, SpaceId, ShareId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -672,13 +675,13 @@ get_share(Auth, SpaceId, ShareId) ->
 %% Retrieves the list of providers of given space.
 %% @end
 %%--------------------------------------------------------------------
--spec get_providers(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, [od_provider:id()]} | {error, term()}.
-get_providers(Auth, SpaceId) ->
+-spec get_eff_providers(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
+    {ok, [od_provider:id()]} | errors:error().
+get_eff_providers(Auth, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
         auth = Auth,
-        gri = #gri{type = od_space, id = SpaceId, aspect = providers}
+        gri = #gri{type = od_space, id = SpaceId, aspect = eff_providers}
     }).
 
 
@@ -688,7 +691,7 @@ get_providers(Auth, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_provider(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    ProviderId :: od_provider:id()) -> {ok, #{}} | {error, term()}.
+    ProviderId :: od_provider:id()) -> {ok, #{}} | errors:error().
 get_provider(Auth, SpaceId, ProviderId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -704,7 +707,7 @@ get_provider(Auth, SpaceId, ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_harvesters(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, [od_harvester:id()]} | {error, term()}.
+    {ok, [od_harvester:id()]} | errors:error().
 get_harvesters(Auth, SpaceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -719,7 +722,7 @@ get_harvesters(Auth, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_harvester(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    HarvesterId :: od_harvester:id()) -> {ok, #{}} | {error, term()}.
+    HarvesterId :: od_harvester:id()) -> {ok, #{}} | errors:error().
 get_harvester(Auth, SpaceId, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -730,6 +733,19 @@ get_harvester(Auth, SpaceId, HarvesterId) ->
 
 
 %%--------------------------------------------------------------------
+%% @doc
+%% Retrieves the list of storages of given space.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_storages(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
+    {ok, [od_storage:id()]} | errors:error().
+get_storages(Auth, SpaceId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = storages}
+    }).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -739,7 +755,7 @@ get_harvester(Auth, SpaceId, HarvesterId) ->
 %%--------------------------------------------------------------------
 -spec update_user_privileges(Auth :: aai:auth(), SpaceId :: od_space:id(),
     UserId :: od_user:id(), PrivsToGrant :: [privileges:space_privilege()],
-    PrivsToRevoke :: [privileges:space_privilege()]) -> ok | {error, term()}.
+    PrivsToRevoke :: [privileges:space_privilege()]) -> ok | errors:error().
 update_user_privileges(Auth, SpaceId, UserId, PrivsToGrant, PrivsToRevoke) ->
     update_user_privileges(Auth, SpaceId, UserId, #{
         <<"grant">> => PrivsToGrant,
@@ -754,7 +770,7 @@ update_user_privileges(Auth, SpaceId, UserId, PrivsToGrant, PrivsToRevoke) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_user_privileges(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    UserId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
+    UserId :: od_user:id(), Data :: #{}) -> ok | errors:error().
 update_user_privileges(Auth, SpaceId, UserId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
@@ -772,7 +788,7 @@ update_user_privileges(Auth, SpaceId, UserId, Data) ->
 %%--------------------------------------------------------------------
 -spec update_group_privileges(Auth :: aai:auth(), SpaceId :: od_space:id(),
     GroupId :: od_group:id(), PrivsToGrant :: [privileges:space_privilege()],
-    PrivsToRevoke :: [privileges:space_privilege()]) -> ok | {error, term()}.
+    PrivsToRevoke :: [privileges:space_privilege()]) -> ok | errors:error().
 update_group_privileges(Auth, SpaceId, GroupId, PrivsToGrant, PrivsToRevoke) ->
     update_group_privileges(Auth, SpaceId, GroupId, #{
         <<"grant">> => PrivsToGrant,
@@ -787,7 +803,7 @@ update_group_privileges(Auth, SpaceId, GroupId, PrivsToGrant, PrivsToRevoke) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_group_privileges(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    GroupId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
+    GroupId :: od_user:id(), Data :: #{}) -> ok | errors:error().
 update_group_privileges(Auth, SpaceId, GroupId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
@@ -799,16 +815,16 @@ update_group_privileges(Auth, SpaceId, GroupId, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Leaves specified provider (ceases support for given space).
+%% Leaves specified storage (ceases support for given space).
 %% @end
 %%--------------------------------------------------------------------
--spec leave_provider(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    ProviderId :: od_provider:id()) -> ok | {error, term()}.
-leave_provider(Auth, SpaceId, ProviderId) ->
+-spec remove_storage(Auth :: aai:auth(), SpaceId :: od_space:id(),
+    StorageId :: od_provider:id()) -> ok | errors:error().
+remove_storage(Auth, SpaceId, StorageId) ->
     entity_logic:handle(#el_req{
         operation = delete,
         auth = Auth,
-        gri = #gri{type = od_space, id = SpaceId, aspect = {provider, ProviderId}}
+        gri = #gri{type = od_space, id = SpaceId, aspect = {storage, StorageId}}
     }).
 
 
@@ -818,7 +834,7 @@ leave_provider(Auth, SpaceId, ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_harvester(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    HarvesterId :: od_harvester:id()) -> ok | {error, term()}.
+    HarvesterId :: od_harvester:id()) -> ok | errors:error().
 remove_harvester(Auth, SpaceId, HarvesterId) ->
     entity_logic:handle(#el_req{
         operation = delete,
@@ -833,7 +849,7 @@ remove_harvester(Auth, SpaceId, HarvesterId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_user(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    UserId :: od_user:id()) -> ok | {error, term()}.
+    UserId :: od_user:id()) -> ok | errors:error().
 remove_user(Auth, SpaceId, UserId) ->
     entity_logic:handle(#el_req{
         operation = delete,
@@ -848,7 +864,7 @@ remove_user(Auth, SpaceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_group(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    GroupId :: od_group:id()) -> ok | {error, term()}.
+    GroupId :: od_group:id()) -> ok | errors:error().
 remove_group(Auth, SpaceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = delete,
@@ -927,12 +943,12 @@ has_eff_group(Space, GroupId) ->
 %% Predicate saying whether specified provider supports given space.
 %% @end
 %%--------------------------------------------------------------------
--spec has_provider(SpaceOrId :: od_space:id() | #od_space{},
+-spec is_supported_by_provider(SpaceOrId :: od_space:id() | #od_space{},
     ProviderId :: od_provider:id()) -> boolean().
-has_provider(SpaceId, ProviderId) when is_binary(SpaceId) ->
-    entity_graph:has_relation(direct, top_down, od_provider, ProviderId, od_space, SpaceId);
-has_provider(Space, ProviderId) ->
-    entity_graph:has_relation(direct, top_down, od_provider, ProviderId, Space).
+is_supported_by_provider(SpaceId, ProviderId) when is_binary(SpaceId) ->
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, od_space, SpaceId);
+is_supported_by_provider(Space, ProviderId) ->
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Space).
 
 
 %%--------------------------------------------------------------------
@@ -946,3 +962,16 @@ has_harvester(SpaceId, HarvesterId) when is_binary(SpaceId) ->
     entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, od_space, SpaceId);
 has_harvester(Space, HarvesterId) ->
     entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, Space).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Predicate saying whether given space is member of specified storage.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_supported_by_storage(SpaceOrId :: od_space:id() | #od_space{},
+    StorageId :: od_storage:id()) -> boolean().
+is_supported_by_storage(SpaceId, StorageId) when is_binary(SpaceId) ->
+    entity_graph:has_relation(direct, top_down, od_storage, StorageId, od_space, SpaceId);
+is_supported_by_storage(Space, StorageId) ->
+    entity_graph:has_relation(direct, top_down, od_storage, StorageId, Space).

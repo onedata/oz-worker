@@ -88,6 +88,7 @@ operation_supported(get, eff_groups, private) -> true;
 operation_supported(get, {eff_group_membership, _}, private) -> true;
 operation_supported(get, eff_harvesters, private) -> true;
 operation_supported(get, spaces, private) -> true;
+operation_supported(get, eff_spaces, private) -> true;
 operation_supported(get, {user_spaces, _}, private) -> true;
 operation_supported(get, {group_spaces, _}, private) -> true;
 operation_supported(get, domain_config, private) -> true;
@@ -120,7 +121,6 @@ is_subscribable({eff_group_membership, _}, private) -> true;
 is_subscribable(eff_harvesters, _) -> true;
 is_subscribable(_, _) -> false.
 
-
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a resource (aspect of entity) based on entity logic request.
@@ -135,30 +135,25 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = instance_d
     Data = Req#el_req.data,
     create_provider(Auth, Data, maps:get(<<"uuid">>, Data, undefined), GRI);
 
-create(#el_req{auth = Auth, gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
-    SupportSize = maps:get(<<"size">>, Data),
-    Token = maps:get(<<"token">>, Data),
-    ExpType = ?SPACE_SUPPORT_TOKEN,
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% Used by providers, that do not keep storages in onezone
+create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
+    %% Virtual storage record with id equal to providers is created.
+    %% This record will be used to keep support information of all provider spaces.
+    %% It will be deleted during provider upgrade.
+    case provider_logic:has_storage(ProviderId, ProviderId) of
+        true -> ok;
+        false -> storage_logic:create(?PROVIDER(ProviderId), ProviderId, ?STORAGE_DEFAULT_NAME)
+    end,
+    {ok, SpaceId} = storage_logic:support_space(?PROVIDER(ProviderId), ProviderId, Data),
+    {true, {
+        #od_space{} = Space,
+        Rev
+    }} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
 
-    token_logic_plugin:consume_invite_token(Auth, Token, ExpType, fun is_authorized_to_request_support/3, fun(SpaceId) ->
-        entity_graph:add_relation(
-            od_space, SpaceId, od_provider, ProviderId, SupportSize
-        ),
-        NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
-        {true, {
-            #od_space{harvesters = Harvesters} = Space,
-            Rev
-        }} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
-
-        lists:foreach(fun(HarvesterId) ->
-            harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->
-                harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, false)
-            end)
-        end, Harvesters),
-
-        {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
-        {ok, resource, {NewGRI, {SpaceData, Rev}}}
-    end);
+    NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
+    {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
+    {ok, resource, {NewGRI, {SpaceData, Rev}}};
 
 create(Req = #el_req{gri = #gri{aspect = check_my_ports}}) ->
     try
@@ -269,8 +264,12 @@ get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Provider) ->
 get(#el_req{gri = #gri{aspect = eff_harvesters}}, Provider) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_harvester, Provider)};
 
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% Used by providers, that do not keep storages in onezone
 get(#el_req{gri = #gri{aspect = spaces}}, Provider) ->
-    {ok, entity_graph:get_relations(direct, bottom_up, od_space, Provider)};
+    {ok, entity_graph:get_relations(effective, bottom_up, od_space, Provider)};
+get(#el_req{gri = #gri{aspect = eff_spaces}}, Provider) ->
+    {ok, entity_graph:get_relations(effective, bottom_up, od_space, Provider)};
 
 get(#el_req{gri = #gri{aspect = {user_spaces, UserId}}}, Provider) ->
     {ok, AllSpaces} = get(#el_req{gri = #gri{aspect = spaces}}, Provider),
@@ -316,6 +315,11 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = instance}, data = Data}) ->
     end),
     ok;
 
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% Used by providers, that do not keep storages in onezone
+update(#el_req{gri = #gri{id = ProviderId, aspect = {space, _SpaceId}}, data = Data}) ->
+    storage_logic:update(?PROVIDER(ProviderId), ProviderId, Data);
+
 update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}) ->
     % prevent race condition with simultaneous updates
     critical_section:run({domain_config_update, ProviderId}, fun() ->
@@ -323,13 +327,7 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}
             true -> update_provider_subomain(ProviderId, Data);
             false -> update_provider_domain(ProviderId, Data)
         end
-    end);
-
-update(Req = #el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
-    NewSupportSize = maps:get(<<"size">>, Req#el_req.data),
-    entity_graph:update_relation(
-        od_space, SpaceId, od_provider, ProviderId, NewSupportSize
-    ).
+    end).
 
 
 %%--------------------------------------------------------------------
@@ -341,7 +339,7 @@ update(Req = #el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
 delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     ok = dns_state:remove_delegation_config(ProviderId),
     {true, {#od_provider{
-        spaces = Spaces,
+        eff_spaces = Spaces,
         eff_harvesters = Harvesters
     }, _}} = fetch_entity(#gri{aspect = instance, id = ProviderId}),
 
@@ -373,18 +371,10 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
             ok
     end;
 
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% Used by providers, that do not keep storages in onezone
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
-    {true, {#od_space{harvesters = Harvesters}, _}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
-    lists:foreach(fun(HarvesterId) ->
-        harvester_indices:update_stats(HarvesterId, all,
-            fun(ExistingStats) ->
-                harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, true)
-            end)
-    end, Harvesters),
-
-    entity_graph:remove_relation(
-        od_space, SpaceId, od_provider, ProviderId
-    );
+    storage_logic:revoke_support(?PROVIDER(ProviderId), ProviderId, SpaceId);
 
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}}) ->
     ok = dns_state:remove_txt_record(ProviderId, RecordName).
@@ -416,7 +406,7 @@ exists(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Provider) 
     entity_graph:has_relation(effective, bottom_up, od_group, GroupId, Provider);
 
 exists(#el_req{gri = #gri{aspect = {space, SpaceId}}}, Provider) ->
-    entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, Provider);
+    entity_graph:has_relation(effective, bottom_up, od_space, SpaceId, Provider);
 
 exists(#el_req{gri = #gri{aspect = {user_spaces, UserId}}}, Provider) ->
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, Provider);
@@ -452,7 +442,7 @@ authorize(#el_req{operation = create, gri = #gri{id = undefined, aspect = instan
     true =:= oz_worker:get_env(dev_mode, true);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
+    auth_by_self(Req);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
     auth_by_self(Req) orelse auth_by_cluster_membership(Req);
@@ -533,6 +523,9 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_harvesters}}, _
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = spaces}}, _) ->
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_spaces}}, _) ->
+    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
+
 authorize(#el_req{auth = ?USER(UserId), operation = get, gri = #gri{aspect = {user_spaces, UserId}}}, _) ->
     true;
 
@@ -545,10 +538,10 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = domain_config}}, _)
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, _) ->
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
-authorize(Req = #el_req{operation = update, gri = #gri{aspect = domain_config}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
-
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {space, _}}}, _) ->
+    auth_by_self(Req);
+
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = domain_config}}, _) ->
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, _) ->
@@ -558,7 +551,7 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {dns_txt_record,
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
+    auth_by_self(Req);
 
 authorize(_, _) ->
     false.
@@ -591,6 +584,9 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_harve
     [?OZ_PROVIDERS_LIST_RELATIONSHIPS];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = spaces}}) ->
+    [?OZ_PROVIDERS_LIST_RELATIONSHIPS];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_spaces}}) ->
     [?OZ_PROVIDERS_LIST_RELATIONSHIPS];
 
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
@@ -745,7 +741,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = domain_config}, data = 
 -spec is_authorized_to_request_support(aai:auth(), tokens:invite_token_type(), od_group:id()) ->
     boolean().
 is_authorized_to_request_support(?USER(UserId), ?SPACE_SUPPORT_TOKEN, SpaceId) ->
-    space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_ADD_PROVIDER) orelse
+    space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_ADD_SUPPORT) orelse
         user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_ADD_RELATIONSHIPS);
 is_authorized_to_request_support(_, _, _) ->
     false.
