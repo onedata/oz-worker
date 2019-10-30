@@ -88,15 +88,6 @@
     (str_utils:rand_hex(3))/binary
 >>).
 
-%% @TODO VFS-5727 temporary solution
--define(ACCESS_TOKEN_NAME, <<
-    "access token ",
-    (binary:replace(
-        time_utils:epoch_to_iso8601(time_utils:cluster_time_seconds()),
-        <<$:>>, <<$.>>, [global]
-    ))/binary, " ",
-    (str_utils:rand_hex(3))/binary
->>).
 
 
 -endif.

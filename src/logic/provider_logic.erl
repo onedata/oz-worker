@@ -24,6 +24,7 @@
 -export([
     get/2,
     get_protected_data/2,
+    get_name/2,
     list/1
 ]).
 -export([
@@ -185,6 +186,15 @@ get_protected_data(Auth, ProviderId) ->
         auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected}
     }).
+
+
+-spec get_name(aai:auth(), od_provider:id()) ->
+    {ok, od_provider:name()} | {error, term()}.
+get_name(Auth, ProviderId) ->
+    case get(Auth, ProviderId) of
+        {ok, #od_provider{name = Name}} -> {ok, Name};
+        {error, _} = Error -> Error
+    end.
 
 
 %%--------------------------------------------------------------------

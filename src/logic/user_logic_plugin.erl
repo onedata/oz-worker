@@ -206,15 +206,11 @@ create(#el_req{gri = GRI = #gri{id = ProposedUserId, aspect = instance}, data = 
 
 create(#el_req{gri = #gri{id = UserId, aspect = client_tokens} = GRI}) ->
     %% @TODO VFS-5770 old client tokens API kept for backward compatibility
-    Data = #{
-        <<"name">> => ?ACCESS_TOKEN_NAME,
-        <<"type">> => ?ACCESS_TOKEN
-    },
-    case token_logic:create_user_named_token(?USER(UserId), UserId, Data) of
-        {ok, #{<<"token">> := Token}} ->
+    case token_logic:create_legacy_client_token(?USER(UserId)) of
+        {ok, Token} ->
             {ok, Serialized} = tokens:serialize(Token),
             {ok, resource, {GRI#gri{aspect = {client_token, Serialized}}, {Serialized, inherit_rev}}};
-        Error = {error, _} ->
+        {error, _} = Error ->
             Error
     end;
 

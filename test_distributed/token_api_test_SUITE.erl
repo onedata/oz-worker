@@ -49,8 +49,9 @@
     update_named_token/1,
     delete_named_token/1,
     delete_all_user_named_tokens/1,
-    delete_all_provider_named_tokens/1
-    % @fixme test revocation of temporary tokens
+    delete_all_provider_named_tokens/1,
+    revoke_all_user_temporary_tokens/1,
+    revoke_all_provider_temporary_tokens/1
 ]).
 
 all() ->
@@ -73,7 +74,9 @@ all() ->
         update_named_token,
         delete_named_token,
         delete_all_user_named_tokens,
-        delete_all_provider_named_tokens
+        delete_all_provider_named_tokens,
+        revoke_all_user_temporary_tokens,
+        revoke_all_provider_temporary_tokens
     ]).
 
 %%%===================================================================
@@ -2096,9 +2099,10 @@ delete_all_provider_named_tokens(Config, BasicEnv, ProviderIdBinding, CorrectCli
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)),
 
+    {ok, TempToken} = create_provider_temporary_token(Config, ProviderId, ?ACCESS_TOKEN),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
-            correct = [{provider, ProviderId}]
+            correct = [{provider, ProviderId, TempToken}]
         },
         logic_spec = undefined,
         rest_spec = RestSpec#rest_spec{
@@ -2146,6 +2150,148 @@ assert_token_deleted(false, Config, Token, TokenName) ->
         _ ->
             ok
     end.
+
+
+revoke_all_user_temporary_tokens(Config) ->
+    BasicEnv = create_basic_env(Config),
+    revoke_all_user_temporary_tokens(Config, BasicEnv, ?USER_ALPHA),
+    revoke_all_user_temporary_tokens(Config, BasicEnv, ?USER_BETA),
+    revoke_all_user_temporary_tokens(Config, BasicEnv, ?ADMIN_OF(?PROV_GAMMA)),
+    revoke_all_user_temporary_tokens(Config, BasicEnv, ?ADMIN_OF(?PROV_DELTA)).
+
+revoke_all_user_temporary_tokens(Config, BasicEnv, UserIdBinding) ->
+    {user, UserId} = map_client(BasicEnv, UserIdBinding),
+    {ok, {SessionId, _}} = oz_test_utils:log_in(Config, UserId),
+
+    EnvSetUpFun = fun() ->
+        {ok, Space} = oz_test_utils:create_space(Config, ?USER(UserId)),
+        {ok, T1} = create_user_temporary_token(Config, UserId, ?ACCESS_TOKEN),
+        {ok, T2} = create_user_temporary_token(Config, UserId, ?GUI_ACCESS_TOKEN(SessionId)),
+        {ok, T3} = create_user_temporary_token(Config, UserId, ?INVITE_TOKEN(?USER_JOIN_SPACE, Space)),
+        #{userTokens => [T1, T2, T3]}
+    end,
+
+    VerifyEndFun = fun(ShouldSucceed, #{userTokens := UserTokens}, _Data) ->
+        lists:foreach(fun(Token) ->
+            VerificationResult = case Token#token.type of
+                ?ACCESS_TOKEN ->
+                    oz_test_utils:call_oz(Config, token_logic, verify_access_token, [?NOBODY, #{<<"token">> => Token}]);
+                ?GUI_ACCESS_TOKEN(_) ->
+                    oz_test_utils:call_oz(Config, token_logic, verify_access_token, [?NOBODY, #{<<"token">> => Token}]);
+                ?INVITE_TOKEN(_, _) ->
+                    oz_test_utils:call_oz(Config, token_logic, verify_invite_token, [?NOBODY, #{<<"token">> => Token}])
+            end,
+            case ShouldSucceed of
+                true -> ?assertMatch({ok, ?SUB(user, UserId)}, VerificationResult);
+                false -> ?assertMatch(?ERROR_TOKEN_INVALID, VerificationResult)
+            end
+        end, UserTokens)
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_TOKENS_MANAGE]},
+                {user, UserId}
+            ],
+            unauthorized = [nobody],
+            forbidden = all_clients(BasicEnv) -- [{user, UserId}]
+        },
+        logic_spec = #logic_spec{
+            module = token_logic,
+            function = revoke_all_user_temporary_tokens,
+            args = [auth, UserId],
+            expected_result = ?OK
+        },
+        rest_spec = RestSpec = #rest_spec{
+            method = delete,
+            path = [<<"/users/">>, UserId, <<"/tokens/temporary/">>],
+            expected_code = ?HTTP_204_NO_CONTENT
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)),
+
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [{user, UserId}]
+        },
+        logic_spec = undefined,
+        rest_spec = RestSpec#rest_spec{
+            path = <<"/user/tokens/temporary/">>
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun)).
+
+
+
+revoke_all_provider_temporary_tokens(Config) ->
+    BasicEnv = create_basic_env(Config),
+    revoke_all_provider_temporary_tokens(Config, BasicEnv, ?PROV_GAMMA, [?PROV_GAMMA, ?ADMIN_OF(?PROV_GAMMA)]),
+    revoke_all_provider_temporary_tokens(Config, BasicEnv, ?PROV_DELTA, [?PROV_DELTA, ?ADMIN_OF(?PROV_DELTA)]).
+
+revoke_all_provider_temporary_tokens(Config, BasicEnv, ProviderIdBinding, CorrectClientsBindings) ->
+    {provider, ProviderId, ProviderToken} = map_client(BasicEnv, ProviderIdBinding),
+
+    CorrectClients = [map_client(BasicEnv, C) || C <- CorrectClientsBindings],
+    ForbiddenClients = all_clients(BasicEnv) -- CorrectClients,
+
+    EnvSetUpFun = fun() ->
+        {ok, T1} = create_provider_temporary_token(Config, ProviderId, ?ACCESS_TOKEN),
+        {ok, T2} = create_provider_temporary_token(Config, ProviderId, ?ACCESS_TOKEN),
+        {ok, T3} = create_provider_temporary_token(Config, ProviderId, ?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, ProviderId)),
+        #{providerTokens => [T1, T2, T3]}
+    end,
+
+    VerifyEndFun = fun(ShouldSucceed, #{providerTokens := ProviderTokens}, _Data) ->
+        lists:foreach(fun(Token) ->
+            VerificationResult = case Token#token.type of
+                ?ACCESS_TOKEN ->
+                    oz_test_utils:call_oz(Config, token_logic, verify_access_token, [?NOBODY, #{<<"token">> => Token}]);
+                ?INVITE_TOKEN(_, _) ->
+                    oz_test_utils:call_oz(Config, token_logic, verify_invite_token, [?NOBODY, #{<<"token">> => Token}])
+            end,
+            case ShouldSucceed of
+                true -> ?assertMatch({ok, ?SUB(?ONEPROVIDER, ProviderId)}, VerificationResult);
+                false -> ?assertMatch(?ERROR_TOKEN_INVALID, VerificationResult)
+            end
+        end, ProviderTokens)
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_TOKENS_MANAGE]} |
+                CorrectClients
+            ],
+            unauthorized = [nobody],
+            forbidden = ForbiddenClients
+        },
+        logic_spec = #logic_spec{
+            module = token_logic,
+            function = revoke_all_provider_temporary_tokens,
+            args = [auth, ProviderId],
+            expected_result = ?OK
+        },
+        rest_spec = RestSpec = #rest_spec{
+            method = delete,
+            path = [<<"/providers/">>, ProviderId, <<"/tokens/temporary/">>],
+            expected_code = ?HTTP_204_NO_CONTENT
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)),
+
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, ProviderId, ProviderToken}]
+        },
+        logic_spec = undefined,
+        rest_spec = RestSpec#rest_spec{
+            path = <<"/provider/tokens/temporary/">>
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun)).
 
 
 %%%===================================================================
