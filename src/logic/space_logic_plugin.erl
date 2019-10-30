@@ -198,41 +198,17 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
         {ok, resource, {NewGRI, {SpaceData, Rev}}}
     end);
 
-create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
+create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    Result = token_logic:create_user_named_token(Auth, UserId, #{
-        <<"name">> => ?INVITE_TOKEN_NAME(?USER_JOIN_SPACE),
-        <<"type">> => ?INVITE_TOKEN(?USER_JOIN_SPACE, SpaceId),
-        <<"usageLimit">> => 1
-    }),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+    token_logic:create_legacy_invite_token(Auth, ?USER_JOIN_SPACE, SpaceId);
 
-create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = SpaceId, aspect = invite_group_token}}) ->
+create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_group_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    Result = token_logic:create_user_named_token(Auth, UserId, #{
-        <<"name">> => ?INVITE_TOKEN_NAME(?GROUP_JOIN_SPACE),
-        <<"type">> => ?INVITE_TOKEN(?GROUP_JOIN_SPACE, SpaceId),
-        <<"usageLimit">> => 1
-    }),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+    token_logic:create_legacy_invite_token(Auth, ?GROUP_JOIN_SPACE, SpaceId);
 
-create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = SpaceId, aspect = invite_provider_token}}) ->
+create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_provider_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    Result = token_logic:create_user_named_token(Auth, UserId, #{
-        <<"name">> => ?INVITE_TOKEN_NAME(?SUPPORT_SPACE),
-        <<"type">> => ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId),
-        <<"usageLimit">> => 1
-    }),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+    token_logic:create_legacy_invite_token(Auth, ?SUPPORT_SPACE, SpaceId);
 
 create(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:space_member()),

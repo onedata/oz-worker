@@ -164,39 +164,11 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
 
 create(#el_req{auth = Auth, gri = #gri{id = ClusterId, aspect = invite_user_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    Data = #{
-        <<"name">> => ?INVITE_TOKEN_NAME(?USER_JOIN_CLUSTER),
-        <<"type">> => ?INVITE_TOKEN(?USER_JOIN_CLUSTER, ClusterId),
-        <<"usageLimit">> => 1
-    },
-    Result = case Auth of
-        ?USER(UserId) ->
-            token_logic:create_user_named_token(Auth, UserId, Data);
-        ?PROVIDER(PrId) ->
-            token_logic:create_provider_named_token(Auth, PrId, Data)
-    end,
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+    token_logic:create_legacy_invite_token(Auth, ?USER_JOIN_CLUSTER, ClusterId);
 
 create(#el_req{auth = Auth, gri = #gri{id = ClusterId, aspect = invite_group_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    Data = #{
-        <<"name">> => ?INVITE_TOKEN_NAME(?GROUP_JOIN_CLUSTER),
-        <<"type">> => ?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, ClusterId),
-        <<"usageLimit">> => 1
-    },
-    Result = case Auth of
-        ?USER(UserId) ->
-            token_logic:create_user_named_token(Auth, UserId, Data);
-        ?PROVIDER(PrId) ->
-            token_logic:create_provider_named_token(Auth, PrId, Data)
-    end,
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+    token_logic:create_legacy_invite_token(Auth, ?GROUP_JOIN_CLUSTER, ClusterId);
 
 create(#el_req{gri = #gri{id = ClusterId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:cluster_member()),

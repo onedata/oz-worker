@@ -237,29 +237,13 @@ create(Req = #el_req{gri = GRI = #gri{id = ParentGroupId, aspect = child}}) ->
     {true, {Group, Rev}} = fetch_entity(#gri{aspect = instance, id = ChildGroupId}),
     {ok, resource, {NewGRI, {Group, Rev}}};
 
-create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = GrId, aspect = invite_user_token}}) ->
+create(#el_req{auth = Auth, gri = #gri{id = GroupId, aspect = invite_user_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    Result = token_logic:create_user_named_token(Auth, UserId, #{
-        <<"name">> => ?INVITE_TOKEN_NAME(?USER_JOIN_GROUP),
-        <<"type">> => ?INVITE_TOKEN(?USER_JOIN_GROUP, GrId),
-        <<"usageLimit">> => 1
-    }),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+    token_logic:create_legacy_invite_token(Auth, ?USER_JOIN_GROUP, GroupId);
 
-create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = GrId, aspect = invite_group_token}}) ->
+create(#el_req{auth = Auth, gri = #gri{id = GroupId, aspect = invite_group_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    Result = token_logic:create_user_named_token(Auth, UserId, #{
-        <<"name">> => ?INVITE_TOKEN_NAME(?GROUP_JOIN_GROUP),
-        <<"type">> => ?INVITE_TOKEN(?GROUP_JOIN_GROUP, GrId),
-        <<"usageLimit">> => 1
-    }),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+    token_logic:create_legacy_invite_token(Auth, ?GROUP_JOIN_GROUP, GroupId);
 
 create(#el_req{gri = #gri{id = GrId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:group_member()),

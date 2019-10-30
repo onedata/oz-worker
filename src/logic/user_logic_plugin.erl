@@ -211,7 +211,7 @@ create(#el_req{gri = #gri{id = UserId, aspect = client_tokens} = GRI}) ->
         <<"type">> => ?ACCESS_TOKEN
     },
     case token_logic:create_user_named_token(?USER(UserId), UserId, Data) of
-        {ok, Token} ->
+        {ok, #{<<"token">> := Token}} ->
             {ok, Serialized} = tokens:serialize(Token),
             {ok, resource, {GRI#gri{aspect = {client_token, Serialized}}, {Serialized, inherit_rev}}};
         Error = {error, _} ->
@@ -254,15 +254,7 @@ create(#el_req{gri = #gri{aspect = {idp_access_token, IdP}}}) ->
 
 create(#el_req{auth = Auth, gri = #gri{id = UserId, aspect = provider_registration_token}}) ->
     %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
-    Result = token_logic:create_user_named_token(Auth, UserId, #{
-        <<"name">> => ?INVITE_TOKEN_NAME(?REGISTER_ONEPROVIDER),
-        <<"type">> => ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, UserId),
-        <<"usageLimit">> => 1
-    }),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end.
+    token_logic:create_legacy_invite_token(Auth, ?REGISTER_ONEPROVIDER, UserId).
 
 
 %%--------------------------------------------------------------------

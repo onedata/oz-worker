@@ -37,6 +37,7 @@
 -export([delete_named_token/2]).
 -export([delete_all_user_named_tokens/2, delete_all_provider_named_tokens/2]).
 -export([revoke_all_user_temporary_tokens/2, revoke_all_provider_temporary_tokens/2]).
+-export([create_legacy_invite_token/3]).
 -export([migrate_deprecated_tokens/0]).
 
 -define(GUI_TOKEN_TTL, oz_worker:get_env(gui_token_ttl, 600)).
@@ -280,6 +281,30 @@ revoke_all_provider_temporary_tokens(Auth, ProviderId) ->
         auth = Auth,
         gri = #gri{type = od_token, id = undefined, aspect = {provider_temporary_tokens, ProviderId}}
     }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+%% Function used from *_logic_plugin modules to create legacy invite tokens.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_legacy_invite_token(aai:auth(), tokens:invite_token_type(), gri:entity_id()) ->
+    entity_logic:create_result().
+create_legacy_invite_token(Auth, InviteTokenType, TargetEntityId) ->
+    Data = #{
+        <<"name">> => ?INVITE_TOKEN_NAME(InviteTokenType),
+        <<"type">> => ?INVITE_TOKEN(InviteTokenType, TargetEntityId),
+        <<"usageLimit">> => 1
+    },
+    Result = case Auth#auth.subject of
+        ?SUB(user, UserId) -> create_user_named_token(Auth, UserId, Data);
+        ?SUB(?ONEPROVIDER, PrId) -> create_provider_named_token(Auth, PrId, Data)
+    end,
+    case Result of
+        {ok, #{<<"token">> := Token}} -> {ok, value, Token};
+        {error, _} = Error -> Error
+    end.
 
 
 %%--------------------------------------------------------------------
