@@ -107,6 +107,8 @@ operation_supported(_, _, _) -> false.
 %%--------------------------------------------------------------------
 -spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
     boolean().
+is_subscribable(instance, private) -> true;
+is_subscribable({user_named_tokens, _}, private) -> true;
 is_subscribable(_, _) -> false.
 
 
@@ -542,7 +544,6 @@ create_named_token(Subject, Data) ->
     Caveats = maps:get(<<"caveats">>, Data, []),
     CustomMetadata = maps:get(<<"customMetadata">>, Data, #{}),
     Secret = tokens:generate_secret(),
-    Token = construct(Subject, TokenId, Type, true, Secret, Caveats),
     TokenRecord = #od_token{
         name = TokenName,
         subject = Subject,
@@ -553,7 +554,10 @@ create_named_token(Subject, Data) ->
         revoked = maps:get(<<"revoked">>, Data, false)
     },
     {ok, _} = od_token:create(#document{key = TokenId, value = TokenRecord}),
-    {ok, value, Token}.
+    NewGRI = #gri{type = od_token, id = TokenId, aspect = instance},
+    {true, {NamedToken, Rev}} = fetch_entity(NewGRI),
+    TokenData = to_token_data(TokenId, NamedToken),
+    {ok, resource, {NewGRI, {TokenData, Rev}}}.
 
 
 %% @private
