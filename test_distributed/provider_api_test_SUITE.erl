@@ -254,10 +254,10 @@ create_test(Config) ->
                 {<<"longitude">>, 1500, ?ERROR_BAD_VALUE_NOT_IN_RANGE(<<"longitude">>, -180, 180)},
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
                 {<<"token">>, <<"zxvcsadfgasdfasdf">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-                {<<"token">>, ClientToken,
-                    ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?REGISTER_ONEPROVIDER))},
-                {<<"token">>, SpaceInviteTokenSerialized,
-                    ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?REGISTER_ONEPROVIDER))}
+                {<<"token">>, ClientToken, ?ERROR_BAD_VALUE_TOKEN(
+                    <<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?REGISTER_ONEPROVIDER, ?ACCESS_TOKEN))},
+                {<<"token">>, SpaceInviteTokenSerialized, ?ERROR_BAD_VALUE_TOKEN(
+                    <<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?REGISTER_ONEPROVIDER, ?INVITE_TOKEN(?USER_JOIN_SPACE, Space)))}
                 | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]
         }

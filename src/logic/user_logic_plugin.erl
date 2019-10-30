@@ -311,7 +311,7 @@ get(#el_req{auth = Auth, gri = #gri{id = UserId, aspect = client_tokens}}, _User
         {error, _} = Error ->
             Error;
         {ok, UserTokens} ->
-            {ok, lists:filtermap(fun({_TokenName, TokenId}) ->
+            {ok, lists:filtermap(fun(TokenId) ->
                 case od_token:get(TokenId) of
                     {ok, #document{value = #od_token{type = ?ACCESS_TOKEN} = NamedToken}} ->
                         Token = od_token:named_token_to_token(TokenId, NamedToken),

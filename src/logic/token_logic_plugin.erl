@@ -598,13 +598,13 @@ delete_named_token(Subject, TokenName, TokenId) ->
 
 
 %% @private
--spec to_token_data(od_token:id()) -> entity_logic:data().
+-spec to_token_data(tokens:id()) -> entity_logic:data().
 to_token_data(TokenId) ->
     {ok, #document{value = NamedToken}} = od_token:get(TokenId),
     to_token_data(TokenId, NamedToken).
 
 %% @private
--spec to_token_data(od_token:id(), od_token:record()) -> entity_logic:data().
+-spec to_token_data(tokens:id(), od_token:record()) -> entity_logic:data().
 to_token_data(TokenId, NamedToken) ->
     #{
         <<"id">> => TokenId,

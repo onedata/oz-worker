@@ -1819,7 +1819,7 @@ update_named_token(Config, SubjectId, CorrectClients) ->
         correct_clients = CorrectClients,
         logic_function = update_named_token,
         logic_args_generator = fun(_, TokenToCheck) ->
-            [auth, token_data_to_id(TokenToCheck)]
+            [auth, token_data_to_id(TokenToCheck), data]
         end,
         logic_expectation_generator = fun(_) -> ?OK end,
         rest_method = patch,
@@ -2040,7 +2040,26 @@ delete_all_provider_named_tokens(Config) ->
 
 delete_all_provider_named_tokens(Config, BasicEnv, ProviderIdBinding, CorrectClientsBindings) ->
     {provider, ProviderId, _} = map_client(BasicEnv, ProviderIdBinding),
-    CorrectClients = [map_client(BasicEnv, C) || C <- CorrectClientsBindings],
+
+    % This test deletes providers' named tokens, in which case temporary tokens
+    % must be used to authorize REST operations. This function replaces the
+    % tokens in provider client tuples.
+    ReplaceTokensForProviders = fun(Clients) ->
+        lists:map(fun
+            ({provider, PrId, _RootToken}) ->
+                {ok, TempToken} = create_provider_temporary_token(Config, PrId, ?ACCESS_TOKEN),
+                {provider, ProviderId, TempToken};
+            (Other) ->
+                Other
+        end, Clients)
+    end,
+
+    CorrectClients = ReplaceTokensForProviders(
+        [map_client(BasicEnv, C) || C <- CorrectClientsBindings]
+    ),
+    ForbiddenClients = ReplaceTokensForProviders(
+        all_clients(BasicEnv) -- CorrectClients
+    ),
 
     EnvSetUpFun = fun() ->
         #{ProviderId := ProviderTokens} = create_some_tokens(Config, BasicEnv),
@@ -2061,7 +2080,7 @@ delete_all_provider_named_tokens(Config, BasicEnv, ProviderIdBinding, CorrectCli
                 CorrectClients
             ],
             unauthorized = [nobody],
-            forbidden = all_clients(BasicEnv) -- CorrectClients
+            forbidden = ForbiddenClients
         },
         logic_spec = #logic_spec{
             module = token_logic,

@@ -232,17 +232,17 @@ list_test(Config) ->
 
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
-    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, ProviderAdmin} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
     {ok, Admin} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, Admin, [
         ?OZ_USERS_LIST
     ], []),
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_NAME1
+        Config, ProviderAdmin, ?PROVIDER_NAME1
     ),
 
-    ExpUsers = [Admin, NonAdmin, U1, U2, U3],
+    ExpUsers = [Admin, NonAdmin, U1, U2, ProviderAdmin],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [

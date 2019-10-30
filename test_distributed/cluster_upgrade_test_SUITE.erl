@@ -91,10 +91,10 @@ upgrade_from_19_02_x(Config) ->
     ?assertEqual(13, length(element(2, {ok, _} = oz_test_utils:call_oz(
         Config, token_logic, list_user_named_tokens, [?ROOT, User5])))
     ),
-    {ok, [{<<"root token">>, _}]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P1]),
-    {ok, [{<<"root token">>, _}]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P2]),
-    {ok, [{<<"root token">>, _}]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P3]),
-    {ok, [{<<"root token">>, _}]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P4]),
+    {ok, [_]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P1]),
+    {ok, [_]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P2]),
+    {ok, [_]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P3]),
+    {ok, [_]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P4]),
 
     % Check all user tokens
     lists:foreach(fun({UserId, TokenId, Secret, Serialized}) ->
