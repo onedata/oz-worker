@@ -173,13 +173,8 @@ create_test(Config) ->
         ),
         ?assertEqual(ProviderURL, ExpProviderURL),
 
-        case Data of
-            #{<<"token">> := _} ->
-                {ok, UserClusters} = oz_test_utils:user_get_clusters(Config, CreatorUserId),
-                ?assert(lists:member(ExpClusterId, UserClusters));
-            _ ->
-                ok
-        end,
+        {ok, UserClusters} = oz_test_utils:user_get_clusters(Config, CreatorUserId),
+        ?assert(lists:member(ExpClusterId, UserClusters)),
 
         % delete provider to avoid "subdomain occupied" errors
         oz_test_utils:delete_provider(Config, ProviderId),
@@ -219,9 +214,9 @@ create_test(Config) ->
         % TODO gs
         data_spec = DataSpec = #data_spec{
             required = [
-                <<"name">>, <<"adminEmail">>, <<"domain">>, <<"subdomainDelegation">>
+                <<"token">>, <<"name">>, <<"adminEmail">>, <<"domain">>, <<"subdomainDelegation">>
             ],
-            optional = [<<"token">>, <<"latitude">>, <<"longitude">>],
+            optional = [<<"latitude">>, <<"longitude">>],
             correct_values = #{
                 <<"token">> => [fun() ->
                     {ok, RegistrationToken} = oz_test_utils:create_provider_registration_token(
@@ -260,9 +255,9 @@ create_test(Config) ->
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
                 {<<"token">>, <<"zxvcsadfgasdfasdf">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
                 {<<"token">>, ClientToken,
-                    ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?PROVIDER_REGISTRATION_TOKEN))},
+                    ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?REGISTER_ONEPROVIDER))},
                 {<<"token">>, SpaceInviteTokenSerialized,
-                    ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?PROVIDER_REGISTRATION_TOKEN))}
+                    ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?REGISTER_ONEPROVIDER))}
                 | ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
             ]
         }
@@ -274,10 +269,10 @@ create_test(Config) ->
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         data_spec = #data_spec{
             required = [
-                <<"name">>, <<"subdomain">>, <<"ipList">>, <<"adminEmail">>,
-                <<"subdomainDelegation">>
+                <<"token">>, <<"name">>, <<"subdomain">>, <<"ipList">>,
+                <<"adminEmail">>, <<"subdomainDelegation">>
             ],
-            optional = [<<"token">>, <<"latitude">>, <<"longitude">>],
+            optional = [<<"latitude">>, <<"longitude">>],
             correct_values = #{
                 <<"token">> => [fun() ->
                     {ok, RegistrationToken} = oz_test_utils:create_provider_registration_token(
@@ -309,20 +304,7 @@ create_test(Config) ->
             ]
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
-
-    %% Check if registration token requirement is enforced by env variable
-    oz_test_utils:set_env(Config, subdomain_delegation_supported, false),
-    oz_test_utils:set_env(Config, require_token_for_provider_registration, true),
-    ApiTestSpec3 = ApiTestSpec#api_test_spec{
-        data_spec = DataSpec#data_spec{
-            required = [
-                <<"name">>, <<"adminEmail">>, <<"domain">>, <<"subdomainDelegation">>, <<"token">>
-            ],
-            optional = [<<"latitude">>, <<"longitude">>]
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
 get_test(Config) ->
@@ -1597,7 +1579,7 @@ support_space_test(Config) ->
     BadValues = [
         {<<"token">>, <<"bad-token">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
         {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-        {<<"token">>, BadInviteTokenSerialized, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?SPACE_SUPPORT_TOKEN))},
+        {<<"token">>, BadInviteTokenSerialized, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE))},
         {<<"size">>, <<"binary">>, ?ERROR_BAD_VALUE_INTEGER(<<"size">>)},
         {<<"size">>, 0, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
         {<<"size">>, -1000, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
@@ -1716,7 +1698,7 @@ support_space_test(Config) ->
                 <<"size">> => [MinSupportSize]
             },
             bad_values = BadValues ++ [
-                {<<"token">>, BadToken3, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?SPACE_SUPPORT_TOKEN))}
+                {<<"token">>, BadToken3, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?SUPPORT_SPACE))}
             ]
         }
     },

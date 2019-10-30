@@ -49,14 +49,6 @@ handshake_attributes(_) ->
     Result :: gs_protocol:data() | errors:error().
 translate_value(_, #gri{type = od_provider, aspect = map_idp_group}, Id) ->
     Id;
-translate_value(ProtocolVersion, #gri{type = od_user, aspect = preauthorize}, {Subject, Caveats}) ->
-    #{
-        <<"subject">> => case ProtocolVersion >= 5 of
-            true -> aai:serialize_subject(Subject);
-            false -> deprecated_subject_to_json(Subject)
-        end,
-        <<"caveats">> => [caveats:serialize(C) || C <- Caveats]
-    };
 translate_value(_, #gri{type = od_user, aspect = {idp_access_token, _}}, {AccessToken, Expires}) ->
     #{
         <<"token">> => AccessToken,
@@ -80,9 +72,9 @@ translate_value(_, #gri{type = od_harvester, aspect = {submit_entry, _}}, Failed
 translate_value(_, #gri{type = od_harvester, aspect = {delete_entry, _}}, FailedIndices) ->
     FailedIndices;
 
-translate_value(_, #gri{type = od_token, aspect = preauthorize}, Subject) ->
+translate_value(_, #gri{type = od_token, aspect = verify_access_token}, Subject) ->
     #{<<"subject">> => aai:serialize_subject(Subject)};
-translate_value(_, #gri{type = od_token, aspect = verify_identity}, Subject) ->
+translate_value(_, #gri{type = od_token, aspect = verify_identity_token}, Subject) ->
     #{<<"subject">> => aai:serialize_subject(Subject)};
 
 translate_value(ProtocolVersion, GRI, Data) ->
@@ -365,14 +357,3 @@ translate_resource(ProtocolVersion, GRI, Data) ->
         ProtocolVersion, GRI, Data
     ]),
     throw(?ERROR_INTERNAL_SERVER_ERROR).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Deprecated - used for backward compatibility with 19.02.* (proto version < 5).
-%% @end
-%%--------------------------------------------------------------------
--spec deprecated_subject_to_json(aai:subject()) -> json_utils:json_term().
-deprecated_subject_to_json(?SUB(user, UserId)) -> #{<<"user">> => UserId};
-deprecated_subject_to_json(?SUB(?ONEPROVIDER, PrId)) -> #{<<"provider">> => PrId}.

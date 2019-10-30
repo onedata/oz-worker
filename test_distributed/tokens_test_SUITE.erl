@@ -34,7 +34,7 @@
     gui_tokens_expire/1,
     gui_tokens_are_invalidated_upon_logout/1,
     gui_tokens_are_invalidated_when_member_leaves_a_service/1,
-    gui_tokens_are_invalidated_upon_shared_token_secret_change/1
+    gui_tokens_are_invalidated_upon_temporary_token_secret_change/1
 ]).
 
 all() ->
@@ -44,7 +44,7 @@ all() ->
         gui_tokens_expire,
         gui_tokens_are_invalidated_upon_logout,
         gui_tokens_are_invalidated_when_member_leaves_a_service,
-        gui_tokens_are_invalidated_upon_shared_token_secret_change
+        gui_tokens_are_invalidated_upon_temporary_token_secret_change
     ]).
 
 -define(EXP_AUTH(UserId, SessionId), #auth{
@@ -382,8 +382,9 @@ gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
     ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token4, ?OPP_AUD(ProviderId))).
 
 
-gui_tokens_are_invalidated_upon_shared_token_secret_change(Config) ->
+gui_tokens_are_invalidated_upon_temporary_token_secret_change(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config),
+    {ok, AnotherUser} = oz_test_utils:create_user(Config),
     {ok, {Session1, _Cookie1}} = oz_test_utils:log_in(Config, UserId),
     {ok, {Session2, _Cookie2}} = oz_test_utils:log_in(Config, UserId),
 
@@ -396,8 +397,16 @@ gui_tokens_are_invalidated_upon_shared_token_secret_change(Config) ->
     {ok, {Token3, _}} = create_gui_access_token(Config, UserId, Session2, ?OPW_AUD(ProviderId)),
     {ok, {Token4, _}} = create_gui_access_token(Config, UserId, Session2, ?OPP_AUD(ProviderId)),
 
-    oz_test_utils:call_oz(Config, shared_token_secret, regenerate, []),
+    % Temporary token secret is shared per subject, so regenerating the secret of
+    % AnotherUser should not affect the tested user
+    oz_test_utils:call_oz(Config, temporary_token_secret, regenerate, [?SUB(user, AnotherUser)]),
+    ?assertMatch({true, _}, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch({true, _}, verify_token(Config, Token2, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch({true, _}, verify_token(Config, Token3, ?OPW_AUD(ProviderId))),
+    ?assertMatch({true, _}, verify_token(Config, Token4, ?OPP_AUD(ProviderId))),
 
+    % Make sure that this works for the tested user
+    oz_test_utils:call_oz(Config, temporary_token_secret, regenerate, [?SUB(user, UserId)]),
     ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
     ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token2, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
     ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token3, ?OPW_AUD(ProviderId))),

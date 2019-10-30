@@ -45,8 +45,9 @@ get_models() -> [
     gui_message,
     provider_connection,
     user_connections,
-    shared_token_secret,
+    temporary_token_secret,
 
+    %% @TODO VFS-5554 Deprecated models
     onedata_auth,
     macaroon_auth
 ].

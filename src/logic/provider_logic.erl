@@ -134,8 +134,7 @@ create(Auth, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @TODO This is a developer functionality and should be removed when
-%% @TODO VFS-2550 is ready.
+%% @TODO VFS-2550 This is a developer functionality and should be removed when is ready.
 %% Creates a new provider document in database. UUID, Name,
 %% Domain and CSR (Certificate Signing Request) are provided in a
 %% proper Data object, Latitude and Longitude are optional.

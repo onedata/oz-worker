@@ -12,6 +12,7 @@
 -module(rpc_api).
 -author("Wojciech Geisler").
 
+-include("entity_logic.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/oz/oz_users.hrl").
@@ -26,7 +27,7 @@
     cluster_get_eff_user_privileges/3, get_protected_cluster_data/2,
     get_clusters_by_user_auth/1, cluster_logic_get_users/2,
     cluster_logic_get_eff_users/2, cluster_logic_get_groups/2,
-    cluster_logic_get_eff_groups/2, cluster_logic_create_user_invite_token/2,
+    cluster_logic_get_eff_groups/2, cluster_logic_create_invite_token_for_admin/2,
     reconcile_dns_config/0, dns_config_get_ns_hosts/0
 ]).
 
@@ -197,10 +198,20 @@ cluster_logic_get_eff_groups(Auth, ClusterId) ->
     cluster_logic:get_eff_groups(Auth, ClusterId).
 
 
--spec cluster_logic_create_user_invite_token(aai:auth(), od_cluster:id()) ->
+-spec cluster_logic_create_invite_token_for_admin(aai:auth(), od_cluster:id()) ->
     {ok, tokens:token()} | {error, term()}.
-cluster_logic_create_user_invite_token(Auth, ClusterId) ->
-    cluster_logic:create_user_invite_token(Auth, ClusterId).
+cluster_logic_create_invite_token_for_admin(Auth, ClusterId) ->
+    ProviderId = ClusterId,
+    TokenName = <<
+        "adminInvitationToCluster ",
+        (binary:part(time_utils:epoch_to_iso8601(time_utils:system_time_seconds()), 0, 10))/binary, " ",
+        (str_utils:rand_hex(3))/binary
+    >>,
+    token_logic:create_provider_named_token(Auth, ProviderId, TokenName, #{
+        <<"type">> => ?INVITE_TOKEN(?USER_JOIN_CLUSTER, ClusterId),
+        <<"usageLimit">> => 1,
+        <<"privileges">> => privileges:cluster_admin()
+    }).
 
 
 -spec reconcile_dns_config() -> ok.

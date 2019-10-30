@@ -36,7 +36,8 @@
 -define(CTX, #{
     model => od_provider,
     fold_enabled => true,
-    sync_enabled => true
+    sync_enabled => true,
+    memory_copies => all
 }).
 
 %%%===================================================================

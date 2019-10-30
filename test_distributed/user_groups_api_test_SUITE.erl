@@ -240,19 +240,19 @@ join_group_test(Config) ->
         ),
         {ok, Serialized} = tokens:serialize(Token),
         #{
-            tokenNonce => Token#token.nonce,
+            tokenNonce => Token#token.id,
             token => Serialized
         }
     end,
 
     VerifyEndFun = fun
-        (true = _ShouldSucceed, #{tokenNonce := TokenNonce}, _) ->
+        (true = _ShouldSucceed, #{tokenNonce := TokenId}, _) ->
             {ok, Groups} = oz_test_utils:user_get_groups(Config, U1),
             ?assertEqual(lists:member(G1, Groups), true),
             oz_test_utils:group_remove_user(Config, G1, U1),
             {ok, NewGroups} = oz_test_utils:user_get_groups(Config, U1),
             ?assertEqual(lists:member(G1, NewGroups), false),
-            oz_test_utils:assert_token_not_exists(Config, TokenNonce);
+            oz_test_utils:assert_invite_token_usage_limit_reached(Config, true, TokenId);
         (false = _ShouldSucceed, _, _) ->
             {ok, Groups} = oz_test_utils:user_get_groups(Config, U1),
             ?assertEqual(lists:member(G1, Groups), false)
@@ -344,7 +344,7 @@ join_group_test(Config) ->
         }
     },
     VerifyEndFun1 = fun(_ShouldSucceed, _Env, _) ->
-        oz_test_utils:assert_token_exists(Config, Token2#token.nonce)
+        oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token2#token.id)
     end,
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1

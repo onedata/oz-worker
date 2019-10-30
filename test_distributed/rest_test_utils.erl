@@ -20,7 +20,7 @@
 % Use "Macaroon", "X-Auth-Token" and "Authorization: Bearer" headers variably,
 % as they all should be accepted.
 -define(ACCESS_TOKEN_HEADER(AccessToken), case rand:uniform(3) of
-    1 -> #{?HDR_MACAROON => AccessToken};
+    1 -> #{?HDR_MACAROON => AccessToken}; %% @TODO VFS-5554 Deprecated
     2 -> #{?HDR_X_AUTH_TOKEN => AccessToken};
     3 -> #{?HDR_AUTHORIZATION => <<"Bearer ", AccessToken/binary>>}
 end).
@@ -58,6 +58,9 @@ end).
 %%          {user, <<"uid">>}
 %%          {user, <<"uid">>, <<"token">>}
 %%          {provider, <<"id">>, <<"token">>}
+%%          % Uses the same auth as provider, but indicates the service type
+%%          (in the auth header a.k.a. service access token)
+%%          {op_panel, <<"id">>, <<"token">>}
 %%          undefined
 %%      opts => % Optional, default: []
 %%          [http_client_option]
@@ -123,15 +126,24 @@ check_rest_call(Config, ArgsMap) ->
                 ReqHeaders;
             {provider, _, Token} ->
                 maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token));
+            {op_panel, _, Token} ->
+                ServiceToken = tokens:build_service_access_token(?OP_PANEL, Token),
+                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(ServiceToken));
             {user, UserId} ->
                 % Cache user auth tokens, if none in cache create a new one.
                 Token = case get({token, UserId}) of
                     undefined ->
-                        {ok, T} = oz_test_utils:create_client_token(
-                            Config, UserId
+                        Now = oz_test_utils:cluster_time_seconds(Config),
+                        {ok, T} = oz_test_utils:call_oz(
+                            Config, token_logic, create_user_temporary_token, [
+                                ?USER(UserId), UserId, #{<<"caveats">> => [
+                                    #cv_time{valid_until = Now + 36000}
+                                ]}
+                            ]
                         ),
-                        put({token, UserId}, T),
-                        T;
+                        {ok, Serialized} = tokens:serialize(T),
+                        put({token, UserId}, Serialized),
+                        Serialized;
                     T ->
                         T
                 end,

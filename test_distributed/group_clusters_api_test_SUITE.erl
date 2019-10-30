@@ -125,15 +125,15 @@ join_cluster_test(Config) ->
         #{
             clusterId => ClusterId,
             token => Serialized,
-            tokenNonce => Token#token.nonce
+            tokenNonce => Token#token.id
         }
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{clusterId := ClusterId, tokenNonce := TokenNonce} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{clusterId := ClusterId, tokenNonce := TokenId} = _Env, _) ->
         {ok, Clusters} = oz_test_utils:group_get_clusters(Config, G1),
         ?assertEqual(lists:member(ClusterId, Clusters), ShouldSucceed),
         case ShouldSucceed of
             true ->
-                oz_test_utils:assert_token_not_exists(Config, TokenNonce);
+                oz_test_utils:assert_invite_token_usage_limit_reached(Config, true, TokenId);
             false -> ok
         end
     end,
@@ -226,7 +226,7 @@ join_cluster_test(Config) ->
         }
     },
     VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
-        oz_test_utils:assert_token_exists(Config, Token#token.nonce)
+        oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token#token.id)
     end,
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1

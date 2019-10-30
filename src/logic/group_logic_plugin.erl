@@ -23,7 +23,6 @@
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
--export([is_authorized_to_invite/3]).
 
 %%%===================================================================
 %%% API
@@ -35,8 +34,6 @@
 %% Should return:
 %%  * {true, entity_logic:versioned_entity()}
 %%      if the fetch was successful
-%%  * {true, gri:gri(), entity_logic:versioned_entity()}
-%%      if the fetch was successful and new GRI was resolved
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
@@ -194,15 +191,12 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
 
 create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
     Token = maps:get(<<"token">>, Req#el_req.data),
-    % In the future, privileges can be included in token
-    Privileges = privileges:group_member(),
-
     ExpType = case Req#el_req.auth_hint of
-        ?AS_USER(_) -> ?GROUP_INVITE_USER_TOKEN;
-        ?AS_GROUP(_) -> ?GROUP_INVITE_GROUP_TOKEN
+        ?AS_USER(_) -> ?USER_JOIN_GROUP;
+        ?AS_GROUP(_) -> ?GROUP_JOIN_GROUP
     end,
 
-    token_logic_plugin:consume_invite_token(Auth, Token, ExpType, fun is_authorized_to_invite/3, fun(GroupId) ->
+    invite_tokens:consume(Auth, Token, ExpType, fun(GroupId, Privileges) ->
         case Req#el_req.auth_hint of
             ?AS_USER(UserId) ->
                 entity_graph:add_relation(
@@ -244,22 +238,24 @@ create(Req = #el_req{gri = GRI = #gri{id = ParentGroupId, aspect = child}}) ->
     {ok, resource, {NewGRI, {Group, Rev}}};
 
 create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = GrId, aspect = invite_user_token}}) ->
-    %% @TODO VFS-5727 move entirely to token_logic
-    Result = token_logic:create_user_named_token(
-        Auth, UserId, ?INVITE_TOKEN_NAME(?GROUP_INVITE_USER_TOKEN),
-        ?INVITE_TOKEN(?GROUP_INVITE_USER_TOKEN, GrId), [], #{}
-    ),
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    Result = token_logic:create_user_named_token(Auth, UserId, #{
+        <<"name">> => ?INVITE_TOKEN_NAME(?USER_JOIN_GROUP),
+        <<"type">> => ?INVITE_TOKEN(?USER_JOIN_GROUP, GrId),
+        <<"usageLimit">> => 1
+    }),
     case Result of
         {ok, Token} -> {ok, value, Token};
         {error, _} = Error -> Error
     end;
 
 create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = GrId, aspect = invite_group_token}}) ->
-    %% @TODO VFS-5727 move entirely to token_logic
-    Result = token_logic:create_user_named_token(
-        Auth, UserId, ?INVITE_TOKEN_NAME(?GROUP_INVITE_GROUP_TOKEN),
-        ?INVITE_TOKEN(?GROUP_INVITE_GROUP_TOKEN, GrId), [], #{}
-    ),
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    Result = token_logic:create_user_named_token(Auth, UserId, #{
+        <<"name">> => ?INVITE_TOKEN_NAME(?GROUP_JOIN_GROUP),
+        <<"type">> => ?INVITE_TOKEN(?GROUP_JOIN_GROUP, GrId),
+        <<"usageLimit">> => 1
+    }),
     case Result of
         {ok, Token} -> {ok, value, Token};
         {error, _} = Error -> Error
@@ -954,8 +950,8 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
     #{
         required => #{
             <<"token">> => {invite_token, case Req#el_req.auth_hint of
-                ?AS_USER(_) -> ?GROUP_INVITE_USER_TOKEN;
-                ?AS_GROUP(_) -> ?GROUP_INVITE_GROUP_TOKEN
+                ?AS_USER(_) -> ?USER_JOIN_GROUP;
+                ?AS_GROUP(_) -> ?GROUP_JOIN_GROUP
             end}
         }
     };
@@ -1015,18 +1011,6 @@ validate(#el_req{operation = update, gri = #gri{aspect = oz_privileges}}) -> #{
         <<"revoke">> => {list_of_atoms, privileges:oz_privileges()}
     }
 }.
-
-
--spec is_authorized_to_invite(aai:auth(), tokens:invite_token_type(), od_group:id()) ->
-    boolean().
-is_authorized_to_invite(?USER(UserId), ?GROUP_INVITE_USER_TOKEN, GroupId) ->
-    auth_by_privilege(UserId, GroupId, ?GROUP_ADD_USER) orelse
-        user_logic:has_eff_oz_privilege(UserId, ?OZ_GROUPS_ADD_RELATIONSHIPS);
-is_authorized_to_invite(?USER(UserId), ?GROUP_INVITE_GROUP_TOKEN, GroupId) ->
-    auth_by_privilege(UserId, GroupId, ?GROUP_ADD_CHILD) orelse
-        user_logic:has_eff_oz_privilege(UserId, ?OZ_GROUPS_ADD_RELATIONSHIPS);
-is_authorized_to_invite(_, _, _) ->
-    false.
 
 %%%===================================================================
 %%% Internal functions

@@ -20,19 +20,11 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/errors.hrl").
 
--type is_authorized_to_invite_fun() :: fun((aai:auth(), tokens:invite_token_type(), gri:entity_id()) -> boolean()).
--type consume_fun() :: fun((gri:entity_id()) -> Result :: term() | errors:error()).
-
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
--export([consume_invite_token/5]).
 
 -define(MAX_TEMPORARY_TOKEN_TTL, oz_worker:get_env(max_temporary_token_ttl, 604800)). % 1 week
-
-% Internal token metadata is used to keep track of multi-use invite tokens and
-% is not available to update by the token owner (but can be read).
--define(INTERNAL_METADATA_KEY, <<"$$$_internal_$$$">>).
 
 %%%===================================================================
 %%% API
@@ -44,8 +36,6 @@
 %% Should return:
 %%  * {true, entity_logic:versioned_entity()}
 %%      if the fetch was successful
-%%  * {true, gri:gri(), entity_logic:versioned_entity()}
-%%      if the fetch was successful and new GRI was resolved
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
@@ -58,11 +48,11 @@ fetch_entity(#gri{aspect = {user_named_token, _}}) ->
     false;
 fetch_entity(#gri{aspect = {provider_named_token, _}}) ->
     false;
-fetch_entity(#gri{id = TokenNonce}) ->
-    case od_token:get(TokenNonce) of
-        {ok, #document{value = Token, revs = [DbRev | _]}} ->
+fetch_entity(#gri{id = TokenId}) ->
+    case od_token:get(TokenId) of
+        {ok, #document{value = NamedToken, revs = [DbRev | _]}} ->
             {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
-            {true, {Token, Revision}};
+            {true, {NamedToken, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -76,8 +66,11 @@ fetch_entity(#gri{id = TokenNonce}) ->
 %%--------------------------------------------------------------------
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
-operation_supported(create, preauthorize, public) -> true;
-operation_supported(create, verify_identity, public) -> true;
+operation_supported(create, examine, public) -> true;
+operation_supported(create, confine, public) -> true;
+operation_supported(create, verify_access_token, public) -> true;
+operation_supported(create, verify_identity_token, public) -> true;
+operation_supported(create, verify_invite_token, public) -> true;
 
 operation_supported(create, {user_named_token, _}, private) -> true;
 operation_supported(create, {provider_named_token, _}, private) -> true;
@@ -100,6 +93,8 @@ operation_supported(delete, {user_named_token, _}, private) -> true;
 operation_supported(delete, {provider_named_token, _}, private) -> true;
 operation_supported(delete, {user_named_tokens, _}, private) -> true;
 operation_supported(delete, {provider_named_tokens, _}, private) -> true;
+operation_supported(delete, {user_temporary_tokens, _}, private) -> true;
+operation_supported(delete, {provider_temporary_tokens, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
 
@@ -120,11 +115,11 @@ is_subscribable(_, _) -> false.
 %% Creates a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
-create(#el_req{gri = #gri{id = TokenName, aspect = {user_named_token, UserId}}, data = Data}) ->
-    create_named_token(?SUB(user, UserId), TokenName, Data);
+create(#el_req{gri = #gri{id = undefined, aspect = {user_named_token, UserId}}, data = Data}) ->
+    create_named_token(?SUB(user, UserId), Data);
 
-create(#el_req{gri = #gri{id = TokenName, aspect = {provider_named_token, ProviderId}}, data = Data}) ->
-    create_named_token(?SUB(?ONEPROVIDER, ProviderId), TokenName, Data);
+create(#el_req{gri = #gri{id = undefined, aspect = {provider_named_token, ProviderId}}, data = Data}) ->
+    create_named_token(?SUB(?ONEPROVIDER, ProviderId), Data);
 
 create(#el_req{gri = #gri{id = undefined, aspect = {user_temporary_token, UserId}}, data = Data}) ->
     create_temporary_token(?SUB(user, UserId), Data);
@@ -132,7 +127,30 @@ create(#el_req{gri = #gri{id = undefined, aspect = {user_temporary_token, UserId
 create(#el_req{gri = #gri{id = undefined, aspect = {provider_temporary_token, ProviderId}}, data = Data}) ->
     create_temporary_token(?SUB(?ONEPROVIDER, ProviderId), Data);
 
-create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = preauthorize}, data = Data}) ->
+create(#el_req{gri = #gri{id = undefined, aspect = examine}, data = Data}) ->
+    Token = maps:get(<<"token">>, Data),
+    #token{
+        onezone_domain = OnezoneDomain, id = Id, persistent = Persistent,
+        subject = Subject, type = Type
+    } = Token,
+    {ok, value, #{
+        <<"onezoneDomain">> => OnezoneDomain,
+        <<"id">> => Id,
+        <<"persistence">> => case Persistent of
+            true -> <<"named">>;
+            false -> <<"temporary">>
+        end,
+        <<"subject">> => Subject,
+        <<"type">> => Type,
+        <<"caveats">> => tokens:get_caveats(Token)
+    }};
+
+create(#el_req{gri = #gri{id = undefined, aspect = confine}, data = Data}) ->
+    Token = maps:get(<<"token">>, Data),
+    Caveats = maps:get(<<"caveats">>, Data),
+    {ok, value, tokens:confine(Token, Caveats)};
+
+create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_access_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
     PeerIp = maps:get(<<"peerIp">>, Data, undefined),
     case token_auth:verify_access_token(Token, PeerIp, aai:auth_to_audience(Auth)) of
@@ -142,11 +160,22 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = preauthorize}, d
             Error
     end;
 
-create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_identity}, data = Data}) ->
+create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_identity_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
     PeerIp = maps:get(<<"peerIp">>, Data, undefined),
-    case token_auth:verify_identity(Token, PeerIp, aai:auth_to_audience(Auth)) of
+    case token_auth:verify_identity_token(Token, PeerIp, aai:auth_to_audience(Auth)) of
         {ok, Subject} ->
+            {ok, value, Subject};
+        {error, _} = Error ->
+            Error
+    end;
+
+create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_invite_token}, data = Data}) ->
+    Token = maps:get(<<"token">>, Data),
+    ExpType = maps:get(<<"expectedInviteTokenType">>, Data, any),
+    PeerIp = maps:get(<<"peerIp">>, Data, undefined),
+    case token_auth:verify_invite_token(Token, ExpType, PeerIp, aai:auth_to_audience(Auth)) of
+        {ok, #auth{subject = Subject}} ->
             {ok, value, Subject};
         {error, _} = Error ->
             Error
@@ -162,23 +191,32 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_identity}
 -spec get(entity_logic:req(), entity_logic:entity()) ->
     entity_logic:get_result().
 get(#el_req{gri = #gri{aspect = list}}, _) ->
-    named_tokens:list_all();
+    token_names:list_all_ids();
 
 get(#el_req{gri = #gri{aspect = {user_named_tokens, UserId}}}, _) ->
-    named_tokens:list_by_subject(?SUB(user, UserId));
+    {ok, Tokens} = token_names:list_by_subject(?SUB(user, UserId)),
+    {_Names, Ids} = lists:unzip(Tokens),
+    {ok, Ids};
 
 get(#el_req{gri = #gri{aspect = {provider_named_tokens, ProviderId}}}, _) ->
-    named_tokens:list_by_subject(?SUB(?ONEPROVIDER, ProviderId));
+    {ok, Tokens} = token_names:list_by_subject(?SUB(?ONEPROVIDER, ProviderId)),
+    {_Names, Ids} = lists:unzip(Tokens),
+    {ok, Ids};
 
-get(#el_req{gri = #gri{aspect = instance}}, Token) ->
-    {ok, Token};
+get(#el_req{gri = #gri{aspect = instance, id = TokenId}}, NamedToken) ->
+    {ok, to_token_data(TokenId, NamedToken)};
 
-get(#el_req{gri = #gri{id = TokenName, aspect = {user_named_token, UserId}}}, _) ->
-    {ok, lookup_token(?SUB(user, UserId), TokenName)};
+get(#el_req{gri = #gri{aspect = {user_named_token, UserId}, id = TokenName}}, _) ->
+    case token_names:lookup(?SUB(user, UserId), TokenName) of
+        {ok, TokenId} -> {ok, to_token_data(TokenId)};
+        {error, _} -> ?ERROR_NOT_FOUND
+    end;
 
-get(#el_req{gri = #gri{id = TokenName, aspect = {provider_named_token, PrId}}}, _) ->
-    {ok, lookup_token(?SUB(?ONEPROVIDER, PrId), TokenName)}.
-
+get(#el_req{gri = #gri{aspect = {provider_named_token, ProviderId}, id = TokenName}}, _) ->
+    case token_names:lookup(?SUB(?ONEPROVIDER, ProviderId), TokenName) of
+        {ok, TokenId} -> {ok, to_token_data(TokenId)};
+        {error, _} -> ?ERROR_NOT_FOUND
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -186,25 +224,31 @@ get(#el_req{gri = #gri{id = TokenName, aspect = {provider_named_token, PrId}}}, 
 %% @end
 %%--------------------------------------------------------------------
 -spec update(entity_logic:req()) -> entity_logic:update_result().
-update(#el_req{gri = #gri{id = TokenNonce, aspect = instance}, data = Data}) ->
-    {ok, _} = od_token:update(TokenNonce, fun(Token = #od_token{metadata = OldMetadata, revoked = OldRevoked}) ->
-        NewMetadata = maps:get(<<"metadata">>, Data, OldMetadata),
+update(#el_req{gri = #gri{id = TokenId, aspect = instance}, data = Data}) ->
+    % If name change was requested, try to update the name mapping first and
+    % (upon success) proceed to od_token record update.
+    case maps:find(<<"name">>, Data) of
+        {ok, NewName} ->
+            {ok, #document{value = #od_token{name = OldName, subject = Subject}}} = od_token:get(TokenId),
+            case token_names:update(Subject, OldName, TokenId, NewName) of
+                ok -> ok;
+                ?ERROR_ALREADY_EXISTS -> throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"name">>))
+            end;
+        error ->
+            ok
+    end,
+
+    {ok, _} = od_token:update(TokenId, fun(Token = #od_token{metadata = OldMetadata}) ->
         {ok, Token#od_token{
-            revoked = maps:get(<<"revoked">>, Data, OldRevoked),
-            % Internal metadata cannot be overwritten
-            metadata = case maps:find(?INTERNAL_METADATA_KEY, OldMetadata) of
-                error -> maps:remove(?INTERNAL_METADATA_KEY, NewMetadata);
-                {ok, Internal} -> NewMetadata#{?INTERNAL_METADATA_KEY => Internal}
+            name = maps:get(<<"name">>, Data, Token#od_token.name),
+            revoked = maps:get(<<"revoked">>, Data, Token#od_token.revoked),
+            metadata = case maps:find(<<"customMetadata">>, Data) of
+                {ok, CustomMetadata} -> token_metadata:update_custom_metadata(OldMetadata, CustomMetadata);
+                error -> OldMetadata
             end
         }}
     end),
-    ok;
-
-update(Req = #el_req{gri = GRI = #gri{id = TokenName, aspect = {user_named_token, UserId}}}) ->
-    update(Req#el_req{gri = GRI#gri{id = lookup_nonce(?SUB(user, UserId), TokenName), aspect = instance}});
-
-update(Req = #el_req{gri = GRI = #gri{id = TokenName, aspect = {provider_named_token, PrId}}}) ->
-    update(Req#el_req{gri = GRI#gri{id = lookup_nonce(?SUB(?ONEPROVIDER, PrId), TokenName), aspect = instance}}).
+    ok.
 
 
 %%--------------------------------------------------------------------
@@ -213,28 +257,28 @@ update(Req = #el_req{gri = GRI = #gri{id = TokenName, aspect = {provider_named_t
 %% @end
 %%--------------------------------------------------------------------
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
-delete(#el_req{gri = #gri{id = TokenNonce, aspect = instance}}) ->
-    fun(NamedToken) ->
-        delete_named(TokenNonce, NamedToken)
+delete(#el_req{gri = #gri{id = TokenId, aspect = instance}}) ->
+    fun(#od_token{name = TokenName, subject = Subject}) ->
+        delete_named_token(Subject, TokenName, TokenId)
     end;
 
-delete(#el_req{gri = #gri{id = TokenName, aspect = {user_named_token, UserId}}}) ->
-    delete_named(lookup_nonce(?SUB(user, UserId), TokenName));
-
-delete(#el_req{gri = #gri{id = TokenName, aspect = {provider_named_token, PrId}}}) ->
-    delete_named(lookup_nonce(?SUB(?ONEPROVIDER, PrId), TokenName));
-
 delete(#el_req{gri = #gri{id = undefined, aspect = {user_named_tokens, UserId}}}) ->
-    {ok, UserTokens} = named_tokens:list_by_subject(?SUB(user, UserId)),
-    lists:foreach(fun({TokenName, TokenNonce}) ->
-        delete_named(?SUB(user, UserId), TokenNonce, TokenName)
+    {ok, UserTokens} = token_names:list_by_subject(?SUB(user, UserId)),
+    lists:foreach(fun({TokenName, TokenId}) ->
+        ok = delete_named_token(?SUB(user, UserId), TokenName, TokenId)
     end, UserTokens);
 
 delete(#el_req{gri = #gri{id = undefined, aspect = {provider_named_tokens, ProviderId}}}) ->
-    {ok, ProviderTokens} = named_tokens:list_by_subject(?SUB(?ONEPROVIDER, ProviderId)),
-    lists:foreach(fun({TokenName, TokenNonce}) ->
-        delete_named(?SUB(?ONEPROVIDER, ProviderId), TokenNonce, TokenName)
-    end, ProviderTokens).
+    {ok, ProviderTokens} = token_names:list_by_subject(?SUB(?ONEPROVIDER, ProviderId)),
+    lists:foreach(fun({TokenName, TokenId}) ->
+        ok = delete_named_token(?SUB(?ONEPROVIDER, ProviderId), TokenName, TokenId)
+    end, ProviderTokens);
+
+delete(#el_req{gri = #gri{aspect = {user_temporary_tokens, UserId}}}) ->
+    temporary_token_secret:regenerate(?SUB(user, UserId));
+
+delete(#el_req{gri = #gri{aspect = {provider_temporary_tokens, PrId}}}) ->
+    temporary_token_secret:regenerate(?SUB(?ONEPROVIDER, PrId)).
 
 
 %%--------------------------------------------------------------------
@@ -257,17 +301,27 @@ exists(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
-% Users and providers are authorized to perform all operations on their tokens
-authorize(#el_req{operation = create, gri = #gri{aspect = preauthorize}}, _) ->
+% Publicly available operations
+authorize(#el_req{operation = create, gri = #gri{aspect = examine}}, _) ->
     true;
-authorize(#el_req{operation = create, gri = #gri{aspect = verify_identity}}, _) ->
+authorize(#el_req{operation = create, gri = #gri{aspect = confine}}, _) ->
     true;
-
+authorize(#el_req{operation = create, gri = #gri{aspect = verify_access_token}}, _) ->
+    true;
+authorize(#el_req{operation = create, gri = #gri{aspect = verify_identity_token}}, _) ->
+    true;
+authorize(#el_req{operation = create, gri = #gri{aspect = verify_invite_token}}, _) ->
+    true;
+% Users and providers are authorized to perform all operations on their tokens.
+% NOTE: Additional authorization for creating different types of
+% invite tokens is checked in validate_type/3.
 authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {user_named_tokens, UserId}}}, _) ->
     true;
 authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {user_named_token, UserId}}}, _) ->
     true;
 authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {user_temporary_token, UserId}}}, _) ->
+    true;
+authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {user_temporary_tokens, UserId}}}, _) ->
     true;
 authorize(#el_req{auth = ?PROVIDER(PrId), gri = #gri{aspect = {provider_named_tokens, PrId}}}, _) ->
     true;
@@ -275,15 +329,17 @@ authorize(#el_req{auth = ?PROVIDER(PrId), gri = #gri{aspect = {provider_named_to
     true;
 authorize(#el_req{auth = ?PROVIDER(PrId), gri = #gri{aspect = {provider_temporary_token, PrId}}}, _) ->
     true;
+authorize(#el_req{auth = ?PROVIDER(PrId), gri = #gri{aspect = {provider_temporary_tokens, PrId}}}, _) ->
+    true;
 
 % Provider's admin with CLUSTER_UPDATE is allowed to manage its tokens
 authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {provider_named_tokens, PrId}}}, _) ->
     cluster_logic:has_eff_privilege(PrId, UserId, ?CLUSTER_UPDATE);
-
 authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {provider_named_token, PrId}}}, _) ->
     cluster_logic:has_eff_privilege(PrId, UserId, ?CLUSTER_UPDATE);
-
 authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {provider_temporary_token, PrId}}}, _) ->
+    cluster_logic:has_eff_privilege(PrId, UserId, ?CLUSTER_UPDATE);
+authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {provider_temporary_tokens, PrId}}}, _) ->
     cluster_logic:has_eff_privilege(PrId, UserId, ?CLUSTER_UPDATE);
 
 % When a token is referenced by its id, check if token's subject matches the auth
@@ -307,29 +363,11 @@ authorize(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
-required_admin_privileges(#el_req{operation = create, data = #{<<"type">> := ?INVITE_TOKEN(?PROVIDER_REGISTRATION_TOKEN, _)}}) ->
-    [?OZ_PROVIDERS_INVITE];
 required_admin_privileges(_) ->
-    % This privilege allows to perform all operations related to tokens
-    [?OZ_MANAGE_TOKENS].
+    % NOTE: Additional admin privileges for creating different types of
+    % invite tokens is checked in validate_type/3.
+    [?OZ_TOKENS_MANAGE].
 
-
--define(NAMED_TOKEN_VALIDATOR(Subject), #{
-    required => #{
-        {id, <<"name">>} => {binary, name}
-    },
-    optional => #{
-        <<"type">> => {token_type, fun(Type) -> validate_type(Subject, named, Type) end},
-        <<"caveats">> => {caveats, fun(Caveat) -> validate_caveat(Subject, Caveat) end},
-        <<"metadata">> => {json, fun validate_metadata/1}
-    }
-}).
--define(TEMPORARY_TOKEN_VALIDATOR(Subject), #{
-    optional => #{
-        <<"type">> => {token_type, fun(Type) -> validate_type(Subject, temporary, Type) end},
-        <<"caveats">> => {caveats, fun(Caveat) -> validate_caveat(Subject, Caveat) end}
-    }
-}).
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -341,126 +379,130 @@ required_admin_privileges(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
-validate(#el_req{operation = create, gri = #gri{aspect = preauthorize}}) -> #{
+validate(#el_req{operation = create, gri = #gri{aspect = examine}}) -> #{
     required => #{
         <<"token">> => {token, any}
-    },
-    optional => #{
-        <<"peerIp">> => {ipv4_address, any}
     }
 };
-validate(#el_req{operation = create, gri = #gri{aspect = verify_identity}}) -> #{
-    required => #{
-        <<"token">> => {token, any}
-    },
-    optional => #{
-        <<"peerIp">> => {ipv4_address, any}
-    }
-};
+validate(#el_req{operation = create, gri = #gri{aspect = confine}, data = Data}) ->
+    Subject = case maps:find(<<"token">>, Data) of
+        {ok, Serialized} ->
+            case tokens:deserialize(Serialized) of
+                {ok, Token} -> Token#token.subject;
+                Error -> throw(?ERROR_BAD_VALUE_TOKEN(<<"token">>, Error))
+            end;
+        _ ->
+            throw(?ERROR_MISSING_REQUIRED_VALUE(<<"token">>))
+    end,
+    #{
+        required => #{
+            <<"token">> => {token, any},
+            <<"caveats">> => {caveats, fun(Caveat) -> validate_caveat(Subject, Caveat) end}
+        }
+    };
+validate(#el_req{operation = create, gri = #gri{aspect = verify_access_token}}) ->
+    validate_verify_operation(#{});
+validate(#el_req{operation = create, gri = #gri{aspect = verify_identity_token}}) ->
+    validate_verify_operation(#{});
+validate(#el_req{operation = create, gri = #gri{aspect = verify_invite_token}}) ->
+    validate_verify_operation(#{
+        <<"expectedInviteTokenType">> => {invite_token_type, any}
+    });
 
-validate(#el_req{operation = create, gri = #gri{aspect = {user_named_token, UserId}}}) ->
-    ?NAMED_TOKEN_VALIDATOR(?SUB(user, UserId));
-validate(#el_req{operation = create, gri = #gri{aspect = {provider_named_token, ProviderId}}}) ->
-    ?NAMED_TOKEN_VALIDATOR(?SUB(?ONEPROVIDER, ProviderId));
+validate(#el_req{operation = create, gri = #gri{aspect = {user_named_token, UserId}}, data = Data}) ->
+    validate_create_operation(named, ?SUB(user, UserId), Data);
+validate(#el_req{operation = create, gri = #gri{aspect = {provider_named_token, ProviderId}}, data = Data}) ->
+    validate_create_operation(named, ?SUB(?ONEPROVIDER, ProviderId), Data);
 
-validate(#el_req{operation = create, gri = #gri{aspect = {user_temporary_token, UserId}}}) ->
-    ?TEMPORARY_TOKEN_VALIDATOR(?SUB(user, UserId));
-validate(#el_req{operation = create, gri = #gri{aspect = {provider_temporary_token, ProviderId}}}) ->
-    ?TEMPORARY_TOKEN_VALIDATOR(?SUB(?ONEPROVIDER, ProviderId));
+validate(#el_req{operation = create, gri = #gri{aspect = {user_temporary_token, UserId}}, data = Data}) ->
+    validate_create_operation(temporary, ?SUB(user, UserId), Data);
+validate(#el_req{operation = create, gri = #gri{aspect = {provider_temporary_token, ProviderId}}, data = Data}) ->
+    validate_create_operation(temporary, ?SUB(?ONEPROVIDER, ProviderId), Data);
 
 validate(#el_req{operation = update, gri = #gri{aspect = {user_named_token, _}}}) ->
-    validate(#el_req{operation = update, gri = #gri{aspect = instance}});
+    validate_update_operation();
 validate(#el_req{operation = update, gri = #gri{aspect = {provider_named_token, _}}}) ->
-    validate(#el_req{operation = update, gri = #gri{aspect = instance}});
-validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
-    at_least_one => #{
-        <<"metadata">> => {json, fun validate_metadata/1},
-        <<"revoked">> => {boolean, any}
-    }
-}.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Unified procedure to be used from other logic plugin modules when consuming
-%% an invite token.
-%% @end
-%%--------------------------------------------------------------------
--spec consume_invite_token(aai:auth(), tokens:token(), tokens:invite_token_type(),
-    is_authorized_to_invite_fun(), consume_fun()) -> term() | no_return().
-consume_invite_token(Auth, Token, ExpectedType, IsAuthorizedToInviteFun, ConsumeFun) ->
-    case token_auth:verify_invite_token(Token, ExpectedType, Auth#auth.peer_ip, aai:auth_to_audience(Auth)) of
-        {error, _} = Error ->
-            Error;
-        {ok, IssuerAuth} ->
-            #token{type = ?INVITE_TOKEN(_, EntityId)} = Token,
-            case IsAuthorizedToInviteFun(IssuerAuth, ExpectedType, EntityId) of
-                false ->
-                    ?ERROR_INVITE_TOKEN_ISSUER_NOT_AUTHORIZED;
-                true ->
-                    critical_section:run({invite_token, Token#token.nonce}, fun() ->
-                        Result = ConsumeFun(EntityId),
-                        ok = delete_named(Token#token.nonce),
-                        Result
-                    end)
-            end
-    end.
+    validate_update_operation();
+validate(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
+    validate_update_operation().
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
 %% @private
--spec lookup_nonce(aai:subject(), od_token:name()) -> tokens:nonce() | no_return().
-lookup_nonce(Subject, TokenName) ->
-    case named_tokens:get(Subject, TokenName) of
-        {ok, TokenNonce} -> TokenNonce;
-        _ -> throw(?ERROR_NOT_FOUND)
-    end.
+-spec validate_verify_operation(OptionalParams :: map()) -> entity_logic:validity_verificator().
+validate_verify_operation(OptionalParams) -> #{
+    required => #{
+        <<"token">> => {token, any}
+    },
+    optional => OptionalParams#{
+        <<"peerIp">> => {ipv4_address, any}
+    }
+}.
 
 
 %% @private
--spec lookup_token(tokens:nonce()) -> od_token:record() | no_return().
-lookup_token(TokenNonce) ->
-    case od_token:get(TokenNonce) of
-        {ok, #document{value = Token}} -> Token;
-        _ -> throw(?ERROR_NOT_FOUND)
-    end.
+-spec validate_create_operation(named | temporary, aai:subject(), entity_logic:data()) ->
+    entity_logic:validity_verificator().
+validate_create_operation(named, Subject, Data) -> #{
+    required => #{
+        <<"name">> => {binary, name}
+    },
+    optional => maps:merge(
+        optional_invite_token_params(Data),
+        #{
+            <<"type">> => {token_type, fun(Type) -> validate_type(Subject, named, Type) end},
+            <<"caveats">> => {caveats, fun(Caveat) -> validate_caveat(Subject, Caveat) end},
+            <<"customMetadata">> => {json, any},
+            <<"revoked">> => {boolean, any}
+        }
+    )
+};
+validate_create_operation(temporary, Subject, Data) -> #{
+    optional => maps:merge(
+        optional_invite_token_params(Data),
+        #{
+            <<"type">> => {token_type, fun(Type) -> validate_type(Subject, temporary, Type) end},
+            <<"caveats">> => {caveats, fun(Caveat) -> validate_caveat(Subject, Caveat) end}
+        }
+    )
+}.
 
 
 %% @private
--spec lookup_token(aai:subject(), od_token:name()) -> od_token:record() | no_return().
-lookup_token(Subject, TokenName) ->
-    lookup_token(lookup_nonce(Subject, TokenName)).
+-spec validate_update_operation() -> entity_logic:validity_verificator().
+validate_update_operation() -> #{
+    at_least_one => #{
+        <<"name">> => {binary, name},
+        <<"customMetadata">> => {json, any},
+        <<"revoked">> => {boolean, any}
+    }
+}.
 
 
+%%--------------------------------------------------------------------
 %% @private
--spec delete_named(tokens:nonce()) -> ok | no_return().
-delete_named(TokenNonce) ->
-    delete_named(TokenNonce, lookup_token(TokenNonce)).
-
-
-%% @private
--spec delete_named(tokens:nonce(), od_token:record()) -> ok | no_return().
-delete_named(TokenNonce, #od_token{name = TokenName, subject = Subject}) ->
-    delete_named(Subject, TokenNonce, TokenName).
-
-
-%% @private
--spec delete_named(aai:subject(), tokens:nonce(), od_token:name()) -> ok | no_return().
-delete_named(Subject, TokenNonce, TokenName) ->
-    ok = named_tokens:remove(Subject, TokenName),
-    ok = od_token:delete(TokenNonce).
+%% @doc
+%% Returns optional parameters for creating an invite token in case such token
+%% type is specified in the data parameters.
+%% @end
+%%--------------------------------------------------------------------
+-spec optional_invite_token_params(entity_logic:data()) ->
+    #{Key :: binary() => {entity_logic:type_validator(), entity_logic:value_validator()}}.
+optional_invite_token_params(#{<<"type">> := ?INVITE_TOKEN(InviteTokenType, _)}) ->
+    token_metadata:optional_invite_token_parameters(InviteTokenType);
+optional_invite_token_params(_) ->
+    #{}.
 
 
 %% @private
 -spec validate_caveat(aai:subject(), caveats:caveat()) -> boolean().
 validate_caveat(Subject, #cv_audience{whitelist = AllowedAudiences}) ->
-    lists:foreach(fun(Audience) ->
+    lists:all(fun(Audience) ->
         token_auth:is_audience_allowed(Subject, Audience) orelse
             throw(?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience))
-    end, AllowedAudiences),
-    true;
+    end, AllowedAudiences);
 validate_caveat(_, _) ->
     true.
 
@@ -472,52 +514,45 @@ validate_type(?SUB(user), _, ?ACCESS_TOKEN) ->
 validate_type(?SUB(?ONEPROVIDER), _, ?ACCESS_TOKEN) ->
     true;
 
+% Only users can issue gui access tokens
 validate_type(?SUB(user), temporary, ?GUI_ACCESS_TOKEN(_)) ->
     true;
 
-% Providers are allowed to create invite tokens for clusters
-validate_type(?SUB(?ONEPROVIDER), _, ?INVITE_TOKEN(?CLUSTER_INVITE_USER_TOKEN, _)) ->
-    true;
-validate_type(?SUB(?ONEPROVIDER), _, ?INVITE_TOKEN(?CLUSTER_INVITE_GROUP_TOKEN, _)) ->
-    true;
-validate_type(?SUB(user), _, ?INVITE_TOKEN(_, _)) ->
-    % Users are allowed to create all invite tokens
-    %% @TODO VFS-5727 checks will be implemented when invite token creation is migrated here
-    true;
+validate_type(Subject, _, ?INVITE_TOKEN(InviteTokenType, EntityId)) ->
+    case invite_tokens:validate_invitation(Subject, InviteTokenType, EntityId) of
+        ok -> true;
+        {error, _} = Error -> throw(Error)
+    end;
+
 validate_type(_, _, _) ->
     false.
 
 
 %% @private
--spec validate_metadata(json_utils:json_term()) -> boolean().
-validate_metadata(Metadata) ->
-    % Modifying the internal metadata is not allowed
-    not maps:is_key(?INTERNAL_METADATA_KEY, Metadata).
-
-
-%% @private
--spec create_named_token(aai:subject(), od_token:name(), entity_logic:data()) ->
+-spec create_named_token(aai:subject(), entity_logic:data()) ->
     entity_logic:create_result().
-create_named_token(Subject, TokenName, Data) ->
-    TokenNonce = datastore_utils:gen_key(),
-    case named_tokens:add(Subject, TokenName, TokenNonce) of
+create_named_token(Subject, Data) ->
+    TokenName = maps:get(<<"name">>, Data),
+    TokenId = datastore_utils:gen_key(),
+    case token_names:register(Subject, TokenName, TokenId) of
         ok -> ok;
-        ?ERROR_ALREADY_EXISTS -> throw(?ERROR_ALREADY_EXISTS)
+        ?ERROR_ALREADY_EXISTS -> throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"name">>))
     end,
     Type = maps:get(<<"type">>, Data, ?ACCESS_TOKEN),
     Caveats = maps:get(<<"caveats">>, Data, []),
-    Metadata = maps:get(<<"metadata">>, Data, #{}),
+    CustomMetadata = maps:get(<<"customMetadata">>, Data, #{}),
     Secret = tokens:generate_secret(),
-    Token = construct(Subject, TokenNonce, Type, true, Secret, Caveats),
+    Token = construct(Subject, TokenId, Type, true, Secret, Caveats),
     TokenRecord = #od_token{
         name = TokenName,
         subject = Subject,
         type = Type,
         secret = Secret,
-        caveats = [caveats:serialize(C) || C <- Caveats],
-        metadata = Metadata
+        caveats = Caveats,
+        metadata = token_metadata:build(Type, CustomMetadata, Data),
+        revoked = maps:get(<<"revoked">>, Data, false)
     },
-    {ok, _} = od_token:create(#document{key = TokenNonce, value = TokenRecord}),
+    {ok, _} = od_token:create(#document{key = TokenId, value = TokenRecord}),
     {ok, value, Token}.
 
 
@@ -530,27 +565,54 @@ create_temporary_token(Subject, Data) ->
 
     Now = time_utils:cluster_time_seconds(),
     MaxTtl = ?MAX_TEMPORARY_TOKEN_TTL,
-    IsTtlAllowed = lists:any(fun
-        (#cv_time{valid_until = ?INFINITY}) -> false;
-        (#cv_time{valid_until = ValidUntil}) -> ValidUntil < Now + MaxTtl
+    IsTtlAllowed = lists:any(fun(#cv_time{valid_until = ValidUntil}) ->
+        ValidUntil < Now + MaxTtl
     end, caveats:filter([cv_time], Caveats)),
     IsTtlAllowed orelse throw(?ERROR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTtl)),
 
-    TokenNonce = datastore_utils:gen_key(),
-    Secret = shared_token_secret:get(),
-    Token = construct(Subject, TokenNonce, Type, false, Secret, Caveats),
+    TokenId = datastore_utils:gen_key(),
+    Secret = temporary_token_secret:get(Subject),
+    Token = construct(Subject, TokenId, Type, false, Secret, Caveats),
     {ok, value, Token}.
 
 
 %% @private
--spec construct(aai:subject(), tokens:nonce(), tokens:type(), tokens:persistent(),
+-spec construct(aai:subject(), tokens:id(), tokens:type(), tokens:persistent(),
     tokens:secret(), [caveats:caveat()]) -> tokens:token().
-construct(Subject, Nonce, Type, Persistent, Secret, Caveats) ->
+construct(Subject, TokenId, Type, Persistent, Secret, Caveats) ->
     Prototype = #token{
         onezone_domain = oz_worker:get_domain(),
+        id = TokenId,
         subject = Subject,
-        nonce = Nonce,
         type = Type,
         persistent = Persistent
     },
     tokens:construct(Prototype, Secret, Caveats).
+
+
+%% @private
+-spec delete_named_token(aai:subject(), od_token:name(), tokens:id()) -> ok | no_return().
+delete_named_token(Subject, TokenName, TokenId) ->
+    ok = token_names:unregister(Subject, TokenName),
+    ok = od_token:delete(TokenId).
+
+
+%% @private
+-spec to_token_data(od_token:id()) -> entity_logic:data().
+to_token_data(TokenId) ->
+    {ok, #document{value = NamedToken}} = od_token:get(TokenId),
+    to_token_data(TokenId, NamedToken).
+
+%% @private
+-spec to_token_data(od_token:id(), od_token:record()) -> entity_logic:data().
+to_token_data(TokenId, NamedToken) ->
+    #{
+        <<"id">> => TokenId,
+        <<"name">> => NamedToken#od_token.name,
+        <<"subject">> => NamedToken#od_token.subject,
+        <<"type">> => NamedToken#od_token.type,
+        <<"caveats">> => NamedToken#od_token.caveats,
+        <<"metadata">> => NamedToken#od_token.metadata,
+        <<"revoked">> => NamedToken#od_token.revoked,
+        <<"token">> => od_token:named_token_to_token(TokenId, NamedToken)
+    }.

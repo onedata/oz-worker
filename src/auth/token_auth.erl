@@ -14,11 +14,12 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/logging.hrl").
 
 %% API
 -export([check_token_auth/1, check_token_auth/3]).
 -export([verify_access_token/3]).
--export([verify_identity/3]).
+-export([verify_identity_token/3]).
 -export([verify_invite_token/4]).
 -export([group_membership_checker/2]).
 -export([is_audience_allowed/2]).
@@ -125,22 +126,22 @@ verify_access_token(Token, PeerIp, Audience, SupportedCaveats) ->
             verify_token_auth(Token, ?AUTH_CTX(PeerIp, Audience), SupportedCaveats);
         ?GUI_ACCESS_TOKEN(_) ->
             verify_token_auth(Token, ?AUTH_CTX(PeerIp, Audience), SupportedCaveats);
-        _ ->
-            ?ERROR_NOT_AN_ACCESS_TOKEN
+        ReceivedTokenType ->
+            ?ERROR_NOT_AN_ACCESS_TOKEN(ReceivedTokenType)
     end.
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Verifies the identity carried by a token - verifies the token itself and
-%% returns the token's subject. In contrast to access tokens, supports the
-%% cv_authorization_none caveat (which nullifies the auth carried by the token,
-%% but still allows to check the subject).
+%% returns the token's subject. Identity token is essentially an access token
+%% that can have the cv_authorization_none caveat (which nullifies the
+%% authorization carried by the token).
 %% @end
 %%--------------------------------------------------------------------
--spec verify_identity(tokens:token(), undefined | ip_utils:ip(),
+-spec verify_identity_token(tokens:token(), undefined | ip_utils:ip(),
     undefined | aai:audience()) -> {ok, aai:subject()} | errors:error().
-verify_identity(Token, PeerIp, Audience) ->
+verify_identity_token(Token, PeerIp, Audience) ->
     case verify_access_token(Token, PeerIp, Audience, ?SUPPORTED_IDENTITY_TOKEN_CAVEATS) of
         {error, _} = Error -> Error;
         {ok, #auth{subject = Subject}} -> {ok, Subject}
@@ -149,19 +150,21 @@ verify_identity(Token, PeerIp, Audience) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Verifies an invite token and checks against given expected invite token type,
-%% and if it's valid, returns the auth carried by that token (auth object).
+%% Verifies an invite token and checks against given expected invite token type
+%% ('any' keyword can be used for any invite token). If it's valid, returns the
+%% auth carried by that token (auth object).
+%% Audience is represented by the invite token consumer.
 %% @end
 %%--------------------------------------------------------------------
--spec verify_invite_token(tokens:token(), tokens:invite_token_type(),
-    undefined | ip_utils:ip(), undefined | aai:audience()) ->
+-spec verify_invite_token(tokens:token(), any | tokens:invite_token_type(),
+    undefined | ip_utils:ip(), Consumer :: undefined | aai:audience()) ->
     {ok, aai:auth()} | errors:error().
-verify_invite_token(Token, ExpectedType, PeerIp, Audience) ->
-    case Token#token.type of
-        ?INVITE_TOKEN(ExpectedType, _) ->
-            verify_token_auth(Token, ?AUTH_CTX(PeerIp, Audience), ?SUPPORTED_INVITE_TOKEN_CAVEATS);
-        _ ->
-            ?ERROR_NOT_AN_INVITE_TOKEN(ExpectedType)
+verify_invite_token(Token = #token{type = ReceivedType}, ExpectedType, PeerIp, Consumer) ->
+    case tokens:is_invite_token(Token, ExpectedType) of
+        true ->
+            verify_token_auth(Token, ?AUTH_CTX(PeerIp, Consumer), ?SUPPORTED_INVITE_TOKEN_CAVEATS);
+        false ->
+            ?ERROR_NOT_AN_INVITE_TOKEN(ExpectedType, ReceivedType)
     end.
 
 
@@ -248,10 +251,10 @@ verify_token_auth(Token = #token{persistent = false, subject = Subject}, AuthCtx
     % alongside the user / provider.
     case subject_exists(Subject) of
         false -> ?ERROR_TOKEN_INVALID;
-        true -> verify_token_auth(Token, AuthCtx, SupportedCaveats, shared_token_secret:get())
+        true -> verify_token_auth(Token, AuthCtx, SupportedCaveats, temporary_token_secret:get(Subject))
     end;
 verify_token_auth(Token = #token{persistent = true}, AuthCtx, SupportedCaveats) ->
-    case od_token:get(Token#token.nonce) of
+    case od_token:get(Token#token.id) of
         {ok, #document{value = #od_token{revoked = true}}} ->
             ?ERROR_TOKEN_REVOKED;
         {ok, #document{value = #od_token{secret = Secret, subject = ?SUB(SubType, _, SubId) = Subject}}} ->
@@ -294,11 +297,6 @@ verify_token_auth(Token = #token{type = TokenType}, AuthCtx, SupportedCaveats, S
 %% @end
 %%--------------------------------------------------------------------
 -spec check_against_token_type(tokens:type(), aai:auth(), aai:audience()) -> ok | errors:error().
-check_against_token_type(?ACCESS_TOKEN, #auth{subject = Subject}, Audience) ->
-    case is_audience_allowed(Subject, Audience) of
-        true -> ok;
-        false -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience)
-    end;
 check_against_token_type(?GUI_ACCESS_TOKEN(SessionId), ?USER(UserId), Audience) ->
     % Only user auth is allowed in gui access tokens
     case {session:exists(SessionId), is_audience_allowed(?SUB(user, UserId), Audience)} of
@@ -306,19 +304,17 @@ check_against_token_type(?GUI_ACCESS_TOKEN(SessionId), ?USER(UserId), Audience) 
         {{ok, false}, _} -> ?ERROR_TOKEN_SESSION_INVALID;
         {_, false} -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience)
     end;
-% Audience in invite tokens is always the subject consuming the token (making the request)
-check_against_token_type(?INVITE_TOKEN(TokenType, _), ?USER(_), Audience) ->
-    case {TokenType, Audience} of
-        % Only provider audience is allowed in space support tokens
-        {?SPACE_SUPPORT_TOKEN, ?AUD(?OP_WORKER, _)} -> ok;
-        %% @TODO VFS-5727 support for registration as nobody should be discontinued
-        % Nobody audience is allowed when creating a provider
-        {?PROVIDER_REGISTRATION_TOKEN, _} -> ok;
-        % User audience is allowed in all invite tokens
-        % (including ?SPACE_SUPPORT_TOKEN, when supporting as cluster admin)
-        {_, ?AUD(user, _)} -> ok;
-        _ -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience)
+check_against_token_type(?ACCESS_TOKEN, #auth{subject = Subject}, Audience) ->
+    case is_audience_allowed(Subject, Audience) of
+        true -> ok;
+        false -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience)
     end;
+check_against_token_type(?INVITE_TOKEN(_, _), _, _) ->
+    % Invite tokens do not require additional checks. Audience (consumer) can
+    % be anything as the idea of tokens is that one can pass them to anyone.
+    % During actual consumption there is an additional check if the consuming
+    % subject can perform such operation.
+    ok;
 check_against_token_type(_, _, _) ->
     ?ERROR_TOKEN_INVALID.
 

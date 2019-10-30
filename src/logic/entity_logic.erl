@@ -603,21 +603,18 @@ report_unauthorized(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec ensure_valid(State :: #state{}) -> #state{}.
-ensure_valid(State) ->
-    #state{
-        req = #el_req{gri = #gri{id = Id, aspect = Aspect}, data = Data} = Req
-    } = State,
+ensure_valid(#state{req = #el_req{gri = #gri{aspect = Aspect}, data = Data} = Req} = State) ->
     ValidatorsMap = call_plugin(validate, State),
     % Get all types of validators
     Required = maps:get(required, ValidatorsMap, #{}),
     Optional = maps:get(optional, ValidatorsMap, #{}),
     AtLeastOne = maps:get(at_least_one, ValidatorsMap, #{}),
-    % Artificially add 'id' and 'aspect' key to Data to simplify validation code.
-    % Those keywords allow verifying if data provided in id / aspect identifier
+    % Artificially add 'aspect' key to Data to simplify validation code.
+    % This keyword allows verifying if data provided in aspect identifier
     % is valid.
-    DataWithIdAndAspect = case Data of
-        undefined -> #{id => Id, aspect => Aspect};
-        _ -> Data#{id => Id, aspect => Aspect}
+    DataWithAspect = case Data of
+        undefined -> #{aspect => Aspect};
+        _ -> Data#{aspect => Aspect}
     end,
     % Start with required parameters. Transform the data if needed, fail when
     % any key is missing or cannot be validated.
@@ -629,7 +626,7 @@ ensure_valid(State) ->
                 {true, NewData} ->
                     NewData
             end
-        end, DataWithIdAndAspect, maps:keys(Required)),
+        end, DataWithAspect, maps:keys(Required)),
     % Now, optional parameters. Transform the data if needed, fail when
     % any of the keys exists in the data but cannot be validated.
     Data3 = lists:foldl(
@@ -661,18 +658,17 @@ ensure_valid(State) ->
         {_, false} ->
             throw(?ERROR_MISSING_AT_LEAST_ONE_VALUE(maps:keys(AtLeastOne)))
     end,
-    % Remove 'id' and 'aspect' keys from data as they are no longer needed
-    State#state{req = Req#el_req{data = maps:without([id, aspect], Data4)}}.
+    % Remove 'aspect' key from data as it is no longer needed
+    State#state{req = Req#el_req{data = maps:remove(aspect, Data4)}}.
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
 %% Performs simple value conversion (if possible) and checks the type and value
-%% of value for Key in Data. Takes into consideration special keys which are
-%% in form {id, Key :: binary()} or {aspect, Key :: binary()}, that allows to
-%% validate data in entity id or aspect. In such case, the Data map must include
-%% the 'id' and/or 'aspect' key that hold the values.
+%% of value for Key in Data. Takes into consideration special keyword
+%% {aspect, Key :: binary()}, that allows to validate data in aspect.
+%% In such case, the Data map must include the 'aspect' key that hold the value.
 %% The Key is an arbitrary name for the validated attribute, useful when
 %% generating error messages.
 %% @end
@@ -680,13 +676,6 @@ ensure_valid(State) ->
 -spec transform_and_check_value(Key :: binary(), Data :: data(),
     Validator :: #{type_validator() => value_validator()}) ->
     {true, sanitized_data()} | false.
-transform_and_check_value({id, Key}, Data, Validator) ->
-    {TypeRule, ValueRule} = maps:get({id, Key}, Validator),
-    Value = maps:get(id, Data),
-    % Ignore the returned value - the check will throw in case the value is
-    % not valid
-    transform_and_check_value(TypeRule, ValueRule, Key, Value),
-    {true, Data};
 transform_and_check_value({aspect, Key}, Data, Validator) ->
     {TypeRule, ValueRule} = maps:get({aspect, Key}, Validator),
     %% Aspect validator supports only aspects that are tuples
@@ -847,8 +836,12 @@ check_type(invite_token, Key, Token) ->
 check_type(token_type, Key, TokenType) ->
     case tokens:sanitize_type(TokenType) of
         {true, Sanitized} -> Sanitized;
-        %% @TODO VFS-5727 consider supporting type in json
         false -> throw(?ERROR_BAD_VALUE_TOKEN_TYPE(Key))
+    end;
+check_type(invite_token_type, Key, InviteTokenType) ->
+    case tokens:sanitize_invite_token_type(InviteTokenType) of
+        {true, Sanitized} -> Sanitized;
+        false -> throw(?ERROR_BAD_VALUE_INVITE_TOKEN_TYPE(Key))
     end;
 check_type(caveats, _, Caveats) ->
     try
@@ -1037,12 +1030,10 @@ check_value(_, {relation_exists, ChType, ChId, ParType, ParId, VerifyFun}, _Key,
     end;
 check_value(token, any, _Key, _Token) ->
     ok;
-check_value(invite_token, any, _Key, _Token) ->
-    ok;
-check_value(invite_token, TokenType, Key, Token) ->
-    case Token#token.type of
-        ?INVITE_TOKEN(TokenType, _) -> Token;
-        _ -> throw(?ERROR_BAD_VALUE_TOKEN(Key, ?ERROR_NOT_AN_INVITE_TOKEN(TokenType)))
+check_value(invite_token, ExpectedType, Key, Token = #token{type = ReceivedType}) ->
+    case tokens:is_invite_token(Token, ExpectedType) of
+        true -> Token;
+        false -> throw(?ERROR_BAD_VALUE_TOKEN(Key, ?ERROR_NOT_AN_INVITE_TOKEN(ExpectedType, ReceivedType)))
     end;
 check_value(binary, username, _Key, Value) ->
     case user_logic:validate_username(Value) of

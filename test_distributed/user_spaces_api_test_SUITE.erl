@@ -231,15 +231,15 @@ join_space_test(Config) ->
         #{
             spaceId => SpaceId,
             token => Serialized,
-            tokenNonce => Token#token.nonce
+            tokenNonce => Token#token.id
         }
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId, tokenNonce := TokenNonce} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId, tokenNonce := TokenId} = _Env, _) ->
         {ok, Spaces} = oz_test_utils:user_get_spaces(Config, U1),
         ?assertEqual(lists:member(SpaceId, Spaces), ShouldSucceed),
         case ShouldSucceed of
             true ->
-                oz_test_utils:assert_token_not_exists(Config, TokenNonce);
+                oz_test_utils:assert_invite_token_usage_limit_reached(Config, true, TokenId);
             false -> ok
         end
     end,
@@ -334,7 +334,7 @@ join_space_test(Config) ->
         }
     },
     VerifyEndFun1 = fun(_ShouldSucceed, _Env, _) ->
-        oz_test_utils:assert_token_exists(Config, Token2#token.nonce)
+        oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token2#token.id)
     end,
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1
