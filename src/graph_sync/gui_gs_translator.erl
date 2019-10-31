@@ -144,8 +144,6 @@ translate_user(GRI = #gri{type = od_user, id = UserId, aspect = instance, scope 
         <<"username">> => gs_protocol:undefined_to_null(Username),
         <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
         <<"defaultProviderId">> => gs_protocol:undefined_to_null(DefaultProvider),
-        %% @fixme remove
-        <<"clientTokenList">> => gri:serialize(GRI#gri{aspect = client_tokens, scope = private}),
         <<"tokenList">> => gri:serialize(#gri{type = od_token, id = undefined, aspect = {user_named_tokens, UserId}}),
         <<"linkedAccountList">> => gri:serialize(GRI#gri{aspect = linked_accounts, scope = private}),
         <<"groupList">> => gri:serialize(GRI#gri{aspect = eff_groups, scope = private}),
@@ -178,20 +176,6 @@ translate_user(#gri{aspect = instance, scope = shared}, User) ->
         <<"scope">> => <<"shared">>,
         <<"fullName">> => FullName,
         <<"username">> => gs_protocol:undefined_to_null(Username)
-    };
-
-%% @fixme remove
-translate_user(GRI = #gri{aspect = client_tokens}, ClientTokens) ->
-    #{
-        <<"list">> => lists:map(
-            fun(ClientToken) ->
-                gri:serialize(GRI#gri{aspect = {client_token, ClientToken}, scope = private})
-            end, ClientTokens)
-    };
-translate_user(#gri{aspect = {client_token, ClientToken}}, ClientToken) ->
-    #{
-        <<"id">> => ClientToken,
-        <<"token">> => ClientToken
     };
 
 translate_user(GRI = #gri{aspect = linked_accounts}, LinkedAccounts) ->
