@@ -98,6 +98,7 @@ upgrade_from_19_02_x(Config) ->
 
     % Check all user tokens
     lists:foreach(fun({UserId, TokenId, Secret, Serialized}) ->
+        {ok, Deserialized} = tokens:deserialize(Serialized),
         % Check if the migrated token has been saved in the new model
         {ok, #document{value = NamedToken}} = ?assertMatch({ok, #document{value = #od_token{
             name = <<"legacy token ", _/binary>>,
@@ -117,13 +118,12 @@ upgrade_from_19_02_x(Config) ->
             <<"caveats">> := [#cv_time{}],
             <<"metadata">> := #{<<"creationTime">> := _},
             <<"revoked">> := false,
-            <<"token">> := Serialized
+            <<"token">> := Deserialized
         }}, oz_test_utils:call_oz(Config, token_logic, get_named_token, [?USER(UserId), TokenId])),
         % Make sure the migrated token has exactly the same serialized form
         % as the original one
         Token = oz_test_utils:call_oz(Config, od_token, named_token_to_token, [TokenId, NamedToken]),
         % Subject is not supported in tokens version 1
-        {ok, Deserialized} = tokens:deserialize(Serialized),
         ?assertEqual(Token#token{subject = ?SUB(nobody)}, Deserialized),
         % The legacy onedata_auth record should have been removed
         ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, onedata_auth, get, [TokenId])),
@@ -135,6 +135,7 @@ upgrade_from_19_02_x(Config) ->
 
     % Check all provider tokens
     lists:foreach(fun({ProviderId, TokenId, Secret, RootTokenSerialized}) ->
+        {ok, RootTokenDeserialized} = tokens:deserialize(RootTokenSerialized),
         % Check if the migrated token has been saved in the new model
         {ok, #document{value = NamedToken}} = ?assertMatch({ok, #document{value = #od_token{
             name = <<"root token">>,
@@ -154,13 +155,12 @@ upgrade_from_19_02_x(Config) ->
             <<"caveats">> := [],
             <<"metadata">> := #{<<"creationTime">> := _},
             <<"revoked">> := false,
-            <<"token">> := RootTokenSerialized
+            <<"token">> := RootTokenDeserialized
         }}, oz_test_utils:call_oz(Config, token_logic, get_named_token, [?PROVIDER(ProviderId), TokenId])),
         % Make sure the migrated token has exactly the same serialized form
         % as the original one
         Token = oz_test_utils:call_oz(Config, od_token, named_token_to_token, [TokenId, NamedToken]),
         % Subject is not supported in tokens version 1
-        {ok, RootTokenDeserialized} = tokens:deserialize(RootTokenSerialized),
         ?assertEqual(Token#token{subject = ?SUB(nobody)}, RootTokenDeserialized),
         % The legacy macaroon_auth record should have been removed
         ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, macaroon_auth, get, [TokenId])),

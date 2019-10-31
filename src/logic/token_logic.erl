@@ -484,7 +484,7 @@ gen_invite_token_name(?SPACE_JOIN_HARVESTER, HarvesterId) ->
 %% @private
 -spec format_invite_token_name(binary(), binary()) -> binary().
 format_invite_token_name(Description, EntityName) ->
-    TokenName = str_utils:format_bin("~s - ~s ~s", [Description, EntityName, str_utils:rand_hex(2)]),
+    TokenName = str_utils:format_bin("~s - ~ts ~s", [Description, EntityName, str_utils:rand_hex(2)]),
     TokenNameSize = size(TokenName),
     case TokenNameSize =< 50 of
         true ->

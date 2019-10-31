@@ -143,7 +143,7 @@ create(#el_req{auth = Auth, gri = #gri{id = ProviderId, aspect = support}, data 
             SupportSize
         ),
         NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
-        {true, {Space, Rev}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
+        {true, {Space, Rev}} = space_logic_plugin:fetch_entity(NewGRI),
 
         lists:foreach(fun(HarvesterId) ->
             harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->

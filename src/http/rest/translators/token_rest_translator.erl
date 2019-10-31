@@ -1,17 +1,18 @@
 %%%-------------------------------------------------------------------
-%%% @author Wojciech Geisler
+%%% @author Lukasz Opiola
 %%% @copyright (C) 2019 ACK CYFRONET AGH
 %%% This software is released under the MIT license
 %%% cited in 'LICENSE.txt'.
 %%% @end
 %%%-------------------------------------------------------------------
-%%% @doc This module handles translation of entity logic results concerning
-%%% onezone configuration into REST responses.
+%%% @doc
+%%% This module handles translation of entity logic results concerning
+%%% the token API into REST responses.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(token_rest_translator).
 -behaviour(rest_translator_behaviour).
--author("Wojciech Geisler").
+-author("Lukasz Opiola").
 
 -include("http/rest.hrl").
 -include("datastore/oz_datastore_models.hrl").

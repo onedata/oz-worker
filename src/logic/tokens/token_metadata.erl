@@ -27,12 +27,18 @@
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
+%% @formatter:off
 % Information about a token
 -type metadata() :: json_utils:json_term().
 % Section in the token metadata that includes arbitrary custom metadata
 -type custom_metadata() :: json_utils:json_term().
 % Privileges carried by an invite token (stored in metadata)
--type carried_privileges() :: undefined | [atom()].
+-type carried_privileges() :: undefined | privileges:privileges(
+    privileges:group_privilege() | privileges:space_privilege() |
+    privileges:handle_service_privilege() | privileges:handle_privilege() |
+    privileges:harvester_privilege() | privileges:cluster_privilege()
+).
+%% @formatter:on
 -export_type([metadata/0, custom_metadata/0, carried_privileges/0]).
 
 % UNIX timestamp of the token creation time
@@ -82,7 +88,7 @@ build(Type, CustomMetadata, Data) ->
             BasicMetadata#{
                 ?PRIVILEGES_KEY => case Privileges of
                     undefined -> null;
-                    [_ | _] -> ?TO_BINARIES(Privileges)
+                    Atoms when is_list(Atoms) -> ?TO_BINARIES(Atoms)
                 end,
                 ?USAGE_LIMIT_KEY => maps:get(?USAGE_LIMIT_KEY, Data, ?INF_USAGE_LIMIT),
                 ?USAGE_COUNT_KEY => 0
@@ -100,11 +106,12 @@ update_custom_metadata(Metadata, CustomMetadata) ->
 -spec is_usage_limit_reached(metadata()) -> boolean().
 is_usage_limit_reached(Metadata) ->
     UsageCount = maps:get(?USAGE_COUNT_KEY, Metadata, 0),
-    UsageLimit = case maps:get(?USAGE_LIMIT_KEY, Metadata, ?INF_USAGE_LIMIT) of
-        ?INF_USAGE_LIMIT -> 99999999999;
-        Int when is_integer(Int) -> Int
-    end,
-    UsageCount >= UsageLimit.
+    case maps:get(?USAGE_LIMIT_KEY, Metadata, ?INF_USAGE_LIMIT) of
+        ?INF_USAGE_LIMIT ->
+            false;
+        UsageLimit when is_integer(UsageLimit) ->
+            UsageCount >= UsageLimit
+    end.
 
 
 -spec increment_usage_count(metadata()) -> metadata().

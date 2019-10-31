@@ -408,7 +408,7 @@ create_provider_temporary_token(Config, ProviderId, Type, Caveats) ->
     {ok, Token} = oz_test_utils:call_oz(Config, token_logic, create_provider_temporary_token, [
         ?PROVIDER(ProviderId), ProviderId, #{
             <<"type">> => Type, <<"caveats">> => case caveats:find(cv_time, Caveats) of
-                % Time caveat is required in temporary tokens - add one if the isn't any
+                % Time caveat is required in temporary tokens - add one if there isn't any
                 false -> [#cv_time{valid_until = Now + 3600} | Caveats];
                 {true, _} -> Caveats
             end
@@ -1829,7 +1829,7 @@ update_named_token(Config, SubjectId, CorrectClients) ->
         rest_path_generator = fun(_, TokenToCheck) ->
             [<<"/tokens/named/">>, token_data_to_id(TokenToCheck)]
         end,
-        rest_expectation_generator = fun(TokenToCheck) ->
+        rest_expectation_generator = fun(_) ->
             {?HTTP_204_NO_CONTENT, undefined}
         end,
         data_spec = #data_spec{

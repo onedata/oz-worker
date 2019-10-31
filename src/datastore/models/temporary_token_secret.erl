@@ -6,8 +6,8 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% API for singleton record that stores a shared token secret for
-%%% all temporary tokens belonging to given subject (user or provider).
+%%% API for records that store a shared token secret for all temporary tokens
+%%% belonging to given subject (user or provider).
 %%% The secret can be regenerated, in such case all existing
 %%% temporary tokens of the subject become invalid.
 %%% @end
@@ -69,7 +69,7 @@ regenerate(Subject) ->
         value = #temporary_token_secret{secret = tokens:generate_secret()}
     }),
     ?debug(
-        "Generated a new share temporary token secret for ~s. "
+        "Generated a new share temporary token secret for ~ts. "
         "All existing temporary tokens of the subject have been invalidated.",
         [aai:subject_to_printable(Subject)]
     ),

@@ -2833,21 +2833,23 @@ group_invite_user_token(Config, Client, GroupId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Asserts that an invite token's usage limit was reached or not
-%% (depending on the IsReached flag).
+%% (depending on the Expected flag).
 %% @end
 %%--------------------------------------------------------------------
--spec assert_invite_token_usage_limit_reached(Config :: term(), IsReached :: boolean(),
+-spec assert_invite_token_usage_limit_reached(Config :: term(), Expected :: boolean(),
     TokenId :: od_token:id()) -> ok.
-assert_invite_token_usage_limit_reached(Config, IsReached, TokenId) ->
+assert_invite_token_usage_limit_reached(Config, Expected, TokenId) ->
     {ok, #document{value = #od_token{
         metadata = Metadata
     }}} = ?assertMatch({ok, _}, call_oz(Config, od_token, get, [TokenId])),
     UsageCount = maps:get(<<"usageCount">>, Metadata, 0),
-    UsageLimit = case maps:get(<<"usageLimit">>, Metadata, <<"infinity">>) of
-        <<"infinity">> -> 9999999999999;
-        Int when is_integer(Int) -> Int
+    IsReached = case maps:get(<<"usageLimit">>, Metadata, <<"infinity">>) of
+        <<"infinity">> ->
+            false;
+        UsageLimit when is_integer(UsageLimit) ->
+            UsageCount >= UsageLimit
     end,
-    ?assertEqual(IsReached, UsageCount >= UsageLimit).
+    ?assertEqual(Expected, IsReached).
 
 
 %%--------------------------------------------------------------------

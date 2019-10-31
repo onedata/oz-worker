@@ -18,10 +18,7 @@
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/logging.hrl").
 
-% Privileges carried by an invite token.
-% 'undefined' when not applicable (e.g. space support token).
--type carried_privileges() :: undefined | [atom()].
--type consume_fun() :: fun((gri:entity_id(), carried_privileges()) -> entity_logic:create_result() | errors:error()).
+-type consume_fun() :: fun((gri:entity_id(), token_metadata:carried_privileges()) -> entity_logic:create_result()).
 
 -export([consume/4]).
 -export([validate_invitation/3]).
@@ -33,12 +30,12 @@
 %%--------------------------------------------------------------------
 %% @doc
 %% Unified procedure to be used from logic plugin modules when consuming an
-%% invite token. The procedure checks the authorization to invite by the token
-%% issuer (it could have changed since the token was issued, e.g. if a user
-%% has lost certain privileges).
+%% invite token. The procedure checks the token issuer's authorization to invite
+%% (it could have changed since the token was issued, e.g. if a user has lost
+%% certain privileges).
 %%
-%% NOTE: The authorization to consume the token is NOT checked, it must be done
-%% in the calling logic plugin module.
+%% NOTE: The token consumer's authorization to consume the token is NOT checked,
+%% it must be done in the calling logic plugin module.
 %% @end
 %%--------------------------------------------------------------------
 -spec consume(aai:auth(), tokens:token(), tokens:invite_token_type(), consume_fun()) ->
