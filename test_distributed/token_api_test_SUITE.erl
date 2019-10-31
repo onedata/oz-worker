@@ -2236,6 +2236,7 @@ revoke_all_provider_temporary_tokens(Config, BasicEnv, ProviderIdBinding, Correc
         lists:foreach(fun(Token) ->
             assert_token_verifies(Config, ShouldSucceed, Token)
         end, ProviderTokens)
+
     end,
 
     ApiTestSpec = #api_test_spec{
@@ -2274,8 +2275,8 @@ revoke_all_provider_temporary_tokens(Config, BasicEnv, ProviderIdBinding, Correc
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun)).
 
 
-assert_token_verifies(Config, ShouldSucceed, Token) ->
-    VerificationResult = case Token#token.type of
+assert_token_verifies(Config, ShouldSucceed, Token = #token{type = Type, subject = Subject}) ->
+    VerificationResult = case Type of
         ?ACCESS_TOKEN ->
             oz_test_utils:call_oz(Config, token_logic, verify_access_token, [?NOBODY, #{<<"token">> => Token}]);
         ?GUI_ACCESS_TOKEN(_) ->
@@ -2284,7 +2285,7 @@ assert_token_verifies(Config, ShouldSucceed, Token) ->
             oz_test_utils:call_oz(Config, token_logic, verify_invite_token, [?NOBODY, #{<<"token">> => Token}])
     end,
     case ShouldSucceed of
-        true -> ?assertMatch({ok, Token#token.subject}, VerificationResult);
+        true -> ?assertMatch({ok, Subject}, VerificationResult);
         false -> ?assertMatch(?ERROR_TOKEN_INVALID, VerificationResult)
     end.
 

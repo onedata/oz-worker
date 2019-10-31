@@ -40,6 +40,7 @@
 -export([create_legacy_invite_token/3, create_legacy_client_token/1]).
 -export([migrate_deprecated_tokens/0]).
 
+
 -define(GUI_TOKEN_TTL, oz_worker:get_env(gui_token_ttl, 600)).
 
 %%%===================================================================
@@ -111,7 +112,7 @@ create_user_named_token(Auth, UserId, Data) ->
         data = Data
     }),
     case Result of
-        {ok, resource, {_, #{<<"token">> := Token}}} -> {ok, Token};
+        {ok, resource, {_, {#{<<"token">> := Token}, _}}} -> {ok, Token};
         {error, _} = Error -> Error
     end.
 
@@ -126,7 +127,7 @@ create_provider_named_token(Auth, ProviderId, Data) ->
         data = Data
     }),
     case Result of
-        {ok, resource, {_, #{<<"token">> := Token}}} -> {ok, Token};
+        {ok, resource, {_, {#{<<"token">> := Token}, _}}} -> {ok, Token};
         {error, _} = Error -> Error
     end.
 
@@ -483,7 +484,7 @@ gen_invite_token_name(?SPACE_JOIN_HARVESTER, HarvesterId) ->
 %% @private
 -spec format_invite_token_name(binary(), binary()) -> binary().
 format_invite_token_name(Description, EntityName) ->
-    TokenName = str_utils:format_bin("~s '~s' ~s", [Description, EntityName, str_utils:rand_hex(3)]),
+    TokenName = str_utils:format_bin("~s - ~s ~s", [Description, EntityName, str_utils:rand_hex(2)]),
     TokenNameSize = size(TokenName),
     case TokenNameSize =< 50 of
         true ->

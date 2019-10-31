@@ -63,9 +63,9 @@ create_response(#gri{aspect = verify_identity_token}, _, value, Subject) ->
 create_response(#gri{aspect = verify_invite_token}, _, value, Subject) ->
     rest_translator:ok_body_reply(#{<<"subject">> => aai:subject_to_json(Subject)});
 
-create_response(#gri{aspect = {user_named_token, _}}, _, resource, {_, #{<<"token">> := Token}}) ->
+create_response(#gri{aspect = {user_named_token, _}}, _, resource, {_, {#{<<"token">> := Token}, _}}) ->
     ?TOKEN_REPLY(Token);
-create_response(#gri{aspect = {provider_named_token, _}}, _, resource, {_, #{<<"token">> := Token}}) ->
+create_response(#gri{aspect = {provider_named_token, _}}, _, resource, {_, {#{<<"token">> := Token}, _}}) ->
     ?TOKEN_REPLY(Token);
 create_response(#gri{aspect = {user_temporary_token, _}}, _, value, Token) ->
     ?TOKEN_REPLY(Token);

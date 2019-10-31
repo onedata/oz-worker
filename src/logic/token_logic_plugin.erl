@@ -85,12 +85,8 @@ operation_supported(get, {user_named_token, _}, private) -> true;
 operation_supported(get, {provider_named_token, _}, private) -> true;
 
 operation_supported(update, instance, private) -> true;
-operation_supported(update, {user_named_token, _}, private) -> true;
-operation_supported(update, {provider_named_token, _}, private) -> true;
 
 operation_supported(delete, instance, private) -> true;
-operation_supported(delete, {user_named_token, _}, private) -> true;
-operation_supported(delete, {provider_named_token, _}, private) -> true;
 operation_supported(delete, {user_named_tokens, _}, private) -> true;
 operation_supported(delete, {provider_named_tokens, _}, private) -> true;
 operation_supported(delete, {user_temporary_tokens, _}, private) -> true;
@@ -108,6 +104,7 @@ operation_supported(_, _, _) -> false.
 -spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
     boolean().
 is_subscribable(instance, private) -> true;
+is_subscribable({user_named_token, _}, private) -> true;
 is_subscribable({user_named_tokens, _}, private) -> true;
 is_subscribable(_, _) -> false.
 
@@ -421,12 +418,13 @@ validate(#el_req{operation = create, gri = #gri{aspect = {user_temporary_token, 
 validate(#el_req{operation = create, gri = #gri{aspect = {provider_temporary_token, ProviderId}}, data = Data}) ->
     validate_create_operation(temporary, ?SUB(?ONEPROVIDER, ProviderId), Data);
 
-validate(#el_req{operation = update, gri = #gri{aspect = {user_named_token, _}}}) ->
-    validate_update_operation();
-validate(#el_req{operation = update, gri = #gri{aspect = {provider_named_token, _}}}) ->
-    validate_update_operation();
-validate(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
-    validate_update_operation().
+validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
+    at_least_one => #{
+        <<"name">> => {binary, name},
+        <<"customMetadata">> => {json, any},
+        <<"revoked">> => {boolean, any}
+    }
+}.
 
 %%%===================================================================
 %%% Internal functions
@@ -469,17 +467,6 @@ validate_create_operation(temporary, Subject, Data) -> #{
             <<"caveats">> => {caveats, fun(Caveat) -> validate_caveat(Subject, Caveat) end}
         }
     )
-}.
-
-
-%% @private
--spec validate_update_operation() -> entity_logic:validity_verificator().
-validate_update_operation() -> #{
-    at_least_one => #{
-        <<"name">> => {binary, name},
-        <<"customMetadata">> => {json, any},
-        <<"revoked">> => {boolean, any}
-    }
 }.
 
 
