@@ -19,9 +19,7 @@
 
 -export([create_response/4, get_response/2]).
 
--define(TOKEN_REPLY(Token), rest_translator:ok_body_reply(#{
-    <<"token">> => element(2, {ok, _} = tokens:serialize(Token))
-})).
+-define(SERIALIZE(Token), element(2, {ok, _} = tokens:serialize(Token))).
 
 %%%===================================================================
 %%% API
@@ -54,23 +52,24 @@ create_response(#gri{aspect = examine}, _, value, TokenData) ->
     });
 
 create_response(#gri{aspect = confine}, _, value, Token) ->
-    ?TOKEN_REPLY(Token);
+    rest_translator:ok_body_reply(#{<<"token">> => ?SERIALIZE(Token)});
 
 create_response(#gri{aspect = verify_access_token}, _, value, Subject) ->
-    rest_translator:ok_body_reply(#{<<"subject">> => aai:subject_to_json(Subject)});
+    subject_reply(Subject);
 create_response(#gri{aspect = verify_identity_token}, _, value, Subject) ->
-    rest_translator:ok_body_reply(#{<<"subject">> => aai:subject_to_json(Subject)});
+    subject_reply(Subject);
 create_response(#gri{aspect = verify_invite_token}, _, value, Subject) ->
-    rest_translator:ok_body_reply(#{<<"subject">> => aai:subject_to_json(Subject)});
+    subject_reply(Subject);
 
 create_response(#gri{aspect = {user_named_token, _}}, _, resource, {_, {#{<<"token">> := Token}, _}}) ->
-    ?TOKEN_REPLY(Token);
+    named_token_created_reply(Token);
 create_response(#gri{aspect = {provider_named_token, _}}, _, resource, {_, {#{<<"token">> := Token}, _}}) ->
-    ?TOKEN_REPLY(Token);
+    named_token_created_reply(Token);
+
 create_response(#gri{aspect = {user_temporary_token, _}}, _, value, Token) ->
-    ?TOKEN_REPLY(Token);
+    temporary_token_created_reply(Token);
 create_response(#gri{aspect = {provider_temporary_token, _}}, _, value, Token) ->
-    ?TOKEN_REPLY(Token).
+    temporary_token_created_reply(Token).
 
 
 %%--------------------------------------------------------------------
@@ -79,12 +78,12 @@ create_response(#gri{aspect = {provider_temporary_token, _}}, _, value, Token) -
 %% @end
 %%--------------------------------------------------------------------
 -spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
-get_response(#gri{id = undefined, aspect = list}, TokenIds) ->
-    rest_translator:ok_body_reply(#{<<"tokens">> => TokenIds});
+get_response(#gri{id = undefined, aspect = list}, Tokens) ->
+    tokens_reply(Tokens);
 get_response(#gri{id = undefined, aspect = {user_named_tokens, _}}, Tokens) ->
-    rest_translator:ok_body_reply(#{<<"tokens">> => Tokens});
+    tokens_reply(Tokens);
 get_response(#gri{id = undefined, aspect = {provider_named_tokens, _}}, Tokens) ->
-    rest_translator:ok_body_reply(#{<<"tokens">> => Tokens});
+    tokens_reply(Tokens);
 
 get_response(#gri{aspect = instance}, TokenData) ->
     named_token_reply(TokenData);
@@ -92,6 +91,41 @@ get_response(#gri{aspect = {user_named_token, _}}, TokenData) ->
     named_token_reply(TokenData);
 get_response(#gri{aspect = {provider_named_token, _}}, TokenData) ->
     named_token_reply(TokenData).
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%% @private
+-spec subject_reply(aai:subject()) -> #rest_resp{}.
+subject_reply(Subject) ->
+    rest_translator:ok_body_reply(#{
+        <<"subject">> => aai:subject_to_json(Subject)
+    }).
+
+
+%% @private
+-spec named_token_created_reply(tokens:token()) -> #rest_resp{}.
+named_token_created_reply(Token = #token{id = TokenId}) ->
+    rest_translator:created_reply_with_location_and_body(
+        [<<"tokens">>, <<"named">>, TokenId],
+        #{
+            <<"tokenId">> => TokenId,
+            <<"token">> => ?SERIALIZE(Token)
+        }
+    ).
+
+
+%% @private
+-spec temporary_token_created_reply(tokens:token()) -> #rest_resp{}.
+temporary_token_created_reply(Token) ->
+    rest_translator:created_reply_with_body(#{<<"token">> => ?SERIALIZE(Token)}).
+
+
+%% @private
+-spec tokens_reply([tokens:id()]) -> #rest_resp{}.
+tokens_reply(Tokens) ->
+    rest_translator:ok_body_reply(#{<<"tokens">> => Tokens}).
 
 
 %% @private

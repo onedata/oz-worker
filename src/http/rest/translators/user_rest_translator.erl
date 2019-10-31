@@ -31,7 +31,7 @@
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
     {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
 create_response(#gri{aspect = instance}, _, resource, {#gri{id = UserId}, _}) ->
-    rest_translator:created_reply([<<"users">>, UserId]);
+    rest_translator:created_reply_with_location([<<"users">>, UserId]);
 
 create_response(#gri{aspect = client_tokens}, _, resource, {_, {Token, _Rev}}) ->
     rest_translator:ok_body_reply(#{<<"token">> => Token});

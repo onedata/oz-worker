@@ -31,7 +31,7 @@
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
     {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
 create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id = ShareId}, _}) ->
-    rest_translator:created_reply([<<"shares">>, ShareId]).
+    rest_translator:created_reply_with_location([<<"shares">>, ShareId]).
 
 
 %%--------------------------------------------------------------------

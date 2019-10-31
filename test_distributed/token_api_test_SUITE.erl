@@ -1248,7 +1248,7 @@ create_user_named_token(Config) ->
         rest_spec = RestSpec = #rest_spec{
             method = post,
             path = [<<"/users/">>, User, <<"/tokens/named/">>],
-            expected_code = ?HTTP_200_OK,
+            expected_code = ?HTTP_201_CREATED,
             expected_body = VerifyFun
         },
         data_spec = #data_spec{
@@ -1322,7 +1322,7 @@ create_provider_named_token(Config) ->
         rest_spec = RestSpec = #rest_spec{
             method = post,
             path = [<<"/providers/">>, Provider, <<"/tokens/named/">>],
-            expected_code = ?HTTP_200_OK,
+            expected_code = ?HTTP_201_CREATED,
             expected_body = VerifyFun
         },
         data_spec = #data_spec{
@@ -1400,7 +1400,7 @@ create_user_temporary_token(Config) ->
         rest_spec = RestSpec = #rest_spec{
             method = post,
             path = [<<"/users/">>, User, <<"/tokens/temporary/">>],
-            expected_code = ?HTTP_200_OK,
+            expected_code = ?HTTP_201_CREATED,
             expected_body = VerifyFun
         },
         data_spec = #data_spec{
@@ -1476,7 +1476,7 @@ create_provider_temporary_token(Config) ->
         rest_spec = RestSpec = #rest_spec{
             method = post,
             path = [<<"/providers/">>, Provider, <<"/tokens/temporary/">>],
-            expected_code = ?HTTP_200_OK,
+            expected_code = ?HTTP_201_CREATED,
             expected_body = VerifyFun
         },
         data_spec = #data_spec{
@@ -2050,19 +2050,15 @@ delete_all_provider_named_tokens(Config, BasicEnv, ProviderIdBinding, CorrectCli
     ReplaceTokensForProviders = fun(Clients) ->
         lists:map(fun
             ({provider, PrId, _RootToken}) ->
-                {ok, TempToken} = create_provider_temporary_token(Config, PrId, ?ACCESS_TOKEN),
-                {provider, ProviderId, TempToken};
+                TempToken = create_provider_temporary_token(Config, PrId, ?ACCESS_TOKEN),
+                {provider, PrId, element(2, {ok, _} = tokens:serialize(TempToken))};
             (Other) ->
                 Other
         end, Clients)
     end,
 
-    CorrectClients = ReplaceTokensForProviders(
-        [map_client(BasicEnv, C) || C <- CorrectClientsBindings]
-    ),
-    ForbiddenClients = ReplaceTokensForProviders(
-        all_clients(BasicEnv) -- CorrectClients
-    ),
+    CorrectClients = [map_client(BasicEnv, C) || C <- CorrectClientsBindings],
+    ForbiddenClients = all_clients(BasicEnv) -- CorrectClients,
 
     EnvSetUpFun = fun() ->
         #{ProviderId := ProviderTokens} = create_some_tokens(Config, BasicEnv),
@@ -2080,10 +2076,10 @@ delete_all_provider_named_tokens(Config, BasicEnv, ProviderIdBinding, CorrectCli
             correct = [
                 root,
                 {admin, [?OZ_TOKENS_MANAGE]} |
-                CorrectClients
+                ReplaceTokensForProviders(CorrectClients)
             ],
             unauthorized = [nobody],
-            forbidden = ForbiddenClients
+            forbidden = ReplaceTokensForProviders(ForbiddenClients)
         },
         logic_spec = #logic_spec{
             module = token_logic,
@@ -2099,10 +2095,14 @@ delete_all_provider_named_tokens(Config, BasicEnv, ProviderIdBinding, CorrectCli
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)),
 
-    {ok, TempToken} = create_provider_temporary_token(Config, ProviderId, ?ACCESS_TOKEN),
+    {ok, ProviderTempToken} = tokens:serialize(
+        create_provider_temporary_token(Config, ProviderId, ?ACCESS_TOKEN)
+    ),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
-            correct = [{provider, ProviderId, TempToken}]
+            correct = [
+                {provider, ProviderId, ProviderTempToken}
+            ]
         },
         logic_spec = undefined,
         rest_spec = RestSpec#rest_spec{
@@ -2163,17 +2163,33 @@ revoke_all_user_temporary_tokens(Config, BasicEnv, UserIdBinding) ->
     {user, UserId} = map_client(BasicEnv, UserIdBinding),
     {ok, {SessionId, _}} = oz_test_utils:log_in(Config, UserId),
 
+    % This test deletes users' temporary tokens, which are by default used by the
+    % test framework in REST calls. This function generates named tokens and
+    % inserts them into the user client tuples.
+    GenNamedTokensForUsers = fun(Clients) ->
+        lists:map(fun
+            ({user, UId}) ->
+                #named_token_data{token = UserNamedToken} = create_user_named_token(Config, UId, ?ACCESS_TOKEN),
+                {user, UId, element(2, {ok, _} = tokens:serialize(UserNamedToken))};
+            (Other) ->
+                Other
+        end, Clients)
+    end,
+
+    CorrectClients = [{user, UserId}],
+    ForbiddenClients = all_clients(BasicEnv) -- CorrectClients,
+
     EnvSetUpFun = fun() ->
         {ok, Space} = oz_test_utils:create_space(Config, ?USER(UserId)),
-        {ok, T1} = create_user_temporary_token(Config, UserId, ?ACCESS_TOKEN),
-        {ok, T2} = create_user_temporary_token(Config, UserId, ?GUI_ACCESS_TOKEN(SessionId)),
-        {ok, T3} = create_user_temporary_token(Config, UserId, ?INVITE_TOKEN(?USER_JOIN_SPACE, Space)),
+        T1 = create_user_temporary_token(Config, UserId, ?ACCESS_TOKEN),
+        T2 = create_user_temporary_token(Config, UserId, ?GUI_ACCESS_TOKEN(SessionId)),
+        T3 = create_user_temporary_token(Config, UserId, ?INVITE_TOKEN(?USER_JOIN_SPACE, Space)),
         #{userTokens => [T1, T2, T3]}
     end,
 
     VerifyEndFun = fun(ShouldSucceed, #{userTokens := UserTokens}, _Data) ->
         lists:foreach(fun(Token) ->
-            assert_token_verifies(Config, ShouldSucceed, Token)
+            assert_token_verifies(Config, not ShouldSucceed, Token)
         end, UserTokens)
     end,
 
@@ -2181,11 +2197,13 @@ revoke_all_user_temporary_tokens(Config, BasicEnv, UserIdBinding) ->
         client_spec = #client_spec{
             correct = [
                 root,
-                {admin, [?OZ_TOKENS_MANAGE]},
-                {user, UserId}
+                {admin, [?OZ_TOKENS_MANAGE]} |
+                % Use a named token for authorizing the user as temporary tokens
+                % get deleted in this test
+                GenNamedTokensForUsers(CorrectClients)
             ],
             unauthorized = [nobody],
-            forbidden = all_clients(BasicEnv) -- [{user, UserId}]
+            forbidden = GenNamedTokensForUsers(ForbiddenClients)
         },
         logic_spec = #logic_spec{
             module = token_logic,
@@ -2226,15 +2244,15 @@ revoke_all_provider_temporary_tokens(Config, BasicEnv, ProviderIdBinding, Correc
     ForbiddenClients = all_clients(BasicEnv) -- CorrectClients,
 
     EnvSetUpFun = fun() ->
-        {ok, T1} = create_provider_temporary_token(Config, ProviderId, ?ACCESS_TOKEN),
-        {ok, T2} = create_provider_temporary_token(Config, ProviderId, ?ACCESS_TOKEN),
-        {ok, T3} = create_provider_temporary_token(Config, ProviderId, ?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, ProviderId)),
+        T1 = create_provider_temporary_token(Config, ProviderId, ?ACCESS_TOKEN),
+        T2 = create_provider_temporary_token(Config, ProviderId, ?ACCESS_TOKEN),
+        T3 = create_provider_temporary_token(Config, ProviderId, ?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, ProviderId)),
         #{providerTokens => [T1, T2, T3]}
     end,
 
     VerifyEndFun = fun(ShouldSucceed, #{providerTokens := ProviderTokens}, _Data) ->
         lists:foreach(fun(Token) ->
-            assert_token_verifies(Config, ShouldSucceed, Token)
+            assert_token_verifies(Config, not ShouldSucceed, Token)
         end, ProviderTokens)
 
     end,

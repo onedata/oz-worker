@@ -118,7 +118,7 @@ upgrade_from_19_02_x(Config) ->
             <<"metadata">> := #{<<"creationTime">> := _},
             <<"revoked">> := false,
             <<"token">> := Serialized
-        }}, oz_test_utils:call_oz(Config, token_logic, get_named_token_by_id, [?USER(UserId), TokenId])),
+        }}, oz_test_utils:call_oz(Config, token_logic, get_named_token, [?USER(UserId), TokenId])),
         % Make sure the migrated token has exactly the same serialized form
         % as the original one
         Token = oz_test_utils:call_oz(Config, od_token, named_token_to_token, [TokenId, NamedToken]),
@@ -155,7 +155,7 @@ upgrade_from_19_02_x(Config) ->
             <<"metadata">> := #{<<"creationTime">> := _},
             <<"revoked">> := false,
             <<"token">> := RootTokenSerialized
-        }}, oz_test_utils:call_oz(Config, token_logic, get_named_token_by_id, [?PROVIDER(ProviderId), TokenId])),
+        }}, oz_test_utils:call_oz(Config, token_logic, get_named_token, [?PROVIDER(ProviderId), TokenId])),
         % Make sure the migrated token has exactly the same serialized form
         % as the original one
         Token = oz_test_utils:call_oz(Config, od_token, named_token_to_token, [TokenId, NamedToken]),

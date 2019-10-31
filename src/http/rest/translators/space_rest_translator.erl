@@ -38,7 +38,7 @@ create_response(#gri{id = undefined, aspect = instance}, AuthHint, resource, {#g
         _ ->
             [<<"spaces">>, SpaceId]
     end,
-    rest_translator:created_reply(LocationTokens);
+    rest_translator:created_reply_with_location(LocationTokens);
 
 create_response(#gri{aspect = join} = Gri, AuthHint, resource, Result) ->
     create_response(Gri#gri{aspect = instance}, AuthHint, resource, Result);
@@ -56,22 +56,22 @@ create_response(#gri{aspect = invite_provider_token}, _, value, Token) ->
     rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
 create_response(#gri{id = SpaceId, aspect = {user, UserId}}, _, resource, _) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"spaces">>, SpaceId, <<"users">>, UserId]
     );
 
 create_response(#gri{id = SpaceId, aspect = {group, GroupId}}, _, resource, _) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"spaces">>, SpaceId, <<"groups">>, GroupId]
     );
 
 create_response(#gri{id = SpaceId, aspect = group}, _, resource, {#gri{id = GroupId}, _}) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"spaces">>, SpaceId, <<"groups">>, GroupId]
     );
 
 create_response(#gri{id = SpaceId, aspect = harvester}, _, resource, {#gri{id = HarvesterId}, _}) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"spaces">>, SpaceId, <<"harvesters">>, HarvesterId]
     ).
 
