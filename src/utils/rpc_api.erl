@@ -27,7 +27,8 @@
     get_clusters_by_user_auth/1, cluster_logic_get_users/2,
     cluster_logic_get_eff_users/2, cluster_logic_get_groups/2,
     cluster_logic_get_eff_groups/2, cluster_logic_create_user_invite_token/2,
-    reconcile_dns_config/0, dns_config_get_ns_hosts/0
+    reconcile_dns_config/0, dns_config_get_ns_hosts/0,
+    gui_message_exists/1, get_gui_message_as_map/1, update_gui_message/3
 ]).
 
 
@@ -213,3 +214,18 @@ dns_config_get_ns_hosts() ->
     dns_config:get_ns_hosts().
 
 
+-spec gui_message_exists(gui_message:id()) -> boolean().
+gui_message_exists(MessageId) ->
+    zone_logic:gui_message_exists(MessageId).
+
+
+-spec get_gui_message_as_map(gui_message:id()) ->
+    {ok, gui_message:map_repr()} | {error, term()}.
+get_gui_message_as_map(MessageId) ->
+    zone_logic:get_gui_message_as_map(MessageId).
+
+
+-spec update_gui_message(aai:auth(), gui_message:id(), Data :: map()) ->
+    ok | {error, term()}.
+update_gui_message(Auth, MessageId, Data) ->
+    zone_logic:update_gui_message(Auth, MessageId, Data).
