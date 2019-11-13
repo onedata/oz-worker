@@ -452,7 +452,7 @@ validate_create_operation(named, Subject, Data) -> #{
     optional => maps:merge(
         optional_invite_token_params(Data),
         #{
-            <<"type">> => {token_type, fun(Type) -> validate_type(Subject, named, Type) end},
+            <<"type">> => {token_type, fun(Type) -> validate_type(Subject, named, Type, Data) end},
             <<"caveats">> => {caveats, fun(Caveat) -> validate_caveat(Subject, Caveat) end},
             <<"customMetadata">> => {json, any},
             <<"revoked">> => {boolean, any}
@@ -460,25 +460,24 @@ validate_create_operation(named, Subject, Data) -> #{
     )
 };
 validate_create_operation(temporary, Subject, Data) -> #{
-    optional => maps:merge(
-        optional_invite_token_params(Data),
-        #{
-            <<"type">> => {token_type, fun(Type) -> validate_type(Subject, temporary, Type) end},
-            <<"caveats">> => {caveats, fun(Caveat) -> validate_caveat(Subject, Caveat) end}
-        }
-    )
+    optional => #{
+        <<"type">> => {token_type, fun(Type) -> validate_type(Subject, temporary, Type, Data) end},
+        <<"caveats">> => {caveats, fun(Caveat) -> validate_caveat(Subject, Caveat) end}
+    }
 }.
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Returns optional parameters for creating an invite token in case such token
-%% type is specified in the data parameters.
+%% Returns optional parameters for creating a named invite token in case such
+%% token type is specified in the data parameters.
 %% @end
 %%--------------------------------------------------------------------
 -spec optional_invite_token_params(entity_logic:data()) ->
     #{Key :: binary() => {entity_logic:type_validator(), entity_logic:value_validator()}}.
+optional_invite_token_params(#{<<"type">> := JSON} = Data) when is_map(JSON) ->
+    optional_invite_token_params(Data#{<<"type">> := tokens:json_to_type(JSON)});
 optional_invite_token_params(#{<<"type">> := ?INVITE_TOKEN(InviteTokenType, _)}) ->
     token_metadata:optional_invite_token_parameters(InviteTokenType);
 optional_invite_token_params(_) ->
@@ -497,23 +496,24 @@ validate_caveat(_, _) ->
 
 
 %% @private
--spec validate_type(aai:subject(), named | temporary, tokens:type()) -> boolean().
-validate_type(?SUB(user), _, ?ACCESS_TOKEN) ->
+-spec validate_type(aai:subject(), named | temporary, tokens:type(), entity_logic:data()) -> boolean().
+validate_type(?SUB(user), _, ?ACCESS_TOKEN, _Data) ->
     true;
-validate_type(?SUB(?ONEPROVIDER), _, ?ACCESS_TOKEN) ->
+validate_type(?SUB(?ONEPROVIDER), _, ?ACCESS_TOKEN, _Data) ->
     true;
 
 % Only users can issue gui access tokens
-validate_type(?SUB(user), temporary, ?GUI_ACCESS_TOKEN(_)) ->
+validate_type(?SUB(user), temporary, ?GUI_ACCESS_TOKEN(_), _Data) ->
     true;
 
-validate_type(Subject, _, ?INVITE_TOKEN(InviteTokenType, EntityId)) ->
-    case invite_tokens:validate_invitation(Subject, InviteTokenType, EntityId) of
-        ok -> true;
-        {error, _} = Error -> throw(Error)
-    end;
+validate_type(Subject, Persistence, ?INVITE_TOKEN(InviteTokenType, EntityId), Data) ->
+    PrivilegesProfile = case Persistence of
+        temporary -> default_privileges;
+        named -> token_metadata:inspect_requested_privileges(InviteTokenType, Data)
+    end,
+    invite_tokens:ensure_valid_invitation(Subject, InviteTokenType, EntityId, PrivilegesProfile);
 
-validate_type(_, _, _) ->
+validate_type(_, _, _, _) ->
     false.
 
 

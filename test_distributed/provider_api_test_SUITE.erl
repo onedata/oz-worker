@@ -1611,7 +1611,6 @@ support_space_test(Config) ->
             % Both providers are correct clients, as this is an endpoint
             % dedicated for provider that presents its authorization
             correct = [
-                root,
                 {provider, P1, P1Token},
                 {provider, P2, P2Token}
             ]
@@ -1655,12 +1654,14 @@ support_space_test(Config) ->
             % Only provider 1 is authorized to perform support operation on
             % behalf of provider 1.
             correct = [
-                {user, Cluster1Member},
                 {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
+                % Only provider itself can perform the support operation as it
+                % requires some operations to be performed in its database.
+                {user, Cluster1Member},
                 {user, Cluster1MemberNoUpdatePriv},
                 {provider, P2, P2Token}
             ]

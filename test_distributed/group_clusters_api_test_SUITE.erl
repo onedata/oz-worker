@@ -211,7 +211,7 @@ join_cluster_test(Config) ->
         rest_spec = #rest_spec{
             method = post,
             path = [<<"/groups/">>, G1, <<"/clusters/join">>],
-            expected_code = ?HTTP_400_BAD_REQUEST
+            expected_code = ?HTTP_409_CONFLICT
         },
         logic_spec = #logic_spec{
             module = group_logic,

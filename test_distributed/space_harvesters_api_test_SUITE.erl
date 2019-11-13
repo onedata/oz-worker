@@ -169,7 +169,7 @@ join_harvester_test(Config) ->
         rest_spec = #rest_spec{
             method = post,
             path = [<<"/spaces/">>, S1, <<"/harvesters/join">>],
-            expected_code = ?HTTP_400_BAD_REQUEST
+            expected_code = ?HTTP_409_CONFLICT
         },
         logic_spec = #logic_spec{
             module = space_logic,

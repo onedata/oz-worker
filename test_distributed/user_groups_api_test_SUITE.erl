@@ -329,7 +329,7 @@ join_group_test(Config) ->
         rest_spec = #rest_spec{
             method = post,
             path = <<"/user/groups/join">>,
-            expected_code = ?HTTP_400_BAD_REQUEST
+            expected_code = ?HTTP_409_CONFLICT
         },
         logic_spec = #logic_spec{
             module = user_logic,

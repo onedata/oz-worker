@@ -324,10 +324,10 @@ join_parent_test(Config) ->
                 {user, U2}
             ]
         },
-        rest_spec = #rest_spec{
+        rest_spec = RestSpec = #rest_spec{
             method = post,
             path = [<<"/groups/">>, Child, <<"/parents/join">>],
-            expected_code = ?HTTP_400_BAD_REQUEST
+            expected_code = ?HTTP_409_CONFLICT
         },
         logic_spec = LogicSpec = #logic_spec{
             module = group_logic,
@@ -355,6 +355,9 @@ join_parent_test(Config) ->
     ),
     {ok, Serialized3} = tokens:serialize(Token3),
     ApiTestSpec2 = ApiTestSpec1#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
+            expected_code = ?HTTP_400_BAD_REQUEST
+        },
         logic_spec = LogicSpec#logic_spec{
             expected_result = ?ERROR_REASON(?ERROR_CANNOT_ADD_RELATION_TO_SELF)
         },

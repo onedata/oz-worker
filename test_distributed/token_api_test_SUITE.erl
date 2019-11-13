@@ -254,17 +254,17 @@ all() ->
     {<<"type">>, <<>>, ?ERROR_BAD_VALUE_TOKEN_TYPE(<<"type">>)},
     {<<"type">>, 123123, ?ERROR_BAD_VALUE_TOKEN_TYPE(<<"type">>)},
     {<<"type">>, <<"dsfdsfasdf">>, ?ERROR_BAD_VALUE_TOKEN_TYPE(<<"type">>)},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?USER_JOIN_GROUP, <<"123">>)), ?ERROR_INVITE_TOKEN_CREATOR_NOT_AUTHORIZED},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?GROUP_JOIN_GROUP, <<"123">>)), ?ERROR_INVITE_TOKEN_CREATOR_NOT_AUTHORIZED},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?USER_JOIN_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_CREATOR_NOT_AUTHORIZED},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?GROUP_JOIN_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_CREATOR_NOT_AUTHORIZED},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?SUPPORT_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_CREATOR_NOT_AUTHORIZED},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?REGISTER_ONEPROVIDER, <<"123">>)), ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"adminUserId">>)},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?USER_JOIN_CLUSTER, <<"123">>)), ?ERROR_INVITE_TOKEN_CREATOR_NOT_AUTHORIZED},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, <<"123">>)), ?ERROR_INVITE_TOKEN_CREATOR_NOT_AUTHORIZED},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?USER_JOIN_HARVESTER, <<"123">>)), ?ERROR_INVITE_TOKEN_CREATOR_NOT_AUTHORIZED},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?GROUP_JOIN_HARVESTER, <<"123">>)), ?ERROR_INVITE_TOKEN_CREATOR_NOT_AUTHORIZED},
-    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?SPACE_JOIN_HARVESTER, <<"123">>)), ?ERROR_INVITE_TOKEN_CREATOR_NOT_AUTHORIZED}
+    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?USER_JOIN_GROUP, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?GROUP_JOIN_GROUP, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?USER_JOIN_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?GROUP_JOIN_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?SUPPORT_SPACE, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?REGISTER_ONEPROVIDER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?USER_JOIN_CLUSTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?USER_JOIN_HARVESTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?GROUP_JOIN_HARVESTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)},
+    {<<"type">>, tokens:type_to_json(?INVITE_TOKEN(?SPACE_JOIN_HARVESTER, <<"123">>)), ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"123">>)}
 ]).
 
 -define(BAD_TYPE_VALUES_FOR_PROVIDER(GroupId, SpaceId, AdminUserId, ClusterId, HarvesterId),
@@ -311,16 +311,23 @@ new_token_verify_fun(Config, Subject, Persistence) ->
 -spec new_token_verify_fun(Config :: term(), aai:subject(), named | temporary, undefined | aai:audience()) ->
     fun((term()) -> boolean()).
 new_token_verify_fun(Config, Subject, Persistence, Audience) ->
-    % Accepts three types of operation result:
-    %   1) #token{} record
+    % Accepts all types of operation result:
+    %   1) #token{} record (returned from logic)
     %   2) Serialized token
-    %   3) REST response (nested in <<"token">> object)
+    %   3) REST response for temporary token (object with <<"token">> key)
+    %   4) REST response for named token (object with <<"token">> and <<"tokenId">> keys)
     fun
+        Fun(#{<<"token">> := Serialized, <<"tokenId">> := TokenId}) ->
+            ?assertMatch({ok, #token{id = TokenId}}, tokens:deserialize(Serialized)),
+            Fun(Serialized);
+
         Fun(#{<<"token">> := Serialized}) ->
             Fun(Serialized);
+
         Fun(Serialized) when is_binary(Serialized) ->
             {ok, Token} = tokens:deserialize(Serialized),
             Fun(Token);
+
         Fun(Token = #token{id = TokenId}) ->
             case Token#token.type of
                 ?INVITE_TOKEN(_, _) ->
