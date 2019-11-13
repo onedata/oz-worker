@@ -153,7 +153,7 @@ create(#el_req{gri = #gri{id = StorageId, aspect = {revamp_space_support, SpaceI
         {true, {VirtualStorage, _}} = fetch_entity(#gri{id = ProviderId}),
         SupportSize = entity_graph:get_relation_attrs(direct, bottom_up, od_space, SpaceId, VirtualStorage),
         try entity_graph:add_relation(od_space, SpaceId, od_storage, StorageId, SupportSize)
-        catch _:?ERROR_ALREADY_EXISTS -> ok
+        catch _:(?ERROR_RELATION_ALREADY_EXISTS(_,_,_,_)) -> ok
         end,
         ok = entity_graph:remove_relation(od_space, SpaceId, od_storage, ProviderId)
     end.

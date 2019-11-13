@@ -613,7 +613,7 @@ get_url(ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_legacy_spaces(od_provider:record() | od_provider:doc()) ->
-    {ok, #{od_space:id() => integer()}}.
+    {ok, #{od_space:id() => Support :: integer()}}.
 get_legacy_spaces(#document{value = Value}) ->
     get_legacy_spaces(Value);
 get_legacy_spaces(#od_provider{legacy_spaces = Spaces}) ->

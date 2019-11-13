@@ -284,7 +284,8 @@ supports_space(Storage, SpaceId) ->
 %% This is done by creating virtual storage record for each provider
 %% and supporting space with this storage.
 %% This storage record does not represent actual storage, it is provider
-%% that keeps knowledge of storages.
+%% that keeps knowledge of storages as long as it is in previous version.
+%% Provider removes this virtual storage record during its upgrade procedure.
 %%
 %% Dedicated for upgrading Onezone from 19.02.* to the next major release.
 %% @end
@@ -304,7 +305,7 @@ migrate_legacy_supports() ->
         ?info("  Migrating spaces supports for provider: ~p", [ProviderId]),
         maps:map(fun(SpaceId, SupportSize) ->
             try entity_graph:add_relation(od_space, SpaceId, od_storage, ProviderId, SupportSize)
-            catch _:?ERROR_ALREADY_EXISTS -> ok
+            catch _:(?ERROR_RELATION_ALREADY_EXISTS(_,_,_,_)) -> ok
             end,
             {ok, _} = provider_logic:remove_legacy_space(ProviderId, SpaceId)
         end, Spaces),
