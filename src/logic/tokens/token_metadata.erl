@@ -71,7 +71,7 @@
 -spec inspect_requested_privileges(tokens:invite_token_type(), entity_logic:data()) ->
     privileges_profile().
 inspect_requested_privileges(InviteTokenType, Data) ->
-    case {invite_privileges_applicable(InviteTokenType), Data} of
+    case {are_invite_privileges_applicable(InviteTokenType), Data} of
         {false, _} -> default_privileges;
         {true, #{?PRIVILEGES_KEY := _}} -> custom_privileges;
         {true, _} -> default_privileges
@@ -88,7 +88,7 @@ inspect_requested_privileges(InviteTokenType, Data) ->
 build(?ACCESS_TOKEN, CustomMetadata, _Data) ->
     basic_metadata(CustomMetadata);
 build(?INVITE_TOKEN(InviteTokenType, _), CustomMetadata, Data) ->
-    Privileges = case invite_privileges_applicable(InviteTokenType) of
+    Privileges = case are_invite_privileges_applicable(InviteTokenType) of
         false ->
             undefined;
         true ->
@@ -201,16 +201,16 @@ allowed_invite_privileges(_) -> undefined.
 
 
 %% @private
--spec invite_privileges_applicable(tokens:invite_token_type()) -> boolean().
-invite_privileges_applicable(?USER_JOIN_GROUP) -> true;
-invite_privileges_applicable(?GROUP_JOIN_GROUP) -> true;
-invite_privileges_applicable(?USER_JOIN_SPACE) -> true;
-invite_privileges_applicable(?GROUP_JOIN_SPACE) -> true;
-invite_privileges_applicable(?USER_JOIN_CLUSTER) -> true;
-invite_privileges_applicable(?GROUP_JOIN_CLUSTER) -> true;
-invite_privileges_applicable(?USER_JOIN_HARVESTER) -> true;
-invite_privileges_applicable(?GROUP_JOIN_HARVESTER) -> true;
-invite_privileges_applicable(_) -> false.
+-spec are_invite_privileges_applicable(tokens:invite_token_type()) -> boolean().
+are_invite_privileges_applicable(?USER_JOIN_GROUP) -> true;
+are_invite_privileges_applicable(?GROUP_JOIN_GROUP) -> true;
+are_invite_privileges_applicable(?USER_JOIN_SPACE) -> true;
+are_invite_privileges_applicable(?GROUP_JOIN_SPACE) -> true;
+are_invite_privileges_applicable(?USER_JOIN_CLUSTER) -> true;
+are_invite_privileges_applicable(?GROUP_JOIN_CLUSTER) -> true;
+are_invite_privileges_applicable(?USER_JOIN_HARVESTER) -> true;
+are_invite_privileges_applicable(?GROUP_JOIN_HARVESTER) -> true;
+are_invite_privileges_applicable(_) -> false.
 
 
 %% @private
