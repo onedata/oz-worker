@@ -67,10 +67,10 @@ upgrade_from_19_02_x_tokens(Config) ->
     User4Tokens = create_n_legacy_client_tokens(Config, User4, 1),
     User5Tokens = create_n_legacy_client_tokens(Config, User5, 13),
 
-    {P1, _, _, _} = PToken1 = create_legacy_provider_tokens(Config),
-    {P2, _, _, _} = PToken2 = create_legacy_provider_tokens(Config),
-    {P3, _, _, _} = PToken3 = create_legacy_provider_tokens(Config),
-    {P4, _, _, _} = PToken4 = create_legacy_provider_tokens(Config),
+    {P1, _, _, _} = PToken1 = create_legacy_provider(Config),
+    {P2, _, _, _} = PToken2 = create_legacy_provider(Config),
+    {P3, _, _, _} = PToken3 = create_legacy_provider(Config),
+    {P4, _, _, _} = PToken4 = create_legacy_provider(Config),
 
     % Force trigger a cluster upgrade
     ?assertEqual({ok, 2}, oz_test_utils:call_oz(Config, node_manager_plugin, upgrade_cluster, [1])),
@@ -196,19 +196,20 @@ upgrade_from_19_02_x_storages(Config) ->
         ?assertEqual(false, oz_test_utils:call_oz(Config, provider_logic, supports_space, [P1, SpaceId]))
     end, maps:keys(SpacesMap2)),
 
+    ?assertEqual(SpacesMap1, oz_test_utils:call_oz(
+        Config, entity_graph, get_relations_with_attrs, [effective, bottom_up, od_space, P1Doc#document.value])),
+    ?assertEqual(SpacesMap2, oz_test_utils:call_oz(
+        Config, entity_graph, get_relations_with_attrs, [effective, bottom_up, od_space, P2Doc#document.value])),
 
-    AddIntermediaries = fun(Map, StId) ->
-        maps:map(fun(_SpaceId, SupportSize) ->
-            {SupportSize, [{od_storage, StId}]}
-        end, Map)
-    end,
+    maps:map(fun(SpaceId, _SupportSize) ->
+        ?assertEqual([{od_storage, P1}], oz_test_utils:call_oz(
+            Config, entity_graph, get_intermediaries, [bottom_up, od_space, SpaceId, P1Doc#document.value]))
+    end, SpacesMap1),
 
-   % Check support size and intermediaries
-    P1EffSpaces = P1Doc#document.value#od_provider.eff_spaces,
-    P2EffSpaces = P2Doc#document.value#od_provider.eff_spaces,
-    ?assertEqual(P1EffSpaces, AddIntermediaries(SpacesMap1, P1)),
-    ?assertEqual(P2EffSpaces, AddIntermediaries(SpacesMap2, P2)).
-
+    maps:map(fun(SpaceId, _SupportSize) ->
+        ?assertEqual([{od_storage, P2}], oz_test_utils:call_oz(
+            Config, entity_graph, get_intermediaries, [bottom_up, od_space, SpaceId, P2Doc#document.value]))
+    end, SpacesMap2).
 
 
 create_n_legacy_client_tokens(Config, UserId, Count) ->
@@ -237,7 +238,7 @@ create_n_legacy_client_tokens(Config, UserId, Count) ->
     end, lists:seq(1, Count)).
 
 
-create_legacy_provider_tokens(Config) ->
+create_legacy_provider(Config) ->
     ProviderId = datastore_utils:gen_key(),
     Secret = tokens:generate_secret(),
     {ok, RootTokenNonce} = oz_test_utils:call_oz(Config, macaroon_auth, create, [
@@ -273,9 +274,9 @@ create_legacy_provider_tokens(Config) ->
 create_provider_with_n_legacy_spaces(Config, SpacesNum) ->
     ProviderId = datastore_utils:gen_key(),
 
-    Spaces = lists:foldl(fun(Num, Acc) ->
+    Spaces = lists:foldl(fun(SupportSize, Acc) ->
         {ok, S} = oz_test_utils:create_space(Config, ?ROOT),
-        Acc#{S => Num}
+        Acc#{S => SupportSize}
     end, #{}, lists:seq(1, SpacesNum)),
 
     ProviderRecord = #od_provider{

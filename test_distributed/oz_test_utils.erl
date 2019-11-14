@@ -256,6 +256,7 @@
 ]).
 -export([
     create_storage/3,
+    create_storage/4,
     get_storage/2,
     update_storage/3,
     delete_storage/2
@@ -1562,20 +1563,17 @@ delete_provider(Config, ProviderId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Supports a space by a provider based on space id
-%% (with default support size and virtual storage with id equal to providers).
+%% (with default support size and new dummy storage).
 %% @end
 %%--------------------------------------------------------------------
 -spec support_space_by_provider(Config :: term(), ProviderId :: od_provider:id(),
     SpaceId :: od_space:id()) -> {ok, SpaceId :: od_space:id()}.
 support_space_by_provider(Config, ProviderId, SpaceId) ->
-    case call_oz(Config, provider_logic, has_storage, [ProviderId, ProviderId]) of
-        true -> ok;
-        false ->
-            ?assertMatch({ok, _}, create_storage(
-                Config, ?PROVIDER(ProviderId), ProviderId, ?STORAGE_NAME1)
-            )
-    end,
-    support_space(Config, ?PROVIDER(ProviderId), ProviderId, SpaceId, minimum_support_size(Config)).
+    % Create dummy storage
+    {ok, StorageId} = ?assertMatch({ok, _}, create_storage(
+        Config, ?PROVIDER(ProviderId), ?STORAGE_NAME1)
+    ),
+    support_space(Config, ?PROVIDER(ProviderId), StorageId, SpaceId, minimum_support_size(Config)).
 
 
 %%--------------------------------------------------------------------

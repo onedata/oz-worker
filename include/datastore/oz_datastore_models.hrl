@@ -273,7 +273,7 @@
     longitude = 0.0 :: float(),
 
     %% @TODO VFS-5856 legacy spaces needed to perform cluster upgrade procedure, remove in future release
-    legacy_spaces = #{} :: #{od_space:id() => integer()},
+    legacy_spaces = #{} :: #{od_space:id() => SupportSize :: integer()},
 
     % Direct relations to other entities
     storages = [] :: entity_graph:relations(od_storage:id()),

@@ -42,7 +42,7 @@
 
     list_spaces_test/1,
 
-    revamp_space_support_test/1
+    upgrade_legacy_support_test/1
 ]).
 
 all() ->
@@ -58,7 +58,7 @@ all() ->
 
         list_spaces_test,
 
-        revamp_space_support_test
+        upgrade_legacy_support_test
     ]).
 
 
@@ -181,6 +181,7 @@ get_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"provider">> => P1,
                 <<"qos_parameters">> => ExpectedQosParameters,
+                <<"spaces">> => [S],
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(St1, Id)
@@ -625,14 +626,14 @@ list_spaces_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
-revamp_space_support_test(Config) ->
+upgrade_legacy_support_test(Config) ->
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, {P2, P2Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
 
     {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, St2} = oz_test_utils:create_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
     {ok, S} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
-    {ok, S} = oz_test_utils:support_space_by_provider(Config, P1, S),
+    {ok, S} = support_space_by_legacy_storage(Config, P1, S),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -645,7 +646,7 @@ revamp_space_support_test(Config) ->
         },
         gs_spec = #gs_spec{
             operation = create,
-            gri = #gri{type = od_storage, id = St2, aspect = {revamp_space_support, S}},
+            gri = #gri{type = od_storage, id = St2, aspect = {upgrade_legacy_support, S}},
             expected_result = ?OK
         }
     },
@@ -660,44 +661,38 @@ revamp_space_support_test(Config) ->
         },
         gs_spec = #gs_spec{
             operation = create,
-            gri = #gri{type = od_storage, id = St2, aspect = {revamp_space_support, S}},
+            gri = #gri{type = od_storage, id = St2, aspect = {upgrade_legacy_support, S}},
             expected_result = ?OK
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
 
-    % Finally check correct migration
     VerifyFun = fun(_) ->
         ?assertEqual(true, oz_test_utils:call_oz(Config, storage_logic, supports_space, [St1, S])),
         ?assertEqual(false, oz_test_utils:call_oz(Config, storage_logic, supports_space, [P1, S])),
         true
     end,
 
+    % Finally check successful migration
     ApiTestSpec3 = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 {provider, P1, P1Token}
             ],
-            unauthorized = [nobody],
-            forbidden = [
-                {provider, P2, P2Token}
-            ]
+            unauthorized = [nobody]
         },
         gs_spec = #gs_spec{
             operation = create,
-            gri = #gri{type = od_storage, id = St1, aspect = {revamp_space_support, S}},
+            gri = #gri{type = od_storage, id = St1, aspect = {upgrade_legacy_support, S}},
             expected_result = ?OK_TERM(VerifyFun)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
 
 
-
-
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
-
 
 init_per_suite(Config) ->
     ssl:start(),
@@ -708,3 +703,27 @@ init_per_suite(Config) ->
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
+
+
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Supports a space by a provider based on space id
+%% (with default support size and virtual storage with id equal to providers).
+%% @end
+%%--------------------------------------------------------------------
+-spec support_space_by_legacy_storage(Config :: term(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> {ok, SpaceId :: od_space:id()}.
+support_space_by_legacy_storage(Config, ProviderId, SpaceId) ->
+    case oz_test_utils:call_oz(Config, provider_logic, has_storage, [ProviderId, ProviderId]) of
+        true -> ok;
+        false ->
+            ?assertMatch({ok, _}, oz_test_utils:create_storage(
+                Config, ?PROVIDER(ProviderId), ProviderId, ?STORAGE_NAME1)
+            )
+    end,
+    oz_test_utils:support_space(Config, ?PROVIDER(ProviderId), ProviderId, SpaceId,
+        oz_test_utils:minimum_support_size(Config)).
