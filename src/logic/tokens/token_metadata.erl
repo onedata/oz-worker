@@ -38,8 +38,9 @@
     privileges:handle_service_privilege() | privileges:handle_privilege() |
     privileges:harvester_privilege() | privileges:cluster_privilege()
 ).
-% Indicates if invite privileges are default or custom (which requires
-% additional privileges from the token creator)
+% Indicates if invite privileges are default or custom for an invite token.
+% Custom privileges require additional privileges from the token creator, apart
+% from regular invite privileges.
 -type privileges_profile() :: default_privileges | custom_privileges.
 %% @formatter:on
 -export_type([metadata/0, custom_metadata/0, invite_privileges/0, privileges_profile/0]).
@@ -56,8 +57,8 @@
 -define(USAGE_COUNT_KEY, <<"usageCount">>).
 -define(INF_USAGE_LIMIT, <<"infinity">>).
 
--export([inspect_requested_privileges/2]).
 -export([build/3, update_custom_metadata/2]).
+-export([inspect_requested_privileges/2]).
 -export([inspect_carried_privileges/2]).
 -export([is_usage_limit_reached/1]).
 -export([increment_usage_count/1]).
@@ -67,16 +68,6 @@
 %%%===================================================================
 %%% API
 %%%===================================================================
-
--spec inspect_requested_privileges(tokens:invite_token_type(), entity_logic:data()) ->
-    privileges_profile().
-inspect_requested_privileges(InviteTokenType, Data) ->
-    case {are_invite_privileges_applicable(InviteTokenType), Data} of
-        {false, _} -> default_privileges;
-        {true, #{?PRIVILEGES_KEY := _}} -> custom_privileges;
-        {true, _} -> default_privileges
-    end.
-
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -122,6 +113,28 @@ update_custom_metadata(Metadata, CustomMetadata) ->
     }.
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Inspects the Data provided during token creation and returns the profile of
+%% the privileges requested to be included in an invite token.
+%% @end
+%%--------------------------------------------------------------------
+-spec inspect_requested_privileges(tokens:invite_token_type(), entity_logic:data()) ->
+    privileges_profile().
+inspect_requested_privileges(InviteTokenType, Data) ->
+    case {are_invite_privileges_applicable(InviteTokenType), Data} of
+        {false, _} -> default_privileges;
+        {true, #{?PRIVILEGES_KEY := _}} -> custom_privileges;
+        {true, _} -> default_privileges
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Inspects the privileges carried by an invite token (based on Metadata) and
+%% returns the resolved privileges along with their profile.
+%% @end
+%%--------------------------------------------------------------------
 -spec inspect_carried_privileges(tokens:invite_token_type(), metadata()) ->
     {privileges_profile(), invite_privileges()}.
 inspect_carried_privileges(InviteTokenType, Metadata) ->
