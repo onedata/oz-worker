@@ -34,7 +34,10 @@
 -type doc() :: datastore_doc:doc(record()).
 -export_type([id/0, record/0, map_repr/0]).
 
--define(CTX, #{model => ?MODULE}).
+-define(CTX, #{
+    model => ?MODULE,
+    memory_copies => all
+}).
 
 -define(ALLOWED_IDS, [
     <<"cookie_consent_notification">>,

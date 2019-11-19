@@ -96,6 +96,8 @@ translate_resource(_, GRI = #gri{type = od_space}, Data) ->
     translate_space(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_provider}, Data) ->
     translate_provider(GRI, Data);
+translate_resource(_, GRI = #gri{type = od_token}, Data) ->
+    translate_token(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_harvester}, Data) ->
     translate_harvester(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_cluster}, Data) ->
@@ -125,7 +127,7 @@ translate_resource(ProtocolVersion, GRI, Data) ->
 %%--------------------------------------------------------------------
 -spec translate_user(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
-translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, User) ->
+translate_user(GRI = #gri{type = od_user, id = UserId, aspect = instance, scope = private}, User) ->
     #od_user{
         basic_auth_enabled = BasicAuthEnabled,
         password_hash = PasswordHash,
@@ -142,7 +144,7 @@ translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, U
         <<"username">> => gs_protocol:undefined_to_null(Username),
         <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
         <<"defaultProviderId">> => gs_protocol:undefined_to_null(DefaultProvider),
-        <<"clientTokenList">> => gri:serialize(GRI#gri{aspect = client_tokens, scope = private}),
+        <<"tokenList">> => gri:serialize(#gri{type = od_token, id = undefined, aspect = {user_named_tokens, UserId}}),
         <<"linkedAccountList">> => gri:serialize(GRI#gri{aspect = linked_accounts, scope = private}),
         <<"groupList">> => gri:serialize(GRI#gri{aspect = eff_groups, scope = private}),
         <<"spaceList">> => gri:serialize(GRI#gri{aspect = eff_spaces, scope = private}),
@@ -174,20 +176,6 @@ translate_user(#gri{aspect = instance, scope = shared}, User) ->
         <<"scope">> => <<"shared">>,
         <<"fullName">> => FullName,
         <<"username">> => gs_protocol:undefined_to_null(Username)
-    };
-
-translate_user(GRI = #gri{aspect = client_tokens}, ClientTokens) ->
-    #{
-        <<"list">> => lists:map(
-            fun(ClientToken) ->
-                gri:serialize(GRI#gri{aspect = {client_token, ClientToken}, scope = private})
-            end, ClientTokens)
-    };
-
-translate_user(#gri{aspect = {client_token, ClientToken}}, ClientToken) ->
-    #{
-        <<"id">> => ClientToken,
-        <<"token">> => ClientToken
     };
 
 translate_user(GRI = #gri{aspect = linked_accounts}, LinkedAccounts) ->
@@ -599,6 +587,44 @@ translate_provider(#gri{aspect = eff_groups}, Groups) ->
 
 translate_provider(#gri{aspect = spaces}, Spaces) ->
     #{<<"list">> => Spaces}.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Translates GET result for named token related aspects.
+%% @end
+%%--------------------------------------------------------------------
+-spec translate_token(gri:gri(), Data :: term()) ->
+    gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_token(#gri{id = undefined, aspect = {user_named_tokens, _}}, Tokens) ->
+    #{
+        <<"list">> => lists:map(
+            fun(TokenId) ->
+                gri:serialize(#gri{type = od_token, id = TokenId, aspect = instance})
+            end, Tokens)
+    };
+translate_token(#gri{aspect = instance}, TokenData) ->
+    #{
+        <<"id">> := TokenId,
+        <<"name">> := Name,
+        <<"subject">> := Subject,
+        <<"type">> := Type,
+        <<"caveats">> := Caveats,
+        <<"metadata">> := Metadata,
+        <<"revoked">> := Revoked,
+        <<"token">> := Token
+    } = TokenData,
+    #{
+        <<"id">> => TokenId,
+        <<"name">> => Name,
+        <<"subject">> => aai:subject_to_json(Subject),
+        <<"type">> => tokens:type_to_json(Type),
+        <<"caveats">> => [caveats:to_json(C) || C <- Caveats],
+        <<"metadata">> => Metadata,
+        <<"revoked">> => Revoked,
+        <<"token">> => element(2, {ok, _} = tokens:serialize(Token))
+    }.
 
 
 %%--------------------------------------------------------------------

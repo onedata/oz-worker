@@ -33,7 +33,6 @@
 -export([
     create_test/1,
     create_with_predefined_id_test/1,
-    preauthorize_test/1,
     list_test/1,
     get_test/1,
     get_self_test/1,
@@ -61,7 +60,6 @@ all() ->
     ?ALL([
         create_test,
         create_with_predefined_id_test,
-        preauthorize_test,
         list_test,
         get_test,
         get_self_test,
@@ -228,105 +226,23 @@ create_with_predefined_id_test(Config) ->
     ).
 
 
-preauthorize_test(Config) ->
-    {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    {ok, SubjectUser} = oz_test_utils:create_user(Config),
-    {ok, AnotherUser} = oz_test_utils:create_user(Config),
-
-    {ok, Space} = oz_test_utils:create_space(Config, ?USER(SubjectUser), ?UNIQUE_STRING),
-    {ok, Space} = oz_test_utils:support_space(Config, Provider, Space),
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-
-    TokenCaveats = [
-        #cv_time{valid_until = 3600 + oz_test_utils:cluster_time_seconds(Config)},
-        #cv_audience{whitelist = [?AUD(?OP_WORKER, Provider)]}
-    ],
-
-    {ok, OldAccessToken} = oz_test_utils:create_client_token(Config, SubjectUser),
-    {ok, NewAccessTokenDeserialized} = oz_test_utils:call_oz(
-        Config, token_logic, create_user_named_token, [?USER(SubjectUser), SubjectUser, ?UNIQUE_STRING, ?ACCESS_TOKEN, TokenCaveats, #{}]
-    ),
-    {ok, NewAccessToken} = tokens:serialize(NewAccessTokenDeserialized),
-    {ok, TemporaryTokenDeserialized} = oz_test_utils:call_oz(
-        Config, token_logic, create_user_temporary_token, [?USER(SubjectUser), SubjectUser, ?ACCESS_TOKEN, TokenCaveats]
-    ),
-    {ok, TemporaryToken} = tokens:serialize(TemporaryTokenDeserialized),
-
-    ErrAudCavUnverified = ?ERROR_REASON(
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_audience{whitelist = [?AUD(?OP_WORKER, Provider)]})
-    ),
-    CheckSuccess = fun(ExpCaveats) ->
-        ?OK_TERM(fun({Subject, Caveats}) ->
-            Subject =:= ?SUB(user, SubjectUser) andalso Caveats =:= ExpCaveats
-        end)
-    end,
-
-    Testcases = [
-        {{user, SubjectUser}, OldAccessToken, CheckSuccess([])},
-        {{user, SubjectUser}, NewAccessToken, ErrAudCavUnverified},
-        {{user, SubjectUser}, TemporaryToken, ErrAudCavUnverified},
-        {{user, AnotherUser}, OldAccessToken, CheckSuccess([])},
-        {{user, AnotherUser}, NewAccessToken, ErrAudCavUnverified},
-        {{user, AnotherUser}, TemporaryToken, ErrAudCavUnverified},
-        {{provider, Provider, ProviderToken}, OldAccessToken, CheckSuccess([])},
-        {{provider, Provider, ProviderToken}, NewAccessToken, CheckSuccess(TokenCaveats)},
-        {{provider, Provider, ProviderToken}, TemporaryToken, CheckSuccess(TokenCaveats)}
-    ],
-
-    lists:foreach(fun({Client, Token, ExpResult}) ->
-        ApiTestSpec = #api_test_spec{
-            client_spec = #client_spec{
-                correct = [Client]
-            },
-            %% @TODO VFS-5727 - implement REST API for new tokens
-            logic_spec = #logic_spec{
-                module = user_logic,
-                function = preauthorize,
-                args = [auth, data],
-                expected_result = ExpResult
-            },
-            data_spec = #data_spec{
-                required = [<<"token">>],
-                optional = [<<"peerIp">>],
-                correct_values = #{
-                    <<"peerIp">> => [<<"187.10.4.217">>],
-                    <<"token">> => [Token]
-                },
-                bad_values = [
-                    {<<"peerIp">>, <<"">>,
-                        ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
-                    {<<"peerIp">>, 123,
-                        ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
-                    {<<"peerIp">>, <<"187.257.4.217">>,
-                        ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
-                    {<<"token">>, <<"Sdfsdf">>,
-                        ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-                    {<<"token">>, 123,
-                        ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)}
-                ]
-            }
-        },
-        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
-    end, Testcases).
-
-
 list_test(Config) ->
     % Make sure that users created in other tests are deleted.
     oz_test_utils:delete_all_entities(Config),
 
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
-    {ok, U3} = oz_test_utils:create_user(Config),
+    {ok, ProviderAdmin} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
     {ok, Admin} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, Admin, [
         ?OZ_USERS_LIST
     ], []),
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_NAME1
+        Config, ProviderAdmin, ?PROVIDER_NAME1
     ),
 
-    ExpUsers = [Admin, NonAdmin, U1, U2, U3],
+    ExpUsers = [Admin, NonAdmin, U1, U2, ProviderAdmin],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
@@ -1060,7 +976,7 @@ create_client_token_test(Config) ->
 
     VerifyFun = fun(ClientToken) ->
         {ok, Token} = tokens:deserialize(ClientToken),
-        ?assertEqual({true, ?USER(User)}, oz_test_utils:call_oz(
+        ?assertMatch({true, ?USER(User)}, oz_test_utils:call_oz(
             Config, token_auth, check_token_auth, [Token, undefined, undefined]
         )),
         true

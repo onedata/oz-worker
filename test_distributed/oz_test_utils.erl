@@ -71,7 +71,8 @@
     user_leave_harvester/3,
     user_leave_cluster/3,
 
-    create_provider_registration_token/3
+    create_provider_registration_token/3,
+    create_temporary_provider_registration_token/3
 ]).
 -export([
     list_groups/1,
@@ -198,7 +199,7 @@
     handle_get_group_privileges/3
 ]).
 -export([
-    create_harvester/3,
+    create_harvester/2, create_harvester/3,
     get_harvester/2,
     list_harvesters/1,
     update_harvester/3,
@@ -254,8 +255,7 @@
     cluster_get_group_privileges/3
 ]).
 -export([
-    assert_token_exists/2,
-    assert_token_not_exists/2
+    assert_invite_token_usage_limit_reached/3
 ]).
 -export([
     delete_all_entities/1,
@@ -686,7 +686,7 @@ user_leave_cluster(Config, UserId, ClusterId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a provider registration token.
+%% Creates a NAMED provider registration token.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_provider_registration_token(Config :: term(),
@@ -694,6 +694,22 @@ user_leave_cluster(Config, UserId, ClusterId) ->
 create_provider_registration_token(Config, Client, UserId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, user_logic, create_provider_registration_token, [Client, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a TEMPORARY provider registration token.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_temporary_provider_registration_token(Config :: term(),
+    Client :: aai:auth(), od_user:id()) -> {ok, tokens:token()}.
+create_temporary_provider_registration_token(Config, Client, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, token_logic, create_user_temporary_token, [Client, UserId, #{
+            <<"type">> => ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, UserId),
+            <<"caveats">> => [#cv_time{valid_until = cluster_time_seconds(Config) + 3600}]
+        }]
     )).
 
 
@@ -1478,6 +1494,10 @@ create_provider(Config, NameOrData) ->
 -spec create_provider(Config :: term(), CreatorUserId :: od_user:id(),
     NameOrData :: od_provider:name() | #{}) ->
     {ok, {od_provider:id(), ProviderRootToken :: tokens:serialized()}}.
+create_provider(Config, undefined, Name) ->
+    % Create an admin for the provider if none was specified
+    {ok, User} = create_user(Config),
+    create_provider(Config, User, Name);
 create_provider(Config, CreatorUserId, Name) when is_binary(Name) ->
     create_provider(Config, CreatorUserId, #{
         <<"name">> => Name,
@@ -1488,17 +1508,13 @@ create_provider(Config, CreatorUserId, Name) when is_binary(Name) ->
         <<"longitude">> => 0.0
     });
 create_provider(Config, CreatorUserId, Data) ->
-    {Auth, DataWithToken} = case CreatorUserId of
-        undefined ->
-            {?NOBODY, Data};
-        _ ->
-            {ok, RegistrationToken} = create_provider_registration_token(
-                Config, ?USER(CreatorUserId), CreatorUserId
-            ),
-            {?USER(CreatorUserId), Data#{<<"token">> => RegistrationToken}}
-    end,
+    {ok, RegistrationToken} = create_temporary_provider_registration_token(
+        Config, ?USER(CreatorUserId), CreatorUserId
+    ),
     {ok, {ProviderId, RootToken}} = ?assertMatch({ok, _}, call_oz(
-        Config, provider_logic, create, [Auth, DataWithToken]
+        Config, provider_logic, create, [
+            ?USER(CreatorUserId), Data#{<<"token">> => RegistrationToken}
+        ]
     )),
     {ok, SerializedRootToken} = tokens:serialize(RootToken),
     {ok, {ProviderId, SerializedRootToken}}.
@@ -2094,6 +2110,17 @@ handle_get_group_privileges(Config, HandleId, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, handle_logic, get_group_privileges, [?ROOT, HandleId, GroupId]
     )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a harvester in onezone with default data.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_harvester(Config :: term(), Client :: aai:auth()) ->
+    {ok, od_harvester:id()}.
+create_harvester(Config, Client) ->
+    create_harvester(Config, Client, ?HARVESTER_CREATE_DATA).
 
 
 %%--------------------------------------------------------------------
@@ -2805,24 +2832,25 @@ group_invite_user_token(Config, Client, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Asserts token not exists.
+%% Asserts that an invite token's usage limit was reached or not
+%% (depending on the Expected flag).
 %% @end
 %%--------------------------------------------------------------------
--spec assert_token_not_exists(Config :: term(), TokenNonce :: od_token:id()) -> ok.
-assert_token_not_exists(Config, TokenNonce) ->
-    ?assertMatch({error, not_found}, call_oz(Config, od_token, get, [TokenNonce])),
-    ok.
+-spec assert_invite_token_usage_limit_reached(Config :: term(), Expected :: boolean(),
+    TokenId :: od_token:id()) -> ok.
+assert_invite_token_usage_limit_reached(Config, Expected, TokenId) ->
+    {ok, #document{value = #od_token{
+        metadata = Metadata
+    }}} = ?assertMatch({ok, _}, call_oz(Config, od_token, get, [TokenId])),
+    UsageCount = maps:get(<<"usageCount">>, Metadata, 0),
+    IsReached = case maps:get(<<"usageLimit">>, Metadata, <<"infinity">>) of
+        <<"infinity">> ->
+            false;
+        UsageLimit when is_integer(UsageLimit) ->
+            UsageCount >= UsageLimit
+    end,
+    ?assertEqual(Expected, IsReached).
 
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Asserts token exists.
-%% @end
-%%--------------------------------------------------------------------
--spec assert_token_exists(Config :: term(), TokenNonce :: tokens:nonce()) -> ok.
-assert_token_exists(Config, TokenNonce) ->
-    ?assertMatch({ok, _}, call_oz(Config, od_token, get, [TokenNonce])),
-    ok.
 
 %%--------------------------------------------------------------------
 %% @doc

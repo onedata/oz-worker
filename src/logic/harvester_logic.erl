@@ -23,6 +23,7 @@
     get/2,
     get_protected_data/2,
     get_public_data/2,
+    get_name/2,
     list/1,
     list_privileges/0,
     get_all_plugins/0,
@@ -169,6 +170,15 @@ get_public_data(Auth, HarvesterId) ->
         auth = Auth,
         gri = #gri{type = od_harvester, id = HarvesterId, aspect = instance, scope = public}
     }).
+
+
+-spec get_name(aai:auth(), od_harvester:id()) ->
+    {ok, od_harvester:name()} | {error, term()}.
+get_name(Auth, HarvesterId) ->
+    case get(Auth, HarvesterId) of
+        {ok, #od_harvester{name = Name}} -> {ok, Name};
+        {error, _} = Error -> Error
+    end.
 
 %%--------------------------------------------------------------------
 %% @doc

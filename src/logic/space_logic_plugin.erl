@@ -24,7 +24,6 @@
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
--export([is_authorized_to_invite/3]).
 
 %%%===================================================================
 %%% API
@@ -36,8 +35,6 @@
 %% Should return:
 %%  * {true, entity_logic:versioned_entity()}
 %%      if the fetch was successful
-%%  * {true, gri:gri(), entity_logic:versioned_entity()}
-%%      if the fetch was successful and new GRI was resolved
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
@@ -170,15 +167,12 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
 
 create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
     Token = maps:get(<<"token">>, Req#el_req.data),
-    % In the future, privileges can be included in token
-    Privileges = privileges:space_member(),
-
     ExpType = case Req#el_req.auth_hint of
-        ?AS_USER(_) -> ?SPACE_INVITE_USER_TOKEN;
-        ?AS_GROUP(_) -> ?SPACE_INVITE_GROUP_TOKEN
+        ?AS_USER(_) -> ?USER_JOIN_SPACE;
+        ?AS_GROUP(_) -> ?GROUP_JOIN_SPACE
     end,
 
-    token_logic_plugin:consume_invite_token(Auth, Token, ExpType, fun is_authorized_to_invite/3, fun(SpaceId) ->
+    invite_tokens:consume(Auth, Token, ExpType, fun(SpaceId, Privileges) ->
         case Req#el_req.auth_hint of
             ?AS_USER(UserId) ->
                 entity_graph:add_relation(
@@ -204,38 +198,17 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
         {ok, resource, {NewGRI, {SpaceData, Rev}}}
     end);
 
-create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
-    %% @TODO VFS-5727 move entirely to token_logic
-    Result = token_logic:create_user_named_token(
-        Auth, UserId, ?INVITE_TOKEN_NAME(?SPACE_INVITE_USER_TOKEN),
-        ?INVITE_TOKEN(?SPACE_INVITE_USER_TOKEN, SpaceId), [], #{}
-    ),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    token_logic:create_legacy_invite_token(Auth, ?USER_JOIN_SPACE, SpaceId);
 
-create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = SpaceId, aspect = invite_group_token}}) ->
-    %% @TODO VFS-5727 move entirely to token_logic
-    Result = token_logic:create_user_named_token(
-        Auth, UserId, ?INVITE_TOKEN_NAME(?SPACE_INVITE_GROUP_TOKEN),
-        ?INVITE_TOKEN(?SPACE_INVITE_GROUP_TOKEN, SpaceId), [], #{}
-    ),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_group_token}}) ->
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    token_logic:create_legacy_invite_token(Auth, ?GROUP_JOIN_SPACE, SpaceId);
 
-create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = SpaceId, aspect = invite_provider_token}}) ->
-    %% @TODO VFS-5727 move entirely to token_logic
-    Result = token_logic:create_user_named_token(
-        Auth, UserId, ?INVITE_TOKEN_NAME(?SPACE_SUPPORT_TOKEN),
-        ?INVITE_TOKEN(?SPACE_SUPPORT_TOKEN, SpaceId), [], #{}
-    ),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_provider_token}}) ->
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    token_logic:create_legacy_invite_token(Auth, ?SUPPORT_SPACE, SpaceId);
 
 create(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:space_member()),
@@ -799,8 +772,8 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
     #{
         required => #{
             <<"token">> => {invite_token, case Req#el_req.auth_hint of
-                ?AS_USER(_) -> ?SPACE_INVITE_USER_TOKEN;
-                ?AS_GROUP(_) -> ?SPACE_INVITE_GROUP_TOKEN
+                ?AS_USER(_) -> ?USER_JOIN_SPACE;
+                ?AS_GROUP(_) -> ?GROUP_JOIN_SPACE
             end}
         }
     };
@@ -874,19 +847,6 @@ validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}})
 
 validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}}) ->
     validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}}).
-
-
--spec is_authorized_to_invite(aai:auth(), tokens:invite_token_type(), od_group:id()) ->
-    boolean().
-is_authorized_to_invite(?USER(UserId), ?SPACE_INVITE_USER_TOKEN, SpaceId) ->
-    auth_by_privilege(UserId, SpaceId, ?SPACE_ADD_USER) orelse
-        user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_ADD_RELATIONSHIPS);
-is_authorized_to_invite(?USER(UserId), ?SPACE_INVITE_GROUP_TOKEN, SpaceId) ->
-    auth_by_privilege(UserId, SpaceId, ?SPACE_ADD_GROUP) orelse
-        user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_ADD_RELATIONSHIPS);
-is_authorized_to_invite(_, _, _) ->
-    false.
-
 
 %%%===================================================================
 %%% Internal functions

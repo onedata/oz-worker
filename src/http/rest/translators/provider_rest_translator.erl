@@ -54,7 +54,7 @@ create_response(#gri{aspect = provider_registration_token}, _, value, Token) ->
     rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
 create_response(#gri{aspect = support}, _, resource, {#gri{id = SpaceId}, _}) ->
-    rest_translator:created_reply([<<"provider">>, <<"spaces">>, SpaceId]);
+    rest_translator:created_reply_with_location([<<"provider">>, <<"spaces">>, SpaceId]);
 
 create_response(#gri{aspect = check_my_ports}, _, value, Value) ->
     rest_translator:ok_body_reply(Value);

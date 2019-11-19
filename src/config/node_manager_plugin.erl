@@ -148,7 +148,6 @@ after_init([]) ->
             false ->
                 ok;
             true ->
-                shared_token_secret:init(),
                 cluster_logic:set_up_oz_worker_service(),
                 entity_graph:init_state(),
                 broadcast_dns_config(),

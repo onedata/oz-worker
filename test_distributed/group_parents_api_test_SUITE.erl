@@ -239,16 +239,16 @@ join_parent_test(Config) ->
         {ok, Serialized2} = tokens:serialize(Token2),
         #{
             groupId => Group,
-            tokenNonce => Token2#token.nonce,
+            tokenNonce => Token2#token.id,
             token => Serialized2
         }
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId, tokenNonce := TokenNonce} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId, tokenNonce := TokenId} = _Env, _) ->
         {ok, ChildGroups} = oz_test_utils:group_get_children(Config, GroupId),
         ?assertEqual(lists:member(Child, ChildGroups), ShouldSucceed),
         case ShouldSucceed of
             true ->
-                oz_test_utils:assert_token_not_exists(Config, TokenNonce);
+                oz_test_utils:assert_invite_token_usage_limit_reached(Config, true, TokenId);
             false -> ok
         end
     end,
@@ -324,10 +324,10 @@ join_parent_test(Config) ->
                 {user, U2}
             ]
         },
-        rest_spec = #rest_spec{
+        rest_spec = RestSpec = #rest_spec{
             method = post,
             path = [<<"/groups/">>, Child, <<"/parents/join">>],
-            expected_code = ?HTTP_400_BAD_REQUEST
+            expected_code = ?HTTP_409_CONFLICT
         },
         logic_spec = LogicSpec = #logic_spec{
             module = group_logic,
@@ -343,7 +343,7 @@ join_parent_test(Config) ->
     },
     VerifyEndFun1 = fun(Token) ->
         fun(_ShouldSucceed, _Env, _) ->
-            oz_test_utils:assert_token_exists(Config, Token#token.nonce)
+            oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token#token.id)
         end
     end,
     ?assert(api_test_utils:run_tests(
@@ -355,6 +355,9 @@ join_parent_test(Config) ->
     ),
     {ok, Serialized3} = tokens:serialize(Token3),
     ApiTestSpec2 = ApiTestSpec1#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
+            expected_code = ?HTTP_400_BAD_REQUEST
+        },
         logic_spec = LogicSpec#logic_spec{
             expected_result = ?ERROR_REASON(?ERROR_CANNOT_ADD_RELATION_TO_SELF)
         },

@@ -324,7 +324,7 @@ create_group_invite_token_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                {admin, [?OZ_HARVESTERS_ADD_RELATIONSHIPS]},
+                {admin, [?OZ_TOKENS_MANAGE, ?OZ_HARVESTERS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],

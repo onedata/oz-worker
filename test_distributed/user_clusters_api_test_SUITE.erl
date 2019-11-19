@@ -176,7 +176,7 @@ create_provider_registration_token_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 {user, U1},
-                {admin, [?OZ_PROVIDERS_INVITE]}
+                {admin, [?OZ_TOKENS_MANAGE, ?OZ_PROVIDERS_INVITE]}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -216,15 +216,15 @@ join_cluster_test(Config) ->
         #{
             clusterId => ClusterId,
             token => Serialized,
-            tokenNonce => Token#token.nonce
+            tokenId => Token#token.id
         }
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{clusterId := ClusterId, tokenNonce := TokenNonce} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{clusterId := ClusterId, tokenId := TokenId} = _Env, _) ->
         {ok, Clusters} = oz_test_utils:user_get_clusters(Config, U1),
         ?assertEqual(lists:member(ClusterId, Clusters), ShouldSucceed),
         case ShouldSucceed of
             true ->
-                oz_test_utils:assert_token_not_exists(Config, TokenNonce);
+                oz_test_utils:assert_invite_token_usage_limit_reached(Config, true, TokenId);
             false -> ok
         end
     end,
@@ -303,7 +303,7 @@ join_cluster_test(Config) ->
         rest_spec = #rest_spec{
             method = post,
             path = <<"/user/clusters/join">>,
-            expected_code = ?HTTP_400_BAD_REQUEST
+            expected_code = ?HTTP_409_CONFLICT
         },
         logic_spec = #logic_spec{
             module = user_logic,
@@ -318,7 +318,7 @@ join_cluster_test(Config) ->
         }
     },
     VerifyEndFun1 = fun(_ShouldSucceed, _Env, _) ->
-        oz_test_utils:assert_token_exists(Config, Token2#token.nonce)
+        oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token2#token.id)
     end,
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1

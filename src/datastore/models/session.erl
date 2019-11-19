@@ -38,7 +38,8 @@
 -define(CTX, #{
     model => ?MODULE,
     disc_driver => undefined,
-    fold_enabled => true
+    fold_enabled => true,
+    memory_copies => all
 }).
 
 

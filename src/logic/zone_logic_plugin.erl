@@ -35,8 +35,6 @@
 %% Should return:
 %%  * {true, entity_logic:versioned_entity()}
 %%      if the fetch was successful
-%%  * {true, gri:gri(), entity_logic:versioned_entity()}
-%%      if the fetch was successful and new GRI was resolved
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}

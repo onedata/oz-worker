@@ -210,6 +210,7 @@ rest_routes() ->
         space_routes:routes(),
         share_routes:routes(),
         provider_routes:routes(),
+        token_routes:routes(),
         handle_service_routes:routes(),
         handle_routes:routes(),
         harvester_routes:routes(),

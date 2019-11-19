@@ -134,7 +134,7 @@ create_group_invite_token_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 {user, U2},
-                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]}
+                {admin, [?OZ_TOKENS_MANAGE, ?OZ_GROUPS_ADD_RELATIONSHIPS]}
             ],
             unauthorized = [nobody],
             forbidden = [
