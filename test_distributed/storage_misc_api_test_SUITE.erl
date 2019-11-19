@@ -233,6 +233,7 @@ get_test(Config) ->
             gri = #gri{type = od_storage, id = St1, aspect = instance, scope = shared},
             auth_hint = ?THROUGH_SPACE(S),
             expected_result = ?OK_MAP_CONTAINS(#{
+                <<"provider">> => P1,
                 <<"qos_parameters">> => ExpectedQosParameters,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
