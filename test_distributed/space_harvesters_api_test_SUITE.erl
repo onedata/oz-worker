@@ -347,7 +347,7 @@ harvest_metadata_test(Config) ->
     {ok, {P1, M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, {P2, M2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
-    {ok, S1} = oz_test_utils:support_space(Config, P1, S1, oz_test_utils:minimum_support_size(Config)),
+    {ok, S1} = oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     {ok, Index1} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
     {ok, Index2} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA(<<"fail">>)),
@@ -418,6 +418,8 @@ harvester_index_empty_stats_test(Config) ->
 
     {ok, {P1, _M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, {P2, _M2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+    {ok, St2} = oz_test_utils:create_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
     {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
 
     {ok, Index1} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
@@ -442,7 +444,7 @@ harvester_index_empty_stats_test(Config) ->
     ?assertEqual({ok, #{S1 => #{}}}, oz_test_utils:harvester_get_index_stats(Config, H2, Index3)),
 
     % adding space support results in provider appearing in indices stats in all harvesters of this space
-    {ok, S1} = oz_test_utils:support_space(Config, P1, S1, oz_test_utils:minimum_support_size(Config)),
+    {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS}}}, 
         oz_test_utils:harvester_get_index_stats(Config, H1, Index1)),
@@ -457,7 +459,7 @@ harvester_index_empty_stats_test(Config) ->
         oz_test_utils:harvester_get_index_stats(Config, H2, Index4)),
 
     % adding another space support results in provider appearing in indices stats in all harvesters of this space
-    {ok, S1} = oz_test_utils:support_space( Config, P2, S1, oz_test_utils:minimum_support_size(Config)),
+    {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P2), St2, S1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS, P2 => ?EMPTY_INDEX_STATS}}},
         oz_test_utils:harvester_get_index_stats(Config, H1, Index1)),
@@ -469,7 +471,7 @@ harvester_index_empty_stats_test(Config) ->
         oz_test_utils:harvester_get_index_stats(Config, H2, Index4)),
 
     % removing space support results in stats being marked archival for this provider in all harvesters of this space
-    ok = oz_test_utils:unsupport_space(Config, P1, S1),
+    ok = oz_test_utils:unsupport_space(Config, St1, S1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS}}},
         oz_test_utils:harvester_get_index_stats(Config, H1, Index1)),
@@ -505,7 +507,7 @@ harvester_index_empty_stats_test(Config) ->
         oz_test_utils:harvester_get_index_stats(Config, H2, Index4)),
 
     % restoring space support results in removal of archival flag in effective harvesters of this provider
-    {ok, S1} = oz_test_utils:support_space(Config, P1, S1, oz_test_utils:minimum_support_size(Config)),
+    {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS(true)}}},
         oz_test_utils:harvester_get_index_stats(Config, H1, Index1)),
@@ -535,10 +537,12 @@ harvester_remove_add_space_stats_test(Config) ->
     {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
     {ok, {P1, _M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, {P2, _M2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    {ok, S1} = oz_test_utils:support_space(Config, P1, S1, oz_test_utils:minimum_support_size(Config)),
-    {ok, S1} = oz_test_utils:support_space(Config, P2, S1, oz_test_utils:minimum_support_size(Config)),
-    oz_test_utils:harvester_add_space(Config, H1, S1),
+    {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+    {ok, St2} = oz_test_utils:create_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
+    {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1),
+    {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P2), St2, S1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+    oz_test_utils:harvester_add_space(Config, H1, S1),
 
     ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS, P2 => ?EMPTY_INDEX_STATS}}},
         oz_test_utils:harvester_get_index_stats(Config, H1, Index1)),
@@ -550,7 +554,7 @@ harvester_remove_add_space_stats_test(Config) ->
         oz_test_utils:harvester_get_index_stats(Config, H1, Index1)),
 
     % removing support from space does not change stats in harvester this space no longer belongs to
-    ok = oz_test_utils:unsupport_space(Config, P1, S1),
+    ok = oz_test_utils:unsupport_space(Config, St1, S1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     ?assertEqual({ok, #{S1 => #{P1 => ?EMPTY_INDEX_STATS(true), P2 => ?EMPTY_INDEX_STATS(true)}}},
         oz_test_utils:harvester_get_index_stats(Config, H1, Index1)),
@@ -569,8 +573,9 @@ harvester_index_nonempty_stats_test(Config) ->
         ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)),
 
     {ok, {P1, _M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, S1} = oz_test_utils:support_space(Config, P1, S1, oz_test_utils:minimum_support_size(Config)),
+    {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1),
 
     {ok, Index1} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
     oz_test_utils:harvester_add_space(Config, H1, S1),
@@ -597,12 +602,12 @@ harvester_index_nonempty_stats_test(Config) ->
     ?assertEqual(false, maps:get(<<"archival">>, Stats3)),
     assert_equal_stats_fields([<<"currentSeq">>, <<"maxSeq">>, <<"error">>, <<"lastUpdate">>], Stats1, Stats3),
     
-    oz_test_utils:unsupport_space(Config, P1, S1),
+    oz_test_utils:unsupport_space(Config, St1, S1),
     {ok, #{S1 := #{P1 := Stats4}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index1),
     ?assertEqual(true, maps:get(<<"archival">>, Stats4)),
     assert_equal_stats_fields([<<"currentSeq">>, <<"maxSeq">>, <<"error">>, <<"lastUpdate">>], Stats1, Stats4),
 
-    {ok, S1} = oz_test_utils:support_space(Config, P1, S1, oz_test_utils:minimum_support_size(Config)),
+    {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1),
     {ok, #{S1 := #{P1 := Stats5}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index1),
     ?assertEqual(false, maps:get(<<"archival">>, Stats5)),
     assert_equal_stats_fields([<<"currentSeq">>, <<"maxSeq">>, <<"error">>, <<"lastUpdate">>], Stats1, Stats5).

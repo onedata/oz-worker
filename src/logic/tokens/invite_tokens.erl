@@ -190,7 +190,7 @@ has_privileges_to_invite(?SUB(user, UserId), ?USER_JOIN_SPACE, SpaceId) ->
 has_privileges_to_invite(?SUB(user, UserId), ?GROUP_JOIN_SPACE, SpaceId) ->
     space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_ADD_GROUP);
 has_privileges_to_invite(?SUB(user, UserId), ?SUPPORT_SPACE, SpaceId) ->
-    space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_ADD_PROVIDER);
+    space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_ADD_SUPPORT);
 
 has_privileges_to_invite(?SUB(user, UserId), ?REGISTER_ONEPROVIDER, UserId) ->
     % Issuing provider registration token for self.

@@ -840,7 +840,7 @@ verify_access_or_identity_token(Config) ->
     {ok, {SessionId, _}} = oz_test_utils:log_in(Config, ProviderAdmin),
     {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(Config, ProviderAdmin, ?UNIQUE_STRING),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(User)),
-    oz_test_utils:support_space(Config, Provider, Space),
+    oz_test_utils:support_space_by_provider(Config, Provider, Space),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllClients = [
@@ -1030,7 +1030,7 @@ verify_invite_token(Config) ->
     {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(Config, ProviderAdmin, ?UNIQUE_STRING),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(User)),
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(User)),
-    oz_test_utils:support_space(Config, Provider, Space),
+    oz_test_utils:support_space_by_provider(Config, Provider, Space),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     ProviderClient = {provider, Provider, ProviderToken},
@@ -1531,7 +1531,7 @@ create_gui_access_token(Config) ->
     {ok, {SessionId, _}} = oz_test_utils:log_in(Config, User),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(User)),
     {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(Config, User, ?UNIQUE_STRING),
-    oz_test_utils:support_space(Config, Provider, Space),
+    oz_test_utils:support_space_by_provider(Config, Provider, Space),
     oz_test_utils:cluster_add_user(Config, ?ONEZONE_CLUSTER_ID, User),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 

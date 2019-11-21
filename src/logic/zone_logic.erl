@@ -41,7 +41,7 @@ get_configuration() ->
 
 
 -spec get_gui_message_as_map(gui_message:id()) ->
-    {ok, gui_message:map_repr()} | {error, term()}.
+    {ok, gui_message:map_repr()} | errors:error().
 get_gui_message_as_map(MessageId) ->
     case entity_logic:handle(#el_req{
         operation = get,
@@ -61,7 +61,7 @@ gui_message_exists(MessageId) ->
 
 
 -spec update_gui_message(aai:auth(), gui_message:id(), Data :: map()) ->
-    ok | {error, term()}.
+    ok | errors:error().
 update_gui_message(Auth, MessageId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,

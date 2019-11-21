@@ -51,7 +51,7 @@ create_response(#gri{aspect = invite_group_token}, _, value, Token) ->
     {ok, Serialized} = tokens:serialize(Token),
     rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
-create_response(#gri{aspect = invite_provider_token}, _, value, Token) ->
+create_response(#gri{aspect = space_support_token}, _, value, Token) ->
     {ok, Serialized} = tokens:serialize(Token),
     rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
@@ -127,7 +127,7 @@ get_response(#gri{aspect = {eff_group_membership, _GroupId}}, Intermediaries) ->
 get_response(#gri{aspect = shares}, Shares) ->
     rest_translator:ok_body_reply(#{<<"shares">> => Shares});
 
-get_response(#gri{aspect = providers}, Providers) ->
+get_response(#gri{aspect = eff_providers}, Providers) ->
     rest_translator:ok_body_reply(#{<<"providers">> => Providers});
 
 get_response(#gri{aspect = harvesters}, Harvesters) ->

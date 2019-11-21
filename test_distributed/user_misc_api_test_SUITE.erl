@@ -299,9 +299,7 @@ get_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, P1, S1, oz_test_utils:minimum_support_size(Config)
-    ),
+    {ok, S1} = oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -1132,9 +1130,7 @@ set_default_provider_test(Config) ->
         {ok, {ProviderId, _}} = oz_test_utils:create_provider(
             Config, ?PROVIDER_NAME2
         ),
-        {ok, S1} = oz_test_utils:support_space(
-            Config, ProviderId, S1, oz_test_utils:minimum_support_size(Config)
-        ),
+        {ok, S1} = oz_test_utils:support_space_by_provider(Config, ProviderId, S1),
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
         #{providerId => ProviderId}
@@ -1237,9 +1233,7 @@ get_default_provider_test(Config) ->
     {ok, {P1, _}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, P1, S1, oz_test_utils:minimum_support_size(Config)
-    ),
+    {ok, S1} = oz_test_utils:support_space_by_provider(Config, P1, S1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     oz_test_utils:user_set_default_provider(Config, U1, P1),
 
@@ -1295,9 +1289,7 @@ unset_default_provider_test(Config) ->
         {ok, {ProviderId, _}} = oz_test_utils:create_provider(
             Config, ?PROVIDER_NAME2
         ),
-        {ok, S1} = oz_test_utils:support_space(
-            Config, ProviderId, S1, oz_test_utils:minimum_support_size(Config)
-        ),
+        {ok, S1} = oz_test_utils:support_space_by_provider(Config, ProviderId, S1),
         oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
         oz_test_utils:user_set_default_provider(Config, U1, ProviderId),
@@ -1616,9 +1608,9 @@ get_spaces_in_eff_provider_test(Config) ->
     {ok, S1_2} = oz_test_utils:create_space(Config, ?USER(U1), ?UNIQUE_STRING),
     {ok, S2} = oz_test_utils:create_space(Config, ?USER(U2), ?UNIQUE_STRING),
 
-    oz_test_utils:support_space(Config, ProviderId, S1_1),
-    oz_test_utils:support_space(Config, ProviderId, S1_2),
-    oz_test_utils:support_space(Config, ProviderId, S2),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, S1_1),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, S1_2),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, S2),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 

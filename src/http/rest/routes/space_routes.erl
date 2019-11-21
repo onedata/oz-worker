@@ -312,16 +312,16 @@ routes() -> [
     {<<"/spaces/:id/providers">>, #rest_req{
         method = 'GET',
         produces = [<<"application/json">>],
-        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = providers}
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = eff_providers}
     }},
     %% Create space support token
     %% This operation requires one of the following privileges:
-    %% - space_invite_provider
+    %% - space_add_support
     %% - oz_spaces_add_relationships
     {<<"/spaces/:id/providers/token">>, #rest_req{
         method = 'POST',
         produces = [<<"application/json">>],
-        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = invite_provider_token}
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = space_support_token}
     }},
     %% Get space provider details
     %% This operation requires one of the following privileges:

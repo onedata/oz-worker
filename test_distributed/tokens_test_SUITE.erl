@@ -110,7 +110,7 @@ gui_tokens_are_bound_to_specific_audience(Config) ->
         create_gui_access_token(Config, UserId, Session2, ?OPW_AUD(ProviderId))
     ),
     {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
-    oz_test_utils:support_space(Config, ProviderId, SpaceId),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, SpaceId),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     {ok, {Token2, _}} = create_gui_access_token(Config, UserId, Session2, ?OPW_AUD(ProviderId)),
@@ -193,7 +193,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
     ),
 
     {ok, Space1} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
-    oz_test_utils:support_space(Config, ProviderId, Space1),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, Space1),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     % Now it should be possible for the user to generate a token
@@ -217,7 +217,7 @@ gui_tokens_can_be_created_via_endpoint(Config) ->
 
     % After becoming an effective member of the provider, he can
     {ok, Space2} = oz_test_utils:create_space(Config, ?USER(User2), <<"space">>),
-    oz_test_utils:support_space(Config, ProviderId, Space2),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, Space2),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     {ok, SerializedToken3} = ?assertMatch({ok, _}, AcquireGuiToken(Cookie2, ?OP_WORKER_GUI, ProviderId)),
@@ -327,8 +327,9 @@ gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
     {ok, {Session, _Cookie}} = oz_test_utils:log_in(Config, UserId),
 
     {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config),
+    {ok, StorageId} = oz_test_utils:create_storage(Config, ?PROVIDER(ProviderId), ?STORAGE_NAME1),
     {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
-    oz_test_utils:support_space(Config, ProviderId, SpaceId),
+    {ok, SpaceId} = oz_test_utils:support_space(Config, ?PROVIDER(ProviderId), StorageId, SpaceId),
     oz_test_utils:cluster_add_user(Config, ProviderId, UserId),
     oz_test_utils:cluster_add_user(Config, ?ONEZONE_CLUSTER_ID, UserId),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
@@ -338,7 +339,7 @@ gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
     {ok, {Token3, _}} = create_gui_access_token(Config, UserId, Session, ?OPW_AUD(ProviderId)),
     {ok, {Token4, _}} = create_gui_access_token(Config, UserId, Session, ?OPP_AUD(ProviderId)),
 
-    oz_test_utils:unsupport_space(Config, ProviderId, SpaceId),
+    oz_test_utils:unsupport_space(Config, StorageId, SpaceId),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     ?assertMatch({true, _}, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
     ?assertMatch({true, _}, verify_token(Config, Token2, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
@@ -454,6 +455,6 @@ verify_token(Config, Token, Audience) ->
 create_provider_supporting_user(Config, UserId) ->
     {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config),
     {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
-    oz_test_utils:support_space(Config, ProviderId, SpaceId),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, SpaceId),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     ProviderId.
