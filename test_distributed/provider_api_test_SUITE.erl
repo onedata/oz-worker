@@ -58,6 +58,9 @@
     list_self_spaces_test/1,
     get_eff_space_test/1,
     get_own_space_test/1,
+    legacy_support_space_test/1,
+    legacy_update_support_size_test/1,
+    legacy_revoke_support_test/1,
 
     check_my_ports_test/1,
     check_my_ip_test/1,
@@ -93,6 +96,9 @@ all() ->
         list_self_spaces_test,
         get_eff_space_test,
         get_own_space_test,
+        legacy_support_space_test,
+        legacy_supdate_support_size_test,
+        legacy_revoke_support_test,
 
         check_my_ports_test,
         check_my_ip_test,
@@ -1585,6 +1591,289 @@ get_own_space_test(Config) ->
         end, Spaces
     ).
 
+
+legacy_support_space_test(Config) ->
+    MinSupportSize = oz_test_utils:minimum_support_size(Config),
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
+        Config, Cluster1Member, ?PROVIDER_NAME1
+    ),
+    {ok, {P2, P2Token}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+    {ok, BadInviteToken} = oz_test_utils:space_invite_user_token(Config, ?USER(U1), S1),
+    {ok, BadInviteTokenSerialized} = tokens:serialize(BadInviteToken),
+
+    % Reused in all specs
+    BadValues = [
+        {<<"token">>, <<"bad-token">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
+        {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
+        {<<"token">>, BadInviteTokenSerialized, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?SPACE_SUPPORT_TOKEN))},
+        {<<"size">>, <<"binary">>, ?ERROR_BAD_VALUE_INTEGER(<<"size">>)},
+        {<<"size">>, 0, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+        {<<"size">>, -1000, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+        {<<"size">>, MinSupportSize - 1, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
+    ],
+
+    VerifyFun = fun(SpaceId) ->
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+        % Should return space id of the newly supported space
+        {ok, #od_space{
+            eff_providers = Providers
+        }} = oz_test_utils:get_space(Config, SpaceId),
+
+        % Test also provider_logic:supports_space fun
+        DoesP1Supports = oz_test_utils:call_oz(
+            Config, provider_logic, supports_space, [P1, SpaceId]
+        ) andalso maps:is_key(P1, Providers),
+        DoesP2Supports = oz_test_utils:call_oz(
+            Config, provider_logic, supports_space, [P2, SpaceId]
+        ) andalso maps:is_key(P2, Providers),
+
+        DoesP1Supports orelse DoesP2Supports
+    end,
+
+    % Check only REST first
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            % Only provider 1 is authorized to perform support operation on
+            % behalf of provider 1.
+            correct = [
+                {provider, P1, P1Token}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
+                {provider, P2, P2Token}
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = provider_logic,
+            function = support_space,
+            args = [auth, P1, data],
+            expected_result = ?OK_TERM(VerifyFun)
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_provider, id = P1, aspect = support},
+            expected_result = ?OK_MAP_CONTAINS(#{
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = SpaceId} = gri:deserialize(EncodedGri),
+                    VerifyFun(SpaceId)
+                end
+            })
+        },
+        data_spec = #data_spec{
+            required = [<<"token">>, <<"size">>],
+            correct_values = #{
+                <<"token">> => [fun() ->
+                    % Create a new space and token for every test case
+                    % (this value is reused multiple times as many cases of
+                    % the api test must be checked).
+                    {ok, Space} = oz_test_utils:create_space(
+                        Config, ?USER(U1), ?SPACE_NAME2
+                    ),
+                    {ok, SpaceSupportToken} = oz_test_utils:create_space_support_token(
+                        Config, ?USER(U1), Space
+                    ),
+                    element(2, {ok, _} = tokens:serialize(SpaceSupportToken))
+                end],
+                <<"size">> => [MinSupportSize]
+            },
+            bad_values = BadValues
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % provider_logic should also allow using non-serialized tokens, check it
+    {ok, BadToken3} = oz_test_utils:space_invite_user_token(
+        Config, ?USER(U1), S1
+    ),
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        % client_spec and logic_spec are inherited from ApiTestSpec
+        gs_spec = undefined,
+        data_spec = #data_spec{
+            required = [<<"token">>, <<"size">>],
+            correct_values = #{
+                <<"token">> => [fun() ->
+                    % Create a new space and token for every test case
+                    % (this value is reused multiple times as many cases of
+                    % the api test must be checked).
+                    {ok, Space} = oz_test_utils:create_space(
+                        Config, ?USER(U1), <<"space">>
+                    ),
+                    {ok, SpaceSupportToken} = oz_test_utils:create_space_support_token(
+                        Config, ?USER(U1), Space
+                    ),
+                    SpaceSupportToken
+                end],
+                <<"size">> => [MinSupportSize]
+            },
+            bad_values = BadValues ++ [
+                {<<"token">>, BadToken3, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_NOT_AN_INVITE_TOKEN(?SPACE_SUPPORT_TOKEN))}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
+
+
+legacy_update_support_size_test(Config) ->
+    MinSupportSize = oz_test_utils:minimum_support_size(Config),
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
+        Config, Cluster1Member, ?PROVIDER_NAME1
+    ),
+    {ok, {P2, P2Token}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+    {ok, U1} = oz_test_utils:create_user(Config),
+
+    EnvSetUpFun = fun() ->
+        {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+        {ok, S1} = oz_test_utils:support_space_by_legacy_storage(Config, P1, S1),
+        {ok, S1} = oz_test_utils:support_space_by_legacy_storage(Config, P2, S1),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+        #{spaceId => S1}
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, Data) ->
+        {ok, #od_space{
+            eff_providers = #{P1 := {SupportSize, _}}
+        }} = oz_test_utils:get_space(Config, SpaceId),
+
+        ExpSupportSize = case ShouldSucceed of
+            true -> maps:get(<<"size">>, Data);
+            false -> MinSupportSize
+        end,
+        ?assertEqual(SupportSize, ExpSupportSize)
+    end,
+
+    % Check only REST first
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [{provider, P1, P1Token}]
+        },
+        rest_spec = #rest_spec{
+            method = patch,
+            path = [<<"/provider/spaces/">>, spaceId],
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
+        data_spec = #data_spec{
+            required = [<<"size">>],
+            correct_values = #{
+                <<"size">> => [MinSupportSize]
+            },
+            bad_values = [
+                {<<"size">>, <<"binary">>, ?ERROR_BAD_VALUE_INTEGER(<<"size">>)},
+                {<<"size">>, 0, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+                {<<"size">>, -1000, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)},
+                {<<"size">>, MinSupportSize - 1, ?ERROR_BAD_VALUE_TOO_LOW(<<"size">>, MinSupportSize)}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
+    )),
+
+    % Check logic endpoints - here we have to specify provider Id, so
+    % different clients will be authorized.
+    ApiTestSpec2 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {provider, P1, P1Token}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
+                {provider, P2, P2Token}
+            ]
+        },
+        rest_spec = undefined,
+        logic_spec = #logic_spec{
+            module = provider_logic,
+            function = update_support_size,
+            args = [auth, P1, spaceId, data],
+            expected_result = ?OK_RES
+        }
+    },
+    ?assert(api_test_utils:run_tests(
+        Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
+    )).
+
+
+legacy_revoke_support_test(Config) ->
+    {ok, Cluster1Member} = oz_test_utils:create_user(Config),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
+        Config, Cluster1Member, ?PROVIDER_NAME1
+    ),
+    {ok, {P2, P2Token}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME2
+    ),
+    {ok, U1} = oz_test_utils:create_user(Config),
+
+    EnvSetUpFun = fun() ->
+        {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
+        {ok, S1} = oz_test_utils:support_space_by_legacy_storage(Config, P1, S1),
+        {ok, S1} = oz_test_utils:support_space_by_legacy_storage(Config, P2, S1),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+        #{spaceId => S1}
+    end,
+    DeleteEntityFun = fun(#{spaceId := SpaceId} = _Env) ->
+        oz_test_utils:unsupport_space(Config, P1, SpaceId),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{spaceId := SpaceId} = _Env, _Data) ->
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+        {ok, #od_space{
+            eff_providers = Providers
+        }} = oz_test_utils:get_space(Config, SpaceId),
+        ?assertEqual(not ShouldSucceed, maps:is_key(P1, Providers))
+    end,
+
+    % Check only REST first, and only one correct client at once as a space
+    % can only be unsupported once.
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            % This is an endpoint dedicated for the provider that presents
+            % its authorization, no need to check other providers
+            correct = [{provider, P1, P1Token}]
+        },
+        rest_spec = #rest_spec{
+            method = delete,
+            path = [<<"/provider/spaces/">>, spaceId],
+            expected_code = ?HTTP_204_NO_CONTENT
+        }
+    },
+    ?assert(api_test_scenarios:run_scenario(delete_entity,
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
+    )),
+
+    % Check logic endpoint (here provider id must be provided)
+    % Check all correct clients one by one
+    ApiTestSpec2 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {provider, P1, P1Token}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
+                {provider, P2, P2Token}
+            ]
+        },
+        logic_spec = #logic_spec{
+            module = provider_logic,
+            function = revoke_support,
+            args = [auth, P1, spaceId],
+            expected_result = ?OK_RES
+        }
+    },
+    ?assert(api_test_scenarios:run_scenario(delete_entity,
+        [Config, ApiTestSpec2, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
+    )).
 
 
 check_my_ports_test(Config) ->

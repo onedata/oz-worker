@@ -633,7 +633,7 @@ upgrade_legacy_support_test(Config) ->
     {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, St2} = oz_test_utils:create_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
     {ok, S} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
-    {ok, S} = support_space_by_legacy_storage(Config, P1, S),
+    {ok, S} = oz_test_utils:support_space_by_legacy_storage(Config, P1, S),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -687,7 +687,11 @@ upgrade_legacy_support_test(Config) ->
             expected_result = ?OK_TERM(VerifyFun)
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
+
+    % check that dummy storage is no longer supporting a space and new storage is
+    ?assertEqual(false, oz_test_utils:call_oz(Config, storage_logic, supports_space, [P1, S])),
+    ?assertEqual(true, oz_test_utils:call_oz(Config, storage_logic, supports_space, [St1, S])).
 
 
 %%%===================================================================
@@ -703,27 +707,3 @@ init_per_suite(Config) ->
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
-
-
-%%%===================================================================
-%%% Internal functions
-%%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Supports a space by a provider based on space id
-%% (with default support size and virtual storage with id equal to providers).
-%% @end
-%%--------------------------------------------------------------------
--spec support_space_by_legacy_storage(Config :: term(), ProviderId :: od_provider:id(),
-    SpaceId :: od_space:id()) -> {ok, SpaceId :: od_space:id()}.
-support_space_by_legacy_storage(Config, ProviderId, SpaceId) ->
-    case oz_test_utils:call_oz(Config, provider_logic, has_storage, [ProviderId, ProviderId]) of
-        true -> ok;
-        false ->
-            ?assertMatch({ok, _}, oz_test_utils:create_storage(
-                Config, ?PROVIDER(ProviderId), ProviderId, ?STORAGE_NAME1)
-            )
-    end,
-    oz_test_utils:support_space(Config, ?PROVIDER(ProviderId), ProviderId, SpaceId,
-        oz_test_utils:minimum_support_size(Config)).

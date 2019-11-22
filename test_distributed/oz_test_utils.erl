@@ -156,7 +156,9 @@
     get_provider/2,
     list_providers/1,
     delete_provider/2,
-    support_space_by_provider/3, support_space/4, support_space/5, support_space_using_token/5,
+    support_space_by_provider/3,
+    support_space/4, support_space/5, support_space_using_token/5,
+    support_space_by_legacy_storage/3,
     unsupport_space/3,
     enable_subdomain_delegation/4,
     set_provider_domain/3
@@ -1620,6 +1622,25 @@ support_space_using_token(Config, Client, StorageId, Token, Size) ->
         Client, StorageId, Token, Size
     ])).
 
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Supports a space by a provider based on space id
+%% (with default support size and virtual storage with id equal to providers).
+%% @end
+%%--------------------------------------------------------------------
+-spec support_space_by_legacy_storage(Config :: term(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> {ok, SpaceId :: od_space:id()}.
+support_space_by_legacy_storage(Config, ProviderId, SpaceId) ->
+    case oz_test_utils:call_oz(Config, provider_logic, has_storage, [ProviderId, ProviderId]) of
+        true -> ok;
+        false ->
+            ?assertMatch({ok, _}, oz_test_utils:create_storage(
+                Config, ?PROVIDER(ProviderId), ProviderId, ?STORAGE_NAME1)
+            )
+    end,
+    oz_test_utils:support_space(Config, ?PROVIDER(ProviderId), ProviderId, SpaceId,
+        oz_test_utils:minimum_support_size(Config)).
 
 %%--------------------------------------------------------------------
 %% @doc

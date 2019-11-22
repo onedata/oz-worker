@@ -38,7 +38,11 @@
     get_eff_groups/2, get_eff_group/3,
     get_eff_group_membership_intermediaries/3,
     get_eff_harvesters/2,
-    get_eff_spaces/2, get_eff_space/3
+    get_eff_spaces/2, get_eff_space/3,
+
+    support_space/3,
+    update_support_size/4,
+    revoke_support/3
 ]).
 -export([
     update_domain_config/3,
@@ -448,6 +452,63 @@ get_eff_space(Auth, ProviderId, SpaceId) ->
         auth = Auth,
         gri = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
         auth_hint = ?THROUGH_PROVIDER(ProviderId)
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% @doc
+%% Supports a space. Token (support_space_token) and SupportSize
+%% are provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec support_space(Auth :: aai:auth(), ProviderId :: od_provider:id(),
+    Data :: map()) -> {ok, od_space:id()} | {error, term()}.
+support_space(Auth, ProviderId, Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = support},
+        data = Data
+    })).
+
+
+%%--------------------------------------------------------------------
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% @doc
+%% Updates support size for specified space of given provider. Has two variants:
+%% 1) New support size is given explicitly
+%% 2) New support size is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_support_size(Auth :: aai:auth(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id(), SupSizeOrData :: integer() | #{}) -> ok | {error, term()}.
+update_support_size(Auth, ProviderId, SpaceId, SupSize) when is_integer(SupSize) ->
+    update_support_size(Auth, ProviderId, SpaceId, #{
+        <<"size">> => SupSize
+    });
+update_support_size(Auth, ProviderId, SpaceId, Data) ->
+    entity_logic:handle(#el_req{
+        operation = update,
+        auth = Auth,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {space, SpaceId}},
+        data = Data
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% @doc
+%% Revokes support for specified space on behalf of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec revoke_support(Auth :: aai:auth(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> ok | {error, term()}.
+revoke_support(Auth, ProviderId, SpaceId) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        auth = Auth,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {space, SpaceId}}
     }).
 
 
