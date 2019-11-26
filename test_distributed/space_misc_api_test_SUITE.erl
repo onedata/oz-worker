@@ -745,6 +745,11 @@ remove_storage_test(Config) ->
                 {user, NonAdmin}
             ]
         },
+        rest_spec = #rest_spec{
+            method = delete,
+            path = [<<"/spaces/">>, S1, <<"/storages/">>, storageId],
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
         logic_spec = #logic_spec{
             module = space_logic,
             function = remove_storage,

@@ -511,7 +511,7 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = clusters}
     }},
-    %% Create provider registration token for self
+    %% Create provider registration token for current user
     %% This operation does not require any specific privileges.
     {<<"/user/clusters/provider_registration_token">>, #rest_req{
         method = 'POST',

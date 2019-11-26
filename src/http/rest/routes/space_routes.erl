@@ -341,6 +341,14 @@ routes() -> [
         method = 'DELETE',
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {provider, ?BINDING(pid)}}
     }},
+    %% Remove space support
+    %% This operation requires one of the following privileges:
+    %% - space_remove_provider
+    %% - oz_spaces_remove_relationships
+    {<<"/spaces/:id/storages/:sid">>, #rest_req{
+        method = 'DELETE',
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {storage, ?BINDING(sid)}}
+    }},
     %% List space harvesters
     %% This operation requires one of the following privileges:
     %% - space_view
