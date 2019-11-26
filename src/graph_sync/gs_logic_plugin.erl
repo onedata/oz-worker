@@ -123,7 +123,7 @@ verify_auth_override(?PROVIDER(ProviderId), #auth_override{client_auth = {token,
         peer_ip = PeerIp,
         interface = Interface,
         audience_token = AudienceToken,
-        allow_data_access_caveats = AllowDataAccessCaveats
+        data_access_caveats_policy = DataAccessCaveatsPolicy
     } = AuthOverride,
 
     % If no audience token is given, audience defaults to the provider (GS channel owner)
@@ -137,7 +137,7 @@ verify_auth_override(?PROVIDER(ProviderId), #auth_override{client_auth = {token,
 
     case ResolvedAudience of
         {ok, Audience} ->
-            AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, Audience, AllowDataAccessCaveats),
+            AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, Audience, DataAccessCaveatsPolicy),
             case token_auth:check_token_auth(Token, AuthCtx) of
                 {true, OverridenAuth = ?USER(UserId)} ->
                     % Provided token is valid; allow only user tokens and check

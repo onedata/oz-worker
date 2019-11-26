@@ -576,7 +576,7 @@ is_authorized_as_admin(#state{req = ElReq} = State) ->
 
 -spec ensure_authorized_regarding_api_caveats(#state{}) -> ok | no_return().
 ensure_authorized_regarding_api_caveats(#state{req = #el_req{auth = Auth, operation = Operation, gri = GRI}}) ->
-    case api_caveats:check_authorization(Auth#auth.caveats, ?OZ_WORKER, Operation, GRI) of
+    case api_auth:check_authorization(Auth, ?OZ_WORKER, Operation, GRI) of
         ok -> ok;
         {error, _} = Error -> throw(Error)
     end.
@@ -851,8 +851,9 @@ check_type(caveats, Key, Caveats) ->
                     end
             end
         end, Caveats)
-    catch _:_ ->
-        throw(?ERROR_BAD_DATA(Key))
+    catch
+        throw:{error, _} = Error -> throw(Error);
+        _:_ -> throw(?ERROR_BAD_DATA(Key))
     end;
 check_type(ipv4_address, _Key, undefined) ->
     undefined;

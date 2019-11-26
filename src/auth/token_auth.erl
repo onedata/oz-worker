@@ -24,7 +24,6 @@
 -export([verify_identity_token/2]).
 -export([verify_invite_token/3]).
 -export([verify_audience_token/2]).
--export([resolve_audience_for_rest_interface/1]).
 -export([group_membership_checker/2]).
 -export([is_audience_allowed/2]).
 
@@ -65,12 +64,12 @@ build_auth_ctx(Interface, PeerIp) ->
     undefined | aai:audience()) ->
     aai:auth_ctx().
 build_auth_ctx(Interface, PeerIp, Audience) ->
-    build_auth_ctx(Interface, PeerIp, Audience, false).
+    build_auth_ctx(Interface, PeerIp, Audience, disallow_data_access_caveats).
 
 -spec build_auth_ctx(undefined | cv_interface:interface(), undefined | ip_utils:ip(),
-    undefined | aai:audience(), AllowDataAccessCaveats :: boolean()) ->
+    undefined | aai:audience(), data_access_caveats:policy()) ->
     aai:auth_ctx().
-build_auth_ctx(Interface, PeerIp, Audience, AllowDataAccessCaveats) ->
+build_auth_ctx(Interface, PeerIp, Audience, DataAccessCaveatsPolicy) ->
     #auth_ctx{
         current_timestamp = time_utils:cluster_time_seconds(),
         ip = PeerIp,
@@ -81,7 +80,7 @@ build_auth_ctx(Interface, PeerIp, Audience, AllowDataAccessCaveats) ->
             undefined -> ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID);
             _ -> Audience
         end,
-        allow_data_access_caveats = AllowDataAccessCaveats,
+        data_access_caveats_policy = DataAccessCaveatsPolicy,
         group_membership_checker = fun group_membership_checker/2
     }.
 
@@ -231,26 +230,6 @@ verify_audience_token(AudienceToken, AuthCtx) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Checks if an audience token is present in a HTTP (REST) request and if so,
-%% verifies it. Returns undefined audience if no token was provided, or the
-%% token verification result (see verify_audience_token/2).
-%% @end
-%%--------------------------------------------------------------------
--spec resolve_audience_for_rest_interface(cowboy_req:req()) ->
-    {ok, undefined | aai:audience()} | errors:error().
-resolve_audience_for_rest_interface(Req) ->
-    case tokens:parse_audience_token_header(Req) of
-        undefined ->
-            {ok, undefined};
-        SerializedAudienceToken ->
-            {PeerIp, _} = cowboy_req:peer(Req),
-            AuthCtx = build_auth_ctx(rest, PeerIp),
-            verify_audience_token(SerializedAudienceToken, AuthCtx)
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Used as callback during caveat verification (provided in #auth_ctx{}).
 %% @end
 %%--------------------------------------------------------------------
@@ -283,6 +262,27 @@ is_audience_allowed(_, _) ->
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Checks if an audience token is present in a HTTP (REST) request and if so,
+%% verifies it. Returns undefined audience if no token was provided, or the
+%% token verification result (see verify_audience_token/2).
+%% @end
+%%--------------------------------------------------------------------
+-spec resolve_audience_for_rest_interface(cowboy_req:req()) ->
+    {ok, undefined | aai:audience()} | errors:error().
+resolve_audience_for_rest_interface(Req) ->
+    case tokens:parse_audience_token_header(Req) of
+        undefined ->
+            {ok, undefined};
+        SerializedAudienceToken ->
+            {PeerIp, _} = cowboy_req:peer(Req),
+            AuthCtx = build_auth_ctx(rest, PeerIp),
+            verify_audience_token(SerializedAudienceToken, AuthCtx)
+    end.
+
 
 %%--------------------------------------------------------------------
 %% @private

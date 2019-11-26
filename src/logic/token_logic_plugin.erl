@@ -153,8 +153,11 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_access_to
     Token = maps:get(<<"token">>, Data),
     PeerIp = maps:get(<<"peerIp">>, Data, undefined),
     Interface = maps:get(<<"interface">>, Data, undefined),
-    AllowDataAccessCaveats = maps:get(<<"allowDataAccessCaveats">>, Data, false),
-    AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, aai:auth_to_audience(Auth), AllowDataAccessCaveats),
+    DataAccessCaveatsPolicy = case maps:get(<<"allowDataAccessCaveats">>, Data, false) of
+        true -> allow_data_access_caveats;
+        false -> disallow_data_access_caveats
+    end,
+    AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, aai:auth_to_audience(Auth), DataAccessCaveatsPolicy),
     case token_auth:verify_access_token(Token, AuthCtx) of
         {ok, #auth{subject = Subject}} ->
             {ok, value, Subject};
@@ -166,7 +169,11 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_identity_
     Token = maps:get(<<"token">>, Data),
     PeerIp = maps:get(<<"peerIp">>, Data, undefined),
     Interface = maps:get(<<"interface">>, Data, undefined),
-    AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, aai:auth_to_audience(Auth)),
+    DataAccessCaveatsPolicy = case maps:get(<<"allowDataAccessCaveats">>, Data, false) of
+        true -> allow_data_access_caveats;
+        false -> disallow_data_access_caveats
+    end,
+    AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, aai:auth_to_audience(Auth), DataAccessCaveatsPolicy),
     case token_auth:verify_identity_token(Token, AuthCtx) of
         {ok, Subject} ->
             {ok, value, Subject};

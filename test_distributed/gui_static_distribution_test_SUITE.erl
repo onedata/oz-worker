@@ -44,6 +44,7 @@
     gui_upload_for_inexistent_cluster_returns_not_found/1,
     gui_upload_with_invalid_package_returns_proper_error/1,
     gui_upload_with_too_large_package_returns_proper_error/1,
+    gui_upload_with_confined_token_returns_proper_error/1,
     gui_upload_page_deploys_op_worker_gui_on_all_nodes/1,
     gui_upload_page_deploys_op_panel_gui_on_all_nodes/1,
     gui_upload_page_deploys_harvester_gui_on_all_nodes/1,
@@ -68,6 +69,7 @@ all() ->
         gui_upload_for_inexistent_cluster_returns_not_found,
         gui_upload_with_invalid_package_returns_proper_error,
         gui_upload_with_too_large_package_returns_proper_error,
+        gui_upload_with_confined_token_returns_proper_error,
         gui_upload_page_deploys_op_worker_gui_on_all_nodes,
         gui_upload_page_deploys_op_panel_gui_on_all_nodes,
         gui_upload_page_deploys_harvester_gui_on_all_nodes,
@@ -323,6 +325,32 @@ gui_upload_with_too_large_package_returns_proper_error(Config) ->
     )),
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
         Config, <<"onp">>, ClusterId, GuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
+    )).
+
+
+gui_upload_with_confined_token_returns_proper_error(Config) ->
+    {ok, U1} = oz_test_utils:create_user(Config),
+    {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
+    oz_test_utils:harvester_add_user(Config, HarvesterId, U1),
+    oz_test_utils:harvester_set_user_privileges(Config, HarvesterId, U1, [?HARVESTER_UPDATE], []),
+    {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, U1),
+    {ok, GuiToken} = oz_test_utils:request_gui_token(Config, CookieValue),
+    {HrvGuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
+
+    UserCaveat = #cv_data_path{whitelist = [<<"/abc">>]},
+    ConfinedGuiToken = tokens:confine(GuiToken, UserCaveat),
+    ExpErrorAlpha = json_utils:encode(errors:to_json(?ERROR_TOKEN_CAVEAT_UNVERIFIED(UserCaveat))),
+    ?assertMatch({ok, 401, _, ExpErrorAlpha}, perform_upload(
+        Config, <<"hrv">>, HarvesterId, HrvGuiPackage, #{?HDR_X_AUTH_TOKEN => ConfinedGuiToken}
+    )),
+
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config),
+    {OpGuiPackage, _} = oz_test_utils:create_dummy_gui_package(),
+    ProviderCaveat = #cv_api{whitelist = [{?OZ_WORKER, get, ?GRI_PATTERN('*', <<"*">>, '*', '*')}]},
+    ConfinedProviderToken = tokens:confine(ProviderToken, ProviderCaveat),
+    ExpErrorBeta = json_utils:encode(errors:to_json(?ERROR_TOKEN_CAVEAT_UNVERIFIED(ProviderCaveat))),
+    ?assertMatch({ok, 401, _, ExpErrorBeta}, perform_upload(
+        Config, <<"opw">>, ProviderId, OpGuiPackage, #{?HDR_X_AUTH_TOKEN => ConfinedProviderToken}
     )).
 
 

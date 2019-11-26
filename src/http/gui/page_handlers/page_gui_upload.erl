@@ -107,7 +107,7 @@ validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
     harvester_logic:exists(HarvesterId) orelse throw(?HTTP_404_NOT_FOUND),
     case token_auth:check_token_auth_for_rest_interface(Req) of
         {true, ?USER(UserId) = Auth} ->
-            ensure_no_api_caveats(Auth),
+            ensure_unlimited_api_authorization(Auth),
             case harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_UPDATE)
                 orelse user_logic:has_eff_oz_privilege(UserId, ?OZ_HARVESTERS_UPDATE) of
                 true ->
@@ -137,7 +137,7 @@ validate_and_authorize(GuiType, ClusterId, Req) ->
 
     case token_auth:check_token_auth_for_rest_interface(Req) of
         {true, ?PROVIDER(ClusterId) = Auth} ->
-            ensure_no_api_caveats(Auth),
+            ensure_unlimited_api_authorization(Auth),
             ReleaseVersion;
         {true, _} ->
             throw(?HTTP_403_FORBIDDEN);
@@ -146,12 +146,19 @@ validate_and_authorize(GuiType, ClusterId, Req) ->
     end.
 
 
+%%--------------------------------------------------------------------
 %% @private
--spec ensure_no_api_caveats(aai:auth()) -> ok | no_return().
-ensure_no_api_caveats(Auth) ->
-    case api_caveats:find_any(Auth#auth.caveats) of
-        false -> ok;
-        {true, Cv} -> throw(?ERROR_TOKEN_CAVEAT_UNVERIFIED(Cv))
+%% @doc
+%% Ensures that presented auth does not include any API limitations. This check
+%% is an exception compared to other page handlers, which either are public or
+%% depend on cookie session (in those cases such check is not needed).
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_unlimited_api_authorization(aai:auth()) -> ok | no_return().
+ensure_unlimited_api_authorization(Auth) ->
+    case api_auth:ensure_unlimited(Auth) of
+        ok -> ok;
+        {error, _} = Error -> throw(Error)
     end.
 
 
