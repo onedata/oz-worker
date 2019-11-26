@@ -111,7 +111,7 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
         <<"fullName">> => FullName,
         <<"username">> => gs_protocol:undefined_to_null(Username),
         <<"emails">> => Emails,
-        <<"linkedAccounts">> => linked_accounts:to_maps(LinkedAccounts),
+        <<"linkedAccounts">> => linked_accounts:to_maps(LinkedAccounts, luma_payload),
         <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
         <<"spaceAliases">> => SpaceAliases,
 

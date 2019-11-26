@@ -201,10 +201,10 @@ all() ->
     ?CAVEATS_TO_JSON([
         #cv_time{valid_until = oz_test_utils:cluster_time_seconds(Config) + 560},
         #cv_api{whitelist = [
-            {?OZ_WORKER, all, ?GRI(od_user, <<"123">>, instance, private)}
+            {?OZ_WORKER, all, ?GRI_PATTERN(od_user, <<"123">>, instance, private)}
         ]},
-        #cv_data_space{whitelist = [<<"124234234">>, <<"opmxv7wenrfapfsa">>]},
-        #cv_data_access{type = read},
+        #cv_interface{interface = graphsync},
+        #cv_data_readonly{},
         #cv_data_path{whitelist = [<<"/ab/cdef/g">>, <<"/1/2">>]},
         #cv_data_objectid{whitelist = [<<"12345">>, <<"67890">>]}
     ])
@@ -222,11 +222,11 @@ all() ->
     ?CAVEATS_TO_JSON([
         #cv_time{valid_until = Now + 156},
         #cv_api{whitelist = [
-            {?OP_PANEL, create, ?GRI('*', <<"*">>, '*', '*')},
-            {all, get, ?GRI(od_user, <<"*">>, '*', private)}
+            {?OP_PANEL, create, ?GRI_PATTERN('*', <<"*">>, '*', '*')},
+            {all, get, ?GRI_PATTERN(od_user, <<"*">>, '*', private)}
         ]},
-        #cv_data_space{whitelist = [<<"8y978qtwda67d12g3">>]},
-        #cv_data_access{type = write},
+        #cv_interface{interface = rest},
+        #cv_data_readonly{},
         #cv_data_path{whitelist = [<<84, 71, 3, 250, 218, 190, 67, 67, 45, 13>>]},
         #cv_data_objectid{whitelist = [<<"000779645781987512837492813641234234">>]}
     ])
@@ -278,15 +278,17 @@ all() ->
 ).
 
 -define(BAD_CAVEATS_VALUES, [
-    {<<"caveats">>, <<>>, ?ERROR_BAD_VALUE_CAVEATS},
-    {<<"caveats">>, 345345, ?ERROR_BAD_VALUE_CAVEATS},
-    {<<"caveats">>, 1.56, ?ERROR_BAD_VALUE_CAVEATS},
-    {<<"caveats">>, <<"string literal">>, ?ERROR_BAD_VALUE_CAVEATS},
-    {<<"caveats">>, #{}, ?ERROR_BAD_VALUE_CAVEATS},
-    {<<"caveats">>, [1, 2, 3], ?ERROR_BAD_VALUE_CAVEATS},
-    {<<"caveats">>, [<<"a">>, <<"b">>, <<"c">>], ?ERROR_BAD_VALUE_CAVEATS},
-    {<<"caveats">>, [<<"time > 1234">>], ?ERROR_BAD_VALUE_CAVEATS},
-    {<<"caveats">>, [<<"ip = 1.2.3.4.5">>], ?ERROR_BAD_VALUE_CAVEATS}
+    {<<"caveats">>, <<>>, ?ERROR_BAD_DATA(<<"caveats">>)},
+    {<<"caveats">>, 345345, ?ERROR_BAD_DATA(<<"caveats">>)},
+    {<<"caveats">>, 1.56, ?ERROR_BAD_DATA(<<"caveats">>)},
+    {<<"caveats">>, <<"string literal">>, ?ERROR_BAD_DATA(<<"caveats">>)},
+    {<<"caveats">>, #{}, ?ERROR_BAD_VALUE_CAVEAT(#{})},
+    {<<"caveats">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_CAVEAT(#{<<"a">> => <<"b">>})},
+    {<<"caveats">>, #{<<"type">> => <<"tiem">>}, ?ERROR_BAD_VALUE_CAVEAT(#{<<"type">> => <<"tiem">>})},
+    {<<"caveats">>, [1, 2, 3], ?ERROR_BAD_DATA(<<"caveats">>)},
+    {<<"caveats">>, [<<"a">>, <<"b">>, <<"c">>], ?ERROR_BAD_DATA(<<"caveats">>)},
+    {<<"caveats">>, [<<"time > 1234">>], ?ERROR_BAD_DATA(<<"caveats">>)},
+    {<<"caveats">>, [<<"ip = 1.2.3.4.5">>], ?ERROR_BAD_DATA(<<"caveats">>)}
 ]).
 
 -define(BAD_CUSTOM_METADATA_VALUES, [
@@ -336,7 +338,7 @@ new_token_verify_fun(Config, Subject, Persistence, Audience) ->
                     % ACCESS_TOKEN, GUI_ACCESS_TOKEN
                     ?assertMatch(
                         {true, #auth{subject = Subject}},
-                        oz_test_utils:call_oz(Config, token_auth, check_token_auth, [Token, undefined, Audience])
+                        oz_test_utils:check_token_auth(Config, Token, Audience)
                     )
             end,
             case Persistence of
@@ -759,9 +761,9 @@ confine(Config) ->
     confine_combinations(Config, AllClients, TokenAlpha, InitialCaveatsAlpha, [
         #cv_authorization_none{},
         #cv_audience{whitelist = [?AUD(group, <<"abderg">>), ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)]},
-        #cv_api{whitelist = [{oz_worker, get, ?GRI(od_space, <<"*">>, '*', private)}]},
-        #cv_data_space{whitelist = [<<"123">>, <<"456">>, <<"678">>]},
-        #cv_data_access{type = read},
+        #cv_interface{interface = rest},
+        #cv_api{whitelist = [{oz_worker, get, ?GRI_PATTERN(od_space, <<"*">>, '*', private)}]},
+        #cv_data_readonly{},
         #cv_data_path{whitelist = [base64:encode(<<"a/b/c/d">>)]},
         #cv_data_objectid{whitelist = [<<"abcdef">>, <<"ghijk">>]}
     ]),
@@ -825,10 +827,10 @@ confine_base(Config, AllClients, Token, InitialCaveats, CaveatsToAdd) ->
                 {<<"token">>, <<"1234">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
                 {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
                 {<<"token">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
-                {<<"caveats">>, <<"1234">>, ?ERROR_BAD_VALUE_CAVEATS},
-                {<<"caveats">>, 1234, ?ERROR_BAD_VALUE_CAVEATS},
-                {<<"caveats">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_CAVEATS},
-                {<<"caveats">>, [#{<<"type">> => <<"unknownCaveat">>}], ?ERROR_BAD_VALUE_CAVEATS}
+                {<<"caveats">>, <<"1234">>, ?ERROR_BAD_DATA(<<"caveats">>)},
+                {<<"caveats">>, 1234, ?ERROR_BAD_DATA(<<"caveats">>)},
+                {<<"caveats">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_CAVEAT(#{<<"a">> => <<"b">>})},
+                {<<"caveats">>, [#{<<"type">> => <<"unknownCaveat">>}], ?ERROR_BAD_DATA(<<"caveats">>)}
             ]
         }
     })).
@@ -855,10 +857,10 @@ verify_access_or_identity_token(Config) ->
         #cv_time{valid_until = oz_test_utils:cluster_time_seconds(Config) + 3600}
     ]),
     verify_access_or_identity_token_base(
-        Config, access, AllClients, TokenAlpha, undefined, true, ?SUB(user, User)
+        Config, access, AllClients, TokenAlpha, undefined, undefined, true, ?SUB(user, User)
     ),
     verify_access_or_identity_token_base(
-        Config, identity, AllClients, TokenAlpha, undefined, true, ?SUB(user, User)
+        Config, identity, AllClients, TokenAlpha, undefined, undefined, true, ?SUB(user, User)
     ),
 
     #named_token_data{token = TokenBeta} = create_provider_named_token(
@@ -867,10 +869,10 @@ verify_access_or_identity_token(Config) ->
         ]
     ),
     verify_access_or_identity_token_base(
-        Config, access, AllClients, TokenBeta, undefined, true, ?SUB(?ONEPROVIDER, Provider)
+        Config, access, AllClients, TokenBeta, undefined, rest, true, ?SUB(?ONEPROVIDER, Provider)
     ),
     verify_access_or_identity_token_base(
-        Config, identity, AllClients, TokenBeta, undefined, true, ?SUB(?ONEPROVIDER, Provider)
+        Config, identity, AllClients, TokenBeta, undefined, graphsync, true, ?SUB(?ONEPROVIDER, Provider)
     ),
 
     TokenGamma = create_user_temporary_token(Config, ProviderAdmin, ?GUI_ACCESS_TOKEN(SessionId), [
@@ -879,18 +881,18 @@ verify_access_or_identity_token(Config) ->
     ]),
     OpPanelClient = {op_panel, Provider, ProviderToken},
     verify_access_or_identity_token_base(
-        Config, access, [OpPanelClient], TokenGamma, undefined, true, ?SUB(user, ProviderAdmin)
+        Config, access, [OpPanelClient], TokenGamma, undefined, undefined, true, ?SUB(user, ProviderAdmin)
     ),
     verify_access_or_identity_token_base(
-        Config, identity, [OpPanelClient], TokenGamma, undefined, true, ?SUB(user, ProviderAdmin)
+        Config, identity, [OpPanelClient], TokenGamma, undefined, undefined, true, ?SUB(user, ProviderAdmin)
     ),
     verify_access_or_identity_token_base(
-        Config, access, AllClients -- [OpPanelClient], TokenGamma, undefined, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
+        Config, access, AllClients -- [OpPanelClient], TokenGamma, undefined, undefined, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
             #cv_audience{whitelist = [?AUD(?OP_PANEL, Provider)]}
         )
     ),
     verify_access_or_identity_token_base(
-        Config, identity, AllClients -- [OpPanelClient], TokenGamma, undefined, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
+        Config, identity, AllClients -- [OpPanelClient], TokenGamma, undefined, undefined, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
             #cv_audience{whitelist = [?AUD(?OP_PANEL, Provider)]}
         )
     ),
@@ -901,23 +903,53 @@ verify_access_or_identity_token(Config) ->
         ]
     ),
     verify_access_or_identity_token_base(
-        Config, access, AllClients, TokenDelta, undefined, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
+        Config, access, AllClients, TokenDelta, undefined, oneclient, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
             #cv_time{valid_until = oz_test_utils:cluster_time_seconds(Config) - 1}
         )
     ),
     verify_access_or_identity_token_base(
-        Config, identity, AllClients, TokenDelta, undefined, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
+        Config, identity, AllClients, TokenDelta, undefined, rest, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
             #cv_time{valid_until = oz_test_utils:cluster_time_seconds(Config) - 1}
         )
     ),
 
+    TokenZeta = create_user_temporary_token(Config, User, ?ACCESS_TOKEN, [
+        #cv_interface{interface = rest}
+    ]),
+    verify_access_or_identity_token_base(
+        Config, access, AllClients, TokenZeta, undefined, undefined, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
+            #cv_interface{interface = rest}
+        )
+    ),
+    verify_access_or_identity_token_base(
+        Config, identity, AllClients, TokenZeta, undefined, undefined, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
+            #cv_interface{interface = rest}
+        )
+    ),
+    verify_access_or_identity_token_base(
+        Config, access, AllClients, TokenZeta, undefined, graphsync, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
+            #cv_interface{interface = rest}
+        )
+    ),
+    verify_access_or_identity_token_base(
+        Config, identity, AllClients, TokenZeta, undefined, oneclient, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
+            #cv_interface{interface = rest}
+        )
+    ),
+    verify_access_or_identity_token_base(
+        Config, access, AllClients, TokenZeta, undefined, rest, true, ?SUB(user, User)
+    ),
+    verify_access_or_identity_token_base(
+        Config, identity, AllClients, TokenZeta, undefined, rest, true, ?SUB(user, User)
+    ),
+
     TokenSigma = create_user_temporary_token(Config, ProviderAdmin, ?INVITE_TOKEN(?USER_JOIN_CLUSTER, Provider)),
     verify_access_or_identity_token_base(
-        Config, access, AllClients, TokenSigma, undefined,
+        Config, access, AllClients, TokenSigma, undefined, undefined,
         false, ?ERROR_NOT_AN_ACCESS_TOKEN(?INVITE_TOKEN(?USER_JOIN_CLUSTER, Provider))
     ),
     verify_access_or_identity_token_base(
-        Config, identity, AllClients, TokenSigma, undefined,
+        Config, identity, AllClients, TokenSigma, undefined, undefined,
         false, ?ERROR_NOT_AN_ACCESS_TOKEN(?INVITE_TOKEN(?USER_JOIN_CLUSTER, Provider))
     ),
 
@@ -925,20 +957,20 @@ verify_access_or_identity_token(Config) ->
         #cv_ip{whitelist = [{{134, 93, 0, 0}, 16}]}
     ]),
     verify_access_or_identity_token_base(
-        Config, access, AllClients, TokenTheta, undefined, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
+        Config, access, AllClients, TokenTheta, undefined, undefined, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
             #cv_ip{whitelist = [{{134, 93, 0, 0}, 16}]}
         )
     ),
     verify_access_or_identity_token_base(
-        Config, identity, AllClients, TokenTheta, <<"133.93.1.182">>, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
+        Config, identity, AllClients, TokenTheta, <<"133.93.1.182">>, undefined, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
             #cv_ip{whitelist = [{{134, 93, 0, 0}, 16}]}
         )
     ),
     verify_access_or_identity_token_base(
-        Config, access, AllClients, TokenTheta, <<"134.93.7.18">>, true, ?SUB(?ONEPROVIDER, Provider)
+        Config, access, AllClients, TokenTheta, <<"134.93.7.18">>, undefined, true, ?SUB(?ONEPROVIDER, Provider)
     ),
     verify_access_or_identity_token_base(
-        Config, identity, AllClients, TokenTheta, <<"134.93.1.182">>, true, ?SUB(?ONEPROVIDER, Provider)
+        Config, identity, AllClients, TokenTheta, <<"134.93.1.182">>, undefined, true, ?SUB(?ONEPROVIDER, Provider)
     ),
 
     #named_token_data{token = TokenOmega} = create_provider_named_token(
@@ -947,16 +979,16 @@ verify_access_or_identity_token(Config) ->
         ]
     ),
     verify_access_or_identity_token_base(
-        Config, access, AllClients, TokenOmega, undefined, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
+        Config, access, AllClients, TokenOmega, undefined, undefined, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
             #cv_authorization_none{}
         )
     ),
     verify_access_or_identity_token_base(
-        Config, identity, AllClients, TokenOmega, undefined, true, ?SUB(?ONEPROVIDER, Provider)
+        Config, identity, AllClients, TokenOmega, undefined, undefined, true, ?SUB(?ONEPROVIDER, Provider)
     ).
 
 
-verify_access_or_identity_token_base(Config, AccessOrIdentity, AllClients, Token, PeerIp, ShouldSucceed, ExpResult) ->
+verify_access_or_identity_token_base(Config, AccessOrIdentity, AllClients, Token, PeerIp, Interface, ShouldSucceed, ExpResult) ->
     ?assert(api_test_utils:run_tests(Config, #api_test_spec{
         client_spec = #client_spec{
             correct = AllClients,
@@ -1001,15 +1033,24 @@ verify_access_or_identity_token_base(Config, AccessOrIdentity, AllClients, Token
             end
         },
         data_spec = #data_spec{
-            % Peer IP can be required to verify a token, but is generally optional in the API.
+            % Peer IP and interface can be required to verify a token,
+            % but generally they are optional in the API.
             required = lists:flatten([
                 <<"token">>,
-                case PeerIp of undefined -> []; _ -> [<<"peerIp">>] end
+                case PeerIp of undefined -> []; _ -> [<<"peerIp">>] end,
+                case Interface of undefined -> []; _ -> [<<"interface">>] end
             ]),
-            optional = case PeerIp of undefined -> [<<"peerIp">>]; _ -> [] end,
+            optional = lists:flatten([
+                case PeerIp of undefined -> [<<"peerIp">>]; _ -> [] end,
+                case Interface of undefined -> [<<"interface">>]; _ -> [] end
+            ]),
             correct_values = #{
                 <<"token">> => [element(2, {ok, _} = tokens:serialize(Token))],
-                <<"peerIp">> => [gs_protocol:undefined_to_null(PeerIp)]
+                <<"peerIp">> => [gs_protocol:undefined_to_null(PeerIp)],
+                <<"interface">> => case Interface of
+                    undefined -> cv_interface:valid_interfaces();
+                    _ -> [Interface]
+                end
             },
             bad_values = [
                 {<<"token">>, <<"1234">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
@@ -1017,7 +1058,11 @@ verify_access_or_identity_token_base(Config, AccessOrIdentity, AllClients, Token
                 {<<"token">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
                 {<<"peerIp">>, <<"1234.6.78.19">>, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
                 {<<"peerIp">>, 1234, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
-                {<<"peerIp">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)}
+                {<<"peerIp">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
+                {<<"interface">>, #{<<"a">> => <<"b">>},
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"interface">>, [<<"gui">>, <<"rest">>, <<"oneclient">>])},
+                {<<"interface">>, <<"graphSync">>,
+                    ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"interface">>, [<<"gui">>, <<"rest">>, <<"oneclient">>])}
             ]
         }
     })).
@@ -2133,7 +2178,7 @@ assert_token_deleted(true, Config, Token, TokenName) ->
         ?ACCESS_TOKEN ->
             ?assertEqual(
                 ?ERROR_TOKEN_INVALID,
-                oz_test_utils:call_oz(Config, token_auth, check_token_auth, [Token, undefined, undefined])
+                oz_test_utils:check_token_auth(Config, Token, undefined)
             );
         _ ->
             ok
@@ -2152,7 +2197,7 @@ assert_token_deleted(false, Config, Token, TokenName) ->
         ?ACCESS_TOKEN ->
             ?assertEqual(
                 {true, #auth{subject = Subject}},
-                oz_test_utils:call_oz(Config, token_auth, check_token_auth, [Token, undefined, undefined])
+                oz_test_utils:check_token_auth(Config, Token, undefined)
             );
         _ ->
             ok

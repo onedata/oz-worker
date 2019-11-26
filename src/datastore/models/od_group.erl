@@ -169,19 +169,19 @@ print_summary(SortPos) when is_integer(SortPos) ->
         }
     end, Groups),
     Sorted = lists:keysort(SortPos, GroupAttrs),
-    io:format("---------------------------------------------------------------------------------------------------------------------------------------------------~n"),
-    io:format("Id                                Name                      Type           Chldrn (eff)   Parnts (eff)   Users (eff)   Spaces (eff)   Eff providers~n"),
-    io:format("---------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("--------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("Id                                           Name                      Type           Chldrn (eff)   Parnts (eff)   Users (eff)   Spaces (eff)   Eff providers~n"),
+    io:format("--------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
     lists:foreach(fun({Id, Name, Type, {Children, EffChildren}, {Parents, EffParents}, {Users, EffUsers}, {Spaces, EffSpaces}, Providers}) ->
         ChildrenStr = str_utils:format("~B (~B)", [Children, EffChildren]),
         ParentsStr = str_utils:format("~B (~B)", [Parents, EffParents]),
         UsersStr = str_utils:format("~B (~B)", [Users, EffUsers]),
         SpacesStr = str_utils:format("~B (~B)", [Spaces, EffSpaces]),
-        io:format("~-33s ~-25ts ~-14s ~-14s ~-14s ~-13s ~-14s ~-14B~n", [
+        io:format("~-44s ~-25ts ~-14s ~-14s ~-14s ~-13s ~-14s ~-14B~n", [
             Id, Name, Type, ChildrenStr, ParentsStr, UsersStr, SpacesStr, Providers
         ])
     end, Sorted),
-    io:format("---------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("--------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
     io:format("~B groups in total~n", [length(Sorted)]).
 
 %%--------------------------------------------------------------------

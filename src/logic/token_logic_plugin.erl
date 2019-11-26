@@ -152,7 +152,10 @@ create(#el_req{gri = #gri{id = undefined, aspect = confine}, data = Data}) ->
 create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_access_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
     PeerIp = maps:get(<<"peerIp">>, Data, undefined),
-    case token_auth:verify_access_token(Token, PeerIp, aai:auth_to_audience(Auth)) of
+    Interface = maps:get(<<"interface">>, Data, undefined),
+    AllowDataAccessCaveats = maps:get(<<"allowDataAccessCaveats">>, Data, false),
+    AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, aai:auth_to_audience(Auth), AllowDataAccessCaveats),
+    case token_auth:verify_access_token(Token, AuthCtx) of
         {ok, #auth{subject = Subject}} ->
             {ok, value, Subject};
         {error, _} = Error ->
@@ -162,7 +165,9 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_access_to
 create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_identity_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
     PeerIp = maps:get(<<"peerIp">>, Data, undefined),
-    case token_auth:verify_identity_token(Token, PeerIp, aai:auth_to_audience(Auth)) of
+    Interface = maps:get(<<"interface">>, Data, undefined),
+    AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, aai:auth_to_audience(Auth)),
+    case token_auth:verify_identity_token(Token, AuthCtx) of
         {ok, Subject} ->
             {ok, value, Subject};
         {error, _} = Error ->
@@ -173,7 +178,8 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_invite_to
     Token = maps:get(<<"token">>, Data),
     ExpType = maps:get(<<"expectedInviteTokenType">>, Data, any),
     PeerIp = maps:get(<<"peerIp">>, Data, undefined),
-    case token_auth:verify_invite_token(Token, ExpType, PeerIp, aai:auth_to_audience(Auth)) of
+    AuthCtx = token_auth:build_auth_ctx(undefined, PeerIp, aai:auth_to_audience(Auth)),
+    case token_auth:verify_invite_token(Token, ExpType, AuthCtx) of
         {ok, #auth{subject = Subject}} ->
             {ok, value, Subject};
         {error, _} = Error ->
@@ -400,9 +406,15 @@ validate(#el_req{operation = create, gri = #gri{aspect = confine}, data = Data})
         }
     };
 validate(#el_req{operation = create, gri = #gri{aspect = verify_access_token}}) ->
-    validate_verify_operation(#{});
+    validate_verify_operation(#{
+        <<"interface">> => {atom, cv_interface:valid_interfaces()},
+        <<"allowDataAccessCaveats">> => {boolean, any}
+    });
 validate(#el_req{operation = create, gri = #gri{aspect = verify_identity_token}}) ->
-    validate_verify_operation(#{});
+    validate_verify_operation(#{
+        <<"interface">> => {atom, cv_interface:valid_interfaces()},
+        <<"allowDataAccessCaveats">> => {boolean, any}
+    });
 validate(#el_req{operation = create, gri = #gri{aspect = verify_invite_token}}) ->
     validate_verify_operation(#{
         <<"expectedInviteTokenType">> => {invite_token_type, any}

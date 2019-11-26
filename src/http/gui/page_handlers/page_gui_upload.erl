@@ -105,8 +105,9 @@ handle_gui_upload(Req) ->
     onedata:release_version() | no_return().
 validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
     harvester_logic:exists(HarvesterId) orelse throw(?HTTP_404_NOT_FOUND),
-    case token_auth:check_token_auth(Req) of
-        {true, ?USER(UserId)} ->
+    case token_auth:check_token_auth_for_rest_interface(Req) of
+        {true, ?USER(UserId) = Auth} ->
+            ensure_no_api_caveats(Auth),
             case harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_UPDATE)
                 orelse user_logic:has_eff_oz_privilege(UserId, ?OZ_HARVESTERS_UPDATE) of
                 true ->
@@ -134,13 +135,23 @@ validate_and_authorize(GuiType, ClusterId, Req) ->
         ?OP_PANEL -> Cluster#od_cluster.onepanel_version
     end,
 
-    case token_auth:check_token_auth(Req) of
-        {true, ?PROVIDER(ClusterId)} ->
+    case token_auth:check_token_auth_for_rest_interface(Req) of
+        {true, ?PROVIDER(ClusterId) = Auth} ->
+            ensure_no_api_caveats(Auth),
             ReleaseVersion;
         {true, _} ->
             throw(?HTTP_403_FORBIDDEN);
         _ ->
             throw(?HTTP_401_UNAUTHORIZED)
+    end.
+
+
+%% @private
+-spec ensure_no_api_caveats(aai:auth()) -> ok | no_return().
+ensure_no_api_caveats(Auth) ->
+    case api_caveats:find_any(Auth#auth.caveats) of
+        false -> ok;
+        {true, Cv} -> throw(?ERROR_TOKEN_CAVEAT_UNVERIFIED(Cv))
     end.
 
 

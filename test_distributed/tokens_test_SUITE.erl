@@ -448,7 +448,7 @@ create_gui_access_token(Config, UserId, SessionId, Audience) ->
 
 
 verify_token(Config, Token, Audience) ->
-    oz_test_utils:call_oz(Config, token_auth, check_token_auth, [Token, undefined, Audience]).
+    oz_test_utils:check_token_auth(Config, Token, Audience).
 
 
 create_provider_supporting_user(Config, UserId) ->

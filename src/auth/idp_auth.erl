@@ -215,7 +215,7 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
     LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
     LinkedAccountMap = maps:without(
         [<<"name">>, <<"login">>, <<"alias">>, <<"emailList">>, <<"groups">>], % do not include deprecated fields
-        linked_accounts:to_map(LinkedAccount)
+        linked_accounts:to_map(LinkedAccount, all_fields)
     ),
     ?auth_debug("Attributes from IdP '~p' (state: ~s) sucessfully mapped:~n~ts", [
         IdP, StateToken, json_utils:encode(LinkedAccountMap, [pretty])

@@ -255,7 +255,8 @@
     cluster_get_group_privileges/3
 ]).
 -export([
-    assert_invite_token_usage_limit_reached/3
+    assert_invite_token_usage_limit_reached/3,
+    check_token_auth/3
 ]).
 -export([
     delete_all_entities/1,
@@ -2850,6 +2851,19 @@ assert_invite_token_usage_limit_reached(Config, Expected, TokenId) ->
             UsageCount >= UsageLimit
     end,
     ?assertEqual(Expected, IsReached).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Constructs an auth ctx based on audience and checks token auth (verifies the
+%% token and returns resulting auth object on success).
+%% @end
+%%--------------------------------------------------------------------
+-spec check_token_auth(Config :: term(), tokens:token(), undefined | aai:audience()) ->
+    {true, aai:auth()} | errors:error().
+check_token_auth(Config, Token, Audience) ->
+    AuthCtx = call_oz(Config, token_auth, build_auth_ctx, [undefined, undefined, Audience]),
+    call_oz(Config, token_auth, check_token_auth, [Token, AuthCtx]).
 
 
 %%--------------------------------------------------------------------
