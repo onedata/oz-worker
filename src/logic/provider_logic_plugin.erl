@@ -26,7 +26,6 @@
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
--export([is_authorized_to_request_support/3]).
 
 -define(MINIMUM_SUPPORT_SIZE, oz_worker:get_env(minimum_space_support_size, 1000000)).
 
@@ -40,8 +39,6 @@
 %% Should return:
 %%  * {true, entity_logic:versioned_entity()}
 %%      if the fetch was successful
-%%  * {true, gri:gri(), entity_logic:versioned_entity()}
-%%      if the fetch was successful and new GRI was resolved
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
@@ -195,7 +192,7 @@ create(#el_req{auth = Auth, gri = #gri{aspect = verify_provider_identity}, data 
         {ok, M} -> M;
         error -> maps:get(<<"token">>, Data)
     end,
-    case token_auth:verify_identity(Token, Auth#auth.peer_ip, aai:auth_to_audience(Auth)) of
+    case token_auth:verify_identity_token(Token, Auth#auth.peer_ip, aai:auth_to_audience(Auth)) of
         {ok, ?SUB(?ONEPROVIDER, ProviderId)} -> ok;
         {ok, _} -> ?ERROR_TOKEN_INVALID;
         Error -> Error
@@ -628,30 +625,18 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}
             % BAD_DATA error. No need to generate domain related fields.
             #{}
     end,
-    Required = DomainRelatedFields#{
-        <<"name">> => {binary, name},
-        <<"subdomainDelegation">> => {boolean, any},
-        <<"adminEmail">> => {binary, email}
-    },
-    Optional = #{
-        <<"latitude">> => {float, {between, -90, 90}},
-        <<"longitude">> => {float, {between, -180, 180}}
-    },
-
-    %% @TODO VFS-5207 Registration token is not required for compatibility with
-    %% legacy providers, but can be forced by the env variable
-    case oz_worker:get_env(require_token_for_provider_registration, false) of
-        false ->
-            #{
-                required => Required,
-                optional => Optional#{<<"token">> => {invite_token, ?PROVIDER_REGISTRATION_TOKEN}}
-            };
-        true ->
-            #{
-                required => Required#{<<"token">> => {invite_token, ?PROVIDER_REGISTRATION_TOKEN}},
-                optional => Optional
-            }
-    end;
+    #{
+        required => DomainRelatedFields#{
+            <<"token">> => {invite_token, ?REGISTER_ONEPROVIDER},
+            <<"name">> => {binary, name},
+            <<"subdomainDelegation">> => {boolean, any},
+            <<"adminEmail">> => {binary, email}
+        },
+        optional => #{
+            <<"latitude">> => {float, {between, -90, 90}},
+            <<"longitude">> => {float, {between, -180, 180}}
+        }
+    };
 
 validate(Req = #el_req{operation = create, gri = GRI = #gri{aspect = instance_dev}}) ->
     ValidationRules = #{required := Required} = validate(Req#el_req{gri = GRI#gri{aspect = instance}}),
@@ -663,7 +648,7 @@ validate(Req = #el_req{operation = create, gri = GRI = #gri{aspect = instance_de
 
 validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     required => #{
-        <<"token">> => {invite_token, ?SPACE_SUPPORT_TOKEN},
+        <<"token">> => {invite_token, ?SUPPORT_SPACE},
         <<"size">> => {integer, {not_lower_than, ?MINIMUM_SUPPORT_SIZE}}
     }
 };
@@ -737,16 +722,6 @@ validate(#el_req{operation = update, gri = #gri{aspect = domain_config}, data = 
                 <<"subdomainDelegation">> => {boolean, any}
             }}
     end.
-
-
--spec is_authorized_to_request_support(aai:auth(), tokens:invite_token_type(), od_group:id()) ->
-    boolean().
-is_authorized_to_request_support(?USER(UserId), ?SPACE_SUPPORT_TOKEN, SpaceId) ->
-    space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_ADD_SUPPORT) orelse
-        user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_ADD_RELATIONSHIPS);
-is_authorized_to_request_support(_, _, _) ->
-    false.
-
 
 %%%===================================================================
 %%% Internal functions
@@ -921,15 +896,17 @@ update_provider_subomain(ProviderId, Data) ->
     GRI :: entity_logic:gri()) -> entity_logic:create_result().
 create_provider(Auth, Data, ProviderId, GRI) ->
     Name = maps:get(<<"name">>, Data),
+    Token = maps:get(<<"token">>, Data),
     Latitude = maps:get(<<"latitude">>, Data, 0.0),
     Longitude = maps:get(<<"longitude">>, Data, 0.0),
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
     AdminEmail = maps:get(<<"adminEmail">>, Data),
 
-    CreateProviderFun = fun(CreatorUserId) ->
-        {ok, RootToken} = token_logic:create_provider_named_token(
-            ?ROOT, ProviderId, ?PROVIDER_ROOT_TOKEN_NAME, ?ACCESS_TOKEN, [], #{}
-        ),
+    invite_tokens:consume(Auth, Token, ?REGISTER_ONEPROVIDER, fun(CreatorUserId, _) ->
+        {ok, RootToken} = token_logic:create_provider_named_token(?ROOT, ProviderId, #{
+            <<"name">> => ?PROVIDER_ROOT_TOKEN_NAME,
+            <<"type">> => ?ACCESS_TOKEN
+        }),
 
         {Domain, Subdomain} = case SubdomainDelegation of
             false ->
@@ -946,7 +923,7 @@ create_provider(Auth, Data, ProviderId, GRI) ->
         end,
 
         ProviderRecord = #od_provider{
-            name = Name, root_token = RootToken#token.nonce,
+            name = Name, root_token = RootToken#token.id,
             subdomain_delegation = SubdomainDelegation,
             domain = Domain, subdomain = Subdomain,
             latitude = Latitude, longitude = Longitude,
@@ -964,16 +941,4 @@ create_provider(Auth, Data, ProviderId, GRI) ->
             dns_state:remove_delegation_config(ProviderId),
             ?ERROR_INTERNAL_SERVER_ERROR
         end
-    end,
-
-    %% @TODO VFS-5207 Registration token is not required for compatibility with legacy providers
-    case maps:find(<<"token">>, Data) of
-        error ->
-            CreateProviderFun(undefined);
-        {ok, Token} ->
-            IsAuthorizedFun = fun(_, _, _) -> true end,
-            token_logic_plugin:consume_invite_token(
-                Auth, Token, ?PROVIDER_REGISTRATION_TOKEN,
-                IsAuthorizedFun, CreateProviderFun
-            )
-    end.
+    end).

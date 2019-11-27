@@ -24,7 +24,6 @@
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
--export([is_authorized_to_invite/3]).
 
 %%%===================================================================
 %%% API
@@ -36,8 +35,6 @@
 %% Should return:
 %%  * {true, entity_logic:versioned_entity()}
 %%      if the fetch was successful
-%%  * {true, gri:gri(), entity_logic:versioned_entity()}
-%%      if the fetch was successful and new GRI was resolved
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
@@ -109,6 +106,7 @@ operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {user, _}, private) -> true;
 operation_supported(delete, {group, _}, private) -> true;
 operation_supported(delete, {storage, _}, private) -> true;
+operation_supported(delete, {provider, _}, private) -> true;
 operation_supported(delete, {harvester, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
@@ -172,15 +170,12 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
 
 create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
     Token = maps:get(<<"token">>, Req#el_req.data),
-    % In the future, privileges can be included in token
-    Privileges = privileges:space_member(),
-
     ExpType = case Req#el_req.auth_hint of
-        ?AS_USER(_) -> ?SPACE_INVITE_USER_TOKEN;
-        ?AS_GROUP(_) -> ?SPACE_INVITE_GROUP_TOKEN
+        ?AS_USER(_) -> ?USER_JOIN_SPACE;
+        ?AS_GROUP(_) -> ?GROUP_JOIN_SPACE
     end,
 
-    token_logic_plugin:consume_invite_token(Auth, Token, ExpType, fun is_authorized_to_invite/3, fun(SpaceId) ->
+    invite_tokens:consume(Auth, Token, ExpType, fun(SpaceId, Privileges) ->
         case Req#el_req.auth_hint of
             ?AS_USER(UserId) ->
                 entity_graph:add_relation(
@@ -206,38 +201,17 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
         {ok, resource, {NewGRI, {SpaceData, Rev}}}
     end);
 
-create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
-    %% @TODO VFS-5727 move entirely to token_logic
-    Result = token_logic:create_user_named_token(
-        Auth, UserId, ?INVITE_TOKEN_NAME(?SPACE_INVITE_USER_TOKEN),
-        ?INVITE_TOKEN(?SPACE_INVITE_USER_TOKEN, SpaceId), [], #{}
-    ),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    token_logic:create_legacy_invite_token(Auth, ?USER_JOIN_SPACE, SpaceId);
 
-create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = SpaceId, aspect = invite_group_token}}) ->
-    %% @TODO VFS-5727 move entirely to token_logic
-    Result = token_logic:create_user_named_token(
-        Auth, UserId, ?INVITE_TOKEN_NAME(?SPACE_INVITE_GROUP_TOKEN),
-        ?INVITE_TOKEN(?SPACE_INVITE_GROUP_TOKEN, SpaceId), [], #{}
-    ),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_group_token}}) ->
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    token_logic:create_legacy_invite_token(Auth, ?GROUP_JOIN_SPACE, SpaceId);
 
-create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = SpaceId, aspect = space_support_token}}) ->
-    %% @TODO VFS-5727 move entirely to token_logic
-    Result = token_logic:create_user_named_token(
-        Auth, UserId, ?INVITE_TOKEN_NAME(?SPACE_SUPPORT_TOKEN),
-        ?INVITE_TOKEN(?SPACE_SUPPORT_TOKEN, SpaceId), [], #{}
-    ),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = space_support_token}}) ->
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    token_logic:create_legacy_invite_token(Auth, ?SUPPORT_SPACE, SpaceId);
 
 create(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:space_member()),
@@ -451,6 +425,28 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {storage, StorageId}}}) ->
         )
     end;
 
+delete(#el_req{gri = #gri{id = SpaceId, aspect = {provider, ProviderId}}}) ->
+    fun(#od_space{harvesters = Harvesters, storages = Storages}) ->
+        lists:foreach(fun(HarvesterId) ->
+            harvester_indices:update_stats(HarvesterId, all,
+                fun(ExistingStats) ->
+                    harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, true)
+                end)
+        end, Harvesters),
+
+        lists:foreach(fun(StorageId) ->
+            case storage_logic_plugin:fetch_entity(#gri{id = StorageId}) of
+                {true, { #od_storage{provider = ProviderId}, _Rev}} ->
+                    entity_graph:remove_relation(
+                        od_space, SpaceId,
+                        od_storage, StorageId
+                    );
+                _ ->
+                    ok
+            end
+        end, maps:keys(Storages))
+    end;
+
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {harvester, HarvesterId}}}) ->
     fun(#od_space{eff_providers = Providers}) ->
         harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->
@@ -510,6 +506,9 @@ exists(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Space) ->
 
 exists(#el_req{gri = #gri{aspect = {storage, StorageId}}}, Space) ->
     entity_graph:has_relation(direct, top_down, od_storage, StorageId, Space);
+
+exists(#el_req{gri = #gri{aspect = {provider, ProviderId}}}, Space) ->
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Space);
 
 exists(#el_req{gri = #gri{aspect = {harvester, HarvesterId}}}, Space) ->
     entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, Space);
@@ -683,6 +682,9 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {group, _}}}, Sp
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {storage, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_REMOVE_SUPPORT);
 
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {provider, _}}}, Space) ->
+    auth_by_privilege(Req, Space, ?SPACE_REMOVE_SUPPORT);
+
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {harvester, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_REMOVE_HARVESTER);
 
@@ -786,6 +788,8 @@ required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {group
     [?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {storage, _}}}) ->
     [?OZ_SPACES_REMOVE_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {provider, _}}}) ->
+    [?OZ_SPACES_REMOVE_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {harvester, _}}}) ->
     [?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_HARVESTERS_REMOVE_RELATIONSHIPS];
 
@@ -812,8 +816,8 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
     #{
         required => #{
             <<"token">> => {invite_token, case Req#el_req.auth_hint of
-                ?AS_USER(_) -> ?SPACE_INVITE_USER_TOKEN;
-                ?AS_GROUP(_) -> ?SPACE_INVITE_GROUP_TOKEN
+                ?AS_USER(_) -> ?USER_JOIN_SPACE;
+                ?AS_GROUP(_) -> ?GROUP_JOIN_SPACE
             end}
         }
     };
@@ -887,19 +891,6 @@ validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}})
 
 validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}}) ->
     validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}}).
-
-
--spec is_authorized_to_invite(aai:auth(), tokens:invite_token_type(), od_group:id()) ->
-    boolean().
-is_authorized_to_invite(?USER(UserId), ?SPACE_INVITE_USER_TOKEN, SpaceId) ->
-    auth_by_privilege(UserId, SpaceId, ?SPACE_ADD_USER) orelse
-        user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_ADD_RELATIONSHIPS);
-is_authorized_to_invite(?USER(UserId), ?SPACE_INVITE_GROUP_TOKEN, SpaceId) ->
-    auth_by_privilege(UserId, SpaceId, ?SPACE_ADD_GROUP) orelse
-        user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_ADD_RELATIONSHIPS);
-is_authorized_to_invite(_, _, _) ->
-    false.
-
 
 %%%===================================================================
 %%% Internal functions

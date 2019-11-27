@@ -124,24 +124,22 @@ create(#el_req{auth = Auth, gri = #gri{id = StorageId, aspect = support}, data =
     fun(#od_storage{provider = ProviderId}) ->
         SupportSize = maps:get(<<"size">>, Data),
         Token = maps:get(<<"token">>, Data),
-        ExpType = ?SPACE_SUPPORT_TOKEN,
 
-        token_logic_plugin:consume_invite_token(Auth, Token, ExpType, fun is_authorized_to_request_support/3, fun(SpaceId) ->
+        invite_tokens:consume(Auth, Token, ?SUPPORT_SPACE, fun(SpaceId, _) ->
             entity_graph:add_relation(
-                od_space, SpaceId, od_storage, StorageId, SupportSize
+                od_space, SpaceId,
+                od_storage, StorageId,
+                SupportSize
             ),
-            {true, {
-                #od_space{harvesters = Harvesters} = Space,
-                Rev
-            }} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
+            NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
+            {true, {Space, Rev}} = space_logic_plugin:fetch_entity(NewGRI),
 
             lists:foreach(fun(HarvesterId) ->
                 harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->
                     harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, false)
                 end)
-            end, Harvesters),
+            end, Space#od_space.harvesters),
 
-            NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
             {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
             {ok, resource, {NewGRI, {SpaceData, Rev}}}
         end)
@@ -342,7 +340,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
 
 validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     required => #{
-        <<"token">> => {invite_token, ?SPACE_SUPPORT_TOKEN},
+        <<"token">> => {invite_token, ?SUPPORT_SPACE},
         <<"size">> => {integer, {not_lower_than, ?MINIMUM_SUPPORT_SIZE}}
     }
 };
@@ -362,11 +360,3 @@ validate(#el_req{operation = update, gri = #gri{aspect = {space, _}}}) -> #{
         <<"size">> => {integer, {not_lower_than, ?MINIMUM_SUPPORT_SIZE}}
     }
 }.
-
--spec is_authorized_to_request_support(aai:auth(), tokens:invite_token_type(), od_group:id()) ->
-    boolean().
-is_authorized_to_request_support(?USER(UserId), ?SPACE_SUPPORT_TOKEN, SpaceId) ->
-    space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_ADD_SUPPORT) orelse
-        user_logic:has_eff_oz_privilege(UserId, ?OZ_SPACES_ADD_RELATIONSHIPS);
-is_authorized_to_request_support(_, _, _) ->
-    false.

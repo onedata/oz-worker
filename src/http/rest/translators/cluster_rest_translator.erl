@@ -38,7 +38,7 @@ create_response(#gri{id = undefined, aspect = join}, AuthHint, resource, {#gri{i
         _ ->
             [<<"clusters">>, ClusterId]
     end,
-    rest_translator:created_reply(LocationTokens);
+    rest_translator:created_reply_with_location(LocationTokens);
 
 create_response(#gri{aspect = invite_user_token}, _, value, Token) ->
     {ok, Serialized} = tokens:serialize(Token),
@@ -49,17 +49,17 @@ create_response(#gri{aspect = invite_group_token}, _, value, Token) ->
     rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
 create_response(#gri{id = ClusterId, aspect = {user, UserId}}, _, resource, _) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"clusters">>, ClusterId, <<"users">>, UserId]
     );
 
 create_response(#gri{id = ClusterId, aspect = {group, GroupId}}, _, resource, _) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"clusters">>, ClusterId, <<"groups">>, GroupId]
     );
 
 create_response(#gri{id = ClusterId, aspect = group}, _, resource, {#gri{id = GroupId}, _}) ->
-    rest_translator:created_reply(
+    rest_translator:created_reply_with_location(
         [<<"clusters">>, ClusterId, <<"groups">>, GroupId]
     ).
 

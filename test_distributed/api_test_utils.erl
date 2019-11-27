@@ -301,7 +301,9 @@ prepare_logic_auth({user, UserId}) ->
 prepare_logic_auth({user, UserId, _Token}) ->
     ?USER(UserId);
 prepare_logic_auth({provider, ProviderId, _Token}) ->
-    ?PROVIDER(ProviderId).
+    ?PROVIDER(ProviderId);
+prepare_logic_auth({op_panel, ProviderId, _Token}) ->
+    #auth{subject = ?SUB(?ONEPROVIDER, ?OP_PANEL, ProviderId)}.
 
 
 % Convert placeholders in various spec fields into real data
@@ -488,7 +490,9 @@ prepare_gs_client(Config, {provider, ProviderId, Token}) ->
         ?SUB(?ONEPROVIDER, ProviderId),
         {token, Token},
         [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
-    ).
+    );
+prepare_gs_client(_Config, {op_panel, _ProviderId, _Token}) ->
+    error(op_panel_graph_sync_not_supported).
 
 
 prepare_gs_client(Config, ExpIdentity, Authorization, Opts) ->
@@ -746,6 +750,8 @@ prepare_auth({user, User, Token}, Env, _Config) when is_atom(User) ->
     {user, maps:get(User, Env, User), Token};
 prepare_auth({provider, Provider, Token}, Env, _Config) when is_atom(Provider) orelse is_atom(Token) ->
     {provider, maps:get(Provider, Env, Provider), maps:get(Token, Env, Token)};
+prepare_auth({op_panel, Provider, Token}, Env, _Config) when is_atom(Provider) orelse is_atom(Token) ->
+    {op_panel, maps:get(Provider, Env, Provider), maps:get(Token, Env, Token)};
 prepare_auth({admin, Privs}, _Env, Config) ->
     {ok, Admin} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, Admin, Privs, []),
@@ -962,5 +968,7 @@ resolve_auth({user, UserId, Token}, _Env) ->
     {user, UserId, Token};
 resolve_auth({provider, ProviderId, Token}, _Env) ->
     {provider, ProviderId, Token};
+resolve_auth({op_panel, ProviderId, Token}, _Env) ->
+    {op_panel, ProviderId, Token};
 resolve_auth(Arg, Env) ->
     maps:get(Arg, Env).

@@ -37,8 +37,6 @@
 %% Should return:
 %%  * {true, entity_logic:versioned_entity()}
 %%      if the fetch was successful
-%%  * {true, gri:gri(), entity_logic:versioned_entity()}
-%%      if the fetch was successful and new GRI was resolved
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
@@ -65,7 +63,6 @@ fetch_entity(#gri{id = UserId}) ->
 %%--------------------------------------------------------------------
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
-operation_supported(create, preauthorize, public) -> true;
 operation_supported(create, instance, private) -> true;
 %% @TODO VFS-5770 old client tokens API kept for backward compatibility
 operation_supported(create, client_tokens, private) -> true;
@@ -164,16 +161,6 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(#el_req{auth = Auth, gri = #gri{aspect = preauthorize}, data = Data}) ->
-    Token = maps:get(<<"token">>, Data),
-    PeerIp = maps:get(<<"peerIp">>, Data, undefined),
-    case token_auth:verify_access_token(Token, PeerIp, aai:auth_to_audience(Auth)) of
-        {ok, #auth{subject = Subject, caveats = Caveats}} ->
-            {ok, value, {Subject, Caveats}};
-        {error, _} = Error ->
-            Error
-    end;
-
 create(#el_req{gri = GRI = #gri{id = ProposedUserId, aspect = instance}, data = Data}) ->
     % Creating users with predefined UserId is reserved for Onezone logic (?ROOT auth).
     % Users with ?OZ_USERS_CREATE privilege can create new users but the UserIds are
@@ -219,11 +206,11 @@ create(#el_req{gri = GRI = #gri{id = ProposedUserId, aspect = instance}, data = 
 
 create(#el_req{gri = #gri{id = UserId, aspect = client_tokens} = GRI}) ->
     %% @TODO VFS-5770 old client tokens API kept for backward compatibility
-    case token_logic:create_user_named_token(?USER(UserId), UserId, ?ACCESS_TOKEN_NAME, ?ACCESS_TOKEN, [], #{}) of
+    case token_logic:create_legacy_client_token(?USER(UserId)) of
         {ok, Token} ->
             {ok, Serialized} = tokens:serialize(Token),
             {ok, resource, {GRI#gri{aspect = {client_token, Serialized}}, {Serialized, inherit_rev}}};
-        Error = {error, _} ->
+        {error, _} = Error ->
             Error
     end;
 
@@ -262,15 +249,8 @@ create(#el_req{gri = #gri{aspect = {idp_access_token, IdP}}}) ->
     end;
 
 create(#el_req{auth = Auth, gri = #gri{id = UserId, aspect = provider_registration_token}}) ->
-    %% @TODO VFS-5727 move entirely to token_logic
-    Result = token_logic:create_user_named_token(
-        Auth, UserId, ?INVITE_TOKEN_NAME(?PROVIDER_REGISTRATION_TOKEN),
-        ?INVITE_TOKEN(?PROVIDER_REGISTRATION_TOKEN, UserId), [], #{}
-    ),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end.
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    token_logic:create_legacy_invite_token(Auth, ?REGISTER_ONEPROVIDER, UserId).
 
 
 %%--------------------------------------------------------------------
@@ -319,10 +299,10 @@ get(#el_req{auth = Auth, gri = #gri{id = UserId, aspect = client_tokens}}, _User
         {error, _} = Error ->
             Error;
         {ok, UserTokens} ->
-            {ok, lists:filtermap(fun({_TokenName, TokenNonce}) ->
-                case token_logic:get_named_token_by_nonce(Auth, TokenNonce) of
-                    {ok, #od_token{type = ?ACCESS_TOKEN} = NamedToken} ->
-                        Token = token_logic:named_token_to_token(TokenNonce, NamedToken),
+            {ok, lists:filtermap(fun(TokenId) ->
+                case od_token:get(TokenId) of
+                    {ok, #document{value = #od_token{type = ?ACCESS_TOKEN} = NamedToken}} ->
+                        Token = od_token:named_token_to_token(TokenId, NamedToken),
                         {ok, Serialized} = tokens:serialize(Token),
                         {true, Serialized};
                     _ ->
@@ -479,8 +459,8 @@ delete(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}}) ->
 
 %% @TODO VFS-5770 old client tokens API kept for backward compatibility
 delete(#el_req{gri = #gri{id = UserId, aspect = {client_token, Serialized}}}) ->
-    {ok, #token{nonce = Nonce}} = tokens:deserialize(Serialized),
-    token_logic:delete_named_token_by_nonce(?USER(UserId), Nonce);
+    {ok, #token{id = TokenId}} = tokens:deserialize(Serialized),
+    token_logic:delete_named_token(?USER(UserId), TokenId);
 
 delete(#el_req{gri = #gri{id = UserId, aspect = default_space}}) ->
     {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
@@ -590,8 +570,8 @@ exists(Req = #el_req{gri = #gri{id = UserId, aspect = instance, scope = shared}}
 
 %% @TODO VFS-5770 old client tokens API kept for backward compatibility
 exists(#el_req{gri = #gri{aspect = {client_token, Serialized}}}, _User) ->
-    {ok, #token{nonce = Nonce}} = tokens:deserialize(Serialized),
-    token_logic:exists(Nonce);
+    {ok, #token{id = TokenId}} = tokens:deserialize(Serialized),
+    token_logic:exists(TokenId);
 
 exists(#el_req{gri = #gri{aspect = {linked_account, SubId}}}, User) ->
     find_linked_account(SubId, User#od_user.linked_accounts) /= undefined;
@@ -635,11 +615,6 @@ exists(#el_req{gri = #gri{id = Id}}, #od_user{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
-
-%% Publicly available operations
-authorize(#el_req{operation = create, gri = #gri{aspect = preauthorize}}, _) ->
-    true;
-
 
 %% Operations reserved for admins or available to users in certain circumstances
 authorize(Req = #el_req{operation = create, gri = #gri{id = UserId, aspect = provider_registration_token}}, _) ->
@@ -846,16 +821,6 @@ required_admin_privileges(_) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
-validate(#el_req{operation = create, gri = #gri{aspect = preauthorize}}) -> #{
-    required => #{
-        %% @TODO VFS-5727 better validators for token types
-        <<"token">> => {token, any}
-    },
-    optional => #{
-        <<"peerIp">> => {ipv4_address, any}
-    }
-};
-
 validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}) ->
     case maps:is_key(<<"password">>, Data) of
         true -> #{

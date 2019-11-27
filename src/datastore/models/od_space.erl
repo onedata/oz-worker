@@ -35,7 +35,8 @@
 -define(CTX, #{
     model => ?MODULE,
     fold_enabled => true,
-    sync_enabled => true
+    sync_enabled => true,
+    memory_copies => all
 }).
 
 %%%===================================================================

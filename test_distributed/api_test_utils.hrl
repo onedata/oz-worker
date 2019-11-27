@@ -12,6 +12,7 @@
 -ifndef(API_TEST_UTILS_HRL).
 -define(API_TEST_UTILS_HRL, 1).
 
+-include_lib("ctool/include/errors.hrl").
 -include_lib("gui/include/gui_session.hrl").
 
 %% @formatter:off

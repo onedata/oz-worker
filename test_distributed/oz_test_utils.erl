@@ -71,7 +71,8 @@
     user_leave_harvester/3,
     user_leave_cluster/3,
 
-    create_provider_registration_token/3
+    create_provider_registration_token/3,
+    create_temporary_provider_registration_token/3
 ]).
 -export([
     list_groups/1,
@@ -126,6 +127,7 @@
     space_get_storages/2,
 
     space_remove_storage/3,
+    space_remove_provider/3,
     space_remove_harvester/3,
 
     space_add_user/3,
@@ -201,7 +203,7 @@
     handle_get_group_privileges/3
 ]).
 -export([
-    create_harvester/3,
+    create_harvester/2, create_harvester/3,
     get_harvester/2,
     list_harvesters/1,
     update_harvester/3,
@@ -264,8 +266,7 @@
     delete_storage/2
 ]).
 -export([
-    assert_token_exists/2,
-    assert_token_not_exists/2
+    assert_invite_token_usage_limit_reached/3
 ]).
 -export([
     delete_all_entities/1,
@@ -696,7 +697,7 @@ user_leave_cluster(Config, UserId, ClusterId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a provider registration token.
+%% Creates a NAMED provider registration token.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_provider_registration_token(Config :: term(),
@@ -704,6 +705,22 @@ user_leave_cluster(Config, UserId, ClusterId) ->
 create_provider_registration_token(Config, Client, UserId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, user_logic, create_provider_registration_token, [Client, UserId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a TEMPORARY provider registration token.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_temporary_provider_registration_token(Config :: term(),
+    Client :: aai:auth(), od_user:id()) -> {ok, tokens:token()}.
+create_temporary_provider_registration_token(Config, Client, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, token_logic, create_user_temporary_token, [Client, UserId, #{
+            <<"type">> => ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, UserId),
+            <<"caveats">> => [#cv_time{valid_until = cluster_time_seconds(Config) + 3600}]
+        }]
     )).
 
 
@@ -1205,7 +1222,7 @@ space_get_providers(Config, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_get_harvesters(Config :: term(),
-    SpaceId :: od_space:id()) -> {ok, [od_provider:id()]}.
+    SpaceId :: od_space:id()) -> {ok, [od_harvester:id()]}.
 space_get_harvesters(Config, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, space_logic, get_harvesters, [?ROOT, SpaceId]
@@ -1218,7 +1235,7 @@ space_get_harvesters(Config, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_get_storages(Config :: term(),
-    SpaceId :: od_space:id()) -> {ok, [od_provider:id()]}.
+    SpaceId :: od_space:id()) -> {ok, [od_storage:id()]}.
 space_get_storages(Config, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, space_logic, get_storages, [?ROOT, SpaceId]
@@ -1227,14 +1244,28 @@ space_get_storages(Config, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Leave space from given provider.
+%% Leaves specified storage (ceases support for given space).
 %% @end
 %%--------------------------------------------------------------------
 -spec space_remove_storage(Config :: term(),
-    SpaceId :: od_space:id(), ProviderId :: od_provider:id()) -> ok.
+    SpaceId :: od_space:id(), StorageId :: od_storage:id()) -> ok.
 space_remove_storage(Config, SpaceId, StorageId) ->
     ?assertMatch(ok, call_oz(
         Config, space_logic, remove_storage, [?ROOT, SpaceId, StorageId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves specified provider (ceases support for given space by all
+%% storages belonging to given provider).
+%% @end
+%%--------------------------------------------------------------------
+-spec space_remove_provider(Config :: term(),
+    SpaceId :: od_space:id(), ProviderId :: od_provider:id()) -> ok.
+space_remove_provider(Config, SpaceId, ProviderId) ->
+    ?assertMatch(ok, call_oz(
+        Config, space_logic, remove_provider, [?ROOT, SpaceId, ProviderId]
     )).
 
 
@@ -1244,7 +1275,7 @@ space_remove_storage(Config, SpaceId, StorageId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_remove_harvester(Config :: term(),
-    SpaceId :: od_space:id(), HarvesterId :: od_provider:id()) -> ok.
+    SpaceId :: od_space:id(), HarvesterId :: od_harvester:id()) -> ok.
 space_remove_harvester(Config, SpaceId, HarvesterId) ->
     ?assertMatch(ok, call_oz(
         Config, space_logic, remove_harvester, [?ROOT, SpaceId, HarvesterId]
@@ -1501,6 +1532,10 @@ create_provider(Config, NameOrData) ->
 -spec create_provider(Config :: term(), CreatorUserId :: od_user:id(),
     NameOrData :: od_provider:name() | #{}) ->
     {ok, {od_provider:id(), ProviderRootToken :: tokens:serialized()}}.
+create_provider(Config, undefined, Name) ->
+    % Create an admin for the provider if none was specified
+    {ok, User} = create_user(Config),
+    create_provider(Config, User, Name);
 create_provider(Config, CreatorUserId, Name) when is_binary(Name) ->
     create_provider(Config, CreatorUserId, #{
         <<"name">> => Name,
@@ -1511,17 +1546,13 @@ create_provider(Config, CreatorUserId, Name) when is_binary(Name) ->
         <<"longitude">> => 0.0
     });
 create_provider(Config, CreatorUserId, Data) ->
-    {Auth, DataWithToken} = case CreatorUserId of
-        undefined ->
-            {?NOBODY, Data};
-        _ ->
-            {ok, RegistrationToken} = create_provider_registration_token(
-                Config, ?USER(CreatorUserId), CreatorUserId
-            ),
-            {?USER(CreatorUserId), Data#{<<"token">> => RegistrationToken}}
-    end,
+    {ok, RegistrationToken} = create_temporary_provider_registration_token(
+        Config, ?USER(CreatorUserId), CreatorUserId
+    ),
     {ok, {ProviderId, RootToken}} = ?assertMatch({ok, _}, call_oz(
-        Config, provider_logic, create, [Auth, DataWithToken]
+        Config, provider_logic, create, [
+            ?USER(CreatorUserId), Data#{<<"token">> => RegistrationToken}
+        ]
     )),
     {ok, SerializedRootToken} = tokens:serialize(RootToken),
     {ok, {ProviderId, SerializedRootToken}}.
@@ -2150,6 +2181,17 @@ handle_get_group_privileges(Config, HandleId, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, handle_logic, get_group_privileges, [?ROOT, HandleId, GroupId]
     )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a harvester in onezone with default data.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_harvester(Config :: term(), Client :: aai:auth()) ->
+    {ok, od_harvester:id()}.
+create_harvester(Config, Client) ->
+    create_harvester(Config, Client, ?HARVESTER_CREATE_DATA).
 
 
 %%--------------------------------------------------------------------
@@ -2924,24 +2966,25 @@ delete_storage(Config, StorageId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Asserts token not exists.
+%% Asserts that an invite token's usage limit was reached or not
+%% (depending on the Expected flag).
 %% @end
 %%--------------------------------------------------------------------
--spec assert_token_not_exists(Config :: term(), TokenNonce :: od_token:id()) -> ok.
-assert_token_not_exists(Config, TokenNonce) ->
-    ?assertMatch({error, not_found}, call_oz(Config, od_token, get, [TokenNonce])),
-    ok.
+-spec assert_invite_token_usage_limit_reached(Config :: term(), Expected :: boolean(),
+    TokenId :: od_token:id()) -> ok.
+assert_invite_token_usage_limit_reached(Config, Expected, TokenId) ->
+    {ok, #document{value = #od_token{
+        metadata = Metadata
+    }}} = ?assertMatch({ok, _}, call_oz(Config, od_token, get, [TokenId])),
+    UsageCount = maps:get(<<"usageCount">>, Metadata, 0),
+    IsReached = case maps:get(<<"usageLimit">>, Metadata, <<"infinity">>) of
+        <<"infinity">> ->
+            false;
+        UsageLimit when is_integer(UsageLimit) ->
+            UsageCount >= UsageLimit
+    end,
+    ?assertEqual(Expected, IsReached).
 
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Asserts token exists.
-%% @end
-%%--------------------------------------------------------------------
--spec assert_token_exists(Config :: term(), TokenNonce :: tokens:nonce()) -> ok.
-assert_token_exists(Config, TokenNonce) ->
-    ?assertMatch({ok, _}, call_oz(Config, od_token, get, [TokenNonce])),
-    ok.
 
 %%--------------------------------------------------------------------
 %% @doc

@@ -24,6 +24,7 @@
 -export([
     get/2,
     get_protected_data/2,
+    get_name/2,
     list/1
 ]).
 -export([
@@ -137,8 +138,7 @@ create(Auth, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @TODO This is a developer functionality and should be removed when
-%% @TODO VFS-2550 is ready.
+%% @TODO VFS-2550 This is a developer functionality and should be removed when is ready.
 %% Creates a new provider document in database. UUID, Name,
 %% Domain and CSR (Certificate Signing Request) are provided in a
 %% proper Data object, Latitude and Longitude are optional.
@@ -189,6 +189,15 @@ get_protected_data(Auth, ProviderId) ->
         auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = instance, scope = protected}
     }).
+
+
+-spec get_name(aai:auth(), od_provider:id()) ->
+    {ok, od_provider:name()} | {error, term()}.
+get_name(Auth, ProviderId) ->
+    case get(Auth, ProviderId) of
+        {ok, #od_provider{name = Name}} -> {ok, Name};
+        {error, _} = Error -> Error
+    end.
 
 
 %%--------------------------------------------------------------------

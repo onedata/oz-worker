@@ -263,7 +263,7 @@
 -record(od_provider, {
     name = <<"">> :: od_provider:name(),
     admin_email = undefined :: undefined | binary(),
-    root_token = undefined :: undefined | tokens:nonce(),
+    root_token = undefined :: undefined | tokens:id(),
 
     subdomain_delegation = false :: boolean(),
     domain :: binary(),
@@ -421,7 +421,7 @@
     type :: tokens:type(),
     caveats = [] :: [caveats:caveat()],
     secret :: tokens:secret(),
-    metadata = #{} :: od_token:metadata(),
+    metadata = #{} :: token_metadata:metadata(),
     revoked = false :: boolean()
 }).
 
@@ -483,8 +483,9 @@
     connections = [] :: [gs_server:conn_ref()]
 }).
 
-%% Singleton record that stores a global, shared token secret for temporary tokens.
--record(shared_token_secret, {
+%% Record that stores a shared token secret for temporary tokens of given
+%% subject (user or provider).
+-record(temporary_token_secret, {
     secret :: tokens:secret()
 }).
 

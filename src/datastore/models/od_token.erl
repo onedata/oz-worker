@@ -21,7 +21,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 
--type id() :: tokens:nonce().
+-type id() :: tokens:id().
 -type record() :: #od_token{}.
 -type doc() :: datastore_doc:doc(record()).
 -type diff() :: datastore_doc:diff(record()).
@@ -30,6 +30,7 @@
 -export_type([record/0, name/0, metadata/0]).
 
 %% API
+-export([named_token_to_token/2]).
 -export([create/1, get/1, exists/1, update/2, delete/1]).
 -export([entity_logic_plugin/0]).
 
@@ -39,12 +40,37 @@
 
 -define(CTX, #{
     model => ?MODULE,
-    sync_enabled => true
+    sync_enabled => true,
+    memory_copies => all
 }).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Reconstructs a token based on given named token (od_token) record and id.
+%% @end
+%%--------------------------------------------------------------------
+-spec named_token_to_token(id(), record()) -> tokens:token().
+named_token_to_token(TokenId, NamedToken) ->
+    #od_token{
+        version = Version,
+        subject = Subject,
+        type = Type,
+        secret = Secret,
+        caveats = Caveats
+    } = NamedToken,
+    Prototype = #token{
+        version = Version,
+        onezone_domain = oz_worker:get_domain(),
+        id = TokenId,
+        subject = Subject,
+        type = Type,
+        persistent = true
+    },
+    tokens:construct(Prototype, Secret, Caveats).
 
 -spec create(doc()) -> {ok, doc()} | {error, term()}.
 create(Doc) ->
@@ -92,7 +118,7 @@ get_record_struct(1) ->
         {version, integer},
         {subject, {custom, string, {aai, serialize_subject, deserialize_subject}}},
         {type, {custom, string, {tokens, serialize_type, deserialize_type}}},
-        {caveats, [string]},
+        {caveats, [{custom, string, {caveats, serialize, deserialize}}]},
         {secret, string},
         {metadata, {custom, json, {json_utils, encode, decode}}},
         {revoked, boolean}

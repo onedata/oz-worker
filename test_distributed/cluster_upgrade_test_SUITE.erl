@@ -93,62 +93,88 @@ upgrade_from_19_02_x_tokens(Config) ->
     ?assertEqual(13, length(element(2, {ok, _} = oz_test_utils:call_oz(
         Config, token_logic, list_user_named_tokens, [?ROOT, User5])))
     ),
-    {ok, [{<<"root token">>, _}]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P1]),
-    {ok, [{<<"root token">>, _}]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P2]),
-    {ok, [{<<"root token">>, _}]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P3]),
-    {ok, [{<<"root token">>, _}]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P4]),
+    {ok, [_]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P1]),
+    {ok, [_]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P2]),
+    {ok, [_]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P3]),
+    {ok, [_]} = oz_test_utils:call_oz(Config, token_logic, list_provider_named_tokens, [?ROOT, P4]),
 
     % Check all user tokens
-    lists:foreach(fun({UserId, TokenNonce, Secret, Serialized}) ->
+    lists:foreach(fun({UserId, TokenId, Secret, LegacyTokenSerialized}) ->
+        {ok, LegacyToken} = tokens:deserialize(LegacyTokenSerialized),
         % Check if the migrated token has been saved in the new model
-        {ok, NamedToken} = ?assertMatch({ok, #od_token{
+        {ok, #document{value = NamedToken}} = ?assertMatch({ok, #document{value = #od_token{
             name = <<"legacy token ", _/binary>>,
             version = 1,
             subject = ?SUB(user, UserId),
             type = ?ACCESS_TOKEN,
-            caveats = [<<"time < ", _/binary>>],
+            caveats = [#cv_time{}],
             secret = Secret,
-            metadata = #{},
+            metadata = #{<<"creationTime">> := _},
             revoked = false
-        }}, oz_test_utils:call_oz(Config, token_logic, get_named_token_by_nonce, [?USER(UserId), TokenNonce])),
-        % Make sure the migrated token has exactly the same serialized form
-        % as the original one
-        Token = oz_test_utils:call_oz(Config, token_logic, named_token_to_token, [TokenNonce, NamedToken]),
-        % Subject is not supported in tokens version 1
-        {ok, Deserialized} = tokens:deserialize(Serialized),
-        ?assertEqual(Token#token{subject = ?SUB(nobody)}, Deserialized),
+        }}}, oz_test_utils:call_oz(Config, od_token, get, [TokenId])),
+
+        % Subject is not supported in tokens version 1 when deserializing a
+        % token (defaults to nobody), but it is filled in when a named token is retrieved.
+        LegacyTokenWithSubject = LegacyToken#token{subject = ?SUB(user, UserId)},
+        ?assertMatch({ok, #{
+            <<"name">> := <<"legacy token ", _/binary>>,
+            <<"id">> := TokenId,
+            <<"subject">> := ?SUB(user, UserId),
+            <<"type">> := ?ACCESS_TOKEN,
+            <<"caveats">> := [#cv_time{}],
+            <<"metadata">> := #{<<"creationTime">> := _},
+            <<"revoked">> := false,
+            % Legacy tokens do not include subject (defaults to nobody)
+            <<"token">> := LegacyTokenWithSubject
+        }}, oz_test_utils:call_oz(Config, token_logic, get_named_token, [?USER(UserId), TokenId])),
+
+        % Make sure the migrated token has exactly the same serialized form as the original one
+        Token = oz_test_utils:call_oz(Config, od_token, named_token_to_token, [TokenId, NamedToken]),
+        ?assertEqual({ok, LegacyTokenSerialized}, tokens:serialize(Token)),
         % The legacy onedata_auth record should have been removed
-        ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, onedata_auth, get, [TokenNonce])),
+        ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, onedata_auth, get, [TokenId])),
         % The migrated token should still work
         ?assertMatch({ok, ?USER(UserId)}, oz_test_utils:call_oz(
-            Config, token_auth, verify_access_token, [Deserialized, undefined, undefined]
+            Config, token_auth, verify_access_token, [LegacyToken, undefined, undefined]
         ))
     end, User1Tokens ++ User2Tokens ++ User3Tokens ++ User4Tokens ++ User5Tokens),
 
     % Check all provider tokens
-    lists:foreach(fun({ProviderId, TokenNonce, Secret, RootTokenSerialized}) ->
+    lists:foreach(fun({ProviderId, TokenId, Secret, LegacyRootTokenSerialized}) ->
+        {ok, LegacyRootToken} = tokens:deserialize(LegacyRootTokenSerialized),
         % Check if the migrated token has been saved in the new model
-        {ok, NamedToken} = ?assertMatch({ok, #od_token{
+        {ok, #document{value = NamedToken}} = ?assertMatch({ok, #document{value = #od_token{
             name = <<"root token">>,
             version = 1,
             subject = ?SUB(?ONEPROVIDER, ProviderId),
             type = ?ACCESS_TOKEN,
             caveats = [],
             secret = Secret,
-            metadata = #{},
+            metadata = #{<<"creationTime">> := _},
             revoked = false
-        }}, oz_test_utils:call_oz(Config, token_logic, get_named_token_by_nonce, [?PROVIDER(ProviderId), TokenNonce])),
-        % Make sure the migrated token has exactly the same serialized form
-        % as the original one
-        Token = oz_test_utils:call_oz(Config, token_logic, named_token_to_token, [TokenNonce, NamedToken]),
-        % Subject is not supported in tokens version 1
-        {ok, RootTokenDeserialized} = tokens:deserialize(RootTokenSerialized),
-        ?assertEqual(Token#token{subject = ?SUB(nobody)}, RootTokenDeserialized),
+        }}}, oz_test_utils:call_oz(Config, od_token, get, [TokenId])),
+
+        % Subject is not supported in tokens version 1 when deserializing a
+        % token (defaults to nobody), but it is filled in when a named token is retrieved.
+        LegacyRootTokenWithSubject = LegacyRootToken#token{subject = ?SUB(?ONEPROVIDER, ProviderId)},
+        ?assertMatch({ok, #{
+            <<"name">> := <<"root token">>,
+            <<"id">> := TokenId,
+            <<"subject">> := ?SUB(?ONEPROVIDER, ProviderId),
+            <<"type">> := ?ACCESS_TOKEN,
+            <<"caveats">> := [],
+            <<"metadata">> := #{<<"creationTime">> := _},
+            <<"revoked">> := false,
+            <<"token">> := LegacyRootTokenWithSubject
+        }}, oz_test_utils:call_oz(Config, token_logic, get_named_token, [?PROVIDER(ProviderId), TokenId])),
+        % Make sure the migrated token has exactly the same serialized form as the original one
+        Token = oz_test_utils:call_oz(Config, od_token, named_token_to_token, [TokenId, NamedToken]),
+        ?assertEqual({ok, LegacyRootTokenSerialized}, tokens:serialize(Token)),
         % The legacy macaroon_auth record should have been removed
-        ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, macaroon_auth, get, [TokenNonce])),
+        ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, macaroon_auth, get, [TokenId])),
         % The migrated token should still work
         ?assertMatch({ok, ?PROVIDER(ProviderId)}, oz_test_utils:call_oz(
-            Config, token_auth, verify_access_token, [RootTokenDeserialized, undefined, undefined]
+            Config, token_auth, verify_access_token, [LegacyRootToken, undefined, undefined]
         ))
     end, [PToken1, PToken2, PToken3, PToken4]).
 
@@ -218,14 +244,14 @@ create_n_legacy_client_tokens(Config, UserId, Count) ->
         {ok, Doc} = oz_test_utils:call_oz(Config, onedata_auth, save, [#document{
             value = #onedata_auth{secret = Secret, user_id = UserId}
         }]),
-        Nonce = Doc#document.key,
+        TokenId = Doc#document.key,
         ExpirationTime = oz_test_utils:cluster_time_seconds(Config) + 31536000, % 1 year
-        Macaroon = macaroon:create(oz_test_utils:oz_domain(Config), Secret, Nonce),
+        Macaroon = macaroon:create(oz_test_utils:oz_domain(Config), Secret, TokenId),
         Confined = macaroon:add_first_party_caveat(Macaroon, ["time < ", integer_to_binary(ExpirationTime)]),
         Token = #token{
             version = 1,
             onezone_domain = oz_test_utils:oz_domain(Config),
-            nonce = Nonce,
+            id = TokenId,
             persistent = true,
             type = ?ACCESS_TOKEN,
             macaroon = Confined
@@ -234,20 +260,20 @@ create_n_legacy_client_tokens(Config, UserId, Count) ->
         oz_test_utils:call_oz(Config, od_user, update, [UserId, fun(User = #od_user{client_tokens = ClientTokens}) ->
             {ok, User#od_user{client_tokens = [Serialized | ClientTokens]}}
         end]),
-        {UserId, Nonce, Secret, Serialized}
+        {UserId, TokenId, Secret, Serialized}
     end, lists:seq(1, Count)).
 
 
 create_legacy_provider(Config) ->
     ProviderId = datastore_utils:gen_key(),
     Secret = tokens:generate_secret(),
-    {ok, RootTokenNonce} = oz_test_utils:call_oz(Config, macaroon_auth, create, [
+    {ok, RootTokenId} = oz_test_utils:call_oz(Config, macaroon_auth, create, [
         Secret, ?PROVIDER(ProviderId)
     ]),
     Prototype = #token{
         version = 1,
         onezone_domain = oz_test_utils:oz_domain(Config),
-        nonce = RootTokenNonce,
+        id = RootTokenId,
         persistent = true,
         type = ?ACCESS_TOKEN
     },
@@ -255,7 +281,7 @@ create_legacy_provider(Config) ->
 
     ProviderRecord = #od_provider{
         name = ?UNIQUE_STRING,
-        root_token = RootTokenNonce,
+        root_token = RootTokenId,
         subdomain_delegation = false,
         domain = <<(?UNIQUE_STRING)/binary, ".example.com">>,
         subdomain = undefined,
@@ -268,7 +294,7 @@ create_legacy_provider(Config) ->
         undefined, ProviderId
     ]),
     {ok, SerializedRootToken} = tokens:serialize(RootToken),
-    {ProviderId, RootTokenNonce, Secret, SerializedRootToken}.
+    {ProviderId, RootTokenId, Secret, SerializedRootToken}.
 
 
 create_provider_with_n_legacy_spaces(Config, SpacesNum) ->

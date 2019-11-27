@@ -25,7 +25,6 @@
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
--export([is_authorized_to_invite/3]).
 
 %%%===================================================================
 %%% API
@@ -37,8 +36,6 @@
 %% Should return:
 %%  * {true, entity_logic:versioned_entity()}
 %%      if the fetch was successful
-%%  * {true, gri:gri(), entity_logic:versioned_entity()}
-%%      if the fetch was successful and new GRI was resolved
 %%  * false
 %%      if fetch is not applicable for this operation
 %%  * {error, _}
@@ -217,15 +214,13 @@ create(#el_req{gri = #gri{aspect = instance} = GRI, auth = Auth,
 
 create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
     Token = maps:get(<<"token">>, Req#el_req.data),
-    % In the future, privileges can be included in token
-    Privileges = privileges:harvester_member(),
     ExpType = case Req#el_req.auth_hint of
-        ?AS_USER(_) -> ?HARVESTER_INVITE_USER_TOKEN;
-        ?AS_GROUP(_) -> ?HARVESTER_INVITE_GROUP_TOKEN;
-        ?AS_SPACE(_) -> ?HARVESTER_INVITE_SPACE_TOKEN
+        ?AS_USER(_) -> ?USER_JOIN_HARVESTER;
+        ?AS_GROUP(_) -> ?GROUP_JOIN_HARVESTER;
+        ?AS_SPACE(_) -> ?SPACE_JOIN_HARVESTER
     end,
 
-    token_logic_plugin:consume_invite_token(Auth, Token, ExpType, fun is_authorized_to_invite/3, fun(HarvesterId) ->
+    invite_tokens:consume(Auth, Token, ExpType, fun(HarvesterId, Privileges) ->
         case Req#el_req.auth_hint of
             ?AS_USER(UserId) ->
                 entity_graph:add_relation(
@@ -250,7 +245,8 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
                 ok
         end,
         NewGRI = #gri{type = od_harvester, id = HarvesterId, aspect = instance,
-            scope = case lists:member(?HARVESTER_VIEW, Privileges) of
+            % Privileges are defined only for USER_JOIN_HARVESTER and GROUP_JOIN_HARVESTER
+            scope = case is_list(Privileges) andalso lists:member(?HARVESTER_VIEW, Privileges) of
                 true -> private;
                 false -> protected
             end
@@ -260,38 +256,17 @@ create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
         {ok, resource, {NewGRI, {HarvesterData, Rev}}}
     end);
 
-create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = HarvesterId, aspect = invite_user_token}}) ->
-    %% @TODO VFS-5727 move entirely to token_logic
-    Result = token_logic:create_user_named_token(
-        Auth, UserId, ?INVITE_TOKEN_NAME(?HARVESTER_INVITE_USER_TOKEN),
-        ?INVITE_TOKEN(?HARVESTER_INVITE_USER_TOKEN, HarvesterId), [], #{}
-    ),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+create(#el_req{auth = Auth, gri = #gri{id = HarvesterId, aspect = invite_user_token}}) ->
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    token_logic:create_legacy_invite_token(Auth, ?USER_JOIN_HARVESTER, HarvesterId);
 
-create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = HarvesterId, aspect = invite_group_token}}) ->
-    %% @TODO VFS-5727 move entirely to token_logic
-    Result = token_logic:create_user_named_token(
-        Auth, UserId, ?INVITE_TOKEN_NAME(?HARVESTER_INVITE_GROUP_TOKEN),
-        ?INVITE_TOKEN(?HARVESTER_INVITE_GROUP_TOKEN, HarvesterId), [], #{}
-    ),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+create(#el_req{auth = Auth, gri = #gri{id = HarvesterId, aspect = invite_group_token}}) ->
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    token_logic:create_legacy_invite_token(Auth, ?GROUP_JOIN_HARVESTER, HarvesterId);
 
-create(#el_req{auth = ?USER(UserId) = Auth, gri = #gri{id = HarvesterId, aspect = invite_space_token}}) ->
-    %% @TODO VFS-5727 move entirely to token_logic
-    Result = token_logic:create_user_named_token(
-        Auth, UserId, ?INVITE_TOKEN_NAME(?HARVESTER_INVITE_SPACE_TOKEN),
-        ?INVITE_TOKEN(?HARVESTER_INVITE_SPACE_TOKEN, HarvesterId), [], #{}
-    ),
-    case Result of
-        {ok, Token} -> {ok, value, Token};
-        {error, _} = Error -> Error
-    end;
+create(#el_req{auth = Auth, gri = #gri{id = HarvesterId, aspect = invite_space_token}}) ->
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    token_logic:create_legacy_invite_token(Auth, ?SPACE_JOIN_HARVESTER, HarvesterId);
 
 create(#el_req{gri = #gri{id = HarvesterId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:harvester_member()),
@@ -1121,9 +1096,9 @@ validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
     #{
         required => #{
             <<"token">> => {invite_token, case Req#el_req.auth_hint of
-                ?AS_USER(_) -> ?HARVESTER_INVITE_USER_TOKEN;
-                ?AS_GROUP(_) -> ?HARVESTER_INVITE_GROUP_TOKEN;
-                ?AS_SPACE(_) -> ?HARVESTER_INVITE_SPACE_TOKEN
+                ?AS_USER(_) -> ?USER_JOIN_HARVESTER;
+                ?AS_GROUP(_) -> ?GROUP_JOIN_HARVESTER;
+                ?AS_SPACE(_) -> ?SPACE_JOIN_HARVESTER
             end}
         }
     };
@@ -1207,21 +1182,6 @@ validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}})
 
 validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}}) ->
     validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}}).
-
-
--spec is_authorized_to_invite(aai:auth(), tokens:invite_token_type(), od_group:id()) ->
-    boolean().
-is_authorized_to_invite(?USER(UserId), ?HARVESTER_INVITE_USER_TOKEN, HarvesterId) ->
-    auth_by_privilege(UserId, HarvesterId, ?HARVESTER_ADD_USER) orelse
-        user_logic:has_eff_oz_privilege(UserId, ?OZ_HARVESTERS_ADD_RELATIONSHIPS);
-is_authorized_to_invite(?USER(UserId), ?HARVESTER_INVITE_GROUP_TOKEN, HarvesterId) ->
-    auth_by_privilege(UserId, HarvesterId, ?HARVESTER_ADD_GROUP) orelse
-        user_logic:has_eff_oz_privilege(UserId, ?OZ_HARVESTERS_ADD_RELATIONSHIPS);
-is_authorized_to_invite(?USER(UserId), ?HARVESTER_INVITE_SPACE_TOKEN, HarvesterId) ->
-    auth_by_privilege(UserId, HarvesterId, ?HARVESTER_ADD_SPACE) orelse
-        user_logic:has_eff_oz_privilege(UserId, ?OZ_HARVESTERS_ADD_RELATIONSHIPS);
-is_authorized_to_invite(_, _, _) ->
-    false.
 
 %%%===================================================================
 %%% Internal functions

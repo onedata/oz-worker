@@ -35,7 +35,7 @@
 %% Creates a macaroon_auth record in database.
 %% @end
 %%--------------------------------------------------------------------
--spec create(tokens:secret(), aai:auth()) -> {ok, tokens:nonce()}.
+-spec create(tokens:secret(), aai:auth()) -> {ok, tokens:id()}.
 create(Secret, Auth) ->
     {ok, #document{key = Id}} = datastore_model:save(?CTX, #document{
         value = #macaroon_auth{
@@ -51,7 +51,7 @@ create(Secret, Auth) ->
 %% Retrieves the secret and issuer of given macaroon from database.
 %% @end
 %%--------------------------------------------------------------------
--spec get(tokens:nonce()) -> {ok, tokens:secret(), aai:auth()} | {error, term()}.
+-spec get(tokens:id()) -> {ok, tokens:secret(), aai:auth()} | {error, term()}.
 get(Id) ->
     case datastore_model:get(?CTX, Id) of
         {ok, #document{value = #macaroon_auth{secret = Secret, type = authorization, issuer = Issuer}}} ->
@@ -65,7 +65,7 @@ get(Id) ->
 %% Deletes a macaroon_auth record from database.
 %% @end
 %%--------------------------------------------------------------------
--spec delete(tokens:nonce()) -> ok | {error, term()}.
+-spec delete(tokens:id()) -> ok | {error, term()}.
 delete(Id) ->
     datastore_model:delete(?CTX, Id).
 

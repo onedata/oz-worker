@@ -32,8 +32,7 @@
 
 -export([
     create/1, create/2, create/3,
-    create_client_token/2,
-    preauthorize/2, preauthorize/3
+    create_client_token/2
 ]).
 -export([
     list/1,
@@ -182,28 +181,6 @@ create_client_token(Auth, UserId) ->
         auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = client_tokens},
         data = #{}
-    })).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Pre-authorizes a user - verifies given token, and upon success, returns the
-%% user's identity (token subject) and caveats that were inscribed in the token.
-%% @end
-%%--------------------------------------------------------------------
--spec preauthorize(aai:auth(), tokens:serialized(), undefined | ip_utils:ip()) ->
-    {ok, {aai:subject(), [caveats:caveat()]}} | errors:error().
-preauthorize(Auth, Token, PeerIp) ->
-    preauthorize(Auth, #{<<"token">> => Token, <<"peerIp">> => PeerIp}).
-
--spec preauthorize(aai:auth(), Data :: #{}) ->
-    {ok, {aai:subject(), [caveats:caveat()]}} | errors:error().
-preauthorize(Auth, Data) ->
-    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
-        operation = create,
-        auth = Auth,
-        gri = #gri{type = od_user, id = undefined, aspect = preauthorize, scope = public},
-        data = Data
     })).
 
 
