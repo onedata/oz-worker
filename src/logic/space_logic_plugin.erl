@@ -106,6 +106,7 @@ operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {user, _}, private) -> true;
 operation_supported(delete, {group, _}, private) -> true;
 operation_supported(delete, {storage, _}, private) -> true;
+operation_supported(delete, {provider, _}, private) -> true;
 operation_supported(delete, {harvester, _}, private) -> true;
 
 operation_supported(_, _, _) -> false.
@@ -424,6 +425,28 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {storage, StorageId}}}) ->
         )
     end;
 
+delete(#el_req{gri = #gri{id = SpaceId, aspect = {provider, ProviderId}}}) ->
+    fun(#od_space{harvesters = Harvesters, storages = Storages}) ->
+        lists:foreach(fun(HarvesterId) ->
+            harvester_indices:update_stats(HarvesterId, all,
+                fun(ExistingStats) ->
+                    harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, true)
+                end)
+        end, Harvesters),
+
+        lists:foreach(fun(StorageId) ->
+            case storage_logic_plugin:fetch_entity(#gri{id = StorageId}) of
+                {true, { #od_storage{provider = ProviderId}, _Rev}} ->
+                    entity_graph:remove_relation(
+                        od_space, SpaceId,
+                        od_storage, StorageId
+                    );
+                _ ->
+                    ok
+            end
+        end, maps:keys(Storages))
+    end;
+
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {harvester, HarvesterId}}}) ->
     fun(#od_space{eff_providers = Providers}) ->
         harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->
@@ -483,6 +506,9 @@ exists(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Space) ->
 
 exists(#el_req{gri = #gri{aspect = {storage, StorageId}}}, Space) ->
     entity_graph:has_relation(direct, top_down, od_storage, StorageId, Space);
+
+exists(#el_req{gri = #gri{aspect = {provider, ProviderId}}}, Space) ->
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Space);
 
 exists(#el_req{gri = #gri{aspect = {harvester, HarvesterId}}}, Space) ->
     entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, Space);
@@ -656,6 +682,9 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {group, _}}}, Sp
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {storage, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_REMOVE_SUPPORT);
 
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {provider, _}}}, Space) ->
+    auth_by_privilege(Req, Space, ?SPACE_REMOVE_SUPPORT);
+
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {harvester, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_REMOVE_HARVESTER);
 
@@ -758,6 +787,8 @@ required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {user,
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {group, _}}}) ->
     [?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {storage, _}}}) ->
+    [?OZ_SPACES_REMOVE_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {provider, _}}}) ->
     [?OZ_SPACES_REMOVE_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {harvester, _}}}) ->
     [?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_HARVESTERS_REMOVE_RELATIONSHIPS];

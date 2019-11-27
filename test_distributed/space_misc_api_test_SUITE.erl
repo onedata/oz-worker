@@ -44,6 +44,7 @@
     list_storages_test/1,
     create_space_support_token/1,
     remove_storage_test/1,
+    remove_provider_test/1,
 
     list_effective_providers_test/1,
     get_eff_provider_test/1
@@ -64,6 +65,7 @@ all() ->
         list_storages_test,
         create_space_support_token,
         remove_storage_test,
+        remove_provider_test,
 
         list_effective_providers_test,
         get_eff_provider_test
@@ -745,15 +747,72 @@ remove_storage_test(Config) ->
                 {user, NonAdmin}
             ]
         },
-        rest_spec = #rest_spec{
-            method = delete,
-            path = [<<"/spaces/">>, S1, <<"/storages/">>, storageId],
-            expected_code = ?HTTP_204_NO_CONTENT
-        },
         logic_spec = #logic_spec{
             module = space_logic,
             function = remove_storage,
             args = [auth, S1, storageId],
+            expected_result = ?OK_RES
+        }
+        % TODO gs
+    },
+    ?assert(api_test_scenarios:run_scenario(delete_entity,
+        [Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun]
+    )).
+
+
+remove_provider_test(Config) ->
+    % create space with 2 users:
+    %   U2 gets the SPACE_REMOVE_SUPPORT privilege
+    %   U1 gets all remaining privileges
+    {S1, U1, U2} = api_test_scenarios:create_basic_space_env(Config, ?SPACE_REMOVE_SUPPORT),
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, {P1, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P2, _}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, St3} = oz_test_utils:create_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
+    {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P2), St3, S1),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    EnvSetUpFun = fun() ->
+        {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+        {ok, St2} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+        {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1),
+        {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St2, S1),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+        #{storageId1 => St1, storageId2 => St2}
+    end,
+    DeleteEntityFun = fun(_Env) ->
+        oz_test_utils:space_remove_provider(Config, S1, P1),
+        oz_test_utils:ensure_entity_graph_is_up_to_date(Config)
+    end,
+    VerifyEndFun = fun(ShouldSucceed, #{storageId1 := St1, storageId2 := St2} = _Env, _) ->
+        {ok, Storages} = oz_test_utils:space_get_storages(Config, S1),
+        ?assertEqual(lists:member(St1, Storages), not ShouldSucceed),
+        ?assertEqual(lists:member(St2, Storages), not ShouldSucceed),
+        ?assertEqual(lists:member(St3, Storages), true)
+    end,
+
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                {admin, [?OZ_SPACES_REMOVE_RELATIONSHIPS]},
+                {user, U2}
+            ],
+            unauthorized = [nobody],
+            forbidden = [
+                {user, U1},
+                {user, NonAdmin}
+            ]
+        },
+        rest_spec = #rest_spec{
+            method = delete,
+            path = [<<"/spaces/">>, S1, <<"/providers/">>, P1],
+            expected_code = ?HTTP_204_NO_CONTENT
+        },
+        logic_spec = #logic_spec{
+            module = space_logic,
+            function = remove_provider,
+            args = [auth, S1, P1],
             expected_result = ?OK_RES
         }
         % TODO gs

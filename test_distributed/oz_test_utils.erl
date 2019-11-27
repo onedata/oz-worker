@@ -127,6 +127,7 @@
     space_get_storages/2,
 
     space_remove_storage/3,
+    space_remove_provider/3,
     space_remove_harvester/3,
 
     space_add_user/3,
@@ -1219,7 +1220,7 @@ space_get_providers(Config, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_get_harvesters(Config :: term(),
-    SpaceId :: od_space:id()) -> {ok, [od_provider:id()]}.
+    SpaceId :: od_space:id()) -> {ok, [od_harvester:id()]}.
 space_get_harvesters(Config, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, space_logic, get_harvesters, [?ROOT, SpaceId]
@@ -1232,7 +1233,7 @@ space_get_harvesters(Config, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_get_storages(Config :: term(),
-    SpaceId :: od_space:id()) -> {ok, [od_provider:id()]}.
+    SpaceId :: od_space:id()) -> {ok, [od_storage:id()]}.
 space_get_storages(Config, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, space_logic, get_storages, [?ROOT, SpaceId]
@@ -1241,14 +1242,28 @@ space_get_storages(Config, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Leave space from given provider.
+%% Leaves specified storage (ceases support for given space).
 %% @end
 %%--------------------------------------------------------------------
 -spec space_remove_storage(Config :: term(),
-    SpaceId :: od_space:id(), ProviderId :: od_provider:id()) -> ok.
+    SpaceId :: od_space:id(), StorageId :: od_storage:id()) -> ok.
 space_remove_storage(Config, SpaceId, StorageId) ->
     ?assertMatch(ok, call_oz(
         Config, space_logic, remove_storage, [?ROOT, SpaceId, StorageId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves specified provider (ceases support for given space by all
+%% storages belonging to given provider).
+%% @end
+%%--------------------------------------------------------------------
+-spec space_remove_provider(Config :: term(),
+    SpaceId :: od_space:id(), ProviderId :: od_provider:id()) -> ok.
+space_remove_provider(Config, SpaceId, ProviderId) ->
+    ?assertMatch(ok, call_oz(
+        Config, space_logic, remove_provider, [?ROOT, SpaceId, ProviderId]
     )).
 
 
@@ -1258,7 +1273,7 @@ space_remove_storage(Config, SpaceId, StorageId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_remove_harvester(Config :: term(),
-    SpaceId :: od_space:id(), HarvesterId :: od_provider:id()) -> ok.
+    SpaceId :: od_space:id(), HarvesterId :: od_harvester:id()) -> ok.
 space_remove_harvester(Config, SpaceId, HarvesterId) ->
     ?assertMatch(ok, call_oz(
         Config, space_logic, remove_harvester, [?ROOT, SpaceId, HarvesterId]

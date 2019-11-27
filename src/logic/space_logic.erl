@@ -66,6 +66,7 @@
     update_group_privileges/5, update_group_privileges/4,
 
     remove_storage/3,
+    remove_provider/3,
     remove_harvester/3,
 
     remove_user/3,
@@ -829,12 +830,28 @@ update_group_privileges(Auth, SpaceId, GroupId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_storage(Auth :: aai:auth(), SpaceId :: od_space:id(),
-    StorageId :: od_provider:id()) -> ok | errors:error().
+    StorageId :: od_storage:id()) -> ok | errors:error().
 remove_storage(Auth, SpaceId, StorageId) ->
     entity_logic:handle(#el_req{
         operation = delete,
         auth = Auth,
         gri = #gri{type = od_space, id = SpaceId, aspect = {storage, StorageId}}
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves specified provider (ceases support for given space by all
+%% storages belonging to given provider).
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_provider(Auth :: aai:auth(), SpaceId :: od_space:id(),
+    ProviderId :: od_provider:id()) -> ok | errors:error().
+remove_provider(Auth, SpaceId, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        auth = Auth,
+        gri = #gri{type = od_space, id = SpaceId, aspect = {provider, ProviderId}}
     }).
 
 

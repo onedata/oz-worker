@@ -323,6 +323,14 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = space_support_token}
     }},
+    %% Ceases space support by provider
+    %% This operation requires one of the following privileges:
+    %% - space_remove_provider
+    %% - oz_spaces_remove_relationships
+    {<<"/spaces/:id/providers/:pid">>, #rest_req{
+        method = 'DELETE',
+        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {provider, ?BINDING(pid)}}
+    }},
     %% Get space provider details
     %% This operation requires one of the following privileges:
     %% - space_view
@@ -332,22 +340,6 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_provider, id = ?BINDING(pid), aspect = instance, scope = protected},
         b_auth_hint = ?THROUGH_SPACE(?BINDING(id))
-    }},
-    %% Remove space support
-    %% This operation requires one of the following privileges:
-    %% - space_remove_provider
-    %% - oz_spaces_remove_relationships
-    {<<"/spaces/:id/providers/:pid">>, #rest_req{
-        method = 'DELETE',
-        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {provider, ?BINDING(pid)}}
-    }},
-    %% Remove space support
-    %% This operation requires one of the following privileges:
-    %% - space_remove_provider
-    %% - oz_spaces_remove_relationships
-    {<<"/spaces/:id/storages/:sid">>, #rest_req{
-        method = 'DELETE',
-        b_gri = #b_gri{type = od_space, id = ?BINDING(id), aspect = {storage, ?BINDING(sid)}}
     }},
     %% List space harvesters
     %% This operation requires one of the following privileges:
