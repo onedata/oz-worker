@@ -151,32 +151,26 @@ create(#el_req{gri = #gri{id = undefined, aspect = confine}, data = Data}) ->
 
 create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_access_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
-    PeerIp = maps:get(<<"peerIp">>, Data, undefined),
-    Interface = maps:get(<<"interface">>, Data, undefined),
-    DataAccessCaveatsPolicy = case maps:get(<<"allowDataAccessCaveats">>, Data, false) of
-        true -> allow_data_access_caveats;
-        false -> disallow_data_access_caveats
-    end,
-    AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, aai:auth_to_audience(Auth), DataAccessCaveatsPolicy),
+    AuthCtx = build_auth_ctx(Auth, Data),
     case token_auth:verify_access_token(Token, AuthCtx) of
         {ok, #auth{subject = Subject}} ->
-            {ok, value, Subject};
+            {ok, value, #{
+                <<"subject">> => Subject,
+                <<"ttl">> => infer_ttl(tokens:get_caveats(Token))
+            }};
         {error, _} = Error ->
             Error
     end;
 
 create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_identity_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
-    PeerIp = maps:get(<<"peerIp">>, Data, undefined),
-    Interface = maps:get(<<"interface">>, Data, undefined),
-    DataAccessCaveatsPolicy = case maps:get(<<"allowDataAccessCaveats">>, Data, false) of
-        true -> allow_data_access_caveats;
-        false -> disallow_data_access_caveats
-    end,
-    AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, aai:auth_to_audience(Auth), DataAccessCaveatsPolicy),
+    AuthCtx = build_auth_ctx(Auth, Data),
     case token_auth:verify_identity_token(Token, AuthCtx) of
         {ok, Subject} ->
-            {ok, value, Subject};
+            {ok, value, #{
+                <<"subject">> => Subject,
+                <<"ttl">> => infer_ttl(tokens:get_caveats(Token))
+            }};
         {error, _} = Error ->
             Error
     end;
@@ -184,14 +178,30 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_identity_
 create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_invite_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
     ExpType = maps:get(<<"expectedInviteTokenType">>, Data, any),
-    PeerIp = maps:get(<<"peerIp">>, Data, undefined),
-    AuthCtx = token_auth:build_auth_ctx(undefined, PeerIp, aai:auth_to_audience(Auth)),
+    AuthCtx = build_auth_ctx(Auth, Data),
     case token_auth:verify_invite_token(Token, ExpType, AuthCtx) of
         {ok, #auth{subject = Subject}} ->
-            {ok, value, Subject};
+            {ok, value, #{
+                <<"subject">> => Subject,
+                <<"ttl">> => infer_ttl(tokens:get_caveats(Token))
+            }};
         {error, _} = Error ->
             Error
     end.
+
+
+%% @private
+-spec build_auth_ctx(aai:auth(), entity_logic:data()) -> aai:auth_ctx().
+build_auth_ctx(Auth, Data) ->
+    PeerIp = maps:get(<<"peerIp">>, Data, undefined),
+    Interface = maps:get(<<"interface">>, Data, undefined),
+    DataAccessCaveatsPolicy = case maps:get(<<"allowDataAccessCaveats">>, Data, false) of
+        true -> allow_data_access_caveats;
+        false -> disallow_data_access_caveats
+    end,
+    token_auth:build_auth_ctx(
+        Interface, PeerIp, aai:auth_to_audience(Auth), DataAccessCaveatsPolicy
+    ).
 
 
 %%--------------------------------------------------------------------
@@ -573,12 +583,12 @@ create_temporary_token(Subject, Data) ->
     Type = maps:get(<<"type">>, Data, ?ACCESS_TOKEN),
     Caveats = maps:get(<<"caveats">>, Data, []),
 
-    Now = time_utils:cluster_time_seconds(),
-    MaxTtl = ?MAX_TEMPORARY_TOKEN_TTL,
-    IsTtlAllowed = lists:any(fun(#cv_time{valid_until = ValidUntil}) ->
-        ValidUntil < Now + MaxTtl
-    end, caveats:filter([cv_time], Caveats)),
-    IsTtlAllowed orelse throw(?ERROR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTtl)),
+    MaxTTL = ?MAX_TEMPORARY_TOKEN_TTL,
+    IsTtlAllowed = case infer_ttl(Caveats) of
+        undefined -> false;
+        TTL -> TTL < MaxTTL
+    end,
+    IsTtlAllowed orelse throw(?ERROR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTTL)),
 
     TokenId = datastore_utils:gen_key(),
     Secret = temporary_token_secret:get(Subject),
@@ -613,6 +623,7 @@ to_token_data(TokenId) ->
     {ok, #document{value = NamedToken}} = od_token:get(TokenId),
     to_token_data(TokenId, NamedToken).
 
+
 %% @private
 -spec to_token_data(tokens:id(), od_token:record()) -> entity_logic:data().
 to_token_data(TokenId, NamedToken) ->
@@ -626,3 +637,21 @@ to_token_data(TokenId, NamedToken) ->
         <<"revoked">> => NamedToken#od_token.revoked,
         <<"token">> => od_token:named_token_to_token(TokenId, NamedToken)
     }.
+
+
+%% @private
+-spec infer_ttl([caveats:caveat()]) -> undefined | time_utils:seconds().
+infer_ttl(Caveats) ->
+    ValidUntil = lists:foldl(fun
+        (#cv_time{valid_until = ValidUntil}, undefined) ->
+            ValidUntil;
+        (#cv_time{valid_until = ValidUntil}, Acc) ->
+            case ValidUntil < Acc of
+                true -> ValidUntil;
+                false -> Acc
+            end
+    end, undefined, caveats:filter([cv_time], Caveats)),
+    case ValidUntil of
+        undefined -> undefined;
+        _ -> ValidUntil - time_utils:cluster_time_seconds()
+    end.

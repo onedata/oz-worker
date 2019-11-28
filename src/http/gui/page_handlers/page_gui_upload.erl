@@ -59,8 +59,6 @@ handle(<<"POST">>, Req) ->
     catch
         throw:{error, _} = Error ->
             cowboy_req:reply(errors:to_http_code(Error), #{}, json_utils:encode(errors:to_json(Error)), Req);
-        throw:Code when is_integer(Code) ->
-            cowboy_req:reply(Code, Req);
         Type:Reason ->
             ?error_stacktrace("Error while processing GUI upload - ~p:~p", [Type, Reason]),
             cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req)
@@ -79,7 +77,7 @@ handle_gui_upload(Req) ->
     GuiType = try
         onedata:gui_by_prefix(GuiPrefix)
     catch error:badarg ->
-        throw(?HTTP_404_NOT_FOUND)
+        throw(?ERROR_NOT_FOUND)
     end,
 
     ServiceReleaseVersion = validate_and_authorize(GuiType, GuiId, Req),
@@ -104,7 +102,7 @@ handle_gui_upload(Req) ->
 -spec validate_and_authorize(onedata:gui(), gui_static:gui_id(), cowboy_req:req()) ->
     onedata:release_version() | no_return().
 validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
-    harvester_logic:exists(HarvesterId) orelse throw(?HTTP_404_NOT_FOUND),
+    harvester_logic:exists(HarvesterId) orelse throw(?ERROR_NOT_FOUND),
     case token_auth:check_token_auth_for_rest_interface(Req) of
         {true, ?USER(UserId) = Auth} ->
             ensure_unlimited_api_authorization(Auth),
@@ -114,20 +112,24 @@ validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
                     % Harvester packages are versioned along with Onezone
                     oz_worker:get_release_version();
                 _ ->
-                    throw(?HTTP_403_FORBIDDEN)
+                    throw(?ERROR_FORBIDDEN)
             end;
-        _ ->
-            throw(?HTTP_401_UNAUTHORIZED)
+        {true, _} ->
+            throw(?ERROR_FORBIDDEN);
+        false ->
+            throw(?ERROR_UNAUTHORIZED);
+        {error, _} = Error ->
+            throw(Error)
     end;
 % Covers all service GUIs
 validate_and_authorize(GuiType, ClusterId, Req) ->
     Service = onedata:service_by_gui(GuiType, ClusterId),
-    lists:member(Service, [?OP_WORKER, ?OP_PANEL]) orelse throw(?HTTP_404_NOT_FOUND),
+    lists:member(Service, [?OP_WORKER, ?OP_PANEL]) orelse throw(?ERROR_NOT_FOUND),
     Cluster = try cluster_logic:get(?ROOT, ClusterId) of
         {ok, #od_cluster{type = ?ONEPROVIDER} = Cl} -> Cl;
-        _ -> throw(?HTTP_404_NOT_FOUND)
+        _ -> throw(?ERROR_NOT_FOUND)
     catch _:_ ->
-        throw(?HTTP_404_NOT_FOUND)
+        throw(?ERROR_NOT_FOUND)
     end,
 
     {ReleaseVersion, _, _} = case Service of
@@ -140,9 +142,11 @@ validate_and_authorize(GuiType, ClusterId, Req) ->
             ensure_unlimited_api_authorization(Auth),
             ReleaseVersion;
         {true, _} ->
-            throw(?HTTP_403_FORBIDDEN);
-        _ ->
-            throw(?HTTP_401_UNAUTHORIZED)
+            throw(?ERROR_FORBIDDEN);
+        false ->
+            throw(?ERROR_UNAUTHORIZED);
+        {error, _} = Error ->
+            throw(Error)
     end.
 
 

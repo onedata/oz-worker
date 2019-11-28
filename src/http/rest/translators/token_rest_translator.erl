@@ -55,12 +55,12 @@ create_response(#gri{aspect = examine}, _, value, TokenData) ->
 create_response(#gri{aspect = confine}, _, value, Token) ->
     rest_translator:ok_body_reply(#{<<"token">> => ?SERIALIZE(Token)});
 
-create_response(#gri{aspect = verify_access_token}, _, value, Subject) ->
-    subject_reply(Subject);
-create_response(#gri{aspect = verify_identity_token}, _, value, Subject) ->
-    subject_reply(Subject);
-create_response(#gri{aspect = verify_invite_token}, _, value, Subject) ->
-    subject_reply(Subject);
+create_response(#gri{aspect = verify_access_token}, _, value, Data) ->
+    token_verification_reply(Data);
+create_response(#gri{aspect = verify_identity_token}, _, value, Data) ->
+    token_verification_reply(Data);
+create_response(#gri{aspect = verify_invite_token}, _, value, Data) ->
+    token_verification_reply(Data);
 
 create_response(#gri{aspect = {user_named_token, _}}, _, resource, {_, {#{<<"token">> := Token}, _}}) ->
     named_token_created_reply(Token);
@@ -98,10 +98,11 @@ get_response(#gri{aspect = {provider_named_token, _}}, TokenData) ->
 %%%===================================================================
 
 %% @private
--spec subject_reply(aai:subject()) -> #rest_resp{}.
-subject_reply(Subject) ->
+-spec token_verification_reply(entity_logic:data()) -> #rest_resp{}.
+token_verification_reply(#{<<"subject">> := Subject, <<"ttl">> := TTL}) ->
     rest_translator:ok_body_reply(#{
-        <<"subject">> => aai:subject_to_json(Subject)
+        <<"subject">> => aai:subject_to_json(Subject),
+        <<"ttl">> => gs_protocol:undefined_to_null(TTL)
     }).
 
 

@@ -29,13 +29,13 @@
 %% @doc
 %% Converts a linked account into a serializable map. Scope can be one of:
 %%  * all_fields - returns all fields of the linked account; intended for
-%%                 the owner user as it includes private date
+%%                 the owner user as it includes private data
 %%  * luma_payload - returns the fields used for user mapping in LUMA, stripped
 %%                   of some unnecessary / private data.
 %% @end
 %%--------------------------------------------------------------------
 -spec to_map(od_user:linked_account(), Scope :: all_fields | luma_payload) -> map().
-to_map(LinkedAccount, Mode) ->
+to_map(LinkedAccount, Scope) ->
     #linked_account{
         idp = IdP,
         subject_id = SubjectId,
@@ -48,7 +48,7 @@ to_map(LinkedAccount, Mode) ->
 
     %% @TODO VFS-4506 fullName and entitlements are no longer
     % sent to LUMA as they are ambiguous and inconclusive for user mapping
-    {FullNameValue, EntitlementsValue} = case Mode of
+    {FullNameValue, EntitlementsValue} = case Scope of
         all_fields -> {FullName, Entitlements};
         luma_payload -> {undefined, []}
     end,
