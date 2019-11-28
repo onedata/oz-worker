@@ -218,17 +218,17 @@ print_summary(SortPos) when is_integer(SortPos) ->
         }
     end, Users),
     Sorted = lists:keysort(SortPos, UserAttrs),
-    io:format("------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
-    io:format("Id                                FullName             Username             Email                          Groups (eff)   Spaces (eff)   Eff providers~n"),
-    io:format("------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("-----------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("Id                                           FullName             Username             Email                          Groups (eff)   Spaces (eff)   Eff providers~n"),
+    io:format("-----------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
     lists:foreach(fun({Id, FullName, Username, Email, {Groups, EffGroups}, {Spaces, EffSpaces}, Providers}) ->
         GroupsStr = str_utils:format("~B (~B)", [Groups, EffGroups]),
         SpacesStr = str_utils:format("~B (~B)", [Spaces, EffSpaces]),
-        io:format("~-33s ~-20ts ~-20ts ~-30ts ~-14s ~-14s ~-14B~n", [
+        io:format("~-44s ~-20ts ~-20ts ~-30ts ~-14s ~-14s ~-14B~n", [
             Id, FullName, Username, Email, GroupsStr, SpacesStr, Providers
         ])
     end, Sorted),
-    io:format("------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("-----------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
     io:format("~B users in total~n", [length(Sorted)]).
 
 %%--------------------------------------------------------------------

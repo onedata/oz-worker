@@ -559,6 +559,7 @@ get_current_time(Auth) ->
 %% @doc
 %% Verifies provider identity based on provided identity token and alleged
 %% provider id.
+%% @TODO VFS-5846 old provider verification API kept for backward compatibility
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_provider_identity(aai:auth(), od_provider:id(),

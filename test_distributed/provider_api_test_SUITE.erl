@@ -1017,7 +1017,7 @@ get_eff_user_membership_intermediaries(Config) ->
 
     lists:foreach(fun({ProviderId, SubjectUser, CorrectClients, ExpIntermediariesRaw}) ->
         ExpIntermediaries = lists:map(fun({Type, Id}) ->
-            #{<<"type">> => gri:serialize_type(Type, regular), <<"id">> => Id}
+            #{<<"type">> => gri:serialize_type(Type), <<"id">> => Id}
         end, ExpIntermediariesRaw),
         ApiTestSpec = #api_test_spec{
             client_spec = #client_spec{
@@ -1304,7 +1304,7 @@ get_eff_group_membership_intermediaries(Config) ->
 
     lists:foreach(fun({ProviderId, SubjectGroup, CorrectClients, ExpIntermediariesRaw}) ->
         ExpIntermediaries = lists:map(fun({Type, Id}) ->
-            #{<<"type">> => gri:serialize_type(Type, regular), <<"id">> => Id}
+            #{<<"type">> => gri:serialize_type(Type), <<"id">> => Id}
         end, ExpIntermediariesRaw),
         ApiTestSpec = #api_test_spec{
             client_spec = #client_spec{

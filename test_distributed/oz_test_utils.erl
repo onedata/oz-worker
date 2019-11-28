@@ -266,7 +266,8 @@
     delete_storage/2
 ]).
 -export([
-    assert_invite_token_usage_limit_reached/3
+    assert_invite_token_usage_limit_reached/3,
+    build_auth_ctx/2, check_token_auth/2, check_token_auth/3
 ]).
 -export([
     delete_all_entities/1,
@@ -2984,6 +2985,42 @@ assert_invite_token_usage_limit_reached(Config, Expected, TokenId) ->
             UsageCount >= UsageLimit
     end,
     ?assertEqual(Expected, IsReached).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Builds the auth ctx object with given Args (see token_auth:build_auth_ctx/*).
+%% @end
+%%--------------------------------------------------------------------
+-spec build_auth_ctx(Config :: term(), [term()]) -> aai:auth_ctx().
+build_auth_ctx(Config, Args) ->
+    call_oz(Config, token_auth, build_auth_ctx, Args).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Verifies the token and returns resulting auth object on success. Default
+%% auth_ctx is used, which will cause verification failure if any caveat that
+%% requires certain context is included in the token.
+%% @end
+%%--------------------------------------------------------------------
+-spec check_token_auth(Config :: term(), tokens:token() | tokens:serialized()) ->
+    {true, aai:auth()} | errors:error().
+check_token_auth(Config, Token) ->
+    AuthCtx = build_auth_ctx(Config, [undefined]),
+    check_token_auth(Config, Token, AuthCtx).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Verifies the token against given auth_ctx and returns resulting auth object
+%% on success.
+%% @end
+%%--------------------------------------------------------------------
+-spec check_token_auth(Config :: term(), tokens:token() | tokens:serialized(), aai:auth_ctx()) ->
+    {true, aai:auth()} | errors:error().
+check_token_auth(Config, Token, AuthCtx) ->
+    call_oz(Config, token_auth, check_token_auth, [Token, AuthCtx]).
 
 
 %%--------------------------------------------------------------------

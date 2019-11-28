@@ -156,17 +156,17 @@ print_summary(SortPos) when is_integer(SortPos) ->
         }
     end, Spaces),
     Sorted = lists:keysort(SortPos, SpaceAttrs),
-    io:format("---------------------------------------------------------------------------------------------------------------------------~n"),
-    io:format("Id                                Name                      Users (eff)    Groups (eff)   Shares   Providers   Tot. support~n"),
-    io:format("---------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("--------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("Id                                           Name                      Users (eff)    Groups (eff)   Shares   Providers   Tot. support~n"),
+    io:format("--------------------------------------------------------------------------------------------------------------------------------------~n"),
     lists:foreach(fun({Id, Name, {Users, EffUsers}, {Groups, EffGroups}, Shares, Providers, Support}) ->
         UsersStr = str_utils:format("~B (~B)", [Users, EffUsers]),
         GroupsStr = str_utils:format("~B (~B)", [Groups, EffGroups]),
-        io:format("~-33s ~-25ts ~-14s ~-14s ~-8B ~-11B ~-14s~n", [
+        io:format("~-44s ~-25ts ~-14s ~-14s ~-8B ~-11B ~-14s~n", [
             Id, Name, UsersStr, GroupsStr, Shares, Providers, str_utils:format_byte_size(Support)
         ])
     end, Sorted),
-    io:format("---------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("--------------------------------------------------------------------------------------------------------------------------------------~n"),
     io:format("~B spaces in total~n", [length(Sorted)]).
 
 %%--------------------------------------------------------------------

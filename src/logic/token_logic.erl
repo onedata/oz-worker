@@ -163,6 +163,7 @@ create_gui_access_token(Auth, UserId, SessionId, Audience) ->
         <<"caveats">> => [
             #cv_time{valid_until = time_utils:cluster_time_seconds() + Ttl},
             #cv_audience{whitelist = [Audience]}
+            % @TODO VFS-5913 Add interface caveat when it is fully supported by Onepanel
         ]
     }),
     case Result of
@@ -319,7 +320,7 @@ create_legacy_invite_token(Auth, InviteTokenType, TargetEntityId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% @TODO VFS-5770 old client tokens API kept for backward compatibility
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
 %% Creates an access token with the parameters of a legacy client token.
 %% @end
 %%--------------------------------------------------------------------
@@ -484,7 +485,7 @@ gen_invite_token_name(?SPACE_JOIN_HARVESTER, HarvesterId) ->
 %% @private
 -spec format_invite_token_name(binary(), binary()) -> binary().
 format_invite_token_name(Description, EntityName) ->
-    TokenName = str_utils:format_bin("~s - ~ts ~s", [Description, EntityName, str_utils:rand_hex(2)]),
+    TokenName = str_utils:format_bin("~s - ~ts ~s", [Description, EntityName, str_utils:rand_hex(3)]),
     TokenNameSize = size(TokenName),
     case TokenNameSize =< 50 of
         true ->

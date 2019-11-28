@@ -134,9 +134,7 @@ upgrade_from_19_02_x_tokens(Config) ->
         % The legacy onedata_auth record should have been removed
         ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, onedata_auth, get, [TokenId])),
         % The migrated token should still work
-        ?assertMatch({ok, ?USER(UserId)}, oz_test_utils:call_oz(
-            Config, token_auth, verify_access_token, [LegacyToken, undefined, undefined]
-        ))
+        ?assertMatch({true, ?USER(UserId)}, oz_test_utils:check_token_auth(Config, LegacyToken))
     end, User1Tokens ++ User2Tokens ++ User3Tokens ++ User4Tokens ++ User5Tokens),
 
     % Check all provider tokens
@@ -173,9 +171,7 @@ upgrade_from_19_02_x_tokens(Config) ->
         % The legacy macaroon_auth record should have been removed
         ?assertEqual({error, not_found}, oz_test_utils:call_oz(Config, macaroon_auth, get, [TokenId])),
         % The migrated token should still work
-        ?assertMatch({ok, ?PROVIDER(ProviderId)}, oz_test_utils:call_oz(
-            Config, token_auth, verify_access_token, [LegacyRootToken, undefined, undefined]
-        ))
+        ?assertMatch({true, ?PROVIDER(ProviderId)}, oz_test_utils:check_token_auth(Config, LegacyRootToken))
     end, [PToken1, PToken2, PToken3, PToken4]).
 
 

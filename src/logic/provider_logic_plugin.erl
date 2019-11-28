@@ -185,6 +185,7 @@ create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
             ?ERROR_MALFORMED_DATA
     end;
 
+%% @TODO VFS-5846 old provider verification API kept for backward compatibility
 create(#el_req{auth = Auth, gri = #gri{aspect = verify_provider_identity}, data = Data}) ->
     ProviderId = maps:get(<<"providerId">>, Data),
     %% @TODO VFS-5554 Deprecated, included for backward compatibility
@@ -192,7 +193,8 @@ create(#el_req{auth = Auth, gri = #gri{aspect = verify_provider_identity}, data 
         {ok, M} -> M;
         error -> maps:get(<<"token">>, Data)
     end,
-    case token_auth:verify_identity_token(Token, Auth#auth.peer_ip, aai:auth_to_audience(Auth)) of
+    AuthCtx = token_auth:build_auth_ctx(undefined, Auth#auth.peer_ip, aai:auth_to_audience(Auth)),
+    case token_auth:verify_identity_token(Token, AuthCtx) of
         {ok, ?SUB(?ONEPROVIDER, ProviderId)} -> ok;
         {ok, _} -> ?ERROR_TOKEN_INVALID;
         Error -> Error

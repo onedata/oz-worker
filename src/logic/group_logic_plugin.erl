@@ -498,7 +498,7 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Group) -
             true
     end;
 
-exists(Req = #el_req{gri = #gri{aspect = instance, scope = shared}}, Group) ->
+exists(Req = #el_req{gri = GRI = #gri{aspect = instance, scope = shared}}, Group) ->
     case Req#el_req.auth_hint of
         ?THROUGH_GROUP(ParentGroupId) ->
             group_logic:has_eff_parent(Group, ParentGroupId);
@@ -513,7 +513,9 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = shared}}, Group) ->
         ?THROUGH_CLUSTER(ClusterId) ->
             group_logic:has_eff_cluster(Group, ClusterId);
         undefined ->
-            true
+            true;
+        _ ->
+            exists(Req#el_req{gri = GRI#gri{scope = protected}}, Group)
     end;
 
 exists(#el_req{gri = #gri{aspect = {parent, ParentId}}}, Group) ->
@@ -645,7 +647,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
 
         {?PROVIDER(ProviderId), ?THROUGH_PROVIDER(ProviderId)} ->
             % Group's membership in provider is checked in 'exists'
-            group_logic:has_eff_provider(Group, ProviderId);
+            true;
 
         {?PROVIDER(_ProviderId), ?THROUGH_PROVIDER(_OtherProviderId)} ->
             false;
