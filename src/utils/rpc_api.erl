@@ -64,7 +64,9 @@ apply(Function, Args) ->
     undefined | ip_utils:ip(), undefined | aai:audience()) ->
     {true, aai:auth()} | {error, term()}.
 check_token_auth(Token, PeerIp, Audience)  ->
-    token_auth:check_token_auth(Token, PeerIp, Audience).
+    % @TODO VFS-5913 Recognize interface caveat in onepanel
+    AuthCtx = token_auth:build_auth_ctx(undefined, PeerIp, Audience),
+    token_auth:check_token_auth(Token, AuthCtx).
 
 
 -spec get_protected_provider_data(aai:auth(), od_provider:id()) ->

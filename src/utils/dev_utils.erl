@@ -177,7 +177,9 @@ set_up_test_entities(Users, Groups, Spaces) ->
                         SupportedSize = proplists:get_value(<<"supported_size">>, ProviderProps),
                         ok = space_logic:update_user_privileges(?ROOT, SpaceId, FirstUser, [?SPACE_ADD_PROVIDER], []),
                         {ok, Token} = space_logic:create_provider_invite_token(?USER(FirstUser), SpaceId),
-                        {ok, SpaceId} = provider_logic:support_space(?ROOT, ProviderId, Token, SupportedSize)
+                        {ok, SpaceId} = provider_logic:support_space(
+                            ?PROVIDER(ProviderId), ProviderId, Token, SupportedSize
+                        )
                     end, ProviderList)
             end, Spaces),
 

@@ -132,21 +132,26 @@ content_types_provided(Req, #state{rest_req = #rest_req{produces = Produces}} = 
 %% 401 Unauthorized is returned when there's been an *authentication* error,
 %% and 403 Forbidden is returned when the already-authenticated client
 %% is unauthorized to perform an operation.
+%%
+%% This function checks authentication, authorization is checked
+%% by entity_logic later.
 %% @end
 %%--------------------------------------------------------------------
 -spec is_authorized(Req :: cowboy_req:req(), State :: #state{}) ->
     {true | {false, binary()} | stop, cowboy_req:req(), #state{}}.
 is_authorized(Req, State) ->
-    % Check if the request carries any authorization
     Result = try
-        % Try to authorize the client using several methods.
-        authorize(Req, [
-            fun token_auth:check_token_auth/1,
-            fun basic_auth:check_basic_auth/1
-        ])
+        case token_auth:check_token_auth_for_rest_interface(Req) of
+            {true, Auth} ->
+                {true, Auth};
+            {error, Err1} ->
+                {error, Err1};
+            false ->
+                basic_auth:check_basic_auth(Req)
+        end
     catch
-        throw:Err ->
-            Err;
+        throw:Err2 ->
+            Err2;
         Type:Message ->
             ?error_stacktrace("Unexpected error in ~p:is_authorized - ~p:~p", [
                 ?MODULE, Type, Message
@@ -155,11 +160,12 @@ is_authorized(Req, State) ->
     end,
 
     case Result of
-        % Always return true - authorization is checked by entity_logic later.
         {true, Client} ->
             {true, Req, State#state{auth = Client}};
-        {error, _} = Error ->
-            {stop, send_error_response(Error, Req), State}
+        false ->
+            {true, Req, State#state{auth = ?NOBODY}};
+        {error, _} = Err3 ->
+            {stop, send_error_response(Err3, Req), State}
     end.
 
 
@@ -389,29 +395,6 @@ call_entity_logic_and_translate_response(ElReq) ->
                 Operation, GRI, AuthHint, Result, Type, Message
             ]),
             rest_translator:response(ElReq, ?ERROR_INTERNAL_SERVER_ERROR)
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Tries to authorize REST client using provided auth methods expressed
-%% as functions to use.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize(Req :: cowboy_req:req(),
-    [fun((cowboy_req:req()) -> {true, aai:auth()} | {error, term()})]) ->
-    {true, aai:auth()} | {error, term()}.
-authorize(_Req, []) ->
-    {true, ?NOBODY};
-authorize(Req, [AuthMethod | Rest]) ->
-    case AuthMethod(Req) of
-        false ->
-            authorize(Req, Rest);
-        {true, Auth} ->
-            {true, Auth};
-        {error, Error} ->
-            {error, Error}
     end.
 
 

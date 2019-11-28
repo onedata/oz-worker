@@ -72,10 +72,16 @@ translate_value(_, #gri{type = od_harvester, aspect = {submit_entry, _}}, Failed
 translate_value(_, #gri{type = od_harvester, aspect = {delete_entry, _}}, FailedIndices) ->
     FailedIndices;
 
-translate_value(_, #gri{type = od_token, aspect = verify_access_token}, Subject) ->
-    #{<<"subject">> => aai:serialize_subject(Subject)};
-translate_value(_, #gri{type = od_token, aspect = verify_identity_token}, Subject) ->
-    #{<<"subject">> => aai:serialize_subject(Subject)};
+translate_value(_, #gri{type = od_token, aspect = verify_access_token}, #{<<"subject">> := Sub, <<"ttl">> := TTL}) ->
+    #{
+        <<"subject">> => aai:serialize_subject(Sub),
+        <<"ttl">> => gs_protocol:undefined_to_null(TTL)
+    };
+translate_value(_, #gri{type = od_token, aspect = verify_identity_token}, #{<<"subject">> := Sub, <<"ttl">> := TTL}) ->
+    #{
+        <<"subject">> => aai:serialize_subject(Sub),
+        <<"ttl">> => gs_protocol:undefined_to_null(TTL)
+    };
 
 translate_value(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync create result for:~n
@@ -111,7 +117,7 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
         <<"fullName">> => FullName,
         <<"username">> => gs_protocol:undefined_to_null(Username),
         <<"emails">> => Emails,
-        <<"linkedAccounts">> => linked_accounts:to_maps(LinkedAccounts),
+        <<"linkedAccounts">> => linked_accounts:to_maps(LinkedAccounts, luma_payload),
         <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
         <<"spaceAliases">> => SpaceAliases,
 

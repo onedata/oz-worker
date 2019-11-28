@@ -43,8 +43,8 @@
 consume(ConsumerAuth, Token, ExpectedType, ConsumeFun) ->
     PeerIp = ConsumerAuth#auth.peer_ip,
     ConsumerAudience = aai:auth_to_audience(ConsumerAuth),
-
-    case token_auth:verify_invite_token(Token, ExpectedType, PeerIp, ConsumerAudience) of
+    AuthCtx = token_auth:build_auth_ctx(undefined, PeerIp, ConsumerAudience),
+    case token_auth:verify_invite_token(Token, ExpectedType, AuthCtx) of
         {ok, _} -> ok;
         {error, _} = Err1 -> throw(Err1)
     end,
