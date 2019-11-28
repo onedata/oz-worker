@@ -643,13 +643,8 @@ to_token_data(TokenId, NamedToken) ->
 -spec infer_ttl([caveats:caveat()]) -> undefined | time_utils:seconds().
 infer_ttl(Caveats) ->
     ValidUntil = lists:foldl(fun
-        (#cv_time{valid_until = ValidUntil}, undefined) ->
-            ValidUntil;
-        (#cv_time{valid_until = ValidUntil}, Acc) ->
-            case ValidUntil < Acc of
-                true -> ValidUntil;
-                false -> Acc
-            end
+        (#cv_time{valid_until = ValidUntil}, undefined) -> ValidUntil;
+        (#cv_time{valid_until = ValidUntil}, Acc) -> min(ValidUntil, Acc)
     end, undefined, caveats:filter([cv_time], Caveats)),
     case ValidUntil of
         undefined -> undefined;
