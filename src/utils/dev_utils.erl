@@ -175,10 +175,18 @@ set_up_test_entities(Users, Groups, Spaces) ->
                     fun({ProviderId, ProviderProps}) ->
                         FirstUser = hd(UserList),
                         SupportedSize = proplists:get_value(<<"supported_size">>, ProviderProps),
-                        ok = space_logic:update_user_privileges(?ROOT, SpaceId, FirstUser, [?SPACE_ADD_SUPPORT], []),
-                        {ok, Token} = space_logic:create_space_support_token(?USER(FirstUser), SpaceId),
-                        {ok, ProviderId} = storage_logic:create(?PROVIDER(ProviderId), ProviderId, ?STORAGE_DEFAULT_NAME),
-                        {ok, SpaceId} = storage_logic:support_space(?ROOT, ProviderId, Token, SupportedSize)
+                        ok = space_logic:update_user_privileges(
+                            ?ROOT, SpaceId, FirstUser, [?SPACE_ADD_SUPPORT], []
+                        ),
+                        {ok, Token} = space_logic:create_space_support_token(
+                            ?USER(FirstUser), SpaceId
+                        ),
+                        {ok, ProviderId} = storage_logic:create(
+                            ?PROVIDER(ProviderId), ProviderId, ?STORAGE_DEFAULT_NAME
+                        ),
+                        {ok, SpaceId} = storage_logic:support_space(
+                            ?PROVIDER(ProviderId), ProviderId, Token, SupportedSize
+                        )
                     end, ProviderList)
             end, Spaces),
 

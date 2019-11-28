@@ -64,7 +64,7 @@ fetch_entity(#gri{id = UserId}) ->
 -spec operation_supported(entity_logic:operation(), entity_logic:aspect(),
     entity_logic:scope()) -> boolean().
 operation_supported(create, instance, private) -> true;
-%% @TODO VFS-5770 old client tokens API kept for backward compatibility
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
 operation_supported(create, client_tokens, private) -> true;
 operation_supported(create, default_space, private) -> true;
 operation_supported(create, {space_alias, _}, private) -> true;
@@ -81,7 +81,7 @@ operation_supported(get, instance, shared) -> true;
 operation_supported(get, oz_privileges, private) -> true;
 operation_supported(get, eff_oz_privileges, private) -> true;
 
-%% @TODO VFS-5770 old client tokens API kept for backward compatibility
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
 operation_supported(get, client_tokens, private) -> true;
 operation_supported(get, {client_token, _}, private) -> true;
 operation_supported(get, linked_accounts, private) -> true;
@@ -118,7 +118,7 @@ operation_supported(update, oz_privileges, private) -> true;
 operation_supported(delete, instance, private) -> true;
 operation_supported(delete, oz_privileges, private) -> true;
 
-%% @TODO VFS-5770 old client tokens API kept for backward compatibility
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
 operation_supported(delete, {client_token, _}, private) -> true;
 operation_supported(delete, default_space, private) -> true;
 operation_supported(delete, {space_alias, _}, private) -> true;
@@ -143,7 +143,7 @@ operation_supported(_, _, _) -> false.
 -spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
     boolean().
 is_subscribable(instance, _) -> true;
-%% @TODO VFS-5770 old client tokens API kept for backward compatibility
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
 is_subscribable(client_tokens, private) -> true;
 is_subscribable({client_token, _}, private) -> true;
 is_subscribable(linked_accounts, private) -> true;
@@ -205,7 +205,7 @@ create(#el_req{gri = GRI = #gri{id = ProposedUserId, aspect = instance}, data = 
     end;
 
 create(#el_req{gri = #gri{id = UserId, aspect = client_tokens} = GRI}) ->
-    %% @TODO VFS-5770 old client tokens API kept for backward compatibility
+    %% @TODO VFS-5846 old client tokens API kept for backward compatibility
     case token_logic:create_legacy_client_token(?USER(UserId)) of
         {ok, Token} ->
             {ok, Serialized} = tokens:serialize(Token),
@@ -277,7 +277,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
         <<"basicAuthEnabled">> => BasicAuthEnabled,
         <<"fullName">> => FullName, <<"username">> => Username,
         <<"emails">> => Emails,
-        <<"linkedAccounts">> => linked_accounts:to_maps(LinkedAccounts),
+        <<"linkedAccounts">> => linked_accounts:to_maps(LinkedAccounts, all_fields),
         <<"creationTime">> => CreationTime
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, User) ->
@@ -293,7 +293,7 @@ get(#el_req{gri = #gri{aspect = oz_privileges}}, User) ->
 get(#el_req{gri = #gri{aspect = eff_oz_privileges}}, User) ->
     {ok, entity_graph:get_oz_privileges(effective, User)};
 
-%% @TODO VFS-5770 old client tokens API kept for backward compatibility
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
 get(#el_req{auth = Auth, gri = #gri{id = UserId, aspect = client_tokens}}, _User) ->
     case token_logic:list_user_named_tokens(Auth, UserId) of
         {error, _} = Error ->
@@ -311,7 +311,7 @@ get(#el_req{auth = Auth, gri = #gri{id = UserId, aspect = client_tokens}}, _User
             end, UserTokens)}
     end;
 
-%% @TODO VFS-5770 old client tokens API kept for backward compatibility
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
 get(#el_req{gri = #gri{aspect = {client_token, Serialized}}}, _User) ->
     {ok, Serialized};
 
@@ -457,7 +457,7 @@ delete(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}}) ->
         <<"grant">> => [], <<"revoke">> => privileges:oz_privileges()
     }});
 
-%% @TODO VFS-5770 old client tokens API kept for backward compatibility
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
 delete(#el_req{gri = #gri{id = UserId, aspect = {client_token, Serialized}}}) ->
     {ok, #token{id = TokenId}} = tokens:deserialize(Serialized),
     token_logic:delete_named_token(?USER(UserId), TokenId);
@@ -568,7 +568,7 @@ exists(Req = #el_req{gri = #gri{id = UserId, aspect = instance, scope = shared}}
             true
     end;
 
-%% @TODO VFS-5770 old client tokens API kept for backward compatibility
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
 exists(#el_req{gri = #gri{aspect = {client_token, Serialized}}}, _User) ->
     {ok, #token{id = TokenId}} = tokens:deserialize(Serialized),
     token_logic:exists(TokenId);
@@ -650,7 +650,7 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             true;
 
         {?USER(ClientUserId), ?THROUGH_PROVIDER(ProviderId)} ->
-            % Group's membership in provider is checked in 'exists'
+            % User's membership in provider is checked in 'exists'
             ClusterId = ProviderId,
             cluster_logic:has_eff_privilege(ClusterId, ClientUserId, ?CLUSTER_VIEW);
 
@@ -840,7 +840,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}
         }
     end;
 
-%% @TODO VFS-5770 old client tokens API kept for backward compatibility
+%% @TODO VFS-5846 old client tokens API kept for backward compatibility
 validate(#el_req{operation = create, gri = #gri{aspect = client_tokens}}) -> #{
 };
 

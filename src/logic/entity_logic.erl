@@ -524,7 +524,7 @@ ensure_authorized_internal(#state{req = #el_req{auth = ?ROOT}}) ->
     % internally).
     true;
 ensure_authorized_internal(State) ->
-    ensure_api_caveat_verifies(State),
+    ensure_authorized_regarding_api_caveats(State),
     is_client_authorized(State) orelse is_authorized_as_admin(State).
 
 
@@ -574,16 +574,11 @@ is_authorized_as_admin(#state{req = ElReq} = State) ->
     end.
 
 
--spec ensure_api_caveat_verifies(#state{}) -> ok | no_return().
-ensure_api_caveat_verifies(#state{req = #el_req{operation = Operation, gri = GRI, auth = Auth}}) ->
-    case caveats:find(cv_api, Auth#auth.caveats) of
-        false ->
-            ok;
-        {true, ApiCaveats} ->
-            lists:foreach(fun(ApiCaveat) ->
-                cv_api:verify(ApiCaveat, ?OZ_WORKER, Operation, GRI) orelse
-                    throw(?ERROR_TOKEN_CAVEAT_UNVERIFIED(ApiCaveat))
-            end, ApiCaveats)
+-spec ensure_authorized_regarding_api_caveats(#state{}) -> ok | no_return().
+ensure_authorized_regarding_api_caveats(#state{req = #el_req{auth = Auth, operation = Operation, gri = GRI}}) ->
+    case api_auth:check_authorization(Auth, ?OZ_WORKER, Operation, GRI) of
+        ok -> ok;
+        {error, _} = Error -> throw(Error)
     end.
 
 
@@ -843,16 +838,22 @@ check_type(invite_token_type, Key, InviteTokenType) ->
         {true, Sanitized} -> Sanitized;
         false -> throw(?ERROR_BAD_VALUE_INVITE_TOKEN_TYPE(Key))
     end;
-check_type(caveats, _, Caveats) ->
+check_type(caveats, Key, Caveats) ->
     try
         lists:map(fun(Caveat) ->
             case caveats:sanitize(Caveat) of
-                {true, Sanitized} -> Sanitized;
-                false -> throw(?ERROR_BAD_VALUE_CAVEATS)
+                {true, Sanitized} ->
+                    Sanitized;
+                false ->
+                    case is_map(Caveat) of
+                        true -> throw(?ERROR_BAD_VALUE_CAVEAT(Caveat));
+                        false -> throw(?ERROR_BAD_DATA(Key))
+                    end
             end
         end, Caveats)
-    catch _:_ ->
-        throw(?ERROR_BAD_VALUE_CAVEATS)
+    catch
+        throw:{error, _} = Error -> throw(Error);
+        _:_ -> throw(?ERROR_BAD_DATA(Key))
     end;
 check_type(ipv4_address, _Key, undefined) ->
     undefined;

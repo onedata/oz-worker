@@ -976,7 +976,7 @@ get_eff_group_membership_intermediaries(Config) ->
 
     lists:foreach(fun({ClusterId, GroupId, CorrectProviderClients, CorrectUsers, ExpIntermediariesRaw}) ->
         ExpIntermediaries = lists:map(fun({Type, Id}) ->
-            #{<<"type">> => gri:serialize_type(Type, regular), <<"id">> => Id}
+            #{<<"type">> => gri:serialize_type(Type), <<"id">> => Id}
         end, ExpIntermediariesRaw),
         CorrectUserClients = [{user, U} || U <- CorrectUsers],
         ApiTestSpec = #api_test_spec{

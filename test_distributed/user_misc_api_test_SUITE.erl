@@ -974,9 +974,7 @@ create_client_token_test(Config) ->
 
     VerifyFun = fun(ClientToken) ->
         {ok, Token} = tokens:deserialize(ClientToken),
-        ?assertMatch({true, ?USER(User)}, oz_test_utils:call_oz(
-            Config, token_auth, check_token_auth, [Token, undefined, undefined]
-        )),
+        ?assertMatch({true, ?USER(User)}, oz_test_utils:check_token_auth(Config, Token)),
         true
     end,
 

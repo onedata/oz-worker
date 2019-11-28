@@ -135,39 +135,45 @@ print_summary() ->
 %% Sorts the records by given attribute (specified by name or position).
 %% @end
 %%--------------------------------------------------------------------
--spec print_summary(id | status | name | domain | spaces | support | users | groups | pos_integer()) -> ok.
+-spec print_summary(id | status | name | domain | version | spaces | support | users | groups | pos_integer()) -> ok.
 print_summary(id) -> print_summary(1);
 print_summary(status) -> print_summary(2);
 print_summary(name) -> print_summary(3);
 print_summary(domain) -> print_summary(4);
-print_summary(spaces) -> print_summary(5);
-print_summary(support) -> print_summary(6);
-print_summary(users) -> print_summary(7);
-print_summary(groups) -> print_summary(8);
+print_summary(version) -> print_summary(5);
+print_summary(spaces) -> print_summary(6);
+print_summary(support) -> print_summary(7);
+print_summary(users) -> print_summary(8);
+print_summary(groups) -> print_summary(9);
 print_summary(SortPos) when is_integer(SortPos) ->
     {ok, Providers} = list(),
     ProviderAttrs = lists:map(fun(#document{key = Id, value = P}) ->
+        {ok, #od_cluster{worker_version = {Version, _, _}}} = cluster_logic:get(?ROOT, Id),
+        TotalSupport = lists:foldl(fun({Support, _}, TotalSupport) ->
+            TotalSupport + Support
+        end, 0, maps:values(P#od_provider.eff_spaces)),
         {
             Id,
             case provider_connection:is_online(Id) of true -> "online"; false -> "-" end,
             P#od_provider.name,
             P#od_provider.domain,
+            Version,
             maps:size(P#od_provider.eff_spaces),
-            lists:foldl(fun({Support, _}, TotalSupport) -> TotalSupport + Support end, 0, maps:values(P#od_provider.eff_spaces)),
+            TotalSupport,
             maps:size(P#od_provider.eff_users),
             maps:size(P#od_provider.eff_groups)
         }
     end, Providers),
     Sorted = lists:keysort(SortPos, ProviderAttrs),
-    io:format("-------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
-    io:format("Id                                Status   Name                      Domain                              Spaces   Tot. support   Eff users   Eff groups~n"),
-    io:format("-------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
-    lists:foreach(fun({Id, Status, Name, Domain, Spaces, Support, EffUsers, EffGroups}) ->
-        io:format("~-33s ~-8s ~-25ts ~-35ts ~-8B ~-14s ~-11B ~-12B~n", [
-            Id, Status, Name, Domain, Spaces, str_utils:format_byte_size(Support), EffUsers, EffGroups
+    io:format("------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("Id                                           Status   Name                      Domain                              Version      Spaces   Tot. support   Eff users   Eff groups~n"),
+    io:format("------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    lists:foreach(fun({Id, Status, Name, Domain, Version, Spaces, Support, EffUsers, EffGroups}) ->
+        io:format("~-44s ~-8s ~-25ts ~-35ts ~-12s ~-8B ~-14s ~-11B ~-12B~n", [
+            Id, Status, Name, Domain, Version, Spaces, str_utils:format_byte_size(Support), EffUsers, EffGroups
         ])
     end, Sorted),
-    io:format("-------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
     io:format("~B providers in total~n", [length(Sorted)]).
 
 %%--------------------------------------------------------------------
