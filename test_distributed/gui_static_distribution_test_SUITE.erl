@@ -420,7 +420,7 @@ gui_upload_page_deploys_harvester_gui_on_all_nodes(Config) ->
 
 
 gui_package_verification_works(Config) ->
-    oz_test_utils:set_env(Config, disable_gui_package_verification, false),
+    oz_test_utils:set_env(Config, gui_package_verification, true),
     oz_test_utils:set_app_env(Config, ctool, compatibility_registry_mirrors, []),
     OnezoneVersion = oz_test_utils:call_oz(Config, oz_worker, get_release_version, []),
 
@@ -458,7 +458,7 @@ gui_package_verification_works(Config) ->
     )),
 
     % When verification is disabled, any package should be accepted
-    oz_test_utils:set_env(Config, disable_gui_package_verification, true),
+    oz_test_utils:set_env(Config, gui_package_verification, false),
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
         Config, <<"opw">>, ClusterId, OpGuiPackage, #{<<"macaroon">> => ProviderMacaroon}
     )),
@@ -467,8 +467,8 @@ gui_package_verification_works(Config) ->
     )),
 
     % Harvester GUI package verification can be turned off using a separate env
-    oz_test_utils:set_env(Config, disable_gui_package_verification, false),
-    oz_test_utils:set_env(Config, disable_harvester_gui_package_verification, false),
+    oz_test_utils:set_env(Config, gui_package_verification, true),
+    oz_test_utils:set_env(Config, harvester_gui_package_verification, true),
 
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?ROOT, ?HARVESTER_CREATE_DATA),
@@ -509,7 +509,7 @@ gui_package_verification_works(Config) ->
     )),
 
     % Disable GUI package verification for harvesters only
-    oz_test_utils:set_env(Config, disable_harvester_gui_package_verification, true),
+    oz_test_utils:set_env(Config, harvester_gui_package_verification, false),
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
         Config, <<"hrv">>, HarvesterId, HrvGuiPackage2, #{<<"x-auth-token">> => GuiToken}
     )),
@@ -520,7 +520,7 @@ gui_package_verification_works(Config) ->
     )),
 
     % When verification is disabled, any package for any service should be accepted
-    oz_test_utils:set_env(Config, disable_gui_package_verification, true),
+    oz_test_utils:set_env(Config, gui_package_verification, false),
     ?assertMatch({ok, 200, _, <<"">>}, perform_upload(
         Config, <<"onp">>, ClusterId, HrvGuiPackage2, #{<<"macaroon">> => ProviderMacaroon}
     )),
@@ -704,7 +704,7 @@ init_per_testcase(unused_packages_are_cleaned, Config) ->
     end),
     init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
-    oz_test_utils:set_env(Config, disable_gui_package_verification, true),
+    oz_test_utils:set_env(Config, gui_package_verification, false),
     oz_test_utils:set_app_env(Config, gui, max_gui_package_size_mb, 50),
     oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
     Config.
