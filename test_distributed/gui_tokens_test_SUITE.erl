@@ -9,7 +9,7 @@
 %%% This file contains test concerning different types of tokens.
 %%% @end
 %%%-------------------------------------------------------------------
--module(tokens_test_SUITE).
+-module(gui_tokens_test_SUITE).
 -author("Lukasz Opiola").
 
 -include_lib("ctool/include/aai/aai.hrl").

@@ -12,7 +12,6 @@
 -module(od_user).
 -author("Michal Zmuda").
 
--include("idp_group_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
