@@ -31,7 +31,7 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
--export_type([name/0]).
+-export_type([doc/0, name/0]).
 
 -define(CTX, #{
     model => od_provider,
@@ -282,7 +282,7 @@ get_record_struct(5) ->
     ]};
 get_record_struct(6) ->
     % * root_macaroon renamed to root_token
-    % * removed field - spaces
+    % * renamed field - spaces -> legacy_spaces
     % * new field - storages
     % * new field - eff spaces
     {record, [
@@ -297,6 +297,7 @@ get_record_struct(6) ->
         {latitude, float},
         {longitude, float},
 
+        {legacy_spaces, #{string => integer}}, % Renamed field
         {storages, [string]}, % New field
 
         {eff_users, #{string => [{atom, string}]}},
@@ -476,17 +477,17 @@ upgrade_record(5, Provider) ->
         Latitude,
         Longitude,
 
-        _Spaces,
+        Spaces,
 
-        EffUsers,
-        EffGroups,
-        EffHarvesters,
+        _EffUsers,
+        _EffGroups,
+        _EffHarvesters,
 
         CreationTime,
 
-        BottomUpDirty
+        _BottomUpDirty
     } = Provider,
-    %% @TODO VFS-5854 Implement upgrade procedure using cluster upgrade
+    %% Eff relations are recalculated during cluster upgrade procedure
     {6, #od_provider{
         name = Name,
         admin_email = AdminEmail,
@@ -498,14 +499,15 @@ upgrade_record(5, Provider) ->
         latitude = Latitude,
         longitude = Longitude,
 
+        legacy_spaces = Spaces,
         storages = [],
 
-        eff_users = EffUsers,
-        eff_groups = EffGroups,
-        eff_harvesters = EffHarvesters,
+        eff_users = #{},
+        eff_groups = #{},
+        eff_harvesters = #{},
         eff_spaces = #{},
 
         creation_time = CreationTime,
 
-        bottom_up_dirty = BottomUpDirty
+        bottom_up_dirty = true
     }}.

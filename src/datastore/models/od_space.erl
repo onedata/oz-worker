@@ -565,18 +565,18 @@ upgrade_record(6, Space) ->
 
         EffUsers,
         EffGroups,
-        EffProviders,
+        _EffProviders,
         EffHarvesters,
 
         CreationTime,
         Creator,
 
-        TopDownDirty,
-        BottomUpDirty
+        _TopDownDirty,
+        _BottomUpDirty
 
     } = Space,
 
-    %% @TODO VFS-5854 Implement upgrade procedure using cluster upgrade
+    %% Eff providers are recalculated during cluster upgrade procedure
 
     TranslatePrivileges = fun(Privileges) ->
         privileges:from_list(lists:flatmap(fun
@@ -604,12 +604,12 @@ upgrade_record(6, Space) ->
 
         eff_users = EffUsers,
         eff_groups = EffGroups,
-        eff_providers = EffProviders,
+        eff_providers = #{},
         eff_harvesters = EffHarvesters,
 
         creation_time = CreationTime,
         creator = upgrade_common:upgrade_subject_record(Creator),
 
-        top_down_dirty = TopDownDirty,
-        bottom_up_dirty = BottomUpDirty
+        top_down_dirty = true,
+        bottom_up_dirty = true
     }}.

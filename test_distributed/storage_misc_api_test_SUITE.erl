@@ -40,7 +40,9 @@
     revoke_support_test/1,
     update_support_size_test/1,
 
-    list_spaces_test/1
+    list_spaces_test/1,
+
+    upgrade_legacy_support_test/1
 ]).
 
 all() ->
@@ -54,7 +56,9 @@ all() ->
         revoke_support_test,
         update_support_size_test,
 
-        list_spaces_test
+        list_spaces_test,
+
+        upgrade_legacy_support_test
     ]).
 
 
@@ -70,6 +74,7 @@ create_test(Config) ->
     VerifyFun = fun(StorageId) ->
         {ok, Storage} = oz_test_utils:get_storage(Config, StorageId),
         ?assertEqual(?CORRECT_NAME, Storage#od_storage.name),
+        ?assertEqual(P1, Storage#od_storage.provider),
         true
     end,
 
@@ -176,6 +181,7 @@ get_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(#{
                 <<"provider">> => P1,
                 <<"qos_parameters">> => ExpectedQosParameters,
+                <<"spaces">> => [S],
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(St1, Id)
@@ -383,6 +389,16 @@ support_space_test(Config) ->
             args = [auth, Storage, data],
             expected_result = ?OK_TERM(VerifyFun)
         },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_storage, id = Storage, aspect = support},
+            expected_result = ?OK_MAP_CONTAINS(#{
+                <<"gri">> => fun(EncodedGri) ->
+                    #gri{id = SpaceId} = gri:deserialize(EncodedGri),
+                    VerifyFun(SpaceId)
+                end
+            })
+        },
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
             correct_values = #{
@@ -402,7 +418,6 @@ support_space_test(Config) ->
             },
             bad_values = BadValues
         }
-        % TODO gs
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
@@ -412,6 +427,7 @@ support_space_test(Config) ->
     ),
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         % client_spec and logic_spec are inherited from ApiTestSpec
+        gs_spec = undefined,
         data_spec = #data_spec{
             required = [<<"token">>, <<"size">>],
             correct_values = #{
@@ -612,10 +628,77 @@ list_spaces_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
+upgrade_legacy_support_test(Config) ->
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P2, P2Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+
+    {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
+    {ok, St2} = oz_test_utils:create_storage(Config, ?PROVIDER(P2), ?STORAGE_NAME1),
+    {ok, S} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
+    {ok, S} = oz_test_utils:support_space_by_legacy_storage(Config, P1, S),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    % First check that provider cannot deceitfully support space using this endpoint
+    ApiTestSpec = #api_test_spec{
+        client_spec = #client_spec{
+            forbidden = [
+                {provider, P2, P2Token}
+            ]
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_storage, id = St2, aspect = {upgrade_legacy_support, S}},
+            expected_result = ?OK
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % Check that only own storage can be used to support
+    ApiTestSpec2 = #api_test_spec{
+        client_spec = #client_spec{
+            forbidden = [
+                {provider, P1, P1Token}
+            ]
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_storage, id = St2, aspect = {upgrade_legacy_support, S}},
+            expected_result = ?OK
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
+
+    VerifyFun = fun(_) ->
+        ?assertEqual(true, oz_test_utils:call_oz(Config, storage_logic, supports_space, [St1, S])),
+        ?assertEqual(false, oz_test_utils:call_oz(Config, storage_logic, supports_space, [P1, S])),
+        true
+    end,
+
+    % Finally check successful migration
+    ApiTestSpec3 = #api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                {provider, P1, P1Token}
+            ],
+            unauthorized = [nobody]
+        },
+        gs_spec = #gs_spec{
+            operation = create,
+            gri = #gri{type = od_storage, id = St1, aspect = {upgrade_legacy_support, S}},
+            expected_result = ?OK_TERM(VerifyFun)
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
+
+    % check that dummy storage is no longer supporting a space and new storage is
+    ?assertEqual(false, oz_test_utils:call_oz(Config, storage_logic, supports_space, [P1, S])),
+    ?assertEqual(true, oz_test_utils:call_oz(Config, storage_logic, supports_space, [St1, S])).
+
+
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
-
 
 init_per_suite(Config) ->
     ssl:start(),

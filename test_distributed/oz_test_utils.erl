@@ -158,8 +158,9 @@
     get_provider/2,
     list_providers/1,
     delete_provider/2,
-    support_space_by_provider/3, support_space/4, support_space/5,
-    support_space_using_token/5,
+    support_space_by_provider/3,
+    support_space/4, support_space/5, support_space_using_token/5,
+    support_space_by_legacy_storage/3,
     unsupport_space/3,
     enable_subdomain_delegation/4,
     set_provider_domain/3
@@ -259,6 +260,7 @@
 ]).
 -export([
     create_storage/3,
+    create_storage/4,
     get_storage/2,
     update_storage/3,
     delete_storage/2
@@ -1655,6 +1657,25 @@ support_space_using_token(Config, Client, StorageId, Token, Size) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Supports a space by a provider based on space id
+%% (with default support size and virtual storage with id equal to providers).
+%% @end
+%%--------------------------------------------------------------------
+-spec support_space_by_legacy_storage(Config :: term(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> {ok, SpaceId :: od_space:id()}.
+support_space_by_legacy_storage(Config, ProviderId, SpaceId) ->
+    case oz_test_utils:call_oz(Config, provider_logic, has_storage, [ProviderId, ProviderId]) of
+        true -> ok;
+        false ->
+            ?assertMatch({ok, _}, oz_test_utils:create_storage(
+                Config, ?PROVIDER(ProviderId), ProviderId, ?STORAGE_NAME1)
+            )
+    end,
+    oz_test_utils:support_space(Config, ?PROVIDER(ProviderId), ProviderId, SpaceId,
+        oz_test_utils:minimum_support_size(Config)).
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Revoke space support by given storage.
 %% @end
 %%--------------------------------------------------------------------
@@ -2890,6 +2911,19 @@ group_invite_user_token(Config, Client, GroupId) ->    ?assertMatch({ok, _}, cal
 create_storage(Config, Client, Name) ->
     ?assertMatch({ok, _}, call_oz(
         Config, storage_logic, create, [Client, Name]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a storage in onezone with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_storage(Config :: term(), Client :: aai:auth(),
+    od_storage:id(), od_storage:name()) -> {ok, od_storage:id()}.
+create_storage(Config, Client, Id, Name) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, storage_logic, create, [Client, Id, Name]
     )).
 
 

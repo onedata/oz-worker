@@ -163,7 +163,7 @@ entity_type() | oz_privileges => eff_relations() | eff_relations_with_attrs() | 
 -export([remove_relation/4]).
 -export([get_relations/4, get_relations_with_attrs/4]).
 -export([has_relation/5, has_relation/6]).
--export([get_privileges/5, has_privilege/6, has_privilege/7]).
+-export([get_relation_attrs/5, has_privilege/6, has_privilege/7]).
 -export([get_intermediaries/4]).
 -export([delete_with_relations/2, delete_with_relations/3]).
 -export([remove_all_relations/2, remove_all_relations/3, delete_entity/2]).
@@ -196,8 +196,8 @@ init_state() ->
 -spec verify_state_of_all_entities() -> ok.
 verify_state_of_all_entities() ->
     EntityTypes = [
-        od_user, od_group, od_space, od_provider,
-        od_handle_service, od_handle, od_harvester, od_cluster
+        od_user, od_group, od_space, od_provider, od_handle_service,
+        od_handle, od_harvester, od_cluster, od_storage
     ],
     lists:foreach(
         fun(EntityType) ->
@@ -266,7 +266,7 @@ ensure_up_to_date(RetriesLeft, Timeout) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec add_relation(ChildType :: entity_type(), ChildId :: entity_id(),
-    ParentType :: entity_type(), ParentId :: entity_id()) -> ok | {error, term()}.
+    ParentType :: entity_type(), ParentId :: entity_id()) -> ok | no_return().
 add_relation(od_share, ShareId, od_space, SpaceId) ->
     add_relation(od_share, ShareId, undefined, od_space, SpaceId, undefined);
 add_relation(od_handle, HandleId, od_share, ShareId) ->
@@ -287,7 +287,7 @@ add_relation(od_storage, StorageId, od_provider, ProviderId) ->
 %%--------------------------------------------------------------------
 -spec add_relation(ChildType :: entity_type(), ChildId :: entity_id(),
     ParentType :: entity_type(), ParentId :: entity_id(),
-    Attributes :: attributes()) -> ok | {error, term()}.
+    Attributes :: attributes()) -> ok | no_return().
 add_relation(od_user, UserId, od_group, GroupId, Privileges) ->
     add_relation(od_user, UserId, Privileges, od_group, GroupId, undefined);
 add_relation(od_user, UserId, od_space, SpaceId, Privileges) ->
@@ -648,13 +648,13 @@ has_relation(RelationType, Direction, SubjectEntityType, SubjectEntityId, Entity
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns privileges of Subject Entity towards given Entity.
+%% Returns relation attributes of Subject Entity towards given Entity.
 %% NOTE: will return empty list if there is no such relation, rather than an error.
 %% @end
 %%--------------------------------------------------------------------
--spec get_privileges(relation_type(), direction(), SubjectEntityType :: entity_type(),
+-spec get_relation_attrs(relation_type(), direction(), SubjectEntityType :: entity_type(),
     SubjectEntityId :: entity_id(), entity()) -> privileges().
-get_privileges(RelationType, Direction, SubjectEntityType, SubjectEntityId, Entity) ->
+get_relation_attrs(RelationType, Direction, SubjectEntityType, SubjectEntityId, Entity) ->
     Relations = get_relations_with_attrs(RelationType, Direction, SubjectEntityType, Entity),
     maps:get(SubjectEntityId, Relations, []).
 
@@ -686,7 +686,7 @@ has_privilege(RelationType, Direction, SubjectEntityType, SubjectEntityId, Privi
     SubjectEntityType :: entity_type(), SubjectEntityId :: entity_id(),
     Privilege :: atom(), entity()) -> boolean().
 has_privilege(RelationType, Direction, SubjectEntityType, SubjectEntityId, Privilege, Entity) ->
-    Privileges = get_privileges(RelationType, Direction, SubjectEntityType, SubjectEntityId, Entity),
+    Privileges = get_relation_attrs(RelationType, Direction, SubjectEntityType, SubjectEntityId, Entity),
     lists:member(Privilege, Privileges).
 
 

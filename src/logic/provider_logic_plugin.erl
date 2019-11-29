@@ -314,10 +314,11 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = instance}, data = Data}) ->
     end),
     ok;
 
+
 %% @TODO VFS-5856 deprecated, included for backward compatibility
 %% Used by providers, that do not keep storages in onezone
-update(#el_req{gri = #gri{id = ProviderId, aspect = {space, _SpaceId}}, data = Data}) ->
-    storage_logic:update(?PROVIDER(ProviderId), ProviderId, Data);
+update(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}, data = Data}) ->
+    storage_logic:update_support_size(?PROVIDER(ProviderId), ProviderId, SpaceId, Data);
 
 update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}) ->
     % prevent race condition with simultaneous updates

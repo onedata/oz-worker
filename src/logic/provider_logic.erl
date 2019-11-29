@@ -39,7 +39,11 @@
     get_eff_groups/2, get_eff_group/3,
     get_eff_group_membership_intermediaries/3,
     get_eff_harvesters/2,
-    get_eff_spaces/2, get_eff_space/3
+    get_eff_spaces/2, get_eff_space/3,
+
+    support_space/3,
+    update_support_size/4,
+    revoke_support/3
 ]).
 -export([
     update_domain_config/3,
@@ -62,7 +66,9 @@
     has_eff_harvester/2
 ]).
 -export([
-    get_url/1
+    get_url/1,
+    get_legacy_spaces/1,
+    remove_legacy_space/2
 ]).
 
 %%%===================================================================
@@ -459,6 +465,63 @@ get_eff_space(Auth, ProviderId, SpaceId) ->
 
 
 %%--------------------------------------------------------------------
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% @doc
+%% Supports a space. Token (support_space_token) and SupportSize
+%% are provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec support_space(Auth :: aai:auth(), ProviderId :: od_provider:id(),
+    Data :: map()) -> {ok, od_space:id()} | {error, term()}.
+support_space(Auth, ProviderId, Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = support},
+        data = Data
+    })).
+
+
+%%--------------------------------------------------------------------
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% @doc
+%% Updates support size for specified space of given provider. Has two variants:
+%% 1) New support size is given explicitly
+%% 2) New support size is provided in a proper Data object.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_support_size(Auth :: aai:auth(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id(), SupSizeOrData :: integer() | #{}) -> ok | {error, term()}.
+update_support_size(Auth, ProviderId, SpaceId, SupSize) when is_integer(SupSize) ->
+    update_support_size(Auth, ProviderId, SpaceId, #{
+        <<"size">> => SupSize
+    });
+update_support_size(Auth, ProviderId, SpaceId, Data) ->
+    entity_logic:handle(#el_req{
+        operation = update,
+        auth = Auth,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {space, SpaceId}},
+        data = Data
+    }).
+
+
+%%--------------------------------------------------------------------
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% @doc
+%% Revokes support for specified space on behalf of given provider.
+%% @end
+%%--------------------------------------------------------------------
+-spec revoke_support(Auth :: aai:auth(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> ok | {error, term()}.
+revoke_support(Auth, ProviderId, SpaceId) ->
+    entity_logic:handle(#el_req{
+        operation = delete,
+        auth = Auth,
+        gri = #gri{type = od_provider, id = ProviderId, aspect = {space, SpaceId}}
+    }).
+
+
+%%--------------------------------------------------------------------
 %% @doc
 %% Performs port check operation by requesting all specified URLs and returning
 %% whether the requests succeeded.
@@ -612,3 +675,30 @@ get_url(#od_provider{domain = Domain}) ->
 get_url(ProviderId) ->
     {ok, Provider} = get(?ROOT, ProviderId),
     get_url(Provider).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Returns all legacy spaces in given provider.
+%% Dedicated for upgrading Onezone from 19.02.* to the next major release.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_legacy_spaces(od_provider:record() | od_provider:doc()) ->
+    {ok, #{od_space:id() => Support :: integer()}}.
+get_legacy_spaces(#document{value = Value}) ->
+    get_legacy_spaces(Value);
+get_legacy_spaces(#od_provider{legacy_spaces = Spaces}) ->
+    {ok, Spaces}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Removes given space from legacy spaces in given provider.
+%% Dedicated for upgrading Onezone from 19.02.* to the next major release.
+%% @end
+%%--------------------------------------------------------------------
+-spec remove_legacy_space(od_provider:id(), od_space:id()) -> {ok, od_provider:doc()}.
+remove_legacy_space(ProviderId, SpaceId) ->
+    od_provider:update(ProviderId, fun(#od_provider{legacy_spaces = Spaces} = Provider) ->
+        {ok, Provider#od_provider{legacy_spaces = maps:remove(SpaceId, Spaces)}}
+    end).

@@ -65,6 +65,7 @@ fetch_entity(#gri{id = StorageId}) ->
     entity_logic:scope()) -> boolean().
 operation_supported(create, instance, private) -> true;
 operation_supported(create, support, private) -> true;
+operation_supported(create, {upgrade_legacy_support, _}, private) -> true;
 
 operation_supported(get, instance, private) -> true;
 operation_supported(get, instance, shared) -> true;
@@ -142,6 +143,20 @@ create(#el_req{auth = Auth, gri = #gri{id = StorageId, aspect = support}, data =
             {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
             {ok, resource, {NewGRI, {SpaceData, Rev}}}
         end)
+    end;
+
+% This endpoint is dedicated to providers upgrading from version 19.02.* to the next major release.
+create(#el_req{gri = #gri{id = StorageId, aspect = {upgrade_legacy_support, SpaceId}}}) ->
+    fun(#od_storage{provider = ProviderId}) ->
+        {true, {VirtualStorage, _}} = fetch_entity(#gri{id = ProviderId}),
+        SupportSize = entity_graph:get_relation_attrs(direct, bottom_up, od_space, SpaceId, VirtualStorage),
+        try
+            entity_graph:add_relation(od_space, SpaceId, od_storage, StorageId, SupportSize)
+        catch
+            _:(?ERROR_RELATION_ALREADY_EXISTS(_,_,_,_)) -> ok
+        end,
+        ok = entity_graph:remove_relation(od_space, SpaceId, od_storage, ProviderId),
+        ?notice("Support of space: ~p successfully upgraded", [SpaceId])
     end.
 
 
@@ -262,6 +277,11 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = instance}}, _) -
 authorize(#el_req{operation = create, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = support}}, Storage) ->
     storage_logic:belongs_to_provider(Storage, ProviderId);
 
+authorize(#el_req{operation = create, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {upgrade_legacy_support, SpaceId}}}, Storage) ->
+    storage_logic:belongs_to_provider(Storage, ProviderId)
+        %% Check whether given space is supported by provider virtual storage (with id equal to providers)
+        andalso storage_logic:supports_space(ProviderId, SpaceId);
+
 authorize(#el_req{operation = get, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = instance, scope = private}}, Storage) ->
     storage_logic:belongs_to_provider(Storage, ProviderId);
 
@@ -324,6 +344,9 @@ validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
         <<"size">> => {integer, {not_lower_than, ?MINIMUM_SUPPORT_SIZE}}
     }
 };
+
+validate(#el_req{operation = create, gri = #gri{aspect = {upgrade_legacy_support, _}}}) ->
+    #{};
 
 validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
     at_least_one => #{
