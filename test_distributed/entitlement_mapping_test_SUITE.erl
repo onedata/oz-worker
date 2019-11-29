@@ -18,6 +18,8 @@
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 
+-define(CUSTOM_ENTITLEMENT_PARSER, my_custom_entitlement_parser).
+
 %% API
 -export([
     all/0,
@@ -25,12 +27,56 @@
     init_per_testcase/2, end_per_testcase/2
 ]).
 -export([
-    coalesce_entitlements_test/1
+    entitlement_mapping_disabled_upon_first_login/1,
+    entitlement_mapping_disabled_upon_consecutive_login/1,
+    entitlement_mapping_disabled_upon_account_link/1,
+    entitlement_mapping_disabled_upon_non_idp_user_account_link/1,
+    no_entitlements_upon_first_login/1,
+    no_entitlements_upon_consecutive_login/1,
+    no_entitlements_upon_account_link/1,
+    no_entitlements_upon_non_idp_user_account_link/1,
+    entitlements_added_upon_first_login/1,
+    entitlements_added_upon_consecutive_login/1,
+    entitlements_removed_upon_consecutive_login/1,
+    entitlements_coalesced_upon_consecutive_login/1,
+    entitlements_added_with_admin_group_upon_account_link/1,
+    entitlements_added_with_admin_group_upon_consecutive_login_after_enabling_entitlement_mapping/1,
+    entitlements_removed_upon_consecutive_login_after_disabling_entitlement_mapping/1,
+    entitlements_added_with_vo_group_upon_first_login/1,
+    entitlements_added_with_vo_group_upon_consecutive_login/1,
+    entitlements_added_with_admin_and_vo_group_upon_first_login/1,
+    entitlements_added_with_admin_and_vo_group_upon_consecutive_login/1,
+    highest_role_prevails_when_entitlements_are_duplicated/1,
+    privileges_are_modified_on_consecutive_login/1,
+    entitlements_coalesced_correctly_in_a_mixed_scenario/1,
+    entitlement_groups_are_protected/1
 ]).
 
 all() ->
     ?ALL([
-        coalesce_entitlements_test
+        entitlement_mapping_disabled_upon_first_login,
+        entitlement_mapping_disabled_upon_consecutive_login,
+        entitlement_mapping_disabled_upon_account_link,
+        entitlement_mapping_disabled_upon_non_idp_user_account_link,
+        no_entitlements_upon_first_login,
+        no_entitlements_upon_consecutive_login,
+        no_entitlements_upon_account_link,
+        no_entitlements_upon_non_idp_user_account_link,
+        entitlements_added_upon_first_login,
+        entitlements_added_upon_consecutive_login,
+        entitlements_removed_upon_consecutive_login,
+        entitlements_coalesced_upon_consecutive_login,
+        entitlements_added_with_admin_group_upon_account_link,
+        entitlements_added_with_admin_group_upon_consecutive_login_after_enabling_entitlement_mapping,
+        entitlements_removed_upon_consecutive_login_after_disabling_entitlement_mapping,
+        entitlements_added_with_vo_group_upon_first_login,
+        entitlements_added_with_vo_group_upon_consecutive_login,
+        entitlements_added_with_admin_and_vo_group_upon_first_login,
+        entitlements_added_with_admin_and_vo_group_upon_consecutive_login,
+        highest_role_prevails_when_entitlements_are_duplicated,
+        privileges_are_modified_on_consecutive_login,
+        entitlements_coalesced_correctly_in_a_mixed_scenario,
+        entitlement_groups_are_protected
     ]).
 
 
@@ -38,161 +84,221 @@ all() ->
 %%% Test functions
 %%%===================================================================
 
-% Below macros use the variables Config and UserId, which appear in merge_groups_in_linked_accounts_test/1
--define(RETRIES, 600).
--define(INTERVAL, 100). % 600 Attempts every 100 ms - 1 minute
-
--define(assertGroupExists(__Flag, __IdP, __RawEntitlement),
-    ?assertEqual(
-        __Flag,
-        check_group_exists(Config, __IdP, __RawEntitlement),
-        ?RETRIES,
-        ?INTERVAL
-    )
-).
-
--define(assertHasGroup(__Flag, __IdP, __RawEntitlement, __RelationType),
-    ?assertEqual(
-        __Flag,
-        check_has_group(Config, UserId, __IdP, __RawEntitlement, __RelationType),
-        ?RETRIES,
-        ?INTERVAL
-    )
-).
-
--define(assertGroupsCount(__Direct, __Effective),
-    ?assertEqual(
-        true,
-        check_groups_count(Config, UserId, __Direct, __Effective),
-        ?RETRIES,
-        ?INTERVAL
-    )
-).
-
--define(assertGroupStructure(__IdP, __ParentRawEntitlement, __ChildRawEntitlement, __RelationType),
-    ?assertEqual(
-        true,
-        check_group_structure(Config, __IdP, __ParentRawEntitlement, __ChildRawEntitlement, __RelationType),
-        ?RETRIES,
-        ?INTERVAL
-    )
-).
-
--define(assertHasLinkedAccount(__LinkedAcc),
-    ?assert(check_has_linked_account(Config, UserId, __LinkedAcc))
-).
-
--define(assertLinkedAccountsCount(__Number),
-    ?assertEqual(
-        __Number,
-        length(get_linked_accounts(Config, UserId)),
-        ?RETRIES,
-        ?INTERVAL
-    )
-).
-
 -define(DUMMY_IDP, dummyIdP).
 -define(OTHER_IDP, anotherIdP).
 -define(THIRD_IDP, thirdIdP).
 
-coalesce_entitlements_test(Config) ->
-    overwrite_entitlement_mapping(Config, ?DUMMY_IDP, false, undefined, undefined, undefined),
-    overwrite_entitlement_mapping(Config, ?OTHER_IDP, false, undefined, undefined, undefined),
-    overwrite_entitlement_mapping(Config, ?THIRD_IDP, false, undefined, undefined, undefined),
+-define(LINKED_ACC(IdP, Entitlements), #linked_account{
+    idp = IdP,
+    subject_id = <<(atom_to_binary(IdP, utf8))/binary, "-subjectId">>,
+    entitlements = Entitlements
+}).
 
-    % Helpers for shorter code
-    LinkedAcc = fun(IdP, Entitlements) ->
-        #linked_account{
-            idp = IdP,
-            subject_id = <<(atom_to_binary(IdP, utf8))/binary, "-subjectId">>,
-            entitlements = Entitlements
-        }
-    end,
+% Below macros assume that set_test_data/2 function has been called at the
+% beginning of the tests and reuse data stored in process dictionary for
+% clearer test code
+-define(RETRIES, 100).
+-define(INTERVAL, 100). % 100 Attempts every 100 ms - 10 seconds
 
-    FirstLinkedAcc = LinkedAcc(?DUMMY_IDP, []),
-    {ok, #document{key = UserId}} = oz_test_utils:call_oz(
-        Config, linked_accounts, acquire_user, [FirstLinkedAcc]
-    ),
-    ?assertHasLinkedAccount(FirstLinkedAcc),
-    ?assertGroupsCount(0, 0),
-    ?assertLinkedAccountsCount(1),
+-define(assertEqualWithRetries(TermA, TermB),
+    ?assertEqual(TermA, TermB, ?RETRIES, ?INTERVAL)
+).
 
-    MergeAcc = fun(IdP, Entitlements) ->
-        oz_test_utils:call_oz(Config, linked_accounts, merge, [
-            UserId, LinkedAcc(IdP, Entitlements)
-        ]),
-        % Make sure
-        ?assertHasLinkedAccount(LinkedAcc(IdP, Entitlements))
-    end,
+-define(assertGroupExists(Flag, IdP, RawEntitlement),
+    ?assertEqual(
+        Flag, group_exists(get_test_config(), IdP, RawEntitlement)
+    )
+).
 
-    % Entitlement mapping is disabled for now
-    MergeAcc(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
-    ?assertGroupsCount(0, 0),
-    ?assertLinkedAccountsCount(1),
-    ?assertGroupExists(false, ?DUMMY_IDP, <<"group/subgroup">>),
-    ?assertGroupExists(false, ?DUMMY_IDP, <<"anotherGroup">>),
-    ?assertGroupExists(false, ?DUMMY_IDP, <<"thirdGroup">>),
+-define(assertGroupProtected(IdP, RawEntitlement),
+    ?assert(
+        is_protected(get_test_config(), IdP, RawEntitlement)
+    )
+).
 
-    % Enable entitlement mapping that uses a flat_entitlement_parser
-    overwrite_entitlement_mapping(Config, ?DUMMY_IDP, true, flat_entitlement_parser, undefined, undefined),
-    MergeAcc(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
-    ?assertGroupsCount(2, 2),
-    ?assertLinkedAccountsCount(1),
+-define(assertTotalGroupsCount(Count),
+    ?assertEqual(Count, total_group_count(get_test_config()))
+).
+
+-define(assertHasGroup(Flag, IdP, RawEntitlement, RelationType),
+    ?assertEqualWithRetries(
+        Flag, has_group(get_test_config(), get_test_user(), IdP, RawEntitlement, RelationType)
+    )
+).
+
+-define(assertUserGroupsCount(Direct, Effective),
+    ?assertEqualWithRetries(
+        {Direct, Effective}, get_groups_count(get_test_config(), get_test_user())
+    )
+).
+
+-define(assertGroupStructure(IdP, ParentRawEntitlement, ChildRawEntitlement, RelationType),
+    ?assertEqualWithRetries(true, check_group_structure(
+        get_test_config(), IdP, ParentRawEntitlement, ChildRawEntitlement, RelationType
+    ))
+).
+
+-define(assertHasLinkedAccount(LinkedAcc),
+    ?assert(
+        has_linked_account(get_test_config(), get_test_user(), LinkedAcc)
+    )
+).
+
+-define(assertLinkedAccountsCount(Number),
+    ?assertEqual(
+        Number, length(get_linked_accounts(get_test_config(), get_test_user()))
+    )
+).
+
+
+entitlement_mapping_disabled_upon_first_login(Config) ->
+    store_test_config(Config),
+    overwrite_config(?DUMMY_IDP, false),
+    simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
+    ?assertUserGroupsCount(0, 0),
+    ?assertTotalGroupsCount(0).
+
+
+entitlement_mapping_disabled_upon_consecutive_login(Config) ->
+    store_test_config(Config),
+    overwrite_config(?DUMMY_IDP, false),
+    simulate_first_login(?DUMMY_IDP, []),
+    simulate_consecutive_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"another">>]),
+    ?assertUserGroupsCount(0, 0),
+    ?assertTotalGroupsCount(0).
+
+
+entitlement_mapping_disabled_upon_account_link(Config) ->
+    store_test_config(Config),
+    overwrite_config(?DUMMY_IDP, false),
+    overwrite_config(?OTHER_IDP, false),
+    simulate_first_login(?DUMMY_IDP, []),
+    simulate_account_link(?OTHER_IDP, [<<"group/subgroup">>, <<"another">>]),
+    ?assertUserGroupsCount(0, 0),
+    ?assertTotalGroupsCount(0).
+
+
+entitlement_mapping_disabled_upon_non_idp_user_account_link(Config) ->
+    store_test_config(Config),
+    overwrite_config(?DUMMY_IDP, false),
+    create_non_idp_user(),
+    simulate_account_link(?DUMMY_IDP, [<<"group/subgroup">>, <<"another">>]),
+    ?assertUserGroupsCount(0, 0),
+    ?assertTotalGroupsCount(0).
+
+
+no_entitlements_upon_first_login(Config) ->
+    store_test_config(Config),
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    simulate_first_login(?DUMMY_IDP, []),
+    ?assertUserGroupsCount(0, 0),
+    ?assertTotalGroupsCount(0).
+
+
+no_entitlements_upon_consecutive_login(Config) ->
+    store_test_config(Config),
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    simulate_first_login(?DUMMY_IDP, []),
+    simulate_consecutive_login(?DUMMY_IDP, []),
+    ?assertUserGroupsCount(0, 0),
+    ?assertTotalGroupsCount(0).
+
+
+no_entitlements_upon_account_link(Config) ->
+    store_test_config(Config),
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    overwrite_config(?OTHER_IDP, true, flat_entitlement_parser),
+    simulate_first_login(?DUMMY_IDP, []),
+    simulate_account_link(?OTHER_IDP, []),
+    ?assertUserGroupsCount(0, 0),
+    ?assertTotalGroupsCount(0).
+
+
+no_entitlements_upon_non_idp_user_account_link(Config) ->
+    store_test_config(Config),
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    create_non_idp_user(),
+    simulate_account_link(?DUMMY_IDP, []),
+    ?assertUserGroupsCount(0, 0),
+    ?assertTotalGroupsCount(0).
+
+
+entitlements_added_upon_first_login(Config) ->
+    store_test_config(Config),
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
+    ?assertUserGroupsCount(2, 2),
     ?assertHasGroup(true, ?DUMMY_IDP, <<"group/subgroup">>, direct),
     ?assertHasGroup(true, ?DUMMY_IDP, <<"anotherGroup">>, direct),
+    ?assertHasGroup(false, ?DUMMY_IDP, <<"thirdGroup">>, direct),
+    ?assertTotalGroupsCount(2),
     ?assertGroupExists(true, ?DUMMY_IDP, <<"group/subgroup">>),
     ?assertGroupExists(true, ?DUMMY_IDP, <<"anotherGroup">>),
-    ?assertGroupExists(false, ?DUMMY_IDP, <<"thirdGroup">>),
+    ?assertGroupExists(false, ?DUMMY_IDP, <<"thirdGroup">>).
 
-    % Simulate a situation when a new entitlement appears
-    MergeAcc(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>, <<"thirdGroup">>]),
-    ?assertGroupsCount(3, 3),
-    ?assertLinkedAccountsCount(1),
+
+entitlements_added_upon_consecutive_login(Config) ->
+    store_test_config(Config),
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
+    simulate_consecutive_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>, <<"thirdGroup">>]),
+    ?assertUserGroupsCount(3, 3),
     ?assertHasGroup(true, ?DUMMY_IDP, <<"group/subgroup">>, direct),
     ?assertHasGroup(true, ?DUMMY_IDP, <<"anotherGroup">>, direct),
     ?assertHasGroup(true, ?DUMMY_IDP, <<"thirdGroup">>, direct),
+    ?assertTotalGroupsCount(3),
     ?assertGroupExists(true, ?DUMMY_IDP, <<"group/subgroup">>),
-    ?assertGroupExists(true, ?DUMMY_IDP, <<"anotherGroup">>),
     ?assertGroupExists(true, ?DUMMY_IDP, <<"thirdGroup">>),
+    ?assertGroupExists(true, ?DUMMY_IDP, <<"anotherGroup">>).
 
-    % Simulate a situation when two user entitlements are withdrawn
-    MergeAcc(?DUMMY_IDP, [<<"anotherGroup">>]),
-    ?assertGroupsCount(1, 1),
-    ?assertLinkedAccountsCount(1),
+
+entitlements_removed_upon_consecutive_login(Config) ->
+    store_test_config(Config),
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
+    simulate_consecutive_login(?DUMMY_IDP, []),
+    ?assertUserGroupsCount(0, 0),
     ?assertHasGroup(false, ?DUMMY_IDP, <<"group/subgroup">>, direct),
-    ?assertHasGroup(true, ?DUMMY_IDP, <<"anotherGroup">>, direct),
-    ?assertHasGroup(false, ?DUMMY_IDP, <<"thirdGroup">>, direct),
-    % The groups should not be removed
+    ?assertHasGroup(false, ?DUMMY_IDP, <<"anotherGroup">>, direct),
+    ?assertTotalGroupsCount(2),
     ?assertGroupExists(true, ?DUMMY_IDP, <<"group/subgroup">>),
+    ?assertGroupExists(true, ?DUMMY_IDP, <<"anotherGroup">>).
+
+
+entitlements_coalesced_upon_consecutive_login(Config) ->
+    store_test_config(Config),
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
+    simulate_consecutive_login(?DUMMY_IDP, [<<"firstGroup">>, <<"anotherGroup">>, <<"thirdGroup">>]),
+    ?assertUserGroupsCount(3, 3),
+    ?assertHasGroup(false, ?DUMMY_IDP, <<"group/subgroup">>, direct),
+    ?assertHasGroup(true, ?DUMMY_IDP, <<"firstGroup">>, direct),
+    ?assertHasGroup(true, ?DUMMY_IDP, <<"anotherGroup">>, direct),
+    ?assertHasGroup(true, ?DUMMY_IDP, <<"thirdGroup">>, direct),
+    ?assertTotalGroupsCount(4),
+    ?assertGroupExists(true, ?DUMMY_IDP, <<"group/subgroup">>),
+    ?assertGroupExists(true, ?DUMMY_IDP, <<"firstGroup">>),
     ?assertGroupExists(true, ?DUMMY_IDP, <<"anotherGroup">>),
-    ?assertGroupExists(true, ?DUMMY_IDP, <<"thirdGroup">>),
+    ?assertGroupExists(true, ?DUMMY_IDP, <<"thirdGroup">>).
 
-    % Link a new user account in IdP that has currently disabled entitlement mapping
-    MergeAcc(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
-    ?assertGroupsCount(1, 1),
-    ?assertLinkedAccountsCount(2),
-    ?assertHasGroup(false, ?DUMMY_IDP, <<"group/subgroup">>, direct),
-    ?assertHasGroup(true, ?DUMMY_IDP, <<"anotherGroup">>, direct),
-    ?assertHasGroup(false, ?DUMMY_IDP, <<"thirdGroup">>, direct),
-    ?assertHasGroup(false, ?OTHER_IDP, <<"users/admins">>, direct),
-    ?assertHasGroup(false, ?OTHER_IDP, <<"users/developers">>, direct),
-    ?assertHasGroup(false, ?OTHER_IDP, <<"users/technicians">>, direct),
-    ?assertGroupExists(false, ?DUMMY_IDP, <<"users/admins">>),
-    ?assertGroupExists(false, ?DUMMY_IDP, <<"users/developers">>),
-    ?assertGroupExists(false, ?DUMMY_IDP, <<"users/technicians">>),
 
-    % Turn on entitlement mapping in ?ANOTHER_IDP, with "users/admins" as admin Group
-    overwrite_entitlement_mapping(Config, ?OTHER_IDP, true, nested_entitlement_parser, undefined, "users/admins"),
-    MergeAcc(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
-    ?assertGroupsCount(4, 5),
-    ?assertLinkedAccountsCount(2),
-    ?assertHasGroup(false, ?DUMMY_IDP, <<"group/subgroup">>, direct),
+entitlements_added_with_admin_group_upon_account_link(Config) ->
+    store_test_config(Config),
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [{adminGroup, "users/admins"}]),
+    simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
+    simulate_account_link(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
+    ?assertUserGroupsCount(5, 6),
+    ?assertHasGroup(true, ?DUMMY_IDP, <<"group/subgroup">>, direct),
     ?assertHasGroup(true, ?DUMMY_IDP, <<"anotherGroup">>, direct),
-    ?assertHasGroup(false, ?DUMMY_IDP, <<"thirdGroup">>, direct),
     ?assertHasGroup(true, ?OTHER_IDP, <<"users/admins">>, direct),
     ?assertHasGroup(true, ?OTHER_IDP, <<"users/developers">>, direct),
     ?assertHasGroup(true, ?OTHER_IDP, <<"users/technicians">>, direct),
     ?assertHasGroup(true, ?OTHER_IDP, <<"users">>, effective),
+    ?assertTotalGroupsCount(6),
+    ?assertGroupExists(true, ?DUMMY_IDP, <<"group/subgroup">>),
+    ?assertGroupExists(true, ?DUMMY_IDP, <<"anotherGroup">>),
+    ?assertGroupExists(true, ?OTHER_IDP, <<"users">>),
     ?assertGroupExists(true, ?OTHER_IDP, <<"users/admins">>),
     ?assertGroupExists(true, ?OTHER_IDP, <<"users/developers">>),
     ?assertGroupExists(true, ?OTHER_IDP, <<"users/technicians">>),
@@ -201,43 +307,57 @@ coalesce_entitlements_test(Config) ->
     ?assertGroupStructure(?OTHER_IDP, <<"users">>, <<"users/technicians">>, direct),
     % The admin group should belong to all groups
     ?assertGroupStructure(?OTHER_IDP, <<"users/developers">>, <<"users/admins">>, direct),
-    ?assertGroupStructure(?OTHER_IDP, <<"users/technicians">>, <<"users/admins">>, direct),
+    ?assertGroupStructure(?OTHER_IDP, <<"users/technicians">>, <<"users/admins">>, direct).
 
-    % Turn off entitlement mapping for the DUMMY_IDP, which should remove related entitlements
-    overwrite_entitlement_mapping(Config, ?DUMMY_IDP, false, undefined, undefined, undefined),
-    MergeAcc(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>, <<"thirdGroup">>]),
-    ?assertGroupsCount(3, 4),
-    ?assertLinkedAccountsCount(2),
-    ?assertHasGroup(false, ?DUMMY_IDP, <<"group/subgroup">>, direct),
-    ?assertHasGroup(false, ?DUMMY_IDP, <<"anotherGroup">>, direct),
-    ?assertHasGroup(false, ?DUMMY_IDP, <<"thirdGroup">>, direct),
-    ?assertHasGroup(true, ?OTHER_IDP, <<"users/admins">>, direct),
-    ?assertHasGroup(true, ?OTHER_IDP, <<"users/developers">>, direct),
-    ?assertHasGroup(true, ?OTHER_IDP, <<"users/technicians">>, direct),
-    ?assertHasGroup(true, ?OTHER_IDP, <<"users">>, effective),
 
-    % Turn on entitlement mapping for the DUMMY_IDP again
-    overwrite_entitlement_mapping(Config, ?DUMMY_IDP, true, flat_entitlement_parser, undefined, undefined),
-    % Turn on entitlement mapping for the ?THIRD_IDP, including a VO and admin group
-    overwrite_entitlement_mapping(Config, ?THIRD_IDP, true, nested_entitlement_parser, "Third-VO", "staff/admins/privileged"),
-    % Single login from ?THIRD_IDP should also trigger adding the entitlements from ?DUMMY_IDP
-    MergeAcc(?THIRD_IDP, [<<"staff/vm-operators">>, <<"task4.1">>, <<"testGroup">>, <<"staff/admins/privileged">>]),
-    ?assertGroupsCount(10, 14),
-    ?assertLinkedAccountsCount(3),
-    ?assertHasGroup(true, ?DUMMY_IDP, <<"group/subgroup">>, direct),
-    ?assertHasGroup(true, ?DUMMY_IDP, <<"anotherGroup">>, direct),
-    ?assertHasGroup(true, ?DUMMY_IDP, <<"thirdGroup">>, direct),
-    ?assertHasGroup(true, ?OTHER_IDP, <<"users/admins">>, direct),
-    ?assertHasGroup(true, ?OTHER_IDP, <<"users/developers">>, direct),
-    ?assertHasGroup(true, ?OTHER_IDP, <<"users/technicians">>, direct),
-    ?assertHasGroup(true, ?OTHER_IDP, <<"users">>, effective),
+entitlements_added_with_admin_group_upon_consecutive_login_after_enabling_entitlement_mapping(Config) ->
+    store_test_config(Config),
+    overwrite_config(?OTHER_IDP, false),
+    simulate_first_login(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
+    ?assertUserGroupsCount(0, 0),
+    ?assertTotalGroupsCount(0),
+    overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [{adminGroup, "users/admins"}]),
+    simulate_consecutive_login(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
+    ?assertUserGroupsCount(3, 4),
+    ?assertTotalGroupsCount(4).
+
+
+entitlements_removed_upon_consecutive_login_after_disabling_entitlement_mapping(Config) ->
+    store_test_config(Config),
+    overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [{adminGroup, "users/admins"}]),
+    simulate_first_login(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
+    ?assertUserGroupsCount(3, 4),
+    ?assertTotalGroupsCount(4),
+    overwrite_config(?OTHER_IDP, false),
+    simulate_consecutive_login(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
+    ?assertUserGroupsCount(0, 0),
+
+    ?assertTotalGroupsCount(4),
+    % Group structure should remain unchanged though the entitlements are removed from the user
+    % config need to be present for the group structure checks to work
+    overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [{adminGroup, "users/admins"}]),
+    ?assertGroupStructure(?OTHER_IDP, <<"users">>, <<"users/admins">>, direct),
+    ?assertGroupStructure(?OTHER_IDP, <<"users">>, <<"users/developers">>, direct),
+    ?assertGroupStructure(?OTHER_IDP, <<"users">>, <<"users/technicians">>, direct),
+    ?assertGroupStructure(?OTHER_IDP, <<"users/developers">>, <<"users/admins">>, direct),
+    ?assertGroupStructure(?OTHER_IDP, <<"users/technicians">>, <<"users/admins">>, direct).
+
+
+entitlements_added_with_vo_group_upon_first_login(Config) ->
+    store_test_config(Config),
+    overwrite_config(?THIRD_IDP, true, nested_entitlement_parser, [{voGroupName, "Third-VO"}]),
+    simulate_first_login(?THIRD_IDP, [
+        <<"staff/vm-operators">>, <<"task4.1">>, <<"testGroup">>, <<"staff/admins/privileged">>
+    ]),
+    ?assertUserGroupsCount(4, 7),
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff/vm-operators">>, direct),
     ?assertHasGroup(true, ?THIRD_IDP, <<"task4.1">>, direct),
     ?assertHasGroup(true, ?THIRD_IDP, <<"testGroup">>, direct),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff/admins/privileged">>, direct),
     ?assertHasGroup(true, ?THIRD_IDP, <<"Third-VO">>, effective),
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff">>, effective),
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff/admins">>, effective),
+
+    ?assertTotalGroupsCount(7),
     % All groups should belong to their parents and the top parent to the VO group
     ?assertGroupStructure(?THIRD_IDP, <<"staff">>, <<"staff/vm-operators">>, direct),
     ?assertGroupStructure(?THIRD_IDP, <<"staff">>, <<"staff/admins">>, direct),
@@ -246,81 +366,347 @@ coalesce_entitlements_test(Config) ->
     ?assertGroupStructure(?THIRD_IDP, <<"Third-VO">>, <<"staff">>, direct),
     ?assertGroupStructure(?THIRD_IDP, <<"Third-VO">>, <<"staff/vm-operators">>, effective),
     ?assertGroupStructure(?THIRD_IDP, <<"Third-VO">>, <<"staff/admins">>, effective),
-    ?assertGroupStructure(?THIRD_IDP, <<"Third-VO">>, <<"staff/admins/privileged">>, effective),
+    ?assertGroupStructure(?THIRD_IDP, <<"Third-VO">>, <<"staff/admins/privileged">>, effective).
+
+
+entitlements_added_with_vo_group_upon_consecutive_login(Config) ->
+    store_test_config(Config),
+    overwrite_config(?THIRD_IDP, true, nested_entitlement_parser, [{voGroupName, "Third-VO"}]),
+    simulate_first_login(?THIRD_IDP, []),
+    ?assertUserGroupsCount(0, 0),
+    ?assertTotalGroupsCount(0),
+    simulate_consecutive_login(?THIRD_IDP, [
+        <<"staff/vm-operators">>, <<"task4.1">>, <<"testGroup">>,
+        <<"staff/admins/readonly">>, <<"staff/admins/privileged">>
+    ]),
+    ?assertUserGroupsCount(5, 8),
+    ?assertTotalGroupsCount(8).
+
+
+entitlements_added_with_admin_and_vo_group_upon_first_login(Config) ->
+    store_test_config(Config),
+    overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
+        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+    ]),
+    simulate_first_login(?THIRD_IDP, [
+        <<"staff:member/vm-operators:member/user:manager">>,
+        <<"task4.1:manager/user:member">>,
+        <<"testGroup:admin/user:admin">>,
+        <<"staff:member/admins:member/readonly:member/user:member">>,
+        <<"staff:member/admins:member/privileged:admin/user:manager">>
+    ]),
+    ?assertUserGroupsCount(5, 8),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:manager">>, direct),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"task4.1:manager/user:member">>, direct),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"testGroup:admin/user:admin">>, direct),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:member/readonly:member/user:member">>, direct),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:member/privileged:admin/user:manager">>, direct),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"Third-VO">>, effective),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member">>, effective),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:member">>, effective),
+
+    ?assertTotalGroupsCount(8),
+    % All groups should belong to their parents and the top parent to the VO group
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"staff:member">>, <<"staff:member/vm-operators:member/user:manager">>, direct),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"staff:member">>, <<"staff:member/admins:member">>, direct),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"staff:member/admins:member">>, <<"staff:member/admins:member/readonly:member/user:member">>, direct),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"staff:member/admins:member">>, <<"staff:member/admins:member/privileged:admin/user:manager">>, direct),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"staff:member">>, <<"staff:member/admins:member/readonly:member/user:member">>, effective),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"staff:member">>, <<"staff:member/admins:member/privileged:admin/user:manager">>, effective),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"Third-VO">>, <<"staff:member">>, direct),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"Third-VO">>, <<"staff:member/vm-operators:member/user:manager">>, effective),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"Third-VO">>, <<"staff:member/admins:member">>, effective),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"Third-VO">>, <<"staff:member/admins:member/readonly:member/user:member">>, effective),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"Third-VO">>, <<"staff:member/admins:member/privileged:admin/user:manager">>, effective),
     % The admin group should belong to all groups
-    ?assertGroupStructure(?THIRD_IDP, <<"staff">>, <<"staff/admins/privileged">>, direct),
-    ?assertGroupStructure(?THIRD_IDP, <<"staff/admins">>, <<"staff/admins/privileged">>, direct),
-    ?assertGroupStructure(?THIRD_IDP, <<"task4.1">>, <<"staff/admins/privileged">>, direct),
-    ?assertGroupStructure(?THIRD_IDP, <<"testGroup">>, <<"staff/admins/privileged">>, direct),
-    ?assertGroupStructure(?THIRD_IDP, <<"Third-VO">>, <<"staff/admins/privileged">>, direct),
-
-    % Turn off entitlement mapping for all IdPs
-    overwrite_entitlement_mapping(Config, ?DUMMY_IDP, false, undefined, undefined, undefined),
-    overwrite_entitlement_mapping(Config, ?OTHER_IDP, false, undefined, undefined, undefined),
-    overwrite_entitlement_mapping(Config, ?THIRD_IDP, false, undefined, undefined, undefined),
-    % Merge one of the accounts, which should trigger removal of all entitlements
-    MergeAcc(?THIRD_IDP, [<<"staff/vm-operators">>, <<"task4.1">>, <<"testGroup">>, <<"staff/admins/privileged">>]),
-    ?assertGroupsCount(0, 0),
-    ?assertLinkedAccountsCount(3),
-
-    % Turn the mapping on again
-    overwrite_entitlement_mapping(Config, ?DUMMY_IDP, true, flat_entitlement_parser, undefined, undefined),
-    overwrite_entitlement_mapping(Config, ?OTHER_IDP, true, nested_entitlement_parser, undefined, "users/admins"),
-    overwrite_entitlement_mapping(Config, ?THIRD_IDP, true, nested_entitlement_parser, "Third-VO", "staff/admins/privileged"),
-    % Merge one of the accounts, which should add the entitlements again
-    MergeAcc(?THIRD_IDP, [<<"staff/vm-operators">>, <<"task4.1">>, <<"testGroup">>, <<"staff/admins/privileged">>]),
-    ?assertGroupsCount(10, 14),
-    ?assertLinkedAccountsCount(3),
-
-    % Check if all groups are protected
-    lists:foreach(fun({IdP, Entitlement}) ->
-        ?assert(is_protected(Config, IdP, Entitlement))
-    end, [
-        {?DUMMY_IDP, <<"group/subgroup">>},
-        {?DUMMY_IDP, <<"anotherGroup">>},
-        {?DUMMY_IDP, <<"thirdGroup">>},
-
-        {?OTHER_IDP, <<"users/admins">>},
-        {?OTHER_IDP, <<"users/developers">>},
-        {?OTHER_IDP, <<"users/technicians">>},
-        {?OTHER_IDP, <<"users">>},
-
-        {?THIRD_IDP, <<"staff/vm-operators">>},
-        {?THIRD_IDP, <<"task4.1">>},
-        {?THIRD_IDP, <<"testGroup">>},
-        {?THIRD_IDP, <<"staff/admins/privileged">>},
-        {?THIRD_IDP, <<"staff">>},
-        {?THIRD_IDP, <<"staff/admins">>}
-    ]).
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"staff:member">>, <<"staff:member/admins:member/privileged:admin">>, direct),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"staff:member/admins:member">>, <<"staff:member/admins:member/privileged:admin">>, direct),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"staff:member/admins:member/readonly:member/user:member">>, <<"staff:member/admins:member/privileged:admin">>, direct),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"task4.1:manager/user:member">>, <<"staff:member/admins:member/privileged:admin">>, direct),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"testGroup:admin/user:admin">>, <<"staff:member/admins:member/privileged:admin">>, direct),
+    ?assertGroupStructure(?THIRD_IDP,
+        <<"Third-VO">>, <<"staff:member/admins:member/privileged:admin">>, direct).
 
 
-%%%===================================================================
-%%% Setup/teardown functions
-%%%===================================================================
+entitlements_added_with_admin_and_vo_group_upon_consecutive_login(Config) ->
+    store_test_config(Config),
+    overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
+        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+    ]),
+    simulate_first_login(?THIRD_IDP, []),
+    ?assertUserGroupsCount(0, 0),
+    ?assertTotalGroupsCount(0),
+    simulate_consecutive_login(?THIRD_IDP, [
+        <<"staff:member/vm-operators:member/user:manager">>,
+        <<"task4.1:manager/user:member">>,
+        <<"testGroup:admin/user:admin">>,
+        <<"staff:member/admins:member/readonly:member/user:member">>,
+        <<"staff:member/admins:member/privileged:admin/user:manager">>
+    ]),
+    ?assertUserGroupsCount(5, 8),
+    ?assertTotalGroupsCount(8).
 
-init_per_suite(Config) ->
-    ssl:start(),
-    hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
 
-init_per_testcase(_, Config) ->
-    oz_test_utils:toggle_basic_auth(Config, true),
-    Config.
+highest_role_prevails_when_entitlements_are_duplicated(Config) ->
+    store_test_config(Config),
+    overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
+        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+    ]),
 
-end_per_testcase(_, Config) ->
-    oz_test_utils:delete_all_entities(Config),
-    ok.
+    simulate_first_login(?THIRD_IDP, [
+        <<"staff:member/vm-operators:member/user:manager">>,
+        <<"staff:member/vm-operators:member/user:admin">>,
+        <<"staff:member/vm-operators:member/user:member">>
+    ]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:admin">>, direct),
 
-end_per_suite(_Config) ->
-    hackney:stop(),
-    ssl:stop().
+    simulate_consecutive_login(?THIRD_IDP, [
+        <<"staff:member/vm-operators:member/user:member">>,
+        <<"staff:member/vm-operators:member/user:admin">>
+    ]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:admin">>, direct),
 
+    simulate_consecutive_login(?THIRD_IDP, [
+        <<"staff:member/vm-operators:member/user:admin">>,
+        <<"staff:member/vm-operators:member/user:manager">>
+    ]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:admin">>, direct),
+
+    simulate_consecutive_login(?THIRD_IDP, [
+        <<"staff:member/vm-operators:member/user:member">>,
+        <<"staff:member/vm-operators:member/user:manager">>
+    ]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:manager">>, direct),
+
+    simulate_consecutive_login(?THIRD_IDP, [
+        <<"staff:member/vm-operators:member/user:member">>,
+        <<"staff:member/vm-operators:member/user:member">>
+    ]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:member">>, direct).
+
+
+privileges_are_modified_on_consecutive_login(Config) ->
+    store_test_config(Config),
+    overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
+        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+    ]),
+
+    simulate_first_login(?THIRD_IDP, [<<"staff:member/vm-operators:member/user:member">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:member">>, direct),
+
+    simulate_first_login(?THIRD_IDP, [<<"staff:admin/vm-operators:manager/user:admin">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:admin/vm-operators:manager/user:admin">>, direct),
+
+    simulate_first_login(?THIRD_IDP, [<<"staff:manager/vm-operators:member/user:manager">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:manager/vm-operators:member/user:manager">>, direct),
+
+    simulate_first_login(?THIRD_IDP, [<<"staff:member/vm-operators:admin/user:admin">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:admin/user:admin">>, direct),
+
+    simulate_first_login(?THIRD_IDP, [<<"staff:member/vm-operators:manager/user:member">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:manager/user:member">>, direct),
+
+    simulate_first_login(?THIRD_IDP, []),
+    ?assertHasGroup(false, ?THIRD_IDP, <<"staff:member/vm-operators:manager/user:member">>, direct),
+
+    simulate_first_login(?THIRD_IDP, [<<"staff:admin/vm-operators:member/user:manager">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:admin/vm-operators:member/user:manager">>, direct).
+
+
+entitlements_coalesced_correctly_in_a_mixed_scenario(Config) ->
+    store_test_config(Config),
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [
+        {adminGroup, "users/admins"}
+    ]),
+    overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
+        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+    ]),
+
+    create_non_idp_user(),
+    ?assertUserGroupsCount(0, 0),
+    ?assertTotalGroupsCount(0),
+
+    simulate_account_link(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
+    ?assertUserGroupsCount(2, 2),
+    ?assertTotalGroupsCount(2),
+
+    simulate_account_link(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
+    ?assertUserGroupsCount(5, 6),
+    ?assertTotalGroupsCount(6),
+
+    overwrite_config(?DUMMY_IDP, false),
+    simulate_consecutive_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
+    ?assertUserGroupsCount(3, 4),
+    ?assertTotalGroupsCount(6),
+
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    simulate_account_link(?THIRD_IDP, [
+        <<"staff:member/vm-operators:member/user:manager">>,
+        <<"task4.1:manager/user:member">>,
+        <<"testGroup:admin/user:admin">>,
+        <<"staff:member/admins:member/readonly:member/user:member">>,
+        <<"staff:member/admins:member/privileged:admin/user:manager">>
+    ]),
+    ?assertUserGroupsCount(10, 14),
+    ?assertTotalGroupsCount(14),
+
+    simulate_consecutive_login(?OTHER_IDP, []),
+    ?assertUserGroupsCount(7, 10),
+    ?assertTotalGroupsCount(14),
+
+    simulate_consecutive_login(?OTHER_IDP, [<<"users/admins">>]),
+    ?assertUserGroupsCount(8, 14),  % Admins group belongs to all groups from ?OTHER_IDP
+    ?assertTotalGroupsCount(14),
+
+    overwrite_config(?DUMMY_IDP, false),
+    overwrite_config(?OTHER_IDP, false),
+    overwrite_config(?THIRD_IDP, false),
+    simulate_consecutive_login(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
+
+    ?assertUserGroupsCount(0, 0),
+    ?assertTotalGroupsCount(14),
+
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [
+        {adminGroup, "users/admins"}
+    ]),
+    overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
+        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+    ]),
+    simulate_consecutive_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
+    ?assertUserGroupsCount(10, 14),
+    ?assertTotalGroupsCount(14).
+
+
+entitlement_groups_are_protected(Config) ->
+    store_test_config(Config),
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [
+        {adminGroup, "users/admins"}
+    ]),
+    overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
+        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+    ]),
+
+    create_non_idp_user(),
+    simulate_account_link(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>, <<"thirdGroup">>]),
+    simulate_account_link(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
+    simulate_account_link(?THIRD_IDP, [
+        <<"staff:member/vm-operators:member/user:manager">>,
+        <<"task4.1:manager/user:member">>,
+        <<"testGroup:admin/user:admin">>,
+        <<"staff:member/admins:member/readonly:member/user:member">>,
+        <<"staff:member/admins:member/privileged:admin/user:manager">>
+    ]),
+
+    ?assertGroupProtected(?DUMMY_IDP, <<"group/subgroup">>),
+    ?assertGroupProtected(?DUMMY_IDP, <<"anotherGroup">>),
+    ?assertGroupProtected(?DUMMY_IDP, <<"thirdGroup">>),
+
+    ?assertGroupProtected(?OTHER_IDP, <<"users">>),
+    ?assertGroupProtected(?OTHER_IDP, <<"users/admins">>),
+    ?assertGroupProtected(?OTHER_IDP, <<"users/developers">>),
+    ?assertGroupProtected(?OTHER_IDP, <<"users/technicians">>),
+
+    ?assertGroupProtected(?THIRD_IDP, <<"staff:member">>),
+    ?assertGroupProtected(?THIRD_IDP, <<"staff:member/vm-operators:member/user:manager">>),
+    ?assertGroupProtected(?THIRD_IDP, <<"staff:member/admins:member">>),
+    ?assertGroupProtected(?THIRD_IDP, <<"staff:member/admins:member/privileged:admin/user:manager">>),
+    ?assertGroupProtected(?THIRD_IDP, <<"staff:member/admins:member/readonly:member/user:member">>),
+    ?assertGroupProtected(?THIRD_IDP, <<"task4.1:manager/user:member">>),
+    ?assertGroupProtected(?THIRD_IDP, <<"testGroup:admin/user:admin">>).
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
 
-check_group_exists(Config, IdP, RawEntitlement) ->
+store_test_config(Config) ->
+    put(test_data_config, Config).
+
+
+get_test_config() ->
+    case get(test_data_config) of
+        undefined -> error("Call init_test at the beggining of the test.");
+        Config -> Config
+    end.
+
+
+create_non_idp_user() ->
+    Config = get_test_config(),
+    {ok, UserId} = oz_test_utils:create_user(Config),
+    put(test_data_user, UserId),
+    UserId.
+
+
+simulate_first_login(IdP, Entitlements) ->
+    LinkedAccount = ?LINKED_ACC(IdP, Entitlements),
+    Config = get_test_config(),
+    {ok, #document{key = UserId}} = oz_test_utils:call_oz(
+        Config, linked_accounts, acquire_user, [LinkedAccount]
+    ),
+    put(test_data_user, UserId),
+    ?assertHasLinkedAccount(LinkedAccount),
+    ?assertLinkedAccountsCount(1),
+    UserId.
+
+
+simulate_consecutive_login(IdP, Entitlements) ->
+    LinkedAccount = ?LINKED_ACC(IdP, Entitlements),
+    Config = get_test_config(),
+    UserId = get_test_user(),
+    LinkedAccountsCount = length(get_linked_accounts(Config, UserId)),
+    case oz_test_utils:call_oz(Config, linked_accounts, find_user, [LinkedAccount]) of
+        {ok, #document{key = UserId}} ->
+            oz_test_utils:call_oz(Config, linked_accounts, merge, [UserId, LinkedAccount]),
+            ?assertHasLinkedAccount(LinkedAccount),
+            ?assertLinkedAccountsCount(LinkedAccountsCount);
+        _ ->
+            % Make sure the test code makes sense
+            error("This user does not have this account linked.")
+    end.
+
+
+simulate_account_link(IdP, Entitlements) ->
+    LinkedAccount = ?LINKED_ACC(IdP, Entitlements),
+    Config = get_test_config(),
+    UserId = get_test_user(),
+    LinkedAccountsCount = length(get_linked_accounts(Config, UserId)),
+    case oz_test_utils:call_oz(Config, linked_accounts, find_user, [LinkedAccount]) of
+        {error, not_found} ->
+            oz_test_utils:call_oz(Config, linked_accounts, merge, [UserId, LinkedAccount]),
+            ?assertHasLinkedAccount(LinkedAccount),
+            ?assertLinkedAccountsCount(LinkedAccountsCount + 1);
+        _ ->
+            % Make sure the test code makes sense
+            error("This account is already linked.")
+    end.
+
+
+get_test_user() ->
+    case get(test_data_user) of
+        undefined -> error("Call simulate_first_login or create_non_idp_user first.");
+        UserId -> UserId
+    end.
+
+
+group_exists(Config, IdP, RawEntitlement) ->
     try
         IdPEntitlement = expected_parsing_result(Config, IdP, RawEntitlement),
         GroupId = entitlement_mapping:gen_group_id(IdPEntitlement),
@@ -330,8 +716,13 @@ check_group_exists(Config, IdP, RawEntitlement) ->
     end.
 
 
+total_group_count(Config) ->
+    {ok, Groups} = oz_test_utils:list_groups(Config),
+    length(Groups).
+
+
 %% RelationType :: direct | effective
-check_has_group(Config, UserId, IdP, RawEntitlement, RelationType) ->
+has_group(Config, UserId, IdP, RawEntitlement, RelationType) ->
     try
         IdPEntitlement = #idp_entitlement{
             idp = IdP,
@@ -346,7 +737,7 @@ check_has_group(Config, UserId, IdP, RawEntitlement, RelationType) ->
         BelongsToGroup = lists:member(GroupId, UserGroups),
         {ok, #od_group{
             name = GroupName, type = GroupType
-        }} = oz_test_utils:get_group(Config, GroupId),
+        }} = oz_test_utils:call_oz(Config, group_logic, get, [?ROOT, GroupId]),
         NameAndTypeMatch = GroupName =:= NormalizedName andalso GroupType =:= Type,
         case BelongsToGroup andalso NameAndTypeMatch of
             false ->
@@ -370,13 +761,12 @@ check_has_group(Config, UserId, IdP, RawEntitlement, RelationType) ->
     end.
 
 
-check_groups_count(Config, UserId, ExpDirectCount, ExpEffectiveCount) ->
+get_groups_count(Config, UserId) ->
     DirectCount = length(get_groups(Config, UserId, direct)),
     EffectiveCount = length(get_groups(Config, UserId, effective)),
     EntitlementsCount = length(get_entitlements(Config, UserId)),
-    DirectCount =:= ExpDirectCount andalso
-        EntitlementsCount =:= ExpDirectCount andalso
-        EffectiveCount =:= ExpEffectiveCount.
+    ?assertEqual(EntitlementsCount, DirectCount),
+    {DirectCount, EffectiveCount}.
 
 
 check_group_structure(Config, IdP, ParentRawEntitlement, ChildRawEntitlement, RelationType) ->
@@ -435,11 +825,11 @@ is_protected(Config, IdP, RawEntitlement) ->
 
 expected_parsing_result(Config, IdP, RawEntitlement) ->
     Parser = get_parser(Config, IdP),
-    Parser =:= undefined andalso throw(undefined_parser),
+    Parser =:= undefined andalso error(undefined_parser),
     Entitlement = #idp_entitlement{
         idp = IdP,
         path = ParentPath
-    } = Parser:parse(IdP, RawEntitlement, parser_config(Parser)),
+    } = oz_test_utils:call_oz(Config, Parser, parse, [IdP, RawEntitlement, parser_config(Parser)]),
     % Include the VO group if it was specified and is not the same as the entitlement
     % (in such case just update its type to organization).
     EntitlementWithVoGroup = case get_vo_group(Config, IdP) of
@@ -481,7 +871,7 @@ get_entitlements(Config, UserId) ->
     Entitlements.
 
 
-check_has_linked_account(Config, UserId, LinkedAccount) ->
+has_linked_account(Config, UserId, LinkedAccount) ->
     lists:member(LinkedAccount, get_linked_accounts(Config, UserId)).
 
 
@@ -492,7 +882,15 @@ get_linked_accounts(Config, UserId) ->
     LinkedAccounts.
 
 
-overwrite_entitlement_mapping(Config, IdP, Enabled, Parser, VoGroupName, AdminGroup) ->
+overwrite_config(IdP, Enabled) ->
+    overwrite_config(IdP, Enabled, undefined, []).
+
+overwrite_config(IdP, Enabled, Parser) ->
+    overwrite_config(IdP, Enabled, Parser, []).
+
+% Opts :: [{adminGroup, string()} | {voGroupName, string()}]
+overwrite_config(IdP, Enabled, Parser, Opts) ->
+    Config = get_test_config(),
     OldAuthConfig = oz_test_utils:read_auth_config(Config),
     SupportedIdPs = maps:get(supportedIdps, OldAuthConfig, []),
 
@@ -502,8 +900,8 @@ overwrite_entitlement_mapping(Config, IdP, Enabled, Parser, VoGroupName, AdminGr
             plugin => default_oidc_plugin,
             entitlementMapping => #{
                 enabled => Enabled,
-                voGroupName => VoGroupName,
-                adminGroup => AdminGroup,
+                voGroupName => proplists:get_value(voGroupName, Opts, undefined),
+                adminGroup => proplists:get_value(adminGroup, Opts, undefined),
                 parser => Parser,
                 parserConfig => parser_config(Parser)
             }
@@ -558,4 +956,73 @@ parser_config(nested_entitlement_parser) -> #{
     subGroupsType => team,
     subGroupsPrivilegesInParent => member,
     userPrivileges => member
+};
+parser_config(?CUSTOM_ENTITLEMENT_PARSER) -> #{
 }.
+
+%%%===================================================================
+%%% Setup/teardown functions
+%%%===================================================================
+
+init_per_suite(Config) ->
+    ssl:start(),
+    hackney:start(),
+    [{?LOAD_MODULES, [oz_test_utils]} | Config].
+
+init_per_testcase(_, Config) ->
+    store_test_config(Config),
+    oz_test_utils:toggle_basic_auth(Config, true),
+    overwrite_config(?DUMMY_IDP, false),
+    overwrite_config(?OTHER_IDP, false),
+    overwrite_config(?THIRD_IDP, false),
+    oz_test_utils:delete_all_entities(Config, true),
+    mock_custom_entitlement_parser(Config),
+    Config.
+
+end_per_testcase(_, Config) ->
+    unmock_custom_entitlement_parser(Config),
+    oz_test_utils:delete_all_entities(Config),
+    ok.
+
+end_per_suite(_Config) ->
+    hackney:stop(),
+    ssl:stop().
+
+mock_custom_entitlement_parser(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_new(Nodes, ?CUSTOM_ENTITLEMENT_PARSER, [non_strict]),
+    test_utils:mock_expect(Nodes, ?CUSTOM_ENTITLEMENT_PARSER, type, fun() ->
+        entitlement_parser
+    end),
+    test_utils:mock_expect(Nodes, ?CUSTOM_ENTITLEMENT_PARSER, parse, fun(IdP, RawEntitlement, _) ->
+        % Parses entitlements like nested parser, but recognizes the privileges on all levels.
+        % Example: "top-group:member/bottom-group:manager/user:admin" entitlement means
+        % that "top-group" would be added as member to the VO group (if any),
+        % "bottom-group" would be added as manager to "top-group" and
+        % the user would be added as admin to "bottom-group".
+        % If no privileges are specified, they default to member.
+        % The last element ("user:privileges") can be skipped.
+        Tokens = binary:split(RawEntitlement, <<"/">>, [global]),
+        ElementsWithPrivileges = lists:map(fun(Token) ->
+            case binary:split(Token, <<":">>, [global]) of
+                [Name, Privileges] -> {Name, binary_to_existing_atom(Privileges, utf8)};
+                [Name] -> {Name, member}
+            end
+        end, Tokens),
+        {UserPrivileges, GroupsWithPrivileges} = case lists:last(ElementsWithPrivileges) of
+            {<<"user">>, UserPrivs} -> {UserPrivs, lists:droplast(ElementsWithPrivileges)};
+            _ -> {member, ElementsWithPrivileges}
+        end,
+        #idp_entitlement{
+            idp = IdP,
+            path = lists:map(fun({GroupName, PrivilegesInParent}) ->
+                #idp_group{type = team, name = GroupName, privileges = PrivilegesInParent}
+            end, GroupsWithPrivileges),
+            privileges = UserPrivileges
+        }
+    end),
+    ok.
+
+unmock_custom_entitlement_parser(Config) ->
+    Nodes = ?config(oz_worker_nodes, Config),
+    test_utils:mock_unload(Nodes, ?CUSTOM_ENTITLEMENT_PARSER).
