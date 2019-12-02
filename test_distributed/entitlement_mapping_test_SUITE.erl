@@ -39,17 +39,27 @@
     entitlements_added_upon_consecutive_login/1,
     entitlements_removed_upon_consecutive_login/1,
     entitlements_coalesced_upon_consecutive_login/1,
+    admin_group_created_upon_any_other_entitlement_creation/1,
     entitlements_added_with_admin_group_upon_account_link/1,
     entitlements_added_with_admin_group_upon_consecutive_login_after_enabling_entitlement_mapping/1,
     entitlements_removed_upon_consecutive_login_after_disabling_entitlement_mapping/1,
+    invalid_vo_group_causing_whole_entitlement_mapping_failure/1,
     entitlements_added_with_vo_group_upon_first_login/1,
     entitlements_added_with_vo_group_upon_consecutive_login/1,
     entitlements_added_with_admin_and_vo_group_upon_first_login/1,
     entitlements_added_with_admin_and_vo_group_upon_consecutive_login/1,
-    highest_role_prevails_when_entitlements_are_duplicated/1,
-    privileges_are_modified_on_consecutive_login/1,
+    highest_role_taken_with_duplicate_entitlements/1,
+    user_privileges_modified_on_consecutive_login/1,
+    group_privileges_not_modified_on_consecutive_login/1,
+    manual_changes_in_user_privileges_overwritten_upon_change_in_idp/1,
+    manual_changes_in_group_privileges_persisted/1,
+    invalid_entitlements_ignored/1,
+    entitlements_resulting_in_invalid_onedata_group_name_or_type_ignored/1,
+    entitlements_with_invalid_privileges_defaulting_to_member/1,
+    invalid_admin_group_ignored/1,
+    admin_group_resulting_in_invalid_onedata_group_name_or_type_ignored/1,
     entitlements_coalesced_correctly_in_a_mixed_scenario/1,
-    entitlement_groups_are_protected/1
+    entitlement_groups_protected/1
 ]).
 
 all() ->
@@ -66,17 +76,27 @@ all() ->
         entitlements_added_upon_consecutive_login,
         entitlements_removed_upon_consecutive_login,
         entitlements_coalesced_upon_consecutive_login,
+        admin_group_created_upon_any_other_entitlement_creation,
         entitlements_added_with_admin_group_upon_account_link,
         entitlements_added_with_admin_group_upon_consecutive_login_after_enabling_entitlement_mapping,
         entitlements_removed_upon_consecutive_login_after_disabling_entitlement_mapping,
+        invalid_vo_group_causing_whole_entitlement_mapping_failure,
         entitlements_added_with_vo_group_upon_first_login,
         entitlements_added_with_vo_group_upon_consecutive_login,
         entitlements_added_with_admin_and_vo_group_upon_first_login,
         entitlements_added_with_admin_and_vo_group_upon_consecutive_login,
-        highest_role_prevails_when_entitlements_are_duplicated,
-        privileges_are_modified_on_consecutive_login,
+        highest_role_taken_with_duplicate_entitlements,
+        user_privileges_modified_on_consecutive_login,
+        group_privileges_not_modified_on_consecutive_login,
+        manual_changes_in_user_privileges_overwritten_upon_change_in_idp,
+        manual_changes_in_group_privileges_persisted,
+        invalid_entitlements_ignored,
+        entitlements_resulting_in_invalid_onedata_group_name_or_type_ignored,
+        entitlements_with_invalid_privileges_defaulting_to_member,
+        invalid_admin_group_ignored,
+        admin_group_resulting_in_invalid_onedata_group_name_or_type_ignored,
         entitlements_coalesced_correctly_in_a_mixed_scenario,
-        entitlement_groups_are_protected
+        entitlement_groups_protected
     ]).
 
 
@@ -87,6 +107,15 @@ all() ->
 -define(DUMMY_IDP, dummyIdP).
 -define(OTHER_IDP, anotherIdP).
 -define(THIRD_IDP, thirdIdP).
+
+% Examples compatible with ?CUSTOM_ENTITLEMENT_PARSER
+-define(INVALID_ENTITLEMENTS, [<<":member///">>, <<"">>, <<"/">>]).
+-define(ENTITLEMENTS_WITH_INVALID_ONEDATA_GROUP_NAME_OR_TYPE, [
+    <<"group#undefined">>, <<"group2#error">>,
+    <<"gr1#team/gr2#unit/#role_holders">>, <<"gr1#team/gr2#unit/gr3#error">>,
+    <<"gr1#team/gr2#unit/#role_holders/gr4#role_holders">>, <<"gr1#team/gr2#unit/gr3#error/gr4#role_holders">>,
+    <<"^&*%$#team/()!@$*!">>, <<"^!^$!!!!3">>, <<"a">>
+]).
 
 -define(LINKED_ACC(IdP, Entitlements), #linked_account{
     idp = IdP,
@@ -132,11 +161,16 @@ all() ->
     )
 ).
 
--define(assertGroupStructure(IdP, ParentRawEntitlement, ChildRawEntitlement, RelationType),
-    ?assertEqualWithRetries(true, check_group_structure(
+-define(assertGroupStructure(Flag, IdP, ParentRawEntitlement, ChildRawEntitlement, RelationType),
+    ?assertEqualWithRetries(Flag, check_group_structure(
         get_test_config(), IdP, ParentRawEntitlement, ChildRawEntitlement, RelationType
     ))
 ).
+
+-define(assertGroupStructure(IdP, ParentRawEntitlement, ChildRawEntitlement, RelationType),
+    ?assertGroupStructure(true, IdP, ParentRawEntitlement, ChildRawEntitlement, RelationType)
+).
+
 
 -define(assertHasLinkedAccount(LinkedAcc),
     ?assert(
@@ -151,16 +185,14 @@ all() ->
 ).
 
 
-entitlement_mapping_disabled_upon_first_login(Config) ->
-    store_test_config(Config),
+entitlement_mapping_disabled_upon_first_login(_) ->
     overwrite_config(?DUMMY_IDP, false),
     simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
     ?assertUserGroupsCount(0, 0),
     ?assertTotalGroupsCount(0).
 
 
-entitlement_mapping_disabled_upon_consecutive_login(Config) ->
-    store_test_config(Config),
+entitlement_mapping_disabled_upon_consecutive_login(_) ->
     overwrite_config(?DUMMY_IDP, false),
     simulate_first_login(?DUMMY_IDP, []),
     simulate_consecutive_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"another">>]),
@@ -168,8 +200,7 @@ entitlement_mapping_disabled_upon_consecutive_login(Config) ->
     ?assertTotalGroupsCount(0).
 
 
-entitlement_mapping_disabled_upon_account_link(Config) ->
-    store_test_config(Config),
+entitlement_mapping_disabled_upon_account_link(_) ->
     overwrite_config(?DUMMY_IDP, false),
     overwrite_config(?OTHER_IDP, false),
     simulate_first_login(?DUMMY_IDP, []),
@@ -178,8 +209,7 @@ entitlement_mapping_disabled_upon_account_link(Config) ->
     ?assertTotalGroupsCount(0).
 
 
-entitlement_mapping_disabled_upon_non_idp_user_account_link(Config) ->
-    store_test_config(Config),
+entitlement_mapping_disabled_upon_non_idp_user_account_link(_) ->
     overwrite_config(?DUMMY_IDP, false),
     create_non_idp_user(),
     simulate_account_link(?DUMMY_IDP, [<<"group/subgroup">>, <<"another">>]),
@@ -187,16 +217,14 @@ entitlement_mapping_disabled_upon_non_idp_user_account_link(Config) ->
     ?assertTotalGroupsCount(0).
 
 
-no_entitlements_upon_first_login(Config) ->
-    store_test_config(Config),
+no_entitlements_upon_first_login(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     simulate_first_login(?DUMMY_IDP, []),
     ?assertUserGroupsCount(0, 0),
     ?assertTotalGroupsCount(0).
 
 
-no_entitlements_upon_consecutive_login(Config) ->
-    store_test_config(Config),
+no_entitlements_upon_consecutive_login(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     simulate_first_login(?DUMMY_IDP, []),
     simulate_consecutive_login(?DUMMY_IDP, []),
@@ -204,8 +232,7 @@ no_entitlements_upon_consecutive_login(Config) ->
     ?assertTotalGroupsCount(0).
 
 
-no_entitlements_upon_account_link(Config) ->
-    store_test_config(Config),
+no_entitlements_upon_account_link(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     overwrite_config(?OTHER_IDP, true, flat_entitlement_parser),
     simulate_first_login(?DUMMY_IDP, []),
@@ -214,8 +241,7 @@ no_entitlements_upon_account_link(Config) ->
     ?assertTotalGroupsCount(0).
 
 
-no_entitlements_upon_non_idp_user_account_link(Config) ->
-    store_test_config(Config),
+no_entitlements_upon_non_idp_user_account_link(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     create_non_idp_user(),
     simulate_account_link(?DUMMY_IDP, []),
@@ -223,8 +249,7 @@ no_entitlements_upon_non_idp_user_account_link(Config) ->
     ?assertTotalGroupsCount(0).
 
 
-entitlements_added_upon_first_login(Config) ->
-    store_test_config(Config),
+entitlements_added_upon_first_login(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
     ?assertUserGroupsCount(2, 2),
@@ -237,8 +262,7 @@ entitlements_added_upon_first_login(Config) ->
     ?assertGroupExists(false, ?DUMMY_IDP, <<"thirdGroup">>).
 
 
-entitlements_added_upon_consecutive_login(Config) ->
-    store_test_config(Config),
+entitlements_added_upon_consecutive_login(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
     simulate_consecutive_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>, <<"thirdGroup">>]),
@@ -252,8 +276,7 @@ entitlements_added_upon_consecutive_login(Config) ->
     ?assertGroupExists(true, ?DUMMY_IDP, <<"anotherGroup">>).
 
 
-entitlements_removed_upon_consecutive_login(Config) ->
-    store_test_config(Config),
+entitlements_removed_upon_consecutive_login(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
     simulate_consecutive_login(?DUMMY_IDP, []),
@@ -265,8 +288,7 @@ entitlements_removed_upon_consecutive_login(Config) ->
     ?assertGroupExists(true, ?DUMMY_IDP, <<"anotherGroup">>).
 
 
-entitlements_coalesced_upon_consecutive_login(Config) ->
-    store_test_config(Config),
+entitlements_coalesced_upon_consecutive_login(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
     simulate_consecutive_login(?DUMMY_IDP, [<<"firstGroup">>, <<"anotherGroup">>, <<"thirdGroup">>]),
@@ -282,8 +304,21 @@ entitlements_coalesced_upon_consecutive_login(Config) ->
     ?assertGroupExists(true, ?DUMMY_IDP, <<"thirdGroup">>).
 
 
-entitlements_added_with_admin_group_upon_account_link(Config) ->
-    store_test_config(Config),
+admin_group_created_upon_any_other_entitlement_creation(_) ->
+    overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [{adminGroup, "users/admins"}]),
+    simulate_first_login(?OTHER_IDP, [<<"myGroup">>]),
+    ?assertUserGroupsCount(1, 1),
+    ?assertHasGroup(true, ?OTHER_IDP, <<"myGroup">>, direct),
+    ?assertHasGroup(false, ?OTHER_IDP, <<"users/admins">>, direct),
+    ?assertTotalGroupsCount(3),
+    ?assertGroupExists(true, ?OTHER_IDP, <<"myGroup">>),
+    ?assertGroupExists(true, ?OTHER_IDP, <<"users">>),
+    ?assertGroupExists(true, ?OTHER_IDP, <<"users/admins">>),
+    ?assertGroupStructure(?OTHER_IDP, <<"users">>, <<"users/admins">>, direct),
+    ?assertGroupStructure(?OTHER_IDP, <<"myGroup">>, <<"users/admins">>, direct).
+
+
+entitlements_added_with_admin_group_upon_account_link(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [{adminGroup, "users/admins"}]),
     simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
@@ -310,8 +345,7 @@ entitlements_added_with_admin_group_upon_account_link(Config) ->
     ?assertGroupStructure(?OTHER_IDP, <<"users/technicians">>, <<"users/admins">>, direct).
 
 
-entitlements_added_with_admin_group_upon_consecutive_login_after_enabling_entitlement_mapping(Config) ->
-    store_test_config(Config),
+entitlements_added_with_admin_group_upon_consecutive_login_after_enabling_entitlement_mapping(_) ->
     overwrite_config(?OTHER_IDP, false),
     simulate_first_login(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
     ?assertUserGroupsCount(0, 0),
@@ -322,8 +356,7 @@ entitlements_added_with_admin_group_upon_consecutive_login_after_enabling_entitl
     ?assertTotalGroupsCount(4).
 
 
-entitlements_removed_upon_consecutive_login_after_disabling_entitlement_mapping(Config) ->
-    store_test_config(Config),
+entitlements_removed_upon_consecutive_login_after_disabling_entitlement_mapping(_) ->
     overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [{adminGroup, "users/admins"}]),
     simulate_first_login(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
     ?assertUserGroupsCount(3, 4),
@@ -343,34 +376,47 @@ entitlements_removed_upon_consecutive_login_after_disabling_entitlement_mapping(
     ?assertGroupStructure(?OTHER_IDP, <<"users/technicians">>, <<"users/admins">>, direct).
 
 
-entitlements_added_with_vo_group_upon_first_login(Config) ->
-    store_test_config(Config),
+invalid_vo_group_causing_whole_entitlement_mapping_failure(_) ->
+    overwrite_config(?THIRD_IDP, false),
+    simulate_first_login(?THIRD_IDP, []),
+
+    lists:foreach(fun(InvalidEntitlement) ->
+        overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
+            {voGroupName, InvalidEntitlement}, {adminGroup, "users/admins"}
+        ]),
+        simulate_consecutive_login(?THIRD_IDP, [<<"staff:member">>]),
+        ?assertHasGroup(false, ?THIRD_IDP, <<"staff:member">>, direct),
+        ?assertTotalGroupsCount(0)
+    end, ["", "a", "/", "*^&$!*$!"]).
+
+
+entitlements_added_with_vo_group_upon_first_login(_) ->
     overwrite_config(?THIRD_IDP, true, nested_entitlement_parser, [{voGroupName, "Third-VO"}]),
     simulate_first_login(?THIRD_IDP, [
-        <<"staff/vm-operators">>, <<"task4.1">>, <<"testGroup">>, <<"staff/admins/privileged">>
+        <<"staff#unit/vm-operators#role_holders">>, <<"task4.1">>,
+        <<"testGroup">>, <<"staff#unit/admins/privileged">>
     ]),
     ?assertUserGroupsCount(4, 7),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff/vm-operators">>, direct),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff#unit/vm-operators#role_holders">>, direct),
     ?assertHasGroup(true, ?THIRD_IDP, <<"task4.1">>, direct),
     ?assertHasGroup(true, ?THIRD_IDP, <<"testGroup">>, direct),
     ?assertHasGroup(true, ?THIRD_IDP, <<"Third-VO">>, effective),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff">>, effective),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff/admins">>, effective),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff#unit">>, effective),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff#unit/admins">>, effective),
 
     ?assertTotalGroupsCount(7),
     % All groups should belong to their parents and the top parent to the VO group
-    ?assertGroupStructure(?THIRD_IDP, <<"staff">>, <<"staff/vm-operators">>, direct),
-    ?assertGroupStructure(?THIRD_IDP, <<"staff">>, <<"staff/admins">>, direct),
-    ?assertGroupStructure(?THIRD_IDP, <<"staff/admins">>, <<"staff/admins/privileged">>, direct),
-    ?assertGroupStructure(?THIRD_IDP, <<"staff">>, <<"staff/admins/privileged">>, effective),
-    ?assertGroupStructure(?THIRD_IDP, <<"Third-VO">>, <<"staff">>, direct),
-    ?assertGroupStructure(?THIRD_IDP, <<"Third-VO">>, <<"staff/vm-operators">>, effective),
-    ?assertGroupStructure(?THIRD_IDP, <<"Third-VO">>, <<"staff/admins">>, effective),
-    ?assertGroupStructure(?THIRD_IDP, <<"Third-VO">>, <<"staff/admins/privileged">>, effective).
+    ?assertGroupStructure(?THIRD_IDP, <<"staff#unit">>, <<"staff#unit/vm-operators#role_holders">>, direct),
+    ?assertGroupStructure(?THIRD_IDP, <<"staff#unit">>, <<"staff#unit/admins">>, direct),
+    ?assertGroupStructure(?THIRD_IDP, <<"staff#unit/admins">>, <<"staff#unit/admins/privileged">>, direct),
+    ?assertGroupStructure(?THIRD_IDP, <<"staff#unit">>, <<"staff#unit/admins/privileged">>, effective),
+    ?assertGroupStructure(?THIRD_IDP, <<"Third-VO">>, <<"staff#unit">>, direct),
+    ?assertGroupStructure(?THIRD_IDP, <<"Third-VO">>, <<"staff#unit/vm-operators#role_holders">>, effective),
+    ?assertGroupStructure(?THIRD_IDP, <<"Third-VO">>, <<"staff#unit/admins">>, effective),
+    ?assertGroupStructure(?THIRD_IDP, <<"Third-VO">>, <<"staff#unit/admins/privileged">>, effective).
 
 
-entitlements_added_with_vo_group_upon_consecutive_login(Config) ->
-    store_test_config(Config),
+entitlements_added_with_vo_group_upon_consecutive_login(_) ->
     overwrite_config(?THIRD_IDP, true, nested_entitlement_parser, [{voGroupName, "Third-VO"}]),
     simulate_first_login(?THIRD_IDP, []),
     ?assertUserGroupsCount(0, 0),
@@ -383,8 +429,7 @@ entitlements_added_with_vo_group_upon_consecutive_login(Config) ->
     ?assertTotalGroupsCount(8).
 
 
-entitlements_added_with_admin_and_vo_group_upon_first_login(Config) ->
-    store_test_config(Config),
+entitlements_added_with_admin_and_vo_group_upon_first_login(_) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
         {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
     ]),
@@ -444,8 +489,7 @@ entitlements_added_with_admin_and_vo_group_upon_first_login(Config) ->
         <<"Third-VO">>, <<"staff:member/admins:member/privileged:admin">>, direct).
 
 
-entitlements_added_with_admin_and_vo_group_upon_consecutive_login(Config) ->
-    store_test_config(Config),
+entitlements_added_with_admin_and_vo_group_upon_consecutive_login(_) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
         {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
     ]),
@@ -463,8 +507,7 @@ entitlements_added_with_admin_and_vo_group_upon_consecutive_login(Config) ->
     ?assertTotalGroupsCount(8).
 
 
-highest_role_prevails_when_entitlements_are_duplicated(Config) ->
-    store_test_config(Config),
+highest_role_taken_with_duplicate_entitlements(_) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
         {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
     ]),
@@ -501,36 +544,176 @@ highest_role_prevails_when_entitlements_are_duplicated(Config) ->
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:member">>, direct).
 
 
-privileges_are_modified_on_consecutive_login(Config) ->
-    store_test_config(Config),
+user_privileges_modified_on_consecutive_login(_) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
         {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
     ]),
 
-    simulate_first_login(?THIRD_IDP, [<<"staff:member/vm-operators:member/user:member">>]),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:member">>, direct),
+    simulate_first_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:member">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:member">>, direct),
 
-    simulate_first_login(?THIRD_IDP, [<<"staff:admin/vm-operators:manager/user:admin">>]),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:admin/vm-operators:manager/user:admin">>, direct),
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:admin">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:admin">>, direct),
 
-    simulate_first_login(?THIRD_IDP, [<<"staff:manager/vm-operators:member/user:manager">>]),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:manager/vm-operators:member/user:manager">>, direct),
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:manager">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:manager">>, direct),
 
-    simulate_first_login(?THIRD_IDP, [<<"staff:member/vm-operators:admin/user:admin">>]),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:admin/user:admin">>, direct),
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:admin">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:admin">>, direct),
 
-    simulate_first_login(?THIRD_IDP, [<<"staff:member/vm-operators:manager/user:member">>]),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:manager/user:member">>, direct),
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:member">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:member">>, direct),
 
+    simulate_consecutive_login(?THIRD_IDP, []),
+    ?assertHasGroup(false, ?THIRD_IDP, <<"staff:member/admins:manager/user:member">>, direct),
+
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:manager">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:manager">>, direct).
+
+
+group_privileges_not_modified_on_consecutive_login(_) ->
+    overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
+        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+    ]),
+
+    simulate_first_login(?THIRD_IDP, [<<"staff:member/admins:manager">>]),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
+
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:admin">>]),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
+    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:admin">>, direct),
+
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:member">>]),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
+    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:member">>, direct),
+
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager">>]),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct).
+
+
+
+manual_changes_in_user_privileges_overwritten_upon_change_in_idp(Config) ->
+    overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
+        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+    ]),
+    AdminsGroupId = entitlement_to_group_id(Config, ?THIRD_IDP, <<"staff:member/admins:manager">>),
+
+    UserId = simulate_first_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:admin">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:admin">>, direct),
+
+    % Change the privileges manually to manager
+    ManagerPrivileges = entitlement_mapping:map_privileges(manager),
+    oz_test_utils:group_set_user_privileges(
+        Config, AdminsGroupId, UserId, ManagerPrivileges, privileges:group_privileges() -- ManagerPrivileges
+    ),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:manager">>, direct),
+    ?assertHasGroup(false, ?THIRD_IDP, <<"staff:member/admins:manager/user:admin">>, direct),
+
+    % Simulate the next login with the same entitlement as before - manually set
+    % privileges should remain unchanged
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:admin">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:manager">>, direct),
+    ?assertHasGroup(false, ?THIRD_IDP, <<"staff:member/admins:manager/user:admin">>, direct),
+
+    % If the privileges change in the IdP, the manual changes should be overwritten
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:member">>]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:member">>, direct),
+    ?assertHasGroup(false, ?THIRD_IDP, <<"staff:member/admins:manager/user:manager">>, direct).
+
+
+manual_changes_in_group_privileges_persisted(Config) ->
+    overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
+        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+    ]),
+    StaffGroupId = entitlement_to_group_id(Config, ?THIRD_IDP, <<"staff:member">>),
+    AdminsGroupId = entitlement_to_group_id(Config, ?THIRD_IDP, <<"staff:member/admins:manager">>),
+
+    simulate_first_login(?THIRD_IDP, [<<"staff:member/admins:manager">>]),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
+
+    % Change the privileges manually to member
+    MemberPrivileges = entitlement_mapping:map_privileges(member),
+    oz_test_utils:group_set_group_privileges(
+        Config, StaffGroupId, AdminsGroupId, MemberPrivileges, privileges:group_privileges() -- MemberPrivileges
+    ),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:member">>, direct),
+    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
+
+    % Even if the privileges change in the IdP, the manual changes should remain unchanged
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:admin">>]),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:member">>, direct),
+    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:admin">>, direct),
+
+    % Change the privileges manually to admin
+    AdminPrivileges = entitlement_mapping:map_privileges(admin),
+    oz_test_utils:group_set_group_privileges(
+        Config, StaffGroupId, AdminsGroupId, AdminPrivileges, privileges:group_privileges() -- AdminPrivileges
+    ),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:admin">>, direct),
+    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
+    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:member">>, direct),
+
+    simulate_consecutive_login(?THIRD_IDP, [<<"staff:member/admins:member">>]),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:admin">>, direct),
+    ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:member">>, direct).
+
+
+invalid_entitlements_ignored(_) ->
+    overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, []),
+
+    simulate_first_login(?THIRD_IDP, [<<"staff:member">> | ?INVALID_ENTITLEMENTS]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member">>, direct),
+    ?assertTotalGroupsCount(1).
+
+
+entitlements_resulting_in_invalid_onedata_group_name_or_type_ignored(_) ->
+    overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, []),
+
+    simulate_first_login(?THIRD_IDP, [
+        <<"staff:member">> | ?ENTITLEMENTS_WITH_INVALID_ONEDATA_GROUP_NAME_OR_TYPE
+    ]),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member">>, direct),
+    ?assertTotalGroupsCount(1).
+
+
+entitlements_with_invalid_privileges_defaulting_to_member(_) ->
+    overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
+        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+    ]),
+    simulate_first_login(?THIRD_IDP, [<<"staff:error/admins:undefined/user:none">>]),
+    ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:member">>, direct),
+    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:member/user:member">>, direct).
+
+
+invalid_admin_group_ignored(_) ->
+    overwrite_config(?THIRD_IDP, false),
     simulate_first_login(?THIRD_IDP, []),
-    ?assertHasGroup(false, ?THIRD_IDP, <<"staff:member/vm-operators:manager/user:member">>, direct),
 
-    simulate_first_login(?THIRD_IDP, [<<"staff:admin/vm-operators:member/user:manager">>]),
-    ?assertHasGroup(true, ?THIRD_IDP, <<"staff:admin/vm-operators:member/user:manager">>, direct).
+    lists:foreach(fun(InvalidEntitlement) ->
+        overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
+            {voGroupName, "Third-VO"}, {adminGroup, binary_to_list(InvalidEntitlement)}
+        ]),
+        simulate_consecutive_login(?THIRD_IDP, [<<"staff:member">>]),
+        ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member">>, direct),
+        ?assertTotalGroupsCount(2)
+    end, ?INVALID_ENTITLEMENTS).
 
 
-entitlements_coalesced_correctly_in_a_mixed_scenario(Config) ->
-    store_test_config(Config),
+admin_group_resulting_in_invalid_onedata_group_name_or_type_ignored(_) ->
+    overwrite_config(?THIRD_IDP, false),
+    simulate_first_login(?THIRD_IDP, []),
+
+    lists:foreach(fun(EntWithInvalidNameOrType) ->
+        overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
+            {voGroupName, "Third-VO"}, {adminGroup, binary_to_list(EntWithInvalidNameOrType)}
+        ]),
+        simulate_consecutive_login(?THIRD_IDP, [<<"staff:member">>]),
+        ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member">>, direct),
+        ?assertTotalGroupsCount(2)
+    end, ?ENTITLEMENTS_WITH_INVALID_ONEDATA_GROUP_NAME_OR_TYPE).
+
+
+entitlements_coalesced_correctly_in_a_mixed_scenario(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [
         {adminGroup, "users/admins"}
@@ -595,8 +778,7 @@ entitlements_coalesced_correctly_in_a_mixed_scenario(Config) ->
     ?assertTotalGroupsCount(14).
 
 
-entitlement_groups_are_protected(Config) ->
-    store_test_config(Config),
+entitlement_groups_protected(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [
         {adminGroup, "users/admins"}
@@ -706,10 +888,14 @@ get_test_user() ->
     end.
 
 
+entitlement_to_group_id(Config, IdP, RawEntitlement) ->
+    IdPEntitlement = expected_parsing_result(Config, IdP, RawEntitlement),
+    entitlement_mapping:gen_group_id(IdPEntitlement).
+
+
 group_exists(Config, IdP, RawEntitlement) ->
     try
-        IdPEntitlement = expected_parsing_result(Config, IdP, RawEntitlement),
-        GroupId = entitlement_mapping:gen_group_id(IdPEntitlement),
+        GroupId = entitlement_to_group_id(Config, IdP, RawEntitlement),
         oz_test_utils:call_oz(Config, group_logic, exists, [GroupId])
     catch _:_ ->
         false
@@ -730,7 +916,7 @@ has_group(Config, UserId, IdP, RawEntitlement, RelationType) ->
             privileges = Privileges
         } = expected_parsing_result(Config, IdP, RawEntitlement),
         #idp_group{name = Name, type = Type} = lists:last(Path),
-        NormalizedName = entity_logic:normalize_name(Name),
+        NormalizedName = entity_logic:normalize_name(Name, undefined),
         GroupId = entitlement_mapping:gen_group_id(IdPEntitlement),
 
         UserGroups = get_groups(Config, UserId, RelationType),
@@ -781,8 +967,8 @@ check_group_structure(Config, IdP, ParentRawEntitlement, ChildRawEntitlement, Re
         } = expected_parsing_result(Config, IdP, ChildRawEntitlement),
         #idp_group{name = ParentName, type = ParentType} = lists:last(ParentPath),
         #idp_group{name = ChildName, type = ChildType} = lists:last(ChildPath),
-        NormalizedParentName = entity_logic:normalize_name(ParentName),
-        NormalizedChildName = entity_logic:normalize_name(ChildName),
+        NormalizedParentName = entity_logic:normalize_name(ParentName, undefined),
+        NormalizedChildName = entity_logic:normalize_name(ChildName, undefined),
         % If the child group is the adminGroup, it should have admin privileges in parents
         ParentGroupId = entitlement_mapping:gen_group_id(ParentEntitlement),
         ChildGroupId = entitlement_mapping:gen_group_id(ChildEntitlement),
@@ -815,8 +1001,7 @@ check_group_structure(Config, IdP, ParentRawEntitlement, ChildRawEntitlement, Re
 
 
 is_protected(Config, IdP, RawEntitlement) ->
-    IdPEntitlement = expected_parsing_result(Config, IdP, RawEntitlement),
-    GroupId = entitlement_mapping:gen_group_id(IdPEntitlement),
+    GroupId = entitlement_to_group_id(Config, IdP, RawEntitlement),
     case oz_test_utils:get_group(Config, GroupId) of
         {ok, #od_group{protected = true}} -> true;
         _ -> false
@@ -996,27 +1181,41 @@ mock_custom_entitlement_parser(Config) ->
     end),
     test_utils:mock_expect(Nodes, ?CUSTOM_ENTITLEMENT_PARSER, parse, fun(IdP, RawEntitlement, _) ->
         % Parses entitlements like nested parser, but recognizes the privileges on all levels.
-        % Example: "top-group:member/bottom-group:manager/user:admin" entitlement means
-        % that "top-group" would be added as member to the VO group (if any),
-        % "bottom-group" would be added as manager to "top-group" and
+        % Example: "top-group#unit:member/bottom-group:manager/user:admin" entitlement means
+        % that "top-group" unit would be added as member to the VO group (if any),
+        % "bottom-group" team would be added as manager to "top-group" and
         % the user would be added as admin to "bottom-group".
+        % Group type can be provided after "#" or defaults to "team".
         % If no privileges are specified, they default to member.
         % The last element ("user:privileges") can be skipped.
+        ToNameAndType = fun(NameAndType) ->
+            case binary:split(NameAndType, <<"#">>, [global]) of
+                [Name, Type] -> {Name, binary_to_existing_atom(Type, utf8)};
+                [Name] -> {Name, team}
+            end
+        end,
         Tokens = binary:split(RawEntitlement, <<"/">>, [global]),
         ElementsWithPrivileges = lists:map(fun(Token) ->
-            case binary:split(Token, <<":">>, [global]) of
-                [Name, Privileges] -> {Name, binary_to_existing_atom(Privileges, utf8)};
-                [Name] -> {Name, member}
-            end
+            {NameAndType, Privileges} = case binary:split(Token, <<":">>, [global]) of
+                [NAndT, Privs] -> {NAndT, binary_to_existing_atom(Privs, utf8)};
+                [NAndT] -> {NAndT, member}
+            end,
+            {Name, Type} = ToNameAndType(NameAndType),
+            {Name, Type, Privileges}
         end, Tokens),
+        % Make sure group names are non-empty
+        case lists:any(fun({E, _, _}) -> E == <<"">> end, ElementsWithPrivileges) of
+            true -> error(invalid_entitlement);
+            false -> ok
+        end,
         {UserPrivileges, GroupsWithPrivileges} = case lists:last(ElementsWithPrivileges) of
-            {<<"user">>, UserPrivs} -> {UserPrivs, lists:droplast(ElementsWithPrivileges)};
+            {<<"user">>, _, UserPrivs} -> {UserPrivs, lists:droplast(ElementsWithPrivileges)};
             _ -> {member, ElementsWithPrivileges}
         end,
         #idp_entitlement{
             idp = IdP,
-            path = lists:map(fun({GroupName, PrivilegesInParent}) ->
-                #idp_group{type = team, name = GroupName, privileges = PrivilegesInParent}
+            path = lists:map(fun({GroupName, GroupType, PrivilegesInParent}) ->
+                #idp_group{type = GroupType, name = GroupName, privileges = PrivilegesInParent}
             end, GroupsWithPrivileges),
             privileges = UserPrivileges
         }

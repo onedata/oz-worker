@@ -129,7 +129,7 @@
     emails = [] :: [od_user:email()],
 
     linked_accounts = [] :: [od_user:linked_account()],
-    entitlements = [] :: [od_group:id()],
+    entitlements = [] :: od_user:entitlements(),
 
     active_sessions = [] :: [session:id()],
 

@@ -17,9 +17,10 @@
 -include("datastore/oz_datastore_models.hrl").
 -include("entity_logic.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 -export([
-    create/2, create/3
+    create/2, create/3, create_with_predefined_id/3
 ]).
 -export([
     get/2,
@@ -117,7 +118,8 @@
     has_eff_privilege/3
 ]).
 -export([
-    create_predefined_groups/0
+    create_predefined_groups/0,
+    create_entitlement_group/3
 ]).
 
 %%%===================================================================
@@ -151,6 +153,22 @@ create(Auth, Data) ->
         operation = create,
         auth = Auth,
         gri = #gri{type = od_group, id = undefined, aspect = instance},
+        data = Data
+    })).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a new group document in database with a predefined Id.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_with_predefined_id(Auth :: aai:auth(), ProposedGroupId :: od_group:id(), entity_logic:data()) ->
+    {ok, od_group:id()} | {error, term()}.
+create_with_predefined_id(Auth, ProposedGroupId, Data) ->
+    ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
+        operation = create,
+        auth = Auth,
+        gri = #gri{type = od_group, id = ProposedGroupId, aspect = instance},
         data = Data
     })).
 
@@ -1768,8 +1786,34 @@ create_predefined_groups() ->
                 {Module, Function} ->
                     Module:Function()
             end,
-            ok = create_predefined_group(Id, Name, Privs)
+            create_predefined_group(Id, Name, Privs)
         end, PredefinedGroups).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a group resulting from entitlement mapping, which is protected from
+%% deletion.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_entitlement_group(od_group:id(), od_group:name(), od_group:type()) ->
+    ok | errors:error().
+create_entitlement_group(GroupId, Name, Type) ->
+    case entity_logic:normalize_name(Name, undefined) of
+        undefined ->
+            ?ERROR_BAD_VALUE_NAME;
+        NormalizedName ->
+            Result = create_with_predefined_id(?ROOT, GroupId, #{
+                <<"name">> => NormalizedName, <<"type">> => Type
+            }),
+            case Result of
+                {ok, GroupId} ->
+                    set_protected(GroupId);
+                {error, _} = Error ->
+                    Error
+            end
+    end.
+
 
 %%%===================================================================
 %%% Internal functions
@@ -1783,40 +1827,35 @@ create_predefined_groups() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create_predefined_group(Id :: binary(), Name :: binary(),
-    Privileges :: [privileges:oz_privilege()]) -> ok | error.
+    Privileges :: [privileges:oz_privilege()]) -> ok.
 create_predefined_group(GroupId, Name, Privileges) ->
-    NormalizedName = entity_logic:normalize_name(Name),
-    Result = case od_group:exists(GroupId) of
-        {ok, true} ->
+    NormalizedName = entity_logic:normalize_name(Name, ?UNKNOWN_ENTITY_NAME),
+    case exists(GroupId) of
+        true ->
             ?info("Predefined group '~ts' already exists, refreshing name and privileges.", [
                 NormalizedName
             ]),
-            ok;
-        {ok, false} ->
-            NewGroup = #document{
-                key = GroupId,
-                value = #od_group{
-                    name = NormalizedName,
-                    type = role_holders,
-                    protected = true,
-                    creator = ?SUB(root)
-                }},
-            case od_group:create(NewGroup) of
-                {ok, _} ->
-                    ?info("Created predefined group '~ts'", [NormalizedName]),
-                    ok;
-                Other ->
-                    ?error("Cannot create predefined group '~ts' - ~p", [
-                        NormalizedName, Other
-                    ]),
-                    error
-            end
+            ok = update(?ROOT, GroupId, #{<<"name">> => NormalizedName});
+        false ->
+            {ok, GroupId} = create_with_predefined_id(?ROOT, GroupId, #{
+                <<"name">> => NormalizedName, <<"type">> => role_holders
+            }),
+            set_protected(GroupId),
+            ?info("Created predefined group '~ts'", [NormalizedName])
     end,
-    case Result of
-        ok ->
-            ok = update(?ROOT, GroupId, #{<<"name">> => NormalizedName}),
-            ToRevoke = privileges:oz_admin() -- Privileges,
-            ok = update_oz_privileges(?ROOT, GroupId, Privileges, ToRevoke);
-        error ->
-            error
-    end.
+    ToRevoke = privileges:oz_admin() -- Privileges,
+    ok = update_oz_privileges(?ROOT, GroupId, Privileges, ToRevoke).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Marks the groups as protected - it cannot be removed from the system.
+%% @end
+%%--------------------------------------------------------------------
+-spec set_protected(od_group:id()) -> ok.
+set_protected(GroupId) ->
+    {ok, _} = od_group:update(GroupId, fun(Group) ->
+        {ok, Group#od_group{protected = true}}
+    end),
+    ok.

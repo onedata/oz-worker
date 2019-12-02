@@ -157,32 +157,35 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
+create(Req = #el_req{gri = #gri{id = ProposedGroupId, aspect = instance} = GRI, auth = Auth}) ->
     Name = maps:get(<<"name">>, Req#el_req.data),
     Type = maps:get(<<"type">>, Req#el_req.data, ?DEFAULT_GROUP_TYPE),
-    {ok, #document{key = GroupId}} = od_group:create(
-        #document{value = #od_group{
-            name = Name, type = Type, creator = Auth#auth.subject
-        }}
-    ),
-    case Req#el_req.auth_hint of
-        ?AS_USER(UserId) ->
-            entity_graph:add_relation(
-                od_user, UserId,
-                od_group, GroupId,
-                privileges:group_admin()
-            );
-        ?AS_GROUP(ChildGroupId) ->
-            entity_graph:add_relation(
-                od_group, ChildGroupId,
-                od_group, GroupId,
-                privileges:group_admin()
-            );
-        _ ->
-            ok
-    end,
-    {ok, {Group, Rev}} = fetch_entity(GroupId),
-    {ok, resource, {GRI#gri{id = GroupId}, {Group, Rev}}};
+    GroupRecord = #document{key = ProposedGroupId, value = #od_group{
+        name = Name, type = Type, creator = Auth#auth.subject
+    }},
+    case od_group:create(GroupRecord) of
+        {error, already_exists} ->
+            throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"groupId">>));
+        {ok, #document{key = GroupId}} ->
+            case Req#el_req.auth_hint of
+                ?AS_USER(UserId) ->
+                    entity_graph:add_relation(
+                        od_user, UserId,
+                        od_group, GroupId,
+                        privileges:group_admin()
+                    );
+                ?AS_GROUP(ChildGroupId) ->
+                    entity_graph:add_relation(
+                        od_group, ChildGroupId,
+                        od_group, GroupId,
+                        privileges:group_admin()
+                    );
+                _ ->
+                    ok
+            end,
+            {ok, {Group, Rev}} = fetch_entity(GroupId),
+            {ok, resource, {GRI#gri{id = GroupId}, {Group, Rev}}}
+    end;
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
     Macaroon = maps:get(<<"token">>, Req#el_req.data),
@@ -594,6 +597,9 @@ authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = 
         _ ->
             false
     end;
+authorize(#el_req{operation = create, gri = #gri{id = _, aspect = instance}}, _) ->
+    % Creating groups with predefined Id is reserved for root
+    false;
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = join}}, _) ->
     case {Req#el_req.auth, Req#el_req.auth_hint} of
@@ -791,12 +797,15 @@ authorize(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec required_admin_privileges(entity_logic:req()) -> [privileges:oz_privilege()] | forbidden.
-required_admin_privileges(Req = #el_req{operation = create, gri = #gri{aspect = instance}}) ->
+required_admin_privileges(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = instance}}) ->
     case Req#el_req.auth_hint of
         ?AS_USER(_) -> [?OZ_GROUPS_CREATE, ?OZ_USERS_ADD_RELATIONSHIPS];
         ?AS_GROUP(_) -> [?OZ_GROUPS_CREATE, ?OZ_GROUPS_ADD_RELATIONSHIPS];
         _ -> [?OZ_GROUPS_CREATE]
     end;
+required_admin_privileges(#el_req{operation = create, gri = #gri{id = _, aspect = instance}}) ->
+    % Creating groups with predefined Id is reserved for root
+    forbidden;
 
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = invite_user_token}}) ->
     [?OZ_GROUPS_ADD_RELATIONSHIPS];
