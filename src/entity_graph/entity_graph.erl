@@ -1109,30 +1109,24 @@ refresh_entity(Direction, EntityType, EntityId, Entity) ->
 %% @private
 %% @doc
 %% Priorities for entities during effective graph recomputation.
-%% For bottom-up:
-%%    1) groups
-%%    2) spaces, storages, handles, handle_services and harvesters
-%%    3) providers
-%% For top-down:
-%%    1) spaces
-%%    2) groups, harvesters
-%%    3) users
+%% Entities with lower priority are calculated first.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_priority(direction(), entity_type()) -> integer().
 get_priority(bottom_up, od_group) -> 0;
-get_priority(bottom_up, od_space) -> 1;
-get_priority(bottom_up, od_storage) -> 1;
 get_priority(bottom_up, od_handle_service) -> 1;
 get_priority(bottom_up, od_handle) -> 1;
 get_priority(bottom_up, od_harvester) -> 1;
-get_priority(bottom_up, od_provider) -> 2;
-get_priority(bottom_up, od_cluster) -> 1;
-get_priority(top_down, od_space) -> 0;
+get_priority(bottom_up, od_space) -> 2;
+get_priority(bottom_up, od_storage) -> 3;
+get_priority(bottom_up, od_provider) -> 4;
+get_priority(bottom_up, od_cluster) -> 5;
+
 get_priority(top_down, od_storage) -> 0;
-get_priority(top_down, od_group) -> 1;
-get_priority(top_down, od_harvester) -> 1;
-get_priority(top_down, od_user) -> 2.
+get_priority(top_down, od_space) -> 1;
+get_priority(top_down, od_group) -> 2;
+get_priority(top_down, od_harvester) -> 3;
+get_priority(top_down, od_user) -> 4.
 
 
 %%--------------------------------------------------------------------

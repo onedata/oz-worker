@@ -1664,15 +1664,14 @@ support_space_using_token(Config, Client, StorageId, Token, Size) ->
 -spec support_space_by_legacy_storage(Config :: term(), ProviderId :: od_provider:id(),
     SpaceId :: od_space:id()) -> {ok, SpaceId :: od_space:id()}.
 support_space_by_legacy_storage(Config, ProviderId, SpaceId) ->
-    case oz_test_utils:call_oz(Config, provider_logic, has_storage, [ProviderId, ProviderId]) of
+    case call_oz(Config, provider_logic, has_storage, [ProviderId, ProviderId]) of
         true -> ok;
         false ->
-            ?assertMatch({ok, _}, oz_test_utils:create_storage(
+            ?assertMatch({ok, _}, create_storage(
                 Config, ?PROVIDER(ProviderId), ProviderId, ?STORAGE_NAME1)
             )
     end,
-    oz_test_utils:support_space(Config, ?PROVIDER(ProviderId), ProviderId, SpaceId,
-        oz_test_utils:minimum_support_size(Config)).
+    support_space(Config, ?PROVIDER(ProviderId), ProviderId, SpaceId, minimum_support_size(Config)).
 
 %%--------------------------------------------------------------------
 %% @doc
