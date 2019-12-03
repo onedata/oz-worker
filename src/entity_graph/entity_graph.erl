@@ -1124,8 +1124,8 @@ get_priority(bottom_up, od_cluster) -> 5;
 
 get_priority(top_down, od_storage) -> 0;
 get_priority(top_down, od_space) -> 1;
-get_priority(top_down, od_group) -> 2;
-get_priority(top_down, od_harvester) -> 3;
+get_priority(top_down, od_harvester) -> 2;
+get_priority(top_down, od_group) -> 3;
 get_priority(top_down, od_user) -> 4.
 
 
