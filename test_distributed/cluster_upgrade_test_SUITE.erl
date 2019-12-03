@@ -25,7 +25,8 @@
     all/0, init_per_suite/1, end_per_suite/1
 ]).
 -export([
-    upgrade_from_19_02_x/1
+    upgrade_from_19_02_x_tokens/1,
+    upgrade_from_19_02_x_storages/1
 ]).
 
 %%%===================================================================
@@ -33,7 +34,8 @@
 %%%===================================================================
 
 all() -> ?ALL([
-    upgrade_from_19_02_x
+    upgrade_from_19_02_x_tokens,
+    upgrade_from_19_02_x_storages
 ]).
 
 
@@ -52,7 +54,7 @@ end_per_suite(_Config) ->
 %%% Tests
 %%%===================================================================
 
-upgrade_from_19_02_x(Config) ->
+upgrade_from_19_02_x_tokens(Config) ->
     {ok, User1} = oz_test_utils:create_user(Config),
     {ok, User2} = oz_test_utils:create_user(Config),
     {ok, User3} = oz_test_utils:create_user(Config),
@@ -173,6 +175,65 @@ upgrade_from_19_02_x(Config) ->
     end, [PToken1, PToken2, PToken3, PToken4]).
 
 
+upgrade_from_19_02_x_storages(Config) ->
+    {P1, SpacesMap1} = create_provider_with_n_legacy_spaces(Config, 8),
+    {P2, SpacesMap2} = create_provider_with_n_legacy_spaces(Config, 32),
+
+    ?assertEqual({ok, 2}, oz_test_utils:call_oz(Config, node_manager_plugin, upgrade_cluster, [1])),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
+    {ok, P1Doc} = oz_test_utils:call_oz(Config, od_provider, get, [P1]),
+    {ok, P2Doc} = oz_test_utils:call_oz(Config, od_provider, get, [P2]),
+
+    % Check that there are no legacy spaces left
+    ?assertEqual({ok, #{}}, oz_test_utils:call_oz(Config, provider_logic, get_legacy_spaces, [P1Doc])),
+    ?assertEqual({ok, #{}}, oz_test_utils:call_oz(Config, provider_logic, get_legacy_spaces, [P2Doc])),
+
+    % Check that virtual storage has been created
+    ?assertEqual(true, oz_test_utils:call_oz(Config, provider_logic, has_storage, [P1, P1])),
+    ?assertEqual(true, oz_test_utils:call_oz(Config, provider_logic, has_storage, [P2, P2])),
+
+    % Check spaces are supported by correct storage
+    lists:foreach(fun(SpaceId) ->
+        ?assertEqual(true, oz_test_utils:call_oz(Config, space_logic, is_supported_by_storage, [SpaceId, P1])),
+        ?assertEqual(true, oz_test_utils:call_oz(Config, space_logic, is_supported_by_provider, [SpaceId, P1])),
+        ?assertEqual(true, oz_test_utils:call_oz(Config, storage_logic, supports_space, [P1, SpaceId])),
+        ?assertEqual(true, oz_test_utils:call_oz(Config, provider_logic, supports_space, [P1, SpaceId])),
+
+        ?assertEqual(false, oz_test_utils:call_oz(Config, space_logic, is_supported_by_storage, [SpaceId, P2])),
+        ?assertEqual(false, oz_test_utils:call_oz(Config, space_logic, is_supported_by_provider, [SpaceId, P2])),
+        ?assertEqual(false, oz_test_utils:call_oz(Config, storage_logic, supports_space, [P2, SpaceId])),
+        ?assertEqual(false, oz_test_utils:call_oz(Config, provider_logic, supports_space, [P2, SpaceId]))
+    end, maps:keys(SpacesMap1)),
+
+    lists:foreach(fun(SpaceId) ->
+        ?assertEqual(true, oz_test_utils:call_oz(Config, space_logic, is_supported_by_storage, [SpaceId, P2])),
+        ?assertEqual(true, oz_test_utils:call_oz(Config, space_logic, is_supported_by_provider, [SpaceId, P2])),
+        ?assertEqual(true, oz_test_utils:call_oz(Config, storage_logic, supports_space, [P2, SpaceId])),
+        ?assertEqual(true, oz_test_utils:call_oz(Config, provider_logic, supports_space, [P2, SpaceId])),
+
+        ?assertEqual(false, oz_test_utils:call_oz(Config, space_logic, is_supported_by_storage, [SpaceId, P1])),
+        ?assertEqual(false, oz_test_utils:call_oz(Config, space_logic, is_supported_by_provider, [SpaceId, P1])),
+        ?assertEqual(false, oz_test_utils:call_oz(Config, storage_logic, supports_space, [P1, SpaceId])),
+        ?assertEqual(false, oz_test_utils:call_oz(Config, provider_logic, supports_space, [P1, SpaceId]))
+    end, maps:keys(SpacesMap2)),
+
+    ?assertEqual(SpacesMap1, oz_test_utils:call_oz(
+        Config, entity_graph, get_relations_with_attrs, [effective, bottom_up, od_space, P1Doc#document.value])),
+    ?assertEqual(SpacesMap2, oz_test_utils:call_oz(
+        Config, entity_graph, get_relations_with_attrs, [effective, bottom_up, od_space, P2Doc#document.value])),
+
+    maps:map(fun(SpaceId, _SupportSize) ->
+        ?assertEqual([{od_storage, P1}], oz_test_utils:call_oz(
+            Config, entity_graph, get_intermediaries, [bottom_up, od_space, SpaceId, P1Doc#document.value]))
+    end, SpacesMap1),
+
+    maps:map(fun(SpaceId, _SupportSize) ->
+        ?assertEqual([{od_storage, P2}], oz_test_utils:call_oz(
+            Config, entity_graph, get_intermediaries, [bottom_up, od_space, SpaceId, P2Doc#document.value]))
+    end, SpacesMap2).
+
+
 create_n_legacy_client_tokens(Config, UserId, Count) ->
     lists:map(fun(_) ->
         Secret = tokens:generate_secret(),
@@ -230,3 +291,25 @@ create_legacy_provider(Config) ->
     ]),
     {ok, SerializedRootToken} = tokens:serialize(RootToken),
     {ProviderId, RootTokenId, Secret, SerializedRootToken}.
+
+
+create_provider_with_n_legacy_spaces(Config, SpacesNum) ->
+    ProviderId = datastore_utils:gen_key(),
+
+    Spaces = lists:foldl(fun(SupportSize, Acc) ->
+        {ok, S} = oz_test_utils:create_space(Config, ?ROOT),
+        Acc#{S => SupportSize}
+    end, #{}, lists:seq(1, SpacesNum)),
+
+    ProviderRecord = #od_provider{
+        name = ?UNIQUE_STRING,
+        subdomain_delegation = false,
+        domain = <<(?UNIQUE_STRING)/binary, ".example.com">>,
+        admin_email = <<(?UNIQUE_STRING)/binary, "@example.com">>,
+        legacy_spaces = Spaces
+    },
+    {ok, _} = oz_test_utils:call_oz(Config, od_provider, create, [
+        #document{key = ProviderId, value = ProviderRecord}
+    ]),
+    {ProviderId, Spaces}.
+

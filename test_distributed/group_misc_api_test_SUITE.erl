@@ -871,9 +871,9 @@ get_spaces_in_eff_provider_test(Config) ->
     {ok, S2} = oz_test_utils:create_space(Config, ?USER(U2), ?UNIQUE_STRING),
     oz_test_utils:space_add_group(Config, S2, G2),
 
-    oz_test_utils:support_space(Config, ProviderId, S1_1),
-    oz_test_utils:support_space(Config, ProviderId, S1_2),
-    oz_test_utils:support_space(Config, ProviderId, S2),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, S1_1),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, S1_2),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, S2),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 

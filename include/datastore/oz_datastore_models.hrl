@@ -87,8 +87,9 @@
 %
 %           provider------------------------------------------>cluster
 %              ^                                                ^  ^
-%              |                                 share          |  |
-%              |                                   ^           /   |
+%              |                                                |  |
+%           storage                              share          |  |
+%              ^                                   ^           /   |
 %              |                                   |          /    |
 %            space            handle_service<----handle      /     |
 %           ^ ^ ^ ^             ^         ^       ^  ^      /     /
@@ -219,7 +220,7 @@
     % Direct relations to other entities
     users = #{} :: entity_graph:relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
     groups = #{} :: entity_graph:relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
-    providers = #{} :: entity_graph:relations_with_attrs(od_provider:id(), Size :: pos_integer()),
+    storages = #{} :: entity_graph:relations_with_attrs(od_storage:id(), Size :: pos_integer()),
     % All shares that belong to this space.
     shares = [] :: entity_graph:relations(od_share:id()),
     harvesters = [] :: entity_graph:relations(od_harvester:id()),
@@ -227,9 +228,7 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
-    % Effective providers contain only direct providers, but this is needed to
-    % track changes in spaces and propagate them top-down.
-    eff_providers = #{} :: entity_graph:eff_relations(od_provider:id()),
+    eff_providers = #{} :: entity_graph:eff_relations_with_attrs(od_provider:id(), Size :: pos_integer()),
     % Effective harvesters contain only direct harvesters, but this is needed to
     % track changes in spaces and propagate them bottom-up.
     eff_harvesters = #{} :: entity_graph:eff_relations(od_provider:id()),
@@ -273,12 +272,16 @@
     latitude = 0.0 :: float(),
     longitude = 0.0 :: float(),
 
+    %% @TODO VFS-5856 legacy spaces needed to perform cluster upgrade procedure, remove in future release
+    legacy_spaces = #{} :: #{od_space:id() => SupportSize :: integer()},
+
     % Direct relations to other entities
-    spaces = #{} :: entity_graph:relations_with_attrs(od_space:id(), Size :: pos_integer()),
+    storages = [] :: entity_graph:relations(od_storage:id()),
 
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations(od_user:id()),
     eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
+    eff_spaces = #{} :: entity_graph:eff_relations_with_attrs(od_space:id(), Size :: pos_integer()),
     eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
@@ -382,6 +385,32 @@
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
+}).
+
+-record(od_storage, {
+    name = <<>> :: binary(),
+    qos_parameters = #{} :: od_storage:qos_parameters(),
+
+    % Direct relations to other entities
+    provider :: od_provider:id(),
+    spaces = #{} :: entity_graph:relations_with_attrs(od_space:id(), Size :: pos_integer()),
+
+    % Effective relations to other entities
+    eff_users = #{} :: entity_graph:eff_relations(od_user:id()),
+    eff_groups = #{} :: entity_graph:eff_relations(od_group:id()),
+    eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
+
+    % Effective providers and spaces contain only direct relations, but this is needed to
+    % track changes in storage and propagate them.
+    eff_providers = #{} :: entity_graph:eff_relations_with_attrs(od_provider:id(), Size :: pos_integer()),
+    eff_spaces = #{} :: entity_graph:eff_relations_with_attrs(od_space:id(), Size :: pos_integer()),
+
+    creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    creator = undefined :: undefined | aai:subject(),
+
+    % Marks that the record's effective relations are not up to date.
+    bottom_up_dirty = true :: boolean(),
+    top_down_dirty = true :: boolean()
 }).
 
 %% Stores information about a named token.

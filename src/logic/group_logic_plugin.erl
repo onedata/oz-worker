@@ -325,9 +325,9 @@ get(#el_req{gri = #gri{aspect = children}}, Group) ->
 get(#el_req{gri = #gri{aspect = eff_children}}, Group) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_group, Group)};
 get(#el_req{gri = #gri{aspect = {child_privileges, ChildId}}}, Group) ->
-    {ok, entity_graph:get_privileges(direct, bottom_up, od_group, ChildId, Group)};
+    {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_group, ChildId, Group)};
 get(#el_req{gri = #gri{aspect = {eff_child_privileges, ChildId}}}, Group) ->
-    {ok, entity_graph:get_privileges(effective, bottom_up, od_group, ChildId, Group)};
+    {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_group, ChildId, Group)};
 get(#el_req{gri = #gri{aspect = {eff_child_membership, ChildId}}}, Group) ->
     {ok, entity_graph:get_intermediaries(bottom_up, od_group, ChildId, Group)};
 
@@ -336,9 +336,9 @@ get(#el_req{gri = #gri{aspect = users}}, Group) ->
 get(#el_req{gri = #gri{aspect = eff_users}}, Group) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_user, Group)};
 get(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, Group) ->
-    {ok, entity_graph:get_privileges(direct, bottom_up, od_user, UserId, Group)};
+    {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_user, UserId, Group)};
 get(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, Group) ->
-    {ok, entity_graph:get_privileges(effective, bottom_up, od_user, UserId, Group)};
+    {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Group)};
 get(#el_req{gri = #gri{aspect = {eff_user_membership, UserId}}}, Group) ->
     {ok, entity_graph:get_intermediaries(bottom_up, od_user, UserId, Group)};
 

@@ -326,6 +326,9 @@
 
 -define(HARVESTER_MOCK_BATCH_ENTRY(Seq, Operation), #{<<"seq">> => Seq, <<"operation">> => Operation}).
 
+%% Example test data for storages
+-define(STORAGE_NAME1, <<"storage1">>).
+
 -define(BAD_VALUES_NAME(Error), [
     {<<"name">>, <<"">>, Error},
     {<<"name">>, <<"a">>, Error},

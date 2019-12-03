@@ -474,16 +474,18 @@ public_share_page_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
 
     {ok, NewSpace} = oz_test_utils:create_space(Config, ?USER(User), ?UNIQUE_STRING),
-    oz_test_utils:support_space(Config, NewProvider, NewSpace),
+    oz_test_utils:support_space_by_provider(Config, NewProvider, NewSpace),
     {ok, NewShare} = oz_test_utils:create_share(
         Config, ?USER(User), ?UNIQUE_STRING, <<"share1">>, <<"rootFile1">>, NewSpace
     ),
 
     {ok, LegacySpace} = oz_test_utils:create_space(Config, ?USER(User), ?UNIQUE_STRING),
-    oz_test_utils:support_space(Config, LegacyProvider, LegacySpace),
+    oz_test_utils:support_space_by_provider(Config, LegacyProvider, LegacySpace),
     {ok, LegacyShare} = oz_test_utils:create_share(
         Config, ?USER(User), ?UNIQUE_STRING, <<"share1">>, <<"rootFile1">>, LegacySpace
     ),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     NewRedirectURl = oz_test_utils:call_oz(Config, share_logic, share_id_to_redirect_url, [NewShare]),
     LegacyRedirectURl = oz_test_utils:call_oz(Config, share_logic, share_id_to_redirect_url, [LegacyShare]),

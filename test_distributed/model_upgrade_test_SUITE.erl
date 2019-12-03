@@ -1063,7 +1063,7 @@ get_record(od_space, 1) -> {od_space,
     ],
     [
         {<<"group1">>, [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_invite_provider]},
-        {<<"group2">>, [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]}
+        {<<"group2">>, [space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]}
     ],
     [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
     [],  % eff_users
@@ -1079,7 +1079,7 @@ get_record(od_space, 2) -> {od_space,
     },
     #{
         <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_invite_provider],
-        <<"group2">> => [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
+        <<"group2">> => [space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
     },
     #{
         <<"prov1">> => 1000,
@@ -1103,7 +1103,7 @@ get_record(od_space, 3) -> {od_space,
     },
     #{
         <<"group1">> => [?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_invite_provider],
-        <<"group2">> => [?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
+        <<"group2">> => [space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, space_invite_group]
     },
     #{
         <<"prov1">> => 1000,
@@ -1119,183 +1119,188 @@ get_record(od_space, 3) -> {od_space,
     true,
     true
 };
-get_record(od_space, 4) -> #od_space{
-    name = <<"name">>,
-    users = #{
+get_record(od_space, 4) -> {od_space,
+    <<"name">>,
+    #{
         <<"user1">> => privileges:from_list([
             ?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_VIEW_PRIVILEGES, ?SPACE_REMOVE_GROUP,
             ?SPACE_READ_DATA, space_manage_indexes, space_query_indexes, ?SPACE_VIEW_STATISTICS
         ]),
         <<"user2">> => privileges:from_list([
-            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, space_add_provider,
             ?SPACE_READ_DATA, space_manage_indexes, space_query_indexes, ?SPACE_VIEW_STATISTICS,
             ?SPACE_ADD_USER
         ])
     },
-    groups = #{
+    #{
         <<"group1">> => privileges:from_list([
-            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_add_provider,
             ?SPACE_READ_DATA, space_manage_indexes, space_query_indexes, ?SPACE_VIEW_STATISTICS
         ]),
         <<"group2">> => privileges:from_list([
-            ?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+            space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
             ?SPACE_READ_DATA, space_manage_indexes, space_query_indexes, ?SPACE_VIEW_STATISTICS
         ])
     },
-    providers = #{
+    #{
         <<"prov1">> => 1000,
         <<"prov2">> => 250000,
         <<"prov3">> => 19999999
     },
-    shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
-    harvesters = [],
+    [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+    [], % harvesters
 
-    eff_users = #{},
-    eff_groups = #{},
-    eff_providers = #{},
+    #{}, % effective_users
+    #{}, % effective_groups
+    #{}, % effective_providers
+    #{}, % effective_harvesters
 
-    creation_time = ?DUMMY_TIMESTAMP,
-    creator = undefined,
+    ?DUMMY_TIMESTAMP,
+    undefined,
 
-    top_down_dirty = true,
-    bottom_up_dirty = true
+    true,
+    true
 };
 get_record(od_space, 5) -> {
     % Returns two records:
     %   ExpAfterUpgrade - expected value after upgrade from previous version
     %   NextIteration - different record that will be upgraded to the next version
-    #od_space{
-        name = <<"name">>,
-        users = #{
+    {od_space,
+        <<"name">>,
+        #{
             <<"user1">> => privileges:from_list([
                 ?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_VIEW_CHANGES_STREAM, ?SPACE_VIEW_PRIVILEGES,
                 ?SPACE_REMOVE_GROUP, ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ]),
             <<"user2">> => privileges:from_list([
-                ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+                ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, space_add_provider,
                 ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ])
         },
-        groups = #{
+        #{
             <<"group1">> => privileges:from_list([
-                ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+                ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_add_provider,
                 ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ]),
             <<"group2">> => privileges:from_list([
-                ?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+                space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
                 ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ])
         },
-        providers = #{
+        #{
             <<"prov1">> => 1000,
             <<"prov2">> => 250000,
             <<"prov3">> => 19999999
         },
-        shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
-        harvesters = [],
+        [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+        [], % harvesters
 
-        eff_users = #{},
-        eff_groups = #{},
-        eff_providers = #{},
+        #{}, % effective_users
+        #{}, % effective_groups
+        #{}, % effective_providers
+        #{}, % effective_harvesters
 
-        creation_time = ?DUMMY_TIMESTAMP,
-        creator = undefined,
+        ?DUMMY_TIMESTAMP,
+        undefined,
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        true,
+        true
     },
-    #od_space{
-        name = <<"name">>,
-        users = #{
+    {od_space,
+        <<"name">>,
+        #{
             <<"user1">> => privileges:from_list([
                 ?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_VIEW_CHANGES_STREAM, ?SPACE_VIEW_PRIVILEGES,
                 ?SPACE_REMOVE_GROUP, ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ]),
             <<"user2">> => privileges:from_list([
-                ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+                ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, space_add_provider, space_remove_provider,
                 ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ])
         },
-        groups = #{
+        #{
             <<"group1">> => privileges:from_list([
-                ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+                ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_add_provider, space_remove_provider,
                 ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ]),
             <<"group2">> => privileges:from_list([
-                ?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+                space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
                 ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
                 ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
             ])
         },
-        providers = #{
+        #{
             <<"prov1">> => 1000,
             <<"prov2">> => 250000,
             <<"prov3">> => 19999999
         },
-        shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
-        harvesters = [],
+        [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+        [], % harvesters
 
-        eff_users = #{},
-        eff_groups = #{},
-        eff_providers = #{},
+        #{}, % effective_users
+        #{}, % effective_groups
+        #{}, % effective_providers
+        #{}, % effective_harvesters
 
-        creation_time = ?DUMMY_TIMESTAMP,
-        creator = {client, nobody, <<"">>},
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        ?DUMMY_TIMESTAMP,
+        {client, nobody, <<"">>},
+
+        true,
+        true
     }
 };
-get_record(od_space, 6) -> #od_space{
-    name = <<"name">>,
-    users = #{
+get_record(od_space, 6) -> {od_space,
+    <<"name">>,
+    #{
         <<"user1">> => privileges:from_list([
             ?SPACE_MANAGE_SHARES, ?SPACE_VIEW, ?SPACE_VIEW_CHANGES_STREAM, ?SPACE_VIEW_PRIVILEGES,
             ?SPACE_REMOVE_GROUP, ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
             ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
         ]),
         <<"user2">> => privileges:from_list([
-            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, space_add_provider, space_remove_provider,
             ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
             ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
         ])
     },
-    groups = #{
+    #{
         <<"group1">> => privileges:from_list([
-            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, space_add_provider, space_remove_provider,
             ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
             ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
         ]),
         <<"group2">> => privileges:from_list([
-            ?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+            space_remove_provider, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
             ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
             ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
         ])
     },
-    providers = #{
+    #{
         <<"prov1">> => 1000,
         <<"prov2">> => 250000,
         <<"prov3">> => 19999999
     },
-    shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
-    harvesters = [],
+    [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
+    [], % harvesters
 
-    eff_users = #{},
-    eff_groups = #{},
-    eff_providers = #{},
+    #{}, % effective_users
+    #{}, % effective_groups
+    #{}, % effective_providers
+    #{}, % effective_harvesters
 
-    creation_time = ?DUMMY_TIMESTAMP,
-    creator = {subject, nobody, undefined},
+    ?DUMMY_TIMESTAMP,
+    {subject, nobody, undefined},
 
-    top_down_dirty = true,
-    bottom_up_dirty = true
+    true,
+    true
 };
 get_record(od_space, 7) -> #od_space{
     name = <<"name">>,
@@ -1306,34 +1311,31 @@ get_record(od_space, 7) -> #od_space{
             ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
         ]),
         <<"user2">> => privileges:from_list([
-            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+            ?SPACE_UPDATE, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
             ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS, ?SPACE_ADD_USER,
             ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
         ])
     },
     groups = #{
         <<"group1">> => privileges:from_list([
-            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_PROVIDER,
+            ?SPACE_MANAGE_SHARES, ?SPACE_SET_PRIVILEGES, ?SPACE_ADD_SUPPORT, ?SPACE_REMOVE_SUPPORT,
             ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
             ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
         ]),
         <<"group2">> => privileges:from_list([
-            ?SPACE_REMOVE_PROVIDER, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
+            ?SPACE_REMOVE_SUPPORT, ?SPACE_REMOVE_GROUP, ?SPACE_UPDATE, ?SPACE_ADD_GROUP,
             ?SPACE_READ_DATA, ?SPACE_VIEW_STATISTICS,
             ?SPACE_MANAGE_VIEWS, ?SPACE_VIEW_VIEWS, ?SPACE_QUERY_VIEWS
         ])
     },
-    providers = #{
-        <<"prov1">> => 1000,
-        <<"prov2">> => 250000,
-        <<"prov3">> => 19999999
-    },
+    storages = #{},
     shares = [<<"share1">>, <<"share2">>, <<"share3">>, <<"share4">>],
     harvesters = [],
 
     eff_users = #{},
     eff_groups = #{},
     eff_providers = #{},
+    eff_harvesters = #{},
 
     creation_time = ?DUMMY_TIMESTAMP,
     creator = ?SUB(nobody),
@@ -1525,12 +1527,13 @@ get_record(od_provider, 6) -> #od_provider{
     latitude = -93.2341,
     longitude = 17,
 
-    spaces = #{
+    legacy_spaces = #{
         <<"space1">> => 0,
         <<"space2">> => 0,
         <<"space3">> => 0,
         <<"space4">> => 0
     },
+    storages = [],
 
     eff_users = #{},
     eff_groups = #{},

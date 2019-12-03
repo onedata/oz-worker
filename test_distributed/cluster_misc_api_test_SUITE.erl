@@ -174,7 +174,7 @@ get_oneprovider_cluster_test(Config) ->
     ClusterId = ProviderId,
     {ok, EffUserOfProvider} = oz_test_utils:create_user(Config),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(EffUserOfProvider), ?UNIQUE_STRING),
-    oz_test_utils:support_space(Config, ProviderId, Space),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, Space),
     VersionInfo = {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH},
 
     get_private_data_test_base(

@@ -31,7 +31,7 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
--export_type([name/0]).
+-export_type([doc/0, name/0]).
 
 -define(CTX, #{
     model => od_provider,
@@ -149,14 +149,17 @@ print_summary(SortPos) when is_integer(SortPos) ->
     {ok, Providers} = list(),
     ProviderAttrs = lists:map(fun(#document{key = Id, value = P}) ->
         {ok, #od_cluster{worker_version = {Version, _, _}}} = cluster_logic:get(?ROOT, Id),
+        TotalSupport = lists:foldl(fun({Support, _}, TotalSupport) ->
+            TotalSupport + Support
+        end, 0, maps:values(P#od_provider.eff_spaces)),
         {
             Id,
             case provider_connection:is_online(Id) of true -> "online"; false -> "-" end,
             P#od_provider.name,
             P#od_provider.domain,
             Version,
-            maps:size(P#od_provider.spaces),
-            lists:sum(maps:values(P#od_provider.spaces)),
+            maps:size(P#od_provider.eff_spaces),
+            TotalSupport,
             maps:size(P#od_provider.eff_users),
             maps:size(P#od_provider.eff_groups)
         }
@@ -197,7 +200,7 @@ get_ctx() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    5.
+    6.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -279,6 +282,9 @@ get_record_struct(5) ->
     ]};
 get_record_struct(6) ->
     % * root_macaroon renamed to root_token
+    % * renamed field - spaces -> legacy_spaces
+    % * new field - storages
+    % * new field - eff spaces
     {record, [
         {name, string},
         {admin_email, string},
@@ -291,13 +297,15 @@ get_record_struct(6) ->
         {latitude, float},
         {longitude, float},
 
-        {spaces, #{string => integer}},
+        {legacy_spaces, #{string => integer}}, % Renamed field
+        {storages, [string]}, % New field
 
         {eff_users, #{string => [{atom, string}]}},
         {eff_groups, #{string => [{atom, string}]}},
-        {eff_harvesters, #{string => [{atom, string}]}}, % New field
+        {eff_spaces, #{string => {integer, [{atom, string}]}}}, % New field
+        {eff_harvesters, #{string => [{atom, string}]}},
 
-        {creation_time, integer}, % New field
+        {creation_time, integer},
 
         {bottom_up_dirty, boolean}
     ]}.
@@ -471,14 +479,15 @@ upgrade_record(5, Provider) ->
 
         Spaces,
 
-        EffUsers,
-        EffGroups,
-        EffHarvesters,
+        _EffUsers,
+        _EffGroups,
+        _EffHarvesters,
 
         CreationTime,
 
-        BottomUpDirty
+        _BottomUpDirty
     } = Provider,
+    %% Eff relations are recalculated during cluster upgrade procedure
     {6, #od_provider{
         name = Name,
         admin_email = AdminEmail,
@@ -490,13 +499,15 @@ upgrade_record(5, Provider) ->
         latitude = Latitude,
         longitude = Longitude,
 
-        spaces = Spaces,
+        legacy_spaces = Spaces,
+        storages = [],
 
-        eff_users = EffUsers,
-        eff_groups = EffGroups,
-        eff_harvesters = EffHarvesters,
+        eff_users = #{},
+        eff_groups = #{},
+        eff_harvesters = #{},
+        eff_spaces = #{},
 
         creation_time = CreationTime,
 
-        bottom_up_dirty = BottomUpDirty
+        bottom_up_dirty = true
     }}.

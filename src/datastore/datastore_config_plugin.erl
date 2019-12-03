@@ -35,6 +35,7 @@ get_models() -> [
     od_handle,
     od_harvester,
     od_cluster,
+    od_storage,
     od_token,
 
     gs_server_state,

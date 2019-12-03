@@ -255,7 +255,7 @@ gui_token_test(Config) ->
         Config, UserId, ?UNIQUE_STRING
     ),
     {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(UserId), ?UNIQUE_STRING),
-    oz_test_utils:support_space(Config, Provider1, SpaceId),
+    oz_test_utils:support_space_by_provider(Config, Provider1, SpaceId),
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, UserId),
 

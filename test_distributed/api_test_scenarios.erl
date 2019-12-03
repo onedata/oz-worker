@@ -948,9 +948,7 @@ create_provider_eff_users_env(Config) ->
     {ok, {P1, ProviderToken}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
     ),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, P1, S1, oz_test_utils:minimum_support_size(Config)
-    ),
+    {ok, S1} = oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -1264,7 +1262,7 @@ create_eff_providers_env(Config) ->
 
     lists:foreach(
         fun({ProvId, SpaceId}) ->
-            {ok, SpaceId} = oz_test_utils:support_space(Config, ProvId, SpaceId)
+            {ok, SpaceId} = oz_test_utils:support_space_by_provider(Config, ProvId, SpaceId)
         end, [{P1, S1}, {P2, S2}, {P2, S3}, {P3, S4}, {P4, S5}]
     ),
 
@@ -1304,10 +1302,10 @@ create_harvester_eff_providers_env(Config) ->
     {ok, S1} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
     {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
 
-    oz_test_utils:support_space(Config, P1, S1),
-    oz_test_utils:support_space(Config, P2, S1),
-    oz_test_utils:support_space(Config, P2, S2),
-    oz_test_utils:support_space(Config, P3, S2),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P2, S1),
+    oz_test_utils:support_space_by_provider(Config, P2, S2),
+    oz_test_utils:support_space_by_provider(Config, P3, S2),
 
     {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
 

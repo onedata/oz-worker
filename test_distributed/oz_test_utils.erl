@@ -124,8 +124,10 @@
     space_get_groups/2,
     space_get_providers/2,
     space_get_harvesters/2,
+    space_get_storages/2,
 
-    space_leave_provider/3,
+    space_remove_storage/3,
+    space_remove_provider/3,
     space_remove_harvester/3,
 
     space_add_user/3,
@@ -137,7 +139,7 @@
     space_set_group_privileges/5,
     space_invite_user_token/3,
     space_invite_group_token/3,
-    space_invite_provider_token/3,
+    create_space_support_token/3,
     space_has_effective_user/3,
 
     space_remove_group/3,
@@ -156,7 +158,9 @@
     get_provider/2,
     list_providers/1,
     delete_provider/2,
-    support_space/3, support_space/4, support_space/5,
+    support_space_by_provider/3,
+    support_space/4, support_space/5, support_space_using_token/5,
+    support_space_by_legacy_storage/3,
     unsupport_space/3,
     enable_subdomain_delegation/4,
     set_provider_domain/3
@@ -253,6 +257,13 @@
     cluster_remove_group/3,
     cluster_set_group_privileges/5,
     cluster_get_group_privileges/3
+]).
+-export([
+    create_storage/3,
+    create_storage/4,
+    get_storage/2,
+    update_storage/3,
+    delete_storage/2
 ]).
 -export([
     assert_invite_token_usage_limit_reached/3,
@@ -1195,14 +1206,14 @@ space_get_groups(Config, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves supporting providers of given space from onezone.
+%% Retrieves effective providers of given space from onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec space_get_providers(Config :: term(),
     SpaceId :: od_space:id()) -> {ok, [od_provider:id()]}.
 space_get_providers(Config, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, space_logic, get_providers, [?ROOT, SpaceId]
+        Config, space_logic, get_eff_providers, [?ROOT, SpaceId]
     )).
 
 
@@ -1212,7 +1223,7 @@ space_get_providers(Config, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_get_harvesters(Config :: term(),
-    SpaceId :: od_space:id()) -> {ok, [od_provider:id()]}.
+    SpaceId :: od_space:id()) -> {ok, [od_harvester:id()]}.
 space_get_harvesters(Config, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, space_logic, get_harvesters, [?ROOT, SpaceId]
@@ -1221,14 +1232,41 @@ space_get_harvesters(Config, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Leave space from given provider.
+%% Retrieves supporting storages of given space from onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec space_leave_provider(Config :: term(),
-    SpaceId :: od_space:id(), ProviderId :: od_provider:id()) -> ok.
-space_leave_provider(Config, SpaceId, ProviderId) ->
+-spec space_get_storages(Config :: term(),
+    SpaceId :: od_space:id()) -> {ok, [od_storage:id()]}.
+space_get_storages(Config, SpaceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, space_logic, get_storages, [?ROOT, SpaceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves specified storage (ceases support for given space).
+%% @end
+%%--------------------------------------------------------------------
+-spec space_remove_storage(Config :: term(),
+    SpaceId :: od_space:id(), StorageId :: od_storage:id()) -> ok.
+space_remove_storage(Config, SpaceId, StorageId) ->
     ?assertMatch(ok, call_oz(
-        Config, space_logic, leave_provider, [?ROOT, SpaceId, ProviderId]
+        Config, space_logic, remove_storage, [?ROOT, SpaceId, StorageId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves specified provider (ceases support for given space by all
+%% storages belonging to given provider).
+%% @end
+%%--------------------------------------------------------------------
+-spec space_remove_provider(Config :: term(),
+    SpaceId :: od_space:id(), ProviderId :: od_provider:id()) -> ok.
+space_remove_provider(Config, SpaceId, ProviderId) ->
+    ?assertMatch(ok, call_oz(
+        Config, space_logic, remove_provider, [?ROOT, SpaceId, ProviderId]
     )).
 
 
@@ -1238,7 +1276,7 @@ space_leave_provider(Config, SpaceId, ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_remove_harvester(Config :: term(),
-    SpaceId :: od_space:id(), HarvesterId :: od_provider:id()) -> ok.
+    SpaceId :: od_space:id(), HarvesterId :: od_harvester:id()) -> ok.
 space_remove_harvester(Config, SpaceId, HarvesterId) ->
     ?assertMatch(ok, call_oz(
         Config, space_logic, remove_harvester, [?ROOT, SpaceId, HarvesterId]
@@ -1371,12 +1409,12 @@ space_invite_group_token(Config, Client, SpaceId) ->
 %% Creates a provider invite token to given space.
 %% @end
 %%--------------------------------------------------------------------
--spec space_invite_provider_token(Config :: term(),
+-spec create_space_support_token(Config :: term(),
     Client :: aai:auth(), SpaceId :: od_space:id()) ->
     {ok, tokens:token()}.
-space_invite_provider_token(Config, Client, SpaceId) ->
+create_space_support_token(Config, Client, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, space_logic, create_provider_invite_token, [Client, SpaceId]
+        Config, space_logic, create_space_support_token, [Client, SpaceId]
     )).
 
 
@@ -1558,14 +1596,29 @@ delete_provider(Config, ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Supports a space by a provider based on space id (with default support size).
+%% Supports a space by a provider based on space id
+%% (with default support size and new dummy storage).
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Config :: term(), ProviderId :: od_provider:id(),
-    SpaceId :: od_space:id()) ->
-    {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
-support_space(Config, ProviderId, SpaceId) ->
-    support_space(Config, ProviderId, SpaceId, minimum_support_size(Config)).
+-spec support_space_by_provider(Config :: term(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> {ok, SpaceId :: od_space:id()}.
+support_space_by_provider(Config, ProviderId, SpaceId) ->
+    % Create dummy storage
+    {ok, StorageId} = ?assertMatch({ok, _}, create_storage(
+        Config, ?PROVIDER(ProviderId), ?STORAGE_NAME1)
+    ),
+    support_space(Config, ?PROVIDER(ProviderId), StorageId, SpaceId, minimum_support_size(Config)).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Supports a space by a storage based on space id (with default support size).
+%% @end
+%%--------------------------------------------------------------------
+-spec support_space(Config :: term(), Client :: aai:auth(), StorageId :: od_storage:id(),
+    SpaceId :: od_space:id()) -> {ok, SpaceId :: od_space:id()}.
+support_space(Config, Client, StorageId, SpaceId) ->
+    support_space(Config, Client, StorageId, SpaceId, minimum_support_size(Config)).
 
 
 %%--------------------------------------------------------------------
@@ -1573,17 +1626,17 @@ support_space(Config, ProviderId, SpaceId) ->
 %% Supports a space by a provider based on space id and support size.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Config :: term(), ProviderId :: od_provider:id(),
+-spec support_space(Config :: term(), Client :: aai:auth(), StorageId :: od_storage:id(),
     SpaceId :: od_space:id(), Size :: non_neg_integer()) ->
     {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
-support_space(Config, ProviderId, SpaceId, Size) ->
+support_space(Config, Client, StorageId, SpaceId, Size) ->
     % Create a temporary user for inviting a provider, as invite tokens cannot
     % be created as root.
     {ok, TmpUser} = create_user(Config),
     {ok, TmpUser} = space_add_user(Config, SpaceId, TmpUser),
-    space_set_user_privileges(Config, SpaceId, TmpUser, [?SPACE_ADD_PROVIDER], []),
-    {ok, Token} = space_invite_provider_token(Config, ?USER(TmpUser), SpaceId),
-    Res = support_space(Config, ?PROVIDER(ProviderId), ProviderId, Token, Size),
+    ok = space_set_user_privileges(Config, SpaceId, TmpUser, [?SPACE_ADD_SUPPORT], []),
+    {ok, Token} = create_space_support_token(Config, ?USER(TmpUser), SpaceId),
+    Res = support_space_using_token(Config, Client, StorageId, Token, Size),
     delete_user(Config, TmpUser),
     Res.
 
@@ -1593,26 +1646,43 @@ support_space(Config, ProviderId, SpaceId, Size) ->
 %% Supports a space by a provider based on token and support size.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Config :: term(), Client :: aai:auth(),
-    ProviderId :: od_provider:id(), Token :: binary() | tokens:token(),
-    Size :: non_neg_integer()) ->
-    {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
-support_space(Config, Client, ProviderId, Token, Size) ->
-    ?assertMatch({ok, _}, call_oz(Config, provider_logic, support_space, [
-        Client, ProviderId, Token, Size
+-spec support_space_using_token(Config :: term(), Client :: aai:auth(),
+    StorageId :: od_storage:id(), Token :: binary() | tokens:token(),
+    Size :: non_neg_integer()) -> {ok, SpaceId :: od_space:id()}.
+support_space_using_token(Config, Client, StorageId, Token, Size) ->
+    ?assertMatch({ok, _}, call_oz(Config, storage_logic, support_space, [
+        Client, StorageId, Token, Size
     ])).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Revoke space support by given provider.
+%% Supports a space by a provider based on space id
+%% (with default support size and virtual storage with id equal to providers).
 %% @end
 %%--------------------------------------------------------------------
--spec unsupport_space(Config :: term(), ProviderId :: od_provider:id(),
+-spec support_space_by_legacy_storage(Config :: term(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> {ok, SpaceId :: od_space:id()}.
+support_space_by_legacy_storage(Config, ProviderId, SpaceId) ->
+    case call_oz(Config, provider_logic, has_storage, [ProviderId, ProviderId]) of
+        true -> ok;
+        false ->
+            ?assertMatch({ok, _}, create_storage(
+                Config, ?PROVIDER(ProviderId), ProviderId, ?STORAGE_NAME1)
+            )
+    end,
+    support_space(Config, ?PROVIDER(ProviderId), ProviderId, SpaceId, minimum_support_size(Config)).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Revoke space support by given storage.
+%% @end
+%%--------------------------------------------------------------------
+-spec unsupport_space(Config :: term(), StorageId :: od_storage:id(),
     SpaceId :: od_space:id()) -> ok.
-unsupport_space(Config, ProviderId, SpaceId) ->
-    ?assertMatch(ok, call_oz(Config, provider_logic, revoke_support, [
-        ?ROOT, ProviderId, SpaceId
+unsupport_space(Config, StorageId, SpaceId) ->
+    ?assertMatch(ok, call_oz(Config, storage_logic, revoke_support, [
+        ?ROOT, StorageId, SpaceId
     ])).
 
 
@@ -2825,9 +2895,72 @@ group_invite_group_token(Config, Client, GroupId) ->
 -spec group_invite_user_token(Config :: term(),
     Client :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, tokens:token()}.
-group_invite_user_token(Config, Client, GroupId) ->
-    ?assertMatch({ok, _}, call_oz(
+group_invite_user_token(Config, Client, GroupId) ->    ?assertMatch({ok, _}, call_oz(
         Config, group_logic, create_user_invite_token, [Client, GroupId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a storage in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_storage(Config :: term(), Client :: aai:auth(),
+    Name :: od_storage:name()) -> {ok, od_storage:id()}.
+create_storage(Config, Client, Name) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, storage_logic, create, [Client, Name]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a storage in onezone with given id.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_storage(Config :: term(), Client :: aai:auth(),
+    od_storage:id(), od_storage:name()) -> {ok, od_storage:id()}.
+create_storage(Config, Client, Id, Name) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, storage_logic, create, [Client, Id, Name]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Retrieves storage data from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec get_storage(Config :: term(), StorageId :: od_storage:id()) ->
+    {ok, #od_storage{}}.
+get_storage(Config, StorageId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, storage_logic, get, [?ROOT, StorageId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates storage.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_storage(Config :: term(), StorageId :: od_storage:id(),
+    Data :: map()) -> ok.
+update_storage(Config, StorageId, Data) ->
+    ?assertMatch(ok, call_oz(
+        Config, storage_logic, update, [?ROOT, StorageId, Data]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes given storage from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_storage(Config :: term(), StorageId :: od_storage:id()) -> ok.
+delete_storage(Config, StorageId) ->
+    ?assertMatch(ok, call_oz(
+        Config, storage_logic, delete, [?ROOT, StorageId]
     )).
 
 
@@ -2923,9 +3056,9 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     [delete_handle(Config, HId) || HId <- Handles],
     [delete_share(Config, ShId) || ShId <- Shares],
     [delete_space(Config, SpId) || SpId <- Spaces],
-    [delete_harvester(Config, HId) || HId <- Harvesters],
     [delete_handle_service(Config, HSId) || HSId <- HServices],
-    % Clusters are removed together with providers
+    [delete_harvester(Config, HId) || HId <- Harvesters],
+    % Clusters and storages are removed together with providers
     % Check if predefined groups should be removed too.
     GroupsToDelete = case RemovePredefinedGroups of
         true ->
