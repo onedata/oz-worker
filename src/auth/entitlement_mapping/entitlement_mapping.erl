@@ -183,10 +183,10 @@
 %%% 1) User logs in with entitlement "developers" and "manager" privileges
 %%% 2) User is manually granted "admin" privileges in the "developers" group
 %%% 3) User logs in again with "developers:manager" but his privileges are not
-%%%    changed because no different since the last login is detected; he still
+%%%    changed because no difference since the last login is detected; he still
 %%%    has "admin" privileges
 %%% 4) User logs in again with "developers:member", which causes his privileges
-%%%    to be changed down to "member" - manual changes has been overwritten
+%%%    to be changed down to "member" - manual changes have been overwritten
 %%%
 %%% For child groups, the privileges are set only when creating a new
 %%% membership - later changes in the corresponding entitlement will NOT be
@@ -332,6 +332,7 @@
 -include("auth/entitlement_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 
 -type raw_entitlement() :: binary().
@@ -558,7 +559,7 @@ ensure_group_structure(Depth, Path, ParentId, _AdminGroupId) when Depth > length
     {ok, ParentId};
 ensure_group_structure(Depth, Path, ParentId, AdminGroupId) ->
     SubGroupPath = lists:sublist(Path, Depth),
-    case ensure_group(SubGroupPath, ParentId) of
+    case ensure_child_group(SubGroupPath, ParentId) of
         {ok, GroupId} ->
             add_admin_group_as_child(GroupId, AdminGroupId),
             ensure_group_structure(Depth + 1, Path, GroupId, AdminGroupId);
@@ -568,12 +569,12 @@ ensure_group_structure(Depth, Path, ParentId, AdminGroupId) ->
 
 
 %% @private
--spec ensure_group([idp_group()], ParentId :: undefined | od_group:id()) ->
+-spec ensure_child_group([idp_group()], ParentId :: undefined | od_group:id()) ->
     {ok, od_group:id()} | errors:error().
-ensure_group(Path, ParentId) ->
+ensure_child_group(Path, ParentId) ->
     GroupId = gen_group_id(Path),
     #idp_group{type = Type, name = Name, privileges = Privileges} = lists:last(Path),
-    case ensure_group_safe(GroupId, Name, Type) of
+    case group_logic:ensure_entitlement_group(GroupId, Name, Type) of
         ok ->
             ParentId /= undefined andalso group_logic:add_group(
                 ?ROOT, ParentId, GroupId, map_privileges(Privileges)
@@ -581,24 +582,6 @@ ensure_group(Path, ParentId) ->
             {ok, GroupId};
         {error, _} = Error ->
             Error
-    end.
-
-
-%% @private
--spec ensure_group_safe(od_group:id(), od_group:name(), od_group:type()) ->
-    ok | errors:error().
-ensure_group_safe(GroupId, Name, Type) ->
-    case group_logic:exists(GroupId) of
-        true ->
-            ok;
-        false ->
-            critical_section:run({create_entitlement_group, GroupId}, fun() ->
-                % The groups might have been created by another process in the meantime
-                case group_logic:exists(GroupId) of
-                    true -> ok;
-                    false -> group_logic:create_entitlement_group(GroupId, Name, Type)
-                end
-            end)
     end.
 
 
@@ -702,7 +685,7 @@ create_admin_group_unsafe(AdminGroupId, GroupPath) ->
             throw(failed)
     end,
     % Create the admin group
-    AdminGroupId = case ensure_group(AdminGroupPath, undefined) of
+    AdminGroupId = case ensure_child_group(AdminGroupPath, undefined) of
         {ok, GroupId} ->
             GroupId;
         {error, _} = Err2 ->

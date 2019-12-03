@@ -118,8 +118,8 @@
     has_eff_privilege/3
 ]).
 -export([
-    create_predefined_groups/0,
-    create_entitlement_group/3
+    ensure_predefined_groups/0,
+    ensure_entitlement_group/3
 ]).
 
 %%%===================================================================
@@ -1768,11 +1768,12 @@ has_eff_privilege(Group, UserId, Privilege) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates predefined groups in the system based on settings in app.config.
+%% Creates predefined groups in the system if they don't exist,
+%% based on settings in app.config.
 %% @end
 %%--------------------------------------------------------------------
--spec create_predefined_groups() -> ok.
-create_predefined_groups() ->
+-spec ensure_predefined_groups() -> ok.
+ensure_predefined_groups() ->
     PredefinedGroups = oz_worker:get_env(predefined_groups),
     lists:foreach(
         fun(GroupMap) ->
@@ -1786,31 +1787,35 @@ create_predefined_groups() ->
                 {Module, Function} ->
                     Module:Function()
             end,
-            create_predefined_group(Id, Name, Privs)
+            ensure_predefined_group(Id, Name, Privs)
         end, PredefinedGroups).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a group resulting from entitlement mapping, which is protected from
-%% deletion.
+%% Creates a group resulting from entitlement mapping if it does not exist
+%% Entitlement groups are protected from deletion.
 %% @end
 %%--------------------------------------------------------------------
--spec create_entitlement_group(od_group:id(), od_group:name(), od_group:type()) ->
+-spec ensure_entitlement_group(od_group:id(), od_group:name(), od_group:type()) ->
     ok | errors:error().
-create_entitlement_group(GroupId, Name, Type) ->
-    case entity_logic:normalize_name(Name, undefined) of
-        undefined ->
-            ?ERROR_BAD_VALUE_NAME;
-        NormalizedName ->
-            Result = create_with_predefined_id(?ROOT, GroupId, #{
-                <<"name">> => NormalizedName, <<"type">> => Type
-            }),
-            case Result of
-                {ok, GroupId} ->
-                    set_protected(GroupId);
-                {error, _} = Error ->
-                    Error
+ensure_entitlement_group(GroupId, Name, Type) ->
+    case exists(GroupId) of
+        true ->
+            ok;
+        false ->
+            case entity_logic:normalize_name(Name, undefined) of
+                undefined ->
+                    ?ERROR_BAD_VALUE_NAME;
+                NormalizedName ->
+                    Data = #{<<"name">> => NormalizedName, <<"type">> => Type},
+                    case create_with_predefined_id(?ROOT, GroupId, Data) of
+                        {ok, GroupId} -> ok = set_protected(GroupId);
+                        % The group might have been created
+                        % by another process in the meantime
+                        ?ERROR_ALREADY_EXISTS -> ok;
+                        {error, _} = Error -> Error
+                    end
             end
     end.
 
@@ -1823,12 +1828,12 @@ create_entitlement_group(GroupId, Name, Type) ->
 %% @private
 %% @doc
 %% Creates a predefined group in the system, if it does not exist, and grants
-%% given OZ privileges to it.
+%% given OZ privileges to it. Predefined groups are protected from deletion.
 %% @end
 %%--------------------------------------------------------------------
--spec create_predefined_group(Id :: binary(), Name :: binary(),
+-spec ensure_predefined_group(Id :: binary(), Name :: binary(),
     Privileges :: [privileges:oz_privilege()]) -> ok.
-create_predefined_group(GroupId, Name, Privileges) ->
+ensure_predefined_group(GroupId, Name, Privileges) ->
     NormalizedName = entity_logic:normalize_name(Name, ?UNKNOWN_ENTITY_NAME),
     case exists(GroupId) of
         true ->
@@ -1840,7 +1845,7 @@ create_predefined_group(GroupId, Name, Privileges) ->
             {ok, GroupId} = create_with_predefined_id(?ROOT, GroupId, #{
                 <<"name">> => NormalizedName, <<"type">> => role_holders
             }),
-            set_protected(GroupId),
+            ok = set_protected(GroupId),
             ?info("Created predefined group '~ts'", [NormalizedName])
     end,
     ToRevoke = privileges:oz_admin() -- Privileges,

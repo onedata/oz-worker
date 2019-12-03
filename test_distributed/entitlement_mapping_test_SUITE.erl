@@ -35,31 +35,31 @@
     no_entitlements_upon_consecutive_login/1,
     no_entitlements_upon_account_link/1,
     no_entitlements_upon_non_idp_user_account_link/1,
-    entitlements_added_upon_first_login/1,
-    entitlements_added_upon_consecutive_login/1,
-    entitlements_removed_upon_consecutive_login/1,
-    entitlements_coalesced_upon_consecutive_login/1,
-    admin_group_created_upon_any_other_entitlement_creation/1,
-    entitlements_added_with_admin_group_upon_account_link/1,
-    entitlements_added_with_admin_group_upon_consecutive_login_after_enabling_entitlement_mapping/1,
-    entitlements_removed_upon_consecutive_login_after_disabling_entitlement_mapping/1,
-    invalid_vo_group_causing_whole_entitlement_mapping_failure/1,
-    entitlements_added_with_vo_group_upon_first_login/1,
-    entitlements_added_with_vo_group_upon_consecutive_login/1,
-    entitlements_added_with_admin_and_vo_group_upon_first_login/1,
-    entitlements_added_with_admin_and_vo_group_upon_consecutive_login/1,
-    highest_role_taken_with_duplicate_entitlements/1,
-    user_privileges_modified_on_consecutive_login/1,
-    group_privileges_not_modified_on_consecutive_login/1,
-    manual_changes_in_user_privileges_overwritten_upon_change_in_idp/1,
-    manual_changes_in_group_privileges_persisted/1,
-    invalid_entitlements_ignored/1,
-    entitlements_resulting_in_invalid_onedata_group_name_or_type_ignored/1,
-    entitlements_with_invalid_privileges_defaulting_to_member/1,
-    invalid_admin_group_ignored/1,
-    admin_group_resulting_in_invalid_onedata_group_name_or_type_ignored/1,
-    entitlements_coalesced_correctly_in_a_mixed_scenario/1,
-    entitlement_groups_protected/1
+    entitlements_are_added_upon_first_login/1,
+    entitlements_are_added_upon_consecutive_login/1,
+    entitlements_are_removed_upon_consecutive_login/1,
+    entitlements_are_coalesced_upon_consecutive_login/1,
+    admin_group_is_created_upon_any_other_entitlement_creation/1,
+    entitlements_are_added_with_admin_group_upon_account_link/1,
+    entitlements_are_added_with_admin_group_upon_consecutive_login_after_enabling_entitlement_mapping/1,
+    entitlements_are_removed_upon_consecutive_login_after_disabling_entitlement_mapping/1,
+    invalid_vo_group_causes_whole_entitlement_mapping_failure/1,
+    entitlements_are_added_with_vo_group_upon_first_login/1,
+    entitlements_are_added_with_vo_group_upon_consecutive_login/1,
+    entitlements_are_added_with_admin_and_vo_group_upon_first_login/1,
+    entitlements_are_added_with_admin_and_vo_group_upon_consecutive_login/1,
+    highest_role_prevails_with_duplicate_entitlements/1,
+    user_privileges_are_modified_on_consecutive_login/1,
+    group_privileges_are_not_modified_on_consecutive_login/1,
+    manual_changes_in_user_privileges_are_overwritten_upon_change_in_idp/1,
+    manual_changes_in_group_privileges_are_persisted/1,
+    invalid_entitlements_are_ignored/1,
+    entitlements_resulting_in_invalid_onedata_group_name_or_type_are_ignored/1,
+    entitlements_with_invalid_privileges_default_to_member/1,
+    invalid_admin_group_is_ignored/1,
+    admin_group_resulting_in_invalid_onedata_group_name_or_type_are_ignored/1,
+    entitlements_are_coalesced_correctly_in_a_mixed_scenario/1,
+    entitlement_groups_are_protected/1
 ]).
 
 all() ->
@@ -72,31 +72,31 @@ all() ->
         no_entitlements_upon_consecutive_login,
         no_entitlements_upon_account_link,
         no_entitlements_upon_non_idp_user_account_link,
-        entitlements_added_upon_first_login,
-        entitlements_added_upon_consecutive_login,
-        entitlements_removed_upon_consecutive_login,
-        entitlements_coalesced_upon_consecutive_login,
-        admin_group_created_upon_any_other_entitlement_creation,
-        entitlements_added_with_admin_group_upon_account_link,
-        entitlements_added_with_admin_group_upon_consecutive_login_after_enabling_entitlement_mapping,
-        entitlements_removed_upon_consecutive_login_after_disabling_entitlement_mapping,
-        invalid_vo_group_causing_whole_entitlement_mapping_failure,
-        entitlements_added_with_vo_group_upon_first_login,
-        entitlements_added_with_vo_group_upon_consecutive_login,
-        entitlements_added_with_admin_and_vo_group_upon_first_login,
-        entitlements_added_with_admin_and_vo_group_upon_consecutive_login,
-        highest_role_taken_with_duplicate_entitlements,
-        user_privileges_modified_on_consecutive_login,
-        group_privileges_not_modified_on_consecutive_login,
-        manual_changes_in_user_privileges_overwritten_upon_change_in_idp,
-        manual_changes_in_group_privileges_persisted,
-        invalid_entitlements_ignored,
-        entitlements_resulting_in_invalid_onedata_group_name_or_type_ignored,
-        entitlements_with_invalid_privileges_defaulting_to_member,
-        invalid_admin_group_ignored,
-        admin_group_resulting_in_invalid_onedata_group_name_or_type_ignored,
-        entitlements_coalesced_correctly_in_a_mixed_scenario,
-        entitlement_groups_protected
+        entitlements_are_added_upon_first_login,
+        entitlements_are_added_upon_consecutive_login,
+        entitlements_are_removed_upon_consecutive_login,
+        entitlements_are_coalesced_upon_consecutive_login,
+        admin_group_is_created_upon_any_other_entitlement_creation,
+        entitlements_are_added_with_admin_group_upon_account_link,
+        entitlements_are_added_with_admin_group_upon_consecutive_login_after_enabling_entitlement_mapping,
+        entitlements_are_removed_upon_consecutive_login_after_disabling_entitlement_mapping,
+        invalid_vo_group_causes_whole_entitlement_mapping_failure,
+        entitlements_are_added_with_vo_group_upon_first_login,
+        entitlements_are_added_with_vo_group_upon_consecutive_login,
+        entitlements_are_added_with_admin_and_vo_group_upon_first_login,
+        entitlements_are_added_with_admin_and_vo_group_upon_consecutive_login,
+        highest_role_prevails_with_duplicate_entitlements,
+        user_privileges_are_modified_on_consecutive_login,
+        group_privileges_are_not_modified_on_consecutive_login,
+        manual_changes_in_user_privileges_are_overwritten_upon_change_in_idp,
+        manual_changes_in_group_privileges_are_persisted,
+        invalid_entitlements_are_ignored,
+        entitlements_resulting_in_invalid_onedata_group_name_or_type_are_ignored,
+        entitlements_with_invalid_privileges_default_to_member,
+        invalid_admin_group_is_ignored,
+        admin_group_resulting_in_invalid_onedata_group_name_or_type_are_ignored,
+        entitlements_are_coalesced_correctly_in_a_mixed_scenario,
+        entitlement_groups_are_protected
     ]).
 
 
@@ -123,7 +123,7 @@ all() ->
     entitlements = Entitlements
 }).
 
-% Below macros assume that set_test_data/2 function has been called at the
+% Below macros assume that store_test_config/1 function has been called at the
 % beginning of the tests and reuse data stored in process dictionary for
 % clearer test code
 -define(RETRIES, 100).
@@ -249,7 +249,7 @@ no_entitlements_upon_non_idp_user_account_link(_) ->
     ?assertTotalGroupsCount(0).
 
 
-entitlements_added_upon_first_login(_) ->
+entitlements_are_added_upon_first_login(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
     ?assertUserGroupsCount(2, 2),
@@ -262,7 +262,7 @@ entitlements_added_upon_first_login(_) ->
     ?assertGroupExists(false, ?DUMMY_IDP, <<"thirdGroup">>).
 
 
-entitlements_added_upon_consecutive_login(_) ->
+entitlements_are_added_upon_consecutive_login(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
     simulate_consecutive_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>, <<"thirdGroup">>]),
@@ -276,7 +276,7 @@ entitlements_added_upon_consecutive_login(_) ->
     ?assertGroupExists(true, ?DUMMY_IDP, <<"anotherGroup">>).
 
 
-entitlements_removed_upon_consecutive_login(_) ->
+entitlements_are_removed_upon_consecutive_login(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
     simulate_consecutive_login(?DUMMY_IDP, []),
@@ -288,7 +288,7 @@ entitlements_removed_upon_consecutive_login(_) ->
     ?assertGroupExists(true, ?DUMMY_IDP, <<"anotherGroup">>).
 
 
-entitlements_coalesced_upon_consecutive_login(_) ->
+entitlements_are_coalesced_upon_consecutive_login(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
     simulate_consecutive_login(?DUMMY_IDP, [<<"firstGroup">>, <<"anotherGroup">>, <<"thirdGroup">>]),
@@ -304,7 +304,7 @@ entitlements_coalesced_upon_consecutive_login(_) ->
     ?assertGroupExists(true, ?DUMMY_IDP, <<"thirdGroup">>).
 
 
-admin_group_created_upon_any_other_entitlement_creation(_) ->
+admin_group_is_created_upon_any_other_entitlement_creation(_) ->
     overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [{adminGroup, "users/admins"}]),
     simulate_first_login(?OTHER_IDP, [<<"myGroup">>]),
     ?assertUserGroupsCount(1, 1),
@@ -318,7 +318,7 @@ admin_group_created_upon_any_other_entitlement_creation(_) ->
     ?assertGroupStructure(?OTHER_IDP, <<"myGroup">>, <<"users/admins">>, direct).
 
 
-entitlements_added_with_admin_group_upon_account_link(_) ->
+entitlements_are_added_with_admin_group_upon_account_link(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [{adminGroup, "users/admins"}]),
     simulate_first_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
@@ -345,7 +345,7 @@ entitlements_added_with_admin_group_upon_account_link(_) ->
     ?assertGroupStructure(?OTHER_IDP, <<"users/technicians">>, <<"users/admins">>, direct).
 
 
-entitlements_added_with_admin_group_upon_consecutive_login_after_enabling_entitlement_mapping(_) ->
+entitlements_are_added_with_admin_group_upon_consecutive_login_after_enabling_entitlement_mapping(_) ->
     overwrite_config(?OTHER_IDP, false),
     simulate_first_login(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
     ?assertUserGroupsCount(0, 0),
@@ -356,7 +356,7 @@ entitlements_added_with_admin_group_upon_consecutive_login_after_enabling_entitl
     ?assertTotalGroupsCount(4).
 
 
-entitlements_removed_upon_consecutive_login_after_disabling_entitlement_mapping(_) ->
+entitlements_are_removed_upon_consecutive_login_after_disabling_entitlement_mapping(_) ->
     overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [{adminGroup, "users/admins"}]),
     simulate_first_login(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
     ?assertUserGroupsCount(3, 4),
@@ -376,7 +376,7 @@ entitlements_removed_upon_consecutive_login_after_disabling_entitlement_mapping(
     ?assertGroupStructure(?OTHER_IDP, <<"users/technicians">>, <<"users/admins">>, direct).
 
 
-invalid_vo_group_causing_whole_entitlement_mapping_failure(_) ->
+invalid_vo_group_causes_whole_entitlement_mapping_failure(_) ->
     overwrite_config(?THIRD_IDP, false),
     simulate_first_login(?THIRD_IDP, []),
 
@@ -390,7 +390,7 @@ invalid_vo_group_causing_whole_entitlement_mapping_failure(_) ->
     end, ["", "a", "/", "*^&$!*$!"]).
 
 
-entitlements_added_with_vo_group_upon_first_login(_) ->
+entitlements_are_added_with_vo_group_upon_first_login(_) ->
     overwrite_config(?THIRD_IDP, true, nested_entitlement_parser, [{voGroupName, "Third-VO"}]),
     simulate_first_login(?THIRD_IDP, [
         <<"staff#unit/vm-operators#role_holders">>, <<"task4.1">>,
@@ -416,7 +416,7 @@ entitlements_added_with_vo_group_upon_first_login(_) ->
     ?assertGroupStructure(?THIRD_IDP, <<"Third-VO">>, <<"staff#unit/admins/privileged">>, effective).
 
 
-entitlements_added_with_vo_group_upon_consecutive_login(_) ->
+entitlements_are_added_with_vo_group_upon_consecutive_login(_) ->
     overwrite_config(?THIRD_IDP, true, nested_entitlement_parser, [{voGroupName, "Third-VO"}]),
     simulate_first_login(?THIRD_IDP, []),
     ?assertUserGroupsCount(0, 0),
@@ -429,7 +429,7 @@ entitlements_added_with_vo_group_upon_consecutive_login(_) ->
     ?assertTotalGroupsCount(8).
 
 
-entitlements_added_with_admin_and_vo_group_upon_first_login(_) ->
+entitlements_are_added_with_admin_and_vo_group_upon_first_login(_) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
         {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
     ]),
@@ -489,7 +489,7 @@ entitlements_added_with_admin_and_vo_group_upon_first_login(_) ->
         <<"Third-VO">>, <<"staff:member/admins:member/privileged:admin">>, direct).
 
 
-entitlements_added_with_admin_and_vo_group_upon_consecutive_login(_) ->
+entitlements_are_added_with_admin_and_vo_group_upon_consecutive_login(_) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
         {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
     ]),
@@ -507,7 +507,7 @@ entitlements_added_with_admin_and_vo_group_upon_consecutive_login(_) ->
     ?assertTotalGroupsCount(8).
 
 
-highest_role_taken_with_duplicate_entitlements(_) ->
+highest_role_prevails_with_duplicate_entitlements(_) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
         {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
     ]),
@@ -544,7 +544,7 @@ highest_role_taken_with_duplicate_entitlements(_) ->
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/vm-operators:member/user:member">>, direct).
 
 
-user_privileges_modified_on_consecutive_login(_) ->
+user_privileges_are_modified_on_consecutive_login(_) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
         {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
     ]),
@@ -571,7 +571,7 @@ user_privileges_modified_on_consecutive_login(_) ->
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:manager">>, direct).
 
 
-group_privileges_not_modified_on_consecutive_login(_) ->
+group_privileges_are_not_modified_on_consecutive_login(_) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
         {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
     ]),
@@ -592,7 +592,7 @@ group_privileges_not_modified_on_consecutive_login(_) ->
 
 
 
-manual_changes_in_user_privileges_overwritten_upon_change_in_idp(Config) ->
+manual_changes_in_user_privileges_are_overwritten_upon_change_in_idp(Config) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
         {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
     ]),
@@ -621,7 +621,7 @@ manual_changes_in_user_privileges_overwritten_upon_change_in_idp(Config) ->
     ?assertHasGroup(false, ?THIRD_IDP, <<"staff:member/admins:manager/user:manager">>, direct).
 
 
-manual_changes_in_group_privileges_persisted(Config) ->
+manual_changes_in_group_privileges_are_persisted(Config) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
         {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
     ]),
@@ -658,7 +658,7 @@ manual_changes_in_group_privileges_persisted(Config) ->
     ?assertGroupStructure(false, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:member">>, direct).
 
 
-invalid_entitlements_ignored(_) ->
+invalid_entitlements_are_ignored(_) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, []),
 
     simulate_first_login(?THIRD_IDP, [<<"staff:member">> | ?INVALID_ENTITLEMENTS]),
@@ -666,7 +666,7 @@ invalid_entitlements_ignored(_) ->
     ?assertTotalGroupsCount(1).
 
 
-entitlements_resulting_in_invalid_onedata_group_name_or_type_ignored(_) ->
+entitlements_resulting_in_invalid_onedata_group_name_or_type_are_ignored(_) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, []),
 
     simulate_first_login(?THIRD_IDP, [
@@ -676,7 +676,7 @@ entitlements_resulting_in_invalid_onedata_group_name_or_type_ignored(_) ->
     ?assertTotalGroupsCount(1).
 
 
-entitlements_with_invalid_privileges_defaulting_to_member(_) ->
+entitlements_with_invalid_privileges_default_to_member(_) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
         {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
     ]),
@@ -685,7 +685,7 @@ entitlements_with_invalid_privileges_defaulting_to_member(_) ->
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:member/user:member">>, direct).
 
 
-invalid_admin_group_ignored(_) ->
+invalid_admin_group_is_ignored(_) ->
     overwrite_config(?THIRD_IDP, false),
     simulate_first_login(?THIRD_IDP, []),
 
@@ -699,7 +699,7 @@ invalid_admin_group_ignored(_) ->
     end, ?INVALID_ENTITLEMENTS).
 
 
-admin_group_resulting_in_invalid_onedata_group_name_or_type_ignored(_) ->
+admin_group_resulting_in_invalid_onedata_group_name_or_type_are_ignored(_) ->
     overwrite_config(?THIRD_IDP, false),
     simulate_first_login(?THIRD_IDP, []),
 
@@ -713,7 +713,7 @@ admin_group_resulting_in_invalid_onedata_group_name_or_type_ignored(_) ->
     end, ?ENTITLEMENTS_WITH_INVALID_ONEDATA_GROUP_NAME_OR_TYPE).
 
 
-entitlements_coalesced_correctly_in_a_mixed_scenario(_) ->
+entitlements_are_coalesced_correctly_in_a_mixed_scenario(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [
         {adminGroup, "users/admins"}
@@ -778,7 +778,7 @@ entitlements_coalesced_correctly_in_a_mixed_scenario(_) ->
     ?assertTotalGroupsCount(14).
 
 
-entitlement_groups_protected(_) ->
+entitlement_groups_are_protected(_) ->
     overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
     overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [
         {adminGroup, "users/admins"}

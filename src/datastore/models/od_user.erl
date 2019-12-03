@@ -1362,6 +1362,9 @@ upgrade_record(10, User) ->
         emails = Emails,
 
         linked_accounts = LinkedAccounts,
+        % Member is the lowest role, if the user had a higher role in the
+        % entitlement it will be automatically set to the correct value upon
+        % his next login.
         entitlements = [{Ent, member} || Ent <- Entitlements],
 
         active_sessions = ActiveSessions,

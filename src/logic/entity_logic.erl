@@ -222,7 +222,7 @@ validate_name(Name, FirstRgx, MiddleRgx, LastRgx, MaxLength) ->
 %% If the name is too long, it is shortened to allowed size.
 %% @end
 %%--------------------------------------------------------------------
--spec normalize_name(binary(), DefaultName :: term()) -> binary().
+-spec normalize_name(binary(), DefaultName) -> binary() | DefaultName.
 normalize_name(Name, DefaultName) ->
     normalize_name(Name,
         ?NAME_FIRST_CHARS_ALLOWED, <<"">>,

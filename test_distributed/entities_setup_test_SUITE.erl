@@ -69,7 +69,7 @@ predefined_groups_test(Config) ->
     % Call the group creation procedure. The function reads from env and
     % creates the predefined groups
     ?assertEqual(ok, oz_test_utils:call_oz(
-        Config, group_logic, create_predefined_groups, []
+        Config, group_logic, ensure_predefined_groups, []
     )),
     % Now, check if the groups are present in the system and have desired
     % privileges.
@@ -113,7 +113,7 @@ predefined_groups_test(Config) ->
     ],
     oz_test_utils:set_env(Config, predefined_groups, NewPredefinedGroups),
     ?assertEqual(ok, oz_test_utils:call_oz(
-        Config, group_logic, create_predefined_groups, []
+        Config, group_logic, ensure_predefined_groups, []
     )),
 
     CheckGroup(<<"group1">>, <<"New group">>, [?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_SET_PRIVILEGES]),
@@ -148,7 +148,7 @@ global_groups_test(Config) ->
     oz_test_utils:set_env(Config, predefined_groups, PredefinedGroups),
     % Make sure predefined groups are created
     ?assertEqual(ok, oz_test_utils:call_oz(
-        Config, group_logic, create_predefined_groups, []
+        Config, group_logic, ensure_predefined_groups, []
     )),
     % Enable global groups
     oz_test_utils:set_env(Config, enable_global_groups, true),
@@ -206,7 +206,7 @@ automatic_space_membership_via_global_group_test(Config) ->
     oz_test_utils:set_env(Config, predefined_groups, PredefinedGroups),
     % Make sure predefined groups are created
     ?assertEqual(ok, oz_test_utils:call_oz(
-        Config, group_logic, create_predefined_groups, []
+        Config, group_logic, ensure_predefined_groups, []
     )),
     % Enable global groups
     oz_test_utils:set_env(Config, enable_global_groups, true),

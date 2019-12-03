@@ -690,9 +690,9 @@ get_record(od_user, 10) -> {
     {od_user,
         <<"name">>,
         <<"username">>,
-        [<<"email1@email.com">>, <<"email2@email.com">>],
         true,
         undefined,
+        [<<"email1@email.com">>, <<"email2@email.com">>],
 
         [
             #linked_account{
@@ -762,9 +762,9 @@ get_record(od_user, 10) -> {
     {od_user,
         <<"name">>,
         <<"username">>,
-        [<<"email1@email.com">>, <<"email2@email.com">>],
         true,
         undefined,
+        [<<"email1@email.com">>, <<"email2@email.com">>],
 
         [
             #linked_account{

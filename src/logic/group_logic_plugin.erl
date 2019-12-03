@@ -165,7 +165,7 @@ create(Req = #el_req{gri = #gri{id = ProposedGroupId, aspect = instance} = GRI, 
     }},
     case od_group:create(GroupRecord) of
         {error, already_exists} ->
-            throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"groupId">>));
+            throw(?ERROR_ALREADY_EXISTS);
         {ok, #document{key = GroupId}} ->
             case Req#el_req.auth_hint of
                 ?AS_USER(UserId) ->
