@@ -113,11 +113,9 @@ optional => #{Key :: binary() | {aspect, binary()} => {type_validator(), value_v
     versioned_entity = {undefined, 1} :: versioned_entity()
 }).
 
--define(DEFAULT_ENTITY_NAME, <<"Unnamed">>).
-
 -export([handle/1, handle/2]).
 -export([is_authorized/2]).
--export([validate_name/1, validate_name/5, normalize_name/1, normalize_name/9]).
+-export([validate_name/1, validate_name/5, normalize_name/2, normalize_name/9]).
 
 
 %%%===================================================================
@@ -224,13 +222,13 @@ validate_name(Name, FirstRgx, MiddleRgx, LastRgx, MaxLength) ->
 %% If the name is too long, it is shortened to allowed size.
 %% @end
 %%--------------------------------------------------------------------
--spec normalize_name(binary()) -> binary().
-normalize_name(Name) ->
+-spec normalize_name(binary(), DefaultName) -> binary() | DefaultName.
+normalize_name(Name, DefaultName) ->
     normalize_name(Name,
         ?NAME_FIRST_CHARS_ALLOWED, <<"">>,
         ?NAME_MIDDLE_CHARS_ALLOWED, <<"-">>,
         ?NAME_LAST_CHARS_ALLOWED, <<"">>,
-        ?NAME_MAXIMUM_LENGTH, ?DEFAULT_ENTITY_NAME
+        ?NAME_MAXIMUM_LENGTH, DefaultName
     ).
 
 

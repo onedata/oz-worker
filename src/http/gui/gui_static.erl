@@ -57,8 +57,8 @@
 % Only packages older than that will be cleaned (in seconds)
 -define(CLEANING_AGE_THRESHOLD, 86400). % 1 day
 
--define(DISABLE_VERIFICATION, oz_worker:get_env(disable_gui_package_verification, false)).
--define(DISABLE_HARVESTER_VERIFICATION, oz_worker:get_env(disable_harvester_gui_package_verification, false)).
+-define(GUI_VERIFICATION_ENABLED, oz_worker:get_env(gui_package_verification, true)).
+-define(HARVESTER_VERIFICATION_ENABLED, oz_worker:get_env(harvester_gui_package_verification, true)).
 
 -define(GUI_STATIC_ROOT, oz_worker:get_env(gui_static_root)).
 -define(CUSTOM_STATIC_ROOT, oz_worker:get_env(gui_custom_static_root)).
@@ -369,23 +369,23 @@ mimetype(Path) ->
 %% @private
 %% @doc
 %% Checks if given GUI checksum (SHA-256) is whitelisted in the compatibility file.
-%% The check can be turned off using the disable_gui_package_verification env
-%% (or disable_harvester_gui_package_verification in case of harvester GUI).
+%% The check can be turned off using the gui_package_verification env
+%% (or harvester_gui_package_verification in case of harvester GUI).
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_gui_hash(onedata:gui(), onedata:release_version(), onedata:gui_hash()) ->
     boolean().
 verify_gui_hash(GuiType, ReleaseVersion, GuiHash) ->
-    case {GuiType, ?DISABLE_VERIFICATION, ?DISABLE_HARVESTER_VERIFICATION} of
+    case {GuiType, ?GUI_VERIFICATION_ENABLED, ?HARVESTER_VERIFICATION_ENABLED} of
         {?OZ_WORKER_GUI, _, _} ->
             % OZ GUI does not need to be checked as it is always present in the
             % Onezone release package.
             true;
 
-        {_, true, _} ->
+        {_, false, _} ->
             true;
 
-        {?HARVESTER_GUI, false, true} ->
+        {?HARVESTER_GUI, _, false} ->
             true;
 
         {_, _, _} ->
