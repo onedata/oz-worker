@@ -18,8 +18,8 @@
 
 %% API
 -export([build_auth_ctx/1, build_auth_ctx/2, build_auth_ctx/3, build_auth_ctx/4]).
--export([check_token_auth/2]).
--export([check_token_auth_for_rest_interface/1]).
+-export([authenticate/2]).
+-export([authenticate_for_rest_interface/1]).
 -export([verify_access_token/2]).
 -export([verify_identity_token/2]).
 -export([verify_invite_token/3]).
@@ -87,32 +87,19 @@ build_auth_ctx(Interface, PeerIp, Audience, DataAccessCaveatsPolicy) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to a authorize a client by an access token - either a token issued
-%% by Onezone or an external access token - originating from an Identity Provider.
-%%      {true, Auth} - the client was authorized
-%%      false - access token was not found
-%%      errors:error() - provided access token is invalid
+%% Tries to authenticate a client by an access token.
+%%   {true, #auth{}} - the client was authenticated
+%%   errors:error() - provided access token was invalid
 %% @end
 %%--------------------------------------------------------------------
--spec check_token_auth(tokens:serialized() | tokens:token(), aai:auth_ctx()) ->
+-spec authenticate(tokens:serialized() | tokens:token(), aai:auth_ctx()) ->
     {true, aai:auth()} | errors:error().
-check_token_auth(Serialized, AuthCtx) when is_binary(Serialized) ->
+authenticate(Serialized, AuthCtx) when is_binary(Serialized) ->
     case tokens:deserialize(Serialized) of
-        {ok, Token} ->
-            check_token_auth(Token, AuthCtx);
-        ?ERROR_BAD_TOKEN ->
-            case openid_protocol:authorize_by_idp_access_token(Serialized) of
-                {true, {IdP, Attributes}} ->
-                    LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
-                    {ok, #document{key = UserId}} = linked_accounts:acquire_user(LinkedAccount),
-                    {true, ?USER(UserId)};
-                {error, _} = Error ->
-                    Error;
-                false ->
-                    ?ERROR_BAD_TOKEN
-            end
+        {ok, Token} -> authenticate(Token, AuthCtx);
+        {error, _} = Error -> Error
     end;
-check_token_auth(Token, AuthCtx) ->
+authenticate(Token, AuthCtx) ->
     case verify_access_token(Token, AuthCtx) of
         {ok, Auth} -> {true, Auth};
         {error, _} = Error -> Error
@@ -121,25 +108,50 @@ check_token_auth(Token, AuthCtx) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Inspects a cowboy HTTP request, resolves the access token (if any) and
-%% tries to authorize a client for REST interface access.
+%% Tries to authenticate a client by an access token based on a HTTP request.
+%% The resulting #auth{} is valid only for REST interface.
+%% Supports third party access tokens originating from Identity Providers.
+%%   {true, #auth{}} - the client was authenticated
+%%   false - access token was not found
+%%   errors:error() - provided access token was invalid
 %% @end
 %%--------------------------------------------------------------------
--spec check_token_auth_for_rest_interface(cowboy_req:req()) ->
+-spec authenticate_for_rest_interface(cowboy_req:req()) ->
     {true, aai:auth()} | false | errors:error().
-check_token_auth_for_rest_interface(Req) when is_map(Req) ->
+authenticate_for_rest_interface(Req) when is_map(Req) ->
     case tokens:parse_access_token_header(Req) of
         undefined ->
             false;
-        AccessToken ->
-            case resolve_audience_for_rest_interface(Req) of
-                {ok, Audience} ->
-                    {PeerIp, _} = cowboy_req:peer(Req),
-                    AuthCtx = build_auth_ctx(rest, PeerIp, Audience),
-                    check_token_auth(AccessToken, AuthCtx);
-                {error, _} = Error ->
-                    Error
+        Serialized ->
+            case tokens:deserialize(Serialized) of
+                {ok, Token} ->
+                    authenticate_for_rest_interface(Req, Token);
+                ?ERROR_BAD_TOKEN ->
+                    case openid_protocol:authenticate_by_idp_access_token(Serialized) of
+                        {true, {IdP, Attributes}} ->
+                            LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
+                            {ok, #document{key = UserId}} = linked_accounts:acquire_user(LinkedAccount),
+                            {true, ?USER(UserId)};
+                        {error, _} = Error ->
+                            Error;
+                        false ->
+                            ?ERROR_BAD_TOKEN
+                    end
             end
+    end.
+
+
+%% @private
+-spec authenticate_for_rest_interface(cowboy_req:req(), tokens:token()) ->
+    {true, aai:auth()} | errors:error().
+authenticate_for_rest_interface(Req, Token) ->
+    case resolve_audience_for_rest_interface(Req) of
+        {ok, Audience} ->
+            {PeerIp, _} = cowboy_req:peer(Req),
+            AuthCtx = build_auth_ctx(rest, PeerIp, Audience),
+            authenticate(Token, AuthCtx);
+        {error, _} = Error ->
+            Error
     end.
 
 

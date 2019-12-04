@@ -22,6 +22,12 @@
 -export([all/0]).
 -export([dummy_test/1]).
 
+-record(testcase, {
+    token_type :: tokens:type(),
+    valid_creators = [],
+    valid_consumers = []
+}).
+
 %%%===================================================================
 %%% API functions
 %%%===================================================================

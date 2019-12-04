@@ -267,7 +267,7 @@
 ]).
 -export([
     assert_invite_token_usage_limit_reached/3,
-    build_auth_ctx/2, check_token_auth/2, check_token_auth/3
+    build_auth_ctx/2, authenticate_by_token/2, authenticate_by_token/3
 ]).
 -export([
     delete_all_entities/1,
@@ -3003,11 +3003,11 @@ build_auth_ctx(Config, Args) ->
 %% requires certain context is included in the token.
 %% @end
 %%--------------------------------------------------------------------
--spec check_token_auth(Config :: term(), tokens:token() | tokens:serialized()) ->
+-spec authenticate_by_token(Config :: term(), tokens:token() | tokens:serialized()) ->
     {true, aai:auth()} | errors:error().
-check_token_auth(Config, Token) ->
+authenticate_by_token(Config, Token) ->
     AuthCtx = build_auth_ctx(Config, [undefined]),
-    check_token_auth(Config, Token, AuthCtx).
+    authenticate_by_token(Config, Token, AuthCtx).
 
 
 %%--------------------------------------------------------------------
@@ -3016,10 +3016,10 @@ check_token_auth(Config, Token) ->
 %% on success.
 %% @end
 %%--------------------------------------------------------------------
--spec check_token_auth(Config :: term(), tokens:token() | tokens:serialized(), aai:auth_ctx()) ->
+-spec authenticate_by_token(Config :: term(), tokens:token() | tokens:serialized(), aai:auth_ctx()) ->
     {true, aai:auth()} | errors:error().
-check_token_auth(Config, Token, AuthCtx) ->
-    call_oz(Config, token_auth, check_token_auth, [Token, AuthCtx]).
+authenticate_by_token(Config, Token, AuthCtx) ->
+    call_oz(Config, token_auth, authenticate, [Token, AuthCtx]).
 
 
 %%--------------------------------------------------------------------

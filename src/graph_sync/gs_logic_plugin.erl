@@ -49,7 +49,7 @@ verify_handshake_auth(nobody, _) ->
     {ok, ?NOBODY};
 verify_handshake_auth({token, Token}, PeerIp) ->
     AuthCtx = token_auth:build_auth_ctx(graphsync, PeerIp),
-    case token_auth:check_token_auth(Token, AuthCtx) of
+    case token_auth:authenticate(Token, AuthCtx) of
         {true, Auth} -> {ok, Auth};
         {error, _} = Error -> Error
     end.
@@ -138,7 +138,7 @@ verify_auth_override(?PROVIDER(ProviderId), #auth_override{client_auth = {token,
     case ResolvedAudience of
         {ok, Audience} ->
             AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, Audience, DataAccessCaveatsPolicy),
-            case token_auth:check_token_auth(Token, AuthCtx) of
+            case token_auth:authenticate(Token, AuthCtx) of
                 {true, OverridenAuth = ?USER(UserId)} ->
                     % Provided token is valid; allow only user tokens and check
                     % that the GS channel owning provider actually supports the user

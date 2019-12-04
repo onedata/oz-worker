@@ -141,13 +141,13 @@ content_types_provided(Req, #state{rest_req = #rest_req{produces = Produces}} = 
     {true | {false, binary()} | stop, cowboy_req:req(), #state{}}.
 is_authorized(Req, State) ->
     Result = try
-        case token_auth:check_token_auth_for_rest_interface(Req) of
+        case token_auth:authenticate_for_rest_interface(Req) of
             {true, Auth} ->
                 {true, Auth};
             {error, Err1} ->
                 {error, Err1};
             false ->
-                basic_auth:check_basic_auth(Req)
+                basic_auth:authenticate(Req)
         end
     catch
         throw:Err2 ->

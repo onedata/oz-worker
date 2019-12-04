@@ -60,7 +60,7 @@ basic_auth_authenticate_test(Config) ->
     {ok, U2} = oz_test_utils:create_user(Config, #{<<"username">> => Username2, <<"password">> => Pass2}),
 
     Authenticate = fun(Username, Password) ->
-        oz_test_utils:call_oz(Config, basic_auth, check_basic_auth, [Username, Password])
+        oz_test_utils:call_oz(Config, basic_auth, authenticate, [Username, Password])
     end,
 
     ?assertMatch({true, ?USER(U1)}, Authenticate(Username1, Pass1)),
@@ -139,7 +139,7 @@ change_password_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #{<<"username">> => Username1, <<"password">> => OldPass1}),
 
     Authenticate = fun(Username, Password) ->
-        oz_test_utils:call_oz(Config, basic_auth, check_basic_auth, [Username, Password])
+        oz_test_utils:call_oz(Config, basic_auth, authenticate, [Username, Password])
     end,
     ChangePassword = fun(User, OldPassword, NewPassword) ->
         oz_test_utils:call_oz(Config, user_logic, change_password, [?USER(User), User, OldPassword, NewPassword])
@@ -182,7 +182,7 @@ set_password_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config, #{<<"username">> => Username1}),
 
     Authenticate = fun(Username, Password) ->
-        oz_test_utils:call_oz(Config, basic_auth, check_basic_auth, [Username, Password])
+        oz_test_utils:call_oz(Config, basic_auth, authenticate, [Username, Password])
     end,
     SetPassword = fun(User, NewPassword) ->
         oz_test_utils:call_oz(Config, user_logic, set_password, [?ROOT, User, NewPassword])
@@ -216,7 +216,7 @@ migrate_onepanel_user_to_onezone(Config) ->
         ]),
 
         ExpUserId = basic_auth:onepanel_uid_to_system_uid(OnepanelUserId),
-        ?assertMatch({true, ?USER(ExpUserId)}, oz_test_utils:call_oz(Config, basic_auth, check_basic_auth, [
+        ?assertMatch({true, ?USER(ExpUserId)}, oz_test_utils:call_oz(Config, basic_auth, authenticate, [
             OnepanelUsername, Password
         ])),
 

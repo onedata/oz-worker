@@ -350,7 +350,7 @@ new_token_verify_fun(Config, Subject, Persistence, Audience) ->
                     ]),
                     ?assertMatch(
                         {true, #auth{subject = Subject}},
-                        oz_test_utils:check_token_auth(Config, Token, AuthCtx)
+                        oz_test_utils:authenticate_by_token(Config, Token, AuthCtx)
                     )
             end,
             case Persistence of
@@ -2278,7 +2278,7 @@ assert_token_deleted(true, Config, Token, TokenName) ->
         ?ACCESS_TOKEN ->
             ?assertEqual(
                 ?ERROR_TOKEN_INVALID,
-                oz_test_utils:check_token_auth(Config, Token)
+                oz_test_utils:authenticate_by_token(Config, Token)
             );
         _ ->
             ok
@@ -2297,7 +2297,7 @@ assert_token_deleted(false, Config, Token, TokenName) ->
         ?ACCESS_TOKEN ->
             ?assertEqual(
                 {true, #auth{subject = Subject}},
-                oz_test_utils:check_token_auth(Config, Token)
+                oz_test_utils:authenticate_by_token(Config, Token)
             );
         _ ->
             ok

@@ -450,7 +450,7 @@ create_gui_access_token(Config, UserId, SessionId, Audience) ->
 
 verify_token(Config, Token, Audience) ->
     AuthCtx = oz_test_utils:build_auth_ctx(Config, [undefined, undefined, Audience]),
-    oz_test_utils:check_token_auth(Config, Token, AuthCtx).
+    oz_test_utils:authenticate_by_token(Config, Token, AuthCtx).
 
 
 create_provider_supporting_user(Config, UserId) ->

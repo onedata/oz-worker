@@ -19,7 +19,7 @@
 
 -export([apply/2]).
 -export([
-    check_token_auth/3,
+    authenticate_by_token/4,
     get_protected_provider_data/2, deploy_static_gui_package/4,
     update_cluster_version_info/4, set_user_password/3, create_user/2,
     add_user_to_group/3, list_users/1, user_exists/1, username_exists/1,
@@ -60,13 +60,12 @@ apply(Function, Args) ->
 %%% Exposed functions
 %%%===================================================================
 
--spec check_token_auth(tokens:serialized() | tokens:token(),
-    undefined | ip_utils:ip(), undefined | aai:audience()) ->
-    {true, aai:auth()} | {error, term()}.
-check_token_auth(Token, PeerIp, Audience)  ->
-    % @TODO VFS-5913 Recognize interface caveat in onepanel
-    AuthCtx = token_auth:build_auth_ctx(undefined, PeerIp, Audience),
-    token_auth:check_token_auth(Token, AuthCtx).
+-spec authenticate_by_token(tokens:serialized() | tokens:token(),
+    undefined | cv_interface:interface(), undefined | ip_utils:ip(),
+    undefined | aai:audience()) -> {true, aai:auth()} | {error, term()}.
+authenticate_by_token(Token, Interface, PeerIp, Audience)  ->
+    AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, Audience),
+    token_auth:authenticate(Token, AuthCtx).
 
 
 -spec get_protected_provider_data(aai:auth(), od_provider:id()) ->
