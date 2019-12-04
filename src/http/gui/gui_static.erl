@@ -386,7 +386,7 @@ verify_gui_hash(GuiType, ReleaseVersion, GuiHash) ->
             % Gui package verification is globally disabled
             true;
 
-        {?HARVESTER_GUI, true, false} ->
+        {?HARVESTER_GUI, _, false} ->
             % Gui package verification for harvesters is disabled
             true;
 

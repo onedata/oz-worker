@@ -95,4 +95,6 @@
 %% does not represent actual storage, it is provider that keeps knowledge of storages.
 -define(STORAGE_DEFAULT_NAME, <<"default_storage">>).
 
+-define(UNKNOWN_ENTITY_NAME, <<"Unnamed">>).
+
 -endif.

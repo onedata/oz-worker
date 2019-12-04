@@ -12,6 +12,7 @@
 -module(linked_accounts).
 -author("Lukasz Opiola").
 
+-include("auth/entitlement_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
@@ -166,7 +167,6 @@ build_test_user_info(LinkedAccount) ->
         entitlements = Entitlements
     } = LinkedAccount,
     MappedEntitlements = entitlement_mapping:map_entitlements(IdP, Entitlements),
-    {GroupIds, _} = lists:unzip(MappedEntitlements),
     UserId = gen_user_id(LinkedAccount),
     {UserId, #{
         <<"userId">> => UserId,
@@ -174,7 +174,11 @@ build_test_user_info(LinkedAccount) ->
         <<"username">> => user_logic:normalize_username(Username),
         <<"emails">> => normalize_emails(Emails),
         <<"linkedAccounts">> => [to_map(LinkedAccount, all_fields)],
-        <<"groups">> => GroupIds
+        <<"groups">> => maps:from_list(
+            lists:map(fun({GroupId, #idp_entitlement{privileges = Privileges}}) ->
+                {GroupId, Privileges}
+            end, MappedEntitlements)
+        )
     }}.
 
 %%%===================================================================
