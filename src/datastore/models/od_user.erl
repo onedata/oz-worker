@@ -12,7 +12,6 @@
 -module(od_user).
 -author("Michal Zmuda").
 
--include("idp_group_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/errors.hrl").
@@ -38,7 +37,10 @@
 -type username() :: binary().
 -type email() :: binary().
 -type linked_account() :: #linked_account{}.
--export_type([full_name/0, username/0, email/0, linked_account/0]).
+% A list of pairs; Onedata group id of an entitlement and set of privileges in
+% the group. The privileges are persisted to be able to detect later changes.
+-type entitlements() :: [{od_group:id(), entitlement_mapping:privileges()}].
+-export_type([full_name/0, username/0, email/0, linked_account/0, entitlements/0]).
 
 % Delay before all session connections are terminated when user is deleted.
 -define(SESSION_CLEANUP_GRACE_PERIOD, 3000).
@@ -299,7 +301,7 @@ get_all_sessions(UserId) ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    10.
+    11.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -565,6 +567,59 @@ get_record_struct(10) ->
         {eff_clusters, #{string => [{atom, string}]}}, % New field
 
         {creation_time, integer}, % New field
+
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(11) ->
+    % Changes:
+    %   * format of entitlements field changed from [string] to [{string, atom}]
+    {record, [
+        {full_name, string},
+        {username, string},
+        {basic_auth_enabled, boolean},
+        {password_hash, binary},
+        {emails, [string]},
+
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {full_name, string},
+            {username, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, {json_utils, encode, decode}}},
+            {access_token, {string, integer}},
+            {refresh_token, string}
+        ]}]},
+        {entitlements, [{string, atom}]},
+
+        {active_sessions, [string]},
+
+        {default_space, string},
+        {default_provider, string},
+
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
 
         {top_down_dirty, boolean}
     ]}.
@@ -1224,17 +1279,102 @@ upgrade_record(9, User) ->
         }
     end, LinkedAccounts),
 
-    {10, #od_user{
-        full_name = Name,
-        username = Alias,
+    {10, {od_user,
+        Name,
+        Alias,
+        BasicAuthEnabled,
+        undefined,
+        Emails,
+
+        TransformedLinkedAccounts,
+        Entitlements,
+
+        [],
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        TranslatePrivileges(OzPrivileges),
+        TranslatePrivileges(EffOzPrivileges),
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        [],
+        [],
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        #{},
+        #{},
+
+        time_utils:system_time_seconds(),
+
+        TopDownDirty
+    }};
+upgrade_record(10, User) ->
+    {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        ActiveSessions,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+
+        TopDownDirty
+    } = User,
+
+    {11, #od_user{
+        full_name = FullName,
+        username = Username,
         basic_auth_enabled = BasicAuthEnabled,
-        password_hash = undefined,
+        password_hash = PasswordHash,
         emails = Emails,
 
-        linked_accounts = TransformedLinkedAccounts,
-        entitlements = Entitlements,
+        linked_accounts = LinkedAccounts,
+        % Member is the lowest role, if the user had a higher role in the
+        % entitlement it will be automatically set to the correct value upon
+        % his next login.
+        entitlements = [{Ent, member} || Ent <- Entitlements],
 
-        active_sessions = [],
+        active_sessions = ActiveSessions,
 
         default_space = DefaultSpace,
         default_provider = DefaultProvider,
@@ -1242,25 +1382,25 @@ upgrade_record(9, User) ->
         client_tokens = ClientTokens,
         space_aliases = SpaceAliases,
 
-        oz_privileges = TranslatePrivileges(OzPrivileges),
-        eff_oz_privileges = TranslatePrivileges(EffOzPrivileges),
+        oz_privileges = OzPrivileges,
+        eff_oz_privileges = EffOzPrivileges,
 
         groups = Groups,
         spaces = Spaces,
         handle_services = HandleServices,
         handles = Handles,
-        harvesters = [],
-        clusters = [],
+        harvesters = Harvesters,
+        clusters = Clusters,
 
         eff_groups = EffGroups,
         eff_spaces = EffSpaces,
         eff_providers = EffProviders,
         eff_handle_services = EffHandleServices,
         eff_handles = EffHandles,
-        eff_harvesters = #{},
-        eff_clusters = #{},
+        eff_harvesters = EffHarvesters,
+        eff_clusters = EffClusters,
 
-        creation_time = time_utils:system_time_seconds(),
+        creation_time = CreationTime,
 
         top_down_dirty = TopDownDirty
     }}.

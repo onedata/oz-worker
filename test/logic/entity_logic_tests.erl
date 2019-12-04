@@ -23,15 +23,15 @@
 %%%===================================================================
 
 name_normalization_test() ->
-    N = fun entity_logic:normalize_name/1,
+    N = fun(Name) -> entity_logic:normalize_name(Name, ?UNKNOWN_ENTITY_NAME) end,
 
     ?assertEqual(<<"aaa---------a"/utf8>>, N(<<"aaa*&:|}{][,a"/utf8>>)),
     ?assertEqual(<<"aaa---------a"/utf8>>, N(<<"][aaa*&:|}{][,a]["/utf8>>)),
-    ?assertEqual(<<"Unnamed">>, N(<<"A">>)),
+    ?assertEqual(?UNKNOWN_ENTITY_NAME, N(<<"A">>)),
     ?assertEqual(<<"group_name">>, N(<<"|group_name">>)),
     ?assertEqual(<<"group_name">>, N(<<"group_name|">>)),
     ?assertEqual(string:slice(?TOO_LONG_NAME, 0, ?NAME_MAXIMUM_LENGTH), N(?TOO_LONG_NAME)),
-    ?assertEqual(<<"Unnamed">>, N(<<"--------------------------------------------------">>)),
+    ?assertEqual(?UNKNOWN_ENTITY_NAME, N(<<"--------------------------------------------------">>)),
     ?assertEqual(<<"µńż_źć-21.3(1)"/utf8>>, N(<<"µńż_źć-21.3(1)"/utf8>>)).
 
 

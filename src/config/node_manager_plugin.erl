@@ -151,7 +151,7 @@ after_init([]) ->
                 cluster_logic:set_up_oz_worker_service(),
                 entity_graph:init_state(),
                 broadcast_dns_config(),
-                group_logic:create_predefined_groups()
+                group_logic:ensure_predefined_groups()
         end
     catch
         _:Error ->

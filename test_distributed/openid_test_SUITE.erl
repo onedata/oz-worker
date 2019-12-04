@@ -180,7 +180,7 @@ validate_correct_login_base(Config, TestMode) ->
                 {str, ":"},
                 "groups",
                 {str, "/"},
-                {str_list, ["1", "2", "3", "4"]}
+                {str_list, ["01", "02", "03", "04"]}
             ]}},
             custom => {optional, {append, [
                 "customAttrs",
@@ -191,7 +191,7 @@ validate_correct_login_base(Config, TestMode) ->
         entitlementMapping => #{
             enabled => true,
             voGroupName => "My-VO",
-            adminGroup => "d:admins/4",
+            adminGroup => "d:admins/04",
             parser => nested_entitlement_parser,
             parserConfig => #{
                 splitWith => "/",
@@ -245,10 +245,10 @@ validate_correct_login_base(Config, TestMode) ->
     ExpUsername = <<"jodoe">>,
     ExpEmails = [<<"john.doe@my.org">>],
     ExpEntitlements = [
-        <<"a:some/1">>,
-        <<"b:entitlements/2">>,
-        <<"c:idk/3">>,
-        <<"d:admins/4">>
+        <<"a:some/01">>,
+        <<"b:entitlements/02">>,
+        <<"c:idk/03">>,
+        <<"d:admins/04">>
     ],
     ExpCustom = #{
         <<"firstAttr">> => <<"firstValue">>,
@@ -264,22 +264,22 @@ validate_correct_login_base(Config, TestMode) ->
     Group1 = entitlement_mapping:gen_group_id(#idp_entitlement{idp = ?DUMMY_IDP, path = [
         #idp_group{name = <<"My-VO">>, type = organization},
         #idp_group{name = <<"a:some">>, type = unit},
-        #idp_group{name = <<"1">>, type = team}
+        #idp_group{name = <<"01">>, type = team}
     ]}),
     Group2 = entitlement_mapping:gen_group_id(#idp_entitlement{idp = ?DUMMY_IDP, path = [
         #idp_group{name = <<"My-VO">>, type = organization},
         #idp_group{name = <<"b:entitlements">>, type = unit},
-        #idp_group{name = <<"2">>, type = team}
+        #idp_group{name = <<"02">>, type = team}
     ]}),
     Group3 = entitlement_mapping:gen_group_id(#idp_entitlement{idp = ?DUMMY_IDP, path = [
         #idp_group{name = <<"My-VO">>, type = organization},
         #idp_group{name = <<"c:idk">>, type = unit},
-        #idp_group{name = <<"3">>, type = team}
+        #idp_group{name = <<"03">>, type = team}
     ]}),
     Group4 = entitlement_mapping:gen_group_id(#idp_entitlement{idp = ?DUMMY_IDP, path = [
         #idp_group{name = <<"My-VO">>, type = organization},
         #idp_group{name = <<"d:admins">>, type = unit},
-        #idp_group{name = <<"4">>, type = team}
+        #idp_group{name = <<"04">>, type = team}
     ]}),
 
     case TestMode of
@@ -291,7 +291,7 @@ validate_correct_login_base(Config, TestMode) ->
                 ])
             ),
 
-            ?assertMatch(
+            {ok, #od_user{entitlements = ActualEntitlements}} = ?assertMatch(
                 {ok, #od_user{
                     full_name = ExpFullName,
                     username = ExpUsername,
@@ -303,10 +303,13 @@ validate_correct_login_base(Config, TestMode) ->
                         emails = ExpEmails,
                         entitlements = ExpEntitlements,
                         custom = ExpCustom
-                    }],
-                    entitlements = [Group1, Group2, Group3, Group4]
+                    }]
                 }},
                 oz_test_utils:get_user(Config, UserId)
+            ),
+            ?assertEqual(
+                lists:sort(ActualEntitlements),
+                lists:sort([{Group1, member}, {Group2, member}, {Group3, member}, {Group4, member}])
             ),
 
             % As a member of the admin group, the user should have effective admin rights
@@ -337,10 +340,14 @@ validate_correct_login_base(Config, TestMode) ->
                         <<"entitlements">> := ExpEntitlements,
                         <<"custom">> := ExpCustom
                     }],
-                    <<"groups">> := [Group1, Group2, Group3, Group4]
+                    <<"groups">> := #{
+                        Group1 := member,
+                        Group2 := member,
+                        Group3 := member,
+                        Group4 := member
+                    }
                 },
                 UserData
-
             ),
 
             % No users or groups should be created in the process
