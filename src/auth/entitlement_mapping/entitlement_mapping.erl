@@ -174,10 +174,25 @@
 %%% PRIVILEGES
 %%% It is possible to specify privileges of the user towards the bottom group
 %%% of the nested structure or privileges of the groups in the nested chain
-%%% towards their parents. These privileges will be set only when creating a new
-%%% membership - if a membership already exists, the privileges are not
-%%% accounted. It means that any changes in privileges introduced by users in an
-%%% existing structure will never be overwritten by the entitlements mapping.
+%%% towards their parents.
+%%%
+%%% User privileges in the bottom group are set when the membership is created
+%%% and each time the privileges resulting from the entitlement mapping change.
+%%% They can be changed manually, but the changes would be overwritten by
+%%% entitlement mapping changes received from an IdP. Example:
+%%% 1) User logs in with entitlement "developers" and "manager" privileges
+%%% 2) User is manually granted "admin" privileges in the "developers" group
+%%% 3) User logs in again with "developers:manager" but his privileges are not
+%%%    changed because no difference since the last login is detected; he still
+%%%    has "admin" privileges
+%%% 4) User logs in again with "developers:member", which causes his privileges
+%%%    to be changed down to "member" - manual changes have been overwritten
+%%%
+%%% For child groups, the privileges are set only when creating a new
+%%% membership - later changes in the corresponding entitlement will NOT be
+%%% taken into account. The privileges can be changed manually without the risk
+%%% of being overwritten by the entitlement mapping.
+%%%
 %%% There are three possible sets of privileges: member, manager, admin.
 %%% They expand to a certain set of Onedata group privileges:
 %%%     * member -> [group_view]
@@ -317,6 +332,7 @@
 -include("auth/entitlement_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/api_errors.hrl").
 
 
 -type raw_entitlement() :: binary().
@@ -367,35 +383,44 @@ enabled(IdP) ->
 %% @doc
 %% Adds the user to new groups resulting from his entitlements and removes him
 %% from the one he lost access to, based on the list of linked accounts and
-%% previous entitlements.
+%% previous entitlements. Updates the privileges in existing entitlements if
+%% they have changed in the IdP.
 %% @end
 %%--------------------------------------------------------------------
--spec coalesce_entitlements(od_user:id(), [od_user:linked_account()], [od_group:id()]) ->
-    [od_group:id()].
-coalesce_entitlements(UserId, LinkedAccounts, OldEntitlementGroupIds) ->
+-spec coalesce_entitlements(od_user:id(), [od_user:linked_account()], od_user:entitlements()) ->
+    od_user:entitlements().
+coalesce_entitlements(UserId, LinkedAccounts, OldEntitlements) ->
     NewEntitlements = lists:flatmap(fun(LinkedAccount) ->
         map_entitlements(LinkedAccount)
     end, LinkedAccounts),
 
-    EntitlementsToAdd = lists:filter(fun({GroupId, _IdPEntitlement}) ->
-        not lists:member(GroupId, OldEntitlementGroupIds)
+    EntitlementsToAdd = lists:filter(fun({GroupId, #idp_entitlement{privileges = Privileges}}) ->
+        not lists:member({GroupId, Privileges}, OldEntitlements)
     end, NewEntitlements),
 
-    EntitlementsToRemove = lists:foldl(fun({GroupId, _IdPEntitlement}, AccGroups) ->
-        lists:delete(GroupId, AccGroups)
-    end, OldEntitlementGroupIds, NewEntitlements),
+    EntitlementsToRemove = lists:foldl(fun({GroupId, _NewIdPEntitlement}, AccGroups) ->
+        proplists:delete(GroupId, AccGroups)
+    end, OldEntitlements, NewEntitlements),
 
     lists:foreach(fun({GroupId, IdPEnt = #idp_entitlement{privileges = UserPrivileges}}) ->
-        ensure_group_structure(IdPEnt),
-        group_logic:add_user(?ROOT, GroupId, UserId, map_privileges(UserPrivileges))
+        case ensure_group_structure(IdPEnt) of
+            {ok, _} ->
+                ensure_member(GroupId, UserId, map_privileges(UserPrivileges));
+            {error, _} = Error ->
+                ?auth_debug("Cannot create group structure for entitlement due to ~w, ignoring: ~p", [
+                    Error, IdPEnt
+                ])
+        end
     end, EntitlementsToAdd),
 
-    lists:foreach(fun(GroupId) ->
+    lists:foreach(fun({GroupId, _}) ->
         group_logic:remove_user(?ROOT, GroupId, UserId)
     end, EntitlementsToRemove),
 
-    {GroupIds, _IdPEntitlements} = lists:unzip(NewEntitlements),
-    GroupIds.
+    % Return the new entitlements list in proper format
+    lists:map(fun({GroupId, #idp_entitlement{privileges = Privileges}}) ->
+        {GroupId, Privileges}
+    end, NewEntitlements).
 
 
 %%--------------------------------------------------------------------
@@ -465,24 +490,27 @@ map_entitlements(IdP, Entitlements) ->
         false ->
             [];
         true ->
-            lists:filtermap(fun(RawEntitlement) ->
+            AllEntitlements = lists:filtermap(fun(RawEntitlement) ->
                 case map_entitlement(IdP, RawEntitlement) of
                     {ok, IdpEntitlement} -> {true, IdpEntitlement};
                     {error, malformed} -> false
                 end
-            end, Entitlements)
+            end, Entitlements),
+            deduplicate_entitlements(AllEntitlements)
     end.
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns the list of privileges represented by given privileges set.
+%% Defaults to member privileges in case of invalid identifier.
 %% @end
 %%--------------------------------------------------------------------
--spec map_privileges(privileges()) -> [privileges:group_privilege()].
+-spec map_privileges(privileges() | term()) -> [privileges:group_privilege()].
 map_privileges(member) -> privileges:group_member();
 map_privileges(manager) -> privileges:group_manager();
-map_privileges(admin) -> privileges:group_admin().
+map_privileges(admin) -> privileges:group_admin();
+map_privileges(_) -> privileges:group_member().
 
 %%%===================================================================
 %%% Internal functions
@@ -491,41 +519,78 @@ map_privileges(admin) -> privileges:group_admin().
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
+%% Removes duplicates of entitlements by choosing the one that
+%% grants higher privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec deduplicate_entitlements([{od_group:id(), idp_entitlement()}]) ->
+    [{od_group:id(), idp_entitlement()}].
+deduplicate_entitlements(AllEntitlements) ->
+    UniquelySorted = lists:usort(AllEntitlements),
+    lists:foldl(fun
+    % Two entitlements were mapped to the same group in Onedata, but are
+    % different - choose the one that carries higher role
+        ({GroupId, FirstEntitlement}, [{GroupId, SecondEntitlement} | Acc]) ->
+            #idp_entitlement{privileges = FirstPrivileges} = FirstEntitlement,
+            #idp_entitlement{privileges = SecondPrivileges} = SecondEntitlement,
+            MergedEntitlement = FirstEntitlement#idp_entitlement{
+                privileges = max_privileges(FirstPrivileges, SecondPrivileges)
+            },
+            [{GroupId, MergedEntitlement} | Acc];
+        (Other, Acc) ->
+            [Other | Acc]
+    end, [], UniquelySorted).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
 %% Creates all missing groups in a chain defined by the idp_entitlement.
 %% Adds the admin group to newly created groups, if specified in config.
 %% @end
 %%--------------------------------------------------------------------
--spec ensure_group_structure(idp_entitlement()) -> od_group:id().
+-spec ensure_group_structure(idp_entitlement()) -> {ok, od_group:id()} | errors:error().
 ensure_group_structure(#idp_entitlement{idp = IdP, path = Path}) ->
     ensure_group_structure(1, Path, undefined, resolve_admin_group(IdP)).
 
 -spec ensure_group_structure(Depth :: integer(), [idp_group()], ParentId :: undefined | od_group:id(),
-    AdminGroupId :: undefined | od_group:id()) -> od_group:id().
+    AdminGroupId :: undefined | od_group:id()) -> {ok, od_group:id()} | errors:error().
 ensure_group_structure(Depth, Path, ParentId, _AdminGroupId) when Depth > length(Path) ->
-    ParentId;
+    {ok, ParentId};
 ensure_group_structure(Depth, Path, ParentId, AdminGroupId) ->
     SubGroupPath = lists:sublist(Path, Depth),
-    GroupId = ensure_group(SubGroupPath, ParentId),
-    add_admin_group_as_child(GroupId, AdminGroupId),
-    ensure_group_structure(Depth + 1, Path, GroupId, AdminGroupId).
+    case ensure_child_group(SubGroupPath, ParentId) of
+        {ok, GroupId} ->
+            add_admin_group_as_child(GroupId, AdminGroupId),
+            ensure_group_structure(Depth + 1, Path, GroupId, AdminGroupId);
+        {error, _} = Error ->
+            Error
+    end.
 
 
 %% @private
--spec ensure_group([idp_group()], ParentId :: undefined | od_group:id()) -> od_group:id().
-ensure_group(Path, ParentId) ->
+-spec ensure_child_group([idp_group()], ParentId :: undefined | od_group:id()) ->
+    {ok, od_group:id()} | errors:error().
+ensure_child_group(Path, ParentId) ->
     GroupId = gen_group_id(Path),
     #idp_group{type = Type, name = Name, privileges = Privileges} = lists:last(Path),
-    % Update will create the group if it does not exist
-    {ok, _} = od_group:update(GroupId, fun(Group) -> {ok, Group} end, #od_group{
-        name = entity_logic:normalize_name(Name),
-        type = Type,
-        protected = true,
-        creator = ?SUB(root)
-    }),
-    ParentId /= undefined andalso group_logic:add_group(
-        ?ROOT, ParentId, GroupId, map_privileges(Privileges)
-    ),
-    GroupId.
+    case group_logic:ensure_entitlement_group(GroupId, Name, Type) of
+        ok ->
+            ParentId /= undefined andalso group_logic:add_group(
+                ?ROOT, ParentId, GroupId, map_privileges(Privileges)
+            ),
+            {ok, GroupId};
+        {error, _} = Error ->
+            Error
+    end.
+
+
+%% @private
+-spec ensure_member(od_group:id(), od_user:id(), [privileges:group_privilege()]) -> ok.
+ensure_member(GroupId, UserId, PrivsToGrant) ->
+    group_logic:add_user(?ROOT, GroupId, UserId), % Fails silently if already a member
+    PrivsToRevoke = privileges:group_privileges() -- PrivsToGrant,
+    ok = group_logic:update_user_privileges(?ROOT, GroupId, UserId, PrivsToGrant, PrivsToRevoke).
 
 
 %% @private
@@ -590,14 +655,50 @@ resolve_admin_group(IdP) ->
 create_admin_group(IdP, RawAdminGroup) ->
     case map_entitlement(IdP, RawAdminGroup) of
         {error, malformed} ->
-            ?warning("Cannot parse admin group for IdP '~p'", [IdP]),
+            ?alert("Cannot parse admin group for IdP '~p' (malformed)", [IdP]),
             false;
         {ok, {AdminGroupId, #idp_entitlement{path = Path}}} ->
-            AdminGroupPath = convert_to_admin_group(Path),
-            % Create the admin group first, as ensure_group_structure/4 adds the
-            % admin group to all created groups on the path.
-            ensure_group(AdminGroupPath, undefined),
-            {true, ensure_group_structure(1, AdminGroupPath, undefined, AdminGroupId)}
+            try create_admin_group_unsafe(AdminGroupId, Path) of
+                ok ->
+                    {true, AdminGroupId}
+            catch
+                throw:failed ->
+                    false;
+                Type:Reason ->
+                    ?alert("Cannot create admin group due to ~p:~p", [Type, Reason]),
+                    false
+            end
+    end.
+
+
+%% @private
+-spec create_admin_group_unsafe(od_group:id(), [entitlement_mapping:idp_group()]) ->
+    ok | no_return().
+create_admin_group_unsafe(AdminGroupId, GroupPath) ->
+    AdminGroupPath = convert_to_admin_group(GroupPath),
+    % First create the required parents for the admin group
+    case ensure_group_structure(1, lists:droplast(AdminGroupPath), undefined, undefined) of
+        {ok, _} ->
+            ok;
+        {error, _} = Err1 ->
+            ?alert("Cannot create parent group structure for admin group due to ~w", [Err1]),
+            throw(failed)
+    end,
+    % Create the admin group
+    AdminGroupId = case ensure_child_group(AdminGroupPath, undefined) of
+        {ok, GroupId} ->
+            GroupId;
+        {error, _} = Err2 ->
+            ?alert("Cannot create admin group due to ~w", [Err2]),
+            throw(failed)
+    end,
+    % Add the admin group to all parents on its path
+    case ensure_group_structure(1, AdminGroupPath, undefined, AdminGroupId) of
+        {ok, AdminGroupId} ->
+            ok;
+        {error, _} = Err3 ->
+            ?alert("Cannot create full group structure for admin group due to ~w", [Err3]),
+            throw(failed)
     end.
 
 
@@ -617,3 +718,12 @@ encode_type(organization) -> <<"vo">>;
 encode_type(unit) -> <<"ut">>;
 encode_type(team) -> <<"tm">>;
 encode_type(role_holders) -> <<"rl">>.
+
+
+%% @private
+-spec max_privileges(privileges(), privileges()) -> privileges().
+max_privileges(admin, _) -> admin;
+max_privileges(_, admin) -> admin;
+max_privileges(manager, _) -> manager;
+max_privileges(_, manager) -> manager;
+max_privileges(_, _) -> member.

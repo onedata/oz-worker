@@ -18,8 +18,6 @@
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include("idp_group_mapping.hrl").
--include_lib("ctool/include/global_definitions.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/api_errors.hrl").

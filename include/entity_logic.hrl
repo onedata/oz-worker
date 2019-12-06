@@ -124,4 +124,6 @@
 % Used when enable_automatic_first_space is set to true
 -define(FIRST_SPACE_NAME, <<"Personal Space">>).
 
+-define(UNKNOWN_ENTITY_NAME, <<"Unnamed">>).
+
 -endif.

@@ -34,7 +34,7 @@
     username = undefined :: undefined | binary(),
     emails = [] :: [binary()],
     % A list of entitlements in given IdP, they must be normalized according
-    % to specification in idp_group_mapping.
+    % to specification in entitlement_mapping.
     entitlements = [] :: [entitlement_mapping:raw_entitlement()],
     % Custom attributes received from the IdP, opaque to Onezone (used in LUMA).
     custom = #{} :: json_utils:json_term(),
@@ -129,7 +129,7 @@
     emails = [] :: [od_user:email()],
 
     linked_accounts = [] :: [od_user:linked_account()],
-    entitlements = [] :: [od_group:id()],
+    entitlements = [] :: od_user:entitlements(),
 
     active_sessions = [] :: [session:id()],
 
