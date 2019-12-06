@@ -31,8 +31,6 @@
     binding()
 }.
 
--export_type([method/0, binding/0, bound_gri/0, bound_auth_hint/0]).
-
 % State of REST handler
 -record(state, {
     auth = #auth{} :: aai:auth(),
@@ -40,6 +38,8 @@
     allowed_methods :: [method()]
 }).
 -type opts() :: #{method() => #rest_req{}}.
+
+-export_type([method/0, binding/0, bound_gri/0, bound_auth_hint/0, opts/0]).
 
 %% cowboy rest handler API
 -export([
@@ -213,7 +213,7 @@ delete_resource(Req, State) ->
 %% Returns all REST routes in the cowboy router format.
 %% @end
 %%--------------------------------------------------------------------
--spec rest_routes() -> [{binary(), module(), map()}].
+-spec rest_routes() -> [{binary(), module(), rest_handler:opts()}].
 rest_routes() ->
     AllRoutes = lists:flatten([
         dev_utils:dev_provider_registration_route(),
