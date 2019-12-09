@@ -1086,7 +1086,7 @@ verify_access_or_identity_token_base(Config, AccessOrIdentity, AllClients, Token
                     fun(#{<<"subject">> := Subject, <<"ttl">> := TTL}) ->
                         {ExpSubject, ExpTTL} = ExpResult,
                         ?assertEqual(Subject, aai:subject_to_json(ExpSubject)),
-                        ?assertEqual(TTL, gs_protocol:undefined_to_null(ExpTTL)),
+                        ?assertEqual(TTL, utils:undefined_to_null(ExpTTL)),
                         true
                     end;
                 false ->
@@ -1136,7 +1136,7 @@ verify_access_or_identity_token_base(Config, AccessOrIdentity, AllClients, Token
                 <<"peerIp">> => case PeerIp of
                     any -> [<<"1.2.3.4">>, <<"5.6.7.8">>];
                     undefined -> [];
-                    _ -> [gs_protocol:undefined_to_null(PeerIp)]
+                    _ -> [utils:undefined_to_null(PeerIp)]
                 end,
                 <<"interface">> => case Interface of
                     any -> cv_interface:valid_interfaces();
@@ -1317,7 +1317,7 @@ verify_invite_token_base(Config, AllClients, Token, PeerIp, ExpType, ShouldSucce
                     fun(#{<<"subject">> := Subject, <<"ttl">> := TTL}) ->
                         {ExpSubject, ExpTTL} = ExpResult,
                         ?assertEqual(Subject, aai:subject_to_json(ExpSubject)),
-                        ?assertEqual(TTL, gs_protocol:undefined_to_null(ExpTTL)),
+                        ?assertEqual(TTL, utils:undefined_to_null(ExpTTL)),
                         true
                     end;
                 false ->
@@ -1337,7 +1337,7 @@ verify_invite_token_base(Config, AllClients, Token, PeerIp, ExpType, ShouldSucce
             ]),
             correct_values = #{
                 <<"token">> => [element(2, {ok, _} = tokens:serialize(Token))],
-                <<"peerIp">> => [gs_protocol:undefined_to_null(PeerIp)],
+                <<"peerIp">> => [utils:undefined_to_null(PeerIp)],
                 <<"expectedInviteTokenType">> => case ExpType of
                     any -> [];
                     _ -> [tokens:invite_token_type_to_str(ExpType)]

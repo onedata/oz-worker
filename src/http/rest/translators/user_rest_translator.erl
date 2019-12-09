@@ -67,14 +67,14 @@ get_response(#gri{id = UserId, aspect = instance, scope = protected}, UserData) 
         <<"basicAuthEnabled">> => BasicAuthEnabled,
         <<"userId">> => UserId,
         <<"fullName">> => FullName,
-        <<"username">> => gs_protocol:undefined_to_null(Username),
+        <<"username">> => utils:undefined_to_null(Username),
         <<"emails">> => Emails,
         <<"linkedAccounts">> => LinkedAccounts,
 
         %% @TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"name">> => FullName,
-        <<"login">> => gs_protocol:undefined_to_null(Username),
-        <<"alias">> => gs_protocol:undefined_to_null(Username),
+        <<"login">> => utils:undefined_to_null(Username),
+        <<"alias">> => utils:undefined_to_null(Username),
         <<"emailList">> => Emails
     });
 
@@ -85,12 +85,12 @@ get_response(#gri{id = UserId, aspect = instance, scope = shared}, UserData) ->
     rest_translator:ok_body_reply(#{
         <<"userId">> => UserId,
         <<"fullName">> => FullName,
-        <<"username">> => gs_protocol:undefined_to_null(Username),
+        <<"username">> => utils:undefined_to_null(Username),
 
         %% @TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"name">> => FullName,
-        <<"login">> => gs_protocol:undefined_to_null(Username),
-        <<"alias">> => gs_protocol:undefined_to_null(Username)
+        <<"login">> => utils:undefined_to_null(Username),
+        <<"alias">> => utils:undefined_to_null(Username)
     });
 
 get_response(#gri{aspect = oz_privileges}, Privileges) ->

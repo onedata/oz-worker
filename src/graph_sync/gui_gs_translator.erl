@@ -42,7 +42,7 @@
 handshake_attributes(_Client) ->
     BrandSubtitle = oz_worker:get_env(brand_subtitle, ""),
     #{
-        <<"zoneName">> => gs_protocol:undefined_to_null(oz_worker:get_name()),
+        <<"zoneName">> => utils:undefined_to_null(oz_worker:get_name()),
         <<"zoneDomain">> => oz_worker:get_domain(),
         <<"serviceVersion">> => oz_worker:get_release_version(),
         <<"serviceBuildVersion">> => oz_worker:get_build_version(),
@@ -141,9 +141,9 @@ translate_user(GRI = #gri{type = od_user, id = UserId, aspect = instance, scope 
         <<"basicAuthEnabled">> => BasicAuthEnabled,
         <<"hasPassword">> => PasswordHash /= undefined,
         <<"fullName">> => FullName,
-        <<"username">> => gs_protocol:undefined_to_null(Username),
-        <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
-        <<"defaultProviderId">> => gs_protocol:undefined_to_null(DefaultProvider),
+        <<"username">> => utils:undefined_to_null(Username),
+        <<"defaultSpaceId">> => utils:undefined_to_null(DefaultSpace),
+        <<"defaultProviderId">> => utils:undefined_to_null(DefaultProvider),
         <<"tokenList">> => gri:serialize(#gri{type = od_token, id = undefined, aspect = {user_named_tokens, UserId}}),
         <<"linkedAccountList">> => gri:serialize(GRI#gri{aspect = linked_accounts, scope = private}),
         <<"groupList">> => gri:serialize(GRI#gri{aspect = eff_groups, scope = private}),
@@ -164,7 +164,7 @@ translate_user(#gri{aspect = instance, scope = protected}, User) ->
     #{
         <<"scope">> => <<"protected">>,
         <<"fullName">> => FullName,
-        <<"username">> => gs_protocol:undefined_to_null(Username)
+        <<"username">> => utils:undefined_to_null(Username)
     };
 
 translate_user(#gri{aspect = instance, scope = shared}, User) ->
@@ -175,7 +175,7 @@ translate_user(#gri{aspect = instance, scope = shared}, User) ->
     #{
         <<"scope">> => <<"shared">>,
         <<"fullName">> => FullName,
-        <<"username">> => gs_protocol:undefined_to_null(Username)
+        <<"username">> => utils:undefined_to_null(Username)
     };
 
 translate_user(GRI = #gri{aspect = linked_accounts}, LinkedAccounts) ->
@@ -799,8 +799,8 @@ translate_harvester(#gri{aspect = {index, _}, scope = private}, IndexData) ->
     } = IndexData,
     #{
         <<"name">> => Name,
-        <<"schema">> => gs_protocol:undefined_to_null(Schema),
-        <<"guiPluginName">> => gs_protocol:undefined_to_null(GuiPluginName)
+        <<"schema">> => utils:undefined_to_null(Schema),
+        <<"guiPluginName">> => utils:undefined_to_null(GuiPluginName)
     };
 
 translate_harvester(#gri{aspect = {index, _}, scope = public}, IndexData) ->
@@ -808,7 +808,7 @@ translate_harvester(#gri{aspect = {index, _}, scope = public}, IndexData) ->
         <<"guiPluginName">> := GuiPluginName
     } = IndexData,
     #{
-        <<"guiPluginName">> => gs_protocol:undefined_to_null(GuiPluginName)
+        <<"guiPluginName">> => utils:undefined_to_null(GuiPluginName)
     };
 
 translate_harvester(#gri{aspect = indices, id = HarvesterId}, Indices) ->
@@ -1028,5 +1028,5 @@ translate_creator(undefined) -> #{
 };
 translate_creator(?SUB(Type, Id)) -> #{
     <<"creatorType">> => atom_to_binary(Type, utf8),
-    <<"creatorId">> => gs_protocol:undefined_to_null(Id)
+    <<"creatorId">> => utils:undefined_to_null(Id)
 }.

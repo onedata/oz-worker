@@ -91,7 +91,7 @@ create_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
     VerifyFun = fun(HarvesterId, Data) ->
         ExpConfig = maps:get(<<"guiPluginConfig">>, Data, #{}),
-        ExpEndpoint = gs_protocol:null_to_undefined(maps:get(<<"endpoint">>, Data, undefined)),
+        ExpEndpoint = utils:null_to_undefined(maps:get(<<"endpoint">>, Data, undefined)),
         {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
         ?assertEqual(?CORRECT_NAME, Harvester#od_harvester.name),
         ?assertEqual(ExpEndpoint, Harvester#od_harvester.endpoint),
@@ -473,7 +473,7 @@ update_test(Config) ->
         ExpPublic = ExpValueFun(ShouldSucceed, <<"public">>, Data, false),
         
         ?assertEqual(ExpName, Harvester#od_harvester.name),
-        ?assertEqual(gs_protocol:null_to_undefined(ExpEndpoint), Harvester#od_harvester.endpoint),
+        ?assertEqual(utils:null_to_undefined(ExpEndpoint), Harvester#od_harvester.endpoint),
         ?assertEqual(ExpPlugin, atom_to_binary(Harvester#od_harvester.plugin, utf8)),
         ?assertEqual(ExpPublic, Harvester#od_harvester.public)
     end,
@@ -752,7 +752,7 @@ create_index_test(Config) ->
         {ok, Harvester} = oz_test_utils:get_harvester(Config, H1),
         Indices = Harvester#od_harvester.indices,
         ExpSchema = maps:get(<<"schema">>, Data, undefined),
-        ExpGuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data, undefined)),
+        ExpGuiPluginName = utils:null_to_undefined(maps:get(<<"guiPluginName">>, Data, undefined)),
         
         ?assertEqual(true, lists:member(IndexId, maps:keys(Indices))),
         Index = maps:get(IndexId, Indices),
@@ -988,7 +988,7 @@ update_index_test(Config) ->
         } = maps:get(IndexId, Indices),
 
         ExpName = ExpValueFun(ShouldSucceed, <<"name">>, Data, ?HARVESTER_INDEX_NAME),
-        ExpGuiPluginName = gs_protocol:null_to_undefined(ExpValueFun(ShouldSucceed, <<"guiPluginName">>, Data, undefined)),
+        ExpGuiPluginName = utils:null_to_undefined(ExpValueFun(ShouldSucceed, <<"guiPluginName">>, Data, undefined)),
         
         ?assertEqual(ExpName, ActualName),
         ?assertEqual(ExpGuiPluginName, ActualGuiPluginName)

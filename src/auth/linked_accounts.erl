@@ -57,16 +57,16 @@ to_map(LinkedAccount, Scope) ->
     #{
         <<"idp">> => IdP,
         <<"subjectId">> => SubjectId,
-        <<"fullName">> => gs_protocol:undefined_to_null(FullNameValue),
-        <<"username">> => gs_protocol:undefined_to_null(Username),
+        <<"fullName">> => utils:undefined_to_null(FullNameValue),
+        <<"username">> => utils:undefined_to_null(Username),
         <<"emails">> => Emails,
         <<"entitlements">> => EntitlementsValue,
         <<"custom">> => Custom,
 
         %% @TODO VFS-4506 deprecated, included for backward compatibility
-        <<"name">> => gs_protocol:undefined_to_null(FullNameValue),
-        <<"login">> => gs_protocol:undefined_to_null(Username),
-        <<"alias">> => gs_protocol:undefined_to_null(Username),
+        <<"name">> => utils:undefined_to_null(FullNameValue),
+        <<"login">> => utils:undefined_to_null(Username),
+        <<"alias">> => utils:undefined_to_null(Username),
         <<"emailList">> => Emails,
         <<"groups">> => EntitlementsValue
     }.
