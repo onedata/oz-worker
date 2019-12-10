@@ -105,10 +105,12 @@ create(#el_req{gri = #gri{id = Id, aspect = instance} = GRI, auth = ?PROVIDER(Pr
         _ -> Id
     end,
     Name = maps:get(<<"name">>, Data),
+    QosParameters = maps:get(<<"qos_parameters">>, Data, #{}),
     {ok, _} = od_storage:create(#document{
         key = StorageId,
         value = #od_storage{
             name = Name,
+            qos_parameters = QosParameters,
             creator = Auth#auth.subject,
             provider = ProviderId
         }
@@ -335,6 +337,9 @@ required_admin_privileges(_) ->
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"name">> => {binary, name}
+    },
+    optional => #{
+        <<"qos_parameters">> => {json, qos_parameters}
     }
 };
 

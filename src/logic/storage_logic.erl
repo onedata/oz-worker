@@ -53,7 +53,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new space document in database. Has two variants:
+%% Creates a new storage document in database. Has two variants:
 %% 1) Storage Name is given explicitly
 %% 2) Storage name is provided in a proper Data object.
 %% @end
@@ -299,7 +299,7 @@ migrate_legacy_supports() ->
         case provider_logic:has_storage(ProviderId, ProviderId) of
             true -> ok;
             false ->
-                create(?PROVIDER(ProviderId), ProviderId, ?STORAGE_DEFAULT_NAME)
+                create(?PROVIDER(ProviderId), ProviderId)
         end,
         {ok, Spaces} = provider_logic:get_legacy_spaces(Provider),
         ?info("  Migrating space supports for provider: ~p", [ProviderId]),
