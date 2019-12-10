@@ -323,7 +323,7 @@ create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data})
 
     Name = maps:get(<<"name">>, Data),
     Schema = maps:get(<<"schema">>, Data, undefined),
-    GuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data, undefined)),
+    GuiPluginName = utils:null_to_undefined(maps:get(<<"guiPluginName">>, Data, undefined)),
 
     UpdateFun = fun(#od_harvester{indices = Indices, plugin = Plugin, endpoint = Endpoint, spaces = Spaces} = Harvester) ->
         IndexStats = lists:foldl(fun(SpaceId, ExistingStats) ->
@@ -512,8 +512,8 @@ get(#el_req{gri = #gri{aspect = {index_stats, IndexId}}}, Harvester) ->
             #{
                 <<"currentSeq">> => CurrentSeq,
                 <<"maxSeq">> => MaxSeq,
-                <<"lastUpdate">> => gs_protocol:undefined_to_null(LastUpdate),
-                <<"error">> => gs_protocol:undefined_to_null(Error),
+                <<"lastUpdate">> => utils:undefined_to_null(LastUpdate),
+                <<"error">> => utils:undefined_to_null(Error),
                 <<"archival">> => Archival
             }
         end, Providers)
@@ -571,7 +571,7 @@ update(#el_req{gri = #gri{id = HarvesterId, aspect = {index, IndexId}}, data = D
             gui_plugin_name = GuiPluginName
         } = maps:get(IndexId, Indices),
         NewName = maps:get(<<"name">>, Data, Name),
-        NewGuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data, GuiPluginName)),
+        NewGuiPluginName = utils:null_to_undefined(maps:get(<<"guiPluginName">>, Data, GuiPluginName)),
         {ok, Harvester#od_harvester{indices = Indices#{IndexId => Index#harvester_index{
             name = NewName,
             gui_plugin_name = NewGuiPluginName

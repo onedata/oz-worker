@@ -98,7 +98,7 @@ get(#el_req{gri = #gri{aspect = configuration}}, _) ->
     {ok, CompatibleOpVersions} = compatibility:get_compatible_versions(?ONEZONE, Version, ?ONEPROVIDER),
     SubdomainDelegationSupported = oz_worker:get_env(subdomain_delegation_supported, true),
     {ok, #{
-        name => gs_protocol:undefined_to_null(oz_worker:get_name()),
+        name => utils:undefined_to_null(oz_worker:get_name()),
         version => Version,
         build => oz_worker:get_build_version(),
         domain => oz_worker:get_domain(),

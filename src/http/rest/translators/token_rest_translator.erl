@@ -102,7 +102,7 @@ get_response(#gri{aspect = {provider_named_token, _}}, TokenData) ->
 token_verification_reply(#{<<"subject">> := Subject, <<"ttl">> := TTL}) ->
     rest_translator:ok_body_reply(#{
         <<"subject">> => aai:subject_to_json(Subject),
-        <<"ttl">> => gs_protocol:undefined_to_null(TTL)
+        <<"ttl">> => utils:undefined_to_null(TTL)
     }).
 
 
