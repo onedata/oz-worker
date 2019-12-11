@@ -299,7 +299,7 @@ migrate_legacy_supports() ->
         case provider_logic:has_storage(ProviderId, ProviderId) of
             true -> ok;
             false ->
-                create(?PROVIDER(ProviderId), ProviderId)
+                create(?PROVIDER(ProviderId), ProviderId, ?STORAGE_DEFAULT_NAME)
         end,
         {ok, Spaces} = provider_logic:get_legacy_spaces(Provider),
         ?info("  Migrating space supports for provider: ~p", [ProviderId]),
