@@ -43,13 +43,13 @@
 %%--------------------------------------------------------------------
 -spec verify_handshake_auth(gs_protocol:client_auth(), ip_utils:ip()) ->
     {ok, aai:auth()} | errors:error().
-verify_handshake_auth(undefined, _) ->
-    {ok, ?NOBODY};
-verify_handshake_auth(nobody, _) ->
-    {ok, ?NOBODY};
+verify_handshake_auth(undefined, PeerIp) ->
+    {ok, #auth{subject = ?SUB(nobody), peer_ip = PeerIp}};
+verify_handshake_auth(nobody, PeerIp) ->
+    {ok, #auth{subject = ?SUB(nobody), peer_ip = PeerIp}};
 verify_handshake_auth({token, Token}, PeerIp) ->
     AuthCtx = token_auth:build_auth_ctx(graphsync, PeerIp),
-    case token_auth:check_token_auth(Token, AuthCtx) of
+    case token_auth:authenticate(Token, AuthCtx) of
         {true, Auth} -> {ok, Auth};
         {error, _} = Error -> Error
     end.
@@ -74,6 +74,8 @@ client_connected(?PROVIDER(ProvId), ConnectionRef) ->
         ProvId,
         {ProvRecord, Revision}
     );
+client_connected(?USER = #auth{session_id = undefined}, _) ->
+    ok;
 client_connected(?USER = #auth{session_id = SessionId}, ConnectionRef) ->
     user_connections:add(SessionId, ConnectionRef);
 client_connected(_, _) ->
@@ -105,6 +107,8 @@ client_disconnected(?PROVIDER(ProvId), _ConnectionRef) ->
             ?info("Provider '~s' went offline", [ProvId])
     end,
     provider_connection:remove_connection(ProvId);
+client_disconnected(?USER = #auth{session_id = undefined}, _) ->
+    ok;
 client_disconnected(?USER = #auth{session_id = SessionId}, ConnectionRef) ->
     user_connections:remove(SessionId, ConnectionRef);
 client_disconnected(_, _) ->
@@ -138,7 +142,7 @@ verify_auth_override(?PROVIDER(ProviderId), #auth_override{client_auth = {token,
     case ResolvedAudience of
         {ok, Audience} ->
             AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, Audience, DataAccessCaveatsPolicy),
-            case token_auth:check_token_auth(Token, AuthCtx) of
+            case token_auth:authenticate(Token, AuthCtx) of
                 {true, OverridenAuth = ?USER(UserId)} ->
                     % Provided token is valid; allow only user tokens and check
                     % that the GS channel owning provider actually supports the user

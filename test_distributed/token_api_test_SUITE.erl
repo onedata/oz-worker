@@ -274,7 +274,7 @@ all() ->
 -define(BAD_TYPE_VALUES_FOR_PROVIDER(GroupId, SpaceId, AdminUserId, ClusterId, HarvesterId),
     lists:map(
         fun(Type) ->
-            {<<"type">>, tokens:type_to_json(Type), ?ERROR_INVITE_TOKEN_CREATOR_NOT_AUTHORIZED}
+            {<<"type">>, tokens:type_to_json(Type), ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED}
         end,
         ?INVITE_TOKEN_TYPE_EXAMPLES(GroupId, SpaceId, AdminUserId, ClusterId, HarvesterId) --
         ?PROVIDER_ALLOWED_INVITE_TOKEN_TYPES(ClusterId)
@@ -290,10 +290,10 @@ all() ->
     {<<"caveats">>, [#{}], ?ERROR_BAD_VALUE_CAVEAT(#{})},
     {<<"caveats">>, [#{<<"a">> => <<"b">>}], ?ERROR_BAD_VALUE_CAVEAT(#{<<"a">> => <<"b">>})},
     {<<"caveats">>, [#{<<"type">> => <<"tiem">>}], ?ERROR_BAD_VALUE_CAVEAT(#{<<"type">> => <<"tiem">>})},
-    {<<"caveats">>, [1, 2, 3], ?ERROR_BAD_DATA(<<"caveats">>)},
-    {<<"caveats">>, [<<"a">>, <<"b">>, <<"c">>], ?ERROR_BAD_DATA(<<"caveats">>)},
-    {<<"caveats">>, [<<"time > 1234">>], ?ERROR_BAD_DATA(<<"caveats">>)},
-    {<<"caveats">>, [<<"ip = 1.2.3.4.5">>], ?ERROR_BAD_DATA(<<"caveats">>)}
+    {<<"caveats">>, [1, 2, 3], ?ERROR_BAD_VALUE_CAVEAT(<<"1">>)},
+    {<<"caveats">>, [<<"a">>, <<"b">>, <<"c">>], ?ERROR_BAD_VALUE_CAVEAT(<<"a">>)},
+    {<<"caveats">>, [<<"time > 1234">>], ?ERROR_BAD_VALUE_CAVEAT(<<"time > 1234">>)},
+    {<<"caveats">>, [<<"ip = 1.2.3.4.5">>], ?ERROR_BAD_VALUE_CAVEAT(<<"ip = 1.2.3.4.5">>)}
 ]).
 
 -define(BAD_CUSTOM_METADATA_VALUES, [
@@ -350,7 +350,7 @@ new_token_verify_fun(Config, Subject, Persistence, Audience) ->
                     ]),
                     ?assertMatch(
                         {true, #auth{subject = Subject}},
-                        oz_test_utils:check_token_auth(Config, Token, AuthCtx)
+                        oz_test_utils:authenticate_by_token(Config, Token, AuthCtx)
                     )
             end,
             case Persistence of
@@ -1732,6 +1732,7 @@ create_gui_access_token(Config) ->
 
 
 list(Config) ->
+    oz_test_utils:delete_all_entities(Config),
     ?assert(run_token_tests(Config, #token_api_test_spec{
         tokens_to_check = [
             ?ROOT_TOKEN(?PROV_GAMMA),
@@ -2278,7 +2279,7 @@ assert_token_deleted(true, Config, Token, TokenName) ->
         ?ACCESS_TOKEN ->
             ?assertEqual(
                 ?ERROR_TOKEN_INVALID,
-                oz_test_utils:check_token_auth(Config, Token)
+                oz_test_utils:authenticate_by_token(Config, Token)
             );
         _ ->
             ok
@@ -2297,7 +2298,7 @@ assert_token_deleted(false, Config, Token, TokenName) ->
         ?ACCESS_TOKEN ->
             ?assertEqual(
                 {true, #auth{subject = Subject}},
-                oz_test_utils:check_token_auth(Config, Token)
+                oz_test_utils:authenticate_by_token(Config, Token)
             );
         _ ->
             ok
@@ -2484,5 +2485,4 @@ init_per_testcase(_, Config) ->
 end_per_testcase(_, Config) ->
     oz_test_utils:unmock_time(Config),
     oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
-    oz_test_utils:delete_all_entities(Config),
     ok.

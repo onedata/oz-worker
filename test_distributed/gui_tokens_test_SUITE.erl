@@ -70,15 +70,19 @@ gui_tokens_are_bound_to_specific_audience(Config) ->
     {ok, {Session1, _Cookie1}} = oz_test_utils:log_in(Config, UserId),
     {ok, {Session2, _Cookie2}} = oz_test_utils:log_in(Config, UserId),
 
-    % Tokens can be created for any session, but the session must exist at the
-    % moment of verification
-    {ok, {TokenInvalidSess, _}} = create_gui_access_token(Config, UserId, <<"bad-session">>, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
-    ?assertMatch(?ERROR_TOKEN_SESSION_INVALID, verify_token(Config, TokenInvalidSess, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
+    % Tokens can be created only for existing sessions
+    ?assertEqual(
+        ?ERROR_TOKEN_SESSION_INVALID,
+        create_gui_access_token(Config, UserId, <<"bad-session">>, ?OZW_AUD(?ONEZONE_CLUSTER_ID))
+    ),
 
     % Tokens can be created for any existing user, but the user must exist at
     % the moment of verification (by passing the user in Auth object, we skip
     % the initial existing check).
-    {ok, {TokenInvalidSubject, _}} = create_gui_access_token(Config, <<"no-longer-existing-user">>, Session1, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
+    {ok, UserToBeDeleted} = oz_test_utils:create_user(Config),
+    {ok, {SessionToBeDeleted, _}} = oz_test_utils:log_in(Config, UserToBeDeleted),
+    {ok, {TokenInvalidSubject, _}} = create_gui_access_token(Config, UserToBeDeleted, SessionToBeDeleted, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
+    oz_test_utils:delete_user(Config, UserToBeDeleted),
     ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, TokenInvalidSubject, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
 
     % All users are allowed to create tokens for oz-worker
@@ -450,7 +454,7 @@ create_gui_access_token(Config, UserId, SessionId, Audience) ->
 
 verify_token(Config, Token, Audience) ->
     AuthCtx = oz_test_utils:build_auth_ctx(Config, [undefined, undefined, Audience]),
-    oz_test_utils:check_token_auth(Config, Token, AuthCtx).
+    oz_test_utils:authenticate_by_token(Config, Token, AuthCtx).
 
 
 create_provider_supporting_user(Config, UserId) ->

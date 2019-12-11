@@ -193,7 +193,7 @@ create(#el_req{auth = Auth, gri = #gri{aspect = verify_provider_identity}, data 
     end,
     AuthCtx = token_auth:build_auth_ctx(undefined, Auth#auth.peer_ip, aai:auth_to_audience(Auth)),
     case token_auth:verify_identity_token(Token, AuthCtx) of
-        {ok, ?SUB(?ONEPROVIDER, ProviderId)} -> ok;
+        {ok, {?SUB(?ONEPROVIDER, ProviderId), _}} -> ok;
         {ok, _} -> ?ERROR_TOKEN_INVALID;
         Error -> Error
     end.
@@ -337,6 +337,7 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}
 delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     ok = dns_state:remove_delegation_config(ProviderId),
     {true, {#od_provider{
+        name = Name,
         eff_spaces = Spaces,
         eff_harvesters = Harvesters
     }, _}} = fetch_entity(#gri{aspect = instance, id = ProviderId}),
@@ -355,6 +356,8 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     entity_graph:remove_all_relations(od_cluster, ClusterId),
     entity_graph:delete_with_relations(od_provider, ProviderId),
     cluster_logic:delete_oneprovider_cluster(ClusterId),
+
+    ?info("Provider '~ts' has been deregistered (~s)", [Name, ProviderId]),
 
     % Force disconnect the provider (if connected)
     case provider_connection:get_connection_ref(ProviderId) of

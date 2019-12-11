@@ -39,7 +39,7 @@
     privileges:harvester_privilege() | privileges:cluster_privilege()
 ).
 % Indicates if invite privileges are default or custom for an invite token.
-% Custom privileges require additional privileges from the token creator, apart
+% Custom privileges require additional privileges from the token subject, apart
 % from regular invite privileges.
 -type privileges_profile() :: default_privileges | custom_privileges.
 %% @formatter:on

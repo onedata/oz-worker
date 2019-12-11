@@ -515,7 +515,7 @@ protected_group_test(Config) ->
     oz_test_utils:group_set_user_privileges(Config, GroupId, U1, [
         ?GROUP_DELETE
     ], []),
-    oz_test_utils:mark_group_protected(Config, GroupId),
+    oz_test_utils:mark_group_protected(Config, GroupId, true),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{

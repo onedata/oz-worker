@@ -165,10 +165,10 @@ is_subscribable(_, _) -> false.
 create(Req = #el_req{gri = #gri{id = ProposedGroupId, aspect = instance} = GRI, auth = Auth}) ->
     Name = maps:get(<<"name">>, Req#el_req.data),
     Type = maps:get(<<"type">>, Req#el_req.data, ?DEFAULT_GROUP_TYPE),
-    GroupRecord = #document{key = ProposedGroupId, value = #od_group{
+    GroupDoc = #document{key = ProposedGroupId, value = #od_group{
         name = Name, type = Type, creator = Auth#auth.subject
     }},
-    case od_group:create(GroupRecord) of
+    case od_group:create(GroupDoc) of
         {error, already_exists} ->
             throw(?ERROR_ALREADY_EXISTS);
         {ok, #document{key = GroupId}} ->

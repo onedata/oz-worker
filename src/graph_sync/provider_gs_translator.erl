@@ -257,6 +257,14 @@ translate_resource(_, #gri{type = od_share, aspect = instance, scope = public}, 
         <<"rootFileId">> => RootFileId, <<"handleId">> => HandleId
     };
 
+
+translate_resource(_, #gri{type = od_provider, aspect = instance, scope = private}, {_Provider, RootToken}) ->
+    % This covers provider creation via Graph Sync, in contrast to the get
+    % request that does not return the root token
+    {ok, Serialized} = tokens:serialize(RootToken),
+    #{
+        <<"providerRootToken">> => Serialized
+    };
 translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope = private}, Provider) ->
     #od_provider{
         name = Name,
