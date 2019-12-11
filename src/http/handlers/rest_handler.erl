@@ -142,16 +142,24 @@ content_types_provided(Req, #state{rest_req = #rest_req{produces = Produces}} = 
 is_authorized(Req, State) ->
     Result = try
         case token_auth:authenticate_for_rest_interface(Req) of
-            {true, Auth} ->
-                {true, Auth};
+            {true, TokenAuth} ->
+                {ok, TokenAuth};
             {error, Err1} ->
                 {error, Err1};
             false ->
-                basic_auth:authenticate(Req)
+                {PeerIp, _} = cowboy_req:peer(Req),
+                case basic_auth:authenticate(Req) of
+                    {true, BasicAuth} ->
+                        {ok, BasicAuth#auth{peer_ip = PeerIp}};
+                    {error, Err2} ->
+                        {error, Err2};
+                    false ->
+                        {ok, #auth{subject = ?SUB(nobody), peer_ip = PeerIp}}
+                end
         end
     catch
-        throw:Err2 ->
-            Err2;
+        throw:Err3 ->
+            Err3;
         Type:Message ->
             ?error_stacktrace("Unexpected error in ~p:is_authorized - ~p:~p", [
                 ?MODULE, Type, Message
@@ -160,12 +168,10 @@ is_authorized(Req, State) ->
     end,
 
     case Result of
-        {true, Client} ->
-            {true, Req, State#state{auth = Client}};
-        false ->
-            {true, Req, State#state{auth = ?NOBODY}};
-        {error, _} = Err3 ->
-            {stop, send_error_response(Err3, Req), State}
+        {ok, Auth} ->
+            {true, Req, State#state{auth = Auth}};
+        {error, _} = Err4 ->
+            {stop, send_error_response(Err4, Req), State}
     end.
 
 

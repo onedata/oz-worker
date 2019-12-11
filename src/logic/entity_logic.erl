@@ -843,10 +843,11 @@ check_type(caveats, Key, Caveats) ->
                 {true, Sanitized} ->
                     Sanitized;
                 false ->
-                    case is_map(Caveat) of
-                        true -> throw(?ERROR_BAD_VALUE_CAVEAT(Caveat));
-                        false -> throw(?ERROR_BAD_DATA(Key))
-                    end
+                    JsonableCaveat = case is_map(Caveat) of
+                        true -> Caveat;
+                        false -> str_utils:format_bin("~tp", [Caveat])
+                    end,
+                    throw(?ERROR_BAD_VALUE_CAVEAT(JsonableCaveat))
             end
         end, Caveats)
     catch

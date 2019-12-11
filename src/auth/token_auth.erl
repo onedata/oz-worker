@@ -25,7 +25,7 @@
 -export([verify_invite_token/3]).
 -export([verify_audience_token/2]).
 -export([group_membership_checker/2]).
--export([is_audience_allowed/2]).
+-export([validate_subject_and_audience/3]).
 
 -define(SUPPORTED_ACCESS_TOKEN_CAVEATS, [
     cv_time, cv_audience,
@@ -188,11 +188,13 @@ verify_access_token(Token, AuthCtx, SupportedCaveats) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_identity_token(tokens:token(), aai:auth_ctx()) ->
-    {ok, aai:subject()} | errors:error().
+    {ok, {aai:subject(), [caveats:caveat()]}} | errors:error().
 verify_identity_token(Token, AuthCtx) ->
     case verify_access_token(Token, AuthCtx, ?SUPPORTED_IDENTITY_TOKEN_CAVEATS) of
-        {error, _} = Error -> Error;
-        {ok, #auth{subject = Subject}} -> {ok, Subject}
+        {ok, #auth{subject = Subject, caveats = Caveats}} ->
+            {ok, {Subject, Caveats}};
+        {error, _} = Error ->
+            Error
     end.
 
 
@@ -246,34 +248,74 @@ verify_audience_token(AudienceToken, AuthCtx) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec group_membership_checker(aai:audience(), od_group:id()) -> boolean().
+group_membership_checker(?AUD(user, UserId), <<"*">>) ->
+    {ok, Groups} = user_logic:get_groups(?ROOT, UserId),
+    length(Groups) > 0;
 group_membership_checker(?AUD(user, UserId), GroupId) ->
     group_logic:has_eff_user(GroupId, UserId);
 group_membership_checker(_, _) ->
     false.
 
 
-%% @private
--spec is_audience_allowed(aai:subject(), aai:audience()) -> boolean().
-is_audience_allowed(_Subject, ?AUD(user, _)) ->
-    true; % User / provider can grant his authorization to any user
-is_audience_allowed(_Subject, ?AUD(group, _)) ->
-    true; % User / provider can grant his authorization to any group
-is_audience_allowed(_Subject, ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)) ->
-    true; % Any user / provider can generate a token for Onezone
-is_audience_allowed(?SUB(user, UserId), ?AUD(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)) ->
-    cluster_logic:has_eff_user(?ONEZONE_CLUSTER_ID, UserId);
-is_audience_allowed(?SUB(user, UserId), ?AUD(?OP_WORKER, ProviderId)) ->
-    provider_logic:has_eff_user(ProviderId, UserId);
-is_audience_allowed(?SUB(?ONEPROVIDER, _), ?AUD(?OP_WORKER, _)) ->
-    true; % Providers can grant their authorization to others (e.g. for identity check)
-is_audience_allowed(?SUB(user, UserId), ?AUD(?OP_PANEL, ProviderId)) ->
-    cluster_logic:has_eff_user(ProviderId, UserId);
-is_audience_allowed(_, _) ->
-    false.
+%%--------------------------------------------------------------------
+%% @doc
+%% Checks if the subject and audience are compatible with each other and
+%% valid for given token type.
+%% @end
+%%--------------------------------------------------------------------
+-spec validate_subject_and_audience(tokens:type(), aai:subject(), aai:audience()) ->
+    ok | errors:error().
+validate_subject_and_audience(?GUI_ACCESS_TOKEN(SessId), ?SUB(user, UserId) = Subject, Audience) ->
+    case {session:belongs_to_user(SessId, UserId), is_valid_access_token_audience(Subject, Audience)} of
+        {true, true} -> ok;
+        {false, _} -> ?ERROR_TOKEN_SESSION_INVALID;
+        {_, false} -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience)
+    end;
+validate_subject_and_audience(?GUI_ACCESS_TOKEN(_), _, _) ->
+    % Only user subject is allowed in gui access tokens
+    ?ERROR_TOKEN_SUBJECT_INVALID;
+validate_subject_and_audience(?ACCESS_TOKEN, Subject, Audience) ->
+    case is_valid_access_token_audience(Subject, Audience) of
+        true -> ok;
+        false -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience)
+    end;
+validate_subject_and_audience(?INVITE_TOKEN(_, _), _, _) ->
+    % Invite tokens do not require additional checks. Audience (consumer) can
+    % be anything as the idea of invite tokens is that one can pass them to
+    % anyone. During actual consumption, there is an additional check if the
+    % consuming subject can perform such operation.
+    ok.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Determines if the audience is allowed for specific subject in an access token.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_valid_access_token_audience(aai:subject(), aai:audience()) -> boolean().
+is_valid_access_token_audience(_Subject, ?AUD(_, <<"*">>)) ->
+    true; % Always allowed when audience id is a wildcard
+is_valid_access_token_audience(_Subject, ?AUD(user, _)) ->
+    true; % User / provider can grant his authorization to any user
+is_valid_access_token_audience(_Subject, ?AUD(group, _)) ->
+    true; % User / provider can grant his authorization to any group
+is_valid_access_token_audience(_Subject, ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)) ->
+    true; % Any user / provider can generate a token for Onezone
+is_valid_access_token_audience(?SUB(user, UserId), ?AUD(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)) ->
+    cluster_logic:has_eff_user(?ONEZONE_CLUSTER_ID, UserId);
+is_valid_access_token_audience(?SUB(user, UserId), ?AUD(?OP_WORKER, ProviderId)) ->
+    provider_logic:has_eff_user(ProviderId, UserId);
+is_valid_access_token_audience(?SUB(?ONEPROVIDER, _), ?AUD(?OP_WORKER, _)) ->
+    true; % Providers can grant their authorization to others (e.g. for identity check)
+is_valid_access_token_audience(?SUB(user, UserId), ?AUD(?OP_PANEL, ProviderId)) ->
+    cluster_logic:has_eff_user(ProviderId, UserId);
+is_valid_access_token_audience(_, _) ->
+    false.
+
 
 %%--------------------------------------------------------------------
 %% @private
@@ -341,43 +383,14 @@ verify_token_auth(Token = #token{persistent = true}, AuthCtx, SupportedCaveats) 
     {ok, aai:auth()} | errors:error().
 verify_token_auth(Token = #token{type = TokenType}, AuthCtx, SupportedCaveats, Secret) ->
     case tokens:verify(Token, Secret, AuthCtx, SupportedCaveats) of
-        {ok, Auth} ->
-            case check_against_token_type(TokenType, Auth, AuthCtx#auth_ctx.audience) of
+        {ok, Auth = #auth{subject = Subject}} ->
+            case validate_subject_and_audience(TokenType, Subject, AuthCtx#auth_ctx.audience) of
                 ok -> {ok, Auth};
                 {error, _} = Err1 -> Err1
             end;
         {error, _} = Err2 ->
             Err2
     end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Performs additional checks that are dependant on token type.
-%% @end
-%%--------------------------------------------------------------------
--spec check_against_token_type(tokens:type(), aai:auth(), aai:audience()) -> ok | errors:error().
-check_against_token_type(?GUI_ACCESS_TOKEN(SessionId), ?USER(UserId), Audience) ->
-    % Only user auth is allowed in gui access tokens
-    case {session:exists(SessionId), is_audience_allowed(?SUB(user, UserId), Audience)} of
-        {{ok, true}, true} -> ok;
-        {{ok, false}, _} -> ?ERROR_TOKEN_SESSION_INVALID;
-        {_, false} -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience)
-    end;
-check_against_token_type(?ACCESS_TOKEN, #auth{subject = Subject}, Audience) ->
-    case is_audience_allowed(Subject, Audience) of
-        true -> ok;
-        false -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience)
-    end;
-check_against_token_type(?INVITE_TOKEN(_, _), _, _) ->
-    % Invite tokens do not require additional checks. Audience (consumer) can
-    % be anything as the idea of tokens is that one can pass them to anyone.
-    % During actual consumption there is an additional check if the consuming
-    % subject can perform such operation.
-    ok;
-check_against_token_type(_, _, _) ->
-    ?ERROR_TOKEN_INVALID.
 
 
 %% @private

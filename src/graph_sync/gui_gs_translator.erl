@@ -506,6 +506,12 @@ translate_space(#gri{aspect = harvesters}, Harvesters) ->
 %%--------------------------------------------------------------------
 -spec translate_provider(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_provider(#gri{type = od_provider, aspect = instance, scope = private}, {_Provider, RootToken}) ->
+    % This covers provider creation via Graph Sync
+    {ok, Serialized} = tokens:serialize(RootToken),
+    #{
+        <<"providerRootToken">> => Serialized
+    };
 translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Provider) ->
     #od_provider{
         name = Name, domain = Domain,
@@ -681,7 +687,7 @@ translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = protected}
             <<"creationTime">> => CreationTime
         })},
         case Public of
-            true -> 
+            true ->
                 ProtectedData#{
                     <<"guiPluginConfig">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = gui_plugin_config}),
                     <<"indexList">> => gri:serialize(#gri{type = od_harvester, id = HarvesterId, aspect = indices})

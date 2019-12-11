@@ -274,7 +274,7 @@ all() ->
 -define(BAD_TYPE_VALUES_FOR_PROVIDER(GroupId, SpaceId, AdminUserId, ClusterId, HarvesterId),
     lists:map(
         fun(Type) ->
-            {<<"type">>, tokens:type_to_json(Type), ?ERROR_INVITE_TOKEN_CREATOR_NOT_AUTHORIZED}
+            {<<"type">>, tokens:type_to_json(Type), ?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED}
         end,
         ?INVITE_TOKEN_TYPE_EXAMPLES(GroupId, SpaceId, AdminUserId, ClusterId, HarvesterId) --
         ?PROVIDER_ALLOWED_INVITE_TOKEN_TYPES(ClusterId)

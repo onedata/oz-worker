@@ -43,6 +43,7 @@
 -export([
     list_users/1,
     create_user/1, create_user/2,
+    create_admin/2,
     get_user/2,
     delete_user/2,
 
@@ -283,9 +284,13 @@
     mock_handle_proxy/1,
     unmock_handle_proxy/1,
     cluster_time_seconds/1,
-    mock_time/1,
-    unmock_time/1,
+    mock_gui_static/1, unmock_gui_static/1,
+    mock_time/1, unmock_time/1,
     get_mocked_time/1,
+    mock_peer_ip_of_all_connections/2,
+    unmock_peer_ip_of_all_connections/1,
+    mock_geo_db_entry_for_all_ips/4,
+    unmock_geo_db_entry_for_all_ips/1,
     simulate_time_passing/2,
     gui_ca_certs/1,
     ensure_entity_graph_is_up_to_date/1, ensure_entity_graph_is_up_to_date/2,
@@ -374,6 +379,19 @@ create_user(Config, Data) ->
     ?assertMatch({ok, _}, call_oz(
         Config, user_logic, create, [?ROOT, Data]
     )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a user in onezone with given admin privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_admin(Config :: term(), [privileges:oz_privilege()]) ->
+    {ok, od_user:id()}.
+create_admin(Config, OzPrivileges) ->
+    {ok, UserId} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, UserId, OzPrivileges, []),
+    {ok, UserId}.
 
 
 %%--------------------------------------------------------------------
@@ -1536,6 +1554,7 @@ create_provider(Config, NameOrData) ->
 create_provider(Config, undefined, Name) ->
     % Create an admin for the provider if none was specified
     {ok, User} = create_user(Config),
+    user_set_oz_privileges(Config, User, [?OZ_PROVIDERS_INVITE], []),
     create_provider(Config, User, Name);
 create_provider(Config, CreatorUserId, Name) when is_binary(Name) ->
     create_provider(Config, CreatorUserId, #{
@@ -2895,9 +2914,9 @@ group_invite_group_token(Config, Client, GroupId) ->
 -spec group_invite_user_token(Config :: term(),
     Client :: aai:auth(), GroupId :: od_group:id()) ->
     {ok, tokens:token()}.
-group_invite_user_token(Config, Client, GroupId) ->    ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, create_user_invite_token, [Client, GroupId]
-    )).
+group_invite_user_token(Config, Client, GroupId) -> ?assertMatch({ok, _}, call_oz(
+    Config, group_logic, create_user_invite_token, [Client, GroupId]
+)).
 
 
 %%--------------------------------------------------------------------
@@ -3052,13 +3071,14 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     {ok, Groups} = list_groups(Config),
     {ok, Users} = list_users(Config),
     {ok, Harvesters} = list_harvesters(Config),
-    [delete_provider(Config, PId) || PId <- Providers],
-    [delete_handle(Config, HId) || HId <- Handles],
-    [delete_share(Config, ShId) || ShId <- Shares],
-    [delete_space(Config, SpId) || SpId <- Spaces],
-    [delete_handle_service(Config, HSId) || HSId <- HServices],
-    [delete_harvester(Config, HId) || HId <- Harvesters],
+    utils:pforeach(fun(PId) -> delete_provider(Config, PId) end, Providers),
+    utils:pforeach(fun(HId) -> delete_handle(Config, HId) end, Handles),
+    utils:pforeach(fun(ShId) -> delete_share(Config, ShId) end, Shares),
+    utils:pforeach(fun(SpId) -> delete_space(Config, SpId) end, Spaces),
+    utils:pforeach(fun(HSId) -> delete_handle_service(Config, HSId) end, HServices),
+    utils:pforeach(fun(HId) -> delete_harvester(Config, HId) end, Harvesters),
     % Clusters and storages are removed together with providers
+
     % Check if predefined groups should be removed too.
     GroupsToDelete = case RemovePredefinedGroups of
         true ->
@@ -3067,19 +3087,18 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
             % Filter out predefined groups
             PredefinedGroupsMapping = get_env(Config, predefined_groups),
             PredefinedGroups = [Id || #{id := Id} <- PredefinedGroupsMapping],
-            lists:filter(
-                fun(GroupId) ->
-                    not lists:member(GroupId, PredefinedGroups)
-                end, Groups)
+            lists:filter(fun(GroupId) ->
+                not lists:member(GroupId, PredefinedGroups)
+            end, Groups)
     end,
-    lists:foreach(fun(GroupId) ->
+    utils:pforeach(fun(GroupId) ->
         call_oz(Config, od_group, update, [GroupId, fun(Group) ->
             {ok, Group#od_group{protected = false}}
-        end])
+        end]),
+        delete_group(Config, GroupId)
     end, GroupsToDelete),
-    [?assertMatch(ok, delete_group(Config, GId)) || GId <- GroupsToDelete],
-    [?assertMatch(ok, delete_user(Config, UId)) || UId <- Users],
-    ok.
+
+    utils:pforeach(fun(UId) -> delete_user(Config, UId) end, Users).
 
 
 %%--------------------------------------------------------------------
@@ -3280,16 +3299,45 @@ cluster_time_seconds(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Mocks the gui_static module - useful in tests that create / delete a lot of
+%% Oneprovider instances to skip these intensive IO operations.
+%% @end
+%%--------------------------------------------------------------------
+-spec mock_gui_static(Config :: term()) -> ok.
+mock_gui_static(Config) ->
+    ok = test_utils:mock_new(?OZ_NODES(Config), gui_static, [passthrough]),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), gui_static, gui_exists, fun(_, _) ->
+        true
+    end),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), gui_static, link_gui, fun(_, _, _) ->
+        ok
+    end),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), gui_static, unlink_gui, fun(_, _) ->
+        ok
+    end).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Clears the gui_static mock.
+%% @end
+%%--------------------------------------------------------------------
+-spec unmock_gui_static(Config :: term()) -> ok.
+unmock_gui_static(Config) ->
+    ok = test_utils:mock_unload(?OZ_NODES(Config), gui_static).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Mocks the time - stops the clock at one value and allows to manually
 %% simulate time passing.
 %% @end
 %%--------------------------------------------------------------------
 -spec mock_time(Config :: term()) -> ok.
 mock_time(Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
     simulate_time_passing(Config, 0),
-    ok = test_utils:mock_new(Nodes, time_utils, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, time_utils, cluster_time_seconds, fun() ->
+    ok = test_utils:mock_new(?OZ_NODES(Config), time_utils, [passthrough]),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), time_utils, cluster_time_seconds, fun() ->
         oz_worker:get_env(mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP)
     end).
 
@@ -3301,8 +3349,7 @@ mock_time(Config) ->
 %%--------------------------------------------------------------------
 -spec unmock_time(Config :: term()) -> ok.
 unmock_time(Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_unload(Nodes, time_utils).
+    ok = test_utils:mock_unload(?OZ_NODES(Config), time_utils).
 
 
 %%--------------------------------------------------------------------
@@ -3323,6 +3370,34 @@ get_mocked_time(Config) ->
 -spec simulate_time_passing(Config :: term(), Seconds :: non_neg_integer()) -> ok.
 simulate_time_passing(Config, Seconds) ->
     set_env(Config, mocked_time, get_mocked_time(Config) + Seconds).
+
+
+mock_peer_ip_of_all_connections(Config, Ip) ->
+    ok = test_utils:mock_new(?OZ_NODES(Config), cowboy_req, [passthrough]),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), cowboy_req, peer, fun(Req) ->
+        {Ip, Req}
+    end).
+
+
+unmock_peer_ip_of_all_connections(Config) ->
+    ok = test_utils:mock_unload(?OZ_NODES(Config), cowboy_req).
+
+
+mock_geo_db_entry_for_all_ips(Config, Asn, Country, Regions) ->
+    ok = test_utils:mock_new(?OZ_NODES(Config), ip_utils, [passthrough]),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), ip_utils, lookup_asn, fun(_) ->
+        {ok, Asn}
+    end),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), ip_utils, lookup_country, fun(_) ->
+        {ok, Country}
+    end),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), ip_utils, lookup_region, fun(_) ->
+        {ok, Regions}
+    end).
+
+
+unmock_geo_db_entry_for_all_ips(Config) ->
+    ok = test_utils:mock_unload(?OZ_NODES(Config), ip_utils).
 
 
 %%--------------------------------------------------------------------
@@ -3502,7 +3577,7 @@ copy_file_to_node(Node, Path) ->
 %% Creates a session for user, simulating a login.
 %% @end
 %%--------------------------------------------------------------------
--spec log_in(Config :: term(), UserId :: od_user:id()) -> {ok, Cookie :: binary()}.
+-spec log_in(Config :: term(), UserId :: od_user:id()) -> {ok, {session:id(), Cookie :: binary()}}.
 log_in(Config, UserId) ->
     MockedReq = #{},
     CookieKey = ?SESSION_COOKIE_KEY,
