@@ -82,7 +82,7 @@
     get_group/2,
     update_group/3,
     delete_group/2,
-    mark_group_protected/2,
+    mark_group_protected/3,
 
     group_get_children/2,
     group_get_parents/2,
@@ -956,12 +956,12 @@ delete_group(Config, GroupId) ->
 %% Marks group as protected
 %% @end
 %%--------------------------------------------------------------------
--spec mark_group_protected(Config :: term(), od_group:id()) -> ok.
-mark_group_protected(Config, GroupId) ->
+-spec mark_group_protected(Config :: term(), od_group:id(), Protected :: boolean()) -> ok.
+mark_group_protected(Config, GroupId, Protected) ->
     ?assertMatch({ok, _}, call_oz(
         Config, od_group, update,
         [GroupId, fun(Group) ->
-            {ok, Group#od_group{protected = true}}
+            {ok, Group#od_group{protected = Protected}}
         end]
     )),
     ok.
@@ -3091,12 +3091,8 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
                 not lists:member(GroupId, PredefinedGroups)
             end, Groups)
     end,
-    utils:pforeach(fun(GroupId) ->
-        call_oz(Config, od_group, update, [GroupId, fun(Group) ->
-            {ok, Group#od_group{protected = false}}
-        end]),
-        delete_group(Config, GroupId)
-    end, GroupsToDelete),
+    utils:pforeach(fun(GroupId) -> mark_group_protected(Config, GroupId, false) end, GroupsToDelete),
+    utils:pforeach(fun(GroupId) -> delete_group(Config, GroupId) end, GroupsToDelete),
 
     utils:pforeach(fun(UId) -> delete_user(Config, UId) end, Users).
 
@@ -3374,8 +3370,8 @@ simulate_time_passing(Config, Seconds) ->
 
 mock_peer_ip_of_all_connections(Config, Ip) ->
     ok = test_utils:mock_new(?OZ_NODES(Config), cowboy_req, [passthrough]),
-    ok = test_utils:mock_expect(?OZ_NODES(Config), cowboy_req, peer, fun(Req) ->
-        {Ip, Req}
+    ok = test_utils:mock_expect(?OZ_NODES(Config), cowboy_req, peer, fun(_) ->
+        {Ip, _Port = 10000}  % port is not relevant
     end).
 
 

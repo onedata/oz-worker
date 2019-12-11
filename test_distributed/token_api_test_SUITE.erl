@@ -290,10 +290,10 @@ all() ->
     {<<"caveats">>, [#{}], ?ERROR_BAD_VALUE_CAVEAT(#{})},
     {<<"caveats">>, [#{<<"a">> => <<"b">>}], ?ERROR_BAD_VALUE_CAVEAT(#{<<"a">> => <<"b">>})},
     {<<"caveats">>, [#{<<"type">> => <<"tiem">>}], ?ERROR_BAD_VALUE_CAVEAT(#{<<"type">> => <<"tiem">>})},
-    {<<"caveats">>, [1, 2, 3], ?ERROR_BAD_DATA(<<"caveats">>)},
-    {<<"caveats">>, [<<"a">>, <<"b">>, <<"c">>], ?ERROR_BAD_DATA(<<"caveats">>)},
-    {<<"caveats">>, [<<"time > 1234">>], ?ERROR_BAD_DATA(<<"caveats">>)},
-    {<<"caveats">>, [<<"ip = 1.2.3.4.5">>], ?ERROR_BAD_DATA(<<"caveats">>)}
+    {<<"caveats">>, [1, 2, 3], ?ERROR_BAD_VALUE_CAVEAT(<<"1">>)},
+    {<<"caveats">>, [<<"a">>, <<"b">>, <<"c">>], ?ERROR_BAD_VALUE_CAVEAT(<<"a">>)},
+    {<<"caveats">>, [<<"time > 1234">>], ?ERROR_BAD_VALUE_CAVEAT(<<"time > 1234">>)},
+    {<<"caveats">>, [<<"ip = 1.2.3.4.5">>], ?ERROR_BAD_VALUE_CAVEAT(<<"ip = 1.2.3.4.5">>)}
 ]).
 
 -define(BAD_CUSTOM_METADATA_VALUES, [
@@ -1732,6 +1732,7 @@ create_gui_access_token(Config) ->
 
 
 list(Config) ->
+    oz_test_utils:delete_all_entities(Config),
     ?assert(run_token_tests(Config, #token_api_test_spec{
         tokens_to_check = [
             ?ROOT_TOKEN(?PROV_GAMMA),
@@ -2484,5 +2485,4 @@ init_per_testcase(_, Config) ->
 end_per_testcase(_, Config) ->
     oz_test_utils:unmock_time(Config),
     oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
-    oz_test_utils:delete_all_entities(Config),
     ok.

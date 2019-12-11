@@ -755,12 +755,14 @@ remove_all_relations(EntityType, EntityId, Entity) ->
         % Remove all independent relations
         maps:map(fun(ParType, ParentIds) ->
             lists:foreach(fun(ParId) ->
-                ok = remove_relation(EntityType, EntityId, ParType, ParId)
+                % ignore non-existent relations
+                catch remove_relation(EntityType, EntityId, ParType, ParId)
             end, ParentIds)
         end, IndependentParents),
         maps:map(fun(ChType, ChIds) ->
             lists:foreach(fun(ChId) ->
-                ok = remove_relation(ChType, ChId, EntityType, EntityId)
+                % ignore non-existent relations
+                catch remove_relation(ChType, ChId, EntityType, EntityId)
             end, ChIds)
         end, IndependentChildren),
         % Remove all dependent relations and dependent entities

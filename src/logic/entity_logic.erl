@@ -843,9 +843,10 @@ check_type(caveats, Key, Caveats) ->
                 {true, Sanitized} ->
                     Sanitized;
                 false ->
-                    JsonableCaveat = case is_map(Caveat) of
-                        true -> Caveat;
-                        false -> str_utils:format_bin("~tp", [Caveat])
+                    JsonableCaveat = case Caveat of
+                        Map when is_map(Map) -> Map;
+                        Bin when is_binary(Bin) -> Bin;
+                        Term -> str_utils:format_bin("~tp", [Term])
                     end,
                     throw(?ERROR_BAD_VALUE_CAVEAT(JsonableCaveat))
             end

@@ -121,7 +121,6 @@ list_test(Config) ->
 
 
 list_privileges_test(Config) ->
-
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [root, nobody]

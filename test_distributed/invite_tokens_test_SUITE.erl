@@ -75,7 +75,7 @@
     % List of subject types that are eligible to consume the token. If a tuple
     % is given, it means that by default such subject is not eligible and
     % requires additional setup to be eligible (e.g. add a user to group that is
-    % being joined to an entity). The seconds element is the function used to
+    % being joined to an entity). The second element is the function used to
     % perform this setup.
     eligible_consumer_types :: [aai:subject_type() | {aai:subject_type(), fun((aai:subject()) -> ok)}],
     % Indicates if special privileges are required to be able to consume the
@@ -148,7 +148,6 @@ init_per_testcase(_, Config) ->
     oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
     oz_test_utils:mock_peer_ip_of_all_connections(Config, ?PEER_IP),
     oz_test_utils:mock_geo_db_entry_for_all_ips(Config, ?CLIENT_ASN, ?CLIENT_COUNTRY, ?CLIENT_REGIONS),
-    oz_test_utils:delete_all_entities(Config),
     store_test_config(Config),
     Config.
 
@@ -480,11 +479,11 @@ support_space_token(Config) ->
 
 
 register_oneprovider_token(Config) ->
-    Testcase = fun(AdminUserId, Policy) -> #testcase{
+    Testcase = fun(AdminUserId, CheckPolicies) -> #testcase{
         token_type = ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, AdminUserId),
 
         eligible_to_invite = [?SUB(user, AdminUserId)],
-        requires_privileges_to_invite = (Policy =:= restricted),
+        requires_privileges_to_invite = (CheckPolicies =:= open_and_restricted_policies),
         admin_privilege_to_invite = ?OZ_PROVIDERS_INVITE,
 
         supports_carried_privileges = false,
@@ -497,9 +496,13 @@ register_oneprovider_token(Config) ->
         requires_privileges_to_consume = false,
         admin_privilege_to_consume = undefined,
 
-        modify_privileges_fun = case Policy of
-            open -> undefined;
-            restricted -> fun
+        % Creating a provider registration token might require admin privileges
+        % depending on the provider_registration_policy. In the testcase where both
+        % policies are checked, changing the policy can be perceived as granting or
+        % revoking the privilege to create registration tokens for all users.
+        modify_privileges_fun = case CheckPolicies of
+            only_open_policy -> undefined;
+            open_and_restricted_policies -> fun
                 (_, {grant, to_invite}) ->
                     oz_test_utils:set_env(Config, provider_registration_policy, open);
                 (_, {revoke, to_invite}) ->
@@ -533,11 +536,11 @@ register_oneprovider_token(Config) ->
 
     oz_test_utils:set_env(Config, provider_registration_policy, open),
     {ok, UserAlpha} = oz_test_utils:create_user(Config),
-    ?assert(run_invite_token_tests(Testcase(UserAlpha, open))),
+    ?assert(run_invite_token_tests(Testcase(UserAlpha, only_open_policy))),
 
     oz_test_utils:set_env(Config, provider_registration_policy, restricted),
     {ok, UserBeta} = oz_test_utils:create_user(Config),
-    ?assert(run_invite_token_tests(Testcase(UserBeta, restricted))).
+    ?assert(run_invite_token_tests(Testcase(UserBeta, open_and_restricted_policies))).
 
 
 user_join_cluster_token(Config) ->
