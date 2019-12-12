@@ -32,7 +32,7 @@
 -export([get_login_endpoint/2, validate_login/2]).
 
 %% API
--export([authorize_by_idp_access_token/1]).
+-export([authenticate_by_idp_access_token/1]).
 -export([refresh_idp_access_token/2]).
 -export([request_idp/5, request_idp/6]).
 
@@ -69,17 +69,18 @@ validate_login(IdP, QueryParams) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to a authorize a client by an access token originating from an
-%% Identity Provider. Its prefix must match any of the configured openid
-%% providers supporting authority delegation.
-%% {true, Client} - client was authorized
-%% false - this method cannot verify authorization, other methods should be tried
-%% {error, term()} - authorization invalid
+%% Tries to authenticate a client by an access token originating from an
+%% Identity Provider. The token must be prefixed with a string that matches any
+%% of the configured openid providers supporting authority delegation
+%% (tokenPrefix field in the auth.config).
+%%   {true, #auth{}} - the client was authenticated
+%%   false - access token was not found
+%%   {error, term()} - provided access token was invalid
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_idp_access_token(AccessToken :: binary()) ->
+-spec authenticate_by_idp_access_token(AccessToken :: binary()) ->
     {true, {auth_config:idp(), attribute_mapping:idp_attributes()}} | false | {error, term()}.
-authorize_by_idp_access_token(AccessTokenWithPrefix) ->
+authenticate_by_idp_access_token(AccessTokenWithPrefix) ->
     case auth_config:find_openid_idp_by_access_token(AccessTokenWithPrefix) of
         false ->
             false;
@@ -96,7 +97,7 @@ authorize_by_idp_access_token(AccessTokenWithPrefix) ->
                     ?ERROR_BAD_IDP_ACCESS_TOKEN(IdP);
                 Type:Reason ->
                     ?error_stacktrace(
-                        "Unexpected error during authorization by external access token - ~p:~p",
+                        "Unexpected error during authentication by IdP access token - ~p:~p",
                         [Type, Reason]
                     ),
                     ?ERROR_INTERNAL_SERVER_ERROR

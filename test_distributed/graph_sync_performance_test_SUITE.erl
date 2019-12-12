@@ -415,12 +415,11 @@ create_n_users(Config, Number) ->
 
 
 create_n_supporting_providers(Config, Number, SpaceId) ->
-    SupportSize = oz_test_utils:minimum_support_size(Config),
     lists:map(fun(_) ->
         {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(
             Config, <<"provider">>
         ),
-        oz_test_utils:support_space(Config, Provider, SpaceId, SupportSize),
+        oz_test_utils:support_space_by_provider(Config, Provider, SpaceId),
         {Provider, ProviderToken}
     end, lists:seq(1, Number)).
 

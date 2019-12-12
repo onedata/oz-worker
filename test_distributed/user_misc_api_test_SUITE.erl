@@ -669,7 +669,7 @@ change_password_test(Config) ->
             data_spec = #data_spec{
                 required = [<<"oldPassword">>, <<"newPassword">>],
                 correct_values = #{
-                    <<"oldPassword">> => [gs_protocol:undefined_to_null(OldPassword)],
+                    <<"oldPassword">> => [utils:undefined_to_null(OldPassword)],
                     <<"newPassword">> => [?UNIQUE_STRING]
                 },
                 bad_values = [
@@ -974,7 +974,7 @@ create_client_token_test(Config) ->
 
     VerifyFun = fun(ClientToken) ->
         {ok, Token} = tokens:deserialize(ClientToken),
-        ?assertMatch({true, ?USER(User)}, oz_test_utils:check_token_auth(Config, Token)),
+        ?assertMatch({true, ?USER(User)}, oz_test_utils:authenticate_by_token(Config, Token)),
         true
     end,
 

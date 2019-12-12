@@ -70,11 +70,11 @@ ensure_valid_invitation(Subject, InviteTokenType, EntityId, default_privileges) 
     is_valid_target_id(InviteTokenType, EntityId) orelse
         throw(?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(EntityId)),
     is_authorized_to_invite(Subject, InviteTokenType, EntityId) orelse
-        throw(?ERROR_INVITE_TOKEN_CREATOR_NOT_AUTHORIZED);
+        throw(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED);
 ensure_valid_invitation(Subject, InviteTokenType, EntityId, custom_privileges) ->
     ensure_valid_invitation(Subject, InviteTokenType, EntityId, default_privileges),
     is_authorized_to_set_privileges(Subject, InviteTokenType, EntityId) orelse
-        throw(?ERROR_INVITE_TOKEN_CREATOR_NOT_AUTHORIZED).
+        throw(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED).
 
 %%%===================================================================
 %%% Internal functions

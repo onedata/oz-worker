@@ -36,7 +36,7 @@
 -spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"POST">>, Req) ->
     try
-        case basic_auth:check_basic_auth(Req) of
+        case basic_auth:authenticate(Req) of
             {true, ?USER(UserId)} ->
                 {ok, FullName} = user_logic:get_full_name(?ROOT, UserId),
                 ?info("User '~ts' has logged in (~s)", [FullName, UserId]),

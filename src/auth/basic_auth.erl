@@ -25,7 +25,7 @@
 -export_type([password/0, password_hash/0]).
 
 %% API
--export([check_basic_auth/1, check_basic_auth/2]).
+-export([authenticate/1, authenticate/2]).
 -export([toggle_basic_auth/2]).
 -export([change_password/3, set_password/2]).
 -export([migrate_onepanel_user_to_onezone/4]).
@@ -41,21 +41,21 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to a authorize a client by username and password.
-%%      {true, Auth} - the client was authorized
-%%      false - credentials were not found
-%%      errors:error() - provided credentials are invalid
+%% Tries to authenticate a client by basic credentials (username and password).
+%%   {true, #auth{}} - the client was authenticated
+%%   false - credentials were not found
+%%   errors:error() - provided credentials were invalid
 %% @end
 %%--------------------------------------------------------------------
--spec check_basic_auth(cowboy_req:req()) ->
+-spec authenticate(cowboy_req:req()) ->
     {true, aai:auth()} | false | errors:error().
-check_basic_auth(Req) ->
+authenticate(Req) ->
     case cowboy_req:header(?HDR_AUTHORIZATION, Req, undefined) of
         <<"Basic ", UserPasswdB64/binary>> ->
             try
                 UsernamePassword = base64:decode(UserPasswdB64),
                 [Username, Password] = binary:split(UsernamePassword, <<":">>),
-                check_basic_auth(Username, Password)
+                authenticate(Username, Password)
             catch _:_ ->
                 ?ERROR_BAD_BASIC_CREDENTIALS
             end;
@@ -63,9 +63,9 @@ check_basic_auth(Req) ->
             false
     end.
 
--spec check_basic_auth(od_user:username(), password()) ->
+-spec authenticate(od_user:username(), password()) ->
     {true, aai:auth()} | errors:error().
-check_basic_auth(Username, Password) ->
+authenticate(Username, Password) ->
     case auth_config:is_basic_auth_enabled() of
         false ->
             ?ERROR_BASIC_AUTH_NOT_SUPPORTED;

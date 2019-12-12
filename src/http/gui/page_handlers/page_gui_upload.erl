@@ -103,7 +103,7 @@ handle_gui_upload(Req) ->
     onedata:release_version() | no_return().
 validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
     harvester_logic:exists(HarvesterId) orelse throw(?ERROR_NOT_FOUND),
-    case token_auth:check_token_auth_for_rest_interface(Req) of
+    case token_auth:authenticate_for_rest_interface(Req) of
         {true, ?USER(UserId) = Auth} ->
             ensure_unlimited_api_authorization(Auth),
             case harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_UPDATE)
@@ -137,7 +137,7 @@ validate_and_authorize(GuiType, ClusterId, Req) ->
         ?OP_PANEL -> Cluster#od_cluster.onepanel_version
     end,
 
-    case token_auth:check_token_auth_for_rest_interface(Req) of
+    case token_auth:authenticate_for_rest_interface(Req) of
         {true, ?PROVIDER(ClusterId) = Auth} ->
             ensure_unlimited_api_authorization(Auth),
             ReleaseVersion;

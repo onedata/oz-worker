@@ -18,14 +18,14 @@
 
 %% API
 -export([build_auth_ctx/1, build_auth_ctx/2, build_auth_ctx/3, build_auth_ctx/4]).
--export([check_token_auth/2]).
--export([check_token_auth_for_rest_interface/1]).
+-export([authenticate/2]).
+-export([authenticate_for_rest_interface/1]).
 -export([verify_access_token/2]).
 -export([verify_identity_token/2]).
 -export([verify_invite_token/3]).
 -export([verify_audience_token/2]).
 -export([group_membership_checker/2]).
--export([is_audience_allowed/2]).
+-export([validate_subject_and_audience/3]).
 
 -define(SUPPORTED_ACCESS_TOKEN_CAVEATS, [
     cv_time, cv_audience,
@@ -87,32 +87,19 @@ build_auth_ctx(Interface, PeerIp, Audience, DataAccessCaveatsPolicy) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to a authorize a client by an access token - either a token issued
-%% by Onezone or an external access token - originating from an Identity Provider.
-%%      {true, Auth} - the client was authorized
-%%      false - access token was not found
-%%      errors:error() - provided access token is invalid
+%% Tries to authenticate a client by an access token.
+%%   {true, #auth{}} - the client was authenticated
+%%   errors:error() - provided access token was invalid
 %% @end
 %%--------------------------------------------------------------------
--spec check_token_auth(tokens:serialized() | tokens:token(), aai:auth_ctx()) ->
+-spec authenticate(tokens:serialized() | tokens:token(), aai:auth_ctx()) ->
     {true, aai:auth()} | errors:error().
-check_token_auth(Serialized, AuthCtx) when is_binary(Serialized) ->
+authenticate(Serialized, AuthCtx) when is_binary(Serialized) ->
     case tokens:deserialize(Serialized) of
-        {ok, Token} ->
-            check_token_auth(Token, AuthCtx);
-        ?ERROR_BAD_TOKEN ->
-            case openid_protocol:authorize_by_idp_access_token(Serialized) of
-                {true, {IdP, Attributes}} ->
-                    LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
-                    {ok, #document{key = UserId}} = linked_accounts:acquire_user(LinkedAccount),
-                    {true, ?USER(UserId)};
-                {error, _} = Error ->
-                    Error;
-                false ->
-                    ?ERROR_BAD_TOKEN
-            end
+        {ok, Token} -> authenticate(Token, AuthCtx);
+        {error, _} = Error -> Error
     end;
-check_token_auth(Token, AuthCtx) ->
+authenticate(Token, AuthCtx) ->
     case verify_access_token(Token, AuthCtx) of
         {ok, Auth} -> {true, Auth};
         {error, _} = Error -> Error
@@ -121,25 +108,50 @@ check_token_auth(Token, AuthCtx) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Inspects a cowboy HTTP request, resolves the access token (if any) and
-%% tries to authorize a client for REST interface access.
+%% Tries to authenticate a client by an access token based on a HTTP request.
+%% The resulting #auth{} is valid only for REST interface.
+%% Supports third party access tokens originating from Identity Providers.
+%%   {true, #auth{}} - the client was authenticated
+%%   false - access token was not found
+%%   errors:error() - provided access token was invalid
 %% @end
 %%--------------------------------------------------------------------
--spec check_token_auth_for_rest_interface(cowboy_req:req()) ->
+-spec authenticate_for_rest_interface(cowboy_req:req()) ->
     {true, aai:auth()} | false | errors:error().
-check_token_auth_for_rest_interface(Req) when is_map(Req) ->
+authenticate_for_rest_interface(Req) when is_map(Req) ->
     case tokens:parse_access_token_header(Req) of
         undefined ->
             false;
-        AccessToken ->
-            case resolve_audience_for_rest_interface(Req) of
-                {ok, Audience} ->
-                    {PeerIp, _} = cowboy_req:peer(Req),
-                    AuthCtx = build_auth_ctx(rest, PeerIp, Audience),
-                    check_token_auth(AccessToken, AuthCtx);
-                {error, _} = Error ->
-                    Error
+        Serialized ->
+            case tokens:deserialize(Serialized) of
+                {ok, Token} ->
+                    authenticate_for_rest_interface(Req, Token);
+                ?ERROR_BAD_TOKEN ->
+                    case openid_protocol:authenticate_by_idp_access_token(Serialized) of
+                        {true, {IdP, Attributes}} ->
+                            LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
+                            {ok, #document{key = UserId}} = linked_accounts:acquire_user(LinkedAccount),
+                            {true, ?USER(UserId)};
+                        {error, _} = Error ->
+                            Error;
+                        false ->
+                            ?ERROR_BAD_TOKEN
+                    end
             end
+    end.
+
+
+%% @private
+-spec authenticate_for_rest_interface(cowboy_req:req(), tokens:token()) ->
+    {true, aai:auth()} | errors:error().
+authenticate_for_rest_interface(Req, Token) ->
+    case resolve_audience_for_rest_interface(Req) of
+        {ok, Audience} ->
+            {PeerIp, _} = cowboy_req:peer(Req),
+            AuthCtx = build_auth_ctx(rest, PeerIp, Audience),
+            authenticate(Token, AuthCtx);
+        {error, _} = Error ->
+            Error
     end.
 
 
@@ -176,11 +188,13 @@ verify_access_token(Token, AuthCtx, SupportedCaveats) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_identity_token(tokens:token(), aai:auth_ctx()) ->
-    {ok, aai:subject()} | errors:error().
+    {ok, {aai:subject(), [caveats:caveat()]}} | errors:error().
 verify_identity_token(Token, AuthCtx) ->
     case verify_access_token(Token, AuthCtx, ?SUPPORTED_IDENTITY_TOKEN_CAVEATS) of
-        {error, _} = Error -> Error;
-        {ok, #auth{subject = Subject}} -> {ok, Subject}
+        {ok, #auth{subject = Subject, caveats = Caveats}} ->
+            {ok, {Subject, Caveats}};
+        {error, _} = Error ->
+            Error
     end.
 
 
@@ -234,34 +248,74 @@ verify_audience_token(AudienceToken, AuthCtx) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec group_membership_checker(aai:audience(), od_group:id()) -> boolean().
+group_membership_checker(?AUD(user, UserId), <<"*">>) ->
+    {ok, Groups} = user_logic:get_groups(?ROOT, UserId),
+    length(Groups) > 0;
 group_membership_checker(?AUD(user, UserId), GroupId) ->
     group_logic:has_eff_user(GroupId, UserId);
 group_membership_checker(_, _) ->
     false.
 
 
-%% @private
--spec is_audience_allowed(aai:subject(), aai:audience()) -> boolean().
-is_audience_allowed(_Subject, ?AUD(user, _)) ->
-    true; % User / provider can grant his authorization to any user
-is_audience_allowed(_Subject, ?AUD(group, _)) ->
-    true; % User / provider can grant his authorization to any group
-is_audience_allowed(_Subject, ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)) ->
-    true; % Any user / provider can generate a token for Onezone
-is_audience_allowed(?SUB(user, UserId), ?AUD(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)) ->
-    cluster_logic:has_eff_user(?ONEZONE_CLUSTER_ID, UserId);
-is_audience_allowed(?SUB(user, UserId), ?AUD(?OP_WORKER, ProviderId)) ->
-    provider_logic:has_eff_user(ProviderId, UserId);
-is_audience_allowed(?SUB(?ONEPROVIDER, _), ?AUD(?OP_WORKER, _)) ->
-    true; % Providers can grant their authorization to others (e.g. for identity check)
-is_audience_allowed(?SUB(user, UserId), ?AUD(?OP_PANEL, ProviderId)) ->
-    cluster_logic:has_eff_user(ProviderId, UserId);
-is_audience_allowed(_, _) ->
-    false.
+%%--------------------------------------------------------------------
+%% @doc
+%% Checks if the subject and audience are compatible with each other and
+%% valid for given token type.
+%% @end
+%%--------------------------------------------------------------------
+-spec validate_subject_and_audience(tokens:type(), aai:subject(), aai:audience()) ->
+    ok | errors:error().
+validate_subject_and_audience(?GUI_ACCESS_TOKEN(SessId), ?SUB(user, UserId) = Subject, Audience) ->
+    case {session:belongs_to_user(SessId, UserId), is_valid_access_token_audience(Subject, Audience)} of
+        {true, true} -> ok;
+        {false, _} -> ?ERROR_TOKEN_SESSION_INVALID;
+        {_, false} -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience)
+    end;
+validate_subject_and_audience(?GUI_ACCESS_TOKEN(_), _, _) ->
+    % Only user subject is allowed in gui access tokens
+    ?ERROR_TOKEN_SUBJECT_INVALID;
+validate_subject_and_audience(?ACCESS_TOKEN, Subject, Audience) ->
+    case is_valid_access_token_audience(Subject, Audience) of
+        true -> ok;
+        false -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience)
+    end;
+validate_subject_and_audience(?INVITE_TOKEN(_, _), _, _) ->
+    % Invite tokens do not require additional checks. Audience (consumer) can
+    % be anything as the idea of invite tokens is that one can pass them to
+    % anyone. During actual consumption, there is an additional check if the
+    % consuming subject can perform such operation.
+    ok.
 
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Determines if the audience is allowed for specific subject in an access token.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_valid_access_token_audience(aai:subject(), aai:audience()) -> boolean().
+is_valid_access_token_audience(_Subject, ?AUD(_, <<"*">>)) ->
+    true; % Always allowed when audience id is a wildcard
+is_valid_access_token_audience(_Subject, ?AUD(user, _)) ->
+    true; % User / provider can grant his authorization to any user
+is_valid_access_token_audience(_Subject, ?AUD(group, _)) ->
+    true; % User / provider can grant his authorization to any group
+is_valid_access_token_audience(_Subject, ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)) ->
+    true; % Any user / provider can generate a token for Onezone
+is_valid_access_token_audience(?SUB(user, UserId), ?AUD(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)) ->
+    cluster_logic:has_eff_user(?ONEZONE_CLUSTER_ID, UserId);
+is_valid_access_token_audience(?SUB(user, UserId), ?AUD(?OP_WORKER, ProviderId)) ->
+    provider_logic:has_eff_user(ProviderId, UserId);
+is_valid_access_token_audience(?SUB(?ONEPROVIDER, _), ?AUD(?OP_WORKER, _)) ->
+    true; % Providers can grant their authorization to others (e.g. for identity check)
+is_valid_access_token_audience(?SUB(user, UserId), ?AUD(?OP_PANEL, ProviderId)) ->
+    cluster_logic:has_eff_user(ProviderId, UserId);
+is_valid_access_token_audience(_, _) ->
+    false.
+
 
 %%--------------------------------------------------------------------
 %% @private
@@ -329,43 +383,14 @@ verify_token_auth(Token = #token{persistent = true}, AuthCtx, SupportedCaveats) 
     {ok, aai:auth()} | errors:error().
 verify_token_auth(Token = #token{type = TokenType}, AuthCtx, SupportedCaveats, Secret) ->
     case tokens:verify(Token, Secret, AuthCtx, SupportedCaveats) of
-        {ok, Auth} ->
-            case check_against_token_type(TokenType, Auth, AuthCtx#auth_ctx.audience) of
+        {ok, Auth = #auth{subject = Subject}} ->
+            case validate_subject_and_audience(TokenType, Subject, AuthCtx#auth_ctx.audience) of
                 ok -> {ok, Auth};
                 {error, _} = Err1 -> Err1
             end;
         {error, _} = Err2 ->
             Err2
     end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Performs additional checks that are dependant on token type.
-%% @end
-%%--------------------------------------------------------------------
--spec check_against_token_type(tokens:type(), aai:auth(), aai:audience()) -> ok | errors:error().
-check_against_token_type(?GUI_ACCESS_TOKEN(SessionId), ?USER(UserId), Audience) ->
-    % Only user auth is allowed in gui access tokens
-    case {session:exists(SessionId), is_audience_allowed(?SUB(user, UserId), Audience)} of
-        {{ok, true}, true} -> ok;
-        {{ok, false}, _} -> ?ERROR_TOKEN_SESSION_INVALID;
-        {_, false} -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience)
-    end;
-check_against_token_type(?ACCESS_TOKEN, #auth{subject = Subject}, Audience) ->
-    case is_audience_allowed(Subject, Audience) of
-        true -> ok;
-        false -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience)
-    end;
-check_against_token_type(?INVITE_TOKEN(_, _), _, _) ->
-    % Invite tokens do not require additional checks. Audience (consumer) can
-    % be anything as the idea of tokens is that one can pass them to anyone.
-    % During actual consumption there is an additional check if the consuming
-    % subject can perform such operation.
-    ok;
-check_against_token_type(_, _, _) ->
-    ?ERROR_TOKEN_INVALID.
 
 
 %% @private

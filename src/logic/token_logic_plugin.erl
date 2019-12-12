@@ -145,18 +145,19 @@ create(#el_req{gri = #gri{id = undefined, aspect = examine}, data = Data}) ->
     }};
 
 create(#el_req{gri = #gri{id = undefined, aspect = confine}, data = Data}) ->
-    Token = maps:get(<<"token">>, Data),
+    Token = #token{type = Type, subject = Subject} = maps:get(<<"token">>, Data),
     Caveats = maps:get(<<"caveats">>, Data),
+    validate_subject_and_audience_caveats(Type, Subject, Caveats),
     {ok, value, tokens:confine(Token, Caveats)};
 
 create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_access_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
     AuthCtx = build_auth_ctx(Auth, Data),
     case token_auth:verify_access_token(Token, AuthCtx) of
-        {ok, #auth{subject = Subject}} ->
+        {ok, #auth{subject = Subject, caveats = Caveats}} ->
             {ok, value, #{
                 <<"subject">> => Subject,
-                <<"ttl">> => infer_ttl(tokens:get_caveats(Token))
+                <<"ttl">> => infer_ttl(Caveats)
             }};
         {error, _} = Error ->
             Error
@@ -166,10 +167,10 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_identity_
     Token = maps:get(<<"token">>, Data),
     AuthCtx = build_auth_ctx(Auth, Data),
     case token_auth:verify_identity_token(Token, AuthCtx) of
-        {ok, Subject} ->
+        {ok, {Subject, Caveats}} ->
             {ok, value, #{
                 <<"subject">> => Subject,
-                <<"ttl">> => infer_ttl(tokens:get_caveats(Token))
+                <<"ttl">> => infer_ttl(Caveats)
             }};
         {error, _} = Error ->
             Error
@@ -180,10 +181,10 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_invite_to
     ExpType = maps:get(<<"expectedInviteTokenType">>, Data, any),
     AuthCtx = build_auth_ctx(Auth, Data),
     case token_auth:verify_invite_token(Token, ExpType, AuthCtx) of
-        {ok, #auth{subject = Subject}} ->
+        {ok, #auth{subject = Subject, caveats = Caveats}} ->
             {ok, value, #{
                 <<"subject">> => Subject,
-                <<"ttl">> => infer_ttl(tokens:get_caveats(Token))
+                <<"ttl">> => infer_ttl(Caveats)
             }};
         {error, _} = Error ->
             Error
@@ -406,20 +407,11 @@ validate(#el_req{operation = create, gri = #gri{aspect = examine}}) -> #{
         <<"token">> => {token, any}
     }
 };
-validate(#el_req{operation = create, gri = #gri{aspect = confine}, data = Data}) ->
-    Subject = case maps:find(<<"token">>, Data) of
-        {ok, Serialized} ->
-            case tokens:deserialize(Serialized) of
-                {ok, Token} -> Token#token.subject;
-                Error -> throw(?ERROR_BAD_VALUE_TOKEN(<<"token">>, Error))
-            end;
-        _ ->
-            throw(?ERROR_MISSING_REQUIRED_VALUE(<<"token">>))
-    end,
+validate(#el_req{operation = create, gri = #gri{aspect = confine}}) ->
     #{
         required => #{
             <<"token">> => {token, any},
-            <<"caveats">> => {caveats, fun(Caveat) -> validate_caveat(Subject, Caveat) end}
+            <<"caveats">> => {caveats, any}
         }
     };
 validate(#el_req{operation = create, gri = #gri{aspect = verify_access_token}}) ->
@@ -482,7 +474,7 @@ validate_create_operation(named, Subject, Data) -> #{
         optional_invite_token_params(Data),
         #{
             <<"type">> => {token_type, fun(Type) -> validate_type(Subject, named, Type, Data) end},
-            <<"caveats">> => {caveats, fun(Caveat) -> validate_caveat(Subject, Caveat) end},
+            <<"caveats">> => {caveats, any},
             <<"customMetadata">> => {json, any},
             <<"revoked">> => {boolean, any}
         }
@@ -491,7 +483,7 @@ validate_create_operation(named, Subject, Data) -> #{
 validate_create_operation(temporary, Subject, Data) -> #{
     optional => #{
         <<"type">> => {token_type, fun(Type) -> validate_type(Subject, temporary, Type, Data) end},
-        <<"caveats">> => {caveats, fun(Caveat) -> validate_caveat(Subject, Caveat) end}
+        <<"caveats">> => {caveats, any}
     }
 }.
 
@@ -511,17 +503,6 @@ optional_invite_token_params(#{<<"type">> := ?INVITE_TOKEN(InviteTokenType, _)})
     token_metadata:optional_invite_token_parameters(InviteTokenType);
 optional_invite_token_params(_) ->
     #{}.
-
-
-%% @private
--spec validate_caveat(aai:subject(), caveats:caveat()) -> boolean().
-validate_caveat(Subject, #cv_audience{whitelist = AllowedAudiences}) ->
-    lists:all(fun(Audience) ->
-        token_auth:is_audience_allowed(Subject, Audience) orelse
-            throw(?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience))
-    end, AllowedAudiences);
-validate_caveat(_, _) ->
-    true.
 
 
 %% @private
@@ -558,6 +539,8 @@ create_named_token(Subject, Data) ->
     end,
     Type = maps:get(<<"type">>, Data, ?ACCESS_TOKEN),
     Caveats = maps:get(<<"caveats">>, Data, []),
+    validate_subject_and_audience_caveats(Type, Subject, Caveats),
+
     CustomMetadata = maps:get(<<"customMetadata">>, Data, #{}),
     Secret = tokens:generate_secret(),
     TokenRecord = #od_token{
@@ -582,6 +565,7 @@ create_named_token(Subject, Data) ->
 create_temporary_token(Subject, Data) ->
     Type = maps:get(<<"type">>, Data, ?ACCESS_TOKEN),
     Caveats = maps:get(<<"caveats">>, Data, []),
+    validate_subject_and_audience_caveats(Type, Subject, Caveats),
 
     MaxTTL = ?MAX_TEMPORARY_TOKEN_TTL,
     IsTtlAllowed = case infer_ttl(Caveats) of
@@ -590,24 +574,30 @@ create_temporary_token(Subject, Data) ->
     end,
     IsTtlAllowed orelse throw(?ERROR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTTL)),
 
-    TokenId = datastore_utils:gen_key(),
     Secret = temporary_token_secret:get(Subject),
-    Token = construct(Subject, TokenId, Type, false, Secret, Caveats),
+    Prototype = #token{
+        onezone_domain = oz_worker:get_domain(),
+        id = datastore_utils:gen_key(),
+        subject = Subject,
+        type = Type,
+        persistent = false
+    },
+    Token = tokens:construct(Prototype, Secret, Caveats),
     {ok, value, Token}.
 
 
 %% @private
--spec construct(aai:subject(), tokens:id(), tokens:type(), tokens:persistent(),
-    tokens:secret(), [caveats:caveat()]) -> tokens:token().
-construct(Subject, TokenId, Type, Persistent, Secret, Caveats) ->
-    Prototype = #token{
-        onezone_domain = oz_worker:get_domain(),
-        id = TokenId,
-        subject = Subject,
-        type = Type,
-        persistent = Persistent
-    },
-    tokens:construct(Prototype, Secret, Caveats).
+-spec validate_subject_and_audience_caveats(tokens:type(), aai:subject(), [caveats:caveat()]) ->
+    ok | no_return().
+validate_subject_and_audience_caveats(Type, Subject, Caveats) ->
+    lists:foreach(fun(#cv_audience{whitelist = Whitelist}) ->
+        lists:foreach(fun(Audience) ->
+           case token_auth:validate_subject_and_audience(Type, Subject, Audience) of
+               ok -> ok;
+               {error, _} = Error -> throw(Error)
+           end
+        end, Whitelist)
+    end, caveats:filter([cv_audience], Caveats)).
 
 
 %% @private

@@ -99,28 +99,29 @@ is_subscribable(_, _) -> false.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(#el_req{gri = #gri{id = Id, aspect = instance} = GRI, auth = ?PROVIDER(ProviderId) = Auth, data = Data}) ->
-    StorageId = case Id of
-        undefined -> datastore_utils:gen_key();
-        _ -> Id
-    end,
+create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PROVIDER(ProviderId) = Auth, data = Data}) ->
     Name = maps:get(<<"name">>, Data),
     QosParameters = maps:get(<<"qos_parameters">>, Data, #{}),
-    {ok, _} = od_storage:create(#document{
-        key = StorageId,
+    StorageDoc = #document{
+        key = ProposedId,
         value = #od_storage{
             name = Name,
             qos_parameters = QosParameters,
             creator = Auth#auth.subject,
             provider = ProviderId
         }
-    }),
-    entity_graph:add_relation(
-        od_storage, StorageId,
-        od_provider, ProviderId
-    ),
-    {true, {Storage, Rev}} = fetch_entity(#gri{id = StorageId}),
-    {ok, resource, {GRI#gri{id = StorageId}, {Storage, Rev}}};
+    },
+    case od_storage:create(StorageDoc) of
+        {error, already_exists} ->
+            throw(?ERROR_ALREADY_EXISTS);
+        {ok, #document{key = StorageId}} ->
+            entity_graph:add_relation(
+                od_storage, StorageId,
+                od_provider, ProviderId
+            ),
+            {true, {Storage, Rev}} = fetch_entity(#gri{id = StorageId}),
+            {ok, resource, {GRI#gri{id = StorageId}, {Storage, Rev}}}
+    end;
 
 create(#el_req{auth = Auth, gri = #gri{id = StorageId, aspect = support}, data = Data}) ->
     fun(#od_storage{provider = ProviderId}) ->
@@ -155,7 +156,7 @@ create(#el_req{gri = #gri{id = StorageId, aspect = {upgrade_legacy_support, Spac
         try
             entity_graph:add_relation(od_space, SpaceId, od_storage, StorageId, SupportSize)
         catch
-            _:(?ERROR_RELATION_ALREADY_EXISTS(_,_,_,_)) -> ok
+            _:(?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _)) -> ok
         end,
         ok = entity_graph:remove_relation(od_space, SpaceId, od_storage, ProviderId),
         ?notice("Support of space: ~p successfully upgraded", [SpaceId])
@@ -281,7 +282,7 @@ authorize(#el_req{operation = create, auth = ?PROVIDER(ProviderId), gri = #gri{a
 
 authorize(#el_req{operation = create, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = {upgrade_legacy_support, SpaceId}}}, Storage) ->
     storage_logic:belongs_to_provider(Storage, ProviderId)
-        %% Check whether given space is supported by provider virtual storage (with id equal to providers)
+    %% Check whether given space is supported by provider virtual storage (with id equal to providers)
         andalso storage_logic:supports_space(ProviderId, SpaceId);
 
 authorize(#el_req{operation = get, auth = ?PROVIDER(ProviderId), gri = #gri{aspect = instance, scope = private}}, Storage) ->

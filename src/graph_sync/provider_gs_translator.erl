@@ -75,12 +75,12 @@ translate_value(_, #gri{type = od_harvester, aspect = {delete_entry, _}}, Failed
 translate_value(_, #gri{type = od_token, aspect = verify_access_token}, #{<<"subject">> := Sub, <<"ttl">> := TTL}) ->
     #{
         <<"subject">> => aai:serialize_subject(Sub),
-        <<"ttl">> => gs_protocol:undefined_to_null(TTL)
+        <<"ttl">> => utils:undefined_to_null(TTL)
     };
 translate_value(_, #gri{type = od_token, aspect = verify_identity_token}, #{<<"subject">> := Sub, <<"ttl">> := TTL}) ->
     #{
         <<"subject">> => aai:serialize_subject(Sub),
-        <<"ttl">> => gs_protocol:undefined_to_null(TTL)
+        <<"ttl">> => utils:undefined_to_null(TTL)
     };
 
 translate_value(ProtocolVersion, GRI, Data) ->
@@ -115,10 +115,10 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
     } = User,
     #{
         <<"fullName">> => FullName,
-        <<"username">> => gs_protocol:undefined_to_null(Username),
+        <<"username">> => utils:undefined_to_null(Username),
         <<"emails">> => Emails,
         <<"linkedAccounts">> => linked_accounts:to_maps(LinkedAccounts, luma_payload),
-        <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
+        <<"defaultSpaceId">> => utils:undefined_to_null(DefaultSpace),
         <<"spaceAliases">> => SpaceAliases,
 
         <<"effectiveGroups">> => entity_graph:get_relations(effective, top_down, od_group, User),
@@ -128,8 +128,8 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
 
         %% @TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"name">> => FullName,
-        <<"login">> => gs_protocol:undefined_to_null(Username),
-        <<"alias">> => gs_protocol:undefined_to_null(Username),
+        <<"login">> => utils:undefined_to_null(Username),
+        <<"alias">> => utils:undefined_to_null(Username),
         <<"emailList">> => Emails
     };
 
@@ -142,14 +142,14 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = protected}
     } = User,
     #{
         <<"fullName">> => FullName,
-        <<"username">> => gs_protocol:undefined_to_null(Username),
+        <<"username">> => utils:undefined_to_null(Username),
         <<"emails">> => Emails,
         <<"linkedAccounts">> => LinkedAccountMaps,
 
         %% @TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"name">> => FullName,
-        <<"login">> => gs_protocol:undefined_to_null(Username),
-        <<"alias">> => gs_protocol:undefined_to_null(Username),
+        <<"login">> => utils:undefined_to_null(Username),
+        <<"alias">> => utils:undefined_to_null(Username),
         <<"emailList">> => Emails
     };
 
@@ -160,12 +160,12 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = shared}, U
     } = User,
     #{
         <<"fullName">> => FullName,
-        <<"username">> => gs_protocol:undefined_to_null(Username),
+        <<"username">> => utils:undefined_to_null(Username),
 
         %% @TODO VFS-4506 deprecated field, included for backward compatibility
         <<"name">> => FullName,
-        <<"login">> => gs_protocol:undefined_to_null(Username),
-        <<"alias">> => gs_protocol:undefined_to_null(Username)
+        <<"login">> => utils:undefined_to_null(Username),
+        <<"alias">> => utils:undefined_to_null(Username)
     };
 
 translate_resource(_, #gri{type = od_group, aspect = instance, scope = private}, Group) ->
@@ -243,7 +243,7 @@ translate_resource(_, #gri{type = od_share, aspect = instance, scope = private},
         <<"name">> => Name,
         <<"publicUrl">> => PublicUrl,
         <<"spaceId">> => SpaceId,
-        <<"handleId">> => gs_protocol:undefined_to_null(HandleId),
+        <<"handleId">> => utils:undefined_to_null(HandleId),
         <<"rootFileId">> => RootFileId
     };
 
@@ -257,6 +257,14 @@ translate_resource(_, #gri{type = od_share, aspect = instance, scope = public}, 
         <<"rootFileId">> => RootFileId, <<"handleId">> => HandleId
     };
 
+
+translate_resource(_, #gri{type = od_provider, aspect = instance, scope = private}, {_Provider, RootToken}) ->
+    % This covers provider creation via Graph Sync, in contrast to the get
+    % request that does not return the root token
+    {ok, Serialized} = tokens:serialize(RootToken),
+    #{
+        <<"providerRootToken">> => Serialized
+    };
 translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope = private}, Provider) ->
     #od_provider{
         name = Name,
