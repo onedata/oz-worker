@@ -148,7 +148,7 @@ create(#el_req{auth = Auth, gri = #gri{id = StorageId, aspect = support}, data =
         end)
     end;
 
-% This endpoint is dedicated to providers upgrading from version 19.02.* to the next major release.
+% This endpoint is dedicated to providers upgrading from version 19.02.* to 19.09.*.
 create(#el_req{gri = #gri{id = StorageId, aspect = {upgrade_legacy_support, SpaceId}}}) ->
     fun(#od_storage{provider = ProviderId}) ->
         {true, {VirtualStorage, _}} = fetch_entity(#gri{id = ProviderId}),

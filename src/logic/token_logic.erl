@@ -346,7 +346,7 @@ create_legacy_client_token(Auth = ?USER(UserId)) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Migrates deprecated user and provider client tokens to the new model.
-%% Dedicated for upgrading Onezone from 19.02.* to the next major release.
+%% Dedicated for upgrading Onezone from 19.02.* to 19.09.*.
 %% @end
 %%--------------------------------------------------------------------
 -spec migrate_deprecated_tokens() -> ok.
