@@ -4,6 +4,13 @@
 CHANGELOG
 ---------
 
+### 19.02.1
+
+* VFS-5936 Improve entitlement mapping * Merge entitlements with different roles (privileges) to the highest of them * Store previous privileges to discover and coalesce later changes in user roles
+* VFS-5940 Rename GUI package verification envs to more intuitive
+* VFS-5205 Hide share CREATE and DELETE operations from Onezone REST API (as they are reserved for Oneprovider logic), return rootFileId as ObjectID in share details
+
+
 ### 19.02.0-rc2
 
 * VFS-1891 GUI update Added privacy policy and cookie consent notification
