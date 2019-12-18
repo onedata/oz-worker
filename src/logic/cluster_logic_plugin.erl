@@ -46,7 +46,7 @@
 fetch_entity(#gri{id = ClusterId}) ->
     case od_cluster:get(ClusterId) of
         {ok, #document{value = Cluster, revs = [DbRev | _]}} ->
-            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Cluster, Revision}};
         _ ->
             ?ERROR_NOT_FOUND

@@ -61,7 +61,7 @@
 -spec create(aai:auth(), NameOrData :: binary() | map()) ->
     {ok, od_storage:id()} | errors:error().
 create(Auth, NameOrData) ->
-    create(Auth, datastore_utils:gen_key(), NameOrData).
+    create(Auth, datastore_key:new(), NameOrData).
 
 -spec create(aai:auth(), Id :: od_storage:id(), NameOrData :: binary() | map()) ->
     {ok, od_storage:id()} | errors:error().

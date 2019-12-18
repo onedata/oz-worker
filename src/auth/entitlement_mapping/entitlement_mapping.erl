@@ -435,7 +435,9 @@ gen_group_id(Path) ->
     GroupNames = lists:map(fun(#idp_group{type = Type, name = Name}) ->
         <<(encode_type(Type))/binary, ":", Name/binary>>
     end, Path),
-    datastore_utils:gen_key(<<"">>, str_utils:join_binary(GroupNames, <<"/">>)).
+    % NOTE: legacy key generation must always be used to ensure that group
+    % mappings are not lost after system upgrade from version pre 19.02.1
+    datastore_key:gen_legacy_key(<<"">>, str_utils:join_binary(GroupNames, <<"/">>)).
 
 
 %%--------------------------------------------------------------------

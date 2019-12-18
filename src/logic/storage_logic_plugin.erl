@@ -48,7 +48,7 @@
 fetch_entity(#gri{id = StorageId}) ->
     case od_storage:get(StorageId) of
         {ok, #document{value = Storage, revs = [DbRev | _]}} ->
-            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Storage, Revision}};
         _ ->
             ?ERROR_NOT_FOUND

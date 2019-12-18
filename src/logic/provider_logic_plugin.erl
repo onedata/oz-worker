@@ -48,7 +48,7 @@
 fetch_entity(#gri{id = ProviderId}) ->
     case od_provider:get(ProviderId) of
         {ok, #document{value = Provider, revs = [DbRev | _]}} ->
-            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Provider, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
@@ -124,7 +124,7 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     Data = Req#el_req.data,
-    create_provider(Auth, Data, datastore_utils:gen_key(), GRI);
+    create_provider(Auth, Data, datastore_key:new(), GRI);
 
 create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = instance_dev} = GRI}) ->
     Data = Req#el_req.data,
