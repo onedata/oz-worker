@@ -16,11 +16,12 @@
 -include("auth/auth_errors.hrl").
 -include("auth/entitlement_mapping.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include_lib("ctool/include/api_errors.hrl").
--include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/global_definitions.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/global_definitions.hrl").
+-include_lib("ctool/include/test/test_utils.hrl").
 
 -define(DUMMY_IDP, dummyIdP).
 -define(FIRST_IDP, firstIdP).
@@ -152,7 +153,7 @@ get_login_endpoint(Config) ->
             <<"method">> := <<"get">>,
             <<"url">> := <<ExpAuthorizeEndpoint:Len/binary, _/binary>>
         }},
-        oz_test_utils:call_oz(Config, auth_logic, get_login_endpoint, [
+        oz_test_utils:call_oz(Config, idp_auth, get_login_endpoint, [
             ?DUMMY_IDP, false, <<"">>, false
         ])
     ).
@@ -204,7 +205,7 @@ validate_correct_login_base(Config, TestMode) ->
     }}]),
 
     {ok, #{<<"url">> := Url}} = oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, RedirectAfterLogin, TestMode]
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, RedirectAfterLogin, TestMode]
     ),
 
     {ok, MockedCowboyReq, _} = ?assertMatch({ok, _, _}, oidc_server_mock:simulate_user_login(
@@ -285,7 +286,7 @@ validate_correct_login_base(Config, TestMode) ->
         false ->
             {ok, UserId, _} = ?assertMatch(
                 {ok, ExpUserId, RedirectAfterLogin},
-                oz_test_utils:call_oz(Config, auth_logic, validate_login, [
+                oz_test_utils:call_oz(Config, idp_auth, validate_login, [
                     <<"GET">>, MockedCowboyReq
                 ])
             ),
@@ -373,7 +374,7 @@ authority_delegation(Config) ->
     }}]),
 
     {ok, #{<<"url">> := Url}} = oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, false]
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, false]
     ),
     {ok, _, AccessToken} = ?assertMatch({ok, _, _}, oidc_server_mock:simulate_user_login(
         Config, OidcSpec, Url, #{<<"sub">> => SubjectId}
@@ -386,8 +387,8 @@ authority_delegation(Config) ->
             method => get,
             path => <<"/user">>,
             headers => case AuthType of
-                bearer -> #{<<"authorization">> => <<"Bearer dummy/", AccessToken/binary>>};
-                xAuthToken -> #{<<"x-auth-token">> => <<"dummy/", AccessToken/binary>>}
+                bearer -> #{?HDR_AUTHORIZATION => <<"Bearer dummy/", AccessToken/binary>>};
+                xAuthToken -> #{?HDR_X_AUTH_TOKEN => <<"dummy/", AccessToken/binary>>}
             end
         },
         expect => case Success of
@@ -712,7 +713,7 @@ bad_xrds_endpoint(Config, TestMode) ->
         }
     end),
     ?assertEqual(?ERROR_INTERNAL_SERVER_ERROR, oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
     )).
 
 
@@ -725,7 +726,7 @@ bad_authorize_endpoint(Config, TestMode) ->
         }
     end),
     ?assertEqual(?ERROR_INTERNAL_SERVER_ERROR, oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
     )).
 
 
@@ -772,7 +773,7 @@ bad_userinfo_endpoint_in_authority_delegation(Config, TestMode) ->
         end
     ),
     {ok, #{<<"url">> := Url}} = oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
     ),
 
     {ok, _, AccessToken} = ?assertMatch({ok, _, _}, oidc_server_mock:simulate_user_login(
@@ -782,7 +783,7 @@ bad_userinfo_endpoint_in_authority_delegation(Config, TestMode) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"authorization">> => <<"Bearer dummy/", AccessToken/binary>>}
+            headers => #{?HDR_AUTHORIZATION => <<"Bearer dummy/", AccessToken/binary>>}
         },
         expect => #{
             code => 500
@@ -798,7 +799,7 @@ bad_scope(Config, TestMode) ->
         }
     end),
     {ok, #{<<"url">> := Url}} = oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
     ),
 
     ?assertMatch(error, oidc_server_mock:simulate_user_login(
@@ -813,7 +814,7 @@ bad_client_id(Config, TestMode) ->
         }
     end),
     {ok, #{<<"url">> := Url}} = oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
     ),
 
     ?assertMatch(error, oidc_server_mock:simulate_user_login(
@@ -882,7 +883,7 @@ bad_access_token_pass_method_in_authority_delegation(Config, TestMode) ->
         end
     ),
     {ok, #{<<"url">> := Url}} = oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
+        Config, idp_auth, get_login_endpoint, [?DUMMY_IDP, false, <<"">>, TestMode]
     ),
 
     {ok, _, AccessToken} = ?assertMatch({ok, _, _}, oidc_server_mock:simulate_user_login(
@@ -892,7 +893,7 @@ bad_access_token_pass_method_in_authority_delegation(Config, TestMode) ->
         request => #{
             method => get,
             path => <<"/user">>,
-            headers => #{<<"authorization">> => <<"Bearer dummy/", AccessToken/binary>>}
+            headers => #{?HDR_AUTHORIZATION => <<"Bearer dummy/", AccessToken/binary>>}
         },
         expect => #{
             code => 500
@@ -946,20 +947,20 @@ screw_up_config(Config, TestMode, ProtocolConfig, ScrewingUpFun) ->
 
 simulate_login_flow(Config, IdP, LinkAccount, TestMode, OidcSpec, UserAttributes) ->
     {ok, #{<<"url">> := Url}} = oz_test_utils:call_oz(
-        Config, auth_logic, get_login_endpoint, [IdP, LinkAccount, <<"">>, TestMode]
+        Config, idp_auth, get_login_endpoint, [IdP, LinkAccount, <<"">>, TestMode]
     ),
 
     {ok, MockedCowboyReq, _} = oidc_server_mock:simulate_user_login(
         Config, OidcSpec, Url, UserAttributes
     ),
-    oz_test_utils:call_oz(Config, auth_logic, validate_login, [
+    oz_test_utils:call_oz(Config, idp_auth, validate_login, [
         <<"GET">>, MockedCowboyReq
     ]).
 
 
 validate_login_in_test_mode(MockedCowboyReq) ->
-    {ok, UserId, _} = auth_logic:validate_login(<<"GET">>, MockedCowboyReq),
-    UserData = auth_test_mode:get_user_data(),
+    {ok, UserId, _} = idp_auth:validate_login(<<"GET">>, MockedCowboyReq),
+    UserData = idp_auth_test_mode:get_user_data(),
     {ok, UserId, UserData}.
 
 

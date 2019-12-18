@@ -6,17 +6,17 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% Plugin implementing auth_protocol_behaviour, used to handle authentication
+%%% Plugin implementing idp_auth_protocol_behaviour, used to handle authentication
 %%% over OpenID protocol. These callbacks are called by auth_logic module.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(openid_protocol).
--behavior(auth_protocol_behaviour).
+-behavior(idp_auth_protocol_behaviour).
 -author("Lukasz Opiola").
 
 -include("auth/auth_errors.hrl").
 -include("http/gui_paths.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -type endpoint_type() :: xrds | authorize | accessToken | userInfo.
@@ -28,11 +28,11 @@
     IdP, [plugin], {default, default_oidc_plugin}
 )).
 
-%% auth_protocol_behaviour callbacks
+%% idp_auth_protocol_behaviour callbacks
 -export([get_login_endpoint/2, validate_login/2]).
 
 %% API
--export([authorize_by_idp_access_token/1]).
+-export([authenticate_by_idp_access_token/1]).
 -export([refresh_idp_access_token/2]).
 -export([request_idp/5, request_idp/6]).
 
@@ -42,7 +42,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link auth_protocol_behaviour} callback get_login_endpoint/2.
+%% {@link idp_auth_protocol_behaviour} callback get_login_endpoint/2.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_login_endpoint(auth_config:idp(), state_token:state_token()) ->
@@ -58,10 +58,10 @@ get_login_endpoint(IdP, State) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link auth_protocol_behaviour} callback validate_login/2.
+%% {@link idp_auth_protocol_behaviour} callback validate_login/2.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_login(auth_config:idp(), auth_logic:query_params()) ->
+-spec validate_login(auth_config:idp(), idp_auth:query_params()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
 validate_login(IdP, QueryParams) ->
     call_plugin(IdP, validate_login, [IdP, QueryParams, ?redirect_uri]).
@@ -69,17 +69,18 @@ validate_login(IdP, QueryParams) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to a authorize a client by an access token originating from an
-%% Identity Provider. Its prefix must match any of the configured openid
-%% providers supporting authority delegation.
-%% {true, Client} - client was authorized
-%% false - this method cannot verify authorization, other methods should be tried
-%% {error, term()} - authorization invalid
+%% Tries to authenticate a client by an access token originating from an
+%% Identity Provider. The token must be prefixed with a string that matches any
+%% of the configured openid providers supporting authority delegation
+%% (tokenPrefix field in the auth.config).
+%%   {true, #auth{}} - the client was authenticated
+%%   false - access token was not found
+%%   {error, term()} - provided access token was invalid
 %% @end
 %%--------------------------------------------------------------------
--spec authorize_by_idp_access_token(AccessToken :: binary()) ->
-    {true, {auth_logic:idp(), auth_logic:idp_attributes()}} | false | {error, term()}.
-authorize_by_idp_access_token(AccessTokenWithPrefix) ->
+-spec authenticate_by_idp_access_token(AccessToken :: binary()) ->
+    {true, {auth_config:idp(), attribute_mapping:idp_attributes()}} | false | {error, term()}.
+authenticate_by_idp_access_token(AccessTokenWithPrefix) ->
     case auth_config:find_openid_idp_by_access_token(AccessTokenWithPrefix) of
         false ->
             false;
@@ -96,7 +97,7 @@ authorize_by_idp_access_token(AccessTokenWithPrefix) ->
                     ?ERROR_BAD_IDP_ACCESS_TOKEN(IdP);
                 Type:Reason ->
                     ?error_stacktrace(
-                        "Unexpected error during authorization by external access token - ~p:~p",
+                        "Unexpected error during authentication by IdP access token - ~p:~p",
                         [Type, Reason]
                     ),
                     ?ERROR_INTERNAL_SERVER_ERROR
@@ -109,7 +110,7 @@ authorize_by_idp_access_token(AccessTokenWithPrefix) ->
 %% Acquires a new access token using given refresh token.
 %% @end
 %%--------------------------------------------------------------------
--spec refresh_idp_access_token(auth_config:idp(), auth_logic:refresh_token()) ->
+-spec refresh_idp_access_token(auth_config:idp(), idp_auth:refresh_token()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
 refresh_idp_access_token(IdP, RefreshToken) ->
     call_plugin(IdP, refresh_access_token, [IdP, RefreshToken]).
@@ -121,7 +122,7 @@ refresh_idp_access_token(IdP, RefreshToken) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec request_idp(get | post, http_client:code(), http_client:url(),
-    http_client:headers(), auth_logic:query_params()) ->
+    http_client:headers(), idp_auth:query_params()) ->
     {ResultHeaders :: http_client:headers(), ResultBody :: binary()}.
 request_idp(Method, ExpCode, Endpoint, Headers, Parameters) ->
     request_idp(Method, ExpCode, Endpoint, Headers, Parameters, []).
@@ -137,7 +138,7 @@ request_idp(Method, ExpCode, Endpoint, Headers, Parameters) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec request_idp(get | post, http_client:code(), http_client:url(),
-    http_client:headers(), auth_logic:query_params(), http_client:opts()) ->
+    http_client:headers(), idp_auth:query_params(), http_client:opts()) ->
     {ResultHeaders :: http_client:headers(), ResultBody :: binary()}.
 request_idp(Method, ExpCode, Endpoint, Headers, Parameters, Opts) ->
     {Url, Body} = case Method of

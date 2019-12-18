@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module encapsulates all handle service logic functionalities.
+%%% This module encapsulates all handle service logic functionality.
 %%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
@@ -72,7 +72,7 @@
 -spec create(Auth :: aai:auth(), Name :: binary(),
     ProxyEndpoint :: od_handle_service:proxy_endpoint(),
     ServiceProperties :: od_handle_service:service_properties()) ->
-    {ok, od_handle_service:id()} | {error, term()}.
+    {ok, od_handle_service:id()} | errors:error().
 create(Auth, Name, ProxyEndpoint, ServiceProperties) ->
     create(Auth, #{
         <<"name">> => Name,
@@ -88,7 +88,7 @@ create(Auth, Name, ProxyEndpoint, ServiceProperties) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Auth :: aai:auth(), Data :: #{}) ->
-    {ok, od_handle_service:id()} | {error, term()}.
+    {ok, od_handle_service:id()} | errors:error().
 create(Auth, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
@@ -105,7 +105,7 @@ create(Auth, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get(Auth :: aai:auth(), HServiceId :: od_handle_service:id()) ->
-    {ok, #od_handle_service{}} | {error, term()}.
+    {ok, #od_handle_service{}} | errors:error().
 get(Auth, HServiceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -120,7 +120,7 @@ get(Auth, HServiceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_protected_data(Auth :: aai:auth(), HServiceId :: od_handle_service:id()) ->
-    {ok, map()} | {error, term()}.
+    {ok, map()} | errors:error().
 get_protected_data(Auth, HServiceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -135,7 +135,7 @@ get_protected_data(Auth, HServiceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec list(Auth :: aai:auth()) ->
-    {ok, [od_handle_service:id()]} | {error, term()}.
+    {ok, [od_handle_service:id()]} | errors:error().
 list(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -149,7 +149,7 @@ list(Auth) ->
 %% Get all possible handle service privileges.
 %% @end
 %%--------------------------------------------------------------------
--spec list_privileges() -> {ok, map()} | {error, term()}.
+-spec list_privileges() -> {ok, map()} | errors:error().
 list_privileges() ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -164,7 +164,7 @@ list_privileges() ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    Data :: #{}) -> ok | {error, term()}.
+    Data :: #{}) -> ok | errors:error().
 update(Auth, HServiceId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
@@ -180,7 +180,7 @@ update(Auth, HServiceId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete(Auth :: aai:auth(), HServiceId :: od_handle_service:id()) ->
-    ok | {error, term()}.
+    ok | errors:error().
 delete(Auth, HServiceId) ->
     entity_logic:handle(#el_req{
         operation = delete,
@@ -196,7 +196,7 @@ delete(Auth, HServiceId) ->
 %%--------------------------------------------------------------------
 -spec add_user(Auth :: aai:auth(),
     HServiceId :: od_handle_service:id(), UserId :: od_user:id()) ->
-    {ok, od_user:id()} | {error, term()}.
+    {ok, od_user:id()} | errors:error().
 add_user(Auth, HServiceId, UserId)  ->
     add_user(Auth, HServiceId, UserId, #{}).
 
@@ -211,8 +211,8 @@ add_user(Auth, HServiceId, UserId)  ->
 %%--------------------------------------------------------------------
 -spec add_user(Auth :: aai:auth(),
     HServiceId :: od_handle_service:id(), UserId :: od_user:id(),
-    PrivilegesPrivilegesOrData :: [privileges:handle_service_privileges()] | #{}) ->
-    {ok, od_user:id()} | {error, term()}.
+    PrivilegesPrivilegesOrData :: [privileges:handle_service_privilege()] | #{}) ->
+    {ok, od_user:id()} | errors:error().
 add_user(Auth, HServiceId, UserId, Privileges) when is_list(Privileges) ->
     add_user(Auth, HServiceId, UserId, #{
         <<"privileges">> => Privileges
@@ -233,7 +233,7 @@ add_user(Auth, HServiceId, UserId, Data) ->
 %%--------------------------------------------------------------------
 -spec add_group(Auth :: aai:auth(),
     HServiceId :: od_handle_service:id(), GroupId :: od_group:id()) ->
-    {ok, od_group:id()} | {error, term()}.
+    {ok, od_group:id()} | errors:error().
 add_group(Auth, HServiceId, GroupId)  ->
     add_group(Auth, HServiceId, GroupId, #{}).
 
@@ -248,8 +248,8 @@ add_group(Auth, HServiceId, GroupId)  ->
 %%--------------------------------------------------------------------
 -spec add_group(Auth :: aai:auth(),
     HServiceId :: od_handle_service:id(), GroupId :: od_group:id(),
-    PrivilegesOrData :: [privileges:handle_service_privileges()] | #{}) ->
-    {ok, od_group:id()} | {error, term()}.
+    PrivilegesOrData :: [privileges:handle_service_privilege()] | #{}) ->
+    {ok, od_group:id()} | errors:error().
 add_group(Auth, HServiceId, GroupId, Privileges) when is_list(Privileges) ->
     add_group(Auth, HServiceId, GroupId, #{
         <<"privileges">> => Privileges
@@ -269,7 +269,7 @@ add_group(Auth, HServiceId, GroupId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_users(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, [od_user:id()]} | {error, term()}.
+    {ok, [od_user:id()]} | errors:error().
 get_users(Auth, HServiceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -284,7 +284,7 @@ get_users(Auth, HServiceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_users(Auth :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, [od_user:id()]} | {error, term()}.
+    {ok, [od_user:id()]} | errors:error().
 get_eff_users(Auth, HServiceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -299,7 +299,7 @@ get_eff_users(Auth, HServiceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_user(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, #{}} | errors:error().
 get_user(Auth, HServiceId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -316,7 +316,7 @@ get_user(Auth, HServiceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_user(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    UserId :: od_user:id()) -> {ok, #{}} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, #{}} | errors:error().
 get_eff_user(Auth, HServiceId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -332,7 +332,7 @@ get_eff_user(Auth, HServiceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_user_privileges(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, [privileges:handle_service_privilege()]} | errors:error().
 get_user_privileges(Auth, HServiceId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -348,7 +348,7 @@ get_user_privileges(Auth, HServiceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_user_privileges(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    UserId :: od_user:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
+    UserId :: od_user:id()) -> {ok, [privileges:handle_service_privilege()]} | errors:error().
 get_eff_user_privileges(Auth, HServiceId, UserId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -363,7 +363,7 @@ get_eff_user_privileges(Auth, HServiceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_groups(Auth :: aai:auth(), HServiceId :: od_handle_service:id()) ->
-    {ok, [od_group:id()]} | {error, term()}.
+    {ok, [od_group:id()]} | errors:error().
 get_groups(Auth, HServiceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -378,7 +378,7 @@ get_groups(Auth, HServiceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_groups(Auth :: aai:auth(), HServiceId :: od_handle_service:id()) ->
-    {ok, [od_group:id()]} | {error, term()}.
+    {ok, [od_group:id()]} | errors:error().
 get_eff_groups(Auth, HServiceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -393,7 +393,7 @@ get_eff_groups(Auth, HServiceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_group(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, #{}} | errors:error().
 get_group(Auth, HServiceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -410,7 +410,7 @@ get_group(Auth, HServiceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_group(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    GroupId :: od_group:id()) -> {ok, #{}} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, #{}} | errors:error().
 get_eff_group(Auth, HServiceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -426,7 +426,7 @@ get_eff_group(Auth, HServiceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_group_privileges(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    GroupId :: od_group:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, [privileges:handle_service_privilege()]} | errors:error().
 get_group_privileges(Auth, HServiceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -442,7 +442,7 @@ get_group_privileges(Auth, HServiceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_eff_group_privileges(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    GroupId :: od_group:id()) -> {ok, [privileges:handle_service_privileges()]} | {error, term()}.
+    GroupId :: od_group:id()) -> {ok, [privileges:handle_service_privilege()]} | errors:error().
 get_eff_group_privileges(Auth, HServiceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -457,7 +457,7 @@ get_eff_group_privileges(Auth, HServiceId, GroupId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_handles(Auth :: aai:auth(), HServiceId :: od_handle_service:id()) ->
-    {ok, [od_handle:id()]} | {error, term()}.
+    {ok, [od_handle:id()]} | errors:error().
 get_handles(Auth, HServiceId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -472,7 +472,7 @@ get_handles(Auth, HServiceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_handle(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    HandleId :: od_handle:id()) -> {ok, #{}} | {error, term()}.
+    HandleId :: od_handle:id()) -> {ok, #{}} | errors:error().
 get_handle(Auth, HServiceId, HandleId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -490,7 +490,7 @@ get_handle(Auth, HServiceId, HandleId) ->
 %%--------------------------------------------------------------------
 -spec update_user_privileges(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
     UserId :: od_user:id(), PrivsToGrant :: [privileges:handle_service_privilege()],
-    PrivsToRevoke :: [privileges:handle_service_privilege()]) -> ok | {error, term()}.
+    PrivsToRevoke :: [privileges:handle_service_privilege()]) -> ok | errors:error().
 update_user_privileges(Auth, HServiceId, UserId, PrivsToGrant, PrivsToRevoke) ->
     update_user_privileges(Auth, HServiceId, UserId, #{
         <<"grant">> => PrivsToGrant,
@@ -505,7 +505,7 @@ update_user_privileges(Auth, HServiceId, UserId, PrivsToGrant, PrivsToRevoke) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update_user_privileges(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    UserId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
+    UserId :: od_user:id(), Data :: #{}) -> ok | errors:error().
 update_user_privileges(Auth, HServiceId, UserId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
@@ -523,7 +523,7 @@ update_user_privileges(Auth, HServiceId, UserId, Data) ->
 %%--------------------------------------------------------------------
 -spec update_group_privileges(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
     GroupId :: od_group:id(), PrivsToGrant :: [privileges:handle_service_privilege()],
-    PrivsToRevoke :: [privileges:handle_service_privilege()]) -> ok | {error, term()}.
+    PrivsToRevoke :: [privileges:handle_service_privilege()]) -> ok | errors:error().
 update_group_privileges(Auth, HServiceId, GroupId, PrivsToGrant, PrivsToRevoke) ->
     update_group_privileges(Auth, HServiceId, GroupId, #{
         <<"grant">> => PrivsToGrant,
@@ -538,7 +538,7 @@ update_group_privileges(Auth, HServiceId, GroupId, PrivsToGrant, PrivsToRevoke) 
 %% @end
 %%--------------------------------------------------------------------
 -spec update_group_privileges(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    GroupId :: od_user:id(), Data :: #{}) -> ok | {error, term()}.
+    GroupId :: od_user:id(), Data :: #{}) -> ok | errors:error().
 update_group_privileges(Auth, HServiceId, GroupId, Data) ->
     entity_logic:handle(#el_req{
         operation = update,
@@ -554,7 +554,7 @@ update_group_privileges(Auth, HServiceId, GroupId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_user(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    UserId :: od_user:id()) -> ok | {error, term()}.
+    UserId :: od_user:id()) -> ok | errors:error().
 remove_user(Auth, HServiceId, UserId) ->
     entity_logic:handle(#el_req{
         operation = delete,
@@ -569,7 +569,7 @@ remove_user(Auth, HServiceId, UserId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_group(Auth :: aai:auth(), HServiceId :: od_handle_service:id(),
-    GroupId :: od_group:id()) -> ok | {error, term()}.
+    GroupId :: od_group:id()) -> ok | errors:error().
 remove_group(Auth, HServiceId, GroupId) ->
     entity_logic:handle(#el_req{
         operation = delete,

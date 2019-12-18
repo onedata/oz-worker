@@ -10,7 +10,7 @@
 %%% Single Sign-On protocols (OpenId or SAML).
 %%% @end
 %%%-------------------------------------------------------------------
--module(auth_logic).
+-module(idp_auth).
 
 -include("auth/auth_common.hrl").
 -include("auth/auth_errors.hrl").
@@ -18,7 +18,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 % URL in IdP where the client should be redirected for authentication
 -type login_endpoint() :: binary().
@@ -47,12 +47,6 @@
 
 %% API
 -export([get_login_endpoint/4, validate_login/2]).
--export([authorize_by_access_token/1]).
--export([authorize_by_macaroons/2]).
--export([authorize_by_oz_worker_gui_token/1, authorize_by_oz_panel_gui_token/1]).
--export([authorize_by_oneprovider_gui_token/1]).
--export([authorize_by_gui_token/2]).
--export([authorize_by_basic_auth/1]).
 -export([acquire_idp_access_token/2, refresh_idp_access_token/2]).
 
 %%%===================================================================
@@ -74,7 +68,7 @@
     RedirectAfterLogin :: binary(), TestMode :: boolean()) ->
     {ok, map()} | {error, term()}.
 get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode) ->
-    TestMode andalso auth_test_mode:process_enable_test_mode(),
+    TestMode andalso idp_auth_test_mode:process_enable_test_mode(),
     try
         {ok, StateToken} = state_token:create(
             IdP, LinkAccount, RedirectAfterLogin, TestMode
@@ -133,178 +127,6 @@ validate_login(Method, Req) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Tries to a authorize a client by an access token - either a token issued
-%% by Onezone or an external access token - originating from an Identity Provider.
-%% {true, Client} - client was authorized
-%% false - this method cannot verify authorization, other methods should be tried
-%% {error, term()} - authorization invalid
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_access_token(tokens:serialized() | cowboy_req:req()) ->
-    {true, aai:auth()} | false | {error, term()}.
-authorize_by_access_token(Serialized) when is_binary(Serialized) ->
-    case authorize_by_macaroons(Serialized, []) of
-        {true, Client1} ->
-            {true, Client1};
-        _ ->
-            case openid_protocol:authorize_by_idp_access_token(Serialized) of
-                {true, {IdP, Attributes}} ->
-                    LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
-                    {ok, #document{key = UserId}} = linked_accounts:acquire_user(LinkedAccount),
-                    {true, ?USER(UserId)};
-                {error, _} = Error ->
-                    Error;
-                false ->
-                    ?ERROR_BAD_MACAROON
-            end
-    end;
-authorize_by_access_token(Req) when is_map(Req) ->
-    case tokens:parse_access_token_header(Req) of
-        undefined -> false;
-        AccessToken -> authorize_by_access_token(AccessToken)
-    end.
-
-
-%% @todo VFS-5554 The use of discharge macaroons is deprecated, kept for backward compatibility
--spec authorize_by_macaroons(Macaroon :: binary() | tokens:token(),
-    DischMacaroons :: binary() | [binary()] | [macaroon:macaroon()]) ->
-    {true, aai:auth()} | {error, term()}.
-authorize_by_macaroons(Serialized, DischMacaroons) when is_binary(Serialized) ->
-    case tokens:deserialize(Serialized) of
-        {ok, Token} -> authorize_by_macaroons(Token, DischMacaroons);
-        {error, _} -> ?ERROR_BAD_MACAROON
-    end;
-authorize_by_macaroons(Token, SerializedDischarges) when is_binary(SerializedDischarges) ->
-    authorize_by_macaroons(Token, binary:split(SerializedDischarges, <<" ">>, [global, trim_all]));
-authorize_by_macaroons(Token, [Bin | _] = DischMacaroons) when is_binary(Bin) ->
-    try
-        DeserializedDischMacaroons = [
-            begin {ok, DM} = macaroons:deserialize(S), DM end || S <- DischMacaroons
-        ],
-        authorize_by_macaroons(Token, DeserializedDischMacaroons)
-    catch
-        _:_ ->
-            ?ERROR_BAD_MACAROON
-    end;
-authorize_by_macaroons(Token, DischMacaroons) ->
-    case auth_tokens:validate_token(<<>>, Token, DischMacaroons, <<"">>, undefined) of
-        {ok, UserId} ->
-            {true, ?USER(UserId)};
-        _ ->
-            case access_tokens:verify_provider_auth(Token) of
-                {ok, ProviderId} ->
-                    {true, ?PROVIDER(ProviderId)};
-                {error, _} ->
-                    ?ERROR_BAD_MACAROON
-            end
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Tries to a authorize a client by a GUI token issued for the oz_worker service.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_oz_worker_gui_token(tokens:token() | tokens:serialized()) ->
-    {true, aai:auth()} | {error, term()}.
-authorize_by_oz_worker_gui_token(Token) ->
-    authorize_by_gui_token(Token, ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Tries to a authorize a client by a GUI token issued for the oz_panel service.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_oz_panel_gui_token(tokens:token() | tokens:serialized()) ->
-    {true, aai:auth()} | {error, term()}.
-authorize_by_oz_panel_gui_token(Token) ->
-    authorize_by_gui_token(Token, ?AUD(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Tries to a authorize a client by a GUI token issued for a
-%% op_worker or op_panel service.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_oneprovider_gui_token(cowboy_req:req()) ->
-    false | {true, aai:auth()} | {error, term()}.
-authorize_by_oneprovider_gui_token(Req) ->
-    case {tokens:parse_access_token_header(Req), tokens:parse_audience_token_header(Req)} of
-        {_, undefined} ->
-            false;
-        {undefined, _} ->
-            false;
-        {SerializedToken, SerializedAudToken} ->
-            authorize_by_oneprovider_gui_token(SerializedToken, SerializedAudToken)
-    end.
-
-%% @private
--spec authorize_by_oneprovider_gui_token(
-    tokens:token() | tokens:serialized(), tokens:audience_token() | tokens:serialized()) ->
-    {true, aai:auth()} | {error, term()}.
-authorize_by_oneprovider_gui_token(SerializedToken, AudToken) when is_binary(SerializedToken) ->
-    case tokens:deserialize(SerializedToken) of
-        {ok, Token} -> authorize_by_oneprovider_gui_token(Token, AudToken);
-        {error, _} = Error -> Error
-    end;
-authorize_by_oneprovider_gui_token(Token, SerializedAudToken) when is_binary(SerializedAudToken) ->
-    case tokens:deserialize_audience_token(SerializedAudToken) of
-        {ok, AudToken} -> authorize_by_oneprovider_gui_token(Token, AudToken);
-        {error, _} = Error -> Error
-    end;
-authorize_by_oneprovider_gui_token(Token, AudToken) ->
-    case access_tokens:verify_provider_auth(AudToken#audience_token.token) of
-        {ok, ProviderId} ->
-            authorize_by_gui_token(Token, ?AUD(AudToken#audience_token.audience_type, ProviderId));
-        {error, _} = Error ->
-            Error
-    end.
-
-
-%% @private
--spec authorize_by_gui_token(tokens:token() | tokens:serialized(), aai:audience()) ->
-    {true, aai:auth()} | {error, term()}.
-authorize_by_gui_token(Serialized, Audience) when is_binary(Serialized) ->
-    case tokens:deserialize(Serialized) of
-        {ok, Token} -> authorize_by_gui_token(Token, Audience);
-        {error, _} = Error -> Error
-    end;
-authorize_by_gui_token(Token, Audience) ->
-    case gui_tokens:verify(Token, Audience) of
-        {ok, Auth} -> {true, Auth};
-        {error, _} = Error -> Error
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Tries to a authorize a client by basic auth credentials.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize_by_basic_auth(UserPasswdB64 :: binary() | cowboy_req:req()) ->
-    {true, aai:auth()} | {error, term()}.
-authorize_by_basic_auth(UserPasswdB64) when is_binary(UserPasswdB64) ->
-    UserPasswd = base64:decode(UserPasswdB64),
-    [Username, Passwd] = binary:split(UserPasswd, <<":">>),
-    case basic_auth:authenticate(Username, Passwd) of
-        {ok, UserId} ->
-            {true, ?USER(UserId)};
-        {error, _} = Error ->
-            Error
-    end;
-authorize_by_basic_auth(Req) ->
-    case cowboy_req:header(<<"authorization">>, Req, undefined) of
-        <<"Basic ", UserPasswdB64/binary>> ->
-            authorize_by_basic_auth(UserPasswdB64);
-        _ ->
-            false
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Acquires an access token for given user, issued by given IdP.
 %% Returns ?ERROR_NOT_FOUND when:
 %%  * the user does not have an account in such IdP
@@ -351,7 +173,7 @@ acquire_idp_access_token(#linked_account{idp = IdP, access_token = {AccessToken,
 %% @end
 %%--------------------------------------------------------------------
 -spec refresh_idp_access_token(auth_config:idp(), refresh_token()) ->
-    {ok, {auth_logic:access_token(), auth_logic:access_token_ttl()}} | {error, term()}.
+    {ok, {idp_auth:access_token(), idp_auth:access_token_ttl()}} | {error, term()}.
 refresh_idp_access_token(IdP, RefreshToken) ->
     try
         {ok, Attributes} = openid_protocol:refresh_idp_access_token(IdP, RefreshToken),
@@ -377,7 +199,7 @@ refresh_idp_access_token(IdP, RefreshToken) ->
 -spec validate_login_by_state(Payload :: #{}, state_token:state_token(), state_token:state_info()) ->
     {ok, od_user:id()} | {error, term()}.
 validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode, link_account := LinkAccount}) ->
-    TestMode andalso auth_test_mode:process_enable_test_mode(),
+    TestMode andalso idp_auth_test_mode:process_enable_test_mode(),
     Handler = get_protocol_handler(IdP),
     ?auth_debug("Login attempt from IdP '~p' (state: ~s), payload:~n~tp", [
         IdP, StateToken, Payload
@@ -393,13 +215,13 @@ validate_login_by_state(Payload, StateToken, #{idp := IdP, test_mode := TestMode
     LinkedAccount = attribute_mapping:map_attributes(IdP, Attributes),
     LinkedAccountMap = maps:without(
         [<<"name">>, <<"login">>, <<"alias">>, <<"emailList">>, <<"groups">>], % do not include deprecated fields
-        linked_accounts:to_map(LinkedAccount)
+        linked_accounts:to_map(LinkedAccount, all_fields)
     ),
     ?auth_debug("Attributes from IdP '~p' (state: ~s) sucessfully mapped:~n~ts", [
         IdP, StateToken, json_utils:encode(LinkedAccountMap, [pretty])
     ]),
 
-    case {auth_test_mode:process_is_test_mode_enabled(), LinkAccount} of
+    case {idp_auth_test_mode:process_is_test_mode_enabled(), LinkAccount} of
         {true, _} ->
             validate_test_login_by_linked_account(LinkedAccount);
         {false, false} ->
@@ -460,7 +282,7 @@ validate_link_account_request(LinkedAccount, TargetUserId) ->
     {ok, od_user:id()}.
 validate_test_login_by_linked_account(LinkedAccount) ->
     {UserId, UserData} = linked_accounts:build_test_user_info(LinkedAccount),
-    auth_test_mode:store_user_data(UserData),
+    idp_auth_test_mode:store_user_data(UserData),
     {ok, UserId}.
 
 

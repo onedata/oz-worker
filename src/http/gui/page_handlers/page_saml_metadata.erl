@@ -16,6 +16,7 @@
 -behaviour(dynamic_page_behaviour).
 
 -include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 
 -export([handle/2]).
 
@@ -32,7 +33,7 @@
 handle(<<"GET">>, Req) ->
     QsVals = cowboy_req:parse_qs(Req),
     Test = proplists:get_value(<<"test">>, QsVals, <<"false">>),
-    Test =:= <<"true">> andalso auth_test_mode:process_enable_test_mode(),
+    Test =:= <<"true">> andalso idp_auth_test_mode:process_enable_test_mode(),
     case auth_config:get_saml_sp_config() of
         {error, saml_disabled} ->
             cowboy_req:reply(?HTTP_404_NOT_FOUND, Req);
@@ -40,6 +41,6 @@ handle(<<"GET">>, Req) ->
             SignedXml = esaml_sp:generate_metadata(SpConfig),
             Metadata = xmerl:export([SignedXml], xmerl_xml),
             cowboy_req:reply(?HTTP_200_OK, #{
-                <<"content-type">> => <<"text/xml">>
+                ?HDR_CONTENT_TYPE => <<"text/xml">>
             }, Metadata, Req)
     end.

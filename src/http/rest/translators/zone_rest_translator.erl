@@ -14,7 +14,7 @@
 -author("Wojciech Geisler").
 
 -include("http/rest.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([create_response/4, get_response/2]).
 

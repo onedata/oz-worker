@@ -54,13 +54,14 @@
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/privileges.hrl").
 
 %% API
 -export([dev_provider_registration_route/0]).
 -export([set_up_users/1, set_up_test_entities/3, destroy_test_entities/3]).
 -export([create_user_with_uuid/2]).
 -export([create_group_with_uuid/3]).
--export([create_space_with_uuid/3, create_space_with_provider/4]).
+-export([create_space_with_uuid/3]).
 
 %%%===================================================================
 %%% API
@@ -159,13 +160,6 @@ set_up_test_entities(Users, Groups, Spaces) ->
                     SpaceName ->
                         create_space_with_uuid(Member, SpaceName, SpaceId)
                 end,
-                % Support the space by all providers
-                lists:foreach(
-                    fun({ProviderId, ProviderProps}) ->
-                        SupportedSize = proplists:get_value(<<"supported_size">>, ProviderProps),
-                        {ok, Token} = space_logic:create_provider_invite_token(?ROOT, SpaceId),
-                        {ok, SpaceId} = provider_logic:support_space(?ROOT, ProviderId, Token, SupportedSize)
-                    end, ProviderList),
                 % Add all users to space
                 lists:foreach(
                     fun(UserId) ->
@@ -175,7 +169,25 @@ set_up_test_entities(Users, Groups, Spaces) ->
                 lists:foreach(
                     fun(GroupId) ->
                         space_logic:add_user(?ROOT, SpaceId, GroupId)
-                    end, GroupsToAdd)
+                    end, GroupsToAdd),
+                % Support the space by all providers
+                lists:foreach(
+                    fun({ProviderId, ProviderProps}) ->
+                        FirstUser = hd(UserList),
+                        SupportedSize = proplists:get_value(<<"supported_size">>, ProviderProps),
+                        ok = space_logic:update_user_privileges(
+                            ?ROOT, SpaceId, FirstUser, [?SPACE_ADD_SUPPORT], []
+                        ),
+                        {ok, Token} = space_logic:create_space_support_token(
+                            ?USER(FirstUser), SpaceId
+                        ),
+                        {ok, ProviderId} = storage_logic:create(
+                            ?PROVIDER(ProviderId), ProviderId, ?STORAGE_DEFAULT_NAME
+                        ),
+                        {ok, SpaceId} = storage_logic:support_space(
+                            ?PROVIDER(ProviderId), ProviderId, Token, SupportedSize
+                        )
+                    end, ProviderList)
             end, Spaces),
 
         % Give all space perms to users that have it as default space
@@ -251,32 +263,15 @@ create_group_with_uuid(UserId, Name, GroupId) ->
 %%--------------------------------------------------------------------
 -spec create_space_with_uuid({od_user | od_group, Id :: binary()}, Name :: binary(), UUId :: binary()) ->
     {ok, SpaceId :: binary()} | no_return().
-create_space_with_uuid(Member, Name, UUId) ->
-    create_space_with_provider(Member, Name, #{}, UUId).
-
-
-%%--------------------------------------------------------------------
-%% @doc Creates a Space for a user or a group with implicit UUId, with a preexisting provider.
-%% Throws exception when call to the datastore fails, or user/group doesn't exist.
-%% @end
-%%--------------------------------------------------------------------
--spec create_space_with_provider({od_user | od_group, Id :: binary()}, Name :: binary(),
-    Support :: #{Provider :: binary() => ProvidedSize :: pos_integer()}, SpaceId :: binary()) ->
-    {ok, SpaceId :: binary()}.
-create_space_with_provider({MemberType, MemberId}, Name, Supports, SpaceId) ->
+create_space_with_uuid({MemberType, MemberId}, Name, UUId) ->
     {ok, _} = od_space:save(
-        #document{key = SpaceId, value = #od_space{name = Name}}
+        #document{key = UUId, value = #od_space{name = Name}}
     ),
     AddFun = case MemberType of
         od_user -> add_user;
         od_group -> add_group
     end,
     {ok, MemberId} = space_logic:AddFun(
-        ?ROOT, SpaceId, MemberId, privileges:space_admin()
+        ?ROOT, UUId, MemberId, privileges:space_admin()
     ),
-    maps:map(
-        fun(ProviderId, SupportSize) ->
-            {ok, Macaroon} = space_logic:create_provider_invite_token(?ROOT, SpaceId),
-            {ok, SpaceId} = provider_logic:support_space(?ROOT, ProviderId, Macaroon, SupportSize)
-        end, Supports),
-    {ok, SpaceId}.
+    {ok, UUId}.

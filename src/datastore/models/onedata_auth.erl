@@ -7,7 +7,7 @@
 %%%-------------------------------------------------------------------
 %%% @doc
 %%% API for onedata_auth record - used to store macaroon's secrets.
-%%% @todo VFS-5554 This module is deprecated, kept for backward compatibility
+%%% @TODO VFS-5554 This module is deprecated, kept for backward compatibility
 %%% @end
 %%%-------------------------------------------------------------------
 -module(onedata_auth).

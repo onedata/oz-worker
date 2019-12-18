@@ -14,13 +14,12 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("invite_tokens.hrl").
 -include("entity_logic.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
@@ -32,17 +31,23 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity and its revision from datastore based on EntityId.
-%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% Retrieves an entity and its revision from datastore, if applicable.
+%% Should return:
+%%  * {true, entity_logic:versioned_entity()}
+%%      if the fetch was successful
+%%  * false
+%%      if fetch is not applicable for this operation
+%%  * {error, _}
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:versioned_entity()} | entity_logic:error().
-fetch_entity(SpaceId) ->
+-spec fetch_entity(gri:gri()) ->
+    {true, entity_logic:versioned_entity()} | false | errors:error().
+fetch_entity(#gri{id = SpaceId}) ->
     case od_space:get(SpaceId) of
         {ok, #document{value = Space, revs = [DbRev | _]}} ->
             {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
-            {ok, {Space, Revision}};
+            {true, {Space, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -58,7 +63,7 @@ fetch_entity(SpaceId) ->
     entity_logic:scope()) -> boolean().
 operation_supported(create, invite_user_token, private) -> true;
 operation_supported(create, invite_group_token, private) -> true;
-operation_supported(create, invite_provider_token, private) -> true;
+operation_supported(create, space_support_token, private) -> true;
 
 operation_supported(create, instance, private) -> true;
 operation_supported(create, join, private) -> true;
@@ -88,8 +93,10 @@ operation_supported(get, {eff_group_membership, _}, private) -> true;
 
 operation_supported(get, shares, private) -> true;
 
-operation_supported(get, providers, private) -> true;
+operation_supported(get, eff_providers, private) -> true;
 operation_supported(get, harvesters, private) -> true;
+
+operation_supported(get, storages, private) -> true;
 
 operation_supported(update, instance, private) -> true;
 operation_supported(update, {user_privileges, _}, private) -> true;
@@ -98,6 +105,7 @@ operation_supported(update, {group_privileges, _}, private) -> true;
 operation_supported(delete, instance, private) -> true;
 operation_supported(delete, {user, _}, private) -> true;
 operation_supported(delete, {group, _}, private) -> true;
+operation_supported(delete, {storage, _}, private) -> true;
 operation_supported(delete, {provider, _}, private) -> true;
 operation_supported(delete, {harvester, _}, private) -> true;
 
@@ -125,7 +133,7 @@ is_subscribable({eff_user_membership, _}, private) -> true;
 is_subscribable({group_privileges, _}, private) -> true;
 is_subscribable({eff_group_privileges, _}, private) -> true;
 is_subscribable({eff_group_membership, _}, private) -> true;
-is_subscribable(providers, private) -> true;
+is_subscribable(eff_providers, private) -> true;
 is_subscribable(harvesters, private) -> true;
 is_subscribable(_, _) -> false.
 
@@ -139,8 +147,7 @@ is_subscribable(_, _) -> false.
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth = Auth}) ->
     #{<<"name">> := Name} = Req#el_req.data,
     {ok, #document{key = SpaceId}} = od_space:create(#document{
-        value = #od_space{name = Name, creator = Auth#auth.subject
-        }
+        value = #od_space{name = Name, creator = Auth#auth.subject}
     }),
     case Req#el_req.auth_hint of
         ?AS_USER(UserId) ->
@@ -158,14 +165,17 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         _ ->
             ok
     end,
-    {ok, {Space, Rev}} = fetch_entity(SpaceId),
+    {true, {Space, Rev}} = fetch_entity(#gri{aspect = instance, id = SpaceId}),
     {ok, resource, {GRI#gri{id = SpaceId}, {Space, Rev}}};
 
-create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
-    Macaroon = maps:get(<<"token">>, Req#el_req.data),
-    % In the future, privileges can be included in token
-    Privileges = privileges:space_member(),
-    JoinSpaceFun = fun(od_space, SpaceId) ->
+create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = join}}) ->
+    Token = maps:get(<<"token">>, Req#el_req.data),
+    ExpType = case Req#el_req.auth_hint of
+        ?AS_USER(_) -> ?USER_JOIN_SPACE;
+        ?AS_GROUP(_) -> ?GROUP_JOIN_SPACE
+    end,
+
+    invite_tokens:consume(Auth, Token, ExpType, fun(SpaceId, Privileges) ->
         case Req#el_req.auth_hint of
             ?AS_USER(UserId) ->
                 entity_graph:add_relation(
@@ -178,47 +188,30 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = join}}) ->
                     od_group, GroupId,
                     od_space, SpaceId,
                     Privileges
-                );
-            _ ->
-                ok
+                )
         end,
-        SpaceId
-    end,
-    SpaceId = invite_tokens:consume(Macaroon, JoinSpaceFun),
+        NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance,
+            scope = case lists:member(?SPACE_VIEW, Privileges) of
+                true -> private;
+                false -> protected
+            end
+        },
+        {true, {Space, Rev}} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
+        {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
+        {ok, resource, {NewGRI, {SpaceData, Rev}}}
+    end);
 
-    NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance,
-        scope = case lists:member(?SPACE_VIEW, Privileges) of
-            true -> private;
-            false -> protected
-        end
-    },
-    {ok, {Space, Rev}} = fetch_entity(SpaceId),
-    {ok, SpaceData} = get(#el_req{gri = NewGRI}, Space),
-    {ok, resource, {NewGRI, {SpaceData, Rev}}};
+create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    token_logic:create_legacy_invite_token(Auth, ?USER_JOIN_SPACE, SpaceId);
 
-create(Req = #el_req{gri = #gri{id = SpaceId, aspect = invite_user_token}}) ->
-    {ok, Macaroon} = invite_tokens:create(
-        Req#el_req.auth,
-        ?SPACE_INVITE_USER_TOKEN,
-        {od_space, SpaceId}
-    ),
-    {ok, value, Macaroon};
+create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = invite_group_token}}) ->
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    token_logic:create_legacy_invite_token(Auth, ?GROUP_JOIN_SPACE, SpaceId);
 
-create(Req = #el_req{gri = #gri{id = SpaceId, aspect = invite_group_token}}) ->
-    {ok, Macaroon} = invite_tokens:create(
-        Req#el_req.auth,
-        ?SPACE_INVITE_GROUP_TOKEN,
-        {od_space, SpaceId}
-    ),
-    {ok, value, Macaroon};
-
-create(Req = #el_req{gri = #gri{id = SpaceId, aspect = invite_provider_token}}) ->
-    {ok, Macaroon} = invite_tokens:create(
-        Req#el_req.auth,
-        ?SPACE_SUPPORT_TOKEN,
-        {od_space, SpaceId}
-    ),
-    {ok, value, Macaroon};
+create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = space_support_token}}) ->
+    %% @TODO VFS-5815 deprecated, should be removed in the next major version AFTER 19.09.*
+    token_logic:create_legacy_invite_token(Auth, ?SUPPORT_SPACE, SpaceId);
 
 create(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}, data = Data}) ->
     Privileges = maps:get(<<"privileges">>, Data, privileges:space_member()),
@@ -228,7 +221,7 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {user, UserId}}, data = Data}) 
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, {User, Rev}} = user_logic_plugin:fetch_entity(UserId),
+    {true, {User, Rev}} = user_logic_plugin:fetch_entity(#gri{id = UserId}),
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
     {ok, resource, {NewGRI, ?THROUGH_SPACE(SpaceId), {UserData, Rev}}};
 
@@ -243,7 +236,7 @@ create(Req = #el_req{gri = GRI = #gri{id = SpaceId, aspect = group}}) ->
         od_space, SpaceId,
         Privileges
     ),
-    {ok, {Group, Rev}} = group_logic_plugin:fetch_entity(GroupId),
+    {true, {Group, Rev}} = group_logic_plugin:fetch_entity(#gri{id = GroupId}),
     {ok, resource, {NewGRI, {Group, Rev}}};
 
 create(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}, data = Data}) ->
@@ -254,7 +247,7 @@ create(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}, data = Data}
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
-    {ok, {Group, Rev}} = group_logic_plugin:fetch_entity(GroupId),
+    {true, {Group, Rev}} = group_logic_plugin:fetch_entity(#gri{id = GroupId}),
     {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
     {ok, resource, {NewGRI, ?THROUGH_GROUP(SpaceId), {GroupData, Rev}}};
 
@@ -265,7 +258,7 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
         <<"maxStreamSeq">> := MaxStreamSeq,
         <<"batch">> := Batch
     } = Data,
-    
+
     Res = utils:pmap(fun(HarvesterId) ->
         Indices = maps:get(HarvesterId, Destination),
         case harvester_logic:submit_batch(Auth, HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq) of
@@ -273,13 +266,14 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
             Error -> {HarvesterId, Error}
         end
     end, maps:keys(Destination)),
-    
+
     {ok, value, lists:foldl(
         fun({HarvesterId, {error, _} = Error}, Acc) -> Acc#{HarvesterId => #{<<"error">> => Error}};
-           ({HarvesterId, FailedIndices}, Acc) when map_size(FailedIndices) =/= 0 -> Acc#{HarvesterId => FailedIndices};
-           (_, Acc) -> Acc
+            ({HarvesterId, FailedIndices}, Acc) when map_size(FailedIndices) =/= 0 ->
+                Acc#{HarvesterId => FailedIndices};
+            (_, Acc) -> Acc
         end, #{}, Res)}.
-    
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -304,12 +298,12 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Space) ->
     {ok, Space};
 get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
     #od_space{
-        name = Name, providers = Providers, creation_time = CreationTime,
+        name = Name, creation_time = CreationTime,
         shares = Shares, creator = Creator
     } = Space,
     {ok, #{
         <<"name">> => Name,
-        <<"providers">> => Providers,
+        <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator,
         <<"sharedDirectories">> => length(Shares)
@@ -320,9 +314,9 @@ get(#el_req{gri = #gri{aspect = users}}, Space) ->
 get(#el_req{gri = #gri{aspect = eff_users}}, Space) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_user, Space)};
 get(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, Space) ->
-    {ok, entity_graph:get_privileges(direct, bottom_up, od_user, UserId, Space)};
+    {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_user, UserId, Space)};
 get(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, Space) ->
-    {ok, entity_graph:get_privileges(effective, bottom_up, od_user, UserId, Space)};
+    {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Space)};
 get(#el_req{gri = #gri{aspect = {eff_user_membership, UserId}}}, Space) ->
     {ok, entity_graph:get_intermediaries(bottom_up, od_user, UserId, Space)};
 
@@ -331,20 +325,23 @@ get(#el_req{gri = #gri{aspect = groups}}, Space) ->
 get(#el_req{gri = #gri{aspect = eff_groups}}, Space) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_group, Space)};
 get(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, Space) ->
-    {ok, entity_graph:get_privileges(direct, bottom_up, od_group, GroupId, Space)};
+    {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_group, GroupId, Space)};
 get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Space) ->
-    {ok, entity_graph:get_privileges(effective, bottom_up, od_group, GroupId, Space)};
+    {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_group, GroupId, Space)};
 get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Space) ->
     {ok, entity_graph:get_intermediaries(bottom_up, od_group, GroupId, Space)};
 
 get(#el_req{gri = #gri{aspect = shares}}, Space) ->
     {ok, Space#od_space.shares};
 
-get(#el_req{gri = #gri{aspect = providers}}, Space) ->
-    {ok, entity_graph:get_relations(direct, top_down, od_provider, Space)};
+get(#el_req{gri = #gri{aspect = eff_providers}}, Space) ->
+    {ok, entity_graph:get_relations(effective, top_down, od_provider, Space)};
 
 get(#el_req{gri = #gri{aspect = harvesters}}, Space) ->
-    {ok, entity_graph:get_relations(direct, bottom_up, od_harvester, Space)}.
+    {ok, entity_graph:get_relations(direct, bottom_up, od_harvester, Space)};
+
+get(#el_req{gri = #gri{aspect = storages}}, Space) ->
+    {ok, entity_graph:get_relations(direct, top_down, od_storage, Space)}.
 
 
 %%--------------------------------------------------------------------
@@ -392,7 +389,7 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
                 fun(ExistingStats) ->
                     harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, true)
                 end)
-            end, Harvesters),
+        end, Harvesters),
         entity_graph:delete_with_relations(od_space, SpaceId)
     end;
 
@@ -408,23 +405,50 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {group, GroupId}}}) ->
         od_space, SpaceId
     );
 
-delete(#el_req{gri = #gri{id = SpaceId, aspect = {provider, ProviderId}}}) ->
+delete(#el_req{gri = #gri{id = SpaceId, aspect = {storage, StorageId}}}) ->
     fun(#od_space{harvesters = Harvesters}) ->
+
+        {true, {
+            #od_storage{provider = ProviderId}, _Rev
+        }} = storage_logic_plugin:fetch_entity(#gri{id = StorageId}),
+
         lists:foreach(fun(HarvesterId) ->
             harvester_indices:update_stats(HarvesterId, all,
-                fun(ExistingStats) -> 
+                fun(ExistingStats) ->
                     harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, true)
                 end)
         end, Harvesters),
-        
+
         entity_graph:remove_relation(
             od_space, SpaceId,
-            od_provider, ProviderId
+            od_storage, StorageId
         )
     end;
 
+delete(#el_req{gri = #gri{id = SpaceId, aspect = {provider, ProviderId}}}) ->
+    fun(#od_space{harvesters = Harvesters, storages = Storages}) ->
+        lists:foreach(fun(HarvesterId) ->
+            harvester_indices:update_stats(HarvesterId, all,
+                fun(ExistingStats) ->
+                    harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, true)
+                end)
+        end, Harvesters),
+
+        lists:foreach(fun(StorageId) ->
+            case storage_logic_plugin:fetch_entity(#gri{id = StorageId}) of
+                {true, { #od_storage{provider = ProviderId}, _Rev}} ->
+                    entity_graph:remove_relation(
+                        od_space, SpaceId,
+                        od_storage, StorageId
+                    );
+                _ ->
+                    ok
+            end
+        end, maps:keys(Storages))
+    end;
+
 delete(#el_req{gri = #gri{id = SpaceId, aspect = {harvester, HarvesterId}}}) ->
-    fun(#od_space{providers = Providers}) ->
+    fun(#od_space{eff_providers = Providers}) ->
         harvester_indices:update_stats(HarvesterId, all, fun(ExistingStats) ->
             harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, maps:keys(Providers), true)
         end),
@@ -449,7 +473,7 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Space) -
         ?THROUGH_GROUP(GroupId) ->
             space_logic:has_eff_group(Space, GroupId);
         ?THROUGH_PROVIDER(ProviderId) ->
-            space_logic:has_provider(Space, ProviderId);
+            space_logic:is_supported_by_provider(Space, ProviderId);
         ?THROUGH_HARVESTER(HarvesterId) ->
             space_logic:has_harvester(Space, HarvesterId);
         undefined ->
@@ -480,8 +504,11 @@ exists(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Space) ->
 exists(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Space) ->
     entity_graph:has_relation(effective, bottom_up, od_group, GroupId, Space);
 
+exists(#el_req{gri = #gri{aspect = {storage, StorageId}}}, Space) ->
+    entity_graph:has_relation(direct, top_down, od_storage, StorageId, Space);
+
 exists(#el_req{gri = #gri{aspect = {provider, ProviderId}}}, Space) ->
-    entity_graph:has_relation(direct, top_down, od_provider, ProviderId, Space);
+    entity_graph:has_relation(effective, top_down, od_provider, ProviderId, Space);
 
 exists(#el_req{gri = #gri{aspect = {harvester, HarvesterId}}}, Space) ->
     entity_graph:has_relation(direct, bottom_up, od_harvester, HarvesterId, Space);
@@ -539,14 +566,14 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Space) 
             false
     end;
 
-authorize(#el_req{operation = create, gri = #gri{id = SpaceId, aspect = harvest_metadata}, 
+authorize(#el_req{operation = create, gri = #gri{id = SpaceId, aspect = harvest_metadata},
     auth = ?PROVIDER(ProviderId), data = #{<<"batch">> := Batch}}, Space) ->
-    
-    space_logic:has_provider(Space, ProviderId) andalso 
-            lists:all(fun(#{<<"fileId">> := FileId}) -> 
-                {ok, Guid} = file_id:objectid_to_guid(FileId),
-                file_id:guid_to_space_id(Guid) == SpaceId
-            end, Batch);
+
+    space_logic:is_supported_by_provider(Space, ProviderId) andalso
+        lists:all(fun(#{<<"fileId">> := FileId}) ->
+            {ok, Guid} = file_id:objectid_to_guid(FileId),
+            file_id:guid_to_space_id(Guid) == SpaceId
+        end, Batch);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_USER);
@@ -554,8 +581,8 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_toke
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_group_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_GROUP);
 
-authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_provider_token}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_ADD_PROVIDER);
+authorize(Req = #el_req{operation = create, gri = #gri{aspect = space_support_token}}, Space) ->
+    auth_by_privilege(Req, Space, ?SPACE_ADD_SUPPORT);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
     true;
@@ -565,7 +592,7 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = p
         ?USER(UserId) ->
             auth_by_privilege(UserId, Space, ?SPACE_VIEW);
         ?PROVIDER(ProviderId) ->
-            space_logic:has_provider(Space, ProviderId)
+            space_logic:is_supported_by_provider(Space, ProviderId)
     end;
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Space) ->
@@ -652,8 +679,11 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {user, _}}}, Spa
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {group, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_REMOVE_GROUP);
 
+authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {storage, _}}}, Space) ->
+    auth_by_privilege(Req, Space, ?SPACE_REMOVE_SUPPORT);
+
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {provider, _}}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_REMOVE_PROVIDER);
+    auth_by_privilege(Req, Space, ?SPACE_REMOVE_SUPPORT);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {harvester, _}}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_REMOVE_HARVESTER);
@@ -678,7 +708,7 @@ required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = invite
     [?OZ_SPACES_ADD_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = invite_group_token}}) ->
     [?OZ_SPACES_ADD_RELATIONSHIPS];
-required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = invite_provider_token}}) ->
+required_admin_privileges(#el_req{operation = create, gri = #gri{aspect = space_support_token}}) ->
     [?OZ_SPACES_ADD_RELATIONSHIPS];
 
 required_admin_privileges(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
@@ -732,10 +762,13 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_group
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = shares}}) ->
     [?OZ_SPACES_LIST_RELATIONSHIPS];
 
-required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = providers}}) ->
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_providers}}) ->
     [?OZ_SPACES_LIST_RELATIONSHIPS];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = harvesters}}) ->
+    [?OZ_SPACES_LIST_RELATIONSHIPS];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = storages}}) ->
     [?OZ_SPACES_LIST_RELATIONSHIPS];
 
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
@@ -753,6 +786,8 @@ required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {user,
     [?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_USERS_REMOVE_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {group, _}}}) ->
     [?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS];
+required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {storage, _}}}) ->
+    [?OZ_SPACES_REMOVE_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {provider, _}}}) ->
     [?OZ_SPACES_REMOVE_RELATIONSHIPS];
 required_admin_privileges(#el_req{operation = delete, gri = #gri{aspect = {harvester, _}}}) ->
@@ -778,13 +813,12 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
 };
 
 validate(Req = #el_req{operation = create, gri = #gri{aspect = join}}) ->
-    TokenType = case Req#el_req.auth_hint of
-        ?AS_USER(_) -> ?SPACE_INVITE_USER_TOKEN;
-        ?AS_GROUP(_) -> ?SPACE_INVITE_GROUP_TOKEN
-    end,
     #{
         required => #{
-            <<"token">> => {invite_token, TokenType}
+            <<"token">> => {invite_token, case Req#el_req.auth_hint of
+                ?AS_USER(_) -> ?USER_JOIN_SPACE;
+                ?AS_GROUP(_) -> ?GROUP_JOIN_SPACE
+            end}
         }
     };
 
@@ -796,7 +830,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = invite_group_token}}) -
     #{
     };
 
-validate(#el_req{operation = create, gri = #gri{aspect = invite_provider_token}}) ->
+validate(#el_req{operation = create, gri = #gri{aspect = space_support_token}}) ->
     #{
     };
 
@@ -828,7 +862,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = harvest_metadata}}) -> 
         <<"maxSeq">> => {integer, {not_lower_than, 0}},
         <<"maxStreamSeq">> => {integer, {not_lower_than, 0}},
         <<"batch">> => {any, any}
-    }   
+    }
 };
 
 validate(Req = #el_req{operation = create, gri = #gri{aspect = group}}) ->
@@ -858,7 +892,6 @@ validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, _}}})
 validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}}) ->
     validate(#el_req{operation = update, gri = #gri{aspect = {user_privileges, Id}}}).
 
-
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -872,7 +905,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_privilege(entity_logic:req() | od_user:id(),
-    od_space:id() | od_space:info(), privileges:space_privilege()) -> boolean().
+    od_space:id() | od_space:record(), privileges:space_privilege()) -> boolean().
 auth_by_privilege(#el_req{auth = ?USER(UserId)}, SpaceOrId, Privilege) ->
     auth_by_privilege(UserId, SpaceOrId, Privilege);
 auth_by_privilege(#el_req{auth = _OtherAuth}, _SpaceOrId, _Privilege) ->

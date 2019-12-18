@@ -16,7 +16,7 @@
 -include("datastore/oz_datastore_models.hrl").
 
 %% API
--export([to_map/1, to_maps/1]).
+-export([to_map/2, to_maps/2]).
 -export([gen_user_id/1, gen_user_id/2]).
 -export([find_user/1, acquire_user/1]).
 -export([merge/2]).
@@ -28,35 +28,47 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Converts a linked account into a serializable map.
+%% Converts a linked account into a serializable map. Scope can be one of:
+%%  * all_fields - returns all fields of the linked account; intended for
+%%                 the owner user as it includes private data
+%%  * luma_payload - returns the fields used for user mapping in LUMA, stripped
+%%                   of some unnecessary / private data.
 %% @end
 %%--------------------------------------------------------------------
--spec to_map(od_user:linked_account()) -> map().
-to_map(LinkedAccount) ->
+-spec to_map(od_user:linked_account(), Scope :: all_fields | luma_payload) -> map().
+to_map(LinkedAccount, Scope) ->
     #linked_account{
         idp = IdP,
         subject_id = SubjectId,
-        username = Username,
         full_name = FullName,
+        username = Username,
         emails = Emails,
         entitlements = Entitlements,
         custom = Custom
     } = LinkedAccount,
+
+    %% @TODO VFS-4506 fullName and entitlements are no longer
+    % sent to LUMA as they are ambiguous and inconclusive for user mapping
+    {FullNameValue, EntitlementsValue} = case Scope of
+        all_fields -> {FullName, Entitlements};
+        luma_payload -> {undefined, []}
+    end,
+
     #{
         <<"idp">> => IdP,
         <<"subjectId">> => SubjectId,
-        <<"fullName">> => gs_protocol:undefined_to_null(FullName),
-        <<"username">> => gs_protocol:undefined_to_null(Username),
+        <<"fullName">> => utils:undefined_to_null(FullNameValue),
+        <<"username">> => utils:undefined_to_null(Username),
         <<"emails">> => Emails,
-        <<"entitlements">> => Entitlements,
+        <<"entitlements">> => EntitlementsValue,
         <<"custom">> => Custom,
 
-        % TODO VFS-4506 deprecated, included for backward compatibility
-        <<"name">> => gs_protocol:undefined_to_null(FullName),
-        <<"login">> => gs_protocol:undefined_to_null(Username),
-        <<"alias">> => gs_protocol:undefined_to_null(Username),
+        %% @TODO VFS-4506 deprecated, included for backward compatibility
+        <<"name">> => utils:undefined_to_null(FullNameValue),
+        <<"login">> => utils:undefined_to_null(Username),
+        <<"alias">> => utils:undefined_to_null(Username),
         <<"emailList">> => Emails,
-        <<"groups">> => Entitlements
+        <<"groups">> => EntitlementsValue
     }.
 
 
@@ -65,9 +77,9 @@ to_map(LinkedAccount) ->
 %% Converts a list of linked_account records into a serializable list of maps.
 %% @end
 %%--------------------------------------------------------------------
--spec to_maps([od_user:linked_account()]) -> [map()].
-to_maps(LinkedAccounts) ->
-    [to_map(L) || L <- LinkedAccounts].
+-spec to_maps([od_user:linked_account()], Scope :: all_fields | luma_payload) -> [map()].
+to_maps(LinkedAccounts, Scope) ->
+    [to_map(L, Scope) || L <- LinkedAccounts].
 
 
 %%--------------------------------------------------------------------
@@ -161,7 +173,7 @@ build_test_user_info(LinkedAccount) ->
         <<"fullName">> => user_logic:normalize_full_name(FullName),
         <<"username">> => user_logic:normalize_username(Username),
         <<"emails">> => normalize_emails(Emails),
-        <<"linkedAccounts">> => [to_map(LinkedAccount)],
+        <<"linkedAccounts">> => [to_map(LinkedAccount, all_fields)],
         <<"groups">> => maps:from_list(
             lists:map(fun({GroupId, #idp_entitlement{privileges = Privileges}}) ->
                 {GroupId, Privileges}
@@ -245,7 +257,7 @@ merge_unsafe(UserId, LinkedAccount) ->
 %% Returns undefined upon failure.
 %% @end
 %%--------------------------------------------------------------------
--spec find_linked_account(od_user:info(), auth_config:idp(),
+-spec find_linked_account(od_user:record(), auth_config:idp(),
     SubjectId :: binary()) -> undefined | od_user:linked_account().
 find_linked_account(#od_user{linked_accounts = LinkedAccounts}, IdP, SubjectId) ->
     lists:foldl(fun(LinkedAccount, Acc) ->

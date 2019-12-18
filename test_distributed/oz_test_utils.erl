@@ -18,8 +18,10 @@
 -include("api_test_utils.hrl").
 -include("auth/auth_common.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/http/headers.hrl").
+-include_lib("ctool/include/privileges.hrl").
 -include_lib("ctool/include/onedata.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/logging.hrl").
 
 -define(OZ_NODES(Config), ?config(oz_worker_nodes, Config)).
@@ -41,6 +43,7 @@
 -export([
     list_users/1,
     create_user/1, create_user/2,
+    create_admin/2,
     get_user/2,
     delete_user/2,
 
@@ -69,16 +72,17 @@
     user_leave_harvester/3,
     user_leave_cluster/3,
 
-    create_provider_registration_token/3
+    create_provider_registration_token/3,
+    create_temporary_provider_registration_token/3
 ]).
 -export([
     list_groups/1,
-    create_group/3,
+    create_group/2, create_group/3,
     create_parent_group/4,
     get_group/2,
     update_group/3,
     delete_group/2,
-    mark_group_protected/2,
+    mark_group_protected/3,
 
     group_get_children/2,
     group_get_parents/2,
@@ -111,7 +115,7 @@
     group_create_harvester/3
 ]).
 -export([
-    create_space/3,
+    create_space/2, create_space/3,
     get_space/2,
     list_spaces/1,
     update_space/3,
@@ -121,8 +125,10 @@
     space_get_groups/2,
     space_get_providers/2,
     space_get_harvesters/2,
+    space_get_storages/2,
 
-    space_leave_provider/3,
+    space_remove_storage/3,
+    space_remove_provider/3,
     space_remove_harvester/3,
 
     space_add_user/3,
@@ -134,7 +140,7 @@
     space_set_group_privileges/5,
     space_invite_user_token/3,
     space_invite_group_token/3,
-    space_invite_provider_token/3,
+    create_space_support_token/3,
     space_has_effective_user/3,
 
     space_remove_group/3,
@@ -149,11 +155,13 @@
     get_share_public_url/2
 ]).
 -export([
-    create_provider/2, create_provider/3,
+    create_provider/1, create_provider/2, create_provider/3,
     get_provider/2,
     list_providers/1,
     delete_provider/2,
-    support_space/3, support_space/4, support_space/5,
+    support_space_by_provider/3,
+    support_space/4, support_space/5, support_space_using_token/5,
+    support_space_by_legacy_storage/3,
     unsupport_space/3,
     enable_subdomain_delegation/4,
     set_provider_domain/3
@@ -196,7 +204,7 @@
     handle_get_group_privileges/3
 ]).
 -export([
-    create_harvester/3,
+    create_harvester/2, create_harvester/3,
     get_harvester/2,
     list_harvesters/1,
     update_harvester/3,
@@ -252,8 +260,15 @@
     cluster_get_group_privileges/3
 ]).
 -export([
-    assert_token_exists/2,
-    assert_token_not_exists/2
+    create_storage/3,
+    create_storage/4,
+    get_storage/2,
+    update_storage/3,
+    delete_storage/2
+]).
+-export([
+    assert_invite_token_usage_limit_reached/3,
+    build_auth_ctx/2, authenticate_by_token/2, authenticate_by_token/3
 ]).
 -export([
     delete_all_entities/1,
@@ -268,9 +283,14 @@
     unmock_harvester_plugins/2,
     mock_handle_proxy/1,
     unmock_handle_proxy/1,
-    mock_time/1,
-    unmock_time/1,
+    cluster_time_seconds/1,
+    mock_gui_static/1, unmock_gui_static/1,
+    mock_time/1, unmock_time/1,
     get_mocked_time/1,
+    mock_peer_ip_of_all_connections/2,
+    unmock_peer_ip_of_all_connections/1,
+    mock_geo_db_entry_for_all_ips/4,
+    unmock_geo_db_entry_for_all_ips/1,
     simulate_time_passing/2,
     gui_ca_certs/1,
     ensure_entity_graph_is_up_to_date/1, ensure_entity_graph_is_up_to_date/2,
@@ -291,7 +311,6 @@
     log_in/2, log_out/2,
     graph_sync_url/2,
     get_gs_supported_proto_versions/1,
-    decode_gri/2,
     request_gui_token/2,
     request_gui_token/4
 ]).
@@ -364,6 +383,19 @@ create_user(Config, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Creates a user in onezone with given admin privileges.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_admin(Config :: term(), [privileges:oz_privilege()]) ->
+    {ok, od_user:id()}.
+create_admin(Config, OzPrivileges) ->
+    {ok, UserId} = oz_test_utils:create_user(Config),
+    oz_test_utils:user_set_oz_privileges(Config, UserId, OzPrivileges, []),
+    {ok, UserId}.
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a client token for given user.
 %% @end
 %%--------------------------------------------------------------------
@@ -371,7 +403,7 @@ create_user(Config, Data) ->
     {ok, Token :: binary()}.
 create_client_token(Config, UserId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, user_logic, create_client_token, [?ROOT, UserId]
+        Config, user_logic, create_client_token, [?USER(UserId), UserId]
     )).
 
 
@@ -384,7 +416,7 @@ create_client_token(Config, UserId) ->
     {ok, Tokens :: [binary()]}.
 list_client_tokens(Config, UserId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, user_logic, list_client_tokens, [?ROOT, UserId]
+        Config, user_logic, list_client_tokens, [?USER(UserId), UserId]
     )).
 
 
@@ -684,15 +716,42 @@ user_leave_cluster(Config, UserId, ClusterId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a provider registration token.
+%% Creates a NAMED provider registration token.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_provider_registration_token(Config :: term(),
-    Client :: aai:auth(), od_user:id()) -> {ok, macaroon:macaroon()}.
+    Client :: aai:auth(), od_user:id()) -> {ok, tokens:token()}.
 create_provider_registration_token(Config, Client, UserId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, user_logic, create_provider_registration_token, [Client, UserId]
     )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a TEMPORARY provider registration token.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_temporary_provider_registration_token(Config :: term(),
+    Client :: aai:auth(), od_user:id()) -> {ok, tokens:token()}.
+create_temporary_provider_registration_token(Config, Client, UserId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, token_logic, create_user_temporary_token, [Client, UserId, #{
+            <<"type">> => ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, UserId),
+            <<"caveats">> => [#cv_time{valid_until = cluster_time_seconds(Config) + 3600}]
+        }]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates group in onezone with a random name.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_group(Config :: term(), Client :: aai:auth()) ->
+    {ok, Id :: binary()}.
+create_group(Config, Client) ->
+    create_group(Config, Client, ?UNIQUE_STRING).
 
 
 %%--------------------------------------------------------------------
@@ -897,12 +956,12 @@ delete_group(Config, GroupId) ->
 %% Marks group as protected
 %% @end
 %%--------------------------------------------------------------------
--spec mark_group_protected(Config :: term(), od_group:id()) -> ok.
-mark_group_protected(Config, GroupId) ->
+-spec mark_group_protected(Config :: term(), od_group:id(), Protected :: boolean()) -> ok.
+mark_group_protected(Config, GroupId, Protected) ->
     ?assertMatch({ok, _}, call_oz(
         Config, od_group, update,
         [GroupId, fun(Group) ->
-            {ok, Group#od_group{protected = true}}
+            {ok, Group#od_group{protected = Protected}}
         end]
     )),
     ok.
@@ -1063,6 +1122,17 @@ group_get_group_privileges(Config, GroupId, ChildGroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Creates a space in onezone with a random name.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_space(Config :: term(), Client :: aai:auth()) ->
+    {ok, od_space:id()}.
+create_space(Config, Client) ->
+    create_space(Config, Client, ?UNIQUE_STRING).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a space in onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -1075,7 +1145,6 @@ create_space(Config, Client, Name) ->
         _ ->
             call_oz(Config, space_logic, create, [Client, Name])
     end,
-
     ?assertMatch({ok, _}, Result).
 
 
@@ -1155,14 +1224,14 @@ space_get_groups(Config, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves supporting providers of given space from onezone.
+%% Retrieves effective providers of given space from onezone.
 %% @end
 %%--------------------------------------------------------------------
 -spec space_get_providers(Config :: term(),
     SpaceId :: od_space:id()) -> {ok, [od_provider:id()]}.
 space_get_providers(Config, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, space_logic, get_providers, [?ROOT, SpaceId]
+        Config, space_logic, get_eff_providers, [?ROOT, SpaceId]
     )).
 
 
@@ -1172,7 +1241,7 @@ space_get_providers(Config, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_get_harvesters(Config :: term(),
-    SpaceId :: od_space:id()) -> {ok, [od_provider:id()]}.
+    SpaceId :: od_space:id()) -> {ok, [od_harvester:id()]}.
 space_get_harvesters(Config, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, space_logic, get_harvesters, [?ROOT, SpaceId]
@@ -1181,14 +1250,41 @@ space_get_harvesters(Config, SpaceId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Leave space from given provider.
+%% Retrieves supporting storages of given space from onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec space_leave_provider(Config :: term(),
-    SpaceId :: od_space:id(), ProviderId :: od_provider:id()) -> ok.
-space_leave_provider(Config, SpaceId, ProviderId) ->
+-spec space_get_storages(Config :: term(),
+    SpaceId :: od_space:id()) -> {ok, [od_storage:id()]}.
+space_get_storages(Config, SpaceId) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, space_logic, get_storages, [?ROOT, SpaceId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves specified storage (ceases support for given space).
+%% @end
+%%--------------------------------------------------------------------
+-spec space_remove_storage(Config :: term(),
+    SpaceId :: od_space:id(), StorageId :: od_storage:id()) -> ok.
+space_remove_storage(Config, SpaceId, StorageId) ->
     ?assertMatch(ok, call_oz(
-        Config, space_logic, leave_provider, [?ROOT, SpaceId, ProviderId]
+        Config, space_logic, remove_storage, [?ROOT, SpaceId, StorageId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Leaves specified provider (ceases support for given space by all
+%% storages belonging to given provider).
+%% @end
+%%--------------------------------------------------------------------
+-spec space_remove_provider(Config :: term(),
+    SpaceId :: od_space:id(), ProviderId :: od_provider:id()) -> ok.
+space_remove_provider(Config, SpaceId, ProviderId) ->
+    ?assertMatch(ok, call_oz(
+        Config, space_logic, remove_provider, [?ROOT, SpaceId, ProviderId]
     )).
 
 
@@ -1198,7 +1294,7 @@ space_leave_provider(Config, SpaceId, ProviderId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec space_remove_harvester(Config :: term(),
-    SpaceId :: od_space:id(), HarvesterId :: od_provider:id()) -> ok.
+    SpaceId :: od_space:id(), HarvesterId :: od_harvester:id()) -> ok.
 space_remove_harvester(Config, SpaceId, HarvesterId) ->
     ?assertMatch(ok, call_oz(
         Config, space_logic, remove_harvester, [?ROOT, SpaceId, HarvesterId]
@@ -1305,7 +1401,7 @@ space_set_group_privileges(Config, SpaceId, GroupId, PrivsToGrant, PrivsToRevoke
 %%--------------------------------------------------------------------
 -spec space_invite_user_token(Config :: term(),
     Client :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, macaroon:macaroon()}.
+    {ok, tokens:token()}.
 space_invite_user_token(Config, Client, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, space_logic, create_user_invite_token, [Client, SpaceId]
@@ -1319,7 +1415,7 @@ space_invite_user_token(Config, Client, SpaceId) ->
 %%--------------------------------------------------------------------
 -spec space_invite_group_token(Config :: term(),
     Client :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, macaroon:macaroon()}.
+    {ok, tokens:token()}.
 space_invite_group_token(Config, Client, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, space_logic, create_group_invite_token, [Client, SpaceId]
@@ -1331,12 +1427,12 @@ space_invite_group_token(Config, Client, SpaceId) ->
 %% Creates a provider invite token to given space.
 %% @end
 %%--------------------------------------------------------------------
--spec space_invite_provider_token(Config :: term(),
+-spec create_space_support_token(Config :: term(),
     Client :: aai:auth(), SpaceId :: od_space:id()) ->
-    {ok, macaroon:macaroon()}.
-space_invite_provider_token(Config, Client, SpaceId) ->
+    {ok, tokens:token()}.
+create_space_support_token(Config, Client, SpaceId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, space_logic, create_provider_invite_token, [Client, SpaceId]
+        Config, space_logic, create_space_support_token, [Client, SpaceId]
     )).
 
 
@@ -1427,11 +1523,22 @@ get_share_public_url(Config, ShareId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Creates a provider without a creator user and with a random name.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_provider(Config :: term()) ->
+    {ok, {od_provider:id(), ProviderRootToken :: tokens:serialized()}}.
+create_provider(Config) ->
+    create_provider(Config, ?UNIQUE_STRING).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a provider without a creator user.
 %% @end
 %%--------------------------------------------------------------------
 -spec create_provider(Config :: term(), NameOrData :: od_provider:name() | #{}) ->
-    {ok, {ProviderId :: binary(), Macaroon :: binary()}}.
+    {ok, {od_provider:id(), ProviderRootToken :: tokens:serialized()}}.
 create_provider(Config, NameOrData) ->
     create_provider(Config, undefined, NameOrData).
 
@@ -1443,7 +1550,12 @@ create_provider(Config, NameOrData) ->
 %%--------------------------------------------------------------------
 -spec create_provider(Config :: term(), CreatorUserId :: od_user:id(),
     NameOrData :: od_provider:name() | #{}) ->
-    {ok, {ProviderId :: binary(), Macaroon :: binary()}}.
+    {ok, {od_provider:id(), ProviderRootToken :: tokens:serialized()}}.
+create_provider(Config, undefined, Name) ->
+    % Create an admin for the provider if none was specified
+    {ok, User} = create_user(Config),
+    user_set_oz_privileges(Config, User, [?OZ_PROVIDERS_INVITE], []),
+    create_provider(Config, User, Name);
 create_provider(Config, CreatorUserId, Name) when is_binary(Name) ->
     create_provider(Config, CreatorUserId, #{
         <<"name">> => Name,
@@ -1454,20 +1566,16 @@ create_provider(Config, CreatorUserId, Name) when is_binary(Name) ->
         <<"longitude">> => 0.0
     });
 create_provider(Config, CreatorUserId, Data) ->
-    DataWithToken = case CreatorUserId of
-        undefined ->
-            Data;
-        _ ->
-            {ok, RegistrationToken} = create_provider_registration_token(
-                Config, ?USER(CreatorUserId), CreatorUserId
-            ),
-            Data#{<<"token">> => RegistrationToken}
-    end,
-    {ok, {ProviderId, Token}} = ?assertMatch({ok, _}, call_oz(
-        Config, provider_logic, create, [?NOBODY, DataWithToken]
+    {ok, RegistrationToken} = create_temporary_provider_registration_token(
+        Config, ?USER(CreatorUserId), CreatorUserId
+    ),
+    {ok, {ProviderId, RootToken}} = ?assertMatch({ok, _}, call_oz(
+        Config, provider_logic, create, [
+            ?USER(CreatorUserId), Data#{<<"token">> => RegistrationToken}
+        ]
     )),
-    {ok, Serialized} = tokens:serialize(Token),
-    {ok, {ProviderId, Serialized}}.
+    {ok, SerializedRootToken} = tokens:serialize(RootToken),
+    {ok, {ProviderId, SerializedRootToken}}.
 
 
 %%--------------------------------------------------------------------
@@ -1507,19 +1615,29 @@ delete_provider(Config, ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Supports a space by a provider based on space id (with default support size).
+%% Supports a space by a provider based on space id
+%% (with default support size and new dummy storage).
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Config :: term(), ProviderId :: od_provider:id(),
-    SpaceId :: od_space:id()) ->
-    {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
-support_space(Config, ProviderId, SpaceId) ->
-    {ok, Macaroon} = ?assertMatch({ok, _}, space_invite_provider_token(
-        Config, ?ROOT, SpaceId
-    )),
-    ?assertMatch({ok, _}, call_oz(Config, provider_logic, support_space, [
-        ?PROVIDER(ProviderId), ProviderId, Macaroon, minimum_support_size(Config)
-    ])).
+-spec support_space_by_provider(Config :: term(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> {ok, SpaceId :: od_space:id()}.
+support_space_by_provider(Config, ProviderId, SpaceId) ->
+    % Create dummy storage
+    {ok, StorageId} = ?assertMatch({ok, _}, create_storage(
+        Config, ?PROVIDER(ProviderId), ?STORAGE_NAME1)
+    ),
+    support_space(Config, ?PROVIDER(ProviderId), StorageId, SpaceId, minimum_support_size(Config)).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Supports a space by a storage based on space id (with default support size).
+%% @end
+%%--------------------------------------------------------------------
+-spec support_space(Config :: term(), Client :: aai:auth(), StorageId :: od_storage:id(),
+    SpaceId :: od_space:id()) -> {ok, SpaceId :: od_space:id()}.
+support_space(Config, Client, StorageId, SpaceId) ->
+    support_space(Config, Client, StorageId, SpaceId, minimum_support_size(Config)).
 
 
 %%--------------------------------------------------------------------
@@ -1527,16 +1645,19 @@ support_space(Config, ProviderId, SpaceId) ->
 %% Supports a space by a provider based on space id and support size.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Config :: term(), ProviderId :: od_provider:id(),
+-spec support_space(Config :: term(), Client :: aai:auth(), StorageId :: od_storage:id(),
     SpaceId :: od_space:id(), Size :: non_neg_integer()) ->
     {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
-support_space(Config, ProviderId, SpaceId, Size) ->
-    {ok, Macaroon} = ?assertMatch({ok, _}, space_invite_provider_token(
-        Config, ?ROOT, SpaceId
-    )),
-    ?assertMatch({ok, _}, call_oz(Config, provider_logic, support_space, [
-        ?PROVIDER(ProviderId), ProviderId, Macaroon, Size
-    ])).
+support_space(Config, Client, StorageId, SpaceId, Size) ->
+    % Create a temporary user for inviting a provider, as invite tokens cannot
+    % be created as root.
+    {ok, TmpUser} = create_user(Config),
+    {ok, TmpUser} = space_add_user(Config, SpaceId, TmpUser),
+    ok = space_set_user_privileges(Config, SpaceId, TmpUser, [?SPACE_ADD_SUPPORT], []),
+    {ok, Token} = create_space_support_token(Config, ?USER(TmpUser), SpaceId),
+    Res = support_space_using_token(Config, Client, StorageId, Token, Size),
+    delete_user(Config, TmpUser),
+    Res.
 
 
 %%--------------------------------------------------------------------
@@ -1544,26 +1665,43 @@ support_space(Config, ProviderId, SpaceId, Size) ->
 %% Supports a space by a provider based on token and support size.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(Config :: term(), Client :: aai:auth(),
-    ProviderId :: od_provider:id(), Token :: binary() | macaroon:macaroon(),
-    Size :: non_neg_integer()) ->
-    {ok, {ProviderId :: binary(), KeyFile :: string(), CertFile :: string()}}.
-support_space(Config, Client, ProviderId, Token, Size) ->
-    ?assertMatch({ok, _}, call_oz(Config, provider_logic, support_space, [
-        Client, ProviderId, Token, Size
+-spec support_space_using_token(Config :: term(), Client :: aai:auth(),
+    StorageId :: od_storage:id(), Token :: binary() | tokens:token(),
+    Size :: non_neg_integer()) -> {ok, SpaceId :: od_space:id()}.
+support_space_using_token(Config, Client, StorageId, Token, Size) ->
+    ?assertMatch({ok, _}, call_oz(Config, storage_logic, support_space, [
+        Client, StorageId, Token, Size
     ])).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Revoke space support by given provider.
+%% Supports a space by a provider based on space id
+%% (with default support size and virtual storage with id equal to providers).
 %% @end
 %%--------------------------------------------------------------------
--spec unsupport_space(Config :: term(), ProviderId :: od_provider:id(),
+-spec support_space_by_legacy_storage(Config :: term(), ProviderId :: od_provider:id(),
+    SpaceId :: od_space:id()) -> {ok, SpaceId :: od_space:id()}.
+support_space_by_legacy_storage(Config, ProviderId, SpaceId) ->
+    case call_oz(Config, provider_logic, has_storage, [ProviderId, ProviderId]) of
+        true -> ok;
+        false ->
+            ?assertMatch({ok, _}, create_storage(
+                Config, ?PROVIDER(ProviderId), ProviderId, ?STORAGE_NAME1)
+            )
+    end,
+    support_space(Config, ?PROVIDER(ProviderId), ProviderId, SpaceId, minimum_support_size(Config)).
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Revoke space support by given storage.
+%% @end
+%%--------------------------------------------------------------------
+-spec unsupport_space(Config :: term(), StorageId :: od_storage:id(),
     SpaceId :: od_space:id()) -> ok.
-unsupport_space(Config, ProviderId, SpaceId) ->
-    ?assertMatch(ok, call_oz(Config, provider_logic, revoke_support, [
-        ?ROOT, ProviderId, SpaceId
+unsupport_space(Config, StorageId, SpaceId) ->
+    ?assertMatch(ok, call_oz(Config, storage_logic, revoke_support, [
+        ?ROOT, StorageId, SpaceId
     ])).
 
 
@@ -2066,6 +2204,17 @@ handle_get_group_privileges(Config, HandleId, GroupId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Creates a harvester in onezone with default data.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_harvester(Config :: term(), Client :: aai:auth()) ->
+    {ok, od_harvester:id()}.
+create_harvester(Config, Client) ->
+    create_harvester(Config, Client, ?HARVESTER_CREATE_DATA).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Creates a harvester in onezone.
 %% @end
 %%--------------------------------------------------------------------
@@ -2295,7 +2444,7 @@ harvester_set_group_privileges(Config, HarvesterId, GroupId, PrivsToGrant, Privs
 %%--------------------------------------------------------------------
 -spec harvester_invite_user_token(Config :: term(),
     Client :: aai:auth(), HarvesterId :: od_harvester:id()) ->
-    {ok, macaroon:macaroon()}.
+    {ok, tokens:token()}.
 harvester_invite_user_token(Config, Client, HarvesterId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, harvester_logic, create_user_invite_token, [Client, HarvesterId]
@@ -2309,7 +2458,7 @@ harvester_invite_user_token(Config, Client, HarvesterId) ->
 %%--------------------------------------------------------------------
 -spec harvester_invite_group_token(Config :: term(),
     Client :: aai:auth(), HarvesterId :: od_harvester:id()) ->
-    {ok, macaroon:macaroon()}.
+    {ok, tokens:token()}.
 harvester_invite_group_token(Config, Client, HarvesterId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, harvester_logic, create_group_invite_token, [Client, HarvesterId]
@@ -2323,7 +2472,7 @@ harvester_invite_group_token(Config, Client, HarvesterId) ->
 %%--------------------------------------------------------------------
 -spec harvester_invite_space_token(Config :: term(),
     Client :: aai:auth(), HarvesterId :: od_harvester:id()) ->
-    {ok, macaroon:macaroon()}.
+    {ok, tokens:token()}.
 harvester_invite_space_token(Config, Client, HarvesterId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, harvester_logic, create_space_invite_token, [Client, HarvesterId]
@@ -2572,7 +2721,7 @@ cluster_get_user_privileges(Config, ClusterId, UserId) ->
 %%--------------------------------------------------------------------
 -spec cluster_invite_user_token(Config :: term(),
     Client :: aai:auth(), ClusterId :: od_cluster:id()) ->
-    {ok, macaroon:macaroon()}.
+    {ok, tokens:token()}.
 cluster_invite_user_token(Config, Client, ClusterId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, cluster_logic, create_user_invite_token, [Client, ClusterId]
@@ -2586,7 +2735,7 @@ cluster_invite_user_token(Config, Client, ClusterId) ->
 %%--------------------------------------------------------------------
 -spec cluster_invite_group_token(Config :: term(),
     Client :: aai:auth(), ClusterId :: od_cluster:id()) ->
-    {ok, macaroon:macaroon()}.
+    {ok, tokens:token()}.
 cluster_invite_group_token(Config, Client, ClusterId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, cluster_logic, create_group_invite_token, [Client, ClusterId]
@@ -2750,7 +2899,7 @@ space_harvest_metadata(Config, ClientProviderId, SpaceId, Destination, MaxStream
 %%--------------------------------------------------------------------
 -spec group_invite_group_token(Config :: term(),
     Client :: aai:auth(), GroupId :: od_group:id()) ->
-    {ok, macaroon:macaroon()}.
+    {ok, tokens:token()}.
 group_invite_group_token(Config, Client, GroupId) ->
     ?assertMatch({ok, _}, call_oz(
         Config, group_logic, create_group_invite_token, [Client, GroupId]
@@ -2764,39 +2913,133 @@ group_invite_group_token(Config, Client, GroupId) ->
 %%--------------------------------------------------------------------
 -spec group_invite_user_token(Config :: term(),
     Client :: aai:auth(), GroupId :: od_group:id()) ->
-    {ok, macaroon:macaroon()}.
-group_invite_user_token(Config, Client, GroupId) ->
+    {ok, tokens:token()}.
+group_invite_user_token(Config, Client, GroupId) -> ?assertMatch({ok, _}, call_oz(
+    Config, group_logic, create_user_invite_token, [Client, GroupId]
+)).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Creates a storage in onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec create_storage(Config :: term(), Client :: aai:auth(),
+    Name :: od_storage:name()) -> {ok, od_storage:id()}.
+create_storage(Config, Client, Name) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, group_logic, create_user_invite_token, [Client, GroupId]
+        Config, storage_logic, create, [Client, Name]
     )).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Asserts token not exists.
+%% Creates a storage in onezone with given id.
 %% @end
 %%--------------------------------------------------------------------
--spec assert_token_not_exists(Config :: term(),
-    TokenId :: token:id()) ->
-    ok.
-assert_token_not_exists(Config, TokenId) ->
-    ?assertMatch({error, not_found}, call_oz(
-        Config, token, get, [TokenId])),
-    ok.
+-spec create_storage(Config :: term(), Client :: aai:auth(),
+    od_storage:id(), od_storage:name()) -> {ok, od_storage:id()}.
+create_storage(Config, Client, Id, Name) ->
+    ?assertMatch({ok, _}, call_oz(
+        Config, storage_logic, create, [Client, Id, Name]
+    )).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Asserts token exists.
+%% Retrieves storage data from onezone.
 %% @end
 %%--------------------------------------------------------------------
--spec assert_token_exists(Config :: term(),
-    TokenId :: token:id()) ->
-    ok.
-assert_token_exists(Config, TokenId) ->
+-spec get_storage(Config :: term(), StorageId :: od_storage:id()) ->
+    {ok, #od_storage{}}.
+get_storage(Config, StorageId) ->
     ?assertMatch({ok, _}, call_oz(
-        Config, token, get, [TokenId])),
-    ok.
+        Config, storage_logic, get, [?ROOT, StorageId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Updates storage.
+%% @end
+%%--------------------------------------------------------------------
+-spec update_storage(Config :: term(), StorageId :: od_storage:id(),
+    Data :: map()) -> ok.
+update_storage(Config, StorageId, Data) ->
+    ?assertMatch(ok, call_oz(
+        Config, storage_logic, update, [?ROOT, StorageId, Data]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Deletes given storage from onezone.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_storage(Config :: term(), StorageId :: od_storage:id()) -> ok.
+delete_storage(Config, StorageId) ->
+    ?assertMatch(ok, call_oz(
+        Config, storage_logic, delete, [?ROOT, StorageId]
+    )).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Asserts that an invite token's usage limit was reached or not
+%% (depending on the Expected flag).
+%% @end
+%%--------------------------------------------------------------------
+-spec assert_invite_token_usage_limit_reached(Config :: term(), Expected :: boolean(),
+    TokenId :: od_token:id()) -> ok.
+assert_invite_token_usage_limit_reached(Config, Expected, TokenId) ->
+    {ok, #document{value = #od_token{
+        metadata = Metadata
+    }}} = ?assertMatch({ok, _}, call_oz(Config, od_token, get, [TokenId])),
+    UsageCount = maps:get(<<"usageCount">>, Metadata, 0),
+    IsReached = case maps:get(<<"usageLimit">>, Metadata, <<"infinity">>) of
+        <<"infinity">> ->
+            false;
+        UsageLimit when is_integer(UsageLimit) ->
+            UsageCount >= UsageLimit
+    end,
+    ?assertEqual(Expected, IsReached).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Builds the auth ctx object with given Args (see token_auth:build_auth_ctx/*).
+%% @end
+%%--------------------------------------------------------------------
+-spec build_auth_ctx(Config :: term(), [term()]) -> aai:auth_ctx().
+build_auth_ctx(Config, Args) ->
+    call_oz(Config, token_auth, build_auth_ctx, Args).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Verifies the token and returns resulting auth object on success. Default
+%% auth_ctx is used, which will cause verification failure if any caveat that
+%% requires certain context is included in the token.
+%% @end
+%%--------------------------------------------------------------------
+-spec authenticate_by_token(Config :: term(), tokens:token() | tokens:serialized()) ->
+    {true, aai:auth()} | errors:error().
+authenticate_by_token(Config, Token) ->
+    AuthCtx = build_auth_ctx(Config, [undefined]),
+    authenticate_by_token(Config, Token, AuthCtx).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Verifies the token against given auth_ctx and returns resulting auth object
+%% on success.
+%% @end
+%%--------------------------------------------------------------------
+-spec authenticate_by_token(Config :: term(), tokens:token() | tokens:serialized(), aai:auth_ctx()) ->
+    {true, aai:auth()} | errors:error().
+authenticate_by_token(Config, Token, AuthCtx) ->
+    call_oz(Config, token_auth, authenticate, [Token, AuthCtx]).
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -2828,13 +3071,14 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
     {ok, Groups} = list_groups(Config),
     {ok, Users} = list_users(Config),
     {ok, Harvesters} = list_harvesters(Config),
-    [delete_provider(Config, PId) || PId <- Providers],
-    [delete_handle(Config, HId) || HId <- Handles],
-    [delete_share(Config, ShId) || ShId <- Shares],
-    [delete_space(Config, SpId) || SpId <- Spaces],
-    [delete_harvester(Config, HId) || HId <- Harvesters],
-    [delete_handle_service(Config, HSId) || HSId <- HServices],
-    % Clusters are removed together with providers
+    utils:pforeach(fun(PId) -> delete_provider(Config, PId) end, Providers),
+    utils:pforeach(fun(HId) -> delete_handle(Config, HId) end, Handles),
+    utils:pforeach(fun(ShId) -> delete_share(Config, ShId) end, Shares),
+    utils:pforeach(fun(SpId) -> delete_space(Config, SpId) end, Spaces),
+    utils:pforeach(fun(HSId) -> delete_handle_service(Config, HSId) end, HServices),
+    utils:pforeach(fun(HId) -> delete_harvester(Config, HId) end, Harvesters),
+    % Clusters and storages are removed together with providers
+
     % Check if predefined groups should be removed too.
     GroupsToDelete = case RemovePredefinedGroups of
         true ->
@@ -2843,19 +3087,14 @@ delete_all_entities(Config, RemovePredefinedGroups) ->
             % Filter out predefined groups
             PredefinedGroupsMapping = get_env(Config, predefined_groups),
             PredefinedGroups = [Id || #{id := Id} <- PredefinedGroupsMapping],
-            lists:filter(
-                fun(GroupId) ->
-                    not lists:member(GroupId, PredefinedGroups)
-                end, Groups)
+            lists:filter(fun(GroupId) ->
+                not lists:member(GroupId, PredefinedGroups)
+            end, Groups)
     end,
-    lists:foreach(fun(GroupId) ->
-        call_oz(Config, od_group, update, [GroupId, fun(Group) ->
-            {ok, Group#od_group{protected = false}}
-        end])
-    end, GroupsToDelete),
-    [?assertMatch(ok, delete_group(Config, GId)) || GId <- GroupsToDelete],
-    [?assertMatch(ok, delete_user(Config, UId)) || UId <- Users],
-    ok.
+    utils:pforeach(fun(GroupId) -> mark_group_protected(Config, GroupId, false) end, GroupsToDelete),
+    utils:pforeach(fun(GroupId) -> delete_group(Config, GroupId) end, GroupsToDelete),
+
+    utils:pforeach(fun(UId) -> delete_user(Config, UId) end, Users).
 
 
 %%--------------------------------------------------------------------
@@ -3046,16 +3285,55 @@ unmock_handle_proxy(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
+%% Returns the current time.
+%% @end
+%%--------------------------------------------------------------------
+-spec cluster_time_seconds(Config :: term()) -> time_utils:seconds().
+cluster_time_seconds(Config) ->
+    call_oz(Config, time_utils, cluster_time_seconds, []).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Mocks the gui_static module - useful in tests that create / delete a lot of
+%% Oneprovider instances to skip these intensive IO operations.
+%% @end
+%%--------------------------------------------------------------------
+-spec mock_gui_static(Config :: term()) -> ok.
+mock_gui_static(Config) ->
+    ok = test_utils:mock_new(?OZ_NODES(Config), gui_static, [passthrough]),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), gui_static, gui_exists, fun(_, _) ->
+        true
+    end),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), gui_static, link_gui, fun(_, _, _) ->
+        ok
+    end),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), gui_static, unlink_gui, fun(_, _) ->
+        ok
+    end).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Clears the gui_static mock.
+%% @end
+%%--------------------------------------------------------------------
+-spec unmock_gui_static(Config :: term()) -> ok.
+unmock_gui_static(Config) ->
+    ok = test_utils:mock_unload(?OZ_NODES(Config), gui_static).
+
+
+%%--------------------------------------------------------------------
+%% @doc
 %% Mocks the time - stops the clock at one value and allows to manually
 %% simulate time passing.
 %% @end
 %%--------------------------------------------------------------------
 -spec mock_time(Config :: term()) -> ok.
 mock_time(Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
     simulate_time_passing(Config, 0),
-    ok = test_utils:mock_new(Nodes, time_utils, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, time_utils, cluster_time_seconds, fun() ->
+    ok = test_utils:mock_new(?OZ_NODES(Config), time_utils, [passthrough]),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), time_utils, cluster_time_seconds, fun() ->
         oz_worker:get_env(mocked_time, ?TIME_MOCK_STARTING_TIMESTAMP)
     end).
 
@@ -3067,8 +3345,7 @@ mock_time(Config) ->
 %%--------------------------------------------------------------------
 -spec unmock_time(Config :: term()) -> ok.
 unmock_time(Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_unload(Nodes, time_utils).
+    ok = test_utils:mock_unload(?OZ_NODES(Config), time_utils).
 
 
 %%--------------------------------------------------------------------
@@ -3089,6 +3366,34 @@ get_mocked_time(Config) ->
 -spec simulate_time_passing(Config :: term(), Seconds :: non_neg_integer()) -> ok.
 simulate_time_passing(Config, Seconds) ->
     set_env(Config, mocked_time, get_mocked_time(Config) + Seconds).
+
+
+mock_peer_ip_of_all_connections(Config, Ip) ->
+    ok = test_utils:mock_new(?OZ_NODES(Config), cowboy_req, [passthrough]),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), cowboy_req, peer, fun(_) ->
+        {Ip, _Port = 10000}  % port is not relevant
+    end).
+
+
+unmock_peer_ip_of_all_connections(Config) ->
+    ok = test_utils:mock_unload(?OZ_NODES(Config), cowboy_req).
+
+
+mock_geo_db_entry_for_all_ips(Config, Asn, Country, Regions) ->
+    ok = test_utils:mock_new(?OZ_NODES(Config), ip_utils, [passthrough]),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), ip_utils, lookup_asn, fun(_) ->
+        {ok, Asn}
+    end),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), ip_utils, lookup_country, fun(_) ->
+        {ok, Country}
+    end),
+    ok = test_utils:mock_expect(?OZ_NODES(Config), ip_utils, lookup_region, fun(_) ->
+        {ok, Regions}
+    end).
+
+
+unmock_geo_db_entry_for_all_ips(Config) ->
+    ok = test_utils:mock_unload(?OZ_NODES(Config), ip_utils).
 
 
 %%--------------------------------------------------------------------
@@ -3268,7 +3573,7 @@ copy_file_to_node(Node, Path) ->
 %% Creates a session for user, simulating a login.
 %% @end
 %%--------------------------------------------------------------------
--spec log_in(Config :: term(), UserId :: od_user:id()) -> {ok, Cookie :: binary()}.
+-spec log_in(Config :: term(), UserId :: od_user:id()) -> {ok, {session:id(), Cookie :: binary()}}.
 log_in(Config, UserId) ->
     MockedReq = #{},
     CookieKey = ?SESSION_COOKIE_KEY,
@@ -3291,7 +3596,7 @@ log_in(Config, UserId) ->
 log_out(Config, Cookie) ->
     MockedReq = #{
         resp_headers => #{},
-        headers => #{<<"cookie">> => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>}
+        headers => #{?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>}
     },
     ?assertMatch(#{}, call_oz(
         Config, gui_session, log_out, [MockedReq]
@@ -3445,18 +3750,6 @@ get_gs_supported_proto_versions(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Get supported graph sync protocol versions.
-%% @end
-%%--------------------------------------------------------------------
--spec decode_gri(Config :: term(), EncodedGri :: binary()) -> #gri{}.
-decode_gri(Config, EncodedGri) ->
-    ?assertMatch(#gri{}, call_oz(
-        Config, gs_protocol, string_to_gri, [EncodedGri])
-    ).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Acquires a Onezone gui token issued for the session denoted by given cookie.
 %% @end
 %%--------------------------------------------------------------------
@@ -3479,8 +3772,8 @@ request_gui_token(Config, Cookie, GuiType, ClusterId) ->
     Result = http_client:post(
         oz_url(Config, str_utils:format_bin("/~s/~s/gui-preauthorize", [GuiPrefix, ClusterId])),
         #{
-            <<"content-type">> => <<"application/json">>,
-            <<"cookie">> => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
+            ?HDR_CONTENT_TYPE => <<"application/json">>,
+            ?HDR_COOKIE => <<(?SESSION_COOKIE_KEY)/binary, "=", Cookie/binary>>
         },
         <<"">>,
         [{ssl_options, [{cacerts, oz_test_utils:gui_ca_certs(Config)}]}]
@@ -3489,12 +3782,7 @@ request_gui_token(Config, Cookie, GuiType, ClusterId) ->
         {ok, 200, _, Response} ->
             #{<<"token">> := Token} = json_utils:decode(Response),
             {ok, Token};
-        {ok, 400, _, _} ->
-            ?ERROR_MALFORMED_DATA;
-        {ok, 401, _, _} ->
-            ?ERROR_UNAUTHORIZED;
-        {ok, 403, _, _} ->
-            ?ERROR_FORBIDDEN;
-        {ok, 404, _, _} ->
-            ?ERROR_NOT_FOUND
+        {ok, _, _, Response} ->
+            #{<<"error">> := Error} = json_utils:decode(Response),
+            errors:from_json(Error)
     end.

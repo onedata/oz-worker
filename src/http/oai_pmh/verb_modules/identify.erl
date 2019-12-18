@@ -119,7 +119,7 @@ get_response(<<"description">>, _Args) -> [].
 %%% Returns earliest metadata datestamp.
 %%% @end
 %%%-------------------------------------------------------------------
--spec get_earliest_datestamp() -> erlang:datetime().
+-spec get_earliest_datestamp() -> none | calendar:datetime().
 get_earliest_datestamp() ->
     Ids = oai_utils:list_handles(),
     Datestamps = lists:map(fun(Id) ->

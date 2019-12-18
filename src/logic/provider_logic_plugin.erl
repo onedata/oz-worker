@@ -14,19 +14,18 @@
 -author("Lukasz Opiola").
 -behaviour(entity_logic_plugin_behaviour).
 
--include("invite_tokens.hrl").
 -include("entity_logic.hrl").
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/api_errors.hrl").
-
--define(MINIMUM_SUPPORT_SIZE, oz_worker:get_env(minimum_space_support_size, 1000000)).
+-include_lib("ctool/include/errors.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
 -export([exists/2, authorize/2, required_admin_privileges/1, validate/1]).
+
+-define(MINIMUM_SUPPORT_SIZE, oz_worker:get_env(minimum_space_support_size, 1000000)).
 
 %%%===================================================================
 %%% API
@@ -34,17 +33,23 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity and its revision from datastore based on EntityId.
-%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% Retrieves an entity and its revision from datastore, if applicable.
+%% Should return:
+%%  * {true, entity_logic:versioned_entity()}
+%%      if the fetch was successful
+%%  * false
+%%      if fetch is not applicable for this operation
+%%  * {error, _}
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:versioned_entity()} | entity_logic:error().
-fetch_entity(ProviderId) ->
+-spec fetch_entity(gri:gri()) ->
+    {true, entity_logic:versioned_entity()} | false | errors:error().
+fetch_entity(#gri{id = ProviderId}) ->
     case od_provider:get(ProviderId) of
         {ok, #document{value = Provider, revs = [DbRev | _]}} ->
             {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
-            {ok, {Provider, Revision}};
+            {true, {Provider, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -78,6 +83,7 @@ operation_supported(get, eff_groups, private) -> true;
 operation_supported(get, {eff_group_membership, _}, private) -> true;
 operation_supported(get, eff_harvesters, private) -> true;
 operation_supported(get, spaces, private) -> true;
+operation_supported(get, eff_spaces, private) -> true;
 operation_supported(get, {user_spaces, _}, private) -> true;
 operation_supported(get, {group_spaces, _}, private) -> true;
 operation_supported(get, domain_config, private) -> true;
@@ -110,40 +116,37 @@ is_subscribable({eff_group_membership, _}, private) -> true;
 is_subscribable(eff_harvesters, _) -> true;
 is_subscribable(_, _) -> false.
 
-
 %%--------------------------------------------------------------------
 %% @doc
 %% Creates a resource (aspect of entity) based on entity logic request.
 %% @end
 %%--------------------------------------------------------------------
 -spec create(entity_logic:req()) -> entity_logic:create_result().
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
+create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     Data = Req#el_req.data,
-    create_provider(Data, datastore_utils:gen_key(), GRI);
+    create_provider(Auth, Data, datastore_utils:gen_key(), GRI);
 
-create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) ->
+create(Req = #el_req{auth = Auth, gri = #gri{id = undefined, aspect = instance_dev} = GRI}) ->
     Data = Req#el_req.data,
-    create_provider(Data, maps:get(<<"uuid">>, Data, undefined), GRI);
+    create_provider(Auth, Data, maps:get(<<"uuid">>, Data, undefined), GRI);
 
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% Used by providers, that do not keep storages in onezone
 create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
-    SupportSize = maps:get(<<"size">>, Data),
-    Macaroon = maps:get(<<"token">>, Data),
-    SupportSpaceFun = fun(od_space, SpaceId) ->
-        entity_graph:add_relation(
-            od_space, SpaceId, od_provider, ProviderId, SupportSize
-        ),
-        SpaceId
+    %% Virtual storage record with id equal to providers is created.
+    %% This record will be used to keep support information of all provider spaces.
+    %% It will be deleted during provider upgrade.
+    case provider_logic:has_storage(ProviderId, ProviderId) of
+        true -> ok;
+        false -> storage_logic:create(?PROVIDER(ProviderId), ProviderId, ?STORAGE_DEFAULT_NAME)
     end,
-    SpaceId = invite_tokens:consume(Macaroon, SupportSpaceFun),
+    {ok, SpaceId} = storage_logic:support_space(?PROVIDER(ProviderId), ProviderId, Data),
+    {true, {
+        #od_space{} = Space,
+        Rev
+    }} = space_logic_plugin:fetch_entity(#gri{id = SpaceId}),
 
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
-    {ok, {#od_space{harvesters = Harvesters} = Space, Rev}} = space_logic_plugin:fetch_entity(SpaceId),
-    
-    lists:foreach(fun(HarvesterId) ->
-        harvester_indices:update_stats(HarvesterId, all,
-            fun(ExistingStats) -> harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, false) end)
-        end, Harvesters),
-        
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
     {ok, resource, {NewGRI, {SpaceData, Rev}}};
 
@@ -155,12 +158,12 @@ create(Req = #el_req{gri = #gri{aspect = check_my_ports}}) ->
     end;
 
 create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}, data = Data}) ->
-    case fetch_entity(ProviderId) of
-        {ok, {#od_provider{subdomain_delegation = true}, _}} ->
+    case fetch_entity(#gri{id = ProviderId}) of
+        {true, {#od_provider{subdomain_delegation = true}, _}} ->
             #{<<"content">> := Content} = Data,
             TTL = maps:get(<<"ttl">>, Data, undefined),
             ok = dns_state:set_txt_record(ProviderId, RecordName, Content, TTL);
-        {ok, {#od_provider{subdomain_delegation = false}, _}} ->
+        {true, {#od_provider{subdomain_delegation = false}, _}} ->
             ?ERROR_SUBDOMAIN_DELEGATION_DISABLED;
         Error ->
             Error
@@ -180,12 +183,18 @@ create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
             ?ERROR_MALFORMED_DATA
     end;
 
-create(#el_req{gri = #gri{aspect = verify_provider_identity}, data = Data}) ->
+%% @TODO VFS-5846 old provider verification API kept for backward compatibility
+create(#el_req{auth = Auth, gri = #gri{aspect = verify_provider_identity}, data = Data}) ->
     ProviderId = maps:get(<<"providerId">>, Data),
-    Macaroon = maps:get(<<"macaroon">>, Data),
-    case access_tokens:verify_provider_identity(Macaroon) of
-        {ok, ProviderId} -> ok;
-        {ok, _OtherProvider} -> ?ERROR_BAD_MACAROON;
+    %% @TODO VFS-5554 Deprecated, included for backward compatibility
+    Token = case maps:find(<<"macaroon">>, Data) of
+        {ok, M} -> M;
+        error -> maps:get(<<"token">>, Data)
+    end,
+    AuthCtx = token_auth:build_auth_ctx(undefined, Auth#auth.peer_ip, aai:auth_to_audience(Auth)),
+    case token_auth:verify_identity_token(Token, AuthCtx) of
+        {ok, {?SUB(?ONEPROVIDER, ProviderId), _}} -> ok;
+        {ok, _} -> ?ERROR_TOKEN_INVALID;
         Error -> Error
     end.
 
@@ -252,8 +261,12 @@ get(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Provider) ->
 get(#el_req{gri = #gri{aspect = eff_harvesters}}, Provider) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_harvester, Provider)};
 
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% Used by providers, that do not keep storages in onezone
 get(#el_req{gri = #gri{aspect = spaces}}, Provider) ->
-    {ok, entity_graph:get_relations(direct, bottom_up, od_space, Provider)};
+    {ok, entity_graph:get_relations(effective, bottom_up, od_space, Provider)};
+get(#el_req{gri = #gri{aspect = eff_spaces}}, Provider) ->
+    {ok, entity_graph:get_relations(effective, bottom_up, od_space, Provider)};
 
 get(#el_req{gri = #gri{aspect = {user_spaces, UserId}}}, Provider) ->
     {ok, AllSpaces} = get(#el_req{gri = #gri{aspect = spaces}}, Provider),
@@ -299,6 +312,12 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = instance}, data = Data}) ->
     end),
     ok;
 
+
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% Used by providers, that do not keep storages in onezone
+update(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}, data = Data}) ->
+    storage_logic:update_support_size(?PROVIDER(ProviderId), ProviderId, SpaceId, Data);
+
 update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}) ->
     % prevent race condition with simultaneous updates
     critical_section:run({domain_config_update, ProviderId}, fun() ->
@@ -306,13 +325,7 @@ update(#el_req{gri = #gri{id = ProviderId, aspect = domain_config}, data = Data}
             true -> update_provider_subomain(ProviderId, Data);
             false -> update_provider_domain(ProviderId, Data)
         end
-    end);
-
-update(Req = #el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
-    NewSupportSize = maps:get(<<"size">>, Req#el_req.data),
-    entity_graph:update_relation(
-        od_space, SpaceId, od_provider, ProviderId, NewSupportSize
-    ).
+    end).
 
 
 %%--------------------------------------------------------------------
@@ -323,16 +336,17 @@ update(Req = #el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     ok = dns_state:remove_delegation_config(ProviderId),
-    {ok, {#od_provider{
-        root_macaroon = RootMacaroon,
-        spaces = Spaces,
+    {true, {#od_provider{
+        name = Name,
+        eff_spaces = Spaces,
         eff_harvesters = Harvesters
-    }, _}} = fetch_entity(ProviderId),
+    }, _}} = fetch_entity(#gri{aspect = instance, id = ProviderId}),
 
-    ok = access_tokens:invalidate_provider_root_macaroon(RootMacaroon),
+    % Invalidate client tokens
+    token_logic:delete_all_provider_named_tokens(?PROVIDER(ProviderId), ProviderId),
 
     lists:foreach(fun(HarvesterId) ->
-       harvester_indices:update_stats(HarvesterId, all,
+        harvester_indices:update_stats(HarvesterId, all,
             fun(ExistingStats) ->
                 harvester_indices:coalesce_index_stats(ExistingStats, maps:keys(Spaces), ProviderId, true)
             end)
@@ -343,6 +357,8 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     entity_graph:delete_with_relations(od_provider, ProviderId),
     cluster_logic:delete_oneprovider_cluster(ClusterId),
 
+    ?info("Provider '~ts' has been deregistered (~s)", [Name, ProviderId]),
+
     % Force disconnect the provider (if connected)
     case provider_connection:get_connection_ref(ProviderId) of
         {ok, ConnRef} ->
@@ -352,21 +368,14 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
                 gs_server:terminate_connection(ConnRef)
             end),
             ok;
-        _ -> ok
+        _ ->
+            ok
     end;
 
+%% @TODO VFS-5856 deprecated, included for backward compatibility
+%% Used by providers, that do not keep storages in onezone
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
-    {ok, {#od_space{harvesters = Harvesters}, _}} = space_logic_plugin:fetch_entity(SpaceId),
-    lists:foreach(fun(HarvesterId) ->
-        harvester_indices:update_stats(HarvesterId, all,
-            fun(ExistingStats) ->
-                harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, true)
-            end)
-    end, Harvesters),
-    
-    entity_graph:remove_relation(
-        od_space, SpaceId, od_provider, ProviderId
-    );
+    storage_logic:revoke_support(?PROVIDER(ProviderId), ProviderId, SpaceId);
 
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}}) ->
     ok = dns_state:remove_txt_record(ProviderId, RecordName).
@@ -398,7 +407,7 @@ exists(#el_req{gri = #gri{aspect = {eff_group_membership, GroupId}}}, Provider) 
     entity_graph:has_relation(effective, bottom_up, od_group, GroupId, Provider);
 
 exists(#el_req{gri = #gri{aspect = {space, SpaceId}}}, Provider) ->
-    entity_graph:has_relation(direct, bottom_up, od_space, SpaceId, Provider);
+    entity_graph:has_relation(effective, bottom_up, od_space, SpaceId, Provider);
 
 exists(#el_req{gri = #gri{aspect = {user_spaces, UserId}}}, Provider) ->
     entity_graph:has_relation(effective, bottom_up, od_user, UserId, Provider);
@@ -434,7 +443,7 @@ authorize(#el_req{operation = create, gri = #gri{id = undefined, aspect = instan
     true =:= oz_worker:get_env(dev_mode, true);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
+    auth_by_self(Req);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
     auth_by_self(Req) orelse auth_by_cluster_membership(Req);
@@ -515,6 +524,9 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_harvesters}}, _
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = spaces}}, _) ->
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
 
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_spaces}}, _) ->
+    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
+
 authorize(#el_req{auth = ?USER(UserId), operation = get, gri = #gri{aspect = {user_spaces, UserId}}}, _) ->
     true;
 
@@ -527,10 +539,10 @@ authorize(Req = #el_req{operation = get, gri = #gri{aspect = domain_config}}, _)
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, _) ->
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
-authorize(Req = #el_req{operation = update, gri = #gri{aspect = domain_config}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
-
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {space, _}}}, _) ->
+    auth_by_self(Req);
+
+authorize(Req = #el_req{operation = update, gri = #gri{aspect = domain_config}}, _) ->
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, _) ->
@@ -540,7 +552,7 @@ authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {dns_txt_record,
     auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
+    auth_by_self(Req);
 
 authorize(_, _) ->
     false.
@@ -573,6 +585,9 @@ required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_harve
     [?OZ_PROVIDERS_LIST_RELATIONSHIPS];
 
 required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = spaces}}) ->
+    [?OZ_PROVIDERS_LIST_RELATIONSHIPS];
+
+required_admin_privileges(#el_req{operation = get, gri = #gri{aspect = eff_spaces}}) ->
     [?OZ_PROVIDERS_LIST_RELATIONSHIPS];
 
 required_admin_privileges(#el_req{operation = update, gri = #gri{aspect = instance}}) ->
@@ -613,30 +628,18 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}
             % BAD_DATA error. No need to generate domain related fields.
             #{}
     end,
-    Required = DomainRelatedFields#{
-        <<"name">> => {binary, name},
-        <<"subdomainDelegation">> => {boolean, any},
-        <<"adminEmail">> => {binary, email}
-    },
-    Optional = #{
-        <<"latitude">> => {float, {between, -90, 90}},
-        <<"longitude">> => {float, {between, -180, 180}}
-    },
-
-    % @TODO VFS-5207 Registration token is not required for compatibility with
-    % legacy providers, but can be forced by the env variable
-    case oz_worker:get_env(require_token_for_provider_registration, false) of
-        false ->
-            #{
-                required => Required,
-                optional => Optional#{<<"token">> => {invite_token, ?PROVIDER_REGISTRATION_TOKEN}}
-            };
-        true ->
-            #{
-                required => Required#{<<"token">> => {invite_token, ?PROVIDER_REGISTRATION_TOKEN}},
-                optional => Optional
-            }
-    end;
+    #{
+        required => DomainRelatedFields#{
+            <<"token">> => {invite_token, ?REGISTER_ONEPROVIDER},
+            <<"name">> => {binary, name},
+            <<"subdomainDelegation">> => {boolean, any},
+            <<"adminEmail">> => {binary, email}
+        },
+        optional => #{
+            <<"latitude">> => {float, {between, -90, 90}},
+            <<"longitude">> => {float, {between, -180, 180}}
+        }
+    };
 
 validate(Req = #el_req{operation = create, gri = GRI = #gri{aspect = instance_dev}}) ->
     ValidationRules = #{required := Required} = validate(Req#el_req{gri = GRI#gri{aspect = instance}}),
@@ -648,7 +651,7 @@ validate(Req = #el_req{operation = create, gri = GRI = #gri{aspect = instance_de
 
 validate(#el_req{operation = create, gri = #gri{aspect = support}}) -> #{
     required => #{
-        <<"token">> => {invite_token, ?SPACE_SUPPORT_TOKEN},
+        <<"token">> => {invite_token, ?SUPPORT_SPACE},
         <<"size">> => {integer, {not_lower_than, ?MINIMUM_SUPPORT_SIZE}}
     }
 };
@@ -674,11 +677,16 @@ validate(#el_req{operation = create, gri = #gri{aspect = map_idp_group}}) -> #{
     }
 };
 
-validate(#el_req{operation = create, gri = #gri{aspect = verify_provider_identity}}) ->
+validate(#el_req{operation = create, gri = #gri{aspect = verify_provider_identity}, data = Data}) ->
+    %% @TODO VFS-5554 Deprecated, included for backward compatibility
+    TokenKey = case maps:is_key(<<"macaroon">>, Data) of
+        true -> <<"macaroon">>;
+        false -> <<"token">>
+    end,
     #{
         required => #{
-            <<"providerId">> => {binary, {exists, fun provider_logic:exists/1}},
-            <<"macaroon">> => {token, any}
+            <<"providerId">> => {any, {exists, fun provider_logic:exists/1}},
+            TokenKey => {token, any}
         }
     };
 
@@ -718,7 +726,6 @@ validate(#el_req{operation = update, gri = #gri{aspect = domain_config}, data = 
             }}
     end.
 
-
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -730,7 +737,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = domain_config}, data = 
 %% ProviderId is either given explicitly or derived from entity logic request.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_membership(od_user:id(), od_provider:info()) ->
+-spec auth_by_membership(od_user:id(), od_provider:record()) ->
     boolean().
 auth_by_membership(UserId, Provider) ->
     provider_logic:has_eff_user(Provider, UserId).
@@ -888,18 +895,21 @@ update_provider_subomain(ProviderId, Data) ->
 %% Creates a new provider document in database.
 %% @end
 %%--------------------------------------------------------------------
--spec create_provider(Data :: map(), ProviderId :: od_provider:id(),
+-spec create_provider(aai:auth(), Data :: map(), ProviderId :: od_provider:id(),
     GRI :: entity_logic:gri()) -> entity_logic:create_result().
-create_provider(Data, ProviderId, GRI) ->
-    Token = maps:get(<<"token">>, Data, undefined),
+create_provider(Auth, Data, ProviderId, GRI) ->
     Name = maps:get(<<"name">>, Data),
+    Token = maps:get(<<"token">>, Data),
     Latitude = maps:get(<<"latitude">>, Data, 0.0),
     Longitude = maps:get(<<"longitude">>, Data, 0.0),
     SubdomainDelegation = maps:get(<<"subdomainDelegation">>, Data),
     AdminEmail = maps:get(<<"adminEmail">>, Data),
 
-    CreateProviderFun = fun(od_user, CreatorUserId) ->
-        {ok, Macaroon, Identity} = access_tokens:create_provider_root_macaroon(ProviderId),
+    invite_tokens:consume(Auth, Token, ?REGISTER_ONEPROVIDER, fun(CreatorUserId, _) ->
+        {ok, RootToken} = token_logic:create_provider_named_token(?ROOT, ProviderId, #{
+            <<"name">> => ?PROVIDER_ROOT_TOKEN_NAME,
+            <<"type">> => ?ACCESS_TOKEN
+        }),
 
         {Domain, Subdomain} = case SubdomainDelegation of
             false ->
@@ -916,7 +926,7 @@ create_provider(Data, ProviderId, GRI) ->
         end,
 
         ProviderRecord = #od_provider{
-            name = Name, root_macaroon = Identity,
+            name = Name, root_token = RootToken#token.id,
             subdomain_delegation = SubdomainDelegation,
             domain = Domain, subdomain = Subdomain,
             latitude = Latitude, longitude = Longitude,
@@ -926,17 +936,12 @@ create_provider(Data, ProviderId, GRI) ->
         try
             {ok, _} = od_provider:create(#document{key = ProviderId, value = ProviderRecord}),
             cluster_logic:create_oneprovider_cluster(CreatorUserId, ProviderId),
-            {ok, {Provider, Rev}} = fetch_entity(ProviderId),
+            {true, {Provider, Rev}} = fetch_entity(#gri{aspect = instance, id = ProviderId}),
             ?info("Provider '~ts' has registered (~s)", [Name, ProviderId]),
-            {ok, resource, {GRI#gri{id = ProviderId}, {{Provider, Macaroon}, Rev}}}
+            {ok, resource, {GRI#gri{id = ProviderId}, {{Provider, RootToken}, Rev}}}
         catch Type:Reason ->
             ?error_stacktrace("Cannot create a new provider due to ~p:~p", [Type, Reason]),
             dns_state:remove_delegation_config(ProviderId),
             ?ERROR_INTERNAL_SERVER_ERROR
         end
-    end,
-    % @TODO VFS-5207 Registration token is not required for compatibility with legacy providers
-    case Token of
-        undefined -> CreateProviderFun(od_user, undefined);
-        _ -> invite_tokens:consume(Token, CreateProviderFun)
-    end.
+    end).

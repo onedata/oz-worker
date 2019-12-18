@@ -6,7 +6,7 @@
 %%% @end
 %%%-------------------------------------------------------------------
 %%% @doc
-%%% This module encapsulates all share logic functionalities.
+%%% This module encapsulates all share logic functionality.
 %%% In most cases, it is a wrapper for entity_logic functions.
 %%% @end
 %%%-------------------------------------------------------------------
@@ -51,7 +51,7 @@
 %%--------------------------------------------------------------------
 -spec create(Auth :: aai:auth(), ShareId :: od_share:id(),
     Name :: binary(), RootFileId :: binary(), SpaceId :: od_space:id()) ->
-    {ok, od_share:id()} | {error, term()}.
+    {ok, od_share:id()} | errors:error().
 create(Auth, ShareId, Name, RootFileId, SpaceId) ->
     create(Auth, #{
         <<"shareId">> => ShareId,
@@ -68,7 +68,7 @@ create(Auth, ShareId, Name, RootFileId, SpaceId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec create(Auth :: aai:auth(), Data :: #{}) ->
-    {ok, od_share:id()} | {error, term()}.
+    {ok, od_share:id()} | errors:error().
 create(Auth, Data) ->
     ?CREATE_RETURN_ID(entity_logic:handle(#el_req{
         operation = create,
@@ -84,7 +84,7 @@ create(Auth, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get(Auth :: aai:auth(), ShareId :: od_share:id()) ->
-    {ok, #od_share{}} | {error, term()}.
+    {ok, #od_share{}} | errors:error().
 get(Auth, ShareId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -99,7 +99,7 @@ get(Auth, ShareId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec get_public_data(Auth :: aai:auth(), ShareId :: od_share:id()) ->
-    {ok, map()} | {error, term()}.
+    {ok, map()} | errors:error().
 get_public_data(Auth, ShareId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -114,7 +114,7 @@ get_public_data(Auth, ShareId) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec list(Auth :: aai:auth()) ->
-    {ok, [od_share:id()]} | {error, term()}.
+    {ok, [od_share:id()]} | errors:error().
 list(Auth) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -132,7 +132,7 @@ list(Auth) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec update(Auth :: aai:auth(), ShareId :: od_share:id(),
-    Data :: #{}) -> ok | {error, term()}.
+    Data :: #{}) -> ok | errors:error().
 update(Auth, ShareId, NewName) when is_binary(NewName) ->
     update(Auth, ShareId, #{<<"name">> => NewName});
 update(Auth, ShareId, Data) ->
@@ -150,7 +150,7 @@ update(Auth, ShareId, Data) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec delete(Auth :: aai:auth(), ShareId :: od_share:id()) ->
-    ok | {error, term()}.
+    ok | errors:error().
 delete(Auth, ShareId) ->
     entity_logic:handle(#el_req{
         operation = delete,
@@ -190,7 +190,7 @@ share_id_to_redirect_url(ShareId) ->
         value = #od_share{space = ParentSpaceId}
     }} = od_share:get(ShareId),
     {ok, #document{
-        value = #od_space{providers = Providers}
+        value = #od_space{eff_providers = Providers}
     }} = od_space:get(ParentSpaceId),
     % Prefer online providers
     {Online, Offline} = lists:partition(

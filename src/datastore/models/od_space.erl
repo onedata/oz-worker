@@ -35,7 +35,8 @@
 -define(CTX, #{
     model => ?MODULE,
     fold_enabled => true,
-    sync_enabled => true
+    sync_enabled => true,
+    memory_copies => all
 }).
 
 %%%===================================================================
@@ -150,22 +151,22 @@ print_summary(SortPos) when is_integer(SortPos) ->
             {maps:size(S#od_space.users), maps:size(S#od_space.eff_users)},
             {maps:size(S#od_space.groups), maps:size(S#od_space.eff_groups)},
             length(S#od_space.shares),
-            maps:size(S#od_space.providers),
-            lists:sum(maps:values(S#od_space.providers))
+            maps:size(S#od_space.eff_providers),
+            lists:foldl(fun({Support, _}, TotalSupport) -> TotalSupport + Support end, 0, maps:values(S#od_space.eff_providers))
         }
     end, Spaces),
     Sorted = lists:keysort(SortPos, SpaceAttrs),
-    io:format("---------------------------------------------------------------------------------------------------------------------------~n"),
-    io:format("Id                                Name                      Users (eff)    Groups (eff)   Shares   Providers   Tot. support~n"),
-    io:format("---------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("--------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("Id                                           Name                      Users (eff)    Groups (eff)   Shares   Providers   Tot. support~n"),
+    io:format("--------------------------------------------------------------------------------------------------------------------------------------~n"),
     lists:foreach(fun({Id, Name, {Users, EffUsers}, {Groups, EffGroups}, Shares, Providers, Support}) ->
         UsersStr = str_utils:format("~B (~B)", [Users, EffUsers]),
         GroupsStr = str_utils:format("~B (~B)", [Groups, EffGroups]),
-        io:format("~-33s ~-25ts ~-14s ~-14s ~-8B ~-11B ~-14s~n", [
+        io:format("~-44s ~-25ts ~-14s ~-14s ~-8B ~-11B ~-14s~n", [
             Id, Name, UsersStr, GroupsStr, Shares, Providers, str_utils:format_byte_size(Support)
         ])
     end, Sorted),
-    io:format("---------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("--------------------------------------------------------------------------------------------------------------------------------------~n"),
     io:format("~B spaces in total~n", [length(Sorted)]).
 
 %%--------------------------------------------------------------------
@@ -188,7 +189,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    6.
+    7.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -268,18 +269,44 @@ get_record_struct(6) ->
         {groups, #{string => [atom]}},
         {providers, #{string => integer}},
         {shares, [string]},
-        {harvesters, [string]}, % New field
+        {harvesters, [string]},
 
         {eff_users, #{string => {[atom], [{atom, string}]}}},
         {eff_groups, #{string => {[atom], [{atom, string}]}}},
         {eff_providers, #{string => [{atom, string}]}},
-        {eff_harvesters, #{string => [{atom, string}]}}, % New field
+        {eff_harvesters, #{string => [{atom, string}]}},
 
         {creation_time, integer},
         {creator, {record, [ % nested record changed from #client{} to #subject{}
             {type, atom},
             {id, string}
         ]}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(7) ->
+    % creator field - nested #subject{} record and encoding changed
+    % * removed field - providers
+    % * new field - storages
+    {record, [
+        {name, string},
+
+        {users, #{string => [atom]}},
+        {groups, #{string => [atom]}},
+        {storages, #{string => integer}}, % New field
+        {shares, [string]},
+        {harvesters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_groups, #{string => {[atom], [{atom, string}]}}},
+        {eff_providers, #{string => {integer, [{atom, string}]}}}, % Modified field
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        % nested #subject{} record was extended and is now encoded as string
+        % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
 
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
@@ -386,7 +413,7 @@ upgrade_record(3, Space) ->
             (space_view) -> [?SPACE_VIEW, ?SPACE_VIEW_PRIVILEGES];
             (space_invite_user) -> [?SPACE_ADD_USER];
             (space_invite_group) -> [?SPACE_ADD_GROUP];
-            (space_invite_provider) -> [?SPACE_ADD_PROVIDER];
+            (space_invite_provider) -> [space_add_provider];
             (Other) -> [Other]
         end, Privileges))
     end,
@@ -398,25 +425,25 @@ upgrade_record(3, Space) ->
         end, Field)
     end,
 
-    {4, #od_space{
-        name = Name,
+    {4, {od_space,
+        Name,
 
-        users = TranslateField(Users),
-        groups = TranslateField(Groups),
-        providers = Providers,
-        shares = Shares,
-        harvesters = [],
+        TranslateField(Users),
+        TranslateField(Groups),
+        Providers,
+        Shares,
+        [],
 
-        eff_users = TranslateField(EffUsers),
-        eff_groups = TranslateField(EffGroups),
-        eff_providers = EffProviders,
-        eff_harvesters = #{},
+        TranslateField(EffUsers),
+        TranslateField(EffGroups),
+        EffProviders,
+        #{},
 
-        creation_time = time_utils:system_time_seconds(),
-        creator = undefined,
+        time_utils:system_time_seconds(),
+        undefined,
 
-        top_down_dirty = true,
-        bottom_up_dirty = true
+        true,
+        true
     }};
 upgrade_record(4, Space) ->
     {
@@ -503,23 +530,86 @@ upgrade_record(5, Space) ->
 
     } = Space,
 
-    {6, #od_space{
+    {6, {
+        od_space,
+        Name,
+
+        Users,
+        Groups,
+        Providers,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        upgrade_common:client_to_subject(Creator),
+
+        TopDownDirty,
+        BottomUpDirty
+
+    }};
+upgrade_record(6, Space) ->
+    {
+        od_space,
+        Name,
+
+        Users,
+        Groups,
+        _Providers,
+        Shares,
+        Harvesters,
+
+        EffUsers,
+        EffGroups,
+        _EffProviders,
+        EffHarvesters,
+
+        CreationTime,
+        Creator,
+
+        _TopDownDirty,
+        _BottomUpDirty
+
+    } = Space,
+
+    %% Eff providers are recalculated during cluster upgrade procedure
+
+    TranslatePrivileges = fun(Privileges) ->
+        privileges:from_list(lists:flatmap(fun
+            (space_add_provider) -> [?SPACE_ADD_SUPPORT];
+            (space_remove_provider) -> [?SPACE_REMOVE_SUPPORT];
+            (Other) -> [Other]
+        end, Privileges))
+    end,
+
+    TranslateField = fun(Field) ->
+        maps:map(fun
+            (_, {Privs, Relation}) -> {TranslatePrivileges(Privs), Relation};
+            (_, Privs) -> TranslatePrivileges(Privs)
+        end, Field)
+    end,
+
+    {7, #od_space{
         name = Name,
 
-        users = Users,
-        groups = Groups,
-        providers = Providers,
+        users = TranslateField(Users),
+        groups = TranslateField(Groups),
         shares = Shares,
         harvesters = Harvesters,
+        storages = #{},
 
         eff_users = EffUsers,
         eff_groups = EffGroups,
-        eff_providers = EffProviders,
+        eff_providers = #{},
         eff_harvesters = EffHarvesters,
 
         creation_time = CreationTime,
-        creator = upgrade_common:client_to_subject(Creator),
+        creator = upgrade_common:upgrade_subject_record(Creator),
 
-        top_down_dirty = TopDownDirty,
-        bottom_up_dirty = BottomUpDirty
+        top_down_dirty = true,
+        bottom_up_dirty = true
     }}.

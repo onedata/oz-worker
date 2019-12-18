@@ -19,14 +19,14 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -type method() :: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'.
 -type binding() :: {binding, atom()} | client_id | client_ip.
 -type bound_gri() :: #b_gri{}.
 -type bound_auth_hint() :: undefined | {
     throughUser | throughGroup | throughSpace | throughProvider |
-    throughHandleService | throughHandle | throughHarvester | throughCluster | 
+    throughHandleService | throughHandle | throughHarvester | throughCluster |
     asUser | asGroup | asSpace,
     binding()
 }.
@@ -132,22 +132,34 @@ content_types_provided(Req, #state{rest_req = #rest_req{produces = Produces}} = 
 %% 401 Unauthorized is returned when there's been an *authentication* error,
 %% and 403 Forbidden is returned when the already-authenticated client
 %% is unauthorized to perform an operation.
+%%
+%% This function checks authentication, authorization is checked
+%% by entity_logic later.
 %% @end
 %%--------------------------------------------------------------------
 -spec is_authorized(Req :: cowboy_req:req(), State :: #state{}) ->
-    {true | {false, binary()}, cowboy_req:req(), #state{}}.
+    {true | {false, binary()} | stop, cowboy_req:req(), #state{}}.
 is_authorized(Req, State) ->
-    % Check if the request carries any authorization
     Result = try
-        % Try to authorize the client using several methods.
-        authorize(Req, [
-            fun auth_logic:authorize_by_basic_auth/1,
-            fun auth_logic:authorize_by_oneprovider_gui_token/1,
-            fun auth_logic:authorize_by_access_token/1
-        ])
+        case token_auth:authenticate_for_rest_interface(Req) of
+            {true, TokenAuth} ->
+                {ok, TokenAuth};
+            {error, Err1} ->
+                {error, Err1};
+            false ->
+                {PeerIp, _} = cowboy_req:peer(Req),
+                case basic_auth:authenticate(Req) of
+                    {true, BasicAuth} ->
+                        {ok, BasicAuth#auth{peer_ip = PeerIp}};
+                    {error, Err2} ->
+                        {error, Err2};
+                    false ->
+                        {ok, #auth{subject = ?SUB(nobody), peer_ip = PeerIp}}
+                end
+        end
     catch
-        throw:Err ->
-            Err;
+        throw:Err3 ->
+            Err3;
         Type:Message ->
             ?error_stacktrace("Unexpected error in ~p:is_authorized - ~p:~p", [
                 ?MODULE, Type, Message
@@ -156,12 +168,10 @@ is_authorized(Req, State) ->
     end,
 
     case Result of
-        % Always return true - authorization is checked by entity_logic later.
-        {true, Client} ->
-            {true, Req, State#state{auth = Client}};
-        {error, _} = Error ->
-            RestResp = error_rest_translator:response(Error),
-            {stop, send_response(RestResp, Req), State}
+        {ok, Auth} ->
+            {true, Req, State#state{auth = Auth}};
+        {error, _} = Err4 ->
+            {stop, send_error_response(Err4, Req), State}
     end.
 
 
@@ -212,6 +222,7 @@ rest_routes() ->
         space_routes:routes(),
         share_routes:routes(),
         provider_routes:routes(),
+        token_routes:routes(),
         handle_service_routes:routes(),
         handle_routes:routes(),
         harvester_routes:routes(),
@@ -277,8 +288,7 @@ process_request(Req, State) ->
         {stop, send_response(RestResp, Req2), State}
     catch
         throw:Error ->
-            ErrorResp = error_rest_translator:response(Error),
-            {stop, send_response(ErrorResp, Req), State};
+            {stop, send_error_response(Error, Req), State};
         Type:Message ->
             ?error_stacktrace("Unexpected error in ~p:process_request - ~p:~p", [
                 ?MODULE, Type, Message
@@ -303,6 +313,14 @@ send_response(#rest_resp{code = Code, headers = Headers, body = Body}, Req) ->
             json_utils:encode(Map)
     end,
     cowboy_req:reply(Code, Headers, RespBody, Req).
+
+
+-spec send_error_response(errors:error(), cowboy_req:req()) -> cowboy_req:req().
+send_error_response(Error = {error, _}, Req) ->
+    send_response(#rest_resp{
+        code = errors:to_http_code(Error),
+        body = #{<<"error">> => errors:to_json(Error)}
+    }, Req).
 
 
 %%--------------------------------------------------------------------
@@ -383,29 +401,6 @@ call_entity_logic_and_translate_response(ElReq) ->
                 Operation, GRI, AuthHint, Result, Type, Message
             ]),
             rest_translator:response(ElReq, ?ERROR_INTERNAL_SERVER_ERROR)
-    end.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Tries to authorize REST client using provided auth methods expressed
-%% as functions to use.
-%% @end
-%%--------------------------------------------------------------------
--spec authorize(Req :: cowboy_req:req(),
-    [fun((cowboy_req:req()) -> {true, aai:auth()} | {error, term()})]) ->
-    {true, aai:auth()} | {error, term()}.
-authorize(_Req, []) ->
-    {true, ?NOBODY};
-authorize(Req, [AuthMethod | Rest]) ->
-    case AuthMethod(Req) of
-        false ->
-            authorize(Req, Rest);
-        {true, Auth} ->
-            {true, Auth};
-        {error, Error} ->
-            {error, Error}
     end.
 
 

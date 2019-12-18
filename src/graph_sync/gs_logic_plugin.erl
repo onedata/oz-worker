@@ -19,17 +19,18 @@
 -include("registered_names.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 
 %% API
--export([verify_handshake_auth/1]).
+-export([verify_handshake_auth/2]).
 -export([client_connected/2, client_disconnected/2]).
 -export([verify_auth_override/2]).
 -export([is_authorized/5]).
 -export([handle_rpc/4]).
 -export([handle_graph_request/6]).
 -export([is_subscribable/1]).
+-export([is_type_supported/1]).
 
 %%%===================================================================
 %%% API
@@ -37,24 +38,20 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% {@link gs_logic_plugin_behaviour} callback verify_handshake_auth/1.
+%% {@link gs_logic_plugin_behaviour} callback verify_handshake_auth/2.
 %% @end
 %%--------------------------------------------------------------------
--spec verify_handshake_auth(gs_protocol:client_auth()) ->
-    {ok, aai:auth()} | gs_protocol:error().
-verify_handshake_auth(undefined) ->
-    {ok, ?NOBODY};
-verify_handshake_auth(nobody) ->
-    {ok, ?NOBODY};
-verify_handshake_auth({macaroon, Macaroon, DischargeMacaroons}) ->
-    case auth_logic:authorize_by_oz_worker_gui_token(Macaroon) of
-        {true, Auth} ->
-            {ok, Auth};
-        {error, _} ->
-            case auth_logic:authorize_by_macaroons(Macaroon, DischargeMacaroons) of
-                {true, Auth} -> {ok, Auth};
-                {error, _} -> ?ERROR_UNAUTHORIZED
-            end
+-spec verify_handshake_auth(gs_protocol:client_auth(), ip_utils:ip()) ->
+    {ok, aai:auth()} | errors:error().
+verify_handshake_auth(undefined, PeerIp) ->
+    {ok, #auth{subject = ?SUB(nobody), peer_ip = PeerIp}};
+verify_handshake_auth(nobody, PeerIp) ->
+    {ok, #auth{subject = ?SUB(nobody), peer_ip = PeerIp}};
+verify_handshake_auth({token, Token}, PeerIp) ->
+    AuthCtx = token_auth:build_auth_ctx(graphsync, PeerIp),
+    case token_auth:authenticate(Token, AuthCtx) of
+        {true, Auth} -> {ok, Auth};
+        {error, _} = Error -> Error
     end.
 
 
@@ -77,6 +74,8 @@ client_connected(?PROVIDER(ProvId), ConnectionRef) ->
         ProvId,
         {ProvRecord, Revision}
     );
+client_connected(?USER = #auth{session_id = undefined}, _) ->
+    ok;
 client_connected(?USER = #auth{session_id = SessionId}, ConnectionRef) ->
     user_connections:add(SessionId, ConnectionRef);
 client_connected(_, _) ->
@@ -108,6 +107,8 @@ client_disconnected(?PROVIDER(ProvId), _ConnectionRef) ->
             ?info("Provider '~s' went offline", [ProvId])
     end,
     provider_connection:remove_connection(ProvId);
+client_disconnected(?USER = #auth{session_id = undefined}, _) ->
+    ok;
 client_disconnected(?USER = #auth{session_id = SessionId}, ConnectionRef) ->
     user_connections:remove(SessionId, ConnectionRef);
 client_disconnected(_, _) ->
@@ -120,26 +121,44 @@ client_disconnected(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_auth_override(aai:auth(), gs_protocol:auth_override()) ->
-    {ok, aai:auth()} | gs_protocol:error().
-verify_auth_override(Auth, {macaroon, Macaroon, DischMacaroons}) ->
-    case auth_logic:authorize_by_macaroons(Macaroon, DischMacaroons) of
-        {true, OverridenAuth1} ->
-            {ok, OverridenAuth1};
-        {error, _} = Error1 ->
-            case Auth of
-                ?PROVIDER(ProviderId) ->
-                    case auth_logic:authorize_by_gui_token(Macaroon, ?AUD(?OP_WORKER, ProviderId)) of
-                        {true, OverridenAuth2} ->
-                            {ok, OverridenAuth2};
-                        {error, _} = Error2 ->
-                            Error2
-                    end;
-                _ ->
-                    Error1
-            end
+    {ok, aai:auth()} | errors:error().
+verify_auth_override(?PROVIDER(ProviderId), #auth_override{client_auth = {token, Token}} = AuthOverride) ->
+    #auth_override{
+        peer_ip = PeerIp,
+        interface = Interface,
+        audience_token = AudienceToken,
+        data_access_caveats_policy = DataAccessCaveatsPolicy
+    } = AuthOverride,
 
+    % If no audience token is given, audience defaults to the provider (GS channel owner)
+    ResolvedAudience = case AudienceToken of
+        undefined ->
+            {ok, ?AUD(?OP_WORKER, ProviderId)};
+        SerializedAudienceToken ->
+            AudienceAuthCtx = token_auth:build_auth_ctx(graphsync, PeerIp),
+            token_auth:verify_audience_token(SerializedAudienceToken, AudienceAuthCtx)
+    end,
+
+    case ResolvedAudience of
+        {ok, Audience} ->
+            AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, Audience, DataAccessCaveatsPolicy),
+            case token_auth:authenticate(Token, AuthCtx) of
+                {true, OverridenAuth = ?USER(UserId)} ->
+                    % Provided token is valid; allow only user tokens and check
+                    % that the GS channel owning provider actually supports the user
+                    case provider_logic:has_eff_user(ProviderId, UserId) of
+                        true -> {ok, OverridenAuth};
+                        false -> ?ERROR_UNAUTHORIZED
+                    end;
+                {true, _} ->
+                    ?ERROR_UNAUTHORIZED;
+                {error, _} = Err1 ->
+                    Err1
+            end;
+        {error, _} = Err2 ->
+            Err2
     end;
-verify_auth_override(_Auth, nobody) ->
+verify_auth_override(?PROVIDER(_), #auth_override{client_auth = nobody}) ->
     {ok, ?NOBODY};
 verify_auth_override(_, _) ->
     ?ERROR_UNAUTHORIZED.
@@ -151,8 +170,8 @@ verify_auth_override(_, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec is_authorized(aai:auth(), gs_protocol:auth_hint(),
-    gs_protocol:gri(), gs_protocol:operation(), gs_protocol:versioned_entity()) ->
-    {true, gs_protocol:gri()} | false.
+    gri:gri(), gs_protocol:operation(), gs_protocol:versioned_entity()) ->
+    {true, gri:gri()} | false.
 is_authorized(Auth, AuthHint, GRI, Operation, VersionedEntity) ->
     ElReq = #el_req{
         auth = Auth,
@@ -171,11 +190,9 @@ is_authorized(Auth, AuthHint, GRI, Operation, VersionedEntity) ->
 -spec handle_rpc(gs_protocol:protocol_version(), aai:auth(),
     gs_protocol:rpc_function(), gs_protocol:rpc_args()) ->
     gs_protocol:rpc_result().
-handle_rpc(_, _, <<"authorizeUser">>, Args) ->
-    user_logic:authorize(Args);
 handle_rpc(_, _, <<"getSupportedIdPs">>, Data) ->
     TestMode = maps:get(<<"testMode">>, Data, false),
-    TestMode andalso auth_test_mode:process_enable_test_mode(),
+    TestMode andalso idp_auth_test_mode:process_enable_test_mode(),
     case oz_worker:get_env(dev_mode, false) of
         true ->
             % If dev mode is enabled, always return basic auth and just one
@@ -223,16 +240,8 @@ handle_rpc(_, Auth, <<"getLoginEndpoint">>, Data = #{<<"idp">> := IdPBin}) ->
             end,
             RedirectAfterLogin = maps:get(<<"redirectUrl">>, Data, <<?AFTER_LOGIN_PAGE_PATH>>),
             TestMode = maps:get(<<"testMode">>, Data, false),
-            auth_logic:get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode)
+            idp_auth:get_login_endpoint(IdP, LinkAccount, RedirectAfterLogin, TestMode)
     end;
-handle_rpc(_, ?USER(UserId), <<"getProviderRedirectURL">>, Args) ->
-    ProviderId = maps:get(<<"providerId">>, Args),
-    RedirectPath = case maps:get(<<"path">>, Args, <<"/">>) of
-        null -> <<"/">>;
-        P -> P
-    end,
-    {ok, URL} = auth_tokens:get_redirection_uri(UserId, ProviderId, RedirectPath),
-    {ok, #{<<"url">> => URL}};
 handle_rpc(_, _, _, _) ->
     ?ERROR_RPC_UNDEFINED.
 
@@ -243,7 +252,7 @@ handle_rpc(_, _, _, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec handle_graph_request(aai:auth(), gs_protocol:auth_hint(),
-    gs_protocol:gri(), gs_protocol:operation(), gs_protocol:data(),
+    gri:gri(), gs_protocol:operation(), gs_protocol:data(),
     gs_protocol:versioned_entity()) -> gs_protocol:graph_request_result().
 handle_graph_request(Auth, AuthHint, GRI, Operation, Data, VersionedEntity) ->
     ElReq = #el_req{
@@ -262,7 +271,28 @@ handle_graph_request(Auth, AuthHint, GRI, Operation, Data, VersionedEntity) ->
 %% {@link gs_logic_plugin_behaviour} callback is_subscribable/1.
 %% @end
 %%--------------------------------------------------------------------
--spec is_subscribable(gs_protocol:gri()) -> boolean().
+-spec is_subscribable(gri:gri()) -> boolean().
 is_subscribable(#gri{type = EntityType, aspect = Aspect, scope = Scope}) ->
     ElPlugin = EntityType:entity_logic_plugin(),
     ElPlugin:is_subscribable(Aspect, Scope).
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% {@link gs_logic_plugin_behaviour} callback is_type_supported/1.
+%% @end
+%%--------------------------------------------------------------------
+-spec is_type_supported(gri:gri()) -> boolean().
+is_type_supported(#gri{type = od_user}) -> true;
+is_type_supported(#gri{type = od_group}) -> true;
+is_type_supported(#gri{type = od_space}) -> true;
+is_type_supported(#gri{type = od_share}) -> true;
+is_type_supported(#gri{type = od_storage}) -> true;
+is_type_supported(#gri{type = od_provider}) -> true;
+is_type_supported(#gri{type = od_token}) -> true;
+is_type_supported(#gri{type = od_handle_service}) -> true;
+is_type_supported(#gri{type = od_handle}) -> true;
+is_type_supported(#gri{type = od_cluster}) -> true;
+is_type_supported(#gri{type = od_harvester}) -> true;
+is_type_supported(#gri{type = oz_worker}) -> true;
+is_type_supported(#gri{type = _}) -> false.

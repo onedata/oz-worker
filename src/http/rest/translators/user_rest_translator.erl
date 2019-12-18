@@ -14,7 +14,7 @@
 -author("Lukasz Opiola").
 
 -include("http/rest.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([create_response/4, get_response/2]).
 
@@ -30,11 +30,8 @@
 -spec create_response(entity_logic:gri(), entity_logic:auth_hint(),
     entity_logic:data_format(), Result :: term() | {entity_logic:gri(), term()} |
     {entity_logic:gri(), entity_logic:auth_hint(), term()}) -> #rest_resp{}.
-create_response(#gri{aspect = authorize}, _, value, DischargeMacaroon) ->
-    rest_translator:ok_body_reply({binary, DischargeMacaroon});
-
 create_response(#gri{aspect = instance}, _, resource, {#gri{id = UserId}, _}) ->
-    rest_translator:created_reply([<<"users">>, UserId]);
+    rest_translator:created_reply_with_location([<<"users">>, UserId]);
 
 create_response(#gri{aspect = client_tokens}, _, resource, {_, {Token, _Rev}}) ->
     rest_translator:ok_body_reply(#{<<"token">> => Token});
@@ -45,9 +42,9 @@ create_response(#gri{aspect = {idp_access_token, _}}, _, value, {AccessToken, Ex
         <<"ttl">> => Expires
     });
 
-create_response(#gri{aspect = provider_registration_token}, _, value, Macaroon) ->
-    {ok, Token} = macaroons:serialize(Macaroon),
-    rest_translator:ok_body_reply(#{<<"token">> => Token}).
+create_response(#gri{aspect = provider_registration_token}, _, value, Token) ->
+    {ok, Serialized} = tokens:serialize(Token),
+    rest_translator:ok_body_reply(#{<<"token">> => Serialized}).
 
 
 %%--------------------------------------------------------------------
@@ -70,14 +67,14 @@ get_response(#gri{id = UserId, aspect = instance, scope = protected}, UserData) 
         <<"basicAuthEnabled">> => BasicAuthEnabled,
         <<"userId">> => UserId,
         <<"fullName">> => FullName,
-        <<"username">> => gs_protocol:undefined_to_null(Username),
+        <<"username">> => utils:undefined_to_null(Username),
         <<"emails">> => Emails,
         <<"linkedAccounts">> => LinkedAccounts,
 
-        % TODO VFS-4506 deprecated fields, included for backward compatibility
+        %% @TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"name">> => FullName,
-        <<"login">> => gs_protocol:undefined_to_null(Username),
-        <<"alias">> => gs_protocol:undefined_to_null(Username),
+        <<"login">> => utils:undefined_to_null(Username),
+        <<"alias">> => utils:undefined_to_null(Username),
         <<"emailList">> => Emails
     });
 
@@ -88,12 +85,12 @@ get_response(#gri{id = UserId, aspect = instance, scope = shared}, UserData) ->
     rest_translator:ok_body_reply(#{
         <<"userId">> => UserId,
         <<"fullName">> => FullName,
-        <<"username">> => gs_protocol:undefined_to_null(Username),
+        <<"username">> => utils:undefined_to_null(Username),
 
-        % TODO VFS-4506 deprecated fields, included for backward compatibility
+        %% @TODO VFS-4506 deprecated fields, included for backward compatibility
         <<"name">> => FullName,
-        <<"login">> => gs_protocol:undefined_to_null(Username),
-        <<"alias">> => gs_protocol:undefined_to_null(Username)
+        <<"login">> => utils:undefined_to_null(Username),
+        <<"alias">> => utils:undefined_to_null(Username)
     });
 
 get_response(#gri{aspect = oz_privileges}, Privileges) ->

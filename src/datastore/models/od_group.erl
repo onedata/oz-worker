@@ -37,7 +37,8 @@
 -define(CTX, #{
     model => ?MODULE,
     fold_enabled => true,
-    sync_enabled => true
+    sync_enabled => true,
+    memory_copies => all
 }).
 
 %%%===================================================================
@@ -168,19 +169,19 @@ print_summary(SortPos) when is_integer(SortPos) ->
         }
     end, Groups),
     Sorted = lists:keysort(SortPos, GroupAttrs),
-    io:format("---------------------------------------------------------------------------------------------------------------------------------------------------~n"),
-    io:format("Id                                Name                      Type           Chldrn (eff)   Parnts (eff)   Users (eff)   Spaces (eff)   Eff providers~n"),
-    io:format("---------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("--------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("Id                                           Name                      Type           Chldrn (eff)   Parnts (eff)   Users (eff)   Spaces (eff)   Eff providers~n"),
+    io:format("--------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
     lists:foreach(fun({Id, Name, Type, {Children, EffChildren}, {Parents, EffParents}, {Users, EffUsers}, {Spaces, EffSpaces}, Providers}) ->
         ChildrenStr = str_utils:format("~B (~B)", [Children, EffChildren]),
         ParentsStr = str_utils:format("~B (~B)", [Parents, EffParents]),
         UsersStr = str_utils:format("~B (~B)", [Users, EffUsers]),
         SpacesStr = str_utils:format("~B (~B)", [Spaces, EffSpaces]),
-        io:format("~-33s ~-25ts ~-14s ~-14s ~-14s ~-13s ~-14s ~-14B~n", [
+        io:format("~-44s ~-25ts ~-14s ~-14s ~-14s ~-13s ~-14s ~-14B~n", [
             Id, Name, Type, ChildrenStr, ParentsStr, UsersStr, SpacesStr, Providers
         ])
     end, Sorted),
-    io:format("---------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("--------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
     io:format("~B groups in total~n", [length(Sorted)]).
 
 %%--------------------------------------------------------------------
@@ -203,7 +204,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    7.
+    8.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -351,6 +352,43 @@ get_record_struct(7) ->
             {type, atom},
             {id, string}
         ]}},
+
+        {top_down_dirty, boolean},
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(8) ->
+    % creator field - nested record changed from #client{} to #subject{}
+    {record, [
+        {name, string},
+        {type, atom},
+        {protected, boolean},
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {parents, [string]},
+        {children, #{string => [atom]}},
+        {eff_parents, #{string => [{atom, string}]}},
+        {eff_children, #{string => {[atom], [{atom, string}]}}},
+
+        {users, #{string => [atom]}},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+
+        {eff_users, #{string => {[atom], [{atom, string}]}}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        % nested #subject{} record was extended and is now encoded as string
+        % rather than record tuple
+        {creator, {custom, string, {aai, serialize_subject, deserialize_subject}}},
 
         {top_down_dirty, boolean},
         {bottom_up_dirty, boolean}
@@ -723,7 +761,77 @@ upgrade_record(6, Group) ->
         BottomUpDirty
     } = Group,
 
-    {7, #od_group{
+    {7, {
+        od_group,
+        Name,
+        Type,
+        Protected,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        upgrade_common:client_to_subject(Creator),
+
+        TopDownDirty,
+        BottomUpDirty
+    }};
+upgrade_record(7, Group) ->
+    {
+        od_group,
+        Name,
+        Type,
+        Protected,
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Parents,
+        Children,
+        EffParents,
+        EffChildren,
+
+        Users,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffUsers,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+        Creator,
+
+        TopDownDirty,
+        BottomUpDirty
+    } = Group,
+
+    {8, #od_group{
         name = Name,
         type = Type,
         protected = Protected,
@@ -751,7 +859,7 @@ upgrade_record(6, Group) ->
         eff_clusters = EffClusters,
 
         creation_time = CreationTime,
-        creator = upgrade_common:client_to_subject(Creator),
+        creator = upgrade_common:upgrade_subject_record(Creator),
 
         top_down_dirty = TopDownDirty,
         bottom_up_dirty = BottomUpDirty

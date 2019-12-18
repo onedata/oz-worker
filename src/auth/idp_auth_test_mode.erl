@@ -12,7 +12,7 @@
 %%% with the production login code.
 %%% @end
 %%%-------------------------------------------------------------------
--module(auth_test_mode).
+-module(idp_auth_test_mode).
 -author("Lukasz Opiola").
 
 %% API

@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -218,9 +218,7 @@ create_group_test(Config) ->
                     <<"spaces">> => [],
                     <<"type">> => atom_to_binary(ExpType, utf8),
                     <<"gri">> => fun(EncodedGri) ->
-                        #gri{id = Id} = oz_test_utils:decode_gri(
-                            Config, EncodedGri
-                        ),
+                        #gri{id = Id} = gri:deserialize(EncodedGri),
                         VerifyFun(Id, ExpName, ExpType)
                     end
                 })
@@ -233,25 +231,28 @@ create_group_test(Config) ->
 join_group_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, U2} = oz_test_utils:create_user(Config),
-    {ok, G1} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
+    {ok, Creator} = oz_test_utils:create_user(Config),
+    {ok, G1} = oz_test_utils:create_group(Config, ?USER(Creator), ?GROUP_NAME1),
 
     EnvSetUpFun = fun() ->
-        {ok, Macaroon} = oz_test_utils:group_invite_user_token(
-            Config, ?ROOT, G1
+        {ok, Token} = oz_test_utils:group_invite_user_token(
+            Config, ?USER(Creator), G1
         ),
-        {ok, Token} = macaroons:serialize(Macaroon),
-        #{macaroonId => macaroon:identifier(Macaroon),
-          token => Token}
+        {ok, Serialized} = tokens:serialize(Token),
+        #{
+            tokenNonce => Token#token.id,
+            token => Serialized
+        }
     end,
-    
+
     VerifyEndFun = fun
-        (true = _ShouldSucceed, #{macaroonId := MacaroonId}, _) ->
+        (true = _ShouldSucceed, #{tokenNonce := TokenId}, _) ->
             {ok, Groups} = oz_test_utils:user_get_groups(Config, U1),
             ?assertEqual(lists:member(G1, Groups), true),
             oz_test_utils:group_remove_user(Config, G1, U1),
             {ok, NewGroups} = oz_test_utils:user_get_groups(Config, U1),
             ?assertEqual(lists:member(G1, NewGroups), false),
-            oz_test_utils:assert_token_not_exists(Config, MacaroonId);
+            oz_test_utils:assert_invite_token_usage_limit_reached(Config, true, TokenId);
         (false = _ShouldSucceed, _, _) ->
             {ok, Groups} = oz_test_utils:user_get_groups(Config, U1),
             ?assertEqual(lists:member(G1, Groups), false)
@@ -278,8 +279,8 @@ join_group_test(Config) ->
             },
             bad_values = [
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
-                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
-                {<<"token">>, <<"123qwe">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)}
+                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
+                {<<"token">>, <<"123qwe">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)}
             ]
         }
     },
@@ -291,7 +292,6 @@ join_group_test(Config) ->
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
                 {admin, [?OZ_USERS_ADD_RELATIONSHIPS]},
                 {user, U1}
             ],
@@ -310,26 +310,26 @@ join_group_test(Config) ->
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
     )),
-    
+
     % Check that token is not consumed upon failed operation
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1),
         #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
     ),
-    {ok, Macaroon} = oz_test_utils:group_invite_user_token(
-        Config, ?ROOT, Group
+    {ok, Token2} = oz_test_utils:group_invite_user_token(
+        Config, ?USER(U1), Group
     ),
-    {ok, Token} = macaroons:serialize(Macaroon),
-    
+    {ok, Serialized2} = tokens:serialize(Token2),
+
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root
+                {user, U1}
             ]
         },
         rest_spec = #rest_spec{
             method = post,
             path = <<"/user/groups/join">>,
-            expected_code = ?HTTP_400_BAD_REQUEST
+            expected_code = ?HTTP_409_CONFLICT
         },
         logic_spec = #logic_spec{
             module = user_logic,
@@ -340,11 +340,11 @@ join_group_test(Config) ->
         % TODO gs
         data_spec = #data_spec{
             required = [<<"token">>],
-            correct_values = #{<<"token">> => [Token]}
+            correct_values = #{<<"token">> => [Serialized2]}
         }
     },
-    VerifyEndFun1 = fun(_ShouldSucceed,_Env,_) ->
-            oz_test_utils:assert_token_exists(Config, macaroon:identifier(Macaroon))
+    VerifyEndFun1 = fun(_ShouldSucceed, _Env, _) ->
+        oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token2#token.id)
     end,
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1
@@ -415,9 +415,7 @@ get_group_test(Config) ->
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1_BIN,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, G1)
                 end
             })
@@ -473,7 +471,7 @@ leave_group_test(Config) ->
             module = user_logic,
             function = leave_group,
             args = [auth, U1, groupId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -595,9 +593,7 @@ get_eff_group_test(Config) ->
                     expected_result = ?OK_MAP_CONTAINS(GroupDetails#{
                         <<"type">> => atom_to_binary(ExpType, utf8),
                         <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
+                            #gri{id = Id} = gri:deserialize(EncodedGri),
                             ?assertEqual(Id, GroupId)
                         end
                     })

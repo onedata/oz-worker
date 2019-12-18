@@ -15,6 +15,7 @@
 
 -include_lib("cluster_worker/include/graph_sync/graph_sync.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
+-include_lib("ctool/include/validation.hrl").
 
 -define(SELF_INTERMEDIARY, <<"self">>).
 
@@ -71,58 +72,28 @@
     end
 ).
 
-% Regexp to validate domain (domain, subdomain or IP)
-% Domain consists of some number of parts delimited by single dot characters.
-% Each part must start and end with an lowercase alphanum
-% and may contain a hyphen '-'.
--define(DOMAIN_VALIDATION_REGEXP,
-    <<"^(([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])\\.)*([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$">>).
-
--define(MAX_DOMAIN_LENGTH, 253).
-
--define(SUBDOMAIN_VALIDATION_REGEXP,
-    <<"^([a-z0-9]|[a-z0-9][a-z0-9\\-]*[a-z0-9])$">>).
-
-
--define(NAME_REQUIREMENTS_DESCRIPTION, <<
-    "Name must be 2-50 characters long and composed only of UTF-8 letters, digits, brackets and underscores. "
-    "Dashes, spaces and dots are allowed (but not at the beginning or the end)."
->>).
--define(NAME_FIRST_CHARS_ALLOWED, <<")(\\w_">>).
--define(NAME_MIDDLE_CHARS_ALLOWED, <<">>)(\\w_ .-">>).
--define(NAME_LAST_CHARS_ALLOWED, ?NAME_FIRST_CHARS_ALLOWED).
--define(NAME_MAXIMUM_LENGTH, 50).
-
-
--define(FULL_NAME_REQUIREMENTS_DESCRIPTION, <<
-    "Full name must be 2-50 characters long and composed only of UTF-8 letters and digits. "
-    "Dashes, spaces, dots, commas and apostrophes are allowed (but not at the beginning or the end)."
->>).
--define(FULL_NAME_FIRST_CHARS_ALLOWED, <<"\\pL\\pNd">>).
--define(FULL_NAME_MIDDLE_CHARS_ALLOWED, <<"\\pL\\pNd ',.-">>).
--define(FULL_NAME_LAST_CHARS_ALLOWED, <<"\\pL\\pNd.">>).
--define(FULL_NAME_MAXIMUM_LENGTH, 50).
--define(DEFAULT_FULL_NAME, <<"Unnamed User">>).
-
-
--define(USERNAME_REQUIREMENTS_DESCRIPTION, <<
-    "Username must be 2-20 characters long and composed only of letters and digits. "
-    "Dashes and underscores are allowed (but not at the beginning or the end). "
->>).
--define(USERNAME_FIRST_CHARS_ALLOWED, <<"a-z0-9A-Z">>).
--define(USERNAME_MIDDLE_CHARS_ALLOWED, <<"a-z0-9A-Z._-">>).
--define(USERNAME_LAST_CHARS_ALLOWED, ?USERNAME_FIRST_CHARS_ALLOWED).
--define(USERNAME_MAXIMUM_LENGTH, 20).
-
-
--define(PASSWORD_REQUIREMENTS_DESCRIPTION, <<
-    "Password must be at least 8 characters long."
->>).
--define(PASSWORD_MIN_LENGTH, 8).
-
 
 % Used when enable_automatic_first_space is set to true
 -define(FIRST_SPACE_NAME, <<"Personal Space">>).
+% Name of the provider's first named token (root token)
+-define(PROVIDER_ROOT_TOKEN_NAME, <<"root token">>).
+% Name generator for the legacy clients tokens (after migration)
+-define(LEGACY_CLIENT_TOKEN_NAME(Number), <<"legacy token ", (integer_to_binary(Number))/binary>>).
+
+
+%% @TODO VFS-5727 temporary solution
+-define(INVITE_TOKEN_NAME(TokenType), <<
+    (atom_to_binary(TokenType, utf8))/binary, " ",
+    (binary:part(time_utils:epoch_to_iso8601(time_utils:cluster_time_seconds()), 0, 10))/binary, " ",
+    (str_utils:rand_hex(3))/binary
+>>).
+
+
+
+%% @TODO VFS-5856 This is needed for providers in previous version, for which virtual
+%% storage record supporting all their spaces will be created. This storage record
+%% does not represent actual storage, it is provider that keeps knowledge of storages.
+-define(STORAGE_DEFAULT_NAME, <<"default_storage">>).
 
 -define(UNKNOWN_ENTITY_NAME, <<"Unnamed">>).
 

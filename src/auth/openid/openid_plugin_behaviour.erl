@@ -23,8 +23,8 @@
 %% @end
 %%--------------------------------------------------------------------
 -callback get_login_endpoint(auth_config:idp(), state_token:state_token(),
-    auth_logic:redirect_uri()) ->
-    auth_logic:login_endpoint().
+    idp_auth:redirect_uri()) ->
+    idp_auth:login_endpoint().
 
 
 %%--------------------------------------------------------------------
@@ -34,8 +34,8 @@
 %% in such case they will be stored for offline access.
 %% @end
 %%--------------------------------------------------------------------
--callback validate_login(auth_config:idp(), auth_logic:query_params(),
-    auth_logic:redirect_uri()) ->
+-callback validate_login(auth_config:idp(), idp_auth:query_params(),
+    idp_auth:redirect_uri()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
 
 
@@ -44,7 +44,7 @@
 %% Acquires a new access token using given refresh token.
 %% @end
 %%--------------------------------------------------------------------
--callback refresh_access_token(auth_config:idp(), auth_logic:refresh_token()) ->
+-callback refresh_access_token(auth_config:idp(), idp_auth:refresh_token()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.
 
 
@@ -55,5 +55,5 @@
 %% in such case they will be stored for offline access.
 %% @end
 %%--------------------------------------------------------------------
--callback get_user_info(auth_config:idp(), auth_logic:access_token()) ->
+-callback get_user_info(auth_config:idp(), idp_auth:access_token()) ->
     {ok, attribute_mapping:idp_attributes()} | {error, term()}.

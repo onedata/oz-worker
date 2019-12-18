@@ -13,7 +13,7 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
@@ -330,7 +330,7 @@ start_gs_connection(Config, Cookie) ->
             rpc:multicall(Nodes, oz_worker, set_env, [mocked_pid, self()]),
             {ok, ClientPid, #gs_resp_handshake{identity = Identity}} = gs_client:start_link(
                 oz_test_utils:graph_sync_url(Config, gui),
-                {macaroon, GuiToken, []},
+                {token, GuiToken},
                 oz_test_utils:get_gs_supported_proto_versions(Config),
                 fun(_) -> ok end,
                 [{cacerts, oz_test_utils:gui_ca_certs(Config)}]

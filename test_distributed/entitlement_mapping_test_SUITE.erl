@@ -820,12 +820,12 @@ entitlement_groups_are_protected(_) ->
 %%%===================================================================
 
 store_test_config(Config) ->
-    put(test_data_config, Config).
+    put(test_config, Config).
 
 
 get_test_config() ->
-    case get(test_data_config) of
-        undefined -> error("Call init_test at the beggining of the test.");
+    case get(test_config) of
+        undefined -> error("Call store_test_config at the beggining of the test.");
         Config -> Config
     end.
 

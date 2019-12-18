@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -175,9 +175,7 @@ create_test(Config) ->
                 <<"rootFileId">> => ?ROOT_FILE_ID,
                 <<"spaceId">> => S1,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     VerifyFun(Id)
                 end
             })
@@ -213,8 +211,8 @@ create_test(Config) ->
         },
         data_spec = DataSpec#data_spec{
             bad_values = lists:append([
-                [{<<"spaceId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"spaceId">>)},
-                    {<<"spaceId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"spaceId">>)}],
+                [{<<"spaceId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"spaceId">>)},
+                    {<<"spaceId">>, 1234, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"spaceId">>)}],
                 BadDataValues,
                 ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)])
         }
@@ -290,9 +288,7 @@ get_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(SharePrivateDetails#{
                 <<"handleId">> => null,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(ShareId, Id)
                 end
             })
@@ -324,9 +320,7 @@ get_test(Config) ->
             expected_result = ?OK_MAP_CONTAINS(SharePublicDetails#{
                 <<"handleId">> => null,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(ShareId, Id)
                 end
             })
@@ -382,12 +376,12 @@ update_test(Config) ->
             module = share_logic,
             function = update,
             args = [auth, shareId, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_share, id = shareId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         data_spec = #data_spec{
             required = [<<"name">>],
@@ -442,12 +436,12 @@ delete_test(Config) ->
             module = share_logic,
             function = delete,
             args = [auth, shareId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_share, id = shareId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -480,16 +474,18 @@ public_share_page_test(Config) ->
     {ok, User} = oz_test_utils:create_user(Config),
 
     {ok, NewSpace} = oz_test_utils:create_space(Config, ?USER(User), ?UNIQUE_STRING),
-    oz_test_utils:support_space(Config, NewProvider, NewSpace),
+    oz_test_utils:support_space_by_provider(Config, NewProvider, NewSpace),
     {ok, NewShare} = oz_test_utils:create_share(
         Config, ?USER(User), ?UNIQUE_STRING, <<"share1">>, <<"rootFile1">>, NewSpace
     ),
 
     {ok, LegacySpace} = oz_test_utils:create_space(Config, ?USER(User), ?UNIQUE_STRING),
-    oz_test_utils:support_space(Config, LegacyProvider, LegacySpace),
+    oz_test_utils:support_space_by_provider(Config, LegacyProvider, LegacySpace),
     {ok, LegacyShare} = oz_test_utils:create_share(
         Config, ?USER(User), ?UNIQUE_STRING, <<"share1">>, <<"rootFile1">>, LegacySpace
     ),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     NewRedirectURl = oz_test_utils:call_oz(Config, share_logic, share_id_to_redirect_url, [NewShare]),
     LegacyRedirectURl = oz_test_utils:call_oz(Config, share_logic, share_id_to_redirect_url, [LegacyShare]),

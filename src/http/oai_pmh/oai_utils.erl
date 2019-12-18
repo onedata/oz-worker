@@ -79,14 +79,15 @@ build_oai_record(MetadataPrefix, OaiId, Handle) ->
 %%%--------------------------------------------------------------------
 %%% @equiv time_utils:datetime_to_datestamp(DateTime).
 %%%--------------------------------------------------------------------
--spec datetime_to_oai_datestamp(DateTime :: erlang:datetime()) -> binary().
+-spec datetime_to_oai_datestamp(DateTime :: calendar:datetime()) -> binary().
 datetime_to_oai_datestamp(DateTime) ->
     time_utils:datetime_to_datestamp(DateTime).
 
 %%%--------------------------------------------------------------------
 %%% @equiv time_utils:datestamp_to_datetime(Datestamp).
 %%%--------------------------------------------------------------------
--spec oai_datestamp_to_datetime(undefined | binary()) -> maybe_invalid_datestamp().
+-spec oai_datestamp_to_datetime(undefined | binary()) ->
+    maybe_invalid_datestamp() | {error, invalid_date_format}.
 oai_datestamp_to_datetime(Datestamp) ->
     time_utils:datestamp_to_datetime(Datestamp).
 
@@ -331,7 +332,7 @@ granularity({{_, _, _}, {_, _, _}}) -> seconds_granularity.
 %%% @end
 %%%-------------------------------------------------------------------
 -spec granularity_days_to_seconds({Direction :: max | min, supported_datestamp()})
-        -> undefined | erlang:datetime().
+        -> undefined | calendar:datetime().
 granularity_days_to_seconds({_, undefined}) -> undefined;
 granularity_days_to_seconds({min, {Y, M, D}}) -> {{Y, M, D}, {0, 0, 0}};
 granularity_days_to_seconds({max, {Y, M, D}}) -> {{Y, M, D}, {23, 59, 59}};

@@ -16,9 +16,10 @@
 -behaviour(dynamic_page_behaviour).
 
 -include_lib("ctool/include/http/codes.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 %% API
 -export([handle/2]).
@@ -35,14 +36,16 @@
 -spec handle(gui:method(), cowboy_req:req()) -> cowboy_req:req().
 handle(<<"POST">>, Req) ->
     try
-        case auth_logic:authorize_by_basic_auth(Req) of
+        case basic_auth:authenticate(Req) of
             {true, ?USER(UserId)} ->
                 {ok, FullName} = user_logic:get_full_name(?ROOT, UserId),
                 ?info("User '~ts' has logged in (~s)", [FullName, UserId]),
                 Req2 = gui_session:log_in(UserId, Req),
-                JSONHeader = #{<<"content-type">> => <<"application/json">>},
+                JSONHeader = #{?HDR_CONTENT_TYPE => <<"application/json">>},
                 Body = json_utils:encode(#{<<"url">> => <<"/">>}),
                 cowboy_req:reply(?HTTP_200_OK, JSONHeader, Body, Req2);
+            false ->
+                cowboy_req:reply(?HTTP_401_UNAUTHORIZED, #{}, <<"Missing basic credentials">>, Req);
             ?ERROR_BAD_BASIC_CREDENTIALS ->
                 cowboy_req:reply(?HTTP_401_UNAUTHORIZED, #{}, <<"Invalid username or password">>, Req);
             ?ERROR_BASIC_AUTH_DISABLED ->

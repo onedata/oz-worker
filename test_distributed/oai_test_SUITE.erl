@@ -14,6 +14,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/performance.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include("datastore/oz_datastore_models.hrl").
 -include("registered_names.hrl").
 -include("oai_test_SUITE.hrl").
@@ -81,9 +82,9 @@
 
 %% useful macros
 -define(CONTENT_TYPE_HEADER,
-    #{<<"content-type">> => <<"application/x-www-form-urlencoded">>}).
+    #{?HDR_CONTENT_TYPE => <<"application/x-www-form-urlencoded">>}).
 -define(RESPONSE_CONTENT_TYPE_HEADER,
-    #{<<"content-type">> => <<"text/xml">>}).
+    #{?HDR_CONTENT_TYPE => <<"text/xml">>}).
 
 %% Example test data
 -define(SHARE_ID, <<"identifier1">>).

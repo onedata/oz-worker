@@ -384,12 +384,12 @@ spawn_clients(Config, Type, Clients, RetryFlag, CallbackFunction, OnSuccessFun) 
             gui ->
                 {ok, {_SessionId, CookieValue}} = oz_test_utils:log_in(Config, Client),
                 {ok, GuiToken} = oz_test_utils:request_gui_token(Config, CookieValue),
-                Auth = {macaroon, GuiToken, []},
+                Auth = {token, GuiToken},
                 Identity = ?SUB(user, Client),
                 {Auth, Identity};
             provider ->
-                {ProviderId, Macaroon} = Client,
-                Auth = {macaroon, Macaroon, []},
+                {ProviderId, ProviderToken} = Client,
+                Auth = {token, ProviderToken},
                 Identity = ?SUB(?ONEPROVIDER, ProviderId),
                 {Auth, Identity}
         end
@@ -415,13 +415,12 @@ create_n_users(Config, Number) ->
 
 
 create_n_supporting_providers(Config, Number, SpaceId) ->
-    SupportSize = oz_test_utils:minimum_support_size(Config),
     lists:map(fun(_) ->
-        {ok, {Provider, ProviderMacaroon}} = oz_test_utils:create_provider(
+        {ok, {Provider, ProviderToken}} = oz_test_utils:create_provider(
             Config, <<"provider">>
         ),
-        oz_test_utils:support_space(Config, Provider, SpaceId, SupportSize),
-        {Provider, ProviderMacaroon}
+        oz_test_utils:support_space_by_provider(Config, Provider, SpaceId),
+        {Provider, ProviderToken}
     end, lists:seq(1, Number)).
 
 

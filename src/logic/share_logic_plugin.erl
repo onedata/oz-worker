@@ -18,7 +18,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
@@ -30,17 +30,23 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity and its revision from datastore based on EntityId.
-%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% Retrieves an entity and its revision from datastore, if applicable.
+%% Should return:
+%%  * {true, entity_logic:versioned_entity()}
+%%      if the fetch was successful
+%%  * false
+%%      if fetch is not applicable for this operation
+%%  * {error, _}
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:versioned_entity()} | entity_logic:error().
-fetch_entity(ShareId) ->
+-spec fetch_entity(gri:gri()) ->
+    {true, entity_logic:versioned_entity()} | false | errors:error().
+fetch_entity(#gri{id = ShareId}) ->
     case od_share:get(ShareId) of
         {ok, #document{value = Share, revs = [DbRev | _]}} ->
             {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
-            {ok, {Share, Revision}};
+            {true, {Share, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -103,7 +109,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
                 od_share, ShareId,
                 od_space, SpaceId
             ),
-            {ok, {Share, Rev}} = fetch_entity(ShareId),
+            {true, {Share, Rev}} = fetch_entity(#gri{aspect = instance, id = ShareId}),
             {ok, resource, {GRI#gri{id = ShareId}, {Share, Rev}}};
         _ ->
             % This can potentially happen if a share with given share id
@@ -135,7 +141,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = public}}, Share) ->
     {ok, #{
         <<"name">> => Name, <<"publicUrl">> => PublicUrl,
         <<"rootFileId">> => RootFileId,
-        <<"handleId">> => gs_protocol:undefined_to_null(HandleId),
+        <<"handleId">> => utils:undefined_to_null(HandleId),
         <<"creationTime">> => CreationTime, <<"creator">> => Creator
     }}.
 
@@ -260,7 +266,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         end}},
         <<"name">> => {binary, name},
         <<"rootFileId">> => {binary, non_empty},
-        <<"spaceId">> => {binary, {exists, fun(Value) ->
+        <<"spaceId">> => {any, {exists, fun(Value) ->
             space_logic:exists(Value)
         end}}
     }
@@ -286,7 +292,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = instance}}) -> #{
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_space_privilege(entity_logic:req() | od_user:id(),
-    od_share:info() | od_space:id(), privileges:space_privilege()) ->
+    od_share:record() | od_space:id(), privileges:space_privilege()) ->
     boolean().
 auth_by_space_privilege(#el_req{auth = ?USER(UserId)}, Share, Privilege) ->
     auth_by_space_privilege(UserId, Share, Privilege);
@@ -305,8 +311,8 @@ auth_by_space_privilege(UserId, SpaceId, Privilege) ->
 %% by entity belongs.
 %% @end
 %%--------------------------------------------------------------------
--spec auth_by_space_support(od_provider:id(), od_share:info()) ->
+-spec auth_by_space_support(od_provider:id(), od_share:record()) ->
     boolean().
 auth_by_space_support(ProviderId, Share) ->
-    space_logic:has_provider(Share#od_share.space, ProviderId).
+    space_logic:is_supported_by_provider(Share#od_share.space, ProviderId).
 

@@ -35,16 +35,20 @@ get_models() -> [
     od_handle,
     od_harvester,
     od_cluster,
+    od_storage,
+    od_token,
+
     gs_server_state,
-    onedata_auth,
-    macaroon_auth,
-    session,
-    shared_token_secret,
-    token,
     entity_graph_state,
+    session,
+    state_token,
     dns_state,
     gui_message,
     provider_connection,
     user_connections,
-    state_token
+    temporary_token_secret,
+
+    %% @TODO VFS-5554 Deprecated models
+    onedata_auth,
+    macaroon_auth
 ].

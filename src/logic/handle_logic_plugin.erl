@@ -18,7 +18,7 @@
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/privileges.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -export([fetch_entity/1, operation_supported/3, is_subscribable/2]).
 -export([create/1, get/2, update/1, delete/1]).
@@ -30,17 +30,23 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves an entity and its revision from datastore based on EntityId.
-%% Should return ?ERROR_NOT_FOUND if the entity does not exist.
+%% Retrieves an entity and its revision from datastore, if applicable.
+%% Should return:
+%%  * {true, entity_logic:versioned_entity()}
+%%      if the fetch was successful
+%%  * false
+%%      if fetch is not applicable for this operation
+%%  * {error, _}
+%%      if there was an error, such as ?ERROR_NOT_FOUND
 %% @end
 %%--------------------------------------------------------------------
--spec fetch_entity(entity_logic:entity_id()) ->
-    {ok, entity_logic:versioned_entity()} | entity_logic:error().
-fetch_entity(HandleId) ->
+-spec fetch_entity(gri:gri()) ->
+    {true, entity_logic:versioned_entity()} | false | errors:error().
+fetch_entity(#gri{id = HandleId}) ->
     case od_handle:get(HandleId) of
         {ok, #document{value = Handle, revs = [DbRev | _]}} ->
             {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
-            {ok, {Handle, Revision}};
+            {true, {Handle, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
     end.
@@ -150,7 +156,7 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
         _ ->
             ok
     end,
-    {ok, {FetchedHandle, Rev}} = fetch_entity(HandleId),
+    {true, {FetchedHandle, Rev}} = fetch_entity(#gri{aspect = instance, id = HandleId}),
     {ok, resource, {GRI#gri{id = HandleId}, {FetchedHandle, Rev}}};
 
 create(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}, data = Data}) ->
@@ -161,7 +167,7 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {user, UserId}}, data = Data})
         Privileges
     ),
     NewGRI = #gri{type = od_user, id = UserId, aspect = instance, scope = shared},
-    {ok, {User, Rev}} = user_logic_plugin:fetch_entity(UserId),
+    {true, {User, Rev}} = user_logic_plugin:fetch_entity(#gri{id = UserId}),
     {ok, UserData} = user_logic_plugin:get(#el_req{gri = NewGRI}, User),
     {ok, resource, {NewGRI, ?THROUGH_HANDLE(HandleId), {UserData, Rev}}};
 
@@ -173,7 +179,7 @@ create(#el_req{gri = #gri{id = HandleId, aspect = {group, GroupId}}, data = Data
         Privileges
     ),
     NewGRI = #gri{type = od_group, id = GroupId, aspect = instance, scope = shared},
-    {ok, {Group, Rev}} = group_logic_plugin:fetch_entity(GroupId),
+    {true, {Group, Rev}} = group_logic_plugin:fetch_entity(#gri{id = GroupId}),
     {ok, GroupData} = group_logic_plugin:get(#el_req{gri = NewGRI}, Group),
     {ok, resource, {NewGRI, ?THROUGH_HANDLE(HandleId), {GroupData, Rev}}}.
 
@@ -229,18 +235,18 @@ get(#el_req{gri = #gri{aspect = users}}, Handle) ->
 get(#el_req{gri = #gri{aspect = eff_users}}, Handle) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_user, Handle)};
 get(#el_req{gri = #gri{aspect = {user_privileges, UserId}}}, Handle) ->
-    {ok, entity_graph:get_privileges(direct, bottom_up, od_user, UserId, Handle)};
+    {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_user, UserId, Handle)};
 get(#el_req{gri = #gri{aspect = {eff_user_privileges, UserId}}}, Handle) ->
-    {ok, entity_graph:get_privileges(effective, bottom_up, od_user, UserId, Handle)};
+    {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_user, UserId, Handle)};
 
 get(#el_req{gri = #gri{aspect = groups}}, Handle) ->
     {ok, entity_graph:get_relations(direct, bottom_up, od_group, Handle)};
 get(#el_req{gri = #gri{aspect = eff_groups}}, Handle) ->
     {ok, entity_graph:get_relations(effective, bottom_up, od_group, Handle)};
 get(#el_req{gri = #gri{aspect = {group_privileges, GroupId}}}, Handle) ->
-    {ok, entity_graph:get_privileges(direct, bottom_up, od_group, GroupId, Handle)};
+    {ok, entity_graph:get_relation_attrs(direct, bottom_up, od_group, GroupId, Handle)};
 get(#el_req{gri = #gri{aspect = {eff_group_privileges, GroupId}}}, Handle) ->
-    {ok, entity_graph:get_privileges(effective, bottom_up, od_group, GroupId, Handle)}.
+    {ok, entity_graph:get_relation_attrs(effective, bottom_up, od_group, GroupId, Handle)}.
 
 
 %%--------------------------------------------------------------------
@@ -354,22 +360,32 @@ exists(#el_req{gri = #gri{id = Id}}, #od_handle{}) ->
 authorize(Req = #el_req{operation = create, gri = #gri{id = undefined, aspect = instance}}, _) ->
     HServiceId = maps:get(<<"handleServiceId">>, Req#el_req.data, <<"">>),
     ShareId = maps:get(<<"resourceId">>, Req#el_req.data, <<"">>),
-    SpaceId = case share_logic_plugin:fetch_entity(ShareId) of
-        {error, _} = Err ->
-            throw(Err);
-        {ok, {#od_share{space = SpId}, _}} ->
+    SpaceId = try share_logic_plugin:fetch_entity(#gri{id = ShareId}) of
+        {error, _} ->
+            throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>));
+        {true, {#od_share{space = SpId}, _}} ->
             SpId
+    catch _:_ ->
+        throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"resourceId">>))
+    end,
+    HandleService = try handle_service_logic_plugin:fetch_entity(#gri{id = HServiceId}) of
+        {error, _} ->
+            throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>));
+        {true, {HService, _}} ->
+            HService
+    catch _:_ ->
+        throw(?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"handleServiceId">>))
     end,
     case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?AS_USER(UserId)} ->
             space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES) andalso
-                handle_service_logic:has_eff_privilege(HServiceId, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
+                handle_service_logic:has_eff_privilege(HandleService, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
 
         {?USER(UserId), ?AS_GROUP(GroupId)} ->
-            handle_service_logic:has_eff_group(HServiceId, GroupId) andalso
+            handle_service_logic:has_eff_group(HandleService, GroupId) andalso
                 space_logic:has_eff_privilege(SpaceId, UserId, ?SPACE_MANAGE_SHARES) andalso
                 group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_CREATE_HANDLE) andalso
-                handle_service_logic:has_eff_privilege(HServiceId, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
+                handle_service_logic:has_eff_privilege(HandleService, UserId, ?HANDLE_SERVICE_REGISTER_HANDLE);
 
         _ ->
             false
@@ -521,11 +537,11 @@ required_admin_privileges(_) ->
 -spec validate(entity_logic:req()) -> entity_logic:validity_verificator().
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
-        <<"handleServiceId">> => {binary, {exists, fun(Value) ->
+        <<"handleServiceId">> => {any, {exists, fun(Value) ->
             handle_service_logic:exists(Value)
         end}},
         <<"resourceType">> => {binary, [<<"Share">>]},
-        <<"resourceId">> => {binary, {exists, fun(Value) ->
+        <<"resourceId">> => {any, {exists, fun(Value) ->
             share_logic:exists(Value) end
         }},
         <<"metadata">> => {binary, any}
@@ -585,7 +601,7 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 %% @end
 %%--------------------------------------------------------------------
 -spec auth_by_privilege(entity_logic:req() | od_user:id(),
-    od_handle:id() | od_handle:info(), privileges:handle_privilege()) ->
+    od_handle:id() | od_handle:record(), privileges:handle_privilege()) ->
     boolean().
 auth_by_privilege(#el_req{auth = ?USER(UserId)}, HandleOrId, Privilege) ->
     auth_by_privilege(UserId, HandleOrId, Privilege);
