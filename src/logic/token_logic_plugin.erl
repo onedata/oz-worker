@@ -51,7 +51,7 @@ fetch_entity(#gri{aspect = {provider_named_token, _}}) ->
 fetch_entity(#gri{id = TokenId}) ->
     case od_token:get(TokenId) of
         {ok, #document{value = NamedToken, revs = [DbRev | _]}} ->
-            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {NamedToken, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
@@ -532,7 +532,7 @@ validate_type(_, _, _, _) ->
     entity_logic:create_result().
 create_named_token(Subject, Data) ->
     TokenName = maps:get(<<"name">>, Data),
-    TokenId = datastore_utils:gen_key(),
+    TokenId = datastore_key:new(),
     case token_names:register(Subject, TokenName, TokenId) of
         ok -> ok;
         ?ERROR_ALREADY_EXISTS -> throw(?ERROR_BAD_VALUE_IDENTIFIER_OCCUPIED(<<"name">>))
@@ -577,7 +577,7 @@ create_temporary_token(Subject, Data) ->
     Secret = temporary_token_secret:get(Subject),
     Prototype = #token{
         onezone_domain = oz_worker:get_domain(),
-        id = datastore_utils:gen_key(),
+        id = datastore_key:new(),
         subject = Subject,
         type = Type,
         persistent = false

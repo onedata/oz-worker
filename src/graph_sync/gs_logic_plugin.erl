@@ -68,7 +68,7 @@ client_connected(?PROVIDER(ProvId), ConnectionRef) ->
     provider_connection:add_connection(ProvId, ConnectionRef),
     % Generate a dummy update which will cause a push to GUI clients so that
     % they can learn the provider is now online.
-    {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+    {Revision, _Hash} = datastore_rev:parse(DbRev),
     gs_server:updated(
         od_provider,
         ProvId,
@@ -95,7 +95,7 @@ client_disconnected(?PROVIDER(ProvId), _ConnectionRef) ->
             ?info("Provider '~ts' went offline (~s)", [ProvRecord#od_provider.name, ProvId]),
             % Generate a dummy update which will cause a push to GUI clients so that
             % they can learn the provider is now offline.
-            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
             gs_server:updated(
                 od_provider,
                 ProvId,

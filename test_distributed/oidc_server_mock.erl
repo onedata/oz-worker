@@ -64,12 +64,12 @@ simulate_user_login(Config, OidcSpec, Url, UserAttributesByEndpoint) ->
         AccessType = maps:get(<<"access_type">>, QsMap, <<"online">>),
         ClientId = list_to_binary(OidcSpec#oidc_spec.clientId),
         Scope = list_to_binary(OidcSpec#oidc_spec.scope),
-        AuthCode = datastore_utils:gen_key(),
+        AuthCode = datastore_key:new(),
         RefreshToken = case AccessType of
             <<"online">> -> undefined;
-            <<"offline">> -> datastore_utils:gen_key()
+            <<"offline">> -> datastore_key:new()
         end,
-        Token = datastore_utils:gen_key(),
+        Token = datastore_key:new(),
         testmaster_save_everywhere(Config, {token, Token}, UserAttributesByEndpoint),
         testmaster_save_everywhere(Config, {auth, AuthCode}, {OnezoneRedirectUri, Token, RefreshToken}),
         RefreshToken /= undefined andalso
@@ -146,8 +146,8 @@ mock_access_token_endpoint(OidcSpec, Headers, #{<<"grant_type">> := <<"refresh_t
     RefreshToken = maps:get(<<"refresh_token">>, Parameters),
     case onezone_get_saved({refresh_token, RefreshToken}) of
         {ok, UserAttributesByEndpoint} ->
-            Token = datastore_utils:gen_key(),
-            NewRefreshToken = datastore_utils:gen_key(),
+            Token = datastore_key:new(),
+            NewRefreshToken = datastore_key:new(),
             onezone_save_everywhere({refresh_token, RefreshToken}, UserAttributesByEndpoint),
             onezone_save_everywhere({token, Token}, UserAttributesByEndpoint),
             mock_access_token_endpoint(OidcSpec, Headers, Parameters, Token, NewRefreshToken);

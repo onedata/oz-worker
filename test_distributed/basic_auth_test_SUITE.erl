@@ -244,7 +244,7 @@ migrate_onepanel_user_to_onezone(Config) ->
     {ok, ConflictingUser} = oz_test_utils:create_user(Config, #{<<"username">> => <<"admin">>}),
 
     {ok, AdminUserId} = oz_test_utils:call_oz(Config, basic_auth, migrate_onepanel_user_to_onezone, [
-        datastore_utils:gen_key(), <<"admin">>, onedata_passwords:create_hash(<<"1234">>), admin
+        datastore_key:new(), <<"admin">>, onedata_passwords:create_hash(<<"1234">>), admin
     ]),
 
     {ok, AllUsers} = oz_test_utils:list_users(Config),

@@ -1143,6 +1143,7 @@ check_adding_carried_privileges_to_named_token(Tc = #testcase{token_type = Token
 
     AllowedPrivileges = Tc#testcase.allowed_carried_privileges,
     CustomPrivileges = utils:random_sublist(AllowedPrivileges),
+    DefaultPrivileges = Tc#testcase.default_carried_privileges,
     ModifyPrivsFun = Tc#testcase.modify_privileges_fun,
     CheckPrivilegesFun = Tc#testcase.check_privileges_fun,
     lists:foreach(fun(EligibleSubject) ->
@@ -1191,14 +1192,22 @@ check_adding_carried_privileges_to_named_token(Tc = #testcase{token_type = Token
                 <<"type">> => TokenType, <<"privileges">> => CustomPrivileges
             }),
             Consumer = create_consumer_with_privs_to_consume(Tc, EligibleConsumerType),
-            % Token becomes invalid when the subject loses privileges to set privileges
-            ModifyPrivsFun(EligibleSubject, {revoke, to_set_privs}),
-            ?assertMatch(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, Consumer, Token)),
-            % But it becomes valid again if the privileges are restored
-            ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
-            ModifyPrivsFun(EligibleSubject, {grant, to_set_privs}),
-            ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token)),
-            ?assert(CheckPrivilegesFun(Consumer, CustomPrivileges))
+            % Token becomes invalid when the subject loses privileges to set privileges,
+            % however if the carried privileges in an already existing token are
+            % identical to default, consuming is still possible
+            case lists:sort(CustomPrivileges) =:= lists:sort(DefaultPrivileges) of
+                true ->
+                    ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token)),
+                    ?assert(CheckPrivilegesFun(Consumer, CustomPrivileges));
+                false ->
+                    ModifyPrivsFun(EligibleSubject, {revoke, to_set_privs}),
+                    ?assertMatch(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, Consumer, Token)),
+                    % But it becomes valid again if the privileges are restored
+                    ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
+                    ModifyPrivsFun(EligibleSubject, {grant, to_set_privs}),
+                    ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token)),
+                    ?assert(CheckPrivilegesFun(Consumer, CustomPrivileges))
+            end
         end, Tc#testcase.eligible_consumer_types),
 
         % Check admin privileges to create a token with privileges
