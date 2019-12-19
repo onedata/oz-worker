@@ -39,7 +39,7 @@
 fetch_entity(ShareId) ->
     case od_share:get(ShareId) of
         {ok, #document{value = Share, revs = [DbRev | _]}} ->
-            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
             {ok, {Share, Revision}};
         _ ->
             ?ERROR_NOT_FOUND

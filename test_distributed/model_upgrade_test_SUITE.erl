@@ -138,7 +138,7 @@ macaroon_auth_upgrade_test(Config) ->
 
 
 generate_cluster_for_a_legacy_provider_test(Config) ->
-    Provider1 = datastore_utils:gen_key(),
+    Provider1 = datastore_key:new(),
     Cluster1 = Provider1,
     ?assertMatch({ok, false}, oz_test_utils:call_oz(Config, od_cluster, exists, [Cluster1])),
     LegacyProviderDoc1 = #document{key = Provider1, value = #od_provider{
@@ -147,7 +147,7 @@ generate_cluster_for_a_legacy_provider_test(Config) ->
     ?assertMatch({ok, _}, oz_test_utils:call_oz(Config, od_provider, save, [LegacyProviderDoc1])),
     ?assertMatch({ok, true}, oz_test_utils:call_oz(Config, od_cluster, exists, [Cluster1])),
 
-    Provider2 = datastore_utils:gen_key(),
+    Provider2 = datastore_key:new(),
     Cluster2 = Provider2,
     ?assertMatch({error, not_found}, oz_test_utils:call_oz(Config, od_cluster, get, [Cluster2])),
     LegacyProviderDoc2 = #document{key = Provider2, value = #od_provider{
@@ -174,7 +174,7 @@ test_record_upgrade(Config, RecordType, Versions) ->
     % Force saving data to disc
     % Due to that record will be upgraded when fetching
     MockCtx = #{model => RecordType, memory_driver => undefined},
-    Key = datastore_utils:gen_key(),
+    Key = datastore_key:new(),
 
     % Simulate record in first version
     mock_record_version(Config, RecordType, hd(Versions)),

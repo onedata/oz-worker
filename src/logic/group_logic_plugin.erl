@@ -40,7 +40,7 @@
 fetch_entity(GroupId) ->
     case od_group:get(GroupId) of
         {ok, #document{value = Group, revs = [DbRev | _]}} ->
-            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
             {ok, {Group, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
