@@ -22,13 +22,9 @@
 % Endpoint for viewing public shares
 -define(SHARE_ID_BINDING, share_id).
 -define(PUBLIC_SHARE_COWBOY_ROUTE, "/share/:share_id").
--define(PUBLIC_SHARE_PATH(ShareId), <<"/share/", ShareId/binary>>).
-
-% Endpoint in Oneprovider consuming login requests
--define(PROVIDER_PUBLIC_SHARE_PATH(ShareId), <<"/share/", ShareId/binary>>).
-
-% Endpoint in Oneprovider consuming login requests
--define(LEGACY_PROVIDER_PUBLIC_SHARE_PATH(ShareId), <<"/#/public/shares/", ShareId/binary>>).
+-define(PUBLIC_SHARE_URN(ShareId), <<"/share/", ShareId/binary>>).
+% GUI page where the clients are redirected after visiting the public share URL
+-define(PUBLIC_SHARE_GUI_PATH(ShareId), <<"/i#/public/shares/", ShareId/binary>>).
 
 % Endpoint serving custom, user defined static files
 -define(CUSTOM_STATIC_GUI_PATH, "/custom/[...]").

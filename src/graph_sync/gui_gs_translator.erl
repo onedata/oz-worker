@@ -94,6 +94,8 @@ translate_resource(_, GRI = #gri{type = od_group}, Data) ->
     translate_group(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_space}, Data) ->
     translate_space(GRI, Data);
+translate_resource(_, GRI = #gri{type = od_share}, Data) ->
+    translate_share(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_provider}, Data) ->
     translate_provider(GRI, Data);
 translate_resource(_, GRI = #gri{type = od_token}, Data) ->
@@ -119,12 +121,7 @@ translate_resource(ProtocolVersion, GRI, Data) ->
 %%% Internal functions
 %%%===================================================================
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates GET result for user related aspects.
-%% @end
-%%--------------------------------------------------------------------
 -spec translate_user(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_user(GRI = #gri{type = od_user, id = UserId, aspect = instance, scope = private}, User) ->
@@ -233,12 +230,7 @@ translate_user(#gri{aspect = eff_clusters}, Clusters) ->
     }.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates GET result for group related aspects.
-%% @end
-%%--------------------------------------------------------------------
 -spec translate_group(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_group(#gri{id = GroupId, aspect = instance, scope = private}, Group) ->
@@ -375,12 +367,7 @@ translate_group(#gri{aspect = eff_harvesters}, Harvesters) ->
     }.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates GET result for space related aspects.
-%% @end
-%%--------------------------------------------------------------------
 -spec translate_space(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) ->
@@ -498,12 +485,21 @@ translate_space(#gri{aspect = harvesters}, Harvesters) ->
     }.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates GET result for provider related aspects.
-%% @end
-%%--------------------------------------------------------------------
+-spec translate_share(gri:gri(), Data :: term()) ->
+    gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_share(GRI = #gri{aspect = instance, scope = private}, #od_share{name = Name}) ->
+    translate_share(GRI#gri{scope = public}, #{<<"name">> => Name});
+translate_share(#gri{id = ShareId, aspect = instance, scope = public}, #{<<"name">> := Name}) ->
+    {ChosenProviderId, ChosenProviderVersion} = share_logic:choose_provider_for_public_view(ShareId),
+    #{
+        <<"name">> => Name,
+        <<"chosenProviderId">> => utils:undefined_to_null(ChosenProviderId),
+        <<"chosenProviderVersion">> => utils:undefined_to_null(ChosenProviderVersion)
+    }.
+
+
+%% @private
 -spec translate_provider(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_provider(#gri{type = od_provider, aspect = instance, scope = private}, {_Provider, RootToken}) ->
@@ -596,12 +592,7 @@ translate_provider(#gri{aspect = spaces}, Spaces) ->
     #{<<"list">> => Spaces}.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates GET result for named token related aspects.
-%% @end
-%%--------------------------------------------------------------------
 -spec translate_token(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_token(#gri{id = undefined, aspect = {user_named_tokens, _}}, Tokens) ->
@@ -634,12 +625,7 @@ translate_token(#gri{aspect = instance}, TokenData) ->
     }.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates GET result for harvester related aspects.
-%% @end
-%%--------------------------------------------------------------------
 -spec translate_harvester(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, Harvester) ->
@@ -832,12 +818,7 @@ translate_harvester(#gri{aspect = {index_stats, _}}, IndexStats) ->
     }.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates GET result for cluster related aspects.
-%% @end
-%%--------------------------------------------------------------------
 -spec translate_cluster(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Cluster) ->
@@ -994,12 +975,7 @@ translate_cluster(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) -
     }.
 
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Translates GET result for aspects handled by zone_logic_plugin.
-%% @end
-%%--------------------------------------------------------------------
 -spec translate_zone(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
 translate_zone(#gri{aspect = {gui_message, _MessageId}}, GuiMessage) ->
@@ -1010,6 +986,7 @@ translate_zone(#gri{aspect = {gui_message, _MessageId}}, GuiMessage) ->
     }.
 
 
+%% @private
 -spec format_intermediaries(entity_graph:intermediaries()) -> #{}.
 format_intermediaries(Intermediaries) ->
     {GRIs, DirectMembership} = lists:foldl(fun
@@ -1027,6 +1004,7 @@ format_intermediaries(Intermediaries) ->
     }.
 
 
+%% @private
 -spec translate_creator(undefined | aai:auth()) ->
     #{binary() => null | binary()}.
 translate_creator(undefined) -> #{
