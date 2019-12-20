@@ -294,7 +294,7 @@ get_all_sessions(UserId) ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    11.
+    12.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -590,6 +590,57 @@ get_record_struct(11) ->
 
         {default_space, string},
         {default_provider, string},
+
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(12) ->
+    % Changes:
+    %   * default_space field removed
+    %   * default_provider field removed
+    {record, [
+        {full_name, string},
+        {username, string},
+        {basic_auth_enabled, boolean},
+        {password_hash, binary},
+        {emails, [string]},
+
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {full_name, string},
+            {username, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, {json_utils, encode, decode}}},
+            {access_token, {string, integer}},
+            {refresh_token, string}
+        ]}]},
+        {entitlements, [{string, atom}]},
+
+        {active_sessions, [string]},
 
         {client_tokens, [string]},
         {space_aliases, #{string => string}},
@@ -1354,7 +1405,91 @@ upgrade_record(10, User) ->
         TopDownDirty
     } = User,
 
-    {11, #od_user{
+    {11, {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        % Member is the lowest role, if the user had a higher role in the
+        % entitlement it will be automatically set to the correct value upon
+        % his next login.
+        [{Ent, member} || Ent <- Entitlements],
+
+        ActiveSessions,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+
+        TopDownDirty
+    }};
+upgrade_record(11, User) ->
+    {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        ActiveSessions,
+
+        _DefaultSpace,
+        _DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+
+        TopDownDirty
+    } = User,
+    {12, #od_user{
         full_name = FullName,
         username = Username,
         basic_auth_enabled = BasicAuthEnabled,
@@ -1362,15 +1497,9 @@ upgrade_record(10, User) ->
         emails = Emails,
 
         linked_accounts = LinkedAccounts,
-        % Member is the lowest role, if the user had a higher role in the
-        % entitlement it will be automatically set to the correct value upon
-        % his next login.
-        entitlements = [{Ent, member} || Ent <- Entitlements],
+        entitlements = Entitlements,
 
         active_sessions = ActiveSessions,
-
-        default_space = DefaultSpace,
-        default_provider = DefaultProvider,
 
         client_tokens = ClientTokens,
         space_aliases = SpaceAliases,

@@ -43,9 +43,7 @@
     get_as_user_details/1, get_as_user_details/2,
     get_oz_privileges/2, get_eff_oz_privileges/2,
     list_client_tokens/2,
-    get_default_space/2,
     get_space_alias/3,
-    get_default_provider/2,
     acquire_idp_access_token/3
 ]).
 -export([
@@ -53,16 +51,13 @@
     change_password/3, change_password/4,
     toggle_basic_auth/3, set_password/3, update_basic_auth_config/3,
     update_oz_privileges/4, update_oz_privileges/3,
-    set_default_space/3,
-    set_space_alias/4,
-    set_default_provider/3]).
+    set_space_alias/4
+]).
 -export([
     delete/2,
     delete_oz_privileges/2,
     delete_client_token/3,
-    unset_default_space/2,
-    delete_space_alias/3,
-    unset_default_provider/2
+    delete_space_alias/3
 ]).
 -export([
     create_provider_registration_token/2,
@@ -121,8 +116,7 @@
 -export([
     validate_full_name/1, normalize_full_name/1,
     validate_username/1, normalize_username/1,
-    reset_entitlements/1,
-    get_default_provider_if_online/1
+    reset_entitlements/1
 ]).
 
 %%%===================================================================
@@ -345,22 +339,6 @@ get_eff_oz_privileges(Auth, UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Retrieves default space of given user. Returns ?ERROR_NOT_FOUND if the user
-%% does not have a default space.
-%% @end
-%%--------------------------------------------------------------------
--spec get_default_space(Auth :: aai:auth(), UserId :: od_user:id()) ->
-    {ok, od_space:id()} | {error, term()}.
-get_default_space(Auth, UserId) ->
-    entity_logic:handle(#el_req{
-        operation = get,
-        auth = Auth,
-        gri = #gri{type = od_user, id = UserId, aspect = default_space}
-    }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Retrieves space alias for given space of a user. Returns ?ERROR_NOT_FOUND
 %% if the user does not have a space alias for given space.
 %% @end
@@ -372,22 +350,6 @@ get_space_alias(Auth, UserId, SpaceId) ->
         operation = get,
         auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = {space_alias, SpaceId}}
-    }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieves default provider of given user. Returns ?ERROR_NOT_FOUND if the user
-%% does not have a default provider.
-%% @end
-%%--------------------------------------------------------------------
--spec get_default_provider(Auth :: aai:auth(), UserId :: od_user:id()) ->
-    {ok, od_provider:id()} | {error, term()}.
-get_default_provider(Auth, UserId) ->
-    entity_logic:handle(#el_req{
-        operation = get,
-        auth = Auth,
-        gri = #gri{type = od_user, id = UserId, aspect = default_provider}
     }).
 
 
@@ -564,26 +526,6 @@ update_oz_privileges(Auth, UserId, Data) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Updates the default space for given user. Has two variants:
-%% 1) SpaceId is given explicitly
-%% 2) SpaceId is provided in a proper Data object.
-%% @end
-%%--------------------------------------------------------------------
--spec set_default_space(Auth :: aai:auth(), UserId :: od_user:id(),
-    Data :: od_space:id() | #{}) -> ok | {error, term()}.
-set_default_space(Auth, UserId, SpaceId) when is_binary(SpaceId) ->
-    set_default_space(Auth, UserId, #{<<"spaceId">> => SpaceId});
-set_default_space(Auth, UserId, Data) ->
-    ?CREATE_RETURN_OK(entity_logic:handle(#el_req{
-        operation = create,
-        auth = Auth,
-        gri = #gri{type = od_user, id = UserId, aspect = default_space},
-        data = Data
-    })).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Updates the space alias for given space of a user. Has two variants:
 %% 1) Alias is given explicitly
 %% 2) Alias is provided in a proper Data object.
@@ -598,26 +540,6 @@ set_space_alias(Auth, UserId, SpaceId, Data) ->
         operation = create,
         auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = {space_alias, SpaceId}},
-        data = Data
-    })).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Updates the default provider for given user. Has two variants:
-%% 1) ProviderId is given explicitly
-%% 2) ProviderId is provided in a proper Data object.
-%% @end
-%%--------------------------------------------------------------------
--spec set_default_provider(Auth :: aai:auth(), UserId :: od_user:id(),
-    Data :: od_provider:id() | #{}) -> ok | {error, term()}.
-set_default_provider(Auth, UserId, ProviderId) when is_binary(ProviderId) ->
-    set_default_provider(Auth, UserId, #{<<"providerId">> => ProviderId});
-set_default_provider(Auth, UserId, Data) ->
-    ?CREATE_RETURN_OK(entity_logic:handle(#el_req{
-        operation = create,
-        auth = Auth,
-        gri = #gri{type = od_user, id = UserId, aspect = default_provider},
         data = Data
     })).
 
@@ -669,21 +591,6 @@ delete_client_token(Auth, UserId, TokenId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Unsets the default space for given user.
-%% @end
-%%--------------------------------------------------------------------
--spec unset_default_space(Auth :: aai:auth(), UserId :: od_user:id()) ->
-    ok | {error, term()}.
-unset_default_space(Auth, UserId) ->
-    entity_logic:handle(#el_req{
-        operation = delete,
-        auth = Auth,
-        gri = #gri{type = od_user, id = UserId, aspect = default_space}
-    }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Deletes the alias for a space of given user.
 %% @end
 %%--------------------------------------------------------------------
@@ -694,21 +601,6 @@ delete_space_alias(Auth, UserId, SpaceId) ->
         operation = delete,
         auth = Auth,
         gri = #gri{type = od_user, id = UserId, aspect = {space_alias, SpaceId}}
-    }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Unsets the default provider for given user.
-%% @end
-%%--------------------------------------------------------------------
--spec unset_default_provider(Auth :: aai:auth(), UserId :: od_user:id()) ->
-    ok | {error, term()}.
-unset_default_provider(Auth, UserId) ->
-    entity_logic:handle(#el_req{
-        operation = delete,
-        auth = Auth,
-        gri = #gri{type = od_user, id = UserId, aspect = default_provider}
     }).
 
 
@@ -1716,24 +1608,3 @@ reset_entitlements(UserId) ->
         {ok, _} -> ok;
         {error, _} = Error -> Error
     end.
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns default provider for given user if it is online (connected to onezone
-%% using graph sync channel), or false otherwise.
-%% @end
-%%--------------------------------------------------------------------
--spec get_default_provider_if_online(UserOrId :: od_user:id() | #od_user{}) ->
-    {true, od_provider:id()} | false.
-get_default_provider_if_online(UserId) when is_binary(UserId) ->
-    {ok, User} = get(?ROOT, UserId),
-    get_default_provider_if_online(User);
-get_default_provider_if_online(#od_user{default_provider = undefined}) ->
-    false;
-get_default_provider_if_online(#od_user{default_provider = DefaultProv}) ->
-    case provider_connection:is_online(DefaultProv) of
-        true -> {true, DefaultProv};
-        false -> false
-    end.
-

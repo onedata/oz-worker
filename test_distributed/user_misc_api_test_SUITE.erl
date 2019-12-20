@@ -47,9 +47,6 @@
     list_client_tokens_test/1,
     delete_client_token_test/1,
 
-    set_default_provider_test/1,
-    get_default_provider_test/1,
-    unset_default_provider_test/1,
     acquire_idp_access_token_test/1,
 
     list_eff_providers_test/1,
@@ -75,9 +72,6 @@ all() ->
         list_client_tokens_test,
         delete_client_token_test,
 
-        set_default_provider_test,
-        get_default_provider_test,
-        unset_default_provider_test,
         acquire_idp_access_token_test,
 
         list_eff_providers_test,
@@ -389,8 +383,6 @@ get_test(Config) ->
                     basic_auth_enabled = false,
                     linked_accounts = [],
 
-                    default_space = undefined,
-                    default_provider = undefined,
                     client_tokens = [],
                     space_aliases = #{},
 
@@ -416,7 +408,6 @@ get_test(Config) ->
             operation = get,
             gri = #gri{type = od_user, id = User, aspect = instance},
             expected_result = ?OK_MAP_CONTAINS(#{
-                <<"defaultSpaceId">> => null,
                 <<"effectiveGroups">> => [],
                 <<"effectiveHandleServices">> => [],
                 <<"effectiveHandles">> => [],
@@ -1176,243 +1167,6 @@ delete_client_token_test(Config) ->
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
     )).
-
-
-set_default_provider_test(Config) ->
-    {ok, {P1, _}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_NAME1
-    ),
-    {ok, U1} = oz_test_utils:create_user(Config),
-    {ok, U2} = oz_test_utils:create_user(Config),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config),
-
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
-
-    EnvSetUpFun = fun() ->
-        {ok, {ProviderId, _}} = oz_test_utils:create_provider(
-            Config, ?PROVIDER_NAME2
-        ),
-        {ok, S1} = oz_test_utils:support_space(
-            Config, ProviderId, S1, oz_test_utils:minimum_support_size(Config)
-        ),
-        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-
-        #{providerId => ProviderId}
-    end,
-    VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId} = _Env, _) ->
-        Result = oz_test_utils:call_oz(
-            Config, user_logic, get_default_provider, [?ROOT, U1]
-        ),
-        case ShouldSucceed of
-            true -> ?assertMatch({ok, ProviderId}, Result);
-            false -> ?assertNotMatch({ok, ProviderId}, Result)
-        end
-    end,
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{correct = [{user, U1}]},
-        rest_spec = #rest_spec{
-            method = put,
-            path = <<"/user/default_provider">>,
-            expected_code = ?HTTP_204_NO_CONTENT
-        },
-        data_spec = #data_spec{
-            required = [<<"providerId">>],
-            correct_values = #{
-                <<"providerId">> => [providerId]
-            },
-            bad_values = [
-                {<<"providerId">>, <<"">>,
-                    ?ERROR_BAD_VALUE_EMPTY(<<"providerId">>)},
-                {<<"providerId">>, 1234,
-                    ?ERROR_BAD_VALUE_BINARY(<<"providerId">>)},
-                {<<"providerId">>, P1,
-                    ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)}
-            ]
-        }
-    },
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
-    )),
-
-    % Check that regular client can't make request on behalf of other client
-    ApiTestSpec2 = ApiTestSpec#api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U1}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U2},
-                {user, NonAdmin}
-            ]
-        },
-        rest_spec = undefined,
-        logic_spec = #logic_spec{
-            module = user_logic,
-            function = set_default_provider,
-            args = [auth, U1, data],
-            expected_result = ?OK
-        }
-        % TODO gs
-    },
-    ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun
-    )).
-
-
-get_default_provider_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
-    {ok, U2} = oz_test_utils:create_user(Config),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config),
-
-    % Newly created user should not have a default provider
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U1}
-            ]
-        },
-        rest_spec = RestSpec = #rest_spec{
-            method = get,
-            path = <<"/user/default_provider">>,
-            expected_code = ?HTTP_404_NOT_FOUND
-        },
-        logic_spec = LogicSpec = #logic_spec{
-            module = user_logic,
-            function = get_default_provider,
-            args = [auth, U1],
-            expected_result = ?ERROR_REASON(?ERROR_NOT_FOUND)
-        }
-        % TODO gs
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
-
-    % Set a default provider for user
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
-
-    {ok, {P1, _}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_NAME1
-    ),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, P1, S1, oz_test_utils:minimum_support_size(Config)
-    ),
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-    oz_test_utils:user_set_default_provider(Config, U1, P1),
-
-    ApiTestSpec2 = ApiTestSpec#api_test_spec{
-        rest_spec = RestSpec#rest_spec{
-            expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"providerId">> => P1}
-        },
-        logic_spec = LogicSpec#logic_spec{
-            expected_result = ?OK_BINARY(P1)
-        }
-        % TODO gs
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)),
-
-    % Check that regular client can't make request on behalf of other client
-    ApiTestSpec3 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U1}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U2},
-                {user, NonAdmin}
-            ]
-        },
-        logic_spec = #logic_spec{
-            module = user_logic,
-            function = get_default_provider,
-            args = [auth, U1],
-            expected_result = ?OK_BINARY(P1)
-        }
-        % TODO gs
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec3)),
-
-    % Unset the default provider and check if it's not present again
-    oz_test_utils:user_unset_default_provider(Config, U1),
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
-
-
-unset_default_provider_test(Config) ->
-    {ok, U1} = oz_test_utils:create_user(Config),
-    {ok, U2} = oz_test_utils:create_user(Config),
-    {ok, NonAdmin} = oz_test_utils:create_user(Config),
-
-    {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, U2} = oz_test_utils:space_add_user(Config, S1, U2),
-
-    EnvSetUpFun = fun() ->
-        {ok, {ProviderId, _}} = oz_test_utils:create_provider(
-            Config, ?PROVIDER_NAME2
-        ),
-        {ok, S1} = oz_test_utils:support_space(
-            Config, ProviderId, S1, oz_test_utils:minimum_support_size(Config)
-        ),
-        oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
-
-        oz_test_utils:user_set_default_provider(Config, U1, ProviderId),
-        #{providerId => ProviderId}
-    end,
-    DeleteEntityFun = fun(_Env) ->
-        oz_test_utils:user_unset_default_provider(Config, U1)
-    end,
-    VerifyEndFun = fun(ShouldSucceed, #{providerId := ProviderId} = _Env, _) ->
-        Result = oz_test_utils:call_oz(
-            Config, user_logic, get_default_provider, [?ROOT, U1]
-        ),
-        case ShouldSucceed of
-            true -> ?assertMatch(?ERROR_NOT_FOUND, Result);
-            false -> ?assertMatch({ok, ProviderId}, Result)
-        end
-    end,
-
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{correct = [{user, U1}]},
-        rest_spec = #rest_spec{
-            method = delete,
-            path = <<"/user/default_provider">>,
-            expected_code = ?HTTP_204_NO_CONTENT
-        }
-    },
-    ?assert(api_test_scenarios:run_scenario(delete_entity, [
-        Config, ApiTestSpec, EnvSetUpFun, VerifyEndFun, DeleteEntityFun
-    ])),
-
-    % Check that regular client can't make request on behalf of other client
-    ApiTestSpec2 = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                root,
-                {user, U1}
-            ],
-            unauthorized = [nobody],
-            forbidden = [
-                {user, U2},
-                {user, NonAdmin}
-            ]
-        },
-        logic_spec = #logic_spec{
-            module = user_logic,
-            function = unset_default_provider,
-            args = [auth, U1],
-            expected_result = ?OK
-        }
-        % TODO gs
-    },
-    ?assert(api_test_scenarios:run_scenario(delete_entity, [
-        Config, ApiTestSpec2, EnvSetUpFun, VerifyEndFun, DeleteEntityFun
-    ])).
 
 
 acquire_idp_access_token_test(Config) ->

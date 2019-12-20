@@ -63,8 +63,7 @@
     supports_space/2
 ]).
 -export([
-    get_url/1,
-    choose_provider_for_user/1
+    get_url/1
 ]).
 
 %%%===================================================================
@@ -661,50 +660,3 @@ get_url(#od_provider{domain = Domain}) ->
 get_url(ProviderId) ->
     {ok, Provider} = get(?ROOT, ProviderId),
     get_url(Provider).
-
-
-%%--------------------------------------------------------------------
-%% @doc Returns provider id of provider that has been chosen
-%% as default for given user, or {error, no_provider} otherwise.
-%% If the user has a default spaces and it is supported by some providers,
-%% one of them will be chosen randomly.
-%% Otherwise, if any of user spaces is supported by any provider,
-%% one of them will be chosen randomly.
-%% @end
-%%--------------------------------------------------------------------
--spec choose_provider_for_user(Referer :: binary() | undefined) ->
-    {ok, ProviderId :: od_provider:id()} | {error, no_provider}.
-choose_provider_for_user(UserId) ->
-    % Check if the user has a default space and if it is supported.
-    {ok, #od_user{
-        spaces = Spaces, default_space = DefaultSpace
-    }} = user_logic:get(?ROOT, UserId),
-    {ok, DSProviders} =
-        case DefaultSpace of
-            undefined ->
-                {ok, []};
-            _ ->
-                space_logic:get_providers(?ROOT, DefaultSpace)
-        end,
-    case DSProviders of
-        List when length(List) > 0 ->
-            % Default space has got some providers, random one
-            {ok, lists:nth(rand:uniform(length(DSProviders)), DSProviders)};
-        _ ->
-            % Default space does not have a provider, look in other spaces
-            ProviderIds = lists:foldl(
-                fun(Space, Acc) ->
-                    {ok, Providers} = space_logic:get_providers(?ROOT, Space),
-                    Providers ++ Acc
-                end, [], Spaces),
-
-            case ProviderIds of
-                [] ->
-                    % No provider for other spaces = nowhere to redirect
-                    {error, no_provider};
-                _ ->
-                    % There are some providers for other spaces, random one
-                    {ok, lists:nth(rand:uniform(length(ProviderIds)), ProviderIds)}
-            end
-    end.
-
