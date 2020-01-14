@@ -97,9 +97,11 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
     Name = maps:get(<<"name">>, Req#el_req.data),
     SpaceId = maps:get(<<"spaceId">>, Req#el_req.data),
     RootFileId = maps:get(<<"rootFileId">>, Req#el_req.data),
+    FileType = maps:get(<<"fileType">>, Req#el_req.data, dir),
     ShareDoc = #document{key = ShareId, value = #od_share{
         name = Name,
         root_file = RootFileId,
+        file_type = FileType,
         public_url = share_logic:share_id_to_public_url(ShareId),
         creator = Auth#auth.subject
     }},
@@ -111,10 +113,10 @@ create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI, auth =
             ),
             {true, {Share, Rev}} = fetch_entity(#gri{aspect = instance, id = ShareId}),
             {ok, resource, {GRI#gri{id = ShareId}, {Share, Rev}}};
-        _ ->
+        {error, already_exists} ->
             % This can potentially happen if a share with given share id
             % has been created between data verification and create
-            ?ERROR_INTERNAL_SERVER_ERROR
+            ?ERROR_ALREADY_EXISTS
     end.
 
 
@@ -135,12 +137,14 @@ get(#el_req{gri = #gri{aspect = instance, scope = private}}, Share) ->
 get(#el_req{gri = #gri{aspect = instance, scope = public}}, Share) ->
     #od_share{
         name = Name, public_url = PublicUrl,
-        root_file = RootFileId, handle = HandleId,
+        handle = HandleId,
+        root_file = RootFileId, file_type = FileType,
         creation_time = CreationTime, creator = Creator
     } = Share,
     {ok, #{
         <<"name">> => Name, <<"publicUrl">> => PublicUrl,
         <<"rootFileId">> => RootFileId,
+        <<"fileType">> => FileType,
         <<"handleId">> => utils:undefined_to_null(HandleId),
         <<"creationTime">> => CreationTime, <<"creator">> => Creator
     }}.
@@ -269,6 +273,9 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
         <<"spaceId">> => {any, {exists, fun(Value) ->
             space_logic:exists(Value)
         end}}
+    },
+    optional => #{
+        <<"fileType">> => {atom, [file, dir]}
     }
 };
 

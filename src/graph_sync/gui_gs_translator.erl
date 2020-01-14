@@ -386,7 +386,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
         <<"harvesterList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = harvesters}),
         <<"info">> => maps:merge(translate_creator(Space#od_space.creator), #{
             <<"creationTime">> => Space#od_space.creation_time,
-            <<"sharedDirectories">> => length(Shares)
+            <<"sharesCount">> => length(Shares)
         })
     } end;
 
@@ -396,7 +396,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"providers">> := SupportSizes,
         <<"creationTime">> := CreationTime,
         <<"creator">> := Creator,
-        <<"sharedDirectories">> := SharedDirectories
+        <<"sharesCount">> := SharesCount
     } = SpaceData,
     fun(?USER(UserId)) -> #{
         <<"name">> => Name,
@@ -406,7 +406,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = protected}, SpaceD
         <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = providers}),
         <<"info">> => maps:merge(translate_creator(Creator), #{
             <<"creationTime">> => CreationTime,
-            <<"sharedDirectories">> => SharedDirectories
+            <<"sharesCount">> => SharesCount
         })
     } end;
 
@@ -488,8 +488,11 @@ translate_space(#gri{aspect = harvesters}, Harvesters) ->
 %% @private
 -spec translate_share(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
-translate_share(GRI = #gri{aspect = instance, scope = private}, #od_share{name = Name}) ->
-    translate_share(GRI#gri{scope = public}, #{<<"name">> => Name});
+translate_share(#gri{aspect = instance, scope = private}, #od_share{name = Name, file_type = FileType}) ->
+    #{
+        <<"name">> => Name,
+        <<"fileType">> => FileType
+    };
 translate_share(#gri{id = ShareId, aspect = instance, scope = public}, #{<<"name">> := Name}) ->
     {ChosenProviderId, ChosenProviderVersion} = share_logic:choose_provider_for_public_view(ShareId),
     #{

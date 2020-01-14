@@ -146,7 +146,10 @@ create_test(Config) ->
         {<<"shareId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"shareId">>)},
         {<<"shareId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"shareId">>)},
         {<<"rootFileId">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"rootFileId">>)},
-        {<<"rootFileId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"rootFileId">>)}
+        {<<"rootFileId">>, 1234, ?ERROR_BAD_VALUE_BINARY(<<"rootFileId">>)},
+        {<<"fileType">>, 1234, ?ERROR_BAD_VALUE_ATOM(<<"fileType">>)},
+        {<<"fileType">>, <<"">>, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [file, dir])},
+        {<<"fileType">>, atom, ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"fileType">>, [file, dir])}
     ],
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -185,10 +188,14 @@ create_test(Config) ->
             required = [
                 <<"shareId">>, <<"name">>, <<"rootFileId">>, <<"spaceId">>
             ],
+            optional = [
+                <<"fileType">>
+            ],
             correct_values = #{
                 <<"shareId">> => [fun() -> ?UNIQUE_STRING end],
                 <<"name">> => [?CORRECT_NAME],
                 <<"rootFileId">> => [?ROOT_FILE_ID],
+                <<"fileType">> => [file, dir],
                 <<"spaceId">> => [S1]
             },
             bad_values = lists:append([
@@ -222,6 +229,10 @@ create_test(Config) ->
 
 
 get_test(Config) ->
+    get_test(Config, ?SHARE_ID_2, dir),
+    get_test(Config, ?SHARE_ID_1, file).
+
+get_test(Config, ShareId, FileType) ->
     % create space with 2 users:
     %   U2 gets the SPACE_MANAGE_SHARES privilege
     %   U1 gets all remaining privileges
@@ -230,14 +241,19 @@ get_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, ShareId} = oz_test_utils:create_share(
-        Config, ?ROOT, ?SHARE_ID_1, ?SHARE_NAME1, ?ROOT_FILE_ID, S1
-    ),
+    {ok, ShareId} = oz_test_utils:create_share(Config, ?ROOT, #{
+        <<"shareId">> => ShareId,
+        <<"spaceId">> => S1,
+        <<"name">> => ?SHARE_NAME1,
+        <<"rootFileId">> => ?ROOT_FILE_ID,
+        <<"fileType">> => FileType
+    }),
     SharePublicURL = oz_test_utils:get_share_public_url(Config, ShareId),
     SharePublicDetails = #{
         <<"name">> => ?SHARE_NAME1,
         <<"publicUrl">> => SharePublicURL,
         <<"rootFileId">> => ?ROOT_FILE_ID,
+        <<"fileType">> => atom_to_binary(FileType, utf8),
         <<"handleId">> => null
     },
     SharePrivateDetails = SharePublicDetails#{<<"spaceId">> => S1},
@@ -274,10 +290,12 @@ get_test(Config) ->
             expected_result = ?OK_TERM(
                 fun(#od_share{
                     name = ShareName, public_url = PublicURL,
-                    space = Space, handle = undefined, root_file = RootFile
+                    space = Space, handle = undefined,
+                    root_file = RootFile, file_type = ReceivedFileType
                 }) ->
                     ?assertEqual(?SHARE_NAME1, ShareName),
                     ?assertEqual(?ROOT_FILE_ID, RootFile),
+                    ?assertEqual(FileType, ReceivedFileType),
                     ?assertEqual(Space, S1),
                     ?assertEqual(SharePublicURL, PublicURL)
                 end
@@ -313,7 +331,9 @@ get_test(Config) ->
             module = share_logic,
             function = get_public_data,
             args = [auth, ShareId],
-            expected_result = ?OK_MAP_CONTAINS(SharePublicDetails)
+            expected_result = ?OK_MAP_CONTAINS(SharePublicDetails#{
+                <<"fileType">> => FileType % atom is expected
+            })
         },
         gs_spec = #gs_spec{
             operation = get,
@@ -450,6 +470,8 @@ delete_test(Config) ->
     )).
 
 
+% The SUITE is run on a single node cluster to test caching of chosen providers
+% (the cache is local for each node).
 choose_provider_for_public_view_test(Config) ->
     % Onezone version is mocked in init_per_testcase to <<"19.09.3">>
     {ok, UserId} = oz_test_utils:create_user(Config),

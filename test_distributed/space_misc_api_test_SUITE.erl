@@ -545,6 +545,7 @@ get_share_test(Config) ->
         <<"name">> => ShareName,
         <<"spaceId">> => S1,
         <<"rootFileId">> => ?ROOT_FILE_ID,
+        <<"fileType">> => <<"dir">>,
         <<"handleId">> => null,
         <<"publicUrl">> => SharePublicUrl
     },
@@ -580,12 +581,14 @@ get_share_test(Config) ->
                     public_url = PublicUrl,
                     space = SpaceId,
                     handle = undefined,
-                    root_file = RootFile
+                    root_file = RootFile,
+                    file_type = FileType
                 }) ->
                     ?assertEqual(Name, ShareName),
                     ?assertEqual(PublicUrl, SharePublicUrl),
                     ?assertEqual(SpaceId, S1),
-                    ?assertEqual(RootFile, ?ROOT_FILE_ID)
+                    ?assertEqual(RootFile, ?ROOT_FILE_ID),
+                    ?assertEqual(FileType, dir)
                 end)
         },
         gs_spec = #gs_spec{

@@ -306,7 +306,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator,
-        <<"sharedDirectories">> => length(Shares)
+        <<"sharesCount">> => length(Shares)
     }};
 
 get(#el_req{gri = #gri{aspect = users}}, Space) ->
