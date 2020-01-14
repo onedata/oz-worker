@@ -486,7 +486,7 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
             true
     end;
 
-exists(Req = #el_req{gri = #gri{id = UserId, aspect = instance, scope = shared}}, User) ->
+exists(Req = #el_req{gri = GRI = #gri{id = UserId, aspect = instance, scope = shared}}, User) ->
     case Req#el_req.auth_hint of
         ?THROUGH_GROUP(GroupId) ->
             user_logic:has_eff_group(User, GroupId) orelse begin
@@ -518,8 +518,8 @@ exists(Req = #el_req{gri = #gri{id = UserId, aspect = instance, scope = shared}}
                 {ok, {Cluster, _}} = cluster_logic_plugin:fetch_entity(ClusterId),
                 Cluster#od_cluster.creator =:= ?SUB(user, UserId)
             end;
-        undefined ->
-            true
+        _ ->
+            exists(Req#el_req{gri = GRI#gri{scope = protected}}, User)
     end;
 
 exists(#el_req{gri = #gri{aspect = {client_token, TokenId}}}, User) ->
