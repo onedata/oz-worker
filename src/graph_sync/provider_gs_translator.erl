@@ -381,9 +381,11 @@ translate_resource(_, #gri{type = od_storage, aspect = instance, scope = private
 
 translate_resource(_, #gri{type = od_storage, aspect = instance, scope = shared}, StorageDetails) ->
     #{
+        <<"provider">> := Provider,
         <<"qos_parameters">> := QosParams
     } = StorageDetails,
     #{
+        <<"provider">> => Provider,
         <<"qos_parameters">> => QosParams
     };
 
