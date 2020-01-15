@@ -46,7 +46,7 @@
 fetch_entity(#gri{id = SpaceId}) ->
     case od_space:get(SpaceId) of
         {ok, #document{value = Space, revs = [DbRev | _]}} ->
-            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Space, Revision}};
         _ ->
             ?ERROR_NOT_FOUND

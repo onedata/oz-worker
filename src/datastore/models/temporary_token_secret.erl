@@ -30,8 +30,8 @@
 }).
 
 -define(KEY(Subject), case Subject of
-    ?SUB(user, UserId) -> datastore_utils:gen_key(<<"user">>, UserId);
-    ?SUB(?ONEPROVIDER, PrId) -> datastore_utils:gen_key(<<"provider">>, PrId)
+    ?SUB(user, UserId) -> datastore_key:build_adjacent(<<"user">>, UserId);
+    ?SUB(?ONEPROVIDER, PrId) -> datastore_key:build_adjacent(<<"provider">>, PrId)
 end).
 
 %%%===================================================================

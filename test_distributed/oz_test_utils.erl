@@ -3523,7 +3523,7 @@ create_dummy_gui_package() ->
     DummyGuiRoot = filename:join(TempDir, "gui_static"),
     ok = file:make_dir(DummyGuiRoot),
     DummyIndex = filename:join(DummyGuiRoot, "index.html"),
-    IndexContent = datastore_utils:gen_key(),
+    IndexContent = datastore_key:new(),
     ok = file:write_file(DummyIndex, IndexContent),
 
     DummyPackage = filename:join(TempDir, "gui_static.tar.gz"),

@@ -47,7 +47,7 @@
 fetch_entity(#gri{id = HarvesterId}) ->
     case od_harvester:get(HarvesterId) of
         {ok, #document{value = Harvester, revs = [DbRev | _]}} ->
-            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
             {true, {Harvester, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
@@ -319,7 +319,7 @@ create(Req = #el_req{gri = GRI = #gri{id = HarvesterId, aspect = group}}) ->
     {ok, resource, {NewGRI, {Group, Rev}}};
 
 create(#el_req{gri = Gri = #gri{aspect = index, id = HarvesterId}, data = Data}) ->
-    IndexId = datastore_utils:gen_key(),
+    IndexId = datastore_key:new(),
 
     Name = maps:get(<<"name">>, Data),
     Schema = maps:get(<<"schema">>, Data, undefined),

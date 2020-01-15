@@ -261,7 +261,7 @@ create_n_legacy_client_tokens(Config, UserId, Count) ->
 
 
 create_legacy_provider(Config) ->
-    ProviderId = datastore_utils:gen_key(),
+    ProviderId = datastore_key:new(),
     Secret = tokens:generate_secret(),
     {ok, RootTokenId} = oz_test_utils:call_oz(Config, macaroon_auth, create, [
         Secret, ?PROVIDER(ProviderId)
@@ -294,7 +294,7 @@ create_legacy_provider(Config) ->
 
 
 create_provider_with_n_legacy_spaces(Config, SpacesNum) ->
-    ProviderId = datastore_utils:gen_key(),
+    ProviderId = datastore_key:new(),
 
     Spaces = lists:foldl(fun(SupportSize, Acc) ->
         {ok, S} = oz_test_utils:create_space(Config, ?ROOT),
