@@ -53,7 +53,7 @@
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Creates a new space document in database. Has two variants:
+%% Creates a new storage document in database. Has two variants:
 %% 1) Storage Name is given explicitly
 %% 2) Storage name is provided in a proper Data object.
 %% @end
@@ -287,7 +287,7 @@ supports_space(Storage, SpaceId) ->
 %% that keeps knowledge of storages as long as it is in previous version.
 %% Provider removes this virtual storage record during its upgrade procedure.
 %%
-%% Dedicated for upgrading Onezone from 19.02.* to the next major release.
+%% Dedicated for upgrading Onezone from 19.02.* to 19.09.*.
 %% @end
 %%--------------------------------------------------------------------
 -spec migrate_legacy_supports() -> ok.

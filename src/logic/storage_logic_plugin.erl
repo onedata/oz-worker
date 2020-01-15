@@ -101,10 +101,12 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(#el_req{gri = #gri{id = ProposedId, aspect = instance} = GRI, auth = ?PROVIDER(ProviderId) = Auth, data = Data}) ->
     Name = maps:get(<<"name">>, Data),
+    QosParameters = maps:get(<<"qos_parameters">>, Data, #{}),
     StorageDoc = #document{
         key = ProposedId,
         value = #od_storage{
             name = Name,
+            qos_parameters = QosParameters,
             creator = Auth#auth.subject,
             provider = ProviderId
         }
@@ -146,7 +148,7 @@ create(#el_req{auth = Auth, gri = #gri{id = StorageId, aspect = support}, data =
         end)
     end;
 
-% This endpoint is dedicated to providers upgrading from version 19.02.* to the next major release.
+% This endpoint is dedicated to providers upgrading from version 19.02.* to 19.09.*.
 create(#el_req{gri = #gri{id = StorageId, aspect = {upgrade_legacy_support, SpaceId}}}) ->
     fun(#od_storage{provider = ProviderId}) ->
         {true, {VirtualStorage, _}} = fetch_entity(#gri{id = ProviderId}),
@@ -336,6 +338,9 @@ required_admin_privileges(_) ->
 validate(#el_req{operation = create, gri = #gri{aspect = instance}}) -> #{
     required => #{
         <<"name">> => {binary, name}
+    },
+    optional => #{
+        <<"qos_parameters">> => {json, qos_parameters}
     }
 };
 

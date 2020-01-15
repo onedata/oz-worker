@@ -367,11 +367,13 @@ translate_resource(_, #gri{type = od_harvester, aspect = instance, scope = priva
 
 translate_resource(_, #gri{type = od_storage, aspect = instance, scope = private}, Storage) ->
     #od_storage{
+        name = Name,
         provider = Provider,
         spaces = Spaces,
         qos_parameters = QosParams
     } = Storage,
     #{
+        <<"name">> => Name,
         <<"provider">> => Provider,
         <<"spaces">> => maps:keys(Spaces),
         <<"qos_parameters">> => QosParams

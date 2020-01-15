@@ -71,10 +71,11 @@ create_test(Config) ->
     {ok, U1} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
 
-    VerifyFun = fun(StorageId) ->
+    VerifyFun = fun(StorageId, ExpectedQosParams) ->
         {ok, Storage} = oz_test_utils:get_storage(Config, StorageId),
         ?assertEqual(?CORRECT_NAME, Storage#od_storage.name),
         ?assertEqual(P1, Storage#od_storage.provider),
+        ?assertEqual(ExpectedQosParams, Storage#od_storage.qos_parameters),
         true
     end,
 
@@ -92,23 +93,36 @@ create_test(Config) ->
             module = storage_logic,
             function = create,
             args = [auth, data],
-            expected_result = ?OK_TERM(VerifyFun)
+            expected_result = ?OK_ENV(fun(_, DataSet) ->
+                ExpectedQosParams = maps:get(<<"qos_parameters">>, DataSet, #{}),
+                ?OK_TERM(fun(StorageId) -> VerifyFun(StorageId, ExpectedQosParams) end)
+            end)
         },
         gs_spec = #gs_spec{
             operation = create,
-            gri = #gri{type = od_storage, id = <<"storageId">>, aspect = instance},
-            expected_result = ?OK_MAP_CONTAINS(#{
+            gri = #gri{type = od_storage, aspect = instance},
+            expected_result = ?OK_ENV(fun(_, DataSet) ->
+                ExpectedQosParams = maps:get(<<"qos_parameters">>, DataSet, #{}),
+                ?OK_MAP_CONTAINS(#{
                 <<"provider">> => P1,
                 <<"gri">> => fun(EncodedGri) ->
                     #gri{id = StorageId} = gri:deserialize(EncodedGri),
-                    VerifyFun(StorageId)
-                end
-            })
+                    VerifyFun(StorageId, ExpectedQosParams)
+                end})
+            end)
         },
         data_spec = #data_spec{
             required = [<<"name">>],
-            correct_values = #{<<"name">> => [?CORRECT_NAME]},
-            bad_values = ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
+            optional = [<<"qos_parameters">>],
+            correct_values = #{
+                <<"name">> => [?CORRECT_NAME],
+                <<"qos_parameters">> => [#{<<"key">> => <<"value">>}]
+            },
+            bad_values = [
+                {<<"qos_parameters">>, <<"binary">>, ?ERROR_BAD_VALUE_JSON(<<"qos_parameters">>)},
+                {<<"qos_parameters">>, #{<<"nested">> => #{<<"key">> => <<"value">>}}, ?ERROR_BAD_VALUE_QOS_PARAMETERS},
+                {<<"qos_parameters">>, #{<<"key">> => 1}, ?ERROR_BAD_VALUE_QOS_PARAMETERS}
+            ] ++ ?BAD_VALUES_NAME(?ERROR_BAD_VALUE_NAME)
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
@@ -179,6 +193,7 @@ get_test(Config) ->
             operation = get,
             gri = #gri{type = od_storage, id = St1, aspect = instance},
             expected_result = ?OK_MAP_CONTAINS(#{
+                <<"name">> => ?STORAGE_NAME1,
                 <<"provider">> => P1,
                 <<"qos_parameters">> => ExpectedQosParameters,
                 <<"spaces">> => [S],

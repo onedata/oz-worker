@@ -680,7 +680,7 @@ get_url(ProviderId) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Returns all legacy spaces in given provider.
-%% Dedicated for upgrading Onezone from 19.02.* to the next major release.
+%% Dedicated for upgrading Onezone from 19.02.* to 19.09.*.
 %% @end
 %%--------------------------------------------------------------------
 -spec get_legacy_spaces(od_provider:record() | od_provider:doc()) ->
@@ -694,7 +694,7 @@ get_legacy_spaces(#od_provider{legacy_spaces = Spaces}) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Removes given space from legacy spaces in given provider.
-%% Dedicated for upgrading Onezone from 19.02.* to the next major release.
+%% Dedicated for upgrading Onezone from 19.02.* to 19.09.*.
 %% @end
 %%--------------------------------------------------------------------
 -spec remove_legacy_space(od_provider:id(), od_space:id()) -> {ok, od_provider:doc()}.
