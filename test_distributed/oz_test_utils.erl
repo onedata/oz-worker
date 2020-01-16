@@ -43,7 +43,6 @@
 -export([
     list_users/1,
     create_user/1, create_user/2,
-    create_admin/2,
     get_user/2,
     delete_user/2,
 
@@ -284,13 +283,8 @@
     mock_handle_proxy/1,
     unmock_handle_proxy/1,
     cluster_time_seconds/1,
-    mock_gui_static/1, unmock_gui_static/1,
     mock_time/1, unmock_time/1,
     get_mocked_time/1,
-    mock_peer_ip_of_all_connections/2,
-    unmock_peer_ip_of_all_connections/1,
-    mock_geo_db_entry_for_all_ips/4,
-    unmock_geo_db_entry_for_all_ips/1,
     simulate_time_passing/2,
     gui_ca_certs/1,
     ensure_entity_graph_is_up_to_date/1, ensure_entity_graph_is_up_to_date/2,
@@ -305,12 +299,11 @@
     copy_file_to_onezone_nodes/2,
     copy_file_to_node/2
 ]).
-
-% Convenience functions for gs
 -export([
     log_in/2, log_out/2,
     graph_sync_url/2,
     get_gs_supported_proto_versions/1,
+    acquire_temporary_token/2,
     request_gui_token/2,
     request_gui_token/4
 ]).
@@ -379,19 +372,6 @@ create_user(Config, Data) ->
     ?assertMatch({ok, _}, call_oz(
         Config, user_logic, create, [?ROOT, Data]
     )).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Creates a user in onezone with given admin privileges.
-%% @end
-%%--------------------------------------------------------------------
--spec create_admin(Config :: term(), [privileges:oz_privilege()]) ->
-    {ok, od_user:id()}.
-create_admin(Config, OzPrivileges) ->
-    {ok, UserId} = oz_test_utils:create_user(Config),
-    oz_test_utils:user_set_oz_privileges(Config, UserId, OzPrivileges, []),
-    {ok, UserId}.
 
 
 %%--------------------------------------------------------------------
@@ -3295,36 +3275,6 @@ cluster_time_seconds(Config) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Mocks the gui_static module - useful in tests that create / delete a lot of
-%% Oneprovider instances to skip these intensive IO operations.
-%% @end
-%%--------------------------------------------------------------------
--spec mock_gui_static(Config :: term()) -> ok.
-mock_gui_static(Config) ->
-    ok = test_utils:mock_new(?OZ_NODES(Config), gui_static, [passthrough]),
-    ok = test_utils:mock_expect(?OZ_NODES(Config), gui_static, gui_exists, fun(_, _) ->
-        true
-    end),
-    ok = test_utils:mock_expect(?OZ_NODES(Config), gui_static, link_gui, fun(_, _, _) ->
-        ok
-    end),
-    ok = test_utils:mock_expect(?OZ_NODES(Config), gui_static, unlink_gui, fun(_, _) ->
-        ok
-    end).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Clears the gui_static mock.
-%% @end
-%%--------------------------------------------------------------------
--spec unmock_gui_static(Config :: term()) -> ok.
-unmock_gui_static(Config) ->
-    ok = test_utils:mock_unload(?OZ_NODES(Config), gui_static).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Mocks the time - stops the clock at one value and allows to manually
 %% simulate time passing.
 %% @end
@@ -3366,34 +3316,6 @@ get_mocked_time(Config) ->
 -spec simulate_time_passing(Config :: term(), Seconds :: non_neg_integer()) -> ok.
 simulate_time_passing(Config, Seconds) ->
     set_env(Config, mocked_time, get_mocked_time(Config) + Seconds).
-
-
-mock_peer_ip_of_all_connections(Config, Ip) ->
-    ok = test_utils:mock_new(?OZ_NODES(Config), cowboy_req, [passthrough]),
-    ok = test_utils:mock_expect(?OZ_NODES(Config), cowboy_req, peer, fun(_) ->
-        {Ip, _Port = 10000}  % port is not relevant
-    end).
-
-
-unmock_peer_ip_of_all_connections(Config) ->
-    ok = test_utils:mock_unload(?OZ_NODES(Config), cowboy_req).
-
-
-mock_geo_db_entry_for_all_ips(Config, Asn, Country, Regions) ->
-    ok = test_utils:mock_new(?OZ_NODES(Config), ip_utils, [passthrough]),
-    ok = test_utils:mock_expect(?OZ_NODES(Config), ip_utils, lookup_asn, fun(_) ->
-        {ok, Asn}
-    end),
-    ok = test_utils:mock_expect(?OZ_NODES(Config), ip_utils, lookup_country, fun(_) ->
-        {ok, Country}
-    end),
-    ok = test_utils:mock_expect(?OZ_NODES(Config), ip_utils, lookup_region, fun(_) ->
-        {ok, Regions}
-    end).
-
-
-unmock_geo_db_entry_for_all_ips(Config) ->
-    ok = test_utils:mock_unload(?OZ_NODES(Config), ip_utils).
 
 
 %%--------------------------------------------------------------------
@@ -3746,6 +3668,21 @@ get_gs_supported_proto_versions(Config) ->
     ?assertMatch([_ | _], call_oz(
         Config, gs_protocol, supported_versions, [])
     ).
+
+
+-spec acquire_temporary_token(Config :: term(), aai:subject()) -> tokens:serialized().
+acquire_temporary_token(Config, Subject = ?SUB(SubType, SubId)) ->
+    {ok, Cached} = simple_cache:get({temp_token, Subject}, fun() ->
+        Data = #{<<"caveats">> => [#cv_time{valid_until = cluster_time_seconds(Config) + 36000}]},
+        Fun = case SubType of
+            user -> create_user_temporary_token;
+            ?ONEPROVIDER -> create_provider_temporary_token
+        end,
+        {ok, Token} = call_oz(Config, token_logic, Fun, [?ROOT, SubId, Data]),
+        {ok, Serialized} = tokens:serialize(Token),
+        {true, Serialized}
+    end),
+    Cached.
 
 
 %%--------------------------------------------------------------------

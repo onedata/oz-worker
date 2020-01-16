@@ -57,9 +57,11 @@ end).
 %%          root
 %%          {user, <<"uid">>}
 %%          {user, <<"uid">>, <<"token">>}
+%%          {provider, <<"id">>}
 %%          {provider, <<"id">>, <<"token">>}
 %%          % Uses the same auth as provider, but indicates the service type
 %%          (in the auth header a.k.a. service access token)
+%%          {op_panel, <<"id">>}
 %%          {op_panel, <<"id">>, <<"token">>}
 %%          undefined
 %%      opts => % Optional, default: []
@@ -119,34 +121,26 @@ check_rest_call(Config, ArgsMap) ->
 
         URL = str_utils:join_binary([ReqURL | ReqPath]),
         ReqAuth = maps:get(auth, RequestMap, undefined),
+        Now = oz_test_utils:cluster_time_seconds(Config),
         HeadersPlusAuth = case ReqAuth of
             undefined ->
                 ReqHeaders;
             nobody ->
                 ReqHeaders;
+            {provider, ProviderId} ->
+                Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(?ONEPROVIDER, ProviderId)),
+                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token));
             {provider, _, Token} ->
                 maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token));
+            {op_panel, ProviderId} ->
+                Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(?ONEPROVIDER, ProviderId)),
+                ServiceToken = tokens:build_service_access_token(?OP_PANEL, Token),
+                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(ServiceToken));
             {op_panel, _, Token} ->
                 ServiceToken = tokens:build_service_access_token(?OP_PANEL, Token),
                 maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(ServiceToken));
             {user, UserId} ->
-                % Cache user auth tokens, if none in cache create a new one.
-                Token = case get({token, UserId}) of
-                    undefined ->
-                        Now = oz_test_utils:cluster_time_seconds(Config),
-                        {ok, T} = oz_test_utils:call_oz(
-                            Config, token_logic, create_user_temporary_token, [
-                                ?USER(UserId), UserId, #{<<"caveats">> => [
-                                    #cv_time{valid_until = Now + 36000}
-                                ]}
-                            ]
-                        ),
-                        {ok, Serialized} = tokens:serialize(T),
-                        put({token, UserId}, Serialized),
-                        Serialized;
-                    T ->
-                        T
-                end,
+                Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(user, UserId)),
                 maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token));
             {user, _, Token} ->
                 maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token))

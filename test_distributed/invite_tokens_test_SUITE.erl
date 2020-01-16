@@ -46,7 +46,7 @@
 
 -record(consume_request, {
     logic_call_args :: {Module :: atom(), Function :: atom(), Args :: [term()]},
-    rest_call_args :: not_available | {PathOrTokens :: binary() | [binary()], Data :: map()},
+    rest_call_args :: not_available | {ozt_http:urn_tokens(), entity_logic:data()},
     graph_sync_args :: {gri:gri(), gs_protocol:auth_hint(), entity_logic:data()}
 }).
 
@@ -140,45 +140,34 @@ all() -> ?ALL([
 init_per_suite(Config) ->
     ssl:start(),
     hackney:start(),
-    [{?LOAD_MODULES, [oz_test_utils]} | Config].
+    ozt:init_per_suite(Config).
 
 init_per_testcase(_, Config) ->
-    oz_test_utils:mock_gui_static(Config),
-    oz_test_utils:mock_time(Config),
-    oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
-    oz_test_utils:mock_peer_ip_of_all_connections(Config, ?PEER_IP),
-    oz_test_utils:mock_geo_db_entry_for_all_ips(Config, ?CLIENT_ASN, ?CLIENT_COUNTRY, ?CLIENT_REGIONS),
-    store_test_config(Config),
+    ozt_mocks:mock_gui_static(),
+    ozt_mocks:mock_time(),
+    ozt_mocks:mock_harvester_plugins(),
+    ozt_mocks:mock_peer_ip_of_all_connections(?PEER_IP),
+    ozt_mocks:mock_geo_db_entry_for_all_ips(?CLIENT_ASN, ?CLIENT_COUNTRY, ?CLIENT_REGIONS),
     Config.
 
-end_per_testcase(_, Config) ->
-    oz_test_utils:unmock_time(Config),
-    oz_test_utils:unmock_gui_static(Config),
-    oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
-    oz_test_utils:unmock_peer_ip_of_all_connections(Config),
-    oz_test_utils:unmock_geo_db_entry_for_all_ips(Config),
-    ok.
+end_per_testcase(_, _Config) ->
+    ozt_mocks:unmock_time(),
+    ozt_mocks:unmock_gui_static(),
+    ozt_mocks:unmock_harvester_plugins(),
+    ozt_mocks:unmock_peer_ip_of_all_connections(),
+    ozt_mocks:unmock_geo_db_entry_for_all_ips().
 
 end_per_suite(_Config) ->
     hackney:stop(),
     ssl:stop().
 
-store_test_config(Config) ->
-    simple_cache:put(test_config, Config).
-
-get_test_config() ->
-    case simple_cache:get(test_config) of
-        {ok, Config} -> Config;
-        _ -> error("Call store_test_config at the beggining of the test.")
-    end.
-
 %%%===================================================================
 %%% Test cases
 %%%===================================================================
 
-user_join_group_token(Config) ->
-    {ok, GroupCreatorUserId} = oz_test_utils:create_user(Config),
-    {ok, GroupId} = oz_test_utils:create_group(Config, ?USER(GroupCreatorUserId)),
+user_join_group_token(_Config) ->
+    GroupCreatorUserId = ozt_users:create(),
+    GroupId = ozt_users:create_group_for(GroupCreatorUserId),
 
     ?assert(run_invite_token_tests(#testcase{
         token_type = ?INVITE_TOKEN(?USER_JOIN_GROUP, GroupId),
@@ -201,12 +190,12 @@ user_join_group_token(Config) ->
             set_user_privs_in_group(GroupId, UserId, Modification)
         end,
         check_privileges_fun = fun(?SUB(user, UserId), ExpectedPrivileges) ->
-            {ok, ActualPrivileges} = oz_rpc(group_logic, get_user_privileges, [?ROOT, GroupId, UserId]),
+            ActualPrivileges = ozt_groups:get_user_privileges(GroupId, UserId),
             lists:sort(ExpectedPrivileges) =:= lists:sort(ActualPrivileges)
         end,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, UserId)}, Token) ->
-            Data = #{<<"token">> => ensure_token_serialized(Token)},
+            Data = #{<<"token">> => ozt_tokens:ensure_serialized(Token)},
             #consume_request{
                 logic_call_args = {user_logic, join_group, [Auth, UserId, Data]},
                 rest_call_args = {<<"/user/groups/join">>, Data},
@@ -215,7 +204,7 @@ user_join_group_token(Config) ->
         end,
 
         delete_target_entity_fun = fun() ->
-            oz_rpc(group_logic, delete, [?ROOT, GroupId])
+            ozt_groups:delete(GroupId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             ?ERROR_RELATION_ALREADY_EXISTS(od_user, UserId, od_group, GroupId)
@@ -223,9 +212,9 @@ user_join_group_token(Config) ->
     })).
 
 
-group_join_group_token(Config) ->
-    {ok, GroupCreatorUserId} = oz_test_utils:create_user(Config),
-    {ok, ParentGroupId} = oz_test_utils:create_group(Config, ?USER(GroupCreatorUserId)),
+group_join_group_token(_Config) ->
+    GroupCreatorUserId = ozt_users:create(),
+    ParentGroupId = ozt_users:create_group_for(GroupCreatorUserId),
 
     ?assert(run_invite_token_tests(#testcase{
         token_type = ?INVITE_TOKEN(?GROUP_JOIN_GROUP, ParentGroupId),
@@ -241,7 +230,7 @@ group_join_group_token(Config) ->
         admin_privilege_to_set_privileges = ?OZ_GROUPS_SET_PRIVILEGES,
 
         eligible_consumer_types = [{user, fun(?SUB(user, UserId)) ->
-            {ok, ChildGroupId} = oz_test_utils:create_group(get_test_config(), ?USER(UserId)),
+            ChildGroupId = ozt_users:create_group_for(UserId),
             % Store the group in memory for use in different callbacks
             simple_cache:put({user_group, UserId}, ChildGroupId)
         end}],
@@ -261,7 +250,7 @@ group_join_group_token(Config) ->
         end,
         check_privileges_fun = fun(?SUB(user, UserId), ExpectedPrivileges) ->
             {ok, ChildGroupId} = simple_cache:get({user_group, UserId}),
-            {ok, ActualPrivileges} = oz_rpc(group_logic, get_child_privileges, [?ROOT, ParentGroupId, ChildGroupId]),
+            ActualPrivileges = ozt_groups:get_child_privileges(ParentGroupId, ChildGroupId),
             lists:sort(ExpectedPrivileges) =:= lists:sort(ActualPrivileges)
         end,
 
@@ -275,10 +264,9 @@ group_join_group_token(Config) ->
                     % Other consumer than user does not make sense, but for the
                     % sake of checking if bad consumer is properly handled, try
                     % to use a freshly created group
-                    {ok, GrId} = oz_test_utils:create_group(Config, ?ROOT),
-                    GrId
+                    ozt_groups:create()
             end,
-            Data = #{<<"token">> => ensure_token_serialized(Token)},
+            Data = #{<<"token">> => ozt_tokens:ensure_serialized(Token)},
             #consume_request{
                 logic_call_args = {group_logic, join_group, [Auth, ChildGroupId, Data]},
                 rest_call_args = {[<<"/groups/">>, ChildGroupId, <<"/parents/join">>], Data},
@@ -287,7 +275,7 @@ group_join_group_token(Config) ->
         end,
 
         delete_target_entity_fun = fun() ->
-            oz_rpc(group_logic, delete, [?ROOT, ParentGroupId])
+            ozt_groups:delete(ParentGroupId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             {ok, ChildGroupId} = simple_cache:get({user_group, UserId}),
@@ -296,9 +284,9 @@ group_join_group_token(Config) ->
     })).
 
 
-user_join_space_token(Config) ->
-    {ok, SpaceCreatorUserId} = oz_test_utils:create_user(Config),
-    {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(SpaceCreatorUserId)),
+user_join_space_token(_Config) ->
+    SpaceCreatorUserId = ozt_users:create(),
+    SpaceId = ozt_users:create_space_for(SpaceCreatorUserId),
 
     ?assert(run_invite_token_tests(#testcase{
         token_type = ?INVITE_TOKEN(?USER_JOIN_SPACE, SpaceId),
@@ -321,12 +309,12 @@ user_join_space_token(Config) ->
             set_user_privs_in_space(SpaceId, UserId, Modification)
         end,
         check_privileges_fun = fun(?SUB(user, UserId), ExpectedPrivileges) ->
-            {ok, ActualPrivileges} = oz_rpc(space_logic, get_user_privileges, [?ROOT, SpaceId, UserId]),
+            ActualPrivileges = ozt_spaces:get_user_privileges(SpaceId, UserId),
             lists:sort(ExpectedPrivileges) =:= lists:sort(ActualPrivileges)
         end,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, UserId)}, Token) ->
-            Data = #{<<"token">> => ensure_token_serialized(Token)},
+            Data = #{<<"token">> => ozt_tokens:ensure_serialized(Token)},
             #consume_request{
                 logic_call_args = {user_logic, join_space, [Auth, UserId, Data]},
                 rest_call_args = {<<"/user/spaces/join">>, Data},
@@ -335,7 +323,7 @@ user_join_space_token(Config) ->
         end,
 
         delete_target_entity_fun = fun() ->
-            oz_rpc(space_logic, delete, [?ROOT, SpaceId])
+            ozt_spaces:delete(SpaceId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             ?ERROR_RELATION_ALREADY_EXISTS(od_user, UserId, od_space, SpaceId)
@@ -343,9 +331,9 @@ user_join_space_token(Config) ->
     })).
 
 
-group_join_space_token(Config) ->
-    {ok, SpaceCreatorUserId} = oz_test_utils:create_user(Config),
-    {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(SpaceCreatorUserId)),
+group_join_space_token(_Config) ->
+    SpaceCreatorUserId = ozt_users:create(),
+    SpaceId = ozt_users:create_space_for(SpaceCreatorUserId),
 
     ?assert(run_invite_token_tests(#testcase{
         token_type = ?INVITE_TOKEN(?GROUP_JOIN_SPACE, SpaceId),
@@ -361,7 +349,7 @@ group_join_space_token(Config) ->
         admin_privilege_to_set_privileges = ?OZ_SPACES_SET_PRIVILEGES,
 
         eligible_consumer_types = [{user, fun(?SUB(user, UserId)) ->
-            {ok, GroupId} = oz_test_utils:create_group(get_test_config(), ?USER(UserId)),
+            GroupId = ozt_users:create_group_for(UserId),
             % Store the group in memory for use in different callbacks
             simple_cache:put({user_group, UserId}, GroupId)
         end}],
@@ -381,7 +369,7 @@ group_join_space_token(Config) ->
         end,
         check_privileges_fun = fun(?SUB(user, UserId), ExpectedPrivileges) ->
             {ok, GroupId} = simple_cache:get({user_group, UserId}),
-            {ok, ActualPrivileges} = oz_rpc(space_logic, get_group_privileges, [?ROOT, SpaceId, GroupId]),
+            ActualPrivileges = ozt_spaces:get_group_privileges(SpaceId, GroupId),
             lists:sort(ExpectedPrivileges) =:= lists:sort(ActualPrivileges)
         end,
 
@@ -395,10 +383,9 @@ group_join_space_token(Config) ->
                     % Other consumer than user does not make sense, but for the
                     % sake of checking if bad consumer is properly handled, try
                     % to use a freshly created group
-                    {ok, GrId} = oz_test_utils:create_group(Config, ?ROOT),
-                    GrId
+                    ozt_groups:create()
             end,
-            Data = #{<<"token">> => ensure_token_serialized(Token)},
+            Data = #{<<"token">> => ozt_tokens:ensure_serialized(Token)},
             #consume_request{
                 logic_call_args = {group_logic, join_space, [Auth, GroupId, Data]},
                 rest_call_args = {[<<"/groups/">>, GroupId, <<"/spaces/join">>], Data},
@@ -407,7 +394,7 @@ group_join_space_token(Config) ->
         end,
 
         delete_target_entity_fun = fun() ->
-            oz_rpc(space_logic, delete, [?ROOT, SpaceId])
+            ozt_spaces:delete(SpaceId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             {ok, GroupId} = simple_cache:get({user_group, UserId}),
@@ -416,9 +403,9 @@ group_join_space_token(Config) ->
     })).
 
 
-support_space_token(Config) ->
-    {ok, SpaceCreatorUserId} = oz_test_utils:create_user(Config),
-    {ok, SpaceId} = oz_test_utils:create_space(Config, ?USER(SpaceCreatorUserId)),
+support_space_token(_Config) ->
+    SpaceCreatorUserId = ozt_users:create(),
+    SpaceId = ozt_users:create_space_for(SpaceCreatorUserId),
 
     ?assert(run_invite_token_tests(#testcase{
         token_type = ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId),
@@ -450,16 +437,14 @@ support_space_token(Config) ->
                     % Other consumer than provider does not make sense, but for the
                     % sake of checking if bad consumer is properly handled, try to
                     % use a storage of another, unrelated provider
-                    {ok, {AnotherProvider, _}} = oz_test_utils:create_provider(Config),
-                    AnotherProvider
+                    ozt_providers:create()
             end,
             % Use a storage with the same id as provider for easier test code
             StorageId = ProviderId,
-            % Ignore errors if already exists
-            oz_rpc(storage_logic, create, [?PROVIDER(ProviderId), StorageId, ?STORAGE_NAME1]),
+            ozt_providers:ensure_storage(ProviderId, StorageId),
             Data = #{
-                <<"token">> => ensure_token_serialized(Token),
-                <<"size">> => oz_test_utils:minimum_support_size(Config)
+                <<"token">> => ozt_tokens:ensure_serialized(Token),
+                <<"size">> => ozt_spaces:minimum_support_size()
             },
             #consume_request{
                 logic_call_args = {storage_logic, support_space, [Auth, StorageId, Data]},
@@ -469,7 +454,7 @@ support_space_token(Config) ->
         end,
 
         delete_target_entity_fun = fun() ->
-            oz_rpc(space_logic, delete, [?ROOT, SpaceId])
+            ozt_spaces:delete(SpaceId)
         end,
         expected_reuse_result_fun = fun(?SUB(?ONEPROVIDER, ProviderId)) ->
             StorageId = ProviderId,
@@ -478,7 +463,7 @@ support_space_token(Config) ->
     })).
 
 
-register_oneprovider_token(Config) ->
+register_oneprovider_token(_Config) ->
     Testcase = fun(AdminUserId, CheckPolicies) -> #testcase{
         token_type = ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, AdminUserId),
 
@@ -504,16 +489,16 @@ register_oneprovider_token(Config) ->
             only_open_policy -> undefined;
             open_and_restricted_policies -> fun
                 (_, {grant, to_invite}) ->
-                    oz_test_utils:set_env(Config, provider_registration_policy, open);
+                    ozt:set_env(provider_registration_policy, open);
                 (_, {revoke, to_invite}) ->
-                    oz_test_utils:set_env(Config, provider_registration_policy, restricted)
+                    ozt:set_env(provider_registration_policy, restricted)
             end
         end,
         check_privileges_fun = undefined,
 
         prepare_consume_request = fun(Auth, Token) ->
             Data = #{
-                <<"token">> => ensure_token_serialized(Token),
+                <<"token">> => ozt_tokens:ensure_serialized(Token),
                 <<"name">> => ?UNIQUE_STRING,
                 <<"subdomainDelegation">> => false,
                 <<"domain">> => <<"oneprovider.example.com">>,
@@ -527,23 +512,23 @@ register_oneprovider_token(Config) ->
         end,
 
         delete_target_entity_fun = fun() ->
-            oz_rpc(user_logic, delete, [?ROOT, AdminUserId])
+            ozt_users:delete(AdminUserId)
         end,
         expected_reuse_result_fun = fun(_) ->
             ok
         end
     } end,
 
-    oz_test_utils:set_env(Config, provider_registration_policy, open),
-    {ok, UserAlpha} = oz_test_utils:create_user(Config),
+    ozt:set_env(provider_registration_policy, open),
+    UserAlpha = ozt_users:create(),
     ?assert(run_invite_token_tests(Testcase(UserAlpha, only_open_policy))),
 
-    oz_test_utils:set_env(Config, provider_registration_policy, restricted),
-    {ok, UserBeta} = oz_test_utils:create_user(Config),
+    ozt:set_env(provider_registration_policy, restricted),
+    UserBeta = ozt_users:create(),
     ?assert(run_invite_token_tests(Testcase(UserBeta, open_and_restricted_policies))).
 
 
-user_join_cluster_token(Config) ->
+user_join_cluster_token(_Config) ->
     Testcase = fun(ClusterId, EligibleToInvite = ?SUB(SubjectType, _)) -> #testcase{
         token_type = ?INVITE_TOKEN(?USER_JOIN_CLUSTER, ClusterId),
 
@@ -565,12 +550,12 @@ user_join_cluster_token(Config) ->
             set_user_privs_in_cluster(ClusterId, UserId, Modification)
         end,
         check_privileges_fun = fun(?SUB(user, UserId), ExpectedPrivileges) ->
-            {ok, ActualPrivileges} = oz_rpc(cluster_logic, get_user_privileges, [?ROOT, ClusterId, UserId]),
+            ActualPrivileges = ozt_clusters:get_user_privileges(ClusterId, UserId),
             lists:sort(ExpectedPrivileges) =:= lists:sort(ActualPrivileges)
         end,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, UserId)}, Token) ->
-            Data = #{<<"token">> => ensure_token_serialized(Token)},
+            Data = #{<<"token">> => ozt_tokens:ensure_serialized(Token)},
             #consume_request{
                 logic_call_args = {user_logic, join_cluster, [Auth, UserId, Data]},
                 rest_call_args = {<<"/user/clusters/join">>, Data},
@@ -580,26 +565,26 @@ user_join_cluster_token(Config) ->
 
         delete_target_entity_fun = fun() ->
             ProviderId = ClusterId,
-            oz_rpc(provider_logic, delete, [?ROOT, ProviderId])
+            ozt_providers:delete(ProviderId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             ?ERROR_RELATION_ALREADY_EXISTS(od_user, UserId, od_cluster, ClusterId)
         end
     } end,
 
-    {ok, ProviderCreatorUserId} = oz_test_utils:create_user(Config),
-    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ProviderCreatorUserId, ?UNIQUE_STRING),
+    ProviderCreatorUserId = ozt_users:create(),
+    ProviderId = ozt_providers:create_for_admin_user(ProviderCreatorUserId),
     ClusterId = ProviderId,
     UserEligibleToInvite = ?SUB(user, ProviderCreatorUserId),
     ?assert(run_invite_token_tests(Testcase(ClusterId, UserEligibleToInvite))),
 
-    {ok, {AnotherProviderId, _}} = oz_test_utils:create_provider(Config),
+    AnotherProviderId = ozt_providers:create(),
     AnotherClusterId = AnotherProviderId,
     ProviderEligibleToInvite = ?SUB(?ONEPROVIDER, AnotherProviderId),
     ?assert(run_invite_token_tests(Testcase(AnotherClusterId, ProviderEligibleToInvite))).
 
 
-group_join_cluster_token(Config) ->
+group_join_cluster_token(_Config) ->
     Testcase = fun(ClusterId, EligibleToInvite = ?SUB(SubjectType, _)) -> #testcase{
         token_type = ?INVITE_TOKEN(?GROUP_JOIN_CLUSTER, ClusterId),
 
@@ -614,7 +599,7 @@ group_join_cluster_token(Config) ->
         admin_privilege_to_set_privileges = ?OZ_CLUSTERS_SET_PRIVILEGES,
 
         eligible_consumer_types = [{user, fun(?SUB(user, UserId)) ->
-            {ok, GroupId} = oz_test_utils:create_group(get_test_config(), ?USER(UserId)),
+            GroupId = ozt_users:create_group_for(UserId),
             % Store the group in memory for use in different callbacks
             simple_cache:put({user_group, UserId}, GroupId)
         end}],
@@ -634,7 +619,7 @@ group_join_cluster_token(Config) ->
         end,
         check_privileges_fun = fun(?SUB(user, UserId), ExpectedPrivileges) ->
             {ok, GroupId} = simple_cache:get({user_group, UserId}),
-            {ok, ActualPrivileges} = oz_rpc(cluster_logic, get_group_privileges, [?ROOT, ClusterId, GroupId]),
+            ActualPrivileges = ozt_clusters:get_group_privileges(ClusterId, GroupId),
             lists:sort(ExpectedPrivileges) =:= lists:sort(ActualPrivileges)
         end,
 
@@ -648,10 +633,9 @@ group_join_cluster_token(Config) ->
                     % Other consumer than user does not make sense, but for the
                     % sake of checking if bad consumer is properly handled, try
                     % to use a freshly created group
-                    {ok, GrId} = oz_test_utils:create_group(Config, ?ROOT),
-                    GrId
+                    ozt_groups:create()
             end,
-            Data = #{<<"token">> => ensure_token_serialized(Token)},
+            Data = #{<<"token">> => ozt_tokens:ensure_serialized(Token)},
             #consume_request{
                 logic_call_args = {group_logic, join_cluster, [Auth, GroupId, Data]},
                 rest_call_args = {[<<"/groups/">>, GroupId, <<"/clusters/join">>], Data},
@@ -661,7 +645,7 @@ group_join_cluster_token(Config) ->
 
         delete_target_entity_fun = fun() ->
             ProviderId = ClusterId,
-            oz_rpc(provider_logic, delete, [?ROOT, ProviderId])
+            ozt_providers:delete(ProviderId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             {ok, GroupId} = simple_cache:get({user_group, UserId}),
@@ -669,21 +653,21 @@ group_join_cluster_token(Config) ->
         end
     } end,
 
-    {ok, ProviderCreatorUserId} = oz_test_utils:create_user(Config),
-    {ok, {ProviderId, _}} = oz_test_utils:create_provider(Config, ProviderCreatorUserId, ?UNIQUE_STRING),
+    ProviderCreatorUserId = ozt_users:create(),
+    ProviderId = ozt_providers:create_for_admin_user(ProviderCreatorUserId),
     ClusterId = ProviderId,
     UserEligibleToInvite = ?SUB(user, ProviderCreatorUserId),
     ?assert(run_invite_token_tests(Testcase(ClusterId, UserEligibleToInvite))),
 
-    {ok, {AnotherProviderId, _}} = oz_test_utils:create_provider(Config),
+    AnotherProviderId = ozt_providers:create(),
     AnotherClusterId = AnotherProviderId,
     ProviderEligibleToInvite = ?SUB(?ONEPROVIDER, AnotherProviderId),
     ?assert(run_invite_token_tests(Testcase(AnotherClusterId, ProviderEligibleToInvite))).
 
 
-user_join_harvester_token(Config) ->
-    HarvesterCreatorUserId = create_admin([?OZ_HARVESTERS_CREATE]),
-    {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?USER(HarvesterCreatorUserId)),
+user_join_harvester_token(_Config) ->
+    HarvesterCreatorUserId = ozt_users:create(),
+    HarvesterId = ozt_users:create_harvester_for(HarvesterCreatorUserId),
 
     ?assert(run_invite_token_tests(#testcase{
         token_type = ?INVITE_TOKEN(?USER_JOIN_HARVESTER, HarvesterId),
@@ -706,12 +690,12 @@ user_join_harvester_token(Config) ->
             set_user_privs_in_harvester(HarvesterId, UserId, Modification)
         end,
         check_privileges_fun = fun(?SUB(user, UserId), ExpectedPrivileges) ->
-            {ok, ActualPrivileges} = oz_rpc(harvester_logic, get_user_privileges, [?ROOT, HarvesterId, UserId]),
+            ActualPrivileges = ozt_harvesters:get_user_privileges(HarvesterId, UserId),
             lists:sort(ExpectedPrivileges) =:= lists:sort(ActualPrivileges)
         end,
 
         prepare_consume_request = fun(Auth = #auth{subject = ?SUB(_, UserId)}, Token) ->
-            Data = #{<<"token">> => ensure_token_serialized(Token)},
+            Data = #{<<"token">> => ozt_tokens:ensure_serialized(Token)},
             #consume_request{
                 logic_call_args = {user_logic, join_harvester, [Auth, UserId, Data]},
                 rest_call_args = {<<"/user/harvesters/join">>, Data},
@@ -720,7 +704,7 @@ user_join_harvester_token(Config) ->
         end,
 
         delete_target_entity_fun = fun() ->
-            oz_rpc(harvester_logic, delete, [?ROOT, HarvesterId])
+            ozt_harvesters:delete(HarvesterId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             ?ERROR_RELATION_ALREADY_EXISTS(od_user, UserId, od_harvester, HarvesterId)
@@ -728,9 +712,9 @@ user_join_harvester_token(Config) ->
     })).
 
 
-group_join_harvester_token(Config) ->
-    HarvesterCreatorUserId = create_admin([?OZ_HARVESTERS_CREATE]),
-    {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?USER(HarvesterCreatorUserId)),
+group_join_harvester_token(_Config) ->
+    HarvesterCreatorUserId = ozt_users:create(),
+    HarvesterId = ozt_users:create_harvester_for(HarvesterCreatorUserId),
 
     ?assert(run_invite_token_tests(#testcase{
         token_type = ?INVITE_TOKEN(?GROUP_JOIN_HARVESTER, HarvesterId),
@@ -746,7 +730,7 @@ group_join_harvester_token(Config) ->
         admin_privilege_to_set_privileges = ?OZ_HARVESTERS_SET_PRIVILEGES,
 
         eligible_consumer_types = [{user, fun(?SUB(user, UserId)) ->
-            {ok, GroupId} = oz_test_utils:create_group(get_test_config(), ?USER(UserId)),
+            GroupId = ozt_users:create_group_for(UserId),
             % Store the group in memory for use in different callbacks
             simple_cache:put({user_group, UserId}, GroupId)
         end}],
@@ -766,7 +750,7 @@ group_join_harvester_token(Config) ->
         end,
         check_privileges_fun = fun(?SUB(user, UserId), ExpectedPrivileges) ->
             {ok, GroupId} = simple_cache:get({user_group, UserId}),
-            {ok, ActualPrivileges} = oz_rpc(harvester_logic, get_group_privileges, [?ROOT, HarvesterId, GroupId]),
+            ActualPrivileges = ozt_harvesters:get_group_privileges(HarvesterId, GroupId),
             lists:sort(ExpectedPrivileges) =:= lists:sort(ActualPrivileges)
         end,
 
@@ -780,10 +764,9 @@ group_join_harvester_token(Config) ->
                     % Other consumer than user does not make sense, but for the
                     % sake of checking if bad consumer is properly handled, try
                     % to use a freshly created group
-                    {ok, GrId} = oz_test_utils:create_group(Config, ?ROOT),
-                    GrId
+                    ozt_groups:create()
             end,
-            Data = #{<<"token">> => ensure_token_serialized(Token)},
+            Data = #{<<"token">> => ozt_tokens:ensure_serialized(Token)},
             #consume_request{
                 logic_call_args = {group_logic, join_harvester, [Auth, GroupId, Data]},
                 rest_call_args = {[<<"/groups/">>, GroupId, <<"/harvesters/join">>], Data},
@@ -792,7 +775,7 @@ group_join_harvester_token(Config) ->
         end,
 
         delete_target_entity_fun = fun() ->
-            oz_rpc(harvester_logic, delete, [?ROOT, HarvesterId])
+            ozt_harvesters:delete(HarvesterId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             {ok, GroupId} = simple_cache:get({user_group, UserId}),
@@ -801,9 +784,9 @@ group_join_harvester_token(Config) ->
     })).
 
 
-space_join_harvester_token(Config) ->
-    HarvesterCreatorUserId = create_admin([?OZ_HARVESTERS_CREATE]),
-    {ok, HarvesterId} = oz_test_utils:create_harvester(Config, ?USER(HarvesterCreatorUserId)),
+space_join_harvester_token(_Config) ->
+    HarvesterCreatorUserId = ozt_users:create(),
+    HarvesterId = ozt_users:create_harvester_for(HarvesterCreatorUserId),
 
     ?assert(run_invite_token_tests(#testcase{
         token_type = ?INVITE_TOKEN(?SPACE_JOIN_HARVESTER, HarvesterId),
@@ -819,7 +802,7 @@ space_join_harvester_token(Config) ->
         admin_privilege_to_set_privileges = undefined,
 
         eligible_consumer_types = [{user, fun(?SUB(user, UserId)) ->
-            {ok, SpaceId} = oz_test_utils:create_space(get_test_config(), ?USER(UserId)),
+            SpaceId = ozt_users:create_space_for(UserId),
             % Store the space in memory for use in different callbacks
             simple_cache:put({user_space, UserId}, SpaceId)
         end}],
@@ -849,10 +832,9 @@ space_join_harvester_token(Config) ->
                     % Other consumer than user does not make sense, but for the
                     % sake of checking if bad consumer is properly handled, try
                     % to use a freshly created group
-                    {ok, SpId} = oz_test_utils:create_space(Config, ?ROOT),
-                    SpId
+                    ozt_spaces:create()
             end,
-            Data = #{<<"token">> => ensure_token_serialized(Token)},
+            Data = #{<<"token">> => ozt_tokens:ensure_serialized(Token)},
             #consume_request{
                 logic_call_args = {space_logic, join_harvester, [Auth, SpaceId, Data]},
                 rest_call_args = {[<<"/spaces/">>, SpaceId, <<"/harvesters/join">>], Data},
@@ -861,7 +843,7 @@ space_join_harvester_token(Config) ->
         end,
 
         delete_target_entity_fun = fun() ->
-            oz_rpc(harvester_logic, delete, [?ROOT, HarvesterId])
+            ozt_harvesters:delete(HarvesterId)
         end,
         expected_reuse_result_fun = fun(?SUB(user, UserId)) ->
             {ok, SpaceId} = simple_cache:get({user_space, UserId}),
@@ -894,8 +876,8 @@ run_invite_token_tests(Testcase) ->
         check_subject_or_target_entity_deleted_scenarios(Testcase),
         true
     catch Type:Reason ->
-        ct:pal("Invite token tests failed due to ~p:~p~nStacktrace: ~p", [
-            Type, Reason, erlang:get_stacktrace()
+        ct:pal("Invite token tests failed due to ~p:~p~nStacktrace: ~s", [
+            Type, Reason, lager:pr_stacktrace(erlang:get_stacktrace())
         ]),
         false
     end.
@@ -903,18 +885,15 @@ run_invite_token_tests(Testcase) ->
 
 % Check if trying to consume a bad token returns proper errors
 check_bad_token_scenarios(Tc = #testcase{token_type = ?INVITE_TOKEN(InviteTokenType, TargetEntityId)}) ->
-    {ok, {DummyProvider, _}} = oz_test_utils:create_provider(get_test_config()),
-    {ok, DummyUser} = oz_test_utils:create_user(get_test_config()),
-    {ok, {SessId, _}} = oz_test_utils:log_in(get_test_config(), DummyUser),
-    {ok, AccessToken} = oz_rpc(token_logic, create_provider_named_token, [
-        ?PROVIDER(DummyProvider), DummyProvider, #{<<"name">> => ?UNIQUE_STRING}
-    ]),
-    {ok, {GuiAccessToken, _}} = oz_rpc(token_logic, create_gui_access_token, [
-        ?USER(DummyUser), DummyUser, SessId, ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)
-    ]),
+    DummyProvider = ozt_providers:create(),
+    DummyUser = ozt_users:create(),
+    SessId = ozt_http:simulate_login(DummyUser),
+
+    AccessToken = ozt_tokens:create(named, ?SUB(?ONEPROVIDER, DummyProvider)),
+    GuiAccessToken = ozt_tokens:create_gui_access_token(DummyUser, SessId, ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)),
     BadToken = <<"not-a-token-definitely-I've-seen-one-I-would-know">>,
     ForgedToken = tokens:construct(#token{
-        onezone_domain = oz_test_utils:oz_domain(get_test_config()),
+        onezone_domain = ozt:get_domain(),
         id = <<"123123123123">>,
         subject = ?SUB(user, <<"123">>),
         type = ?INVITE_TOKEN(InviteTokenType, TargetEntityId),
@@ -950,9 +929,9 @@ check_bad_token_scenarios(Tc = #testcase{token_type = ?INVITE_TOKEN(InviteTokenT
 %   Subject - user or provider for whom the token is created - can be perceived
 %             as the one who invites
 check_invalid_subject_scenarios(Tc = #testcase{token_type = TokenType}) ->
-    {ok, SomeUser} = oz_test_utils:create_user(get_test_config()),
-    {ok, {SomeProvider, _}} = oz_test_utils:create_provider(get_test_config()),
-    TokenManager = create_admin([?OZ_TOKENS_MANAGE]),
+    SomeUser = ozt_users:create(),
+    SomeProvider = ozt_providers:create(),
+    TokenManager = ozt_users:create_admin([?OZ_TOKENS_MANAGE]),
 
     assert_creation_fails(
         ?USER(SomeUser), ?SUB(user, SomeUser), #{<<"type">> => TokenType},
@@ -988,8 +967,8 @@ check_invalid_subject_scenarios(Tc = #testcase{token_type = TokenType}) ->
 % has the required privileges. Admin with ?OZ_TOKENS_MANAGE privileges should
 % be able to create tokens on behalf of the eligible subject.
 check_valid_subject_scenarios(Tc = #testcase{token_type = TokenType}) ->
-    TokenManager = create_admin([?OZ_TOKENS_MANAGE]),
-    AdminOfTargetEntity = create_admin([Tc#testcase.admin_privilege_to_invite]),
+    TokenManager = ozt_users:create_admin([?OZ_TOKENS_MANAGE]),
+    AdminOfTargetEntity = ozt_users:create_admin([Tc#testcase.admin_privilege_to_invite]),
 
     % Admin that has the invite privileges in target entity can issue invites to the entity
     assert_creation_succeeds(?USER(TokenManager), ?SUB(user, AdminOfTargetEntity), #{<<"type">> => TokenType}),
@@ -1028,9 +1007,7 @@ check_valid_subject_scenarios(Tc = #testcase{token_type = TokenType}) ->
                     % If the invite privileges are revoked in the meantime, the
                     % token should stop working
                     lists:foreach(fun(EligibleConsumerType) ->
-                        {ok, Token} = create_invite_token(
-                            Persistence, Auth, EligibleSubject, #{<<"type">> => TokenType}
-                        ),
+                        Token = ozt_tokens:create(Persistence, EligibleSubject, TokenType),
                         ModifyPrivsFun(EligibleSubject, {revoke, to_invite}),
                         Consumer = create_consumer_by_type(EligibleConsumerType),
                         ?assertMatch(?ERROR_INVITE_TOKEN_SUBJECT_NOT_AUTHORIZED, consume_token(Tc, Consumer, Token)),
@@ -1046,9 +1023,8 @@ check_valid_subject_scenarios(Tc = #testcase{token_type = TokenType}) ->
 check_invalid_consumer_scenarios(Tc = #testcase{token_type = TokenType}) ->
     lists:foreach(fun(Persistence) ->
         lists:foreach(fun(EligibleSubject) ->
-            Auth = #auth{subject = EligibleSubject},
             ensure_privileges_to_invite(Tc, EligibleSubject),
-            {ok, Token} = create_invite_token(Persistence, Auth, EligibleSubject, #{<<"type">> => TokenType}),
+            Token = ozt_tokens:create(Persistence, EligibleSubject, TokenType),
             EligibleConsumerTypes = Tc#testcase.eligible_consumer_types,
             InvalidConsumerTypes = all_consumer_types() -- EligibleConsumerTypes,
             lists:foreach(fun(InvalidConsumerType) ->
@@ -1073,10 +1049,9 @@ check_valid_consumer_scenarios(Tc = #testcase{token_type = TokenType}) ->
     CheckPrivilegesFun = Tc#testcase.check_privileges_fun,
     lists:foreach(fun(Persistence) ->
         lists:foreach(fun(EligibleSubject) ->
-            Auth = #auth{subject = EligibleSubject},
             ensure_privileges_to_invite(Tc, EligibleSubject),
             lists:foreach(fun(EligibleConsumerType) ->
-                {ok, Token} = create_invite_token(Persistence, Auth, EligibleSubject, #{<<"type">> => TokenType}),
+                Token = ozt_tokens:create(Persistence, EligibleSubject, TokenType),
                 Consumer = create_consumer_by_type(EligibleConsumerType),
                 case Tc#testcase.requires_privileges_to_consume of
                     false ->
@@ -1095,12 +1070,13 @@ check_valid_consumer_scenarios(Tc = #testcase{token_type = TokenType}) ->
 
             % Check admin privileges to consume
             Tc#testcase.requires_privileges_to_consume andalso lists:foreach(fun(EligibleConsumerType) ->
-                {ok, Token} = create_invite_token(Persistence, Auth, EligibleSubject, #{<<"type">> => TokenType}),
-                Consumer = create_consumer_by_type(EligibleConsumerType),
+                Token = ozt_tokens:create(Persistence, EligibleSubject, TokenType),
+                % Privileges are required only for user consumer type
+                Consumer = ?SUB(user, UserId) = create_consumer_by_type(EligibleConsumerType),
                 ModifyPrivsFun(Consumer, {revoke, to_consume}),
-                set_admin_privileges(Consumer, revoke, [Tc#testcase.admin_privilege_to_consume]),
+                ozt_users:revoke_oz_privileges(UserId, [Tc#testcase.admin_privilege_to_consume]),
                 ?assertMatch(?ERROR_FORBIDDEN, consume_token(Tc, Consumer, Token)),
-                set_admin_privileges(Consumer, grant, [Tc#testcase.admin_privilege_to_consume]),
+                ozt_users:grant_oz_privileges(UserId, [Tc#testcase.admin_privilege_to_consume]),
                 ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token)),
                 Tc#testcase.supports_carried_privileges andalso
                     CheckPrivilegesFun(Consumer, Tc#testcase.default_carried_privileges)
@@ -1116,10 +1092,9 @@ check_adding_carried_privileges_to_temporary_token(Tc = #testcase{token_type = T
     ModifyPrivsFun = Tc#testcase.modify_privileges_fun,
     CheckPrivilegesFun = Tc#testcase.check_privileges_fun,
     lists:foreach(fun(EligibleSubject) ->
-        Auth = #auth{subject = EligibleSubject},
         Tc#testcase.requires_privileges_to_set_privileges andalso ModifyPrivsFun(EligibleSubject, {grant, to_set_privs}),
         lists:foreach(fun(EligibleConsumerType) ->
-            {ok, Token} = create_invite_token(temporary, Auth, EligibleSubject, #{
+            Token = ozt_tokens:create(temporary, EligibleSubject, #{
                 <<"type">> => TokenType, <<"privileges">> => Tc#testcase.allowed_carried_privileges
             }),
             Consumer = create_consumer_with_privs_to_consume(Tc, EligibleConsumerType),
@@ -1138,11 +1113,15 @@ check_adding_carried_privileges_to_temporary_token(Tc = #testcase{token_type = T
 check_adding_carried_privileges_to_named_token(#testcase{supports_carried_privileges = false}) ->
     ok;
 check_adding_carried_privileges_to_named_token(Tc = #testcase{token_type = TokenType}) ->
-    AdminWithoutSetPrivs = create_admin([Tc#testcase.admin_privilege_to_invite]),
-    AdminWithSetPrivs = create_admin([Tc#testcase.admin_privilege_to_invite, Tc#testcase.admin_privilege_to_set_privileges]),
+    AdminWithoutSetPrivs = ozt_users:create_admin([
+        Tc#testcase.admin_privilege_to_invite
+    ]),
+    AdminWithSetPrivs = ozt_users:create_admin([
+        Tc#testcase.admin_privilege_to_invite, Tc#testcase.admin_privilege_to_set_privileges
+    ]),
 
     AllowedPrivileges = Tc#testcase.allowed_carried_privileges,
-    CustomPrivileges = utils:random_sublist(AllowedPrivileges),
+    CustomPrivileges = lists_utils:random_sublist(AllowedPrivileges),
     DefaultPrivileges = Tc#testcase.default_carried_privileges,
     ModifyPrivsFun = Tc#testcase.modify_privileges_fun,
     CheckPrivilegesFun = Tc#testcase.check_privileges_fun,
@@ -1188,7 +1167,7 @@ check_adding_carried_privileges_to_named_token(Tc = #testcase{token_type = Token
         % Additional privileges are required to create a token carrying privileges,
         % as well as at the moment of consumption
         Tc#testcase.requires_privileges_to_set_privileges andalso lists:foreach(fun(EligibleConsumerType) ->
-            {ok, Token} = create_invite_token(named, Auth, EligibleSubject, #{
+            Token = ozt_tokens:create(named, EligibleSubject, #{
                 <<"type">> => TokenType, <<"privileges">> => CustomPrivileges
             }),
             Consumer = create_consumer_with_privs_to_consume(Tc, EligibleConsumerType),
@@ -1227,9 +1206,8 @@ check_adding_carried_privileges_to_named_token(Tc = #testcase{token_type = Token
 % makes them inherently multi-use within time validity.
 check_multi_use_temporary_token(Tc = #testcase{token_type = TokenType}) ->
     lists:foreach(fun(EligibleSubject) ->
-        Auth = #auth{subject = EligibleSubject},
         ensure_privileges_to_invite(Tc, EligibleSubject),
-        {ok, Token} = create_invite_token(temporary, Auth, EligibleSubject, #{
+        Token = ozt_tokens:create(temporary, EligibleSubject, #{
             <<"type">> => TokenType, <<"usageLimit">> => 3
         }),
         % Although usage limit was requested, the temporary token should always
@@ -1245,14 +1223,13 @@ check_multi_use_temporary_token(Tc = #testcase{token_type = TokenType}) ->
 % Named tokens can have a usage limit. If not specified, it defaults to infinite.
 check_multi_use_named_token(Tc = #testcase{token_type = TokenType}) ->
     lists:foreach(fun(EligibleSubject) ->
-        Auth = #auth{subject = EligibleSubject},
         ensure_privileges_to_invite(Tc, EligibleSubject),
 
-        ?ERROR_BAD_VALUE_TOO_LOW(<<"usageLimit">>, 1) = create_invite_token(
-            named, Auth, EligibleSubject, #{<<"type">> => TokenType, <<"usageLimit">> => 0}
+        ?ERROR_BAD_VALUE_TOO_LOW(<<"usageLimit">>, 1) = ozt_tokens:try_create(
+            named, EligibleSubject, #{<<"type">> => TokenType, <<"usageLimit">> => 0}
         ),
 
-        {ok, SingleUseToken} = create_invite_token(named, Auth, EligibleSubject, #{
+        SingleUseToken = ozt_tokens:create(named, EligibleSubject, #{
             <<"type">> => TokenType, <<"usageLimit">> => 1
         }),
         ConsumerAlpha = create_consumer_with_privs_to_consume(Tc, random_eligible),
@@ -1261,7 +1238,7 @@ check_multi_use_named_token(Tc = #testcase{token_type = TokenType}) ->
         ?assertMatch(?ERROR_INVITE_TOKEN_USAGE_LIMIT_REACHED, consume_token(Tc, ConsumerBeta, SingleUseToken)),
 
         UsageLimit = 17,
-        {ok, MultiUseToken} = create_invite_token(named, Auth, EligibleSubject, #{
+        MultiUseToken = ozt_tokens:create(named, EligibleSubject, #{
             <<"type">> => TokenType, <<"usageLimit">> => UsageLimit
         }),
 
@@ -1282,19 +1259,18 @@ check_multi_use_privileges_carrying_named_token(#testcase{supports_carried_privi
     ok;
 check_multi_use_privileges_carrying_named_token(Tc = #testcase{token_type = TokenType}) ->
     AllowedPrivileges = Tc#testcase.allowed_carried_privileges,
-    CustomPrivileges = utils:random_sublist(AllowedPrivileges),
+    CustomPrivileges = lists_utils:random_sublist(AllowedPrivileges),
     ModifyPrivsFun = Tc#testcase.modify_privileges_fun,
     CheckPrivilegesFun = Tc#testcase.check_privileges_fun,
 
     lists:foreach(fun(EligibleSubject) ->
-        Auth = #auth{subject = EligibleSubject},
         Tc#testcase.requires_privileges_to_invite andalso ModifyPrivsFun(EligibleSubject, {grant, to_invite}),
         Tc#testcase.requires_privileges_to_set_privileges andalso ModifyPrivsFun(EligibleSubject, {grant, to_set_privs}),
 
-        {ok, Token} = create_invite_token(named, Auth, EligibleSubject, #{
+        Token = ozt_tokens:create(named, EligibleSubject, #{
             <<"type">> => TokenType, <<"usageLimit">> => 3, <<"privileges">> => CustomPrivileges
         }),
-        ConsumerAlpha = create_consumer_by_type(utils:random_element(Tc#testcase.eligible_consumer_types)),
+        ConsumerAlpha = create_consumer_by_type(lists_utils:random_element(Tc#testcase.eligible_consumer_types)),
         case Tc#testcase.requires_privileges_to_consume of
             false ->
                 ?assertMatch({ok, _}, consume_token(Tc, ConsumerAlpha, Token));
@@ -1319,15 +1295,17 @@ check_multi_use_privileges_carrying_named_token(Tc = #testcase{token_type = Toke
         ?assertMatch({ok, _}, consume_token(Tc, ConsumerBeta, Token)),
         CheckPrivilegesFun(ConsumerBeta, CustomPrivileges),
         % There should be 1 use left
-        ConsumerGamma = create_consumer_by_type(utils:random_element(Tc#testcase.eligible_consumer_types)),
+        ConsumerGamma = create_consumer_by_type(lists_utils:random_element(Tc#testcase.eligible_consumer_types)),
         case Tc#testcase.requires_privileges_to_consume of
             false ->
                 ?assertMatch({ok, _}, consume_token(Tc, ConsumerGamma, Token));
             true ->
+                % Privileges are required only for user consumer type
+                ?SUB(user, UserId) = ConsumerGamma,
                 ModifyPrivsFun(ConsumerGamma, {revoke, to_consume}),
-                set_admin_privileges(ConsumerGamma, revoke, [Tc#testcase.admin_privilege_to_consume]),
+                ozt_users:revoke_oz_privileges(UserId, [Tc#testcase.admin_privilege_to_consume]),
                 ?assertMatch(?ERROR_FORBIDDEN, consume_token(Tc, ConsumerGamma, Token)),
-                set_admin_privileges(ConsumerGamma, grant, [Tc#testcase.admin_privilege_to_consume]),
+                ozt_users:grant_oz_privileges(UserId, [Tc#testcase.admin_privilege_to_consume]),
                 ?assertMatch({ok, _}, consume_token(Tc, ConsumerGamma, Token))
         end,
         CheckPrivilegesFun(ConsumerGamma, CustomPrivileges),
@@ -1340,23 +1318,17 @@ check_multi_use_privileges_carrying_named_token(Tc = #testcase{token_type = Toke
 % Temporary tokens are not revocable individually, but can be revoked all at once
 check_temporary_token_revocation(Tc = #testcase{token_type = TokenType}) ->
     lists:foreach(fun(EligibleSubject) ->
-        Auth = #auth{subject = EligibleSubject},
         ensure_privileges_to_invite(Tc, EligibleSubject),
-        {ok, TokenAlpha} = create_invite_token(temporary, Auth, EligibleSubject, #{<<"type">> => TokenType}),
-        {ok, TokenBeta} = create_invite_token(temporary, Auth, EligibleSubject, #{<<"type">> => TokenType}),
-        {ok, TokenGamma} = create_invite_token(temporary, Auth, EligibleSubject, #{<<"type">> => TokenType}),
+        TokenAlpha = ozt_tokens:create(temporary, EligibleSubject, TokenType),
+        TokenBeta = ozt_tokens:create(temporary, EligibleSubject, TokenType),
+        TokenGamma = ozt_tokens:create(temporary, EligibleSubject, TokenType),
         lists:foreach(fun(_) ->
             lists:foreach(fun(Token) ->
                 Consumer = create_consumer_with_privs_to_consume(Tc, random_eligible),
                 ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token))
             end, [TokenAlpha, TokenBeta, TokenGamma])
         end, lists:seq(1, 9)),
-        case EligibleSubject of
-            ?SUB(user, UserId) ->
-                oz_rpc(token_logic, revoke_all_user_temporary_tokens, [?USER(UserId), UserId]);
-            ?SUB(?ONEPROVIDER, PrId) ->
-                oz_rpc(token_logic, revoke_all_provider_temporary_tokens, [?PROVIDER(PrId), PrId])
-        end,
+        ozt_tokens:revoke_all_temporary_tokens(EligibleSubject),
         lists:foreach(fun(Token) ->
             Consumer = create_consumer_with_privs_to_consume(Tc, random_eligible),
             ?assertMatch(?ERROR_TOKEN_INVALID, consume_token(Tc, Consumer, Token))
@@ -1367,17 +1339,14 @@ check_temporary_token_revocation(Tc = #testcase{token_type = TokenType}) ->
 % Named tokens are revocable individually. The revocation can be undone at will.
 check_named_token_revocation(Tc = #testcase{token_type = TokenType}) ->
     lists:foreach(fun(EligibleSubject) ->
-        Auth = #auth{subject = EligibleSubject},
         ensure_privileges_to_invite(Tc, EligibleSubject),
-        {ok, #token{id = TokenId} = Token} = create_invite_token(named, Auth, EligibleSubject, #{
-            <<"type">> => TokenType
-        }),
+        Token = ozt_tokens:create(named, EligibleSubject, TokenType),
         Consumer = create_consumer_with_privs_to_consume(Tc, random_eligible),
-        oz_rpc(token_logic, update_named_token, [Auth, TokenId, #{<<"revoked">> => true}]),
+        ozt_tokens:toggle_revoked(Token, true),
         ?assertMatch(?ERROR_TOKEN_REVOKED, consume_token(Tc, Consumer, Token)),
-        oz_rpc(token_logic, update_named_token, [Auth, TokenId, #{<<"revoked">> => false}]),
+        ozt_tokens:toggle_revoked(Token, false),
         ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token)),
-        oz_rpc(token_logic, update_named_token, [Auth, TokenId, #{<<"revoked">> => true}]),
+        ozt_tokens:toggle_revoked(Token, true),
         ?assertMatch(?ERROR_TOKEN_REVOKED, consume_token(Tc, Consumer, Token))
     end, Tc#testcase.eligible_to_invite).
 
@@ -1391,13 +1360,12 @@ check_named_token_revocation(Tc = #testcase{token_type = TokenType}) ->
 check_token_reuse(Tc = #testcase{token_type = TokenType}) ->
     ExpectedReuseResultFun = Tc#testcase.expected_reuse_result_fun,
     lists:foreach(fun(EligibleSubject) ->
-        Auth = #auth{subject = EligibleSubject},
         ensure_privileges_to_invite(Tc, EligibleSubject),
         lists:foreach(fun(EligibleConsumerType) ->
             % Check two tokens to the same target entity
             lists:foreach(fun(Persistence) ->
-                {ok, TokenAlpha} = create_invite_token(Persistence, Auth, EligibleSubject, #{<<"type">> => TokenType}),
-                {ok, TokenBeta} = create_invite_token(Persistence, Auth, EligibleSubject, #{<<"type">> => TokenType}),
+                TokenAlpha = ozt_tokens:create(Persistence, EligibleSubject, TokenType),
+                TokenBeta = ozt_tokens:create(Persistence, EligibleSubject, TokenType),
                 Consumer = create_consumer_with_privs_to_consume(Tc, EligibleConsumerType),
                 ?assertMatch({ok, _}, consume_token(Tc, Consumer, TokenAlpha)),
                 case ExpectedReuseResultFun(Consumer) of
@@ -1410,7 +1378,7 @@ check_token_reuse(Tc = #testcase{token_type = TokenType}) ->
 
             % Check one multi-use token (only named tokens can be multi-use)
             UsageLimit = 6,
-            {ok, MultiUseToken} = create_invite_token(named, Auth, EligibleSubject, #{
+            MultiUseToken = ozt_tokens:create(named, EligibleSubject, #{
                 <<"type">> => TokenType, <<"usageLimit">> => UsageLimit
             }),
             AnotherConsumer = create_consumer_with_privs_to_consume(Tc, EligibleConsumerType),
@@ -1437,7 +1405,7 @@ check_token_reuse(Tc = #testcase{token_type = TokenType}) ->
 
 % It should not be possible to create a token for an inexistent target entity id
 check_invalid_target_scenarios(Tc = #testcase{token_type = ?INVITE_TOKEN(InviteTokenType, _)}) ->
-    Admin = create_admin(privileges:oz_admin()),
+    Admin = ozt_users:create_admin(),
     lists:foreach(fun(Persistence) ->
         lists:foreach(fun(EligibleSubject) ->
             EligibleAuth = #auth{subject = EligibleSubject},
@@ -1446,7 +1414,7 @@ check_invalid_target_scenarios(Tc = #testcase{token_type = ?INVITE_TOKEN(InviteT
                 BadTokenType = ?INVITE_TOKEN(InviteTokenType, <<"1234">>),
                 Error = ?assertMatch(
                     {error, _},
-                    create_invite_token(Persistence, Auth, EligibleSubject, #{<<"type">> => BadTokenType})
+                    ozt_tokens:try_create(Auth, Persistence, EligibleSubject, #{<<"type">> => BadTokenType})
                 ),
                 ?assert(lists:member(Error, [?ERROR_FORBIDDEN, ?ERROR_INVITE_TOKEN_TARGET_ID_INVALID(<<"1234">>)]))
             end, [EligibleAuth, ?USER(Admin)])
@@ -1458,22 +1426,22 @@ check_invalid_target_scenarios(Tc = #testcase{token_type = ?INVITE_TOKEN(InviteT
 check_token_caveats_handling(Tc = #testcase{token_type = TokenType}) ->
     lists:foreach(fun(Persistence) ->
         lists:foreach(fun(EligibleSubject) ->
-            Auth = #auth{subject = EligibleSubject, peer_ip = ?PEER_IP},
             ensure_privileges_to_invite(Tc, EligibleSubject),
             lists:foreach(fun(_) ->
                 Consumer = create_consumer_with_privs_to_consume(Tc, random_eligible),
-                RandCorrectCaveats = utils:random_sublist(gen_correct_caveats(Consumer)),
-                RandUnverifiedCaveats = utils:random_sublist(gen_unverified_caveats(Consumer)),
-                {ok, Token} = create_invite_token(Persistence, Auth, EligibleSubject, #{
+                RandCorrectCaveats = lists_utils:random_sublist(gen_correct_caveats(Consumer)),
+                RandUnverifiedCaveats = lists_utils:random_sublist(gen_unverified_caveats(Consumer)),
+                Token = ozt_tokens:create(Persistence, EligibleSubject, #{
                     <<"type">> => TokenType,
                     <<"caveats">> => RandCorrectCaveats ++ RandUnverifiedCaveats
                 }),
+                Result = consume_token(Tc, Consumer, Token),
                 case RandUnverifiedCaveats of
                     [] ->
-                        ?assertMatch({ok, _}, consume_token(Tc, Consumer, Token));
+                        ?assertMatch({ok, _}, Result);
                     _ ->
-                        ?assertMatch(?ERROR_TOKEN_CAVEAT_UNVERIFIED(_), consume_token(Tc, Consumer, Token)),
-                        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(UnverifiedCaveat) = consume_token(Tc, Consumer, Token),
+                        ?assertMatch(?ERROR_TOKEN_CAVEAT_UNVERIFIED(_), Result),
+                        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(UnverifiedCaveat) = Result,
                         ?assert(lists:member(UnverifiedCaveat, RandUnverifiedCaveats))
                 end
             end, lists:seq(1, 20))
@@ -1482,9 +1450,10 @@ check_token_caveats_handling(Tc = #testcase{token_type = TokenType}) ->
 
 
 gen_correct_caveats(Consumer) -> lists:flatten([
-    #cv_time{valid_until = oz_test_utils:cluster_time_seconds(get_test_config()) + 10},
+    #cv_time{valid_until = ozt:cluster_time_seconds() + 10},
     #cv_ip{whitelist = [?CORRECT_MASK_1]},
     #cv_ip{whitelist = [?CORRECT_MASK_2]},
+    #cv_ip{whitelist = [{{0, 0, 0, 0}, 8}, ?CORRECT_MASK_1, ?CORRECT_MASK_2]},
     #cv_asn{whitelist = [?CLIENT_ASN]},
     #cv_country{type = whitelist, list = [?CLIENT_COUNTRY]},
     #cv_country{type = blacklist, list = [?INCORRECT_COUNTRY]},
@@ -1492,8 +1461,8 @@ gen_correct_caveats(Consumer) -> lists:flatten([
     #cv_region{type = blacklist, list = ?INCORRECT_REGIONS},
     case Consumer of
         ?SUB(user, UserId) ->
-            {ok, Group} = oz_test_utils:create_group(get_test_config(), ?USER(UserId)),
-            oz_test_utils:ensure_entity_graph_is_up_to_date(get_test_config()),
+            Group = ozt_users:create_group_for(UserId),
+            ozt:reconcile_entity_graph(),
             [
                 #cv_audience{whitelist = [?AUD(group, Group)]},
                 #cv_audience{whitelist = [?AUD(group, <<"*">>)]},
@@ -1512,7 +1481,7 @@ gen_correct_caveats(Consumer) -> lists:flatten([
 
 
 gen_unverified_caveats(Consumer) -> lists:flatten([
-    #cv_time{valid_until = oz_test_utils:cluster_time_seconds(get_test_config()) - 1},
+    #cv_time{valid_until = ozt:cluster_time_seconds() - 1},
     #cv_authorization_none{},
     #cv_ip{whitelist = [?INCORRECT_MASK_1]},
     #cv_ip{whitelist = [?INCORRECT_MASK_2]},
@@ -1564,9 +1533,8 @@ check_subject_or_target_entity_deleted_scenarios(Tc = #testcase{token_type = Tok
     ?INVITE_TOKEN(_, TargetEntityId) = TokenType,
     TokensToCheck = lists:flatmap(fun(Persistence) ->
         lists:flatmap(fun(EligibleSubject) ->
-            Auth = #auth{subject = EligibleSubject},
             ensure_privileges_to_invite(Tc, EligibleSubject),
-            {ok, Token} = create_invite_token(Persistence, Auth, EligibleSubject, #{<<"type">> => TokenType}),
+            Token = ozt_tokens:create(Persistence, EligibleSubject, TokenType),
             [{EligibleSubject, Token}]
         end, Tc#testcase.eligible_to_invite)
     end, [named, temporary]),
@@ -1585,7 +1553,10 @@ check_subject_or_target_entity_deleted_scenarios(Tc = #testcase{token_type = Tok
 
     % If the token subject is deleted, the token should become invalid
     lists:foreach(fun({Subject, TokenToCheck}) ->
-        delete_subject(Subject),
+        case Subject of
+            ?SUB(user, UserId) -> ozt:rpc(user_logic, delete, [?ROOT, UserId]);
+            ?SUB(?ONEPROVIDER, PrId) -> ozt:rpc(provider_logic, delete, [?ROOT, PrId])
+        end,
         lists:foreach(fun(EligibleConsumerType) ->
             Consumer = create_consumer_with_privs_to_consume(Tc, EligibleConsumerType),
             ?assertMatch(?ERROR_TOKEN_INVALID, consume_token(Tc, Consumer, TokenToCheck))
@@ -1630,12 +1601,12 @@ set_user_privs_in_harvester(HarvesterId, UserId, {GrantOrRevoke, to_set_privs}) 
 % privileges) or revokes given privileges. These two scenarios which should be
 % equivalent from the point of view of authorization to invite .
 set_user_privs(LogicModule, EntityId, UserId, grant, Privileges) ->
-    oz_rpc(LogicModule, add_user, [?ROOT, EntityId, UserId]),
-    oz_rpc(LogicModule, update_user_privileges, [?ROOT, EntityId, UserId, Privileges, []]);
+    ozt:rpc(LogicModule, add_user, [?ROOT, EntityId, UserId]),
+    ozt:rpc(LogicModule, update_user_privileges, [?ROOT, EntityId, UserId, Privileges, []]);
 set_user_privs(LogicModule, EntityId, UserId, revoke, Privileges) ->
     case rand:uniform(2) of
-        1 -> oz_rpc(LogicModule, remove_user, [?ROOT, EntityId, UserId]);
-        2 -> oz_rpc(LogicModule, update_user_privileges, [?ROOT, EntityId, UserId, [], Privileges])
+        1 -> ozt:rpc(LogicModule, remove_user, [?ROOT, EntityId, UserId]);
+        2 -> ozt:rpc(LogicModule, update_user_privileges, [?ROOT, EntityId, UserId, [], Privileges])
     end.
 
 
@@ -1643,43 +1614,14 @@ assert_creation_succeeds(Auth, Subject, Data) ->
     assert_creation_succeeds(named, Auth, Subject, Data),
     assert_creation_succeeds(temporary, Auth, Subject, Data).
 assert_creation_succeeds(Persistence, Auth, Subject, Data) ->
-    ?assertMatch({ok, _}, create_invite_token(Persistence, Auth, Subject, Data)).
+    ?assertMatch({ok, _}, ozt_tokens:try_create(Auth, Persistence, Subject, Data)).
 
 
 assert_creation_fails(Auth, Subject, Data, ExpError) ->
     assert_creation_fails(named, Auth, Subject, Data, ExpError),
     assert_creation_fails(temporary, Auth, Subject, Data, ExpError).
 assert_creation_fails(Persistence, Auth, Subject, Data, {error, _} = ExpError) ->
-    ?assertEqual(ExpError, create_invite_token(Persistence, Auth, Subject, Data)).
-
-
-create_invite_token(named, Auth, ?SUB(user, UserId), Data) ->
-    oz_rpc(token_logic, create_user_named_token, [
-        Auth, UserId, Data#{<<"name">> => ?UNIQUE_STRING}
-    ]);
-create_invite_token(temporary, Auth, ?SUB(user, UserId), Data) ->
-    Caveats = maps:get(<<"caveats">>, Data, []),
-    oz_rpc(token_logic, create_user_temporary_token, [
-        Auth, UserId, Data#{<<"caveats">> => ensure_time_caveat(Caveats)}
-    ]);
-create_invite_token(named, Auth, ?SUB(?ONEPROVIDER, ProviderId), Data) ->
-    oz_rpc(token_logic, create_provider_named_token, [
-        Auth, ProviderId, Data#{<<"name">> => ?UNIQUE_STRING}
-    ]);
-create_invite_token(temporary, Auth, ?SUB(?ONEPROVIDER, ProviderId), Data) ->
-    Caveats = maps:get(<<"caveats">>, Data, []),
-    oz_rpc(token_logic, create_provider_temporary_token, [
-        Auth, ProviderId, Data#{<<"caveats">> => ensure_time_caveat(Caveats)}
-    ]).
-
-
-% Time caveat is required in temporary tokens - add one if there isn't any
-ensure_time_caveat(Caveats) ->
-    Now = oz_test_utils:cluster_time_seconds(get_test_config()),
-    case caveats:find(cv_time, Caveats) of
-        false -> [#cv_time{valid_until = Now + 3600} | Caveats];
-        {true, _} -> Caveats
-    end.
+    ?assertEqual(ExpError, ozt_tokens:try_create(Auth, Persistence, Subject, Data)).
 
 
 ensure_privileges_to_invite(#testcase{requires_privileges_to_invite = false}, _Subject) ->
@@ -1696,15 +1638,13 @@ create_consumer_by_type({SubjectType, MakeConsumerEligibleFun}) ->
 create_consumer_by_type(nobody) ->
     ?SUB(nobody);
 create_consumer_by_type(user) ->
-    {ok, User} = oz_test_utils:create_user(get_test_config()),
-    ?SUB(user, User);
+    ?SUB(user, ozt_users:create());
 create_consumer_by_type(?ONEPROVIDER) ->
-    {ok, {Provider, _}} = oz_test_utils:create_provider(get_test_config()),
-    ?SUB(?ONEPROVIDER, Provider).
+    ?SUB(?ONEPROVIDER, ozt_providers:create()).
 
 
 create_consumer_with_privs_to_consume(Tc, random_eligible) ->
-    ConsumerType = utils:random_element(Tc#testcase.eligible_consumer_types),
+    ConsumerType = lists_utils:random_element(Tc#testcase.eligible_consumer_types),
     create_consumer_with_privs_to_consume(Tc, ConsumerType);
 create_consumer_with_privs_to_consume(Tc, ConsumerType) ->
     Consumer = create_consumer_by_type(ConsumerType),
@@ -1713,30 +1653,9 @@ create_consumer_with_privs_to_consume(Tc, ConsumerType) ->
     Consumer.
 
 
-create_admin(Privileges) ->
-    {ok, Admin} = oz_test_utils:create_admin(get_test_config(), Privileges),
-    Admin.
-
-
-set_admin_privileges(?SUB(user, UserId), grant, Privileges) ->
-    oz_test_utils:user_set_oz_privileges(get_test_config(), UserId, Privileges, []);
-set_admin_privileges(?SUB(user, UserId), revoke, Privileges) ->
-    oz_test_utils:user_set_oz_privileges(get_test_config(), UserId, [], Privileges).
-
-
-delete_subject(?SUB(user, UserId)) ->
-    oz_rpc(user_logic, delete, [?ROOT, UserId]);
-delete_subject(?SUB(?ONEPROVIDER, ProviderId)) ->
-    oz_rpc(provider_logic, delete, [?ROOT, ProviderId]).
-
-
 all_consumer_types() -> [
     user, ?ONEPROVIDER, nobody
 ].
-
-
-oz_rpc(Module, Function, Args) ->
-    oz_test_utils:call_oz(get_test_config(), Module, Function, Args).
 
 
 consume_token(Tc, Consumer, Token) ->
@@ -1751,7 +1670,7 @@ consume_token(Auth, ConsumeRequest) ->
         not_available -> [logic, graphsync];
         _ -> [logic, graphsync, rest]
     end,
-    case utils:random_element(AvailableInterfaces) of
+    case lists_utils:random_element(AvailableInterfaces) of
         logic -> consume_by_logic_call(ConsumeRequest);
         graphsync -> consume_by_graphsync_request(Auth, ConsumeRequest);
         rest -> consume_by_rest_call(Auth, ConsumeRequest)
@@ -1759,40 +1678,18 @@ consume_token(Auth, ConsumeRequest) ->
 
 
 consume_by_logic_call(#consume_request{logic_call_args = {Module, Function, Args}}) ->
-    oz_rpc(Module, Function, Args).
+    ozt:rpc(Module, Function, Args).
 
 
-consume_by_rest_call(Auth, #consume_request{rest_call_args = {PathOrTokens, Data}}) ->
-    Config = get_test_config(),
-    Url = oz_test_utils:oz_rest_url(Config, PathOrTokens),
-    AuthHeader = case create_access_token(Auth) of
-        undefined -> #{};
-        Token -> #{?HDR_X_AUTH_TOKEN => Token}
-    end,
-    Headers = AuthHeader#{?HDR_CONTENT_TYPE => <<"application/json">>},
-    Opts = [
-        {ssl_options, ssl_opts()},
-        {connect_timeout, timer:seconds(30)},
-        {recv_timeout, timer:seconds(30)}
-    ],
-    case http_client:request(post, Url, Headers, json_utils:encode(Data), Opts) of
-        {ok, OkCode, _, Body} when OkCode >= 200 andalso OkCode < 300 ->
-            {ok, json_utils:decode(Body)};
-        {ok, _, _, ErrorBody} ->
-            #{<<"error">> := ErrorJson} = json_utils:decode(ErrorBody),
-            errors:from_json(ErrorJson);
-        Other ->
-            ct:pal("REST call failed unexpectedly with: ~tp", [Other]),
-            error(rest_call_failed)
-    end.
+consume_by_rest_call(Auth, #consume_request{rest_call_args = {UrnTokens, Data}}) ->
+    ozt_http:rest_call(auth_to_client_auth(Auth), post, UrnTokens, Data).
 
 
 consume_by_graphsync_request(Auth, #consume_request{graph_sync_args = {GRI, AuthHint, Data}}) ->
-    Type = case Auth of
-        ?PROVIDER(_) -> provider;
+    Endpoint = case Auth of
+        ?PROVIDER(_) -> oneprovider;
         _ -> gui
     end,
-    Url = oz_test_utils:graph_sync_url(get_test_config(), Type),
     % EntityId in the AuthHint can be undefined due to testing different
     % combinations of subjects - make sure it is serializable as GS expects a
     % binary entity type.
@@ -1801,40 +1698,22 @@ consume_by_graphsync_request(Auth, #consume_request{graph_sync_args = {GRI, Auth
         {HintType, undefined} -> undefined;
         {HintType, EntityId} -> {HintType, EntityId}
     end,
-    GsAuth = case create_access_token(Auth) of
-        undefined -> undefined;
-        Token -> {token, Token}
-    end,
-    {ok, GsClient, _} = gs_client:start_link(
-        Url, GsAuth, ?SUPPORTED_PROTO_VERSIONS, fun(_) -> ok end, ssl_opts()
-    ),
-    Result = gs_client:graph_request(GsClient, GRI, create, Data, false, SerializableAuthHint),
-    gs_client:kill(GsClient),
-    Result.
+    GsReq = #gs_req{
+        subtype = graph,
+        request = #gs_req_graph{
+            gri = GRI,
+            operation = create,
+            data = Data,
+            subscribe = false,
+            auth_hint = SerializableAuthHint
+        }
+    },
+    ozt_gs:connect_and_request(Endpoint, auth_to_client_auth(Auth), GsReq).
 
 
-create_access_token(?USER(UserId) = Auth) ->
-    {ok, UserToken} = oz_rpc(token_logic, create_user_temporary_token, [
-        Auth, UserId, #{<<"caveats">> => ensure_time_caveat([])}
-    ]),
-    {ok, Serialized} = tokens:serialize(UserToken),
-    Serialized;
-create_access_token(?PROVIDER(ProviderId) = Auth) ->
-    {ok, ProviderToken} = oz_rpc(token_logic, create_provider_temporary_token, [
-        Auth, ProviderId, #{<<"caveats">> => ensure_time_caveat([])}
-    ]),
-    {ok, Serialized} = tokens:serialize(ProviderToken),
-    Serialized;
-create_access_token(?NOBODY) ->
-    undefined.
-
-
-ssl_opts() ->
-    [{secure, only_verify_peercert}, {cacerts, oz_test_utils:gui_ca_certs(get_test_config())}].
-
-
-ensure_token_serialized(Serialized) when is_binary(Serialized) ->
-    Serialized;
-ensure_token_serialized(Token) ->
-    {ok, Serialized} = tokens:serialize(Token),
-    Serialized.
+auth_to_client_auth(?NOBODY) ->
+    undefined;
+auth_to_client_auth(?USER(UserId)) ->
+    {token, ozt_tokens:create(temporary, ?SUB(user, UserId))};
+auth_to_client_auth(?PROVIDER(PrId)) ->
+    {token, ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, PrId))}.

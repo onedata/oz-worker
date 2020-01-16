@@ -25,3 +25,4 @@ test_coverage
 # OS X
 .DS_Store
 ._*
+!/test_distributed/ozt_users.erl

@@ -36,6 +36,11 @@
 -define(SUPPORTED_IDENTITY_TOKEN_CAVEATS, [
     cv_authorization_none | ?SUPPORTED_ACCESS_TOKEN_CAVEATS
 ]).
+-define(SUPPORTED_AUDIENCE_TOKEN_CAVEATS, [
+    cv_time,
+    cv_ip, cv_asn, cv_country, cv_region,
+    cv_interface
+]).
 -define(SUPPORTED_INVITE_TOKEN_CAVEATS, [
     cv_time, cv_audience, cv_ip, cv_asn, cv_country, cv_region
 ]).
@@ -74,8 +79,8 @@ build_auth_ctx(Interface, PeerIp, Audience, DataAccessCaveatsPolicy) ->
         current_timestamp = time_utils:cluster_time_seconds(),
         ip = PeerIp,
         interface = Interface,
-        % This onezone is the default audience if it was not specified (being the
-        % service that consumes the token).
+        % This Onezone is the default audience if it was not specified
+        % (being the service that consumes the token).
         audience = case Audience of
             undefined -> ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID);
             _ -> Audience
@@ -221,9 +226,10 @@ verify_invite_token(Token = #token{type = ReceivedType}, ExpectedType, AuthCtx) 
 %% @doc
 %% Verifies an audience token and returns the audience upon success.
 %% The audience token is a regular access token put in a proper header and sent
-%% along with the subject's access token. It is used to prove the identity of
-%% requesting party, which may be required to satisfy an audience caveat of the
-%% subject's access token.
+%% along with the subject's access token, however it allows less caveats than
+%% a typical access token. It is used to prove the identity of requesting party,
+%% which may be required to satisfy an audience caveat of the subject's access
+%% token.
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_audience_token(tokens:token() | tokens:serialized(), aai:auth_ctx()) ->
@@ -236,9 +242,11 @@ verify_audience_token(SerializedAudienceToken, AuthCtx) when is_binary(Serialize
             ?ERROR_BAD_AUDIENCE_TOKEN(Error)
     end;
 verify_audience_token(AudienceToken, AuthCtx) ->
-    case verify_access_token(AudienceToken, AuthCtx) of
-        {ok, Auth} -> {ok, aai:auth_to_audience(Auth)};
-        {error, _} = Error -> ?ERROR_BAD_AUDIENCE_TOKEN(Error)
+    case verify_access_token(AudienceToken, AuthCtx, ?SUPPORTED_AUDIENCE_TOKEN_CAVEATS) of
+        {ok, Auth} ->
+            {ok, aai:auth_to_audience(Auth)};
+        {error, _} = Err2 ->
+            ?ERROR_BAD_AUDIENCE_TOKEN(Err2)
     end.
 
 
@@ -297,22 +305,30 @@ validate_subject_and_audience(?INVITE_TOKEN(_, _), _, _) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec is_valid_access_token_audience(aai:subject(), aai:audience()) -> boolean().
-is_valid_access_token_audience(_Subject, ?AUD(_, <<"*">>)) ->
-    true; % Always allowed when audience id is a wildcard
+is_valid_access_token_audience(?SUB(nobody), _) ->
+    false; % Audience is not applicable in case of nobody (unauthenticated client)
+
 is_valid_access_token_audience(_Subject, ?AUD(user, _)) ->
     true; % User / provider can grant his authorization to any user
 is_valid_access_token_audience(_Subject, ?AUD(group, _)) ->
     true; % User / provider can grant his authorization to any group
 is_valid_access_token_audience(_Subject, ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)) ->
     true; % Any user / provider can generate a token for Onezone
+is_valid_access_token_audience(_Subject, ?AUD(?OZ_WORKER, <<"*">>)) ->
+    true;
+
+is_valid_access_token_audience(?SUB(user, _), ?AUD(_, <<"*">>)) ->
+    true; % Always allowed when audience id is a wildcard
 is_valid_access_token_audience(?SUB(user, UserId), ?AUD(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)) ->
     cluster_logic:has_eff_user(?ONEZONE_CLUSTER_ID, UserId);
 is_valid_access_token_audience(?SUB(user, UserId), ?AUD(?OP_WORKER, ProviderId)) ->
     provider_logic:has_eff_user(ProviderId, UserId);
-is_valid_access_token_audience(?SUB(?ONEPROVIDER, _), ?AUD(?OP_WORKER, _)) ->
-    true; % Providers can grant their authorization to others (e.g. for identity check)
 is_valid_access_token_audience(?SUB(user, UserId), ?AUD(?OP_PANEL, ProviderId)) ->
     cluster_logic:has_eff_user(ProviderId, UserId);
+
+is_valid_access_token_audience(?SUB(?ONEPROVIDER, _), ?AUD(?OP_WORKER, _)) ->
+    true; % Providers can grant their authorization to others (e.g. for identity check)
+
 is_valid_access_token_audience(_, _) ->
     false.
 

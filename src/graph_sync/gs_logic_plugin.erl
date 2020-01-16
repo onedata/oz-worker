@@ -135,7 +135,7 @@ verify_auth_override(?PROVIDER(ProviderId), #auth_override{client_auth = {token,
         undefined ->
             {ok, ?AUD(?OP_WORKER, ProviderId)};
         SerializedAudienceToken ->
-            AudienceAuthCtx = token_auth:build_auth_ctx(graphsync, PeerIp),
+            AudienceAuthCtx = token_auth:build_auth_ctx(Interface, PeerIp),
             token_auth:verify_audience_token(SerializedAudienceToken, AudienceAuthCtx)
     end,
 

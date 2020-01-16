@@ -30,7 +30,8 @@
 -export_type([id/0, record/0]).
 
 -type name() :: binary().
--export_type([name/0]).
+-type support_size() :: pos_integer().
+-export_type([name/0, support_size/0]).
 
 -define(CTX, #{
     model => ?MODULE,
