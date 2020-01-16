@@ -39,7 +39,7 @@ add_user(ClusterId, UserId, Privileges) ->
 
 -spec ensure_member(od_cluster:id(), od_user:id()) -> ok.
 ensure_member(ClusterId, UserId) ->
-    ?assertSuccessOrRelationExists(ozt:rpc(cluster_logic, add_user, [?ROOT, ClusterId, UserId])).
+    ?assertSuccessOrAlreadyExists(ozt:rpc(cluster_logic, add_user, [?ROOT, ClusterId, UserId])).
 
 
 -spec get_user_privileges(od_cluster:id(), od_user:id()) -> [privileges:cluster_privilege()].
@@ -61,4 +61,4 @@ remove_user(ClusterId, UserId) ->
 
 -spec ensure_not_a_member(od_cluster:id(), od_user:id()) -> ok.
 ensure_not_a_member(ClusterId, UserId) ->
-    ?assertSuccessOrNoSuchRelation(ozt:rpc(cluster_logic, remove_user, [?ROOT, ClusterId, UserId])).
+    ?assertSuccessOrDoesNotExist(ozt:rpc(cluster_logic, remove_user, [?ROOT, ClusterId, UserId])).

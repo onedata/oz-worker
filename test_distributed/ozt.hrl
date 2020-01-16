@@ -27,18 +27,21 @@
 % Time caveat is required in temporary tokens, a default one is added if there isn't any
 -define(DEFAULT_TEMP_CAVEAT_TTL, 36000).
 
-% Macro used to check the result in ensure_member functions
-% (where a relation should be added if it does not exist)
--define(assertSuccessOrRelationExists(Result), ?assertMatch(ok, case Result of
+% Macro used to check the result in ensure_exists / ensure_member functions
+% (where an entity / relation should be created if it does not exist)
+-define(assertSuccessOrAlreadyExists(Result), ?assertMatch(ok, case Result of
+    ok -> ok;
     {ok, _} -> ok;
+    ?ERROR_ALREADY_EXISTS -> ok;
     ?ERROR_RELATION_ALREADY_EXISTS(_, _, _, _) -> ok;
     Other -> Other
 end)).
 
-% Macro used to check the result in ensure_not_a_member functions
-% (where a relation should be removed if it exists)
--define(assertSuccessOrNoSuchRelation(Result), ?assertMatch(ok, case Result of
+% Macro used to check the result in ensure_does_not_exist / ensure_not_a_member functions
+% (where an entity / relation should be removed if it exists)
+-define(assertSuccessOrDoesNotExist(Result), ?assertMatch(ok, case Result of
     ok -> ok;
+    {ok, _} -> ok;
     ?ERROR_NOT_FOUND -> ok;
     ?ERROR_RELATION_DOES_NOT_EXIST(_, _, _, _) -> ok;
     Other -> Other

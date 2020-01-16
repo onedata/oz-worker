@@ -81,8 +81,9 @@ get_root_token(ProviderId) ->
 
 -spec ensure_storage(od_provider:id(), od_storage:id()) -> ok.
 ensure_storage(ProviderId, StorageId) ->
-    ozt:rpc(storage_logic, create, [?PROVIDER(ProviderId), StorageId, <<"storage-of-", ProviderId/binary>>]),
-    ok.
+    ?assertSuccessOrAlreadyExists(ozt:rpc(storage_logic, create, [
+        ?PROVIDER(ProviderId), StorageId, <<"storage-of-", ProviderId/binary>>
+    ])).
 
 
 -spec support_space(od_provider:id(), od_space:id()) -> ok.

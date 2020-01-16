@@ -8,9 +8,10 @@
 %%% @doc
 %%% This suite contains tests for access tokens, which check the behaviour of
 %%% the system when access tokens are used to access arbitrarily chosen API
-%%% operations. Each test is repeated, and each time the request context is
-%%% randomized. Depending on the context, different combinations of subjects,
-%%% tokens caveats and interfaces are tested if they return the expected results.
+%%% operations. Each test is repeated several times, and each time the request
+%%% context is randomized. Depending on the request context, different
+%%% combinations of subjects, audiences, token caveats and interfaces are
+%%% randomly generated and tested if they return the expected results.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(access_tokens_test_SUITE).
@@ -29,7 +30,7 @@
 
 % Number of repeats of each test - each time, request context is randomized
 -define(TEST_REPEATS, 3).
--define(CAVEAT_RANDOMIZATION_REPEATS, 5).
+-define(CAVEAT_RANDOMIZATION_REPEATS, 3).
 
 % Mocked connection and geo db data
 -define(PEER_IP, {81, 213, 5, 17}).
