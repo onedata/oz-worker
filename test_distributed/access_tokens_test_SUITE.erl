@@ -28,8 +28,8 @@
 -include_lib("ctool/include/test/performance.hrl").
 
 % Number of repeats of each test - each time, request context is randomized
--define(TEST_REPEATS, 4).
--define(CAVEAT_RANDOMIZATION_REPEATS, 4).
+-define(TEST_REPEATS, 3).
+-define(CAVEAT_RANDOMIZATION_REPEATS, 5).
 
 % Mocked connection and geo db data
 -define(PEER_IP, {81, 213, 5, 17}).
