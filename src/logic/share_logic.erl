@@ -256,7 +256,7 @@ choose_provider_for_space(SpaceId) ->
 
     {ChosenProviderId, ChosenProviderVersion, _} = case {EligibleProviders, UpToDateProviders} of
         {[], _} -> {undefined, undefined, undefined};
-        {_, []} -> utils:random_element(EligibleProviders);
-        {_, _} -> utils:random_element(UpToDateProviders)
+        {_, []} -> lists_utils:random_element(EligibleProviders);
+        {_, _} -> lists_utils:random_element(UpToDateProviders)
     end,
     {ChosenProviderId, ChosenProviderVersion}.
