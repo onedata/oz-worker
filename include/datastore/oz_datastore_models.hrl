@@ -228,7 +228,7 @@
     % Effective relations to other entities
     eff_users = #{} :: entity_graph:eff_relations_with_attrs(od_user:id(), [privileges:space_privilege()]),
     eff_groups = #{} :: entity_graph:eff_relations_with_attrs(od_group:id(), [privileges:space_privilege()]),
-    eff_providers = #{} :: entity_graph:eff_relations_with_attrs(od_provider:id(), Size :: pos_integer()),
+    eff_providers = #{} :: entity_graph:eff_relations_with_attrs(od_provider:id(), od_space:support_size()),
     % Effective harvesters contain only direct harvesters, but this is needed to
     % track changes in spaces and propagate them bottom-up.
     eff_harvesters = #{} :: entity_graph:eff_relations(od_provider:id()),
@@ -273,7 +273,7 @@
     longitude = 0.0 :: float(),
 
     %% @TODO VFS-5856 legacy spaces needed to perform cluster upgrade procedure, remove in future release
-    legacy_spaces = #{} :: #{od_space:id() => SupportSize :: integer()},
+    legacy_spaces = #{} :: #{od_space:id() => od_space:support_size()},
 
     % Direct relations to other entities
     storages = [] :: entity_graph:relations(od_storage:id()),

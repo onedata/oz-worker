@@ -425,7 +425,7 @@ get_eff_cluster_details_test(Config) ->
     EffClustersList = lists:map(fun({ProviderId, _}) ->
         ClusterId = ProviderId,
         % G1 is a child of all groups, so it inherits effective memberships from them
-        oz_test_utils:cluster_add_group(Config, ClusterId, utils:random_element([G1, G2, G3, G4, G5])),
+        oz_test_utils:cluster_add_group(Config, ClusterId, lists_utils:random_element([G1, G2, G3, G4, G5])),
 
         {ok, #od_cluster{
             type = Type,

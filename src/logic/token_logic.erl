@@ -202,7 +202,7 @@ list_provider_named_tokens(Auth, ProviderId) ->
 
 
 -spec get_named_token(aai:auth(), tokens:id()) ->
-    {ok, od_token:record()} | errors:error().
+    {ok, entity_logic:data()} | errors:error().
 get_named_token(Auth, TokenId) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -212,7 +212,7 @@ get_named_token(Auth, TokenId) ->
 
 
 -spec get_user_named_token_by_name(aai:auth(), od_user:id(), od_token:name()) ->
-    {ok, od_token:record()} | errors:error().
+    {ok, entity_logic:data()} | errors:error().
 get_user_named_token_by_name(Auth, UserId, TokenName) ->
     entity_logic:handle(#el_req{
         operation = get,
@@ -222,7 +222,7 @@ get_user_named_token_by_name(Auth, UserId, TokenName) ->
 
 
 -spec get_provider_named_token_by_name(aai:auth(), od_provider:id(), od_token:name()) ->
-    {ok, od_token:record()} | errors:error().
+    {ok, entity_logic:data()} | errors:error().
 get_provider_named_token_by_name(Auth, ProviderId, TokenName) ->
     entity_logic:handle(#el_req{
         operation = get,

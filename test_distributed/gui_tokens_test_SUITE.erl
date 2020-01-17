@@ -34,7 +34,8 @@
     gui_tokens_expire/1,
     gui_tokens_are_invalidated_upon_logout/1,
     gui_tokens_are_invalidated_when_member_leaves_a_service/1,
-    gui_tokens_are_invalidated_upon_temporary_token_secret_change/1
+    gui_tokens_are_invalidated_upon_temporary_token_secret_change/1,
+    gui_tokens_are_invalidated_when_user_is_deleted/1
 ]).
 
 all() ->
@@ -44,7 +45,8 @@ all() ->
         gui_tokens_expire,
         gui_tokens_are_invalidated_upon_logout,
         gui_tokens_are_invalidated_when_member_leaves_a_service,
-        gui_tokens_are_invalidated_upon_temporary_token_secret_change
+        gui_tokens_are_invalidated_upon_temporary_token_secret_change,
+        gui_tokens_are_invalidated_when_user_is_deleted
     ]).
 
 -define(EXP_AUTH(UserId, SessionId), #auth{
@@ -75,15 +77,6 @@ gui_tokens_are_bound_to_specific_audience(Config) ->
         ?ERROR_TOKEN_SESSION_INVALID,
         create_gui_access_token(Config, UserId, <<"bad-session">>, ?OZW_AUD(?ONEZONE_CLUSTER_ID))
     ),
-
-    % Tokens can be created for any existing user, but the user must exist at
-    % the moment of verification (by passing the user in Auth object, we skip
-    % the initial existing check).
-    {ok, UserToBeDeleted} = oz_test_utils:create_user(Config),
-    {ok, {SessionToBeDeleted, _}} = oz_test_utils:log_in(Config, UserToBeDeleted),
-    {ok, {TokenInvalidSubject, _}} = create_gui_access_token(Config, UserToBeDeleted, SessionToBeDeleted, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
-    oz_test_utils:delete_user(Config, UserToBeDeleted),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, TokenInvalidSubject, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
 
     % All users are allowed to create tokens for oz-worker
     {ok, {Token1, _}} = create_gui_access_token(Config, UserId, Session1, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
@@ -378,13 +371,7 @@ gui_tokens_are_invalidated_when_member_leaves_a_service(Config) ->
     ?assertMatch(
         ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(?OPP_AUD(ProviderId)),
         verify_token(Config, Token4, ?OPP_AUD(ProviderId))
-    ),
-
-    oz_test_utils:delete_user(Config, UserId),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token2, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token3, ?OPW_AUD(ProviderId))),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token4, ?OPP_AUD(ProviderId))).
+    ).
 
 
 gui_tokens_are_invalidated_upon_temporary_token_secret_change(Config) ->
@@ -412,6 +399,27 @@ gui_tokens_are_invalidated_upon_temporary_token_secret_change(Config) ->
 
     % Make sure that this works for the tested user
     oz_test_utils:call_oz(Config, temporary_token_secret, regenerate, [?SUB(user, UserId)]),
+    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token2, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token3, ?OPW_AUD(ProviderId))),
+    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token4, ?OPP_AUD(ProviderId))).
+
+
+gui_tokens_are_invalidated_when_user_is_deleted(Config) ->
+    {ok, UserId} = oz_test_utils:create_user(Config),
+    {ok, {Session1, _Cookie1}} = oz_test_utils:log_in(Config, UserId),
+    {ok, {Session2, _Cookie2}} = oz_test_utils:log_in(Config, UserId),
+
+    ProviderId = create_provider_supporting_user(Config, UserId),
+    oz_test_utils:cluster_add_user(Config, ProviderId, UserId),
+    oz_test_utils:cluster_add_user(Config, ?ONEZONE_CLUSTER_ID, UserId),
+
+    {ok, {Token1, _}} = create_gui_access_token(Config, UserId, Session1, ?OZW_AUD(?ONEZONE_CLUSTER_ID)),
+    {ok, {Token2, _}} = create_gui_access_token(Config, UserId, Session1, ?OZP_AUD(?ONEZONE_CLUSTER_ID)),
+    {ok, {Token3, _}} = create_gui_access_token(Config, UserId, Session1, ?OPW_AUD(ProviderId)),
+    {ok, {Token4, _}} = create_gui_access_token(Config, UserId, Session2, ?OPP_AUD(ProviderId)),
+
+    oz_test_utils:delete_user(Config, UserId),
     ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
     ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token2, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
     ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token3, ?OPW_AUD(ProviderId))),

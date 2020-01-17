@@ -61,6 +61,8 @@
 -define(PRIVILEGES_CHECK_RETRIES, 600).
 -define(PRIVILEGES_CHECK_INTERVAL, 100). % Interval * retries = 1 minute
 
+-define(PRIVILEGES_RANDOMIZATION_REPEATS, 25).
+
 -define(compare_privileges(__PrivsA, __PrivsB), begin
     __SortedPrivsA = lists:sort(__PrivsA),
     __SortedPrivsB = lists:sort(__PrivsB),
@@ -223,7 +225,7 @@ run_get_privs_tests(Config, ApiTestSpec, SetPrivsFun, AllPrivs, ConstPrivs) ->
                 Config, prepare_get_privs_api_spec(ApiTestSpec, Privs),
                 EnvSetUpFun, undefined, undefined
             ))
-        end, generate_lists_of_privs(AllPrivs)
+        end, generate_random_sublists_of_privs(AllPrivs)
     ).
 
 
@@ -359,14 +361,11 @@ run_update_privs_tests(
             Config, NewApiTestSpec, EnvSetUpFun,
             undefined, VerifyEndFun
         ))
-    end, generate_lists_of_privs(AllPrivs)).
+    end, generate_random_sublists_of_privs(AllPrivs)).
 
 
-% Returns all sublists of privileges.
-% For example when AllPrivs is [priv1, priv2, priv3]
-% the result will be: [[], [priv1], [priv1, priv2], [priv1,priv2,priv3]]
-generate_lists_of_privs(AllPrivs) ->
-    [lists:sublist(AllPrivs, I) || I <- lists:seq(0, length(AllPrivs))].
+generate_random_sublists_of_privs(AllPrivs) ->
+    [lists_utils:random_sublist(AllPrivs) || _ <- lists:seq(1, ?PRIVILEGES_RANDOMIZATION_REPEATS)].
 
 % Grant all oz privileges and check that correct clients can delete them but
 % forbidden and unauthorized cannot.

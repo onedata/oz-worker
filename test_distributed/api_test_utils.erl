@@ -300,8 +300,12 @@ prepare_logic_auth({user, UserId}) ->
     ?USER(UserId);
 prepare_logic_auth({user, UserId, _Token}) ->
     ?USER(UserId);
+prepare_logic_auth({provider, ProviderId}) ->
+    ?PROVIDER(ProviderId);
 prepare_logic_auth({provider, ProviderId, _Token}) ->
     ?PROVIDER(ProviderId);
+prepare_logic_auth({op_panel, ProviderId}) ->
+    #auth{subject = ?SUB(?ONEPROVIDER, ?OP_PANEL, ProviderId)};
 prepare_logic_auth({op_panel, ProviderId, _Token}) ->
     #auth{subject = ?SUB(?ONEPROVIDER, ?OP_PANEL, ProviderId)}.
 
@@ -484,6 +488,9 @@ prepare_gs_client(Config, {user, UserId}) ->
     );
 prepare_gs_client(_Config, nobody) ->
     ok;
+prepare_gs_client(Config, {provider, ProviderId}) ->
+    Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(?ONEPROVIDER, ProviderId)),
+    prepare_gs_client(Config, {provider, ProviderId, Token});
 prepare_gs_client(Config, {provider, ProviderId, Token}) ->
     prepare_gs_client(
         Config,
@@ -491,6 +498,8 @@ prepare_gs_client(Config, {provider, ProviderId, Token}) ->
         {token, Token},
         [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
     );
+prepare_gs_client(_Config, {op_panel, _ProviderId}) ->
+    error(op_panel_graph_sync_not_supported);
 prepare_gs_client(_Config, {op_panel, _ProviderId, _Token}) ->
     error(op_panel_graph_sync_not_supported).
 
@@ -748,14 +757,22 @@ prepare_auth({user, User}, Env, _Config) when is_atom(User) ->
     {user, maps:get(User, Env, User)};
 prepare_auth({user, User, Token}, Env, _Config) when is_atom(User) ->
     {user, maps:get(User, Env, User), Token};
+
+prepare_auth({provider, Provider}, Env, _Config) when is_atom(Provider) ->
+    {provider, maps:get(Provider, Env, Provider)};
 prepare_auth({provider, Provider, Token}, Env, _Config) when is_atom(Provider) orelse is_atom(Token) ->
     {provider, maps:get(Provider, Env, Provider), maps:get(Token, Env, Token)};
+
+prepare_auth({op_panel, Provider}, Env, _Config) when is_atom(Provider) ->
+    {op_panel, maps:get(Provider, Env, Provider)};
 prepare_auth({op_panel, Provider, Token}, Env, _Config) when is_atom(Provider) orelse is_atom(Token) ->
     {op_panel, maps:get(Provider, Env, Provider), maps:get(Token, Env, Token)};
+
 prepare_auth({admin, Privs}, _Env, Config) ->
     {ok, Admin} = oz_test_utils:create_user(Config),
     oz_test_utils:user_set_oz_privileges(Config, Admin, Privs, []),
     {user, Admin};
+
 prepare_auth(Client, Env, _Config) when is_atom(Client) ->
     maps:get(Client, Env, Client);
 prepare_auth(Client, _Env, _Config) ->
@@ -966,8 +983,12 @@ resolve_auth({user, UserId}, _Env) ->
     {user, UserId};
 resolve_auth({user, UserId, Token}, _Env) ->
     {user, UserId, Token};
+resolve_auth({provider, ProviderId}, _Env) ->
+    {provider, ProviderId};
 resolve_auth({provider, ProviderId, Token}, _Env) ->
     {provider, ProviderId, Token};
+resolve_auth({op_panel, ProviderId}, _Env) ->
+    {op_panel, ProviderId};
 resolve_auth({op_panel, ProviderId, Token}, _Env) ->
     {op_panel, ProviderId, Token};
 resolve_auth(Arg, Env) ->
