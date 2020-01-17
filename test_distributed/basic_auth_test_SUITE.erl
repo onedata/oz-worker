@@ -203,7 +203,7 @@ migrate_onepanel_user_to_onezone(Config) ->
     Roles = [regular, admin],
 
     lists:foreach(fun(Role) ->
-        OnepanelUserId = datastore_utils:gen_key(),
+        OnepanelUserId = datastore_key:new(),
         OnepanelUsername = str_utils:format_bin("onepanel-~s", [Role]),
         Password = str_utils:format_bin("password-~s", [Role]),
         PasswordHash = onedata_passwords:create_hash(Password),

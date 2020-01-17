@@ -50,7 +50,7 @@ create(UserId, SessionId, Audience) ->
             Expires = Now + TTL,
             Prototype = #auth_token{
                 onezone_domain = oz_worker:get_domain(),
-                nonce = datastore_utils:gen_key(),
+                nonce = datastore_key:new(),
                 persistent = false,
                 subject = ?SUB(user, UserId),
                 type = ?GUI_TOKEN(SessionId)
