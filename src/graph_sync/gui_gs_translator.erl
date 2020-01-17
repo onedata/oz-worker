@@ -381,6 +381,7 @@ translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) -
         <<"effUserList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_users}),
         <<"groupList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = groups}),
         <<"effGroupList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_groups}),
+        <<"shareList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = shares}),
         <<"supportSizes">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"providerList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = eff_providers}),
         <<"harvesterList">> => gri:serialize(#gri{type = od_space, id = SpaceId, aspect = harvesters}),
@@ -466,6 +467,14 @@ translate_space(#gri{aspect = {group_privileges, _GroupId}}, Privileges) ->
 translate_space(#gri{aspect = {eff_group_privileges, _GroupId}}, Privileges) ->
     #{
         <<"privileges">> => Privileges
+    };
+
+translate_space(#gri{aspect = shares}, Shares) ->
+    #{
+        <<"list">> => lists:map(
+            fun(ShareId) ->
+                gri:serialize(#gri{type = od_share, id = ShareId, aspect = instance, scope = auto})
+            end, Shares)
     };
 
 translate_space(#gri{aspect = eff_providers, scope = private}, Providers) ->
