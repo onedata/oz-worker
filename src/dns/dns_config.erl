@@ -23,6 +23,7 @@
 -type domain() :: binary().
 -type domain_entry() :: {domain(), [inet:ip4_address()]}.
 -type dns_config() :: {Name :: domain(), _Version :: <<>>, Records :: [#dns_rr{}]}.
+-type serial() :: -2147483648..2147483647.
 -export_type([domain/0, dns_config/0]).
 
 
@@ -77,11 +78,13 @@ build_config() ->
     OneZoneIPs = node_manager:get_cluster_ips(),
     OneZoneDomain = oz_worker:get_domain(),
     AdminEmail = get_soa_admin(OneZoneDomain),
+    DnsZoneSerial = generate_zone_serial(),
 
     OnezoneNS = build_onezone_ns_entries(OneZoneIPs),
 
     {PrimaryNS, _IPs} = hd(OnezoneNS),
-    SOARecord = build_record_soa(OneZoneDomain, PrimaryNS, AdminEmail),
+    SOARecord = build_record_soa(OneZoneDomain, PrimaryNS,
+        AdminEmail, DnsZoneSerial),
 
     {OneZoneDomain, <<>>, [
         SOARecord |
@@ -122,6 +125,31 @@ get_soa_admin(OneZoneDomain) ->
         undefined -> <<"admin.", OneZoneDomain/binary>>;
         Admin -> str_utils:to_binary(Admin)
     end.
+
+
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Generates serial number for the SOA record. The number must change
+%% every time the zone contents change, which is why it is set
+%% to current unix timestamp every time the zone is generated.
+%% The serial is ensured to be representable as a 32 bit signed integer
+%% (negative SOA serials may be treated as larger in cases defined
+%% by "serial number arithmetic", avoiding the Year 2038 Problem).
+%% @end
+%%--------------------------------------------------------------------
+-spec generate_zone_serial() -> serial().
+generate_zone_serial() ->
+    wrap_like_signed_32bit(time_utils:cluster_time_seconds()).
+
+
+%%--------------------------------------------------------------------
+%% @doc @private
+%% Wraps an integer like a signed 32bit arithmetic would.
+%% @end
+%%--------------------------------------------------------------------
+-spec wrap_like_signed_32bit(integer()) -> serial().
+wrap_like_signed_32bit(Integer) when Integer < (1 bsl 31) -> Integer;
+wrap_like_signed_32bit(Integer) -> wrap_like_signed_32bit(Integer - (1 bsl 32)).
 
 
 %%--------------------------------------------------------------------
@@ -320,8 +348,8 @@ build_record_a(Domain, IP) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec build_record_soa(Name :: domain(), MainName :: domain(),
-    Admin :: binary()) -> #dns_rr{}.
-build_record_soa(Name, MainName, Admin) ->
+    Admin :: binary(), serial()) -> #dns_rr{}.
+build_record_soa(Name, MainName, Admin, Serial) ->
     #dns_rr{
         name = Name,
         type = ?DNS_TYPE_SOA,
@@ -329,7 +357,7 @@ build_record_soa(Name, MainName, Admin) ->
         data = #dns_rrdata_soa{
             mname = MainName,
             rname = Admin,
-            serial = oz_worker:get_env(dns_soa_serial, 2017090401),
+            serial = Serial,
             refresh = oz_worker:get_env(dns_soa_refresh, 7200),
             retry = oz_worker:get_env(dns_soa_retry, 1800),
             expire = oz_worker:get_env(dns_soa_expire, 1209600),

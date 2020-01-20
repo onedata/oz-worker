@@ -40,7 +40,8 @@
     dns_resolves_txt_record/1,
     txt_record_forbidden_without_subdomain_delegation/1,
     dns_does_not_resolve_removed_txt_record_test/1,
-    removing_nonexistent_txt_does_nothing/1
+    removing_nonexistent_txt_does_nothing/1,
+    dns_config_update_increases_soa_serial/1
 ]).
 
 
@@ -58,7 +59,8 @@ all() -> ?ALL([
     dns_resolves_txt_record,
     txt_record_forbidden_without_subdomain_delegation,
     dns_does_not_resolve_removed_txt_record_test,
-    removing_nonexistent_txt_does_nothing
+    removing_nonexistent_txt_does_nothing,
+    dns_config_update_increases_soa_serial
 ]).
 
 -define(DNS_ASSERT_RETRY_COUNT, 7).
@@ -566,6 +568,30 @@ removing_nonexistent_txt_does_nothing(Config) ->
     ?assertEqual(DnsStateBefore, DnsStateAfter).
 
 
+dns_config_update_increases_soa_serial(Config) ->
+    OZIPs = ?config(oz_ips, Config),
+    OZDomain = ?config(oz_domain, Config),
+    [PreviousSerial | _] = PreviousSerials = lists:map(fun(Server) ->
+        get_soa_serial(OZDomain, Server)
+    end, OZIPs),
+    assert_all_equal(PreviousSerials),
+
+    % wait for unix timestamp, used as the serial, to change
+    timer:sleep(timer:seconds(1)),
+
+    % force dns update
+    ?assertEqual(ok, oz_test_utils:call_oz(Config,
+        node_manager_plugin, reconcile_dns_config, [])),
+
+    wait_for_soa_serial_to_change(OZIPs, OZDomain, PreviousSerial, ?DNS_ASSERT_RETRY_COUNT),
+
+    [NewSerial | _] = NewSerials = lists:map(fun(Server) ->
+        get_soa_serial(OZDomain, Server)
+    end, OZIPs),
+    assert_all_equal(NewSerials),
+    ?assert(NewSerial > PreviousSerial).
+
+
 %%%===================================================================
 %%% Utils
 %%%===================================================================
@@ -613,10 +639,34 @@ assert_dns_answer(Servers, Query, Type, Expected, Attempts) ->
             ct:pal("DNS query type ~p to server ~p for name ~p "
             "returned incorrect results in ~p attempts.",
                 [Type, Server, Query, Attempts]),
-
             erlang:error(Error)
         end
+    % restrict to one server, to save time in tests ensuring NOT existence
+    % of a record, as each server would wait for the timeout.
     end, [hd(Servers)]).
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Waits for DNS lookup of SOA record to return a changed serial number.
+%% @end
+%%--------------------------------------------------------------------
+-spec wait_for_soa_serial_to_change(Servers :: [inet:ip4_address()],
+    Query :: string(), Previous :: integer(), Attempts :: non_neg_integer()) ->
+    ok | no_return().
+wait_for_soa_serial_to_change(Servers, Query, OldSerial, Attempts) ->
+    lists:foreach(fun(Server) ->
+        % there are multiple, delayed attempts because inet_res:lookup
+        % displays ~20 seconds delay before returning updated results
+        try
+            NewSerial = get_soa_serial(Query, Server),
+            ?assertNotEqual(OldSerial, NewSerial)
+        catch _:_ when Attempts > 0 ->
+            timer:sleep(?DNS_ASSERT_RETRY_DELAY),
+            wait_for_soa_serial_to_change(Servers, Query, OldSerial, Attempts - 1)
+        end
+    end, Servers).
 
 
 %%--------------------------------------------------------------------
@@ -635,3 +685,19 @@ filter_response(Type, {ok, Response}) ->
         (_) -> false
         end, Anlist ++ Arlist ++ Nslist),
     lists:sort(Filtered).
+
+
+-spec get_soa_serial(Domain :: string(), Server :: inet:ip4_address()) ->
+    Serial :: integer().
+get_soa_serial(Domain, Server) ->
+    Opts = [{nameservers, [{Server, 53}]}],
+    [SoaRecord] = ?assertMatch([{_,_,_,_,_,_,_}],
+        inet_res:lookup(Domain, in, soa, Opts)),
+    element(3, SoaRecord).
+
+
+-spec assert_all_equal(list()) -> ok | no_return().
+assert_all_equal([]) ->
+    ok;
+assert_all_equal([Head | _] = List) ->
+    ?assertEqual(lists:duplicate(length(List), Head), List).
