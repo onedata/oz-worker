@@ -43,7 +43,7 @@ setup() ->
     % Use process memory for storing macaroons data
     meck:new(macaroon_auth, []),
     meck:expect(macaroon_auth, create, fun(Secret, Issuer) ->
-        Id = datastore_utils:gen_key(),
+        Id = datastore_key:new(),
         put(Id, {Secret, Issuer}),
         {ok, Id}
     end),

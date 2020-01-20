@@ -39,7 +39,7 @@
 fetch_entity(HandleId) ->
     case od_handle:get(HandleId) of
         {ok, #document{value = Handle, revs = [DbRev | _]}} ->
-            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
             {ok, {Handle, Revision}};
         _ ->
             ?ERROR_NOT_FOUND

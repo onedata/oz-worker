@@ -41,7 +41,7 @@
 fetch_entity(SpaceId) ->
     case od_space:get(SpaceId) of
         {ok, #document{value = Space, revs = [DbRev | _]}} ->
-            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
             {ok, {Space, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
@@ -265,7 +265,7 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
         <<"maxStreamSeq">> := MaxStreamSeq,
         <<"batch">> := Batch
     } = Data,
-    
+
     Res = utils:pmap(fun(HarvesterId) ->
         Indices = maps:get(HarvesterId, Destination),
         case harvester_logic:submit_batch(Auth, HarvesterId, Indices, SpaceId, Batch, MaxStreamSeq, MaxSeq) of
@@ -273,13 +273,13 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
             Error -> {HarvesterId, Error}
         end
     end, maps:keys(Destination)),
-    
+
     {ok, value, lists:foldl(
         fun({HarvesterId, {error, _} = Error}, Acc) -> Acc#{HarvesterId => #{<<"error">> => Error}};
            ({HarvesterId, FailedIndices}, Acc) when map_size(FailedIndices) =/= 0 -> Acc#{HarvesterId => FailedIndices};
            (_, Acc) -> Acc
         end, #{}, Res)}.
-    
+
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -412,11 +412,11 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = {provider, ProviderId}}}) ->
     fun(#od_space{harvesters = Harvesters}) ->
         lists:foreach(fun(HarvesterId) ->
             harvester_indices:update_stats(HarvesterId, all,
-                fun(ExistingStats) -> 
+                fun(ExistingStats) ->
                     harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, true)
                 end)
         end, Harvesters),
-        
+
         entity_graph:remove_relation(
             od_space, SpaceId,
             od_provider, ProviderId
@@ -539,11 +539,11 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Space) 
             false
     end;
 
-authorize(#el_req{operation = create, gri = #gri{id = SpaceId, aspect = harvest_metadata}, 
+authorize(#el_req{operation = create, gri = #gri{id = SpaceId, aspect = harvest_metadata},
     auth = ?PROVIDER(ProviderId), data = #{<<"batch">> := Batch}}, Space) ->
-    
-    space_logic:has_provider(Space, ProviderId) andalso 
-            lists:all(fun(#{<<"fileId">> := FileId}) -> 
+
+    space_logic:has_provider(Space, ProviderId) andalso
+            lists:all(fun(#{<<"fileId">> := FileId}) ->
                 {ok, Guid} = file_id:objectid_to_guid(FileId),
                 file_id:guid_to_space_id(Guid) == SpaceId
             end, Batch);
@@ -828,7 +828,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = harvest_metadata}}) -> 
         <<"maxSeq">> => {integer, {not_lower_than, 0}},
         <<"maxStreamSeq">> => {integer, {not_lower_than, 0}},
         <<"batch">> => {any, any}
-    }   
+    }
 };
 
 validate(Req = #el_req{operation = create, gri = #gri{aspect = group}}) ->

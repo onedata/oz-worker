@@ -203,7 +203,7 @@ migrate_onepanel_user_to_onezone(Config) ->
     Roles = [regular, admin],
 
     lists:foreach(fun(Role) ->
-        OnepanelUserId = datastore_utils:gen_key(),
+        OnepanelUserId = datastore_key:new(),
         OnepanelUsername = str_utils:format_bin("onepanel-~s", [Role]),
         Password = str_utils:format_bin("password-~s", [Role]),
         PasswordHash = onedata_passwords:create_hash(Password),
@@ -243,7 +243,7 @@ migrate_onepanel_user_to_onezone(Config) ->
     {ok, ConflictingUser} = oz_test_utils:create_user(Config, #{<<"username">> => <<"admin">>}),
 
     {ok, AdminUserId} = oz_test_utils:call_oz(Config, basic_auth, migrate_onepanel_user_to_onezone, [
-        datastore_utils:gen_key(), <<"admin">>, onedata_passwords:create_hash(<<"1234">>), admin
+        datastore_key:new(), <<"admin">>, onedata_passwords:create_hash(<<"1234">>), admin
     ]),
 
     {ok, AllUsers} = oz_test_utils:list_users(Config),

@@ -21,10 +21,10 @@
 -define(TIME_MOCK_STARTING_TIMESTAMP, 1500000000).
 
 % Macros to mock users that are members of a cluster / provider
--define(USER_CLUSTER_MEMBER(ServiceId), <<"cl/", ServiceId/binary, "/", (datastore_utils:gen_key())/binary>>).
--define(USER_PROVIDER_MEMBER(ServiceId), <<"pr/", ServiceId/binary, "/", (datastore_utils:gen_key())/binary>>).
+-define(USER_CLUSTER_MEMBER(ServiceId), <<"cl/", ServiceId/binary, "/", (datastore_key:new())/binary>>).
+-define(USER_PROVIDER_MEMBER(ServiceId), <<"pr/", ServiceId/binary, "/", (datastore_key:new())/binary>>).
 
--define(EXISTING_SESSION, <<"existing-session-", (datastore_utils:gen_key())/binary>>).
+-define(EXISTING_SESSION, <<"existing-session-", (datastore_key:new())/binary>>).
 -define(MATCH_EXISTING_SESSION, <<"existing-session-", _/binary>>).
 
 %%%===================================================================
@@ -97,13 +97,13 @@ mocked_session_exists(SessionId) ->
 % Generates a mock user id that later evaluates to true if checked for
 % membership in cluster / provider
 mocked_service_member(?OZ_WORKER, ServiceId) ->
-    <<"ozw/", ServiceId/binary, "/", (datastore_utils:gen_key())/binary>>;
+    <<"ozw/", ServiceId/binary, "/", (datastore_key:new())/binary>>;
 mocked_service_member(?OP_WORKER, ServiceId) ->
-    <<"opw/", ServiceId/binary, "/", (datastore_utils:gen_key())/binary>>;
+    <<"opw/", ServiceId/binary, "/", (datastore_key:new())/binary>>;
 mocked_service_member(?OZ_PANEL, ServiceId) ->
-    <<"ozp/", ServiceId/binary, "/", (datastore_utils:gen_key())/binary>>;
+    <<"ozp/", ServiceId/binary, "/", (datastore_key:new())/binary>>;
 mocked_service_member(?OP_PANEL, ServiceId) ->
-    <<"opp/", ServiceId/binary, "/", (datastore_utils:gen_key())/binary>>.
+    <<"opp/", ServiceId/binary, "/", (datastore_key:new())/binary>>.
 
 mocked_is_cluster_member(ServiceId, UserId) ->
     case binary:split(UserId, <<"/">>, [global]) of
@@ -214,7 +214,7 @@ reject_forged_tokens() ->
     SessionId = <<"some-session-id">>,
     ForgedPrototype = #auth_token{
         onezone_domain = oz_worker:get_domain(),
-        nonce = datastore_utils:gen_key(),
+        nonce = datastore_key:new(),
         persistent = false,
         subject = ?SUB(user, UserId),
         type = ?GUI_TOKEN(SessionId)
