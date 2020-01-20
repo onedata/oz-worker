@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -189,9 +189,7 @@ create_parent_test(Config) ->
                     <<"spaces">> => [],
                     <<"type">> => atom_to_binary(ExpType, utf8),
                     <<"gri">> => fun(EncodedGri) ->
-                        #gri{id = Id} = oz_test_utils:decode_gri(
-                            Config, EncodedGri
-                        ),
+                        #gri{id = Id} = gri:deserialize(EncodedGri),
                         VerifyFun(Id, Data)
                     end
                 })
@@ -225,31 +223,32 @@ join_parent_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     CreateTokenForItselfFun = fun() ->
-        {ok, Macaroon} = oz_test_utils:group_invite_group_token(
-            Config, ?ROOT, Child
+        {ok, Token} = oz_test_utils:group_invite_group_token(
+            Config, ?USER(U1), Child
         ),
-        {ok, Token} = macaroons:serialize(Macaroon),
-        Token
+        {ok, Serialized} = tokens:serialize(Token),
+        Serialized
     end,
 
     EnvSetUpFun = fun() ->
-        {ok, Group} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME2),
-        {ok, Macaroon} = oz_test_utils:group_invite_group_token(
-            Config, ?ROOT, Group
+        {ok, Creator} = oz_test_utils:create_user(Config),
+        {ok, Group} = oz_test_utils:create_group(Config, ?USER(Creator), ?GROUP_NAME2),
+        {ok, Token2} = oz_test_utils:group_invite_group_token(
+            Config, ?USER(Creator), Group
         ),
-        {ok, Token} = macaroons:serialize(Macaroon),
+        {ok, Serialized2} = tokens:serialize(Token2),
         #{
             groupId => Group,
-            macaroonId => macaroon:identifier(Macaroon),
-            token => Token
+            tokenNonce => Token2#token.id,
+            token => Serialized2
         }
     end,
-    VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId, macaroonId := MacaroonId} = _Env, _) ->
+    VerifyEndFun = fun(ShouldSucceed, #{groupId := GroupId, tokenNonce := TokenId} = _Env, _) ->
         {ok, ChildGroups} = oz_test_utils:group_get_children(Config, GroupId),
         ?assertEqual(lists:member(Child, ChildGroups), ShouldSucceed),
         case ShouldSucceed of
             true ->
-                oz_test_utils:assert_token_not_exists(Config, MacaroonId);
+                oz_test_utils:assert_invite_token_usage_limit_reached(Config, true, TokenId);
             false -> ok
         end
     end,
@@ -257,7 +256,6 @@ join_parent_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
                 {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
@@ -301,35 +299,35 @@ join_parent_test(Config) ->
                 {<<"token">>, <<"">>, ?ERROR_BAD_VALUE_EMPTY(<<"token">>)},
                 {<<"token">>, CreateTokenForItselfFun,
                     ?ERROR_CANNOT_ADD_RELATION_TO_SELF},
-                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>)},
-                {<<"token">>, <<"123qwe">>,
-                    ?ERROR_BAD_VALUE_TOKEN(<<"token">>)}
+                {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
+                {<<"token">>, <<"123qwe">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)}
             ]
         }
     },
     ?assert(api_test_utils:run_tests(
         Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun
     )),
-    
+
     % Check that token is not consumed upon failed operation
     {ok, Group} = oz_test_utils:create_group(Config, ?USER(U1),
         #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
     ),
-    {ok, Macaroon1} = oz_test_utils:group_invite_group_token(
-        Config, ?ROOT, Group
+    {ok, Token2} = oz_test_utils:group_invite_group_token(
+        Config, ?USER(U1), Group
     ),
-    {ok, Token} = macaroons:serialize(Macaroon1),
+    {ok, Serialized2} = tokens:serialize(Token2),
     oz_test_utils:group_add_group(Config, Group, Child),
     ApiTestSpec1 = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root
+                {admin, [?OZ_GROUPS_ADD_RELATIONSHIPS]},
+                {user, U2}
             ]
         },
-        rest_spec = #rest_spec{
+        rest_spec = RestSpec = #rest_spec{
             method = post,
             path = [<<"/groups/">>, Child, <<"/parents/join">>],
-            expected_code = ?HTTP_400_BAD_REQUEST
+            expected_code = ?HTTP_409_CONFLICT
         },
         logic_spec = LogicSpec = #logic_spec{
             module = group_logic,
@@ -340,34 +338,37 @@ join_parent_test(Config) ->
         % TODO gs
         data_spec = #data_spec{
             required = [<<"token">>],
-            correct_values = #{<<"token">> => [Token]}
+            correct_values = #{<<"token">> => [Serialized2]}
         }
     },
-    VerifyEndFun1 = fun(MacaroonId) ->
-        fun(_ShouldSucceed,_Env,_) ->
-            oz_test_utils:assert_token_exists(Config, macaroon:identifier(MacaroonId))
+    VerifyEndFun1 = fun(Token) ->
+        fun(_ShouldSucceed, _Env, _) ->
+            oz_test_utils:assert_invite_token_usage_limit_reached(Config, false, Token#token.id)
         end
     end,
     ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1(Macaroon1)
+        Config, ApiTestSpec1, undefined, undefined, VerifyEndFun1(Token2)
     )),
-    
-    {ok, Macaroon2} = oz_test_utils:group_invite_group_token(
-        Config, ?ROOT, Child
+
+    {ok, Token3} = oz_test_utils:group_invite_group_token(
+        Config, ?USER(U1), Child
     ),
-    {ok, Token2} = macaroons:serialize(Macaroon2),
+    {ok, Serialized3} = tokens:serialize(Token3),
     ApiTestSpec2 = ApiTestSpec1#api_test_spec{
+        rest_spec = RestSpec#rest_spec{
+            expected_code = ?HTTP_400_BAD_REQUEST
+        },
         logic_spec = LogicSpec#logic_spec{
             expected_result = ?ERROR_REASON(?ERROR_CANNOT_ADD_RELATION_TO_SELF)
         },
         data_spec = #data_spec{
-        required = [<<"token">>],
-        correct_values = #{<<"token">> => [Token2]}
+            required = [<<"token">>],
+            correct_values = #{<<"token">> => [Serialized3]}
         }
     },
     ?assert(api_test_utils:run_tests(
-        Config, ApiTestSpec2, undefined, undefined, VerifyEndFun1(Macaroon2)
-    )). 
+        Config, ApiTestSpec2, undefined, undefined, VerifyEndFun1(Token3)
+    )).
 
 
 leave_parent_test(Config) ->
@@ -414,7 +415,7 @@ leave_parent_test(Config) ->
             module = group_logic,
             function = leave_group,
             args = [auth, Child, groupId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -481,9 +482,7 @@ get_parent_details_test(Config) ->
                 <<"name">> => ?GROUP_NAME2,
                 <<"type">> => ?GROUP_TYPE2_BIN,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(ParentGroup, Id)
                 end
             })
@@ -592,9 +591,7 @@ get_eff_parent_details_test(Config) ->
                         GroupDetails#{
                             <<"type">> => atom_to_binary(ExpType, utf8),
                             <<"gri">> => fun(EncodedGri) ->
-                                #gri{id = Id} = oz_test_utils:decode_gri(
-                                    Config, EncodedGri
-                                ),
+                                #gri{id = Id} = gri:deserialize(EncodedGri),
                                 ?assertEqual(Id, GroupId)
                             end
                         })

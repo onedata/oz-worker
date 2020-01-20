@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -244,8 +244,7 @@ create_user_invite_token_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
-                {admin, [?OZ_HARVESTERS_ADD_RELATIONSHIPS]},
+                {admin, [?OZ_TOKENS_MANAGE, ?OZ_HARVESTERS_ADD_RELATIONSHIPS]},
                 {user, U2}
             ],
             unauthorized = [nobody],
@@ -315,7 +314,7 @@ remove_user_test(Config) ->
             module = harvester_logic,
             function = remove_user,
             args = [auth, H1, userId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -447,7 +446,7 @@ get_user_test(Config) ->
                     <<"gri">> => fun(EncodedGri) ->
                         ?assertMatch(
                             #gri{id = SubjectUser},
-                            oz_test_utils:decode_gri(Config, EncodedGri)
+                            gri:deserialize(EncodedGri)
                         )
                     end,
 
@@ -570,7 +569,7 @@ update_user_privileges_test(Config) ->
             module = harvester_logic,
             function = update_user_privileges,
             args = [auth, H1, U3, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -681,9 +680,7 @@ get_eff_user_test(Config) ->
                     auth_hint = ?THROUGH_HARVESTER(H1),
                     expected_result = ?OK_MAP_CONTAINS(UserDetails#{
                         <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
+                            #gri{id = Id} = gri:deserialize(EncodedGri),
                             ?assertEqual(Id, UserId)
                         end,
 
@@ -876,7 +873,7 @@ get_eff_user_membership_intermediaries(Config) ->
 
     lists:foreach(fun({HarvesterId, SubjectUser, CorrectUsers, ExpIntermediariesRaw}) ->
         ExpIntermediaries = lists:map(fun({Type, Id}) ->
-            #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+            #{<<"type">> => gri:serialize_type(Type), <<"id">> => Id}
         end, ExpIntermediariesRaw),
         CorrectUserClients = [{user, U} || U <- CorrectUsers],
         ApiTestSpec = #api_test_spec{

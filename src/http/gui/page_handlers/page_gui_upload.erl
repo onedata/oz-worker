@@ -24,9 +24,10 @@
 
 -include("http/rest.hrl").
 -include("datastore/oz_datastore_models.hrl").
--include_lib("ctool/include/onedata.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("ctool/include/logging.hrl").
+-include_lib("ctool/include/onedata.hrl").
 -include_lib("ctool/include/privileges.hrl").
 
 %% Cowboy API
@@ -57,10 +58,7 @@ handle(<<"POST">>, Req) ->
         handle_gui_upload(Req)
     catch
         throw:{error, _} = Error ->
-            EncodedError = gs_protocol_errors:error_to_json(1, Error),
-            cowboy_req:reply(?HTTP_400_BAD_REQUEST, #{}, json_utils:encode(EncodedError), Req);
-        throw:Code when is_integer(Code) ->
-            cowboy_req:reply(Code, Req);
+            cowboy_req:reply(errors:to_http_code(Error), #{}, json_utils:encode(errors:to_json(Error)), Req);
         Type:Reason ->
             ?error_stacktrace("Error while processing GUI upload - ~p:~p", [Type, Reason]),
             cowboy_req:reply(?HTTP_500_INTERNAL_SERVER_ERROR, Req)
@@ -79,7 +77,7 @@ handle_gui_upload(Req) ->
     GuiType = try
         onedata:gui_by_prefix(GuiPrefix)
     catch error:badarg ->
-        throw(?HTTP_404_NOT_FOUND)
+        throw(?ERROR_NOT_FOUND)
     end,
 
     ServiceReleaseVersion = validate_and_authorize(GuiType, GuiId, Req),
@@ -91,8 +89,7 @@ handle_gui_upload(Req) ->
             GuiType =:= ?HARVESTER_GUI andalso gui_static:link_gui(GuiType, GuiId, GuiHash),
             cowboy_req:reply(?HTTP_200_OK, Req2);
         {error, _} = Error ->
-            EncodedError = gs_protocol_errors:error_to_json(1, Error),
-            cowboy_req:reply(?HTTP_400_BAD_REQUEST, #{}, json_utils:encode(EncodedError), Req)
+            cowboy_req:reply(errors:to_http_code(Error), #{}, json_utils:encode(errors:to_json(Error)), Req)
     end.
 
 
@@ -105,35 +102,34 @@ handle_gui_upload(Req) ->
 -spec validate_and_authorize(onedata:gui(), gui_static:gui_id(), cowboy_req:req()) ->
     onedata:release_version() | no_return().
 validate_and_authorize(?HARVESTER_GUI, HarvesterId, Req) ->
-    harvester_logic:exists(HarvesterId) orelse throw(?HTTP_404_NOT_FOUND),
-
-    Token = case tokens:parse_access_token_header(Req) of
-        undefined -> throw(?HTTP_401_UNAUTHORIZED);
-        T -> T
-    end,
-
-    case auth_logic:authorize_by_oz_worker_gui_token(Token) of
-        {true, ?USER(UserId)} ->
+    harvester_logic:exists(HarvesterId) orelse throw(?ERROR_NOT_FOUND),
+    case token_auth:authenticate_for_rest_interface(Req) of
+        {true, ?USER(UserId) = Auth} ->
+            ensure_unlimited_api_authorization(Auth),
             case harvester_logic:has_eff_privilege(HarvesterId, UserId, ?HARVESTER_UPDATE)
                 orelse user_logic:has_eff_oz_privilege(UserId, ?OZ_HARVESTERS_UPDATE) of
                 true ->
                     % Harvester packages are versioned along with Onezone
                     oz_worker:get_release_version();
                 _ ->
-                    throw(?HTTP_403_FORBIDDEN)
+                    throw(?ERROR_FORBIDDEN)
             end;
-        _ ->
-            throw(?HTTP_401_UNAUTHORIZED)
+        {true, _} ->
+            throw(?ERROR_FORBIDDEN);
+        false ->
+            throw(?ERROR_UNAUTHORIZED);
+        {error, _} = Error ->
+            throw(Error)
     end;
 % Covers all service GUIs
 validate_and_authorize(GuiType, ClusterId, Req) ->
     Service = onedata:service_by_gui(GuiType, ClusterId),
-    lists:member(Service, [?OP_WORKER, ?OP_PANEL]) orelse throw(?HTTP_404_NOT_FOUND),
+    lists:member(Service, [?OP_WORKER, ?OP_PANEL]) orelse throw(?ERROR_NOT_FOUND),
     Cluster = try cluster_logic:get(?ROOT, ClusterId) of
         {ok, #od_cluster{type = ?ONEPROVIDER} = Cl} -> Cl;
-        _ -> throw(?HTTP_404_NOT_FOUND)
+        _ -> throw(?ERROR_NOT_FOUND)
     catch _:_ ->
-        throw(?HTTP_404_NOT_FOUND)
+        throw(?ERROR_NOT_FOUND)
     end,
 
     {ReleaseVersion, _, _} = case Service of
@@ -141,13 +137,32 @@ validate_and_authorize(GuiType, ClusterId, Req) ->
         ?OP_PANEL -> Cluster#od_cluster.onepanel_version
     end,
 
-    case auth_logic:authorize_by_access_token(Req) of
-        {true, ?PROVIDER(ClusterId)} ->
+    case token_auth:authenticate_for_rest_interface(Req) of
+        {true, ?PROVIDER(ClusterId) = Auth} ->
+            ensure_unlimited_api_authorization(Auth),
             ReleaseVersion;
         {true, _} ->
-            throw(?HTTP_403_FORBIDDEN);
-        _ ->
-            throw(?HTTP_401_UNAUTHORIZED)
+            throw(?ERROR_FORBIDDEN);
+        false ->
+            throw(?ERROR_UNAUTHORIZED);
+        {error, _} = Error ->
+            throw(Error)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Ensures that presented auth does not include any API limitations. This check
+%% is an exception compared to other page handlers, which either are public or
+%% depend on cookie session (in those cases such check is not needed).
+%% @end
+%%--------------------------------------------------------------------
+-spec ensure_unlimited_api_authorization(aai:auth()) -> ok | no_return().
+ensure_unlimited_api_authorization(Auth) ->
+    case api_auth:ensure_unlimited(Auth) of
+        ok -> ok;
+        {error, _} = Error -> throw(Error)
     end.
 
 

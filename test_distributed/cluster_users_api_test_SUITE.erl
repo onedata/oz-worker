@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -233,7 +233,7 @@ create_user_invite_token_test(Config) ->
     % create cluster with 2 users:
     %   U2 gets the CLUSTER_ADD_USER privilege
     %   U1 gets all remaining privileges
-    {C1, U1, U2, {P1, P1Macaroon}} = api_test_scenarios:create_basic_cluster_env(
+    {C1, U1, U2, {P1, P1Token}} = api_test_scenarios:create_basic_cluster_env(
         Config, ?CLUSTER_ADD_USER
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -243,10 +243,9 @@ create_user_invite_token_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                root,
-                {admin, [?OZ_CLUSTERS_ADD_RELATIONSHIPS]},
+                {admin, [?OZ_TOKENS_MANAGE, ?OZ_CLUSTERS_ADD_RELATIONSHIPS]},
                 {user, U2},
-                {provider, P1, P1Macaroon}
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -275,7 +274,7 @@ remove_user_test(Config) ->
     % create cluster with 2 users:
     %   U2 gets the CLUSTER_REMOVE_USER privilege
     %   U1 gets all remaining privileges
-    {C1, U1, U2, {P1, P1Macaroon}} = api_test_scenarios:create_basic_cluster_env(
+    {C1, U1, U2, {P1, P1Token}} = api_test_scenarios:create_basic_cluster_env(
         Config, ?CLUSTER_REMOVE_USER
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -299,7 +298,7 @@ remove_user_test(Config) ->
                 root,
                 {admin, [?OZ_CLUSTERS_REMOVE_RELATIONSHIPS, ?OZ_USERS_REMOVE_RELATIONSHIPS]},
                 {user, U2},
-                {provider, P1, P1Macaroon}
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -316,7 +315,7 @@ remove_user_test(Config) ->
             module = cluster_logic,
             function = remove_user,
             args = [auth, C1, userId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -329,7 +328,7 @@ list_users_test(Config) ->
     % create cluster with 2 users:
     %   U2 gets the CLUSTER_VIEW privilege
     %   U1 gets all remaining privileges
-    {C1, U1, U2, {P1, P1Macaroon}} = api_test_scenarios:create_basic_cluster_env(
+    {C1, U1, U2, {P1, P1Token}} = api_test_scenarios:create_basic_cluster_env(
         Config, ?CLUSTER_VIEW
     ),
     {ok, U3} = oz_test_utils:create_user(Config),
@@ -345,7 +344,7 @@ list_users_test(Config) ->
                 {admin, [?OZ_CLUSTERS_LIST_RELATIONSHIPS]},
                 {user, U2},
                 {user, U3},
-                {provider, P1, P1Macaroon}
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -381,7 +380,7 @@ get_user_test(Config) ->
     }),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
-    {ok, {ProviderId, ProviderMacaroon}} = oz_test_utils:create_provider(Config, Creator, ?PROVIDER_NAME1),
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config, Creator, ?PROVIDER_NAME1),
     ClusterId = ProviderId,
 
     {ok, _} = oz_test_utils:cluster_add_user(Config, ClusterId, MemberWithViewPrivs),
@@ -408,7 +407,7 @@ get_user_test(Config) ->
                     {admin, [?OZ_USERS_VIEW]},
                     {user, SubjectUser},
                     {user, MemberWithViewPrivs},
-                    {provider, ProviderId, ProviderMacaroon}
+                    {provider, ProviderId, ProviderToken}
                 ] ++ case SubjectUser of
                     % Every member of the cluster should be able to see the creator details
                     Creator -> [{user, MemberWithoutViewPrivs}];
@@ -451,7 +450,7 @@ get_user_test(Config) ->
                     <<"gri">> => fun(EncodedGri) ->
                         ?assertMatch(
                             #gri{id = SubjectUser},
-                            oz_test_utils:decode_gri(Config, EncodedGri)
+                            gri:deserialize(EncodedGri)
                         )
                     end,
 
@@ -470,7 +469,7 @@ get_user_privileges_test(Config) ->
     % create cluster with 2 users:
     %   U2 gets the CLUSTER_VIEW_PRIVILEGES privilege
     %   U1 gets all remaining privileges
-    {C1, U1, U2, {P1, P1Macaroon}} = api_test_scenarios:create_basic_cluster_env(
+    {C1, U1, U2, {P1, P1Token}} = api_test_scenarios:create_basic_cluster_env(
         Config, ?CLUSTER_VIEW_PRIVILEGES
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -496,7 +495,7 @@ get_user_privileges_test(Config) ->
                 root,
                 {admin, [?OZ_CLUSTERS_VIEW_PRIVILEGES]},
                 {user, U2},
-                {provider, P1, P1Macaroon},
+                {provider, P1, P1Token},
                 % user can always see his own privileges
                 {user, U3}
             ],
@@ -531,7 +530,7 @@ update_user_privileges_test(Config) ->
     % create cluster with 2 users:
     %   U2 gets the CLUSTER_SET_PRIVILEGES privilege
     %   U1 gets all remaining privileges
-    {C1, U1, U2, {P1, P1Macaroon}} = api_test_scenarios:create_basic_cluster_env(
+    {C1, U1, U2, {P1, P1Token}} = api_test_scenarios:create_basic_cluster_env(
         Config, ?CLUSTER_SET_PRIVILEGES
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -559,7 +558,7 @@ update_user_privileges_test(Config) ->
                 root,
                 {admin, [?OZ_CLUSTERS_SET_PRIVILEGES]},
                 {user, U2},
-                {provider, P1, P1Macaroon}
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -576,7 +575,7 @@ update_user_privileges_test(Config) ->
             module = cluster_logic,
             function = update_user_privileges,
             args = [auth, C1, U3, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -590,7 +589,7 @@ update_user_privileges_test(Config) ->
 list_eff_users_test(Config) ->
     {
         C1, _Groups, [{U3, _}, {U4, _}, {U5, _}, {U6, _}],
-        {U1, U2, NonAdmin}, {P1, P1Macaroon}
+        {U1, U2, NonAdmin}, {P1, P1Token}
     } = api_test_scenarios:create_cluster_eff_users_env(Config),
 
 
@@ -601,7 +600,7 @@ list_eff_users_test(Config) ->
                 root,
                 {user, U2},
                 {admin, [?OZ_CLUSTERS_LIST_RELATIONSHIPS]},
-                {provider, P1, P1Macaroon}
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -640,7 +639,7 @@ list_eff_users_test(Config) ->
 
 get_eff_user_test(Config) ->
     {
-        C1, _Groups, EffUsers, {U1, U2, NonAdmin}, {P1, P1Macaroon}
+        C1, _Groups, EffUsers, {U1, U2, NonAdmin}, {P1, P1Token}
     } = api_test_scenarios:create_cluster_eff_users_env(Config),
 
     lists:foreach(
@@ -651,7 +650,7 @@ get_eff_user_test(Config) ->
                         root,
                         {admin, [?OZ_USERS_VIEW]},
                         {user, U2},
-                        {provider, P1, P1Macaroon}
+                        {provider, P1, P1Token}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
@@ -689,9 +688,7 @@ get_eff_user_test(Config) ->
                     auth_hint = ?THROUGH_CLUSTER(C1),
                     expected_result = ?OK_MAP_CONTAINS(UserDetails#{
                         <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
+                            #gri{id = Id} = gri:deserialize(EncodedGri),
                             ?assertEqual(Id, UserId)
                         end,
 
@@ -732,7 +729,7 @@ get_eff_user_privileges_test(Config) ->
     % create cluster with 2 users:
     %   U2 gets the CLUSTER_VIEW_PRIVILEGES privilege
     %   U1 gets all remaining privileges
-    {C1, U1, U2, {P1, P1Macaroon}} = api_test_scenarios:create_basic_cluster_env(
+    {C1, U1, U2, {P1, P1Token}} = api_test_scenarios:create_basic_cluster_env(
         Config, ?CLUSTER_VIEW_PRIVILEGES
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
@@ -781,7 +778,7 @@ get_eff_user_privileges_test(Config) ->
                 root,
                 {admin, [?OZ_CLUSTERS_VIEW_PRIVILEGES]},
                 {user, U2},
-                {provider, P1, P1Macaroon},
+                {provider, P1, P1Token},
                 % user can always see his own privileges
                 {user, U3}
             ],
@@ -841,11 +838,11 @@ get_eff_user_membership_intermediaries(Config) ->
     {ok, G2} = oz_test_utils:create_group(Config, ?ROOT, ?GROUP_NAME1),
     {ok, G3} = oz_test_utils:create_group(Config, ?USER(U1), ?GROUP_NAME1),
 
-    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
     C1 = P1,
-    {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
+    {ok, {P2, P2Token}} = oz_test_utils:create_provider(Config, U1, ?PROVIDER_NAME1),
     C2 = P2,
-    {ok, {P3, P3Macaroon}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
+    {ok, {P3, P3Token}} = oz_test_utils:create_provider(Config, undefined, ?PROVIDER_NAME1),
     C3 = P3,
 
     oz_test_utils:cluster_add_user(Config, C1, U1),
@@ -865,29 +862,29 @@ get_eff_user_membership_intermediaries(Config) ->
 
     % {ClusterId, SubjectUser, CorrectUsers, ExpIntermediariesRaw}
     ExpectedMembershipIntermediaries = [
-        {C1, U1, [{provider, P1, P1Macaroon}], [U1], ordsets:from_list([
+        {C1, U1, [{provider, P1, P1Token}], [U1], ordsets:from_list([
             {od_cluster, ?SELF_INTERMEDIARY},
             {od_group, G1},
             {od_group, G2}
         ])},
 
-        {C2, U1, [{provider, P2, P2Macaroon}], [U1], ordsets:from_list([
+        {C2, U1, [{provider, P2, P2Token}], [U1], ordsets:from_list([
             {od_cluster, ?SELF_INTERMEDIARY},
             {od_group, G2},
             {od_group, G3}
         ])},
 
-        {C3, U1, [{provider, P3, P3Macaroon}], [U1], ordsets:from_list([
+        {C3, U1, [{provider, P3, P3Token}], [U1], ordsets:from_list([
             {od_group, G3}
         ])},
-        {C3, U2, [{provider, P3, P3Macaroon}], [U1, U2], ordsets:from_list([
+        {C3, U2, [{provider, P3, P3Token}], [U1, U2], ordsets:from_list([
             {od_cluster, ?SELF_INTERMEDIARY}
         ])}
     ],
 
     lists:foreach(fun({ClusterId, SubjectUser, CorrectProviderClients, CorrectUsers, ExpIntermediariesRaw}) ->
         ExpIntermediaries = lists:map(fun({Type, Id}) ->
-            #{<<"type">> => gs_protocol_plugin:encode_entity_type(Type), <<"id">> => Id}
+            #{<<"type">> => gri:serialize_type(Type), <<"id">> => Id}
         end, ExpIntermediariesRaw),
         CorrectUserClients = [{user, U} || U <- CorrectUsers],
         ApiTestSpec = #api_test_spec{
@@ -899,7 +896,7 @@ get_eff_user_membership_intermediaries(Config) ->
                 unauthorized = [nobody],
                 forbidden = [
                     {user, NonAdmin}, {user, U1}, {user, U2},
-                    {provider, P1, P1Macaroon}, {provider, P2, P2Macaroon}, {provider, P3, P3Macaroon}
+                    {provider, P1, P1Token}, {provider, P2, P2Token}, {provider, P3, P3Token}
                 ] -- (CorrectUserClients ++ CorrectProviderClients)
             },
             rest_spec = #rest_spec{

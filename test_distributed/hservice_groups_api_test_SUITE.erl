@@ -22,7 +22,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -198,7 +198,7 @@ remove_group_test(Config) ->
             module = handle_service_logic,
             function = remove_group,
             args = [auth, HService, groupId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -314,9 +314,7 @@ get_group_test(Config) ->
                 <<"name">> => ?GROUP_NAME1,
                 <<"type">> => ?GROUP_TYPE1_BIN,
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(Id, G1)
                 end
             })
@@ -442,7 +440,7 @@ update_group_privileges_test(Config) ->
             module = handle_service_logic,
             function = update_group_privileges,
             args = [auth, HService, G1, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
         % TODO gs
     },
@@ -557,9 +555,7 @@ get_eff_group_test(Config) ->
                     auth_hint = ?THROUGH_HANDLE_SERVICE(HService),
                     expected_result = ?OK_MAP_CONTAINS(GroupDetailsBinary#{
                         <<"gri">> => fun(EncodedGri) ->
-                            #gri{id = Id} = oz_test_utils:decode_gri(
-                                Config, EncodedGri
-                            ),
+                            #gri{id = Id} = gri:deserialize(EncodedGri),
                             ?assertEqual(Id, GroupId)
                         end
                     })

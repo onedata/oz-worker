@@ -12,6 +12,7 @@
 -ifndef(API_TEST_UTILS_HRL).
 -define(API_TEST_UTILS_HRL, 1).
 
+-include_lib("ctool/include/errors.hrl").
 -include_lib("gui/include/gui_session.hrl").
 
 %% @formatter:off
@@ -71,7 +72,7 @@
 
 -record(gs_spec, {
     operation = get :: gs_protocol:operation(),
-    gri :: gs_protocol:gri(),
+    gri :: gri:gri(),
     subscribe = false :: boolean(),
     auth_hint = undefined :: gs_protocol:auth_hint(),
     expected_result = undefined :: undefined | gs_expectation()
@@ -86,7 +87,7 @@
 }).
 
 % Convenience macros for expressing gs and/or logic result expectations
--define(OK, ok).
+-define(OK_RES, ok).
 -define(OK_BINARY, ok_binary).
 -define(OK_BINARY(__ExactValue), {ok_binary, __ExactValue}).
 -define(OK_MAP(__ExactValue), {ok_map, __ExactValue}).
@@ -324,6 +325,9 @@
 -define(HARVESTER_PLUGIN_INDEX_ID(H, I), <<H/binary, I/binary>>).
 
 -define(HARVESTER_MOCK_BATCH_ENTRY(Seq, Operation), #{<<"seq">> => Seq, <<"operation">> => Operation}).
+
+%% Example test data for storages
+-define(STORAGE_NAME1, <<"storage1">>).
 
 -define(BAD_VALUES_NAME(Error), [
     {<<"name">>, <<"">>, Error},

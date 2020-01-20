@@ -14,12 +14,14 @@
 
 -include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/privileges.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, update/3, force_delete/1, list/0]).
 -export([get_by_username/1, get_by_linked_account/1]).
 -export([to_string/1, print_summary/0, print_summary/1]).
 -export([entity_logic_plugin/0]).
+-export([get_ctx/0]).
 -export([add_session/2, remove_session/2, get_all_sessions/1]).
 
 %% datastore_model callbacks
@@ -29,7 +31,7 @@
 -type record() :: #od_user{}.
 -type doc() :: datastore_doc:doc(record()).
 -type diff() :: datastore_doc:diff(record()).
--export_type([id/0, record/0]).
+-export_type([id/0, record/0, doc/0]).
 
 -type full_name() :: binary().
 -type username() :: binary().
@@ -46,7 +48,8 @@
 -define(CTX, #{
     model => ?MODULE,
     fold_enabled => true,
-    sync_enabled => true
+    sync_enabled => true,
+    memory_copies => all
 }).
 
 %%%===================================================================
@@ -217,17 +220,17 @@ print_summary(SortPos) when is_integer(SortPos) ->
         }
     end, Users),
     Sorted = lists:keysort(SortPos, UserAttrs),
-    io:format("------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
-    io:format("Id                                FullName             Username             Email                          Groups (eff)   Spaces (eff)   Eff providers~n"),
-    io:format("------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("-----------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("Id                                           FullName             Username             Email                          Groups (eff)   Spaces (eff)   Eff providers~n"),
+    io:format("-----------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
     lists:foreach(fun({Id, FullName, Username, Email, {Groups, EffGroups}, {Spaces, EffSpaces}, Providers}) ->
         GroupsStr = str_utils:format("~B (~B)", [Groups, EffGroups]),
         SpacesStr = str_utils:format("~B (~B)", [Spaces, EffSpaces]),
-        io:format("~-33s ~-20ts ~-20ts ~-30ts ~-14s ~-14s ~-14B~n", [
+        io:format("~-44s ~-20ts ~-20ts ~-30ts ~-14s ~-14s ~-14B~n", [
             Id, FullName, Username, Email, GroupsStr, SpacesStr, Providers
         ])
     end, Sorted),
-    io:format("------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
+    io:format("-----------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
     io:format("~B users in total~n", [length(Sorted)]).
 
 %%--------------------------------------------------------------------
@@ -238,6 +241,10 @@ print_summary(SortPos) when is_integer(SortPos) ->
 -spec entity_logic_plugin() -> module().
 entity_logic_plugin() ->
     user_logic_plugin.
+
+-spec get_ctx() -> datastore:ctx().
+get_ctx() ->
+    ?CTX.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -429,7 +436,7 @@ get_record_struct(8) ->
             {alias, string},
             {emails, [string]},
             {entitlements, [string]},
-            {custom, {custom, {json_utils, encode, decode}}}
+            {custom, {custom, json, {json_utils, encode, decode}}}
         ]}]},
         {entitlements, [string]},
 
@@ -471,7 +478,7 @@ get_record_struct(9) ->
             {alias, string},
             {emails, [string]},
             {entitlements, [string]},
-            {custom, {custom, {json_utils, encode, decode}}},
+            {custom, {custom, json, {json_utils, encode, decode}}},
             {access_token, {string, integer}},
             {refresh_token, string}
         ]}]},
@@ -527,7 +534,7 @@ get_record_struct(10) ->
             {username, string},
             {emails, [string]},
             {entitlements, [string]},
-            {custom, {custom, {json_utils, encode, decode}}},
+            {custom, {custom, json, {json_utils, encode, decode}}},
             {access_token, {string, integer}},
             {refresh_token, string}
         ]}]},

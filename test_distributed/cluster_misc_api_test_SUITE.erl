@@ -21,7 +21,7 @@
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/onedata.hrl").
 
 -include("api_test_utils.hrl").
@@ -72,7 +72,7 @@ list_test(Config) ->
 
     ExpClusters = [?ONEZONE_CLUSTER_ID] ++ lists:map(
         fun(_) ->
-            {ok, {ProviderId, _MacaroonBin}} = oz_test_utils:create_provider(
+            {ok, {ProviderId, _}} = oz_test_utils:create_provider(
                 Config, U1, ?PROVIDER_NAME1
             ),
             _ClusterId = ProviderId
@@ -121,7 +121,6 @@ list_test(Config) ->
 
 
 list_privileges_test(Config) ->
-
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [root, nobody]
@@ -168,29 +167,29 @@ get_onezone_cluster_test(Config) ->
 get_oneprovider_cluster_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
     {ok, ProviderAdmin} = oz_test_utils:create_user(Config),
-    {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(
         Config, ProviderAdmin, ?PROVIDER_NAME1
     ),
     ClusterId = ProviderId,
     {ok, EffUserOfProvider} = oz_test_utils:create_user(Config),
     {ok, Space} = oz_test_utils:create_space(Config, ?USER(EffUserOfProvider), ?UNIQUE_STRING),
-    oz_test_utils:support_space(Config, ProviderId, Space),
+    oz_test_utils:support_space_by_provider(Config, ProviderId, Space),
     VersionInfo = {?DEFAULT_RELEASE_VERSION, ?DEFAULT_BUILD_VERSION, ?EMPTY_GUI_HASH},
 
     get_private_data_test_base(
         Config, ClusterId, ?ONEPROVIDER, VersionInfo,
-        [{provider, ProviderId, Macaroon}],
+        [{provider, ProviderId, ProviderToken}],
         [{user, NonAdmin}, {user, EffUserOfProvider}]
     ),
     get_protected_data_test_base(
         Config, ClusterId, ?ONEPROVIDER, VersionInfo,
-        [{provider, ProviderId, Macaroon}],
+        [{provider, ProviderId, ProviderToken}],
         [{user, NonAdmin}, {user, EffUserOfProvider}]
     ),
     get_public_data_test_base(
         Config, ClusterId, ?ONEPROVIDER, VersionInfo,
         % Every user of onezone is allowed to view public data
-        [{provider, ProviderId, Macaroon}, {user, EffUserOfProvider}, {user, NonAdmin}],
+        [{provider, ProviderId, ProviderToken}, {user, EffUserOfProvider}, {user, NonAdmin}],
         []
     ).
 
@@ -378,7 +377,7 @@ update_onepanel_proxy_test(Config) ->
     AllPrivs = privileges:cluster_privileges(),
 
     EnvSetUpFun = fun() ->
-        {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
+        {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(
             Config, U1, ?PROVIDER_NAME1
         ),
         ClusterId = ProviderId,
@@ -392,7 +391,7 @@ update_onepanel_proxy_test(Config) ->
         ),
         #{
             clusterId => ClusterId,
-            providerClient => {provider, ProviderId, Macaroon}
+            providerClient => {provider, ProviderId, ProviderToken}
         }
     end,
 
@@ -428,12 +427,12 @@ update_onepanel_proxy_test(Config) ->
             module = cluster_logic,
             function = update,
             args = [auth, clusterId, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_cluster, id = clusterId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         data_spec = #data_spec{
             required = [<<"onepanelProxy">>],
@@ -479,7 +478,7 @@ update_version_info_test_base(Config, ClusterType, ServiceType) ->
     AllPrivs = privileges:cluster_privileges(),
 
     EnvSetUpFun = fun() ->
-        {ok, {ProviderId, Macaroon}} = oz_test_utils:create_provider(
+        {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(
             Config, ?PROVIDER_NAME1
         ),
         ClusterId = case ClusterType of
@@ -498,7 +497,7 @@ update_version_info_test_base(Config, ClusterType, ServiceType) ->
         ),
         #{
             clusterId => ClusterId,
-            providerClient => {provider, ProviderId, Macaroon},
+            providerClient => {provider, ProviderId, ProviderToken},
             previousVersionInfo => get_version_info(ServiceType, Cluster)
         }
     end,
@@ -566,12 +565,12 @@ update_version_info_test_base(Config, ClusterType, ServiceType) ->
             module = cluster_logic,
             function = update,
             args = [auth, clusterId, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_cluster, id = clusterId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         data_spec = #data_spec{
             required = [DataKey],

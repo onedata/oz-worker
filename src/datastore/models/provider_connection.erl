@@ -33,7 +33,8 @@
 
 -define(CTX, #{
     model => ?MODULE,
-    disc_driver => undefined
+    disc_driver => undefined,
+    memory_copies => all
 }).
 
 %%%===================================================================

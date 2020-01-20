@@ -19,8 +19,8 @@
 %% API
 -export([
     create/2,
-    get/1, get_user_id/1,
-    exists/1,
+    get/1,
+    get_user_id/1, belongs_to_user/2,
     update/2,
     delete/1, delete/2, delete/3,
     list/0
@@ -38,7 +38,8 @@
 -define(CTX, #{
     model => ?MODULE,
     disc_driver => undefined,
-    fold_enabled => true
+    fold_enabled => true,
+    memory_copies => all
 }).
 
 
@@ -62,11 +63,6 @@ get(Id) ->
     datastore_model:get(?CTX, Id).
 
 
--spec exists(id()) -> {ok, doc()} | {error, term()}.
-exists(Id) ->
-    datastore_model:exists(?CTX, Id).
-
-
 %%--------------------------------------------------------------------
 %% @doc
 %% Retrieves user id - the owner of given session.
@@ -79,6 +75,14 @@ get_user_id(Id) ->
             {ok, UserId};
         {error, _} = Error ->
             Error
+    end.
+
+
+-spec belongs_to_user(id(), od_user:id()) -> boolean().
+belongs_to_user(SessionId, UserId) ->
+    case get_user_id(SessionId) of
+        {ok, UserId} -> true;
+        _ -> false
     end.
 
 

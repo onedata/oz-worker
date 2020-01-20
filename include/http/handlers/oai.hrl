@@ -74,7 +74,7 @@
 -type maybe_invalid_time() :: {non_neg_integer(), non_neg_integer(), non_neg_integer()}.
 -type maybe_invalid_datetime() :: {maybe_invalid_date(), maybe_invalid_time()}.
 -type maybe_invalid_datestamp() :: supported_datestamp() | maybe_invalid_date() | maybe_invalid_datetime().
--type supported_datestamp() :: erlang:datetime() | erlang:date() | undefined.
+-type supported_datestamp() :: calendar:datetime() | calendar:date() | undefined.
 -type oai_date_granularity() :: day_granularity | seconds_granularity.
 
 

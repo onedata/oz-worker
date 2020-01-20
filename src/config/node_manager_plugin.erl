@@ -36,7 +36,7 @@
 % This can be used to e.g. move models between services.
 % Oldest known generation is the lowest one that can be directly upgraded to newest.
 % Human readable version is included to for logging purposes.
--define(INSTALLED_CLUSTER_GENERATION, 1).
+-define(INSTALLED_CLUSTER_GENERATION, 2).
 -define(OLDEST_KNOWN_CLUSTER_GENERATION, {1, <<"19.02.*">>}).
 
 %%%===================================================================
@@ -144,17 +144,18 @@ after_init([]) ->
         onezone_plugins:init(),
 
         % Logic that should be run on a single node
-        is_dedicated_node(shared_token_secret) andalso shared_token_secret:init(),
-        is_dedicated_node(set_up_service) andalso cluster_logic:set_up_oz_worker_service(),
-        is_dedicated_node(init_entity_graph) andalso entity_graph:init_state(),
-        is_dedicated_node(dns) andalso broadcast_dns_config(),
-        is_dedicated_node(predefined_groups) andalso group_logic:ensure_predefined_groups(),
-
-        ok
+        case is_dedicated_node(cluster_setup) of
+            false ->
+                ok;
+            true ->
+                cluster_logic:set_up_oz_worker_service(),
+                entity_graph:init_state(),
+                broadcast_dns_config(),
+                group_logic:ensure_predefined_groups()
+        end
     catch
         _:Error ->
-            ?error_stacktrace("Error in node_manager_plugin:after_init: ~p",
-                [Error]),
+            ?error_stacktrace("Error in node_manager_plugin:after_init: ~p", [Error]),
             {error, cannot_start_node_manager_plugin}
     end.
 
@@ -165,9 +166,12 @@ after_init([]) ->
 %% This callback is executed only on one cluster node.
 %% @end
 %%--------------------------------------------------------------------
--spec upgrade_cluster(node_manager:cluster_generation()) -> no_return().
-upgrade_cluster(_CurrentGeneration) ->
-    error(not_supported).
+-spec upgrade_cluster(node_manager:cluster_generation()) ->
+    {ok, node_manager:cluster_generation()}.
+upgrade_cluster(1) ->
+    token_logic:migrate_deprecated_tokens(),
+    storage_logic:migrate_legacy_supports(),
+    {ok, 2}.
 
 
 %%--------------------------------------------------------------------

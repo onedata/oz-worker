@@ -13,15 +13,16 @@
 -include("registered_names.hrl").
 -include_lib("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
+-include_lib("ctool/include/http/headers.hrl").
 -include_lib("xmerl/include/xmerl.hrl").
 
 
 % Use "Macaroon", "X-Auth-Token" and "Authorization: Bearer" headers variably,
 % as they all should be accepted.
 -define(ACCESS_TOKEN_HEADER(AccessToken), case rand:uniform(3) of
-    1 -> #{<<"macaroon">> => AccessToken};
-    2 -> #{<<"x-auth-token">> => AccessToken};
-    3 -> #{<<"authorization">> => <<"Bearer ", AccessToken/binary>>}
+    1 -> #{?HDR_MACAROON => AccessToken}; %% @TODO VFS-5554 Deprecated
+    2 -> #{?HDR_X_AUTH_TOKEN => AccessToken};
+    3 -> #{?HDR_AUTHORIZATION => <<"Bearer ", AccessToken/binary>>}
 end).
 
 
@@ -55,8 +56,13 @@ end).
 %%          nobody
 %%          root
 %%          {user, <<"uid">>}
-%%          {user, <<"uid">>, <<"macaroon">>}
-%%          {provider, <<"id">>, <<"macaroon">>}
+%%          {user, <<"uid">>, <<"token">>}
+%%          {provider, <<"id">>}
+%%          {provider, <<"id">>, <<"token">>}
+%%          % Uses the same auth as provider, but indicates the service type
+%%          (in the auth header a.k.a. service access token)
+%%          {op_panel, <<"id">>}
+%%          {op_panel, <<"id">>, <<"token">>}
 %%          undefined
 %%      opts => % Optional, default: []
 %%          [http_client_option]
@@ -94,7 +100,7 @@ check_rest_call(Config, ArgsMap) ->
         end,
         ReqHeaders = case maps:get(headers, RequestMap, undefined) of
             undefined ->
-                #{<<"content-type">> => <<"application/json">>};
+                #{?HDR_CONTENT_TYPE => <<"application/json">>};
             Map2 when is_map(Map2) ->
                 Map2
         end,
@@ -115,28 +121,29 @@ check_rest_call(Config, ArgsMap) ->
 
         URL = str_utils:join_binary([ReqURL | ReqPath]),
         ReqAuth = maps:get(auth, RequestMap, undefined),
+        Now = oz_test_utils:cluster_time_seconds(Config),
         HeadersPlusAuth = case ReqAuth of
             undefined ->
                 ReqHeaders;
             nobody ->
                 ReqHeaders;
-            {provider, _, Macaroon} ->
-                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Macaroon));
+            {provider, ProviderId} ->
+                Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(?ONEPROVIDER, ProviderId)),
+                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token));
+            {provider, _, Token} ->
+                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token));
+            {op_panel, ProviderId} ->
+                Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(?ONEPROVIDER, ProviderId)),
+                ServiceToken = tokens:build_service_access_token(?OP_PANEL, Token),
+                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(ServiceToken));
+            {op_panel, _, Token} ->
+                ServiceToken = tokens:build_service_access_token(?OP_PANEL, Token),
+                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(ServiceToken));
             {user, UserId} ->
-                % Cache user auth tokens, if none in cache create a new one.
-                Macaroon = case get({macaroon, UserId}) of
-                    undefined ->
-                        {ok, Mac} = oz_test_utils:create_client_token(
-                            Config, UserId
-                        ),
-                        put({macaroon, UserId}, Mac),
-                        Mac;
-                    Mac ->
-                        Mac
-                end,
-                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Macaroon));
-            {user, _, Macaroon} ->
-                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Macaroon))
+                Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(user, UserId)),
+                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token));
+            {user, _, Token} ->
+                maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token))
         end,
 
 %%        %% Useful for debug

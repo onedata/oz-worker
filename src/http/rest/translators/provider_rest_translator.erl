@@ -35,6 +35,8 @@ create_response(#gri{id = undefined, aspect = instance}, _, resource, {#gri{id =
 
     rest_translator:ok_body_reply(#{
         <<"providerId">> => ProvId,
+        <<"providerRootToken">> => Serialized,
+        %% @TODO VFS-5554 Deprecated, for backward compatibility
         <<"macaroon">> => Serialized
     });
 
@@ -42,15 +44,14 @@ create_response(#gri{id = undefined, aspect = instance_dev}, _, resource, {#gri{
     {ok, Serialized} = tokens:serialize(Token),
     rest_translator:ok_body_reply(#{
         <<"providerId">> => ProvId,
+        <<"providerRootToken">> => Serialized,
+        %% @TODO VFS-5554 Deprecated, for backward compatibility
         <<"macaroon">> => Serialized
     });
 
 create_response(#gri{aspect = provider_registration_token}, _, value, Token) ->
-    {ok, Serialized} = macaroons:serialize(Token),
+    {ok, Serialized} = tokens:serialize(Token),
     rest_translator:ok_body_reply(#{<<"token">> => Serialized});
-
-create_response(#gri{aspect = support}, _, resource, {#gri{id = SpaceId}, _}) ->
-    rest_translator:created_reply([<<"provider">>, <<"spaces">>, SpaceId]);
 
 create_response(#gri{aspect = check_my_ports}, _, value, Value) ->
     rest_translator:ok_body_reply(Value);

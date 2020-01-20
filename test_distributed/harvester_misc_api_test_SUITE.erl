@@ -19,7 +19,7 @@
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
 -include_lib("ctool/include/test/performance.hrl").
--include_lib("ctool/include/api_errors.hrl").
+-include_lib("ctool/include/errors.hrl").
 
 -include("api_test_utils.hrl").
 
@@ -91,7 +91,7 @@ create_test(Config) ->
     [Node | _] = ?config(oz_worker_nodes, Config),
     VerifyFun = fun(HarvesterId, Data) ->
         ExpConfig = maps:get(<<"guiPluginConfig">>, Data, #{}),
-        ExpEndpoint = gs_protocol:null_to_undefined(maps:get(<<"endpoint">>, Data, undefined)),
+        ExpEndpoint = utils:null_to_undefined(maps:get(<<"endpoint">>, Data, undefined)),
         {ok, Harvester} = oz_test_utils:get_harvester(Config, HarvesterId),
         ?assertEqual(?CORRECT_NAME, Harvester#od_harvester.name),
         ?assertEqual(ExpEndpoint, Harvester#od_harvester.endpoint),
@@ -233,6 +233,8 @@ get_test(Config) ->
     oz_test_utils:user_set_oz_privileges(Config, U1, [?OZ_HARVESTERS_CREATE], []),
     {ok, U2} = oz_test_utils:create_user(Config),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, {P1, T1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P2, T2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
 
     AllPrivs = privileges:harvester_privileges(),
     {ok, H1} = oz_test_utils:create_harvester(Config, ?USER(U1), ?HARVESTER_CREATE_DATA),
@@ -244,11 +246,10 @@ get_test(Config) ->
         [?HARVESTER_VIEW], AllPrivs -- [?HARVESTER_VIEW]
     ),
 
-    {ok, S} = oz_test_utils:create_space(
-        Config, ?USER(U1), ?SPACE_NAME1
-    ),
+    {ok, S} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
 
     oz_test_utils:harvester_add_space(Config, H1, S),
+    oz_test_utils:support_space_by_provider(Config, P1, S),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -257,11 +258,13 @@ get_test(Config) ->
         client_spec = #client_spec{
             correct = [
                 root,
+                {provider, P1, T1},
                 {user, U2}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {admin, [?OZ_HARVESTERS_VIEW]},
+                {provider, P2, T2},
                 {user, NonAdmin},
                 {user, U1}
             ]
@@ -302,9 +305,7 @@ get_test(Config) ->
                 <<"indices">> => [],
                 <<"spaces">> => [S],
                 <<"gri">> => fun(EncodedGri) ->
-                    #gri{id = Id} = oz_test_utils:decode_gri(
-                        Config, EncodedGri
-                    ),
+                    #gri{id = Id} = gri:deserialize(EncodedGri),
                     ?assertEqual(H1, Id)
                 end
 
@@ -472,7 +473,7 @@ update_test(Config) ->
         ExpPublic = ExpValueFun(ShouldSucceed, <<"public">>, Data, false),
         
         ?assertEqual(ExpName, Harvester#od_harvester.name),
-        ?assertEqual(gs_protocol:null_to_undefined(ExpEndpoint), Harvester#od_harvester.endpoint),
+        ?assertEqual(utils:null_to_undefined(ExpEndpoint), Harvester#od_harvester.endpoint),
         ?assertEqual(ExpPlugin, atom_to_binary(Harvester#od_harvester.plugin, utf8)),
         ?assertEqual(ExpPublic, Harvester#od_harvester.public)
     end,
@@ -499,12 +500,12 @@ update_test(Config) ->
             module = harvester_logic,
             function = update,
             args = [auth, harvesterId, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [<<"name">>, <<"endpoint">>, <<"plugin">>, <<"public">>],
@@ -585,12 +586,12 @@ update_gui_plugin_config_test(Config) ->
             module = harvester_logic,
             function = update_gui_plugin_config,
             args = [auth, harvesterId, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = gui_plugin_config},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         data_spec = #data_spec{
             required = [<<"guiPluginConfig">>],
@@ -655,12 +656,12 @@ delete_test(Config) ->
             module = harvester_logic,
             function = delete,
             args = [auth, harvesterId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = instance},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_scenarios:run_scenario(delete_entity,
@@ -725,12 +726,12 @@ delete_harvested_metadata_test(Config) ->
             module = harvester_logic,
             function = delete_harvested_metadata,
             args = [auth, harvesterId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = metadata},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
@@ -751,7 +752,7 @@ create_index_test(Config) ->
         {ok, Harvester} = oz_test_utils:get_harvester(Config, H1),
         Indices = Harvester#od_harvester.indices,
         ExpSchema = maps:get(<<"schema">>, Data, undefined),
-        ExpGuiPluginName = gs_protocol:null_to_undefined(maps:get(<<"guiPluginName">>, Data, undefined)),
+        ExpGuiPluginName = utils:null_to_undefined(maps:get(<<"guiPluginName">>, Data, undefined)),
         
         ?assertEqual(true, lists:member(IndexId, maps:keys(Indices))),
         Index = maps:get(IndexId, Indices),
@@ -987,7 +988,7 @@ update_index_test(Config) ->
         } = maps:get(IndexId, Indices),
 
         ExpName = ExpValueFun(ShouldSucceed, <<"name">>, Data, ?HARVESTER_INDEX_NAME),
-        ExpGuiPluginName = gs_protocol:null_to_undefined(ExpValueFun(ShouldSucceed, <<"guiPluginName">>, Data, undefined)),
+        ExpGuiPluginName = utils:null_to_undefined(ExpValueFun(ShouldSucceed, <<"guiPluginName">>, Data, undefined)),
         
         ?assertEqual(ExpName, ActualName),
         ?assertEqual(ExpGuiPluginName, ActualGuiPluginName)
@@ -1015,12 +1016,12 @@ update_index_test(Config) ->
             module = harvester_logic,
             function = update_index,
             args = [auth, harvesterId, indexId, data],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = update,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = {index, indexId}},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         data_spec = #data_spec{
             at_least_one = [<<"name">>, <<"guiPluginName">>],
@@ -1085,12 +1086,12 @@ delete_index_test(Config) ->
             module = harvester_logic,
             function = delete_index,
             args = [auth, harvesterId, indexId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = {index, indexId}},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
@@ -1147,12 +1148,12 @@ delete_index_metadata_test(Config) ->
             module = harvester_logic,
             function = delete_index_metadata,
             args = [auth, harvesterId, indexId],
-            expected_result = ?OK
+            expected_result = ?OK_RES
         },
         gs_spec = #gs_spec{
             operation = delete,
             gri = #gri{type = od_harvester, id = harvesterId, aspect = {index_metadata, indexId}},
-            expected_result = ?OK
+            expected_result = ?OK_RES
         }
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec, EnvSetUpFun, undefined, VerifyEndFun)).
@@ -1302,12 +1303,10 @@ submit_batch_test(Config) ->
         ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)),
     oz_test_utils:harvester_add_user(Config, H1, U1),
 
-    {ok, {P1, M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P1, T1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, P1, S1, oz_test_utils:minimum_support_size(Config)
-    ),
-    {ok, {P2, M2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, S1} = oz_test_utils:support_space_by_provider(Config, P1, S1),
+    {ok, {P2, T2}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
 
     oz_test_utils:harvester_add_space(Config, H1, S1),
 
@@ -1318,12 +1317,12 @@ submit_batch_test(Config) ->
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
-                {provider, P1,M1}
+                {provider, P1, T1}
             ],
             unauthorized = [nobody],
             forbidden = [
                 {user, U1},
-                {provider, P2,M2}
+                {provider, P2, T2}
             ]
         },
         logic_spec = #logic_spec{
@@ -1352,19 +1351,15 @@ submit_batch_index_stats_test(Config) ->
         ?HARVESTER_CREATE_DATA(?HARVESTER_NAME1, ?HARVESTER_MOCK_PLUGIN_BINARY)),
     oz_test_utils:harvester_add_user(Config, H1, U1),
 
-    {ok, {P1, _M1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P1, _T1}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
-    {ok, S1} = oz_test_utils:support_space(
-        Config, P1, S1, oz_test_utils:minimum_support_size(Config)
-    ),
-
+    {ok, S1} = oz_test_utils:support_space_by_provider(Config, P1, S1),
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
     oz_test_utils:harvester_add_space(Config, H1, S1),
 
     {ok, Index1} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
     {ok, Index2} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA),
     {ok, FailingIndex} = oz_test_utils:harvester_create_index(Config, H1, ?HARVESTER_INDEX_CREATE_DATA(<<"fail">>)),
-    
-    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     % Created indices have empty stats
     {ok, #{S1 := #{P1 := Stats1_0}}} = oz_test_utils:harvester_get_index_stats(Config, H1, Index1),

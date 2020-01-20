@@ -160,13 +160,6 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_provider, id = ?CLIENT_ID, aspect = spaces}
     }},
-    %% Add space storage support
-    %% This operation does not require any specific privileges.
-    {<<"/provider/spaces/support">>, #rest_req{
-        method = 'POST',
-        produces = [<<"application/json">>],
-        b_gri = #b_gri{type = od_provider, id = ?CLIENT_ID, aspect = support}
-    }},
     %% Get space details by provider
     %% This operation does not require any specific privileges.
     {<<"/provider/spaces/:sid">>, #rest_req{

@@ -178,7 +178,7 @@ parse_harvesting_datestamps(ArgsList) ->
 %%% @private
 %%% @doc
 %%% Validates and converts datestamp from format defined by
-%%% OAI-PMH to erlang:datetime() or erlang:date().
+%%% OAI-PMH to calendar:datetime() or calendar:date().
 %%% Converts:
 %%%     * YYYY-MM-DDT:hh:mm:ssZ to {{Year, Month, Day},{Hour, Minutes, Seconds}}
 %%%     * YYYY-MM-DD to {Year, Month, Day}
@@ -188,7 +188,8 @@ parse_harvesting_datestamps(ArgsList) ->
 validate_and_convert_datestamp(undefined) -> undefined;
 validate_and_convert_datestamp(Date) ->
     case oai_utils:oai_datestamp_to_datetime(Date) of
-        {error, invalid_date_format} ->throw({invalid_date_format, Date});
+        {error, invalid_date_format} ->
+            throw({invalid_date_format, Date});
         ConvertedDate ->
             case is_valid_datestamp(ConvertedDate) of
                 true -> ConvertedDate;
