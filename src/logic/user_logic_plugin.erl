@@ -672,6 +672,10 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
                     Space#od_space.creator =:= ?SUB(user, UserId)
             end;
 
+        {?PROVIDER(ProviderId), ?THROUGH_SPACE(SpaceId)} ->
+            % UserId's membership in space is checked in 'exists'
+            space_logic:has_provider(SpaceId, ProviderId);
+
         {?USER(ClientUserId), ?THROUGH_HANDLE_SERVICE(HServiceId)} ->
             {ok, {HService, _}} = handle_service_logic_plugin:fetch_entity(HServiceId),
             % UserId's membership in handle_service is checked in 'exists'

@@ -684,6 +684,10 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             % Group's membership in space is checked in 'exists'
             space_logic:has_eff_privilege(SpaceId, ClientUserId, ?SPACE_VIEW);
 
+        {?PROVIDER(ProviderId), ?THROUGH_SPACE(SpaceId)} ->
+            % Group's membership in space is checked in 'exists'
+            space_logic:has_provider(SpaceId, ProviderId);
+
         {?USER(ClientUserId), ?THROUGH_HANDLE_SERVICE(HServiceId)} ->
             % Group's membership in handle_service is checked in 'exists'
             handle_service_logic:has_eff_privilege(HServiceId, ClientUserId, ?HANDLE_SERVICE_VIEW);

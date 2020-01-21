@@ -33,6 +33,7 @@
     delete/2
 ]).
 -export([
+    get_name/2,
     get_eff_users/2, get_eff_user/3,
     get_eff_user_membership_intermediaries/3,
     get_eff_groups/2, get_eff_group/3,
@@ -338,6 +339,15 @@ get_domain_config(Auth, ProviderId) ->
         operation = get,
         auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = domain_config}}).
+
+
+-spec get_name(aai:auth(), od_provider:id()) ->
+    {ok, od_provider:name()} | {error, term()}.
+get_name(Auth, ProviderId) ->
+    case get(Auth, ProviderId) of
+        {ok, #od_provider{name = Name}} -> {ok, Name};
+        {error, _} = Error -> Error
+    end.
 
 
 %%--------------------------------------------------------------------
