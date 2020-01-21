@@ -341,8 +341,8 @@ print_collection(Config, Env, Collection) ->
         4 -> [CollectionAtom, SortBy, SortOrder]
     end,
     Result = oz_test_utils:call_oz(Config, db_browser, format, Args),
-    case string:str(Result, "\n0 entries in total") of
-        0 ->
+    case string:find(Result, "\n0 entries in total") of
+        nomatch ->
             % Okay, dump the results to logs so that they can be examined
             ct:pal("~w:~n~s", [Args, oz_test_utils:call_oz(Config, db_browser, format, Args)]);
         _ ->
