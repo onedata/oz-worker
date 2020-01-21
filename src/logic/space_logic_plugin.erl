@@ -276,8 +276,9 @@ create(#el_req{auth = Auth, gri = #gri{id = SpaceId, aspect = harvest_metadata},
 
     {ok, value, lists:foldl(
         fun({HarvesterId, {error, _} = Error}, Acc) -> Acc#{HarvesterId => #{<<"error">> => Error}};
-           ({HarvesterId, FailedIndices}, Acc) when map_size(FailedIndices) =/= 0 -> Acc#{HarvesterId => FailedIndices};
-           (_, Acc) -> Acc
+            ({HarvesterId, FailedIndices}, Acc) when map_size(FailedIndices) =/= 0 ->
+                Acc#{HarvesterId => FailedIndices};
+            (_, Acc) -> Acc
         end, #{}, Res)}.
 
 
@@ -392,7 +393,7 @@ delete(#el_req{gri = #gri{id = SpaceId, aspect = instance}}) ->
                 fun(ExistingStats) ->
                     harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, true)
                 end)
-            end, Harvesters),
+        end, Harvesters),
         entity_graph:delete_with_relations(od_space, SpaceId)
     end;
 
@@ -539,14 +540,12 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = group}}, Space) 
             false
     end;
 
-authorize(#el_req{operation = create, gri = #gri{id = SpaceId, aspect = harvest_metadata},
-    auth = ?PROVIDER(ProviderId), data = #{<<"batch">> := Batch}}, Space) ->
-
-    space_logic:has_provider(Space, ProviderId) andalso
-            lists:all(fun(#{<<"fileId">> := FileId}) ->
-                {ok, Guid} = file_id:objectid_to_guid(FileId),
-                file_id:guid_to_space_id(Guid) == SpaceId
-            end, Batch);
+authorize(Req = #el_req{operation = create, gri = #gri{id = SpaceId, aspect = harvest_metadata}, data = Data}, Space) ->
+    auth_by_support(Req, Space) andalso
+        lists:all(fun(#{<<"fileId">> := FileId}) ->
+            {ok, Guid} = file_id:objectid_to_guid(FileId),
+            file_id:guid_to_space_id(Guid) == SpaceId
+        end, maps:get(<<"batch">>, Data));
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = invite_user_token}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_ADD_USER);
@@ -561,12 +560,7 @@ authorize(#el_req{operation = get, gri = #gri{aspect = privileges}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, Space) ->
-    case Req#el_req.auth of
-        ?USER(UserId) ->
-            auth_by_privilege(UserId, Space, ?SPACE_VIEW);
-        ?PROVIDER(ProviderId) ->
-            space_logic:has_provider(Space, ProviderId)
-    end;
+    auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse auth_by_support(Req, Space);
 
 authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Space) ->
     case {Req#el_req.auth, Req#el_req.auth_hint} of
@@ -608,31 +602,32 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
 authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
     true;
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {user_privileges, _}}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_VIEW_PRIVILEGES);
+    auth_by_privilege(Req, Space, ?SPACE_VIEW_PRIVILEGES) orelse auth_by_support(Req, Space);
 
 authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_privileges, UserId}}}, _) ->
     true;
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_privileges, _}}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_VIEW_PRIVILEGES);
+    auth_by_privilege(Req, Space, ?SPACE_VIEW_PRIVILEGES) orelse auth_by_support(Req, Space);
 
 authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_membership, UserId}}}, _) ->
     true;
-
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_membership, _}}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_VIEW);
+    auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse auth_by_support(Req, Space);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {group_privileges, _}}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_VIEW_PRIVILEGES);
+    auth_by_privilege(Req, Space, ?SPACE_VIEW_PRIVILEGES) orelse auth_by_support(Req, Space);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_group_privileges, _}}}, Space) ->
-    auth_by_privilege(Req, Space, ?SPACE_VIEW_PRIVILEGES);
+    auth_by_privilege(Req, Space, ?SPACE_VIEW_PRIVILEGES) orelse auth_by_support(Req, Space);
 
 authorize(Req = #el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, Space) ->
-    group_logic:has_eff_user(GroupId, UserId) orelse auth_by_privilege(Req, Space, ?SPACE_VIEW);
+    group_logic:has_eff_user(GroupId, UserId) orelse
+        auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse
+        auth_by_support(Req, Space);
 
-authorize(Req = #el_req{operation = get, auth = ?USER}, Space) ->
-    % All other resources can be accessed with view privileges
-    auth_by_privilege(Req, Space, ?SPACE_VIEW);
+authorize(Req = #el_req{operation = get}, Space) ->
+    % All other resources can be accessed with view privileges or by the supporting provider
+    auth_by_privilege(Req, Space, ?SPACE_VIEW) orelse auth_by_support(Req, Space);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, Space) ->
     auth_by_privilege(Req, Space, ?SPACE_UPDATE);
@@ -863,19 +858,17 @@ validate(#el_req{operation = update, gri = #gri{aspect = {group_privileges, Id}}
 %%% Internal functions
 %%%===================================================================
 
-%%--------------------------------------------------------------------
 %% @private
-%% @doc
-%% Returns if given user has specific effective privilege in the space.
-%% UserId is either given explicitly or derived from entity logic request.
-%% Auths of type other than user are discarded.
-%% @end
-%%--------------------------------------------------------------------
 -spec auth_by_privilege(entity_logic:req() | od_user:id(),
     od_space:id() | od_space:info(), privileges:space_privilege()) -> boolean().
 auth_by_privilege(#el_req{auth = ?USER(UserId)}, SpaceOrId, Privilege) ->
-    auth_by_privilege(UserId, SpaceOrId, Privilege);
-auth_by_privilege(#el_req{auth = _OtherAuth}, _SpaceOrId, _Privilege) ->
-    false;
-auth_by_privilege(UserId, SpaceOrId, Privilege) ->
-    space_logic:has_eff_privilege(SpaceOrId, UserId, Privilege).
+    space_logic:has_eff_privilege(SpaceOrId, UserId, Privilege);
+auth_by_privilege(_, _, _) ->
+    false.
+
+
+%% @private
+auth_by_support(#el_req{auth = ?PROVIDER(ProviderId)}, Space) ->
+    space_logic:has_provider(Space, ProviderId);
+auth_by_support(_, _) ->
+    false.
