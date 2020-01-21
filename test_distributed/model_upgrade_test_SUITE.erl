@@ -832,12 +832,84 @@ get_record(od_user, 10) -> {
         true
     }
 };
-get_record(od_user, 11) -> #od_user{
+get_record(od_user, 11) -> {od_user,
+    <<"name">>,
+    <<"username">>,
+    true,
+    undefined,
+    [<<"email1@email.com">>, <<"email2@email.com">>],
+
+    [
+        #linked_account{
+            idp = google,
+            subject_id = <<"user_id1">>,
+            full_name = <<"name1">>,
+            username = <<"username1">>,
+            emails = [<<"email1@email.com">>],
+            entitlements = [],
+            custom = #{},
+            access_token = {undefined, 0},
+            refresh_token = undefined
+        },
+        #linked_account{
+            idp = github,
+            subject_id = <<"user_id2">>,
+            full_name = <<"name2">>,
+            username = <<"username2">>,
+            emails = [<<"email2@email.com">>],
+            entitlements = [],
+            custom = #{},
+            access_token = {undefined, 0},
+            refresh_token = undefined
+        }
+    ],
+    [{<<"ent1">>, member}, {<<"ent2">>, member}, {<<"ent3">>, member}],
+
+    [],
+
+    <<"default_space">>,
+    <<"default_provider">>,
+
+    [<<"token1">>, <<"token2">>],
+    #{
+        <<"sp1">> => <<"sp1Name">>,
+        <<"sp2">> => <<"sp2Name">>
+    },
+
+    [
+        ?OZ_GROUPS_ADD_RELATIONSHIPS, ?OZ_GROUPS_LIST, ?OZ_GROUPS_LIST_RELATIONSHIPS, ?OZ_GROUPS_REMOVE_RELATIONSHIPS, ?OZ_GROUPS_VIEW,
+        ?OZ_PROVIDERS_LIST, ?OZ_PROVIDERS_LIST_RELATIONSHIPS, ?OZ_PROVIDERS_VIEW,
+        ?OZ_SET_PRIVILEGES,
+        ?OZ_SPACES_ADD_RELATIONSHIPS, ?OZ_SPACES_LIST, ?OZ_SPACES_LIST_RELATIONSHIPS, ?OZ_SPACES_REMOVE_RELATIONSHIPS, ?OZ_SPACES_VIEW,
+        ?OZ_USERS_LIST, ?OZ_USERS_VIEW, ?OZ_VIEW_PRIVILEGES
+    ],
+    [],
+
+    [<<"group1">>, <<"group2">>, <<"group3">>],
+    [<<"space1">>, <<"space2">>, <<"space3">>],
+    [<<"hservice1">>, <<"hservice2">>, <<"hservice3">>],
+    [<<"handle1">>, <<"handle2">>, <<"handle3">>],
+    [],
+    [],
+
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+    #{},
+
+    ?DUMMY_TIMESTAMP,
+
+    true
+};
+get_record(od_user, 12) -> #od_user{
     full_name = <<"name">>,
     username = <<"username">>,
-    emails = [<<"email1@email.com">>, <<"email2@email.com">>],
     basic_auth_enabled = true,
     password_hash = undefined,
+    emails = [<<"email1@email.com">>, <<"email2@email.com">>],
 
     linked_accounts = [
         #linked_account{
@@ -866,9 +938,6 @@ get_record(od_user, 11) -> #od_user{
     entitlements = [{<<"ent1">>, member}, {<<"ent2">>, member}, {<<"ent3">>, member}],
 
     active_sessions = [],
-
-    default_space = <<"default_space">>,
-    default_provider = <<"default_provider">>,
 
     client_tokens = [<<"token1">>, <<"token2">>],
     space_aliases = #{

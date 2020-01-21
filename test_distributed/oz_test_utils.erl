@@ -55,15 +55,9 @@
     user_get_harvesters/2,
     user_get_clusters/2,
     user_set_oz_privileges/4,
-    user_set_default_space/3,
-    user_get_default_space/2,
-    user_unset_default_space/2,
     user_set_space_alias/4,
     user_get_space_alias/3,
     user_unset_space_alias/3,
-    user_set_default_provider/3,
-    user_get_default_provider/2,
-    user_unset_default_provider/2,
 
     user_leave_space/3,
     user_leave_harvester/3,
@@ -519,44 +513,6 @@ user_set_oz_privileges(Config, UserId, PrivsToGrant, PrivsToRevoke) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Sets default space of a user.
-%% @end
-%%--------------------------------------------------------------------
--spec user_set_default_space(Config :: term(), UserId :: od_user:id(),
-    SpaceId :: od_space:id()) -> ok.
-user_set_default_space(Config, UserId, SpaceId) ->
-    ?assertMatch(ok, call_oz(Config, user_logic, set_default_space, [
-        ?ROOT, UserId, SpaceId
-    ])).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Retrieve default space of a user.
-%% @end
-%%--------------------------------------------------------------------
--spec user_get_default_space(Config :: term(),
-    UserId :: od_user:id()) -> SpaceId :: od_space:id().
-user_get_default_space(Config, UserId) ->
-    ?assertMatch({ok, _}, call_oz(
-        Config, user_logic, get_default_space, [?ROOT, UserId]
-    )).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Unsets default space of a user.
-%% @end
-%%--------------------------------------------------------------------
--spec user_unset_default_space(Config :: term(), UserId :: od_user:id()) -> ok.
-user_unset_default_space(Config, UserId) ->
-    ?assertMatch(ok, call_oz(Config, user_logic, unset_default_space, [
-        ?ROOT, UserId
-    ])).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Sets alias for a space of a user.
 %% @end
 %%--------------------------------------------------------------------
@@ -591,45 +547,6 @@ user_get_space_alias(Config, UserId, SpaceId) ->
 user_unset_space_alias(Config, UserId, SpaceId) ->
     ?assertMatch(ok, call_oz(Config, user_logic, delete_space_alias, [
         ?ROOT, UserId, SpaceId
-    ])).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Sets default provider of a user.
-%% @end
-%%--------------------------------------------------------------------
--spec user_set_default_provider(Config :: term(), UserId :: od_user:id(),
-    ProviderId :: od_provider:id()) -> ok.
-user_set_default_provider(Config, UserId, ProviderId) ->
-    ?assertMatch(ok, call_oz(Config, user_logic, set_default_provider, [
-        ?ROOT, UserId, ProviderId
-    ])).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Sets default provider of a user.
-%% @end
-%%--------------------------------------------------------------------
--spec user_get_default_provider(Config :: term(),
-    UserId :: od_user:id()) -> {ok, ProviderId :: od_provider:id()}.
-user_get_default_provider(Config, UserId) ->
-    ?assertMatch({ok, _}, call_oz(Config, user_logic, get_default_provider, [
-        ?ROOT, UserId
-    ])).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Unsets default provider of a user.
-%% @end
-%%--------------------------------------------------------------------
--spec user_unset_default_provider(Config :: term(), UserId :: od_user:id()) ->
-    ok.
-user_unset_default_provider(Config, UserId) ->
-    ?assertMatch(ok, call_oz(Config, user_logic, unset_default_provider, [
-        ?ROOT, UserId
     ])).
 
 
