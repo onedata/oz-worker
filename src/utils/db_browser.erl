@@ -510,7 +510,7 @@ format_table(TableType, Entries, SortBy, SortOrder, Fields, ExtraSpecs) ->
         str_utils:format("~B entries in total~n~n", [length(SortedValues)]),
         case bottom_note(TableType) of
             undefined -> [];
-            BottomNode -> str_utils:format("~s~n~n", [BottomNode])
+            BottomNote -> str_utils:format("~s~n~n", [BottomNote])
         end
     ]).
 
