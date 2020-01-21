@@ -133,9 +133,6 @@
 
     active_sessions = [] :: [session:id()],
 
-    default_space = undefined :: undefined | binary(),
-    default_provider = undefined :: undefined | binary(),
-
     % List of user's client tokens
     client_tokens = [] :: [binary()],
     % List of user's aliases for spaces

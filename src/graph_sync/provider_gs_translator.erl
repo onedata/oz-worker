@@ -108,7 +108,6 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
         username = Username,
         emails = Emails,
         linked_accounts = LinkedAccounts,
-        default_space = DefaultSpace,
         space_aliases = SpaceAliases
     } = User,
     #{
@@ -116,7 +115,6 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
         <<"username">> => gs_protocol:undefined_to_null(Username),
         <<"emails">> => Emails,
         <<"linkedAccounts">> => linked_accounts:to_maps(LinkedAccounts),
-        <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
         <<"spaceAliases">> => SpaceAliases,
 
         <<"effectiveGroups">> => entity_graph:get_relations(effective, top_down, od_group, User),
@@ -125,6 +123,7 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
         <<"effectiveHandleServices">> => entity_graph:get_relations(effective, top_down, od_handle_service, User),
 
         % TODO VFS-4506 deprecated fields, included for backward compatibility
+        <<"defaultSpaceId">> => null,
         <<"name">> => FullName,
         <<"login">> => gs_protocol:undefined_to_null(Username),
         <<"alias">> => gs_protocol:undefined_to_null(Username),

@@ -130,9 +130,7 @@ translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, U
         basic_auth_enabled = BasicAuthEnabled,
         password_hash = PasswordHash,
         full_name = FullName,
-        username = Username,
-        default_space = DefaultSpace,
-        default_provider = DefaultProvider
+        username = Username
     } = User,
     #{
         <<"scope">> => <<"private">>,
@@ -140,8 +138,6 @@ translate_user(GRI = #gri{type = od_user, aspect = instance, scope = private}, U
         <<"hasPassword">> => PasswordHash /= undefined,
         <<"fullName">> => FullName,
         <<"username">> => gs_protocol:undefined_to_null(Username),
-        <<"defaultSpaceId">> => gs_protocol:undefined_to_null(DefaultSpace),
-        <<"defaultProviderId">> => gs_protocol:undefined_to_null(DefaultProvider),
         <<"clientTokenList">> => gs_protocol:gri_to_string(GRI#gri{aspect = client_tokens, scope = private}),
         <<"linkedAccountList">> => gs_protocol:gri_to_string(GRI#gri{aspect = linked_accounts, scope = private}),
         <<"groupList">> => gs_protocol:gri_to_string(GRI#gri{aspect = eff_groups, scope = private}),
