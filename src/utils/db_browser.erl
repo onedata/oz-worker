@@ -495,9 +495,19 @@ format_table(TableType, Entries, SortBy, SortOrder, Fields, ExtraSpecs) ->
         format_separator_line(TotalWidth),
         format_table_header(FieldsToInclude),
         format_separator_line(TotalWidth),
-        [format_row(Row, FieldsToInclude) || Row <- SortedValues],
-        format_separator_line(TotalWidth),
-        str_utils:format("~B entries in total~n~n", [length(Docs)]),
+        case length(SortedValues) of
+            0 -> [
+                str_utils:format("<empty>~n"),
+                format_separator_line(TotalWidth)
+            ];
+            _ -> [
+                [format_row(Row, FieldsToInclude) || Row <- SortedValues],
+                format_separator_line(TotalWidth),
+                format_table_header(FieldsToInclude),
+                format_separator_line(TotalWidth)
+            ]
+        end,
+        str_utils:format("~B entries in total~n~n", [length(SortedValues)]),
         case bottom_note(TableType) of
             undefined -> [];
             BottomNode -> str_utils:format("~s~n~n", [BottomNode])
