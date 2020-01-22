@@ -62,7 +62,7 @@
 
 -export([pr/1, pr/2, pr/3]).
 -export([format/1, format/2, format/3]).
--export([call_from_script/1]).
+-export([call_from_script/2]).
 -export([print_help/0]).
 -export([all_collections/0]).
 
@@ -100,7 +100,8 @@ harvesters() -> pr(harvesters).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Prints requested collection to the console in form of a table.
+%% Prints requested collection to the console in form of a table,
+%% or error details and help in case of an error.
 %% @end
 %%--------------------------------------------------------------------
 -spec pr(collection()) -> ok.
@@ -117,13 +118,13 @@ pr(Collection, SortBy) ->
 
 -spec pr(collection(), sort_by(), sort_order()) -> ok.
 pr(Collection, SortBy, SortOrder) ->
-    catch io:format("~s", [format(Collection, SortBy, SortOrder)]),
-    ok.
+    io:format("~s", [format(Collection, SortBy, SortOrder)]).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns a formatted string representing a collection in form of a table.
+%% Returns a formatted string representing a collection in form of a table,
+%% or error details and help in case of an error.
 %% @end
 %%--------------------------------------------------------------------
 -spec format(collection()) -> string().
@@ -143,8 +144,8 @@ format(Collection, SortBy, SortOrder) ->
     try
         parse_and_format_collection(Collection, SortBy, SortOrder)
     catch Type:Reason ->
-        io:format(
-            "~s crashed with ~w:~w.~n"
+        str_utils:format(
+            "~s crashed with ~w:~w~n"
             "Stacktrace: ~ts~n"
             "~n"
             "~s",
@@ -153,27 +154,29 @@ format(Collection, SortBy, SortOrder) ->
                 lager:pr_stacktrace(erlang:get_stacktrace()),
                 format_help()
             ]
-        ),
-        error(badarg)
+        )
     end.
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Interface for db_browser.sh script that can be used without manually
-%% attaching to the erlang console.
+%% attaching to the erlang console. The output is written to given file,
+%% which is then displayed by the script.
 %% @end
 %%--------------------------------------------------------------------
--spec call_from_script(ArgsString :: string()) -> ok.
-call_from_script(ArgsString) ->
-    try string:split(ArgsString, " ", all) of
-        [A] -> pr(list_to_atom(A));
-        [A, B] -> pr(list_to_atom(A), list_to_atom(B));
-        [A, B, C] -> pr(list_to_atom(A), list_to_atom(B), list_to_atom(C));
-        _ -> print_help()
+-spec call_from_script(OutputFile :: file:filename_all(), ArgsString :: string()) -> ok.
+call_from_script(OutputFile, ArgsString) ->
+    Output = try string:split(ArgsString, " ", all) of
+        [""] -> format_help();
+        [A] -> format(list_to_atom(A));
+        [A, B] -> format(list_to_atom(A), list_to_atom(B));
+        [A, B, C] -> format(list_to_atom(A), list_to_atom(B), list_to_atom(C));
+        _ -> format_help()
     catch _:_ ->
-        print_help()
-    end.
+        format_help()
+    end,
+    file:write_file(OutputFile, Output).
 
 
 -spec print_help() -> ok.
