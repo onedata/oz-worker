@@ -72,13 +72,15 @@ end_per_suite(_Config) ->
     <<"Amazing">>, <<"Competent">>, <<"Ecstatic">>, <<"Flamboyant">>,
     <<"Hopeful">>, <<"Jolly">>, <<"Lucid">>, <<"Naughty">>,
     <<"Pedantic">>, <<"Quirky">>, <<"Romantic">>, <<"Silly">>,
-    <<"Thirsty">>, <<"Vigilant">>, <<"Wonderful">>, <<"Zealous">>
+    <<"Thirsty">>, <<"Vigilant">>, <<"Wonderful">>, <<"Zealous">>,
+    <<"πęß"/utf8>>
 ]).
 -define(NAMES_B, [
     <<"Archimedes">>, <<"Banach">>, <<"Dijkstra">>, <<"Fermat">>,
     <<"Hamilton">>, <<"Kepler">>, <<"Matsumoto">>, <<"Nobel">>,
     <<"Panini">>, <<"Roentgen">>, <<"Satoshi">>, <<"Tesla">>,
-    <<"Villani">>, <<"Wozniak">>, <<"Yonath">>, <<"Zhukovsky">>
+    <<"Villani">>, <<"Wozniak">>, <<"Yonath">>, <<"Zhukovsky">>,
+    <<"źµで"/utf8>>
 ]).
 
 -define(GEN_NAME(), <<(utils:random_element(?NAMES_A))/binary, " ", (utils:random_element(?NAMES_B))/binary>>).
@@ -301,7 +303,7 @@ db_browser_test(Config) ->
     try
         db_browser_test_unsafe(Config)
     catch Type:Reason ->
-        ct:pal("db_browser test failed with ~w:~w~nStacktrace: ~s", [
+        ct:pal("db_browser test failed with ~w:~w~nStacktrace: ~ts", [
             Type, Reason, lager:pr_stacktrace(erlang:get_stacktrace())
         ]),
         error(test_failed)
@@ -319,13 +321,17 @@ db_browser_test_unsafe(Config) ->
     TmpPath = oz_test_utils:call_oz(Config, mochitemp, mkdtemp, []),
     OutputFile = filename:join(TmpPath, "dump.txt"),
     oz_test_utils:call_oz(Config, db_browser, call_from_script, [OutputFile, "users username desc"]),
-    ExpectedResult = list_to_binary(oz_test_utils:call_oz(Config, db_browser, format, [users, username, desc])),
+    ExpectedResult = str_utils:unicode_list_to_binary(oz_test_utils:call_oz(
+        Config, db_browser, format, [users, username, desc])
+    ),
     {ok, OutputFileContent} = oz_test_utils:call_oz(Config, file, read_file, [OutputFile]),
     ?assertEqual(OutputFileContent, ExpectedResult),
 
     % Check that error handling and help works the same for internal use and the script
     oz_test_utils:call_oz(Config, db_browser, call_from_script, [OutputFile, "sdf &SD F^sadf6asDF5asd"]),
-    ExpectedResult2 = list_to_binary(oz_test_utils:call_oz(Config, db_browser, format, ['sdf', '&SD', 'F^sadf6asDF5asd'])),
+    ExpectedResult2 = str_utils:unicode_list_to_binary(oz_test_utils:call_oz(
+        Config, db_browser, format, ['sdf', '&SD', 'F^sadf6asDF5asd'])
+    ),
     {ok, OutputFileContent2} = oz_test_utils:call_oz(Config, file, read_file, [OutputFile]),
     % The stacktrace at the beginning of the output is different - check if the
     % usage help is the same.
@@ -360,7 +366,7 @@ print_collection(Config, Env, Collection) ->
     case string:find(Result, "\n0 entries in total") of
         nomatch ->
             % Okay, dump the results to logs so that they can be examined
-            ct:pal("~w:~n~s", [Args, oz_test_utils:call_oz(Config, db_browser, format, Args)]);
+            ct:pal("~w:~n~ts", [Args, oz_test_utils:call_oz(Config, db_browser, format, Args)]);
         _ ->
             % Repeat until collection that have at least one entry is found
             print_collection(Config, Env, Collection)
