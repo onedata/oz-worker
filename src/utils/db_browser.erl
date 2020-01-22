@@ -118,7 +118,7 @@ pr(Collection, SortBy) ->
 
 -spec pr(collection(), sort_by(), sort_order()) -> ok.
 pr(Collection, SortBy, SortOrder) ->
-    io:format("~s", [format(Collection, SortBy, SortOrder)]).
+    io:format("~ts", [format(Collection, SortBy, SortOrder)]).
 
 
 %%--------------------------------------------------------------------
@@ -145,10 +145,10 @@ format(Collection, SortBy, SortOrder) ->
         parse_and_format_collection(Collection, SortBy, SortOrder)
     catch Type:Reason ->
         str_utils:format(
-            "~s crashed with ~w:~w~n"
+            "~ts crashed with ~w:~w~n"
             "Stacktrace: ~ts~n"
             "~n"
-            "~s",
+            "~ts",
             [
                 ?MODULE, Type, Reason,
                 lager:pr_stacktrace(erlang:get_stacktrace()),
@@ -176,12 +176,12 @@ call_from_script(OutputFile, ArgsString) ->
     catch _:_ ->
         format_help()
     end,
-    file:write_file(OutputFile, Output).
+    file:write_file(OutputFile, str_utils:unicode_list_to_binary(Output)).
 
 
 -spec print_help() -> ok.
 print_help() ->
-    io:format("~s", [format_help()]).
+    io:format("~ts", [format_help()]).
 
 
 -spec all_collections() -> [collection()].
@@ -513,7 +513,7 @@ format_table(TableType, Entries, SortBy, SortOrder, Fields, ExtraSpecs) ->
         str_utils:format("~B entries in total~n~n", [length(SortedValues)]),
         case bottom_note(TableType) of
             undefined -> [];
-            BottomNote -> str_utils:format("~s~n~n", [BottomNote])
+            BottomNote -> str_utils:format("~ts~n~n", [BottomNote])
         end
     ]).
 
@@ -677,7 +677,7 @@ field_specs(harvesters) -> [
 -spec bottom_note(table_type()) -> undefined | string().
 bottom_note(shares) ->
     str_utils:format(
-        "Public share URL is equal to: ~s",
+        "Public share URL is equal to: ~ts",
         [share_logic:share_id_to_public_url(<<"${ID}">>)]
     );
 bottom_note(_) ->
@@ -709,7 +709,7 @@ get_row_values(Doc, FieldSpecs) ->
 %% @private
 -spec format_separator_line(width()) -> string().
 format_separator_line(Width) ->
-    str_utils:format("~s~n", [lists:duplicate(Width, "-")]).
+    str_utils:format("~ts~n", [lists:duplicate(Width, "-")]).
 
 
 %% @private
@@ -718,7 +718,7 @@ format_table_header(FieldSpecs) ->
     Header = lists:map(fun({ColumnId, _, Width, _}) ->
         str_utils:format("~-*s", [Width, ColumnId])
     end, FieldSpecs),
-    str_utils:format("~s~n", [string:join(Header, ?PADDING)]).
+    str_utils:format("~ts~n", [string:join(Header, ?PADDING)]).
 
 
 %% @private
