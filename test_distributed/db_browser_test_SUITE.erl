@@ -313,7 +313,23 @@ db_browser_test_unsafe(Config) ->
     AllCollections = oz_test_utils:call_oz(Config, db_browser, all_collections, []),
     lists:foreach(fun(Collection) ->
         print_collection(Config, Env, Collection)
-    end, [help | AllCollections]).
+    end, [help | AllCollections]),
+
+    % Check that script API for db_browser.sh works as expected
+    TmpPath = oz_test_utils:call_oz(Config, mochitemp, mkdtemp, []),
+    OutputFile = filename:join(TmpPath, "dump.txt"),
+    oz_test_utils:call_oz(Config, db_browser, call_from_script, [OutputFile, "users username desc"]),
+    ExpectedResult = list_to_binary(oz_test_utils:call_oz(Config, db_browser, format, [users, username, desc])),
+    {ok, OutputFileContent} = oz_test_utils:call_oz(Config, file, read_file, [OutputFile]),
+    ?assertEqual(OutputFileContent, ExpectedResult),
+
+    % Check that error handling and help works the same for internal use and the script
+    oz_test_utils:call_oz(Config, db_browser, call_from_script, [OutputFile, "sdf &SD F^sadf6asDF5asd"]),
+    ExpectedResult2 = list_to_binary(oz_test_utils:call_oz(Config, db_browser, format, ['sdf', '&SD', 'F^sadf6asDF5asd'])),
+    {ok, OutputFileContent2} = oz_test_utils:call_oz(Config, file, read_file, [OutputFile]),
+    % The stacktrace at the beginning of the output is different - check if the
+    % usage help is the same.
+    ?assertEqual(string:find(OutputFileContent2, "Usage"), string:find(ExpectedResult2, "Usage")).
 
 
 print_collection(Config, Env, Collection) ->
