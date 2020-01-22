@@ -180,44 +180,6 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = {client_token, ?BINDING(tid)}}
     }},
-    %% Get default space
-    %% This operation does not require any specific privileges.
-    {<<"/user/default_space">>, #rest_req{
-        method = 'GET',
-        produces = [<<"application/json">>],
-        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = default_space}
-    }},
-    %% Unset default space
-    %% This operation does not require any specific privileges.
-    {<<"/user/default_space">>, #rest_req{
-        method = 'DELETE',
-        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = default_space}
-    }},
-    %% Set default space
-    %% This operation does not require any specific privileges.
-    {<<"/user/default_space">>, #rest_req{
-        method = 'PUT',
-        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = default_space}
-    }},
-    %% Get default provider
-    %% This operation does not require any specific privileges.
-    {<<"/user/default_provider">>, #rest_req{
-        method = 'GET',
-        produces = [<<"application/json">>],
-        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = default_provider}
-    }},
-    %% Unset default provider
-    %% This operation does not require any specific privileges.
-    {<<"/user/default_provider">>, #rest_req{
-        method = 'DELETE',
-        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = default_provider}
-    }},
-    %% Set default provider
-    %% This operation does not require any specific privileges.
-    {<<"/user/default_provider">>, #rest_req{
-        method = 'PUT',
-        b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = default_provider}
-    }},
     %% Acquire IdP access token
     %% This operation does not require any specific privileges.
     {<<"/user/idp_access_token/:idp">>, #rest_req{
@@ -517,7 +479,7 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_user, id = ?CLIENT_ID, aspect = clusters}
     }},
-    %% Create provider registration token for self
+    %% Create provider registration token for current user
     %% This operation does not require any specific privileges.
     {<<"/user/clusters/provider_registration_token">>, #rest_req{
         method = 'POST',

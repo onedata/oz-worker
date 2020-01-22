@@ -102,14 +102,8 @@ get_response(#gri{aspect = oz_privileges}, Privileges) ->
 get_response(#gri{aspect = eff_oz_privileges}, Privileges) ->
     rest_translator:ok_body_reply(#{<<"privileges">> => Privileges});
 
-get_response(#gri{aspect = default_space}, DefaultSpace) ->
-    rest_translator:ok_body_reply(#{<<"spaceId">> => DefaultSpace});
-
 get_response(#gri{aspect = {space_alias, _}}, SpaceAlias) ->
     rest_translator:ok_body_reply(#{<<"alias">> => SpaceAlias});
-
-get_response(#gri{aspect = default_provider}, DefaultProvider) ->
-    rest_translator:ok_body_reply(#{<<"providerId">> => DefaultProvider});
 
 get_response(#gri{aspect = client_tokens}, Tokens) ->
     rest_translator:ok_body_reply(#{<<"tokens">> => Tokens});

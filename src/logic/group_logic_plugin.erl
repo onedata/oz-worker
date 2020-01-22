@@ -40,7 +40,7 @@
 fetch_entity(GroupId) ->
     case od_group:get(GroupId) of
         {ok, #document{value = Group, revs = [DbRev | _]}} ->
-            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
             {ok, {Group, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
@@ -506,7 +506,7 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, Group) -
             true
     end;
 
-exists(Req = #el_req{gri = #gri{aspect = instance, scope = shared}}, Group) ->
+exists(Req = #el_req{gri = GRI = #gri{aspect = instance, scope = shared}}, Group) ->
     case Req#el_req.auth_hint of
         ?THROUGH_GROUP(ParentGroupId) ->
             group_logic:has_eff_parent(Group, ParentGroupId);
@@ -520,8 +520,8 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = shared}}, Group) ->
             group_logic:has_eff_harvester(Group, HarvesterId);
         ?THROUGH_CLUSTER(ClusterId) ->
             group_logic:has_eff_cluster(Group, ClusterId);
-        undefined ->
-            true
+        _ ->
+            exists(Req#el_req{gri = GRI#gri{scope = protected}}, Group)
     end;
 
 exists(#el_req{gri = #gri{aspect = {parent, ParentId}}}, Group) ->
@@ -683,6 +683,10 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
         {?USER(ClientUserId), ?THROUGH_SPACE(SpaceId)} ->
             % Group's membership in space is checked in 'exists'
             space_logic:has_eff_privilege(SpaceId, ClientUserId, ?SPACE_VIEW);
+
+        {?PROVIDER(ProviderId), ?THROUGH_SPACE(SpaceId)} ->
+            % Group's membership in space is checked in 'exists'
+            space_logic:has_provider(SpaceId, ProviderId);
 
         {?USER(ClientUserId), ?THROUGH_HANDLE_SERVICE(HServiceId)} ->
             % Group's membership in handle_service is checked in 'exists'

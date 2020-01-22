@@ -43,7 +43,7 @@
 fetch_entity(ProviderId) ->
     case od_provider:get(ProviderId) of
         {ok, #document{value = Provider, revs = [DbRev | _]}} ->
-            {Revision, _Hash} = datastore_utils:parse_rev(DbRev),
+            {Revision, _Hash} = datastore_rev:parse(DbRev),
             {ok, {Provider, Revision}};
         _ ->
             ?ERROR_NOT_FOUND
@@ -119,7 +119,7 @@ is_subscribable(_, _) -> false.
 -spec create(entity_logic:req()) -> entity_logic:create_result().
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance} = GRI}) ->
     Data = Req#el_req.data,
-    create_provider(Data, datastore_utils:gen_key(), GRI);
+    create_provider(Data, datastore_key:new(), GRI);
 
 create(Req = #el_req{gri = #gri{id = undefined, aspect = instance_dev} = GRI}) ->
     Data = Req#el_req.data,
@@ -138,12 +138,12 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
 
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
     {ok, {#od_space{harvesters = Harvesters} = Space, Rev}} = space_logic_plugin:fetch_entity(SpaceId),
-    
+
     lists:foreach(fun(HarvesterId) ->
         harvester_indices:update_stats(HarvesterId, all,
             fun(ExistingStats) -> harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, false) end)
         end, Harvesters),
-        
+
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
     {ok, resource, {NewGRI, {SpaceData, Rev}}};
 
@@ -363,7 +363,7 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
                 harvester_indices:coalesce_index_stats(ExistingStats, SpaceId, ProviderId, true)
             end)
     end, Harvesters),
-    
+
     entity_graph:remove_relation(
         od_space, SpaceId, od_provider, ProviderId
     );
