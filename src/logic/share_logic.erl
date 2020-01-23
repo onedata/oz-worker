@@ -203,8 +203,7 @@ share_id_to_public_url(ShareId) ->
 %% @doc
 %% Chooses a provider to handle viewing of a public share. Online providers that
 %% are in newest version are preferred, then any online provider. Returns the
-%% provider Id and its version. If there are no online providers, undefined
-%% values are returned.
+%% provider Id and its version, or undefined values if there are no online providers.
 %% This operation is performed each time a public share is visited. To minimize
 %% the cost (as each choice requires several request to the database), it is
 %% cached for some time per space. There is an additional check in case the

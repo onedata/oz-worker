@@ -134,6 +134,7 @@ is_subscribable({group_privileges, _}, private) -> true;
 is_subscribable({eff_group_privileges, _}, private) -> true;
 is_subscribable({eff_group_membership, _}, private) -> true;
 is_subscribable(eff_providers, private) -> true;
+is_subscribable(shares, private) -> true;
 is_subscribable(harvesters, private) -> true;
 is_subscribable(_, _) -> false.
 
