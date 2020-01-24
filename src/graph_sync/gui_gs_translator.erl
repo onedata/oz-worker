@@ -497,10 +497,12 @@ translate_space(#gri{aspect = harvesters}, Harvesters) ->
 %% @private
 -spec translate_share(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
-translate_share(#gri{aspect = instance, scope = private}, #od_share{name = Name, file_type = FileType}) ->
+translate_share(#gri{aspect = instance, scope = private}, Share) ->
+    #od_share{name = Name, file_type = FileType, public_url = PublicUrl} = Share,
     #{
         <<"name">> => Name,
-        <<"fileType">> => FileType
+        <<"fileType">> => FileType,
+        <<"publicUrl">> => PublicUrl
     };
 translate_share(#gri{id = ShareId, aspect = instance, scope = public}, #{<<"name">> := Name}) ->
     {ChosenProviderId, ChosenProviderVersion} = share_logic:choose_provider_for_public_view(ShareId),
