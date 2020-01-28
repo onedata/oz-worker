@@ -59,7 +59,11 @@
     invalid_admin_group_is_ignored/1,
     admin_group_resulting_in_invalid_onedata_group_name_or_type_are_ignored/1,
     entitlements_are_coalesced_correctly_in_a_mixed_scenario/1,
-    entitlement_groups_are_protected/1
+    entitlement_groups_are_protected/1,
+    legacy_user_ids_are_retained/1,
+    legacy_group_ids_are_retained_for_legacy_user/1,
+    legacy_group_ids_are_retained_for_new_user/1,
+    legacy_user_and_group_relations_are_retained/1
 ]).
 
 all() ->
@@ -96,7 +100,11 @@ all() ->
         invalid_admin_group_is_ignored,
         admin_group_resulting_in_invalid_onedata_group_name_or_type_are_ignored,
         entitlements_are_coalesced_correctly_in_a_mixed_scenario,
-        entitlement_groups_are_protected
+        entitlement_groups_are_protected,
+        legacy_user_ids_are_retained,
+        legacy_group_ids_are_retained_for_legacy_user,
+        legacy_group_ids_are_retained_for_new_user,
+        legacy_user_and_group_relations_are_retained
     ]).
 
 
@@ -573,7 +581,7 @@ user_privileges_are_modified_on_consecutive_login(_) ->
 
 group_privileges_are_not_modified_on_consecutive_login(_) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
-        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+        {voGroupName, "Third-VO"}, {adminGroup, "staff:member/admins:manager/privileged:admin"}
     ]),
 
     simulate_first_login(?THIRD_IDP, [<<"staff:member/admins:manager">>]),
@@ -594,9 +602,9 @@ group_privileges_are_not_modified_on_consecutive_login(_) ->
 
 manual_changes_in_user_privileges_are_overwritten_upon_change_in_idp(Config) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
-        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+        {voGroupName, "Third-VO"}, {adminGroup, "staff:member/admins:manager/privileged:admin"}
     ]),
-    AdminsGroupId = entitlement_to_group_id(Config, ?THIRD_IDP, <<"staff:member/admins:manager">>),
+    AdminsGroupId = raw_entitlement_to_group_id(Config, ?THIRD_IDP, <<"staff:member/admins:manager">>),
 
     UserId = simulate_first_login(?THIRD_IDP, [<<"staff:member/admins:manager/user:admin">>]),
     ?assertHasGroup(true, ?THIRD_IDP, <<"staff:member/admins:manager/user:admin">>, direct),
@@ -623,10 +631,10 @@ manual_changes_in_user_privileges_are_overwritten_upon_change_in_idp(Config) ->
 
 manual_changes_in_group_privileges_are_persisted(Config) ->
     overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
-        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+        {voGroupName, "Third-VO"}, {adminGroup, "staff:member/admins:manager/privileged:admin"}
     ]),
-    StaffGroupId = entitlement_to_group_id(Config, ?THIRD_IDP, <<"staff:member">>),
-    AdminsGroupId = entitlement_to_group_id(Config, ?THIRD_IDP, <<"staff:member/admins:manager">>),
+    StaffGroupId = raw_entitlement_to_group_id(Config, ?THIRD_IDP, <<"staff:member">>),
+    AdminsGroupId = raw_entitlement_to_group_id(Config, ?THIRD_IDP, <<"staff:member/admins:manager">>),
 
     simulate_first_login(?THIRD_IDP, [<<"staff:member/admins:manager">>]),
     ?assertGroupStructure(true, ?THIRD_IDP, <<"staff:member">>, <<"staff:member/admins:manager">>, direct),
@@ -815,6 +823,147 @@ entitlement_groups_are_protected(_) ->
     ?assertGroupProtected(?THIRD_IDP, <<"task4.1:manager/user:member">>),
     ?assertGroupProtected(?THIRD_IDP, <<"testGroup:admin/user:admin">>).
 
+
+legacy_user_ids_are_retained(Config) ->
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    % Create a user with legacy id to simulate a situation after system upgrade
+    #linked_account{idp = IdP, subject_id = SubjectId} = LinkedAccount = ?LINKED_ACC(?DUMMY_IDP, []),
+    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~s", [IdP, SubjectId])),
+    ModernUserId = datastore_key:new_from_digest([atom_to_binary(IdP, utf8), SubjectId]),
+    {ok, LegacyUserId} = oz_test_utils:call_oz(Config, user_logic, create, [?ROOT, LegacyUserId, #{}]),
+    oz_test_utils:call_oz(Config, linked_accounts, merge, [LegacyUserId, LinkedAccount]),
+    put(test_data_user, LegacyUserId),
+    simulate_consecutive_login(?DUMMY_IDP, []),
+    ?assert(oz_test_utils:call_oz(Config, user_logic, exists, [LegacyUserId])),
+    ?assertNot(oz_test_utils:call_oz(Config, user_logic, exists, [ModernUserId])),
+    % Make sure that group mapping works for legacy users
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    overwrite_config(?OTHER_IDP, true, nested_entitlement_parser, [
+        {adminGroup, "users/admins"}
+    ]),
+    simulate_consecutive_login(?DUMMY_IDP, [<<"group/subgroup">>, <<"anotherGroup">>]),
+    ?assertUserGroupsCount(2, 2),
+    ?assertTotalGroupsCount(2),
+    simulate_account_link(?OTHER_IDP, [<<"users/admins">>, <<"users/developers">>, <<"users/technicians">>]),
+    ?assertUserGroupsCount(5, 6),
+    ?assertTotalGroupsCount(6).
+
+
+legacy_group_ids_are_retained_for_legacy_user(Config) ->
+    % Create a user with legacy id to simulate a situation after system upgrade
+    #linked_account{idp = IdP, subject_id = SubjectId} = LinkedAccount = ?LINKED_ACC(?THIRD_IDP, []),
+    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~s", [IdP, SubjectId])),
+    {ok, LegacyUserId} = oz_test_utils:call_oz(Config, user_logic, create, [?ROOT, LegacyUserId, #{}]),
+    oz_test_utils:call_oz(Config, linked_accounts, merge, [LegacyUserId, LinkedAccount]),
+    put(test_data_user, LegacyUserId),
+    legacy_group_ids_are_retained_base(Config).
+
+
+legacy_group_ids_are_retained_for_new_user(Config) ->
+    simulate_first_login(?THIRD_IDP, []),
+    legacy_group_ids_are_retained_base(Config).
+
+
+legacy_group_ids_are_retained_base(Config) ->
+    overwrite_config(?THIRD_IDP, true, ?CUSTOM_ENTITLEMENT_PARSER, [
+        {voGroupName, "Third-VO"}, {adminGroup, "staff/admins/privileged"}
+    ]),
+    % A list of all expected groups after the system upgrade and a new user login -
+    % some of them simulate groups retained after upgrade (legacy)
+    Groups = [
+        {legacy, team, <<"Third-VO">>, [<<"vo:Third-VO">>]},
+        {legacy, team, <<"staff">>, [<<"vo:Third-VO">>, <<"tm:staff">>]},
+        {legacy, team, <<"privileged">>, [<<"vo:Third-VO">>, <<"tm:staff">>, <<"tm:admins">>, <<"tm:privileged">>]},
+        {legacy, team, <<"testGroup">>, [<<"vo:Third-VO">>, <<"tm:testGroup">>]},
+        {modern, team, <<"vm-operators">>, [<<"vo:Third-VO">>, <<"tm:staff">>, <<"tm:vm-operators">>]},
+        {modern, team, <<"admins">>, [<<"vo:Third-VO">>, <<"tm:staff">>, <<"tm:admins">>]},
+        {modern, team, <<"readonly">>, [<<"vo:Third-VO">>, <<"tm:staff">>, <<"tm:admins">>, <<"tm:readonly">>]},
+        {modern, team, <<"task4.1">>, [<<"vo:Third-VO">>, <<"tm:task4.1">>]}
+    ],
+    lists:foreach(fun
+        ({legacy, Type, Name, EncodedGroupPath}) ->
+            % Create the legacy groups to simulate a state after system upgrade
+            LegacyGroupId = datastore_key:build_adjacent(<<"">>, str_utils:join_binary(EncodedGroupPath, <<"/">>)),
+            oz_test_utils:call_oz(Config, group_logic, ensure_entitlement_group, [LegacyGroupId, Name, Type]);
+        (_) ->
+            % No need to create modern groups - they should be created upon login
+            ok
+    end, Groups),
+    CheckGroupIds = fun() ->
+        lists:foreach(fun({LegacyOrModern, _, _, EncodedGroupPath}) ->
+            LegacyGroupId = datastore_key:build_adjacent(<<"">>, str_utils:join_binary(EncodedGroupPath, <<"/">>)),
+            ModernGroupId = datastore_key:new_from_digest(EncodedGroupPath),
+            {ExpLegacyExists, ExpModernExists} = case LegacyOrModern of
+                legacy -> {true, false};
+                modern -> {false, true}
+            end,
+            ?assertEqual(ExpLegacyExists, oz_test_utils:call_oz(Config, group_logic, exists, [LegacyGroupId])),
+            ?assertEqual(ExpModernExists, oz_test_utils:call_oz(Config, group_logic, exists, [ModernGroupId]))
+        end, Groups)
+    end,
+    ?assertTotalGroupsCount(4),
+    simulate_consecutive_login(?THIRD_IDP, [
+        <<"staff:member/vm-operators:member/user:manager">>,
+        <<"task4.1:manager/user:member">>,
+        <<"testGroup:admin/user:admin">>,
+        <<"staff:member/admins:member/readonly:member/user:member">>,
+        <<"staff:member/admins:member/privileged:admin/user:manager">>
+    ]),
+    ?assertUserGroupsCount(5, 8),
+    ?assertTotalGroupsCount(8),
+    CheckGroupIds(),
+    simulate_consecutive_login(?THIRD_IDP, [
+        <<"task4.1:manager/user:member">>,
+        <<"staff:member/admins:member/readonly:member/user:member">>
+    ]),
+    ?assertUserGroupsCount(2, 5),
+    ?assertTotalGroupsCount(8),
+    CheckGroupIds(),
+    simulate_consecutive_login(?THIRD_IDP, [
+        <<"staff:member/vm-operators:member/user:manager">>,
+        <<"task4.1:manager/user:member">>,
+        <<"testGroup:admin/user:admin">>,
+        <<"staff:member/admins:member/readonly:member/user:member">>,
+        <<"staff:member/admins:member/privileged:admin/user:manager">>
+    ]),
+    ?assertUserGroupsCount(5, 8),
+    ?assertTotalGroupsCount(8).
+
+
+legacy_user_and_group_relations_are_retained(Config) ->
+    overwrite_config(?DUMMY_IDP, true, flat_entitlement_parser),
+    % Create a user with legacy id to simulate a situation after system upgrade
+    #linked_account{idp = IdP, subject_id = SubjectId} = LinkedAccount = ?LINKED_ACC(?DUMMY_IDP, []),
+    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~s", [IdP, SubjectId])),
+    {ok, LegacyUserId} = oz_test_utils:call_oz(Config, user_logic, create, [?ROOT, LegacyUserId, #{}]),
+    oz_test_utils:call_oz(Config, linked_accounts, merge, [LegacyUserId, LinkedAccount]),
+    put(test_data_user, LegacyUserId),
+    Groups = [
+        {legacy, team, <<"firstGroup">>, [<<"tm:firstGroup">>]},
+        {legacy, team, <<"anotherGroup">>, [<<"tm:anotherGroup">>]},
+        {modern, team, <<"thirdGroup">>, [<<"tm:thirdGroup">>]}
+    ],
+    lists:foreach(fun
+        ({legacy, Type, Name, EncodedGroupPath}) ->
+            % Create the legacy groups to simulate a state after system upgrade
+            LegacyGroupId = datastore_key:build_adjacent(<<"">>, str_utils:join_binary(EncodedGroupPath, <<"/">>)),
+            oz_test_utils:call_oz(Config, group_logic, ensure_entitlement_group, [LegacyGroupId, Name, Type]);
+        (_) ->
+            ok
+    end, Groups),
+    simulate_consecutive_login(?DUMMY_IDP, [<<"firstGroup">>, <<"anotherGroup">>]),
+
+
+    simulate_consecutive_login(?DUMMY_IDP, [<<"firstGroup">>, <<"anotherGroup">>, <<"thirdGroup">>]),
+    ?assertUserGroupsCount(3, 3),
+    ?assertHasGroup(true, ?DUMMY_IDP, <<"firstGroup">>, direct),
+    ?assertHasGroup(true, ?DUMMY_IDP, <<"anotherGroup">>, direct),
+    ?assertHasGroup(true, ?DUMMY_IDP, <<"thirdGroup">>, direct),
+    ?assertTotalGroupsCount(3),
+    ?assertGroupExists(true, ?DUMMY_IDP, <<"firstGroup">>),
+    ?assertGroupExists(true, ?DUMMY_IDP, <<"anotherGroup">>),
+    ?assertGroupExists(true, ?DUMMY_IDP, <<"thirdGroup">>).
+
 %%%===================================================================
 %%% Internal functions
 %%%===================================================================
@@ -888,14 +1037,18 @@ get_test_user() ->
     end.
 
 
-entitlement_to_group_id(Config, IdP, RawEntitlement) ->
+raw_entitlement_to_group_id(Config, IdP, RawEntitlement) ->
     IdPEntitlement = expected_parsing_result(Config, IdP, RawEntitlement),
-    entitlement_mapping:gen_group_id(IdPEntitlement).
+    idp_entitlement_to_group_id(IdPEntitlement).
+
+
+idp_entitlement_to_group_id(IdPEntitlement) ->
+    oz_test_utils:call_oz(get_test_config(), entitlement_mapping, gen_group_id, [IdPEntitlement]).
 
 
 group_exists(Config, IdP, RawEntitlement) ->
     try
-        GroupId = entitlement_to_group_id(Config, IdP, RawEntitlement),
+        GroupId = raw_entitlement_to_group_id(Config, IdP, RawEntitlement),
         oz_test_utils:call_oz(Config, group_logic, exists, [GroupId])
     catch _:_ ->
         false
@@ -917,7 +1070,7 @@ has_group(Config, UserId, IdP, RawEntitlement, RelationType) ->
         } = expected_parsing_result(Config, IdP, RawEntitlement),
         #idp_group{name = Name, type = Type} = lists:last(Path),
         NormalizedName = entity_logic:normalize_name(Name, undefined),
-        GroupId = entitlement_mapping:gen_group_id(IdPEntitlement),
+        GroupId = idp_entitlement_to_group_id(IdPEntitlement),
 
         UserGroups = get_groups(Config, UserId, RelationType),
         BelongsToGroup = lists:member(GroupId, UserGroups),
@@ -969,9 +1122,8 @@ check_group_structure(Config, IdP, ParentRawEntitlement, ChildRawEntitlement, Re
         #idp_group{name = ChildName, type = ChildType} = lists:last(ChildPath),
         NormalizedParentName = entity_logic:normalize_name(ParentName, undefined),
         NormalizedChildName = entity_logic:normalize_name(ChildName, undefined),
-        % If the child group is the adminGroup, it should have admin privileges in parents
-        ParentGroupId = entitlement_mapping:gen_group_id(ParentEntitlement),
-        ChildGroupId = entitlement_mapping:gen_group_id(ChildEntitlement),
+        ParentGroupId = idp_entitlement_to_group_id(ParentEntitlement),
+        ChildGroupId = idp_entitlement_to_group_id(ChildEntitlement),
         % Check if names and types of groups are as expected
         {ok, #od_group{
             name = NormalizedParentName, type = ParentType
@@ -1001,7 +1153,7 @@ check_group_structure(Config, IdP, ParentRawEntitlement, ChildRawEntitlement, Re
 
 
 is_protected(Config, IdP, RawEntitlement) ->
-    GroupId = entitlement_to_group_id(Config, IdP, RawEntitlement),
+    GroupId = raw_entitlement_to_group_id(Config, IdP, RawEntitlement),
     case oz_test_utils:get_group(Config, GroupId) of
         {ok, #od_group{protected = true}} -> true;
         _ -> false
@@ -1079,6 +1231,7 @@ overwrite_config(IdP, Enabled, Parser, Opts) ->
     OldAuthConfig = oz_test_utils:read_auth_config(Config),
     SupportedIdPs = maps:get(supportedIdps, OldAuthConfig, []),
 
+    AdminGroup = proplists:get_value(adminGroup, Opts, undefined),
     IdPConfig = {IdP, #{
         protocol => openid,
         protocolConfig => #{
@@ -1086,7 +1239,7 @@ overwrite_config(IdP, Enabled, Parser, Opts) ->
             entitlementMapping => #{
                 enabled => Enabled,
                 voGroupName => proplists:get_value(voGroupName, Opts, undefined),
-                adminGroup => proplists:get_value(adminGroup, Opts, undefined),
+                adminGroup => AdminGroup,
                 parser => Parser,
                 parserConfig => parser_config(Parser)
             }
@@ -1098,7 +1251,12 @@ overwrite_config(IdP, Enabled, Parser, Opts) ->
             enabled => true
         },
         supportedIdps => lists:keystore(IdP, 1, SupportedIdPs, IdPConfig)
-    }).
+    }),
+
+    % Clear the admin group cache on all nodes, otherwise testcases might depend on each other
+    OzNodes = ?config(oz_worker_nodes, Config),
+    rpc:multicall(OzNodes, simple_cache, clear, [{admin_group, {IdP, str_utils:to_binary(AdminGroup)}}]),
+    ok.
 
 
 get_admin_group(Config, IdP) ->

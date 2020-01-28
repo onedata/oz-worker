@@ -341,6 +341,7 @@
 -type privileges() :: member | manager | admin.
 -export_type([raw_entitlement/0, idp_group/0, idp_entitlement/0, privileges/0]).
 
+-define(ADMIN_GROUP_CACHE_TTL, oz_worker:get_env(auth_config_cache_ttl, timer:minutes(1))).
 
 -define(DEFAULT_PARSER, flat_entitlement_parser).
 
@@ -426,6 +427,9 @@ coalesce_entitlements(UserId, LinkedAccounts, OldEntitlements) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Encodes a group path into group id used in database.
+%% Onezone versions pre 19.02.1 used legacy key mapping - checks if such group
+%% is present and if so, reuses the legacy id to retain the group mapping after
+%% upgrade. Otherwise, returns an id constructed using the new procedure.
 %% @end
 %%--------------------------------------------------------------------
 -spec gen_group_id(idp_entitlement() | [idp_group()]) -> binary().
@@ -435,9 +439,11 @@ gen_group_id(Path) ->
     GroupNames = lists:map(fun(#idp_group{type = Type, name = Name}) ->
         <<(encode_type(Type))/binary, ":", Name/binary>>
     end, Path),
-    % NOTE: legacy key generation must always be used to ensure that group
-    % mappings are not lost after system upgrade from version pre 19.02.1
-    datastore_key:gen_legacy_key(<<"">>, str_utils:join_binary(GroupNames, <<"/">>)).
+    LegacyGroupId = datastore_key:build_adjacent(<<"">>, str_utils:join_binary(GroupNames, <<"/">>)),
+    case group_logic:exists(LegacyGroupId) of
+        true -> LegacyGroupId;
+        false -> datastore_key:new_from_digest(GroupNames)
+    end.
 
 
 %%--------------------------------------------------------------------
@@ -639,7 +645,7 @@ resolve_admin_group(IdP) ->
                         % Do not cache in case of failure to map the entitlement
                         {false, undefined};
                     {true, GroupId} ->
-                        {true, GroupId}
+                        {true, GroupId, ?ADMIN_GROUP_CACHE_TTL}
                 end
             end),
             GroupId

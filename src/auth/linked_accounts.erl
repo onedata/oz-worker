@@ -83,13 +83,18 @@ gen_user_id(#linked_account{idp = IdP, subject_id = SubjectId}) ->
 %%--------------------------------------------------------------------
 %% @doc
 %% Constructs user id based on IdP name and user's subjectId in that IdP.
+%% Onezone versions pre 19.02.1 used legacy key mapping - checks if such user
+%% is present and if so, reuses the legacy id to retain the user mapping after
+%% upgrade. Otherwise, returns an id constructed using the new procedure.
 %% @end
 %%--------------------------------------------------------------------
 -spec gen_user_id(auth_config:idp(), SubjectId :: binary()) -> od_user:id().
 gen_user_id(IdP, SubjectId) ->
-    % NOTE: legacy key generation must always be used to ensure that user
-    % mappings are not lost after system upgrade from version pre 19.02.1
-    datastore_key:gen_legacy_key(<<"">>, str_utils:format_bin("~ts:~s", [IdP, SubjectId])).
+    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~s", [IdP, SubjectId])),
+    case user_logic:exists(LegacyUserId) of
+        true -> LegacyUserId;
+        false -> datastore_key:new_from_digest([atom_to_binary(IdP, utf8), SubjectId])
+    end.
 
 
 %%--------------------------------------------------------------------
