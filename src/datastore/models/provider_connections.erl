@@ -82,6 +82,9 @@ close_all(ProviderId) ->
             Error
     end.
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
 
 %% @private
 -spec update(id(), datastore_model:diff(), record()) -> {ok, connections_count()} | {error, term()}.

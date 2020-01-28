@@ -107,14 +107,14 @@ client_disconnected(?PROVIDER(ProvId), ConnectionRef) ->
             ),
             ProvRecord#od_provider.name;
         _ ->
+            % Provider could have been deleted in the meantime, in such case do
+            % not retrieve its name.
             undefined
     end,
     case provider_connections:remove(ProvId, ConnectionRef) of
         {ok, 0} ->
             case ProviderName of
                 undefined ->
-                    % Provider could have been deleted in the meantime, in such case do
-                    % not retrieve its name.
                     ?info("Provider '~s' went offline", [ProvId]);
                 _ ->
                     ?info("Provider '~ts' went offline (~s)", [ProviderName, ProvId])
