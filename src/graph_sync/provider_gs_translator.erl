@@ -276,7 +276,7 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
 
-        <<"online">> => provider_connection:is_online(Id),
+        <<"online">> => provider_connections:is_online(Id),
 
         <<"spaces">> => Spaces,
         <<"effectiveUsers">> => entity_graph:get_relations(effective, bottom_up, od_user, Provider),

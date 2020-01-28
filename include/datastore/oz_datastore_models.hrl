@@ -427,9 +427,9 @@
     seq = 1 :: couchbase_changes:seq()
 }).
 
-%% Stores information about active provider connection
--record(provider_connection, {
-    connection_ref :: gs_server:conn_ref()
+%% Stores information about active provider connections
+-record(provider_connections, {
+    connections :: [gs_server:conn_ref()]
 }).
 
 %% Stores information about active user connections per session id

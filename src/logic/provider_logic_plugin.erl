@@ -219,7 +219,7 @@ get(#el_req{gri = #gri{id = Id, aspect = instance, scope = protected}}, Provider
     {ok, #{
         <<"name">> => Name, <<"domain">> => Domain,
         <<"latitude">> => Latitude, <<"longitude">> => Longitude,
-        <<"online">> => provider_connection:is_online(Id),
+        <<"online">> => provider_connections:is_online(Id),
         <<"creationTime">> => CreationTime
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Provider) ->
@@ -349,17 +349,10 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     entity_graph:delete_with_relations(od_provider, ProviderId),
     cluster_logic:delete_oneprovider_cluster(ClusterId),
 
-    % Force disconnect the provider (if connected)
-    case provider_connection:get_connection_ref(ProviderId) of
-        {ok, ConnRef} ->
-            spawn(fun() ->
-                % Make sure client receives message of successful deletion before connection termination
-                timer:sleep(5000),
-                gs_server:terminate_connection(ConnRef)
-            end),
-            ok;
-        _ -> ok
-    end;
+    % Force disconnect the provider (if connected), but with a delay to allow
+    % some time for the provider to receive the response to deletion request.
+    timer:apply_after(10000, provider_connections, close_all, [ProviderId]),
+    ok;
 
 delete(#el_req{gri = #gri{id = ProviderId, aspect = {space, SpaceId}}}) ->
     {ok, {#od_space{harvesters = Harvesters}, _}} = space_logic_plugin:fetch_entity(SpaceId),

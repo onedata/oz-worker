@@ -44,7 +44,7 @@ get_models() -> [
     entity_graph_state,
     dns_state,
     gui_message,
-    provider_connection,
+    provider_connections,
     user_connections,
     state_token
 ].
