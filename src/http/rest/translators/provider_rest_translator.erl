@@ -55,6 +55,11 @@ create_response(#gri{aspect = support}, _, resource, {#gri{id = SpaceId}, _}) ->
 create_response(#gri{aspect = check_my_ports}, _, value, Value) ->
     rest_translator:ok_body_reply(Value);
 
+create_response(#gri{aspect = map_idp_user}, _, value, UserId) ->
+    rest_translator:ok_body_reply(#{
+        <<"userId">> => UserId
+    });
+
 create_response(#gri{aspect = map_idp_group}, _, value, GroupId) ->
     rest_translator:ok_body_reply(#{
         <<"groupId">> => GroupId

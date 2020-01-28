@@ -54,10 +54,7 @@ add(SessionId, ConnectionRef) ->
     Diff = fun(Record = #user_connections{connections = Connections}) ->
         {ok, Record#user_connections{connections = [ConnectionRef | Connections]}}
     end,
-    Default = #document{
-        key = SessionId, value = #user_connections{
-            connections = [ConnectionRef]
-        }},
+    Default = #user_connections{connections = [ConnectionRef]},
     ?OK_ON_SUCCESS(datastore_model:update(?CTX, SessionId, Diff, Default)).
 
 
@@ -86,10 +83,7 @@ remove(SessionId, ConnectionRef) ->
     Diff = fun(Record = #user_connections{connections = Connections}) ->
         {ok, Record#user_connections{connections = Connections -- [ConnectionRef]}}
     end,
-    Default = #document{
-        key = SessionId, value = #user_connections{
-            connections = []
-        }},
+    Default = #user_connections{connections = []},
     ?OK_ON_SUCCESS(datastore_model:update(?CTX, SessionId, Diff, Default)).
 
 

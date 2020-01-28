@@ -62,7 +62,7 @@
 
 -export([pr/1, pr/2, pr/3]).
 -export([format/1, format/2, format/3]).
--export([call_from_script/1]).
+-export([call_from_script/2]).
 -export([print_help/0]).
 -export([all_collections/0]).
 
@@ -100,7 +100,8 @@ harvesters() -> pr(harvesters).
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Prints requested collection to the console in form of a table.
+%% Prints requested collection to the console in form of a table,
+%% or error details and help in case of an error.
 %% @end
 %%--------------------------------------------------------------------
 -spec pr(collection()) -> ok.
@@ -117,13 +118,13 @@ pr(Collection, SortBy) ->
 
 -spec pr(collection(), sort_by(), sort_order()) -> ok.
 pr(Collection, SortBy, SortOrder) ->
-    catch io:format("~s", [format(Collection, SortBy, SortOrder)]),
-    ok.
+    io:format("~ts", [format(Collection, SortBy, SortOrder)]).
 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Returns a formatted string representing a collection in form of a table.
+%% Returns a formatted string representing a collection in form of a table,
+%% or error details and help in case of an error.
 %% @end
 %%--------------------------------------------------------------------
 -spec format(collection()) -> string().
@@ -143,42 +144,44 @@ format(Collection, SortBy, SortOrder) ->
     try
         parse_and_format_collection(Collection, SortBy, SortOrder)
     catch Type:Reason ->
-        io:format(
-            "~s crashed with ~w:~w.~n"
+        str_utils:format(
+            "~ts crashed with ~w:~w~n"
             "Stacktrace: ~ts~n"
             "~n"
-            "~s",
+            "~ts",
             [
                 ?MODULE, Type, Reason,
                 lager:pr_stacktrace(erlang:get_stacktrace()),
                 format_help()
             ]
-        ),
-        error(badarg)
+        )
     end.
 
 
 %%--------------------------------------------------------------------
 %% @doc
 %% Interface for db_browser.sh script that can be used without manually
-%% attaching to the erlang console.
+%% attaching to the erlang console. The output is written to given file,
+%% which is then displayed by the script.
 %% @end
 %%--------------------------------------------------------------------
--spec call_from_script(ArgsString :: string()) -> ok.
-call_from_script(ArgsString) ->
-    try string:split(ArgsString, " ", all) of
-        [A] -> pr(list_to_atom(A));
-        [A, B] -> pr(list_to_atom(A), list_to_atom(B));
-        [A, B, C] -> pr(list_to_atom(A), list_to_atom(B), list_to_atom(C));
-        _ -> print_help()
+-spec call_from_script(OutputFile :: file:filename_all(), ArgsString :: string()) -> ok.
+call_from_script(OutputFile, ArgsString) ->
+    Output = try string:split(ArgsString, " ", all) of
+        [""] -> format_help();
+        [A] -> format(list_to_atom(A));
+        [A, B] -> format(list_to_atom(A), list_to_atom(B));
+        [A, B, C] -> format(list_to_atom(A), list_to_atom(B), list_to_atom(C));
+        _ -> format_help()
     catch _:_ ->
-        print_help()
-    end.
+        format_help()
+    end,
+    file:write_file(OutputFile, str_utils:unicode_list_to_binary(Output)).
 
 
 -spec print_help() -> ok.
 print_help() ->
-    io:format("~s", [format_help()]).
+    io:format("~ts", [format_help()]).
 
 
 -spec all_collections() -> [collection()].
@@ -510,7 +513,7 @@ format_table(TableType, Entries, SortBy, SortOrder, Fields, ExtraSpecs) ->
         str_utils:format("~B entries in total~n~n", [length(SortedValues)]),
         case bottom_note(TableType) of
             undefined -> [];
-            BottomNote -> str_utils:format("~s~n~n", [BottomNote])
+            BottomNote -> str_utils:format("~ts~n~n", [BottomNote])
         end
     ]).
 
@@ -592,10 +595,7 @@ field_specs(shares) -> [
 ];
 field_specs(providers) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
-    {online, text, 6, fun(Doc) -> case provider_connection:is_online(Doc#document.key) of
-        true -> "online";
-        false -> "-"
-    end end},
+    {online, {boolean, "online", "-"}, 6, fun(Doc) -> provider_connections:is_online(Doc#document.key) end},
     {version, text, 14, fun(Doc) ->
         {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, Doc#document.key),
         Version
@@ -674,7 +674,7 @@ field_specs(harvesters) -> [
 -spec bottom_note(table_type()) -> undefined | string().
 bottom_note(shares) ->
     str_utils:format(
-        "Public share URL is equal to: ~s",
+        "Public share URL is equal to: ~ts",
         [share_logic:share_id_to_public_url(<<"${ID}">>)]
     );
 bottom_note(_) ->
@@ -706,7 +706,7 @@ get_row_values(Doc, FieldSpecs) ->
 %% @private
 -spec format_separator_line(width()) -> string().
 format_separator_line(Width) ->
-    str_utils:format("~s~n", [lists:duplicate(Width, "-")]).
+    str_utils:format("~ts~n", [lists:duplicate(Width, "-")]).
 
 
 %% @private
@@ -715,7 +715,7 @@ format_table_header(FieldSpecs) ->
     Header = lists:map(fun({ColumnId, _, Width, _}) ->
         str_utils:format("~-*s", [Width, ColumnId])
     end, FieldSpecs),
-    str_utils:format("~s~n", [string:join(Header, ?PADDING)]).
+    str_utils:format("~ts~n", [string:join(Header, ?PADDING)]).
 
 
 %% @private
