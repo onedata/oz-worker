@@ -595,10 +595,7 @@ field_specs(shares) -> [
 ];
 field_specs(providers) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
-    {online, text, 6, fun(Doc) -> case provider_connection:is_online(Doc#document.key) of
-        true -> "online";
-        false -> "-"
-    end end},
+    {online, {boolean, "online", "-"}, 6, fun(Doc) -> provider_connections:is_online(Doc#document.key) end},
     {version, text, 14, fun(Doc) ->
         {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, Doc#document.key),
         Version
