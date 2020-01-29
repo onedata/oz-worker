@@ -81,8 +81,7 @@ create(Auth, Id, Data) ->
 %% Supports a space based on support_space_token and support size.
 %% @end
 %%--------------------------------------------------------------------
--spec support_space(aai:auth(), od_storage:id(),
-    tokens:token() | macaroon:macaroon(), SupportSize :: integer()) ->
+-spec support_space(aai:auth(), od_storage:id(), tokens:token(), od_space:support_size()) ->
     {ok, od_space:id()} | errors:error().
 support_space(Auth, StorageId, Token, SupportSize) ->
     support_space(Auth, StorageId, #{

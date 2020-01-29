@@ -437,7 +437,7 @@ support_space_test(Config) ->
     },
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
 
-    % storage_logic should also allow using non-serialized macaroons, check it
+    % storage_logic should also allow using non-serialized tokens, check it
     {ok, BadToken3} = oz_test_utils:space_invite_user_token(
         Config, ?USER(U1), S1
     ),

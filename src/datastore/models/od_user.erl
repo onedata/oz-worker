@@ -19,7 +19,7 @@
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, update/3, force_delete/1, list/0]).
 -export([get_by_username/1, get_by_linked_account/1]).
--export([to_string/1, print_summary/0, print_summary/1]).
+-export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([get_ctx/0]).
 -export([add_session/2, remove_session/2, get_all_sessions/1]).
@@ -184,57 +184,6 @@ to_string(UserId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Prints all user records to the console in a nicely-formatted manner.
-%% Sorts the records in a default manner.
-%% @end
-%%--------------------------------------------------------------------
--spec print_summary() -> ok.
-print_summary() ->
-    print_summary(full_name).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Prints all user records to the console in a nicely-formatted manner.
-%% Sorts the records by given attribute (specified by name or position).
-%% @end
-%%--------------------------------------------------------------------
--spec print_summary(id | full_name | username | groups | spaces | providers | pos_integer()) -> ok.
-print_summary(id) -> print_summary(1);
-print_summary(full_name) -> print_summary(2);
-print_summary(username) -> print_summary(3);
-print_summary(email) -> print_summary(4);
-print_summary(groups) -> print_summary(5);
-print_summary(spaces) -> print_summary(6);
-print_summary(providers) -> print_summary(7);
-print_summary(SortPos) when is_integer(SortPos) ->
-    {ok, Users} = list(),
-    UserAttrs = lists:map(fun(#document{key = Id, value = U}) ->
-        {
-            Id,
-            U#od_user.full_name,
-            case U#od_user.username of undefined -> "-"; Username -> Username end,
-            case U#od_user.emails of [] -> "-"; Emails -> hd(Emails) end,
-            {length(U#od_user.groups), maps:size(U#od_user.eff_groups)},
-            {length(U#od_user.spaces), maps:size(U#od_user.eff_spaces)},
-            maps:size(U#od_user.eff_providers)
-        }
-    end, Users),
-    Sorted = lists:keysort(SortPos, UserAttrs),
-    io:format("-----------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
-    io:format("Id                                           FullName             Username             Email                          Groups (eff)   Spaces (eff)   Eff providers~n"),
-    io:format("-----------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
-    lists:foreach(fun({Id, FullName, Username, Email, {Groups, EffGroups}, {Spaces, EffSpaces}, Providers}) ->
-        GroupsStr = str_utils:format("~B (~B)", [Groups, EffGroups]),
-        SpacesStr = str_utils:format("~B (~B)", [Spaces, EffSpaces]),
-        io:format("~-44s ~-20ts ~-20ts ~-30ts ~-14s ~-14s ~-14B~n", [
-            Id, FullName, Username, Email, GroupsStr, SpacesStr, Providers
-        ])
-    end, Sorted),
-    io:format("-----------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
-    io:format("~B users in total~n", [length(Sorted)]).
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Returns the entity logic plugin module that handles model logic.
 %% @end
 %%--------------------------------------------------------------------
@@ -301,7 +250,7 @@ get_all_sessions(UserId) ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    11.
+    12.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -597,6 +546,57 @@ get_record_struct(11) ->
 
         {default_space, string},
         {default_provider, string},
+
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(12) ->
+    % Changes:
+    %   * default_space field removed
+    %   * default_provider field removed
+    {record, [
+        {full_name, string},
+        {username, string},
+        {basic_auth_enabled, boolean},
+        {password_hash, binary},
+        {emails, [string]},
+
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {full_name, string},
+            {username, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, {json_utils, encode, decode}}},
+            {access_token, {string, integer}},
+            {refresh_token, string}
+        ]}]},
+        {entitlements, [{string, atom}]},
+
+        {active_sessions, [string]},
 
         {client_tokens, [string]},
         {space_aliases, #{string => string}},
@@ -1361,7 +1361,91 @@ upgrade_record(10, User) ->
         TopDownDirty
     } = User,
 
-    {11, #od_user{
+    {11, {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        % Member is the lowest role, if the user had a higher role in the
+        % entitlement it will be automatically set to the correct value upon
+        % his next login.
+        [{Ent, member} || Ent <- Entitlements],
+
+        ActiveSessions,
+
+        DefaultSpace,
+        DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+
+        TopDownDirty
+    }};
+upgrade_record(11, User) ->
+    {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        ActiveSessions,
+
+        _DefaultSpace,
+        _DefaultProvider,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+
+        TopDownDirty
+    } = User,
+    {12, #od_user{
         full_name = FullName,
         username = Username,
         basic_auth_enabled = BasicAuthEnabled,
@@ -1369,15 +1453,9 @@ upgrade_record(10, User) ->
         emails = Emails,
 
         linked_accounts = LinkedAccounts,
-        % Member is the lowest role, if the user had a higher role in the
-        % entitlement it will be automatically set to the correct value upon
-        % his next login.
-        entitlements = [{Ent, member} || Ent <- Entitlements],
+        entitlements = Entitlements,
 
         active_sessions = ActiveSessions,
-
-        default_space = DefaultSpace,
-        default_provider = DefaultProvider,
 
         client_tokens = ClientTokens,
         space_aliases = SpaceAliases,

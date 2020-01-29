@@ -254,6 +254,9 @@ list_harvesters_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space(Config, P1, S1),
+
     ExpHarvesters = lists:map(
         fun(_) ->
             {ok, HarvesterId} = oz_test_utils:create_harvester(
@@ -269,7 +272,8 @@ list_harvesters_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]},
-                {user, U2}
+                {user, U2},
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -303,6 +307,9 @@ get_harvester_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space(Config, P1, S1),
+
     {ok, H1} = oz_test_utils:create_harvester(
         Config, ?ROOT, ?HARVESTER_CREATE_DATA(?HARVESTER_NAME2)
     ),
@@ -316,7 +323,8 @@ get_harvester_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_HARVESTERS_VIEW]},
-                {user, U2}
+                {user, U2},
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [

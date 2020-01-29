@@ -64,6 +64,7 @@
 
     check_my_ports_test/1,
     check_my_ip_test/1,
+    map_user_test/1,
     map_group_test/1,
     update_subdomain_test/1,
     update_domain_test/1,
@@ -102,6 +103,7 @@ all() ->
 
         check_my_ports_test,
         check_my_ip_test,
+        map_user_test,
         map_group_test,
         update_subdomain_test,
         update_domain_test,
@@ -1936,7 +1938,64 @@ check_my_ip_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
+map_user_test(Config) ->
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME1
+    ),
+
+    oz_test_utils:overwrite_auth_config(Config, #{
+        openidConfig => #{
+            enabled => true
+        },
+        supportedIdps => [
+            {?DUMMY_IDP, #{}}
+        ]
+    }),
+
+    SubjectId = str_utils:rand_hex(20),
+    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~s", [?DUMMY_IDP, SubjectId])),
+    ModernUserId = datastore_key:new_from_digest([atom_to_binary(?DUMMY_IDP, utf8), SubjectId]),
+
+    RunTest = fun(ExpUserId) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    {user, NonAdmin},
+                    {provider, P1, P1Token},
+                    nobody,
+                    root
+                ]
+            },
+            rest_spec = #rest_spec{
+                method = post,
+                path = <<"/provider/public/map_idp_user">>,
+                expected_code = ?HTTP_200_OK,
+                expected_body = #{<<"userId">> => ExpUserId}
+            },
+            data_spec = #data_spec{
+                required = [<<"idp">>, <<"userId">>],
+                correct_values = #{
+                    <<"idp">> => [atom_to_binary(?DUMMY_IDP, utf8)],
+                    <<"userId">> => [SubjectId]
+                },
+                bad_values = [
+                    {<<"idp">>, bad_idp_name, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"idp">>)}
+                ]
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end,
+    % If a legacy user exist, the idp account should map to legacy key, otherwise to a new one
+    RunTest(ModernUserId),
+    oz_test_utils:call_oz(Config, user_logic, create, [?ROOT, LegacyUserId, #{}]),
+    RunTest(LegacyUserId),
+    oz_test_utils:delete_user(Config, LegacyUserId),
+    RunTest(ModernUserId).
+
+
 map_group_test(Config) ->
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
@@ -1968,41 +2027,49 @@ map_group_test(Config) ->
     }),
 
     RawEntitlement = <<"my-unit/my-team/my-subteam">>,
-    ExpIdPEntitlement = #idp_entitlement{
-        idp = ?DUMMY_IDP,
-        privileges = member,
-        path = [
-            #idp_group{type = unit, name = <<"my-unit">>, privileges = member},
-            #idp_group{type = team, name = <<"my-team">>, privileges = member},
-            #idp_group{type = team, name = <<"my-subteam">>, privileges = member}
-        ]
-    },
-    ExpGroupId = entitlement_mapping:gen_group_id(ExpIdPEntitlement),
+    EncodedGroupPath = [<<"ut:my-unit">>, <<"tm:my-team">>, <<"tm:my-subteam">>],
+    LegacyGroupId = datastore_key:build_adjacent(<<"">>, str_utils:join_binary(EncodedGroupPath, <<"/">>)),
+    ModernGroupId = datastore_key:new_from_digest(EncodedGroupPath),
 
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                {provider, P1, P1Token}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = post,
-            path = <<"/provider/public/map_idp_group">>,
-            expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"groupId">> => ExpGroupId}
-        },
-        data_spec = #data_spec{
-            required = [<<"idp">>, <<"groupId">>],
-            correct_values = #{
-                <<"idp">> => [atom_to_binary(?DUMMY_IDP, utf8)],
-                <<"groupId">> => [RawEntitlement]
+    RunTest = fun(ExpGroupId) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    {user, NonAdmin},
+                    {provider, P1, P1Token},
+                    nobody,
+                    root
+                ]
             },
-            bad_values = [
-                {<<"idp">>, bad_idp_name, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"idp">>)}
-            ]
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+            rest_spec = #rest_spec{
+                method = post,
+                path = <<"/provider/public/map_idp_group">>,
+                expected_code = ?HTTP_200_OK,
+                expected_body = #{<<"groupId">> => ExpGroupId}
+            },
+            data_spec = #data_spec{
+                required = [<<"idp">>, <<"groupId">>],
+                correct_values = #{
+                    <<"idp">> => [atom_to_binary(?DUMMY_IDP, utf8)],
+                    <<"groupId">> => [RawEntitlement]
+                },
+                bad_values = [
+                    {<<"idp">>, bad_idp_name, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"idp">>)}
+                ]
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end,
+    % If a legacy group exist, the entitlement should map to legacy key, otherwise to a new one
+    RunTest(ModernGroupId),
+    oz_test_utils:call_oz(Config, group_logic, ensure_entitlement_group, [LegacyGroupId, <<"my-subteam">>, team]),
+    RunTest(LegacyGroupId),
+    oz_test_utils:call_oz(Config, od_group, update, [LegacyGroupId, fun(Group) ->
+        {ok, Group#od_group{protected = false}}
+    end]),
+    oz_test_utils:delete_group(Config, LegacyGroupId),
+    RunTest(ModernGroupId).
+
 
 
 update_subdomain_test(Config) ->

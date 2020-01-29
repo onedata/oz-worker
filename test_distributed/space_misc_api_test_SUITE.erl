@@ -223,7 +223,7 @@ get_test(Config) ->
         [?SPACE_VIEW], AllPrivs -- [?SPACE_VIEW]
     ),
 
-    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config),
     SupportSize = oz_test_utils:minimum_support_size(Config),
     {ok, St1} = oz_test_utils:create_storage(Config, ?PROVIDER(P1), ?STORAGE_NAME1),
     {ok, S1} = oz_test_utils:support_space(Config, ?PROVIDER(P1), St1, S1, SupportSize),
@@ -532,6 +532,9 @@ get_share_test(Config) ->
     {ok, S1} = oz_test_utils:create_space(Config, ?USER(User), ?SPACE_NAME1),
     oz_test_utils:space_set_user_privileges(Config, S1, User, [?SPACE_VIEW], []),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config),
+    oz_test_utils:support_space(Config, P1, S1),
+
     ShareName = <<"Share">>,
     ShareId = ?UNIQUE_STRING,
     {ok, ShareId} = oz_test_utils:create_share(
@@ -553,7 +556,8 @@ get_share_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SHARES_VIEW]},
-                {user, User}
+                {user, User},
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [

@@ -82,8 +82,7 @@ dev_provider_registration_route() ->
 -spec set_up_users(Users :: term()) -> ok | error.
 set_up_users(Users) ->
     try
-        lists:foreach(fun({UserId, Props}) ->
-            DefaultSpace = proplists:get_value(<<"default_space">>, Props),
+        lists:foreach(fun({UserId, _Props}) ->
             UserInfo = #od_user{
                 full_name = UserId,
                 username = UserId,
@@ -97,7 +96,6 @@ set_up_users(Users) ->
                     }
                 ],
                 spaces = [],
-                default_space = DefaultSpace,
                 groups = []
             },
             {ok, UserInfo2} = basic_auth:toggle_basic_auth(UserInfo, true),

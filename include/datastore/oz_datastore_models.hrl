@@ -134,9 +134,6 @@
 
     active_sessions = [] :: [session:id()],
 
-    default_space = undefined :: undefined | binary(),
-    default_provider = undefined :: undefined | binary(),
-
     % List of user's client tokens
     client_tokens = [] :: [binary()],
     % List of user's aliases for spaces
@@ -473,9 +470,9 @@
     body = <<>> :: binary()
 }).
 
-%% Stores information about active provider connection
--record(provider_connection, {
-    connection_ref :: gs_server:conn_ref()
+%% Stores information about active provider connections
+-record(provider_connections, {
+    connections :: [gs_server:conn_ref()]
 }).
 
 %% Stores information about active user connections per session id
