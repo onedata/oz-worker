@@ -429,12 +429,14 @@
 
 %% Stores information about active provider connections
 -record(provider_connections, {
-    connections :: [gs_server:conn_ref()]
+    connections = [] :: [gs_server:conn_ref()],
+    last_activity = time_utils:cluster_time_seconds() :: time_utils:seconds()
 }).
 
 %% Stores information about active user connections per session id
 -record(user_connections, {
-    connections = [] :: [gs_server:conn_ref()]
+    connections_per_session = #{} :: #{session:id() => gs_server:conn_ref()},
+    last_activity = time_utils:cluster_time_seconds() :: time_utils:seconds()
 }).
 
 % Token used to match together OIDC/SAML requests and responses and protect

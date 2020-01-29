@@ -19,16 +19,14 @@
 -export([
     add/2,
     remove/2,
+    get_all/1,
+    get_last_activity/1,
     is_online/1,
     close_all/1
 ]).
 
 %% datastore_model callbacks
 -export([init/0]).
-
--type id() :: od_provider:id().
--type record() :: #provider_connections{}.
--export_type([id/0, record/0]).
 
 -type connections_count() :: non_neg_integer().
 
@@ -41,37 +39,48 @@
 %%% API
 %%%===================================================================
 
--spec add(id(), gs_server:conn_ref()) -> {ok, connections_count()} | {error, term()}.
+-spec add(od_provider:id(), gs_server:conn_ref()) -> {ok, connections_count()} | {error, term()}.
 add(ProviderId, ConnectionRef) ->
-    Diff = fun(Record = #provider_connections{connections = Connections}) ->
-        {ok, Record#provider_connections{
-            connections = [ConnectionRef | Connections]
-        }}
-    end,
-    Default = #provider_connections{connections = [ConnectionRef]},
-    update(ProviderId, Diff, Default).
+    update(ProviderId, fun(Connections) ->
+        [ConnectionRef | Connections]
+    end).
 
 
--spec remove(id(), gs_server:conn_ref()) -> {ok, connections_count()} | {error, term()}.
+-spec remove(od_provider:id(), gs_server:conn_ref()) -> {ok, connections_count()} | {error, term()}.
 remove(ProviderId, ConnectionRef) ->
-    Diff = fun(Record = #provider_connections{connections = Connections}) ->
-        {ok, Record#provider_connections{
-            connections = Connections -- [ConnectionRef]
-        }}
-    end,
-    Default = #provider_connections{connections = []},
-    update(ProviderId, Diff, Default).
+    update(ProviderId, fun(Connections) ->
+        lists:delete(ConnectionRef, Connections)
+    end).
 
 
--spec is_online(id()) -> boolean().
-is_online(ProviderId) ->
+-spec get_all(od_provider:id()) -> [gs_server:conn_ref()].
+get_all(ProviderId) ->
     case datastore_model:get(?CTX, ProviderId) of
-        {ok, #document{value = #provider_connections{connections = [_ | _]}}} -> true;
-        _ -> false
+        {ok, #document{value = #provider_connections{connections = Connections}}} ->
+            Connections;
+        {error, _} ->
+            []
     end.
 
 
--spec close_all(id()) -> ok.
+-spec get_last_activity(od_provider:id()) -> now | time_utils:seconds().
+get_last_activity(ProviderId) ->
+    case datastore_model:get(?CTX, ProviderId) of
+        {ok, #document{value = #provider_connections{connections = C}}} when length(C) > 0 ->
+            now;
+        {ok, #document{value = #provider_connections{last_activity = LastActivity}}} ->
+            LastActivity;
+        {error, _} ->
+            0
+    end.
+
+
+-spec is_online(od_provider:id()) -> boolean().
+is_online(ProviderId) ->
+    get_all(ProviderId) /= [].
+
+
+-spec close_all(od_provider:id()) -> ok.
 close_all(ProviderId) ->
     case datastore_model:get(?CTX, ProviderId) of
         {ok, #document{value = #provider_connections{connections = Connections}}} ->
@@ -87,8 +96,19 @@ close_all(ProviderId) ->
 %%%===================================================================
 
 %% @private
--spec update(id(), datastore_model:diff(), record()) -> {ok, connections_count()} | {error, term()}.
-update(ProviderId, Diff, Default) ->
+-spec update(od_provider:id(), fun(([gs_server:conn_ref()]) -> [gs_server:conn_ref()])) ->
+    {ok, connections_count()} | {error, term()}.
+update(ProviderId, ConnectionsDiff) ->
+    Diff = fun(Record = #provider_connections{connections = Connections}) ->
+        {ok, Record#provider_connections{
+            connections = ConnectionsDiff(Connections),
+            last_activity = time_utils:cluster_time_seconds()
+        }}
+    end,
+    Default = #provider_connections{
+        connections = ConnectionsDiff([]),
+        last_activity = time_utils:cluster_time_seconds()
+    },
     case datastore_model:update(?CTX, ProviderId, Diff, Default) of
         {ok, #document{value = #provider_connections{connections = Connections}}} ->
             {ok, length(Connections)};
