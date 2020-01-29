@@ -333,7 +333,7 @@ list_users_test(Config) ->
     ExpUsers = [U1, U2, U3],
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
@@ -390,7 +390,7 @@ get_user_test(Config) ->
     oz_test_utils:space_remove_user(Config, Space, Creator),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space(Config, P1, Space),
+    oz_test_utils:support_space_by_provider(Config, P1, Space),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -480,7 +480,7 @@ get_user_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     AllPrivs = privileges:space_privileges(),
     InitialPrivs = privileges:space_member(),
@@ -593,7 +593,7 @@ list_eff_users_test(Config) ->
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     ExpUsers = [U1, U2, U3, U4, U5, U6],
     ApiTestSpec = #api_test_spec{
@@ -645,7 +645,7 @@ get_eff_user_test(Config) ->
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     lists:foreach(
         fun({UserId, UserDetails}) ->
@@ -756,7 +756,7 @@ get_eff_user_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:group_add_user(Config, G2, U3),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
@@ -852,9 +852,9 @@ get_eff_user_membership_intermediaries(Config) ->
     {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space(Config, P1, S1),
-    oz_test_utils:support_space(Config, P1, S2),
-    oz_test_utils:support_space(Config, P1, S3),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S2),
+    oz_test_utils:support_space_by_provider(Config, P1, S3),
 
     oz_test_utils:space_add_user(Config, S1, U1),
     oz_test_utils:space_add_user(Config, S3, U2),

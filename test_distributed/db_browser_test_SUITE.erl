@@ -208,7 +208,7 @@ set_up_providers_and_clusters(Config, Environment = #environment{users = Users, 
                 2 -> rand:uniform(10000000000);
                 3 -> rand:uniform(10000000)
             end,
-            oz_test_utils:support_space(Config, Provider, Space, SupportSize)
+            oz_test_utils:support_space(Config, Provider, Space, SupportSize)  % fixme use generated storage
         end, ?RAND_SUBLIST(Spaces, ?MEMBERS_COUNT)),
         Provider
     end, lists:seq(1, ?ENTITY_COUNT)),

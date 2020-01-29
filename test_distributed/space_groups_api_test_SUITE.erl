@@ -411,7 +411,7 @@ list_groups_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     ExpGroups = lists:map(
         fun(_) ->
@@ -464,7 +464,7 @@ get_group_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     {ok, G1} = oz_test_utils:create_group(
         Config, ?ROOT,
@@ -541,7 +541,7 @@ get_group_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:space_add_group(Config, S1, G1),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     AllPrivs = privileges:space_privileges(),
     InitialPrivs = privileges:space_member(),
@@ -657,7 +657,7 @@ list_eff_groups_test(Config) ->
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     ExpGroups = [G1, G2, G3, G4, G5, G6],
     ApiTestSpec = #api_test_spec{
@@ -709,7 +709,7 @@ get_eff_group_test(Config) ->
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     lists:foreach(
         fun({GroupId, GroupDetails}) ->
@@ -801,7 +801,7 @@ get_eff_group_privileges_test(Config) ->
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     % User whose eff privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
@@ -915,9 +915,9 @@ get_eff_group_membership_intermediaries(Config) ->
     {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
-    oz_test_utils:support_space(Config, P1, S1),
-    oz_test_utils:support_space(Config, P1, S2),
-    oz_test_utils:support_space(Config, P1, S3),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S2),
+    oz_test_utils:support_space_by_provider(Config, P1, S3),
 
     oz_test_utils:group_add_user(Config, G4, U2),
 

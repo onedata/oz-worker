@@ -533,7 +533,7 @@ get_share_test(Config) ->
     oz_test_utils:space_set_user_privileges(Config, S1, User, [?SPACE_VIEW], []),
 
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config),
-    oz_test_utils:support_space(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     ShareName = <<"Share">>,
     ShareId = ?UNIQUE_STRING,
