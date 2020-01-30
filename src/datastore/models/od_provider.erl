@@ -137,7 +137,7 @@ entity_logic_plugin() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    5.
+    6.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -193,8 +193,9 @@ get_record_struct(4) ->
     % effective relations (as intermediaries computing logic has changed).
     get_record_struct(3);
 get_record_struct(5) ->
-    % * new field - creation_time
-    % * new field - eff harvesters
+    % Changes:
+    %   * new field - creation_time
+    %   * new field - eff harvesters
     {record, [
         {name, string},
         {admin_email, string},
@@ -214,6 +215,32 @@ get_record_struct(5) ->
         {eff_harvesters, #{string => [{atom, string}]}}, % New field
 
         {creation_time, integer}, % New field
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(6) ->
+    % Changes:
+    %   * new field - last_activity
+    {record, [
+        {name, string},
+        {admin_email, string},
+        {root_macaroon, string},
+
+        {subdomain_delegation, boolean},
+        {domain, string},
+        {subdomain, string},
+
+        {latitude, float},
+        {longitude, float},
+
+        {spaces, #{string => integer}},
+
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {last_activity, integer}, % new field
 
         {bottom_up_dirty, boolean}
     ]}.
@@ -352,7 +379,50 @@ upgrade_record(4, Provider) ->
 
         BottomUpDirty
     } = Provider,
-    {5, #od_provider{
+    {5, {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+        #{},
+
+        time_utils:system_time_seconds(),
+
+        BottomUpDirty
+    }};
+upgrade_record(5, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+        EffHarvesters,
+
+        CreationTime,
+
+        BottomUpDirty
+    } = Provider,
+    {6, #od_provider{
         name = Name,
         admin_email = AdminEmail,
         root_macaroon = RootMacaroon,
@@ -367,9 +437,10 @@ upgrade_record(4, Provider) ->
 
         eff_users = EffUsers,
         eff_groups = EffGroups,
-        eff_harvesters = #{},
+        eff_harvesters = EffHarvesters,
 
-        creation_time = time_utils:system_time_seconds(),
+        creation_time = CreationTime,
+        last_activity = 0,
 
         bottom_up_dirty = BottomUpDirty
     }}.

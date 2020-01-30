@@ -17,23 +17,15 @@
 
 %% API
 -export([
-    add/2,
-    get_all/1,
-    remove/2,
+    add/3,
+    remove/3,
+    get_all/2,
+    get_last_activity/1,
     clear/2
 ]).
 
 %% datastore_model callbacks
 -export([init/0]).
-
--type id() :: session:id().
--type record() :: #user_connections{}.
--export_type([id/0, record/0]).
-
--define(OK_ON_SUCCESS(__Term), case __Term of
-    {ok, _} -> ok;
-    {error, _} = Error -> Error
-end).
 
 -define(CTX, #{
     model => ?MODULE,
@@ -44,78 +36,85 @@ end).
 %%% API
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Adds a connection to the list of user connections.
-%% @end
-%%--------------------------------------------------------------------
--spec add(id(), gs_server:conn_ref()) -> ok | {error, term()}.
-add(SessionId, ConnectionRef) ->
-    Diff = fun(Record = #user_connections{connections = Connections}) ->
-        {ok, Record#user_connections{connections = [ConnectionRef | Connections]}}
-    end,
-    Default = #user_connections{connections = [ConnectionRef]},
-    ?OK_ON_SUCCESS(datastore_model:update(?CTX, SessionId, Diff, Default)).
+-spec add(od_user:id(), session:id(), gs_server:conn_ref()) -> ok | {error, term()}.
+add(UserId, SessionId, ConnectionRef) ->
+    update(UserId, fun(ConnectionsPerSession) ->
+        Connections = maps:get(SessionId, ConnectionsPerSession, []),
+        ConnectionsPerSession#{
+            SessionId => [ConnectionRef | Connections]
+        }
+    end).
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Returns the list of user connections.
-%% @end
-%%--------------------------------------------------------------------
--spec get_all(id()) -> {ok, [gs_server:conn_ref()]}.
-get_all(SessionId) ->
-    case datastore_model:get(?CTX, SessionId) of
-        {ok, #document{value = #user_connections{connections = Connections}}} ->
-            {ok, Connections};
+-spec remove(od_user:id(), session:id(), gs_server:conn_ref()) -> ok | {error, term()}.
+remove(UserId, SessionId, ConnectionRef) ->
+    update(UserId, fun(ConnectionsPerSession) ->
+        Connections = maps:get(SessionId, ConnectionsPerSession, []),
+        case lists:delete(ConnectionRef, Connections) of
+            [] -> maps:remove(SessionId, ConnectionsPerSession);
+            List -> maps:put(SessionId, List, ConnectionsPerSession)
+        end
+    end).
+
+
+-spec get_all(od_user:id(), session:id()) -> [gs_server:conn_ref()].
+get_all(UserId, SessionId) ->
+    case datastore_model:get(?CTX, UserId) of
+        {ok, #document{value = #user_connections{connections_per_session = ConnectionsPerSession}}} ->
+            maps:get(SessionId, ConnectionsPerSession, []);
         {error, _} ->
-            {ok, []}
+            []
     end.
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Removes a connection from the list of user connections.
-%% @end
-%%--------------------------------------------------------------------
--spec remove(id(), gs_server:conn_ref()) -> ok | {error, term()}.
-remove(SessionId, ConnectionRef) ->
-    Diff = fun(Record = #user_connections{connections = Connections}) ->
-        {ok, Record#user_connections{connections = Connections -- [ConnectionRef]}}
-    end,
-    Default = #user_connections{connections = []},
-    ?OK_ON_SUCCESS(datastore_model:update(?CTX, SessionId, Diff, Default)).
+-spec get_last_activity(od_user:id()) -> now | time_utils:seconds().
+get_last_activity(UserId) ->
+    case datastore_model:get(?CTX, UserId) of
+        {ok, #document{value = #user_connections{connections_per_session = C}}} when map_size(C) > 0 ->
+            now;
+        _ ->
+            case od_user:get(UserId) of
+                {ok, #document{value = #od_user{last_activity = LastActivity}}} ->
+                    LastActivity;
+                _ ->
+                    0
+            end
+    end.
 
 
-%%--------------------------------------------------------------------
-%% @doc
-%% Removes information about all connections related to given session.
-%% @end
-%%--------------------------------------------------------------------
--spec clear(id(), GracePeriodMillis :: undefined | non_neg_integer()) ->
-    ok | {error, term()}.
-clear(SessionId, GracePeriod) ->
-    {ok, Connections} = get_all(SessionId),
-    case GracePeriod of
-        undefined ->
-            terminate_connections(Connections);
-        Milliseconds ->
-            spawn(fun() ->
-                timer:sleep(Milliseconds),
-                terminate_connections(Connections)
-            end)
-    end,
-    % Disconnect the connections with a delay to allow for flushing
-    datastore_model:delete(?CTX, SessionId).
-
-
-%% @private
--spec terminate_connections(Connections :: [gs_server:conn_ref()]) -> ok.
-terminate_connections(Connections) ->
+-spec clear(od_user:id(), session:id()) -> ok | {error, term()}.
+clear(UserId, SessionId) ->
+    Connections = get_all(UserId, SessionId),
     lists:foreach(fun(Connection) ->
         gs_server:terminate_connection(Connection)
-    end, Connections).
+    end, Connections),
+    datastore_model:delete(?CTX, SessionId).
 
+%%%===================================================================
+%%% Internal functions
+%%%===================================================================
+
+%% @private
+-spec update(od_user:id(), fun((#{session:id() => gs_server:conn_ref()}) -> #{session:id() => gs_server:conn_ref()})) ->
+    ok | {error, term()}.
+update(UserId, ConnectionsDiff) ->
+    Diff = fun(Record = #user_connections{connections_per_session = ConnectionsPerSession}) ->
+        {ok, Record#user_connections{
+            connections_per_session = ConnectionsDiff(ConnectionsPerSession)
+        }}
+    end,
+    Default = #user_connections{
+        connections_per_session = ConnectionsDiff(#{})
+    },
+    case datastore_model:update(?CTX, UserId, Diff, Default) of
+        {ok, _} ->
+            {ok, _} = od_user:update(UserId, fun(User) ->
+                {ok, User#od_user{last_activity = time_utils:cluster_time_seconds()}}
+            end),
+            ok;
+        {error, _} = Error ->
+            Error
+    end.
 
 %%%===================================================================
 %%% datastore_model callbacks

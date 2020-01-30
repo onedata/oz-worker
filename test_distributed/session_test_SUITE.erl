@@ -26,6 +26,7 @@
     multiple_connections_per_session/1,
     multiple_sessions_per_user/1,
     session_cookie_refresh_and_grace_period/1,
+    last_activity_tracking/1,
     cleanup_on_session_expiry/1,
     cleanup_on_session_delete/1,
     cleanup_on_user_delete/1,
@@ -38,6 +39,7 @@ all() -> ?ALL([
     multiple_connections_per_session,
     multiple_sessions_per_user,
     session_cookie_refresh_and_grace_period,
+    last_activity_tracking,
     cleanup_on_session_expiry,
     cleanup_on_session_delete,
     cleanup_on_user_delete,
@@ -59,14 +61,14 @@ multiple_connections_per_session(Config) ->
     {_ClientPid1, ServerPid1, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie),
     {ClientPid2, ServerPid2, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie),
     {_ClientPid3, ServerPid3, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie),
-    ?assert(compare_connections_per_session(Config, SessionId, [ServerPid1, ServerPid2, ServerPid3])),
+    ?assert(compare_connections_per_session(Config, UserId, SessionId, [ServerPid1, ServerPid2, ServerPid3])),
     ?assert(compare_connections_per_user(Config, UserId, [ServerPid1, ServerPid2, ServerPid3])),
 
     exit(ClientPid2, kill),
-    ?assert(compare_connections_per_session(Config, SessionId, [ServerPid1, ServerPid3])),
+    ?assert(compare_connections_per_session(Config, UserId, SessionId, [ServerPid1, ServerPid3])),
 
     {_ClientPid4, ServerPid4, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie),
-    ?assert(compare_connections_per_session(Config, SessionId, [ServerPid1, ServerPid3, ServerPid4])),
+    ?assert(compare_connections_per_session(Config, UserId, SessionId, [ServerPid1, ServerPid3, ServerPid4])),
 
     ok.
 
@@ -85,14 +87,14 @@ multiple_sessions_per_user(Config) ->
     {_ClientPid5, ServerPid5, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie2),
     ?assert(compare_user_sessions(Config, UserId, [Session1, Session2])),
 
-    ?assert(compare_connections_per_session(Config, Session1, [ServerPid1, ServerPid2, ServerPid3])),
-    ?assert(compare_connections_per_session(Config, Session2, [ServerPid4, ServerPid5])),
+    ?assert(compare_connections_per_session(Config, UserId, Session1, [ServerPid1, ServerPid2, ServerPid3])),
+    ?assert(compare_connections_per_session(Config, UserId, Session2, [ServerPid4, ServerPid5])),
     ?assert(compare_connections_per_user(Config, UserId, [ServerPid1, ServerPid2, ServerPid3, ServerPid4, ServerPid5])),
 
     exit(ClientPid2, kill),
 
-    ?assert(compare_connections_per_session(Config, Session1, [ServerPid1, ServerPid3])),
-    ?assert(compare_connections_per_session(Config, Session2, [ServerPid4, ServerPid5])),
+    ?assert(compare_connections_per_session(Config, UserId, Session1, [ServerPid1, ServerPid3])),
+    ?assert(compare_connections_per_session(Config, UserId, Session2, [ServerPid4, ServerPid5])),
     ?assert(compare_connections_per_user(Config, UserId, [ServerPid1, ServerPid3, ServerPid4, ServerPid5])),
 
     ok.
@@ -131,6 +133,39 @@ session_cookie_refresh_and_grace_period(Config) ->
     ok.
 
 
+last_activity_tracking(Config) ->
+    {ok, UserId} = oz_test_utils:create_user(Config),
+    ?assertEqual(0, oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId])),
+
+    {ok, {_, Cookie}} = oz_test_utils:log_in(Config, UserId),
+    {ClientPid1, _, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie),
+    ?assertEqual(now, oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId])),
+    {ClientPid2, _, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie),
+    ?assertEqual(now, oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId])),
+    {ClientPid3, _, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie),
+    ?assertEqual(now, oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId])),
+    exit(ClientPid1, kill),
+    exit(ClientPid2, kill),
+    oz_test_utils:simulate_time_passing(Config, 54),
+    exit(ClientPid3, kill),
+    TimestampAlpha = oz_test_utils:get_mocked_time(Config),
+    ?assertMatch(
+        TimestampAlpha,
+        oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId]),
+        60
+    ),
+    oz_test_utils:simulate_time_passing(Config, 22),
+    {ClientPid4, _, ?SUB(user, UserId)} = start_gs_connection(Config, Cookie),
+    ?assertEqual(now, oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId])),
+    exit(ClientPid4, kill),
+    TimestampBeta = oz_test_utils:get_mocked_time(Config),
+    ?assertMatch(
+        TimestampBeta,
+        oz_test_utils:call_oz(Config, user_connections, get_last_activity, [UserId]),
+        60
+    ).
+
+
 cleanup_on_session_expiry(Config) ->
     {ok, UserId} = oz_test_utils:create_user(Config),
     {ok, {SessionId, Cookie}} = oz_test_utils:log_in(Config, UserId),
@@ -144,7 +179,7 @@ cleanup_on_session_expiry(Config) ->
 
     ?assert(compare_user_sessions(Config, UserId, [])),
     ?assert(compare_connections_per_user(Config, UserId, [])),
-    ?assert(compare_connections_per_session(Config, SessionId, [])),
+    ?assert(compare_connections_per_session(Config, UserId, SessionId, [])),
     ?assertMatch(false, is_process_alive(ClientPid1), 10),
     ?assertMatch(false, is_process_alive(ClientPid2), 10),
     ?assertMatch(false, is_process_alive(ClientPid3), 10),
@@ -166,7 +201,7 @@ cleanup_on_session_delete(Config) ->
 
     ?assert(compare_user_sessions(Config, UserId, [])),
     ?assert(compare_connections_per_user(Config, UserId, [])),
-    ?assert(compare_connections_per_session(Config, SessionId, [])),
+    ?assert(compare_connections_per_session(Config, UserId, SessionId, [])),
     ?assertMatch(false, is_process_alive(ClientPid1), 10),
     ?assertMatch(false, is_process_alive(ClientPid2), 10),
     ?assertMatch(false, is_process_alive(ClientPid3), 10),
@@ -186,9 +221,9 @@ cleanup_on_user_delete(Config) ->
     rpc:call(random_node(Config), od_user, force_delete, [UserId]),
     ?assert(compare_user_sessions(Config, UserId, [])),
     ?assert(compare_connections_per_user(Config, UserId, [])),
-    ?assert(compare_connections_per_session(Config, Session1, [])),
-    ?assert(compare_connections_per_session(Config, Session2, [])),
-    ?assert(compare_connections_per_session(Config, Session3, [])),
+    ?assert(compare_connections_per_session(Config, UserId, Session1, [])),
+    ?assert(compare_connections_per_session(Config, UserId, Session2, [])),
+    ?assert(compare_connections_per_session(Config, UserId, Session3, [])),
     ?assertMatch(false, is_process_alive(ClientPid1), 10),
     ?assertMatch(false, is_process_alive(ClientPid2), 10),
     ?assertMatch(false, is_process_alive(ClientPid3), 10),
@@ -210,9 +245,9 @@ cleanup_of_expired_sessions_upon_other_session_expiry(Config) ->
 
     ?assert(compare_user_sessions(Config, UserId, [Session1, Session2, Session3])),
     ?assert(compare_connections_per_user(Config, UserId, [ServerPid1, ServerPid2, ServerPid3])),
-    ?assert(compare_connections_per_session(Config, Session1, [ServerPid1])),
-    ?assert(compare_connections_per_session(Config, Session2, [ServerPid2])),
-    ?assert(compare_connections_per_session(Config, Session3, [ServerPid3])),
+    ?assert(compare_connections_per_session(Config, UserId, Session1, [ServerPid1])),
+    ?assert(compare_connections_per_session(Config, UserId, Session2, [ServerPid2])),
+    ?assert(compare_connections_per_session(Config, UserId, Session3, [ServerPid3])),
     ?assert(is_process_alive(ClientPid1)),
     ?assert(is_process_alive(ClientPid2)),
     ?assert(is_process_alive(ClientPid3)),
@@ -227,10 +262,10 @@ cleanup_of_expired_sessions_upon_other_session_expiry(Config) ->
 
     ?assert(compare_user_sessions(Config, UserId, [Session4])),
     ?assert(compare_connections_per_user(Config, UserId, [ServerPid4])),
-    ?assert(compare_connections_per_session(Config, Session1, [])),
-    ?assert(compare_connections_per_session(Config, Session2, [])),
-    ?assert(compare_connections_per_session(Config, Session3, [])),
-    ?assert(compare_connections_per_session(Config, Session4, [ServerPid4])),
+    ?assert(compare_connections_per_session(Config, UserId, Session1, [])),
+    ?assert(compare_connections_per_session(Config, UserId, Session2, [])),
+    ?assert(compare_connections_per_session(Config, UserId, Session3, [])),
+    ?assert(compare_connections_per_session(Config, UserId, Session4, [ServerPid4])),
     ?assertMatch(false, is_process_alive(ClientPid1), 10),
     ?assertMatch(false, is_process_alive(ClientPid2), 10),
     ?assertMatch(false, is_process_alive(ClientPid3), 10),
@@ -253,9 +288,9 @@ cleanup_of_expired_sessions_upon_other_session_delete(Config) ->
 
     ?assert(compare_user_sessions(Config, UserId, [Session1, Session2, Session3])),
     ?assert(compare_connections_per_user(Config, UserId, [ServerPid1, ServerPid2, ServerPid3])),
-    ?assert(compare_connections_per_session(Config, Session1, [ServerPid1])),
-    ?assert(compare_connections_per_session(Config, Session2, [ServerPid2])),
-    ?assert(compare_connections_per_session(Config, Session3, [ServerPid3])),
+    ?assert(compare_connections_per_session(Config, UserId, Session1, [ServerPid1])),
+    ?assert(compare_connections_per_session(Config, UserId, Session2, [ServerPid2])),
+    ?assert(compare_connections_per_session(Config, UserId, Session3, [ServerPid3])),
     ?assert(is_process_alive(ClientPid1)),
     ?assert(is_process_alive(ClientPid2)),
     ?assert(is_process_alive(ClientPid3)),
@@ -268,10 +303,10 @@ cleanup_of_expired_sessions_upon_other_session_delete(Config) ->
 
     ?assert(compare_user_sessions(Config, UserId, [Session4])),
     ?assert(compare_connections_per_user(Config, UserId, [ServerPid4])),
-    ?assert(compare_connections_per_session(Config, Session1, [])),
-    ?assert(compare_connections_per_session(Config, Session2, [])),
-    ?assert(compare_connections_per_session(Config, Session3, [])),
-    ?assert(compare_connections_per_session(Config, Session4, [ServerPid4])),
+    ?assert(compare_connections_per_session(Config, UserId, Session1, [])),
+    ?assert(compare_connections_per_session(Config, UserId, Session2, [])),
+    ?assert(compare_connections_per_session(Config, UserId, Session3, [])),
+    ?assert(compare_connections_per_session(Config, UserId, Session4, [ServerPid4])),
     ?assertMatch(false, is_process_alive(ClientPid1), 10),
     ?assertMatch(false, is_process_alive(ClientPid2), 10),
     ?assertMatch(false, is_process_alive(ClientPid3), 10),
@@ -361,10 +396,9 @@ compare_user_sessions(Config, UserId, Expected) ->
     compare_lists(ListFun, Expected, 60).
 
 
-compare_connections_per_session(Config, SessionId, Expected) ->
+compare_connections_per_session(Config, UserId, SessionId, Expected) ->
     ListFun = fun() ->
-        {ok, Connections} = rpc:call(random_node(Config), user_connections, get_all, [SessionId]),
-        Connections
+        rpc:call(random_node(Config), user_connections, get_all, [UserId, SessionId])
     end,
     compare_lists(ListFun, Expected, 60).
 
@@ -373,8 +407,7 @@ compare_connections_per_user(Config, UserId, Expected) ->
     ListFun = fun() ->
         {ok, Sessions} = rpc:call(random_node(Config), od_user, get_all_sessions, [UserId]),
         lists:flatmap(fun(SessionId) ->
-            {ok, Connections} = rpc:call(random_node(Config), user_connections, get_all, [SessionId]),
-            Connections
+            rpc:call(random_node(Config), user_connections, get_all, [UserId, SessionId])
         end, Sessions)
     end,
     compare_lists(ListFun, Expected, 60).

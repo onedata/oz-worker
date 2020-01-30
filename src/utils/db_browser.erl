@@ -34,7 +34,7 @@
 % Type of the data in column, used for formatting
 -type data_type() :: text | integer
 | {boolean, TrueStr :: string(), FalseStr :: string()}
-| creation_date | byte_size | direct_and_eff
+| creation_date | last_activity | byte_size | direct_and_eff
 | {privileges, privileges:privileges(any())} | admin_privileges.
 % Value of a field, corresponds to the data_type()
 -type value() :: binary() | integer() | {integer(), integer()}.
@@ -358,7 +358,7 @@ format_collection({space_shares, SpaceId}, SortBy, SortOrder) ->
 
 format_collection({space_providers, SpaceId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_space{providers = Providers}}} = od_space:get(SpaceId),
-    format_table(providers, maps:keys(Providers), SortBy, SortOrder, [id, online, version, name, domain], [
+    format_table(providers, maps:keys(Providers), SortBy, SortOrder, [id, last_activity, version, name, domain], [
         {support, byte_size, 11, fun(Doc) -> maps:get(SpaceId, Doc#document.value#od_provider.spaces) end}
     ]);
 
@@ -445,7 +445,7 @@ format_collection({harvester_providers, HarvesterId}, SortBy, SortOrder) ->
     AllPrivileges :: privileges:privileges(any())) -> string().
 format_members(TableType, Entries, SortBy, SortOrder, DirectMembers, EffMembers, AllPrivileges) ->
     Fields = case TableType of
-        users -> [id, full_name, username, email];
+        users -> [id, full_name, username, idp_and_email];
         groups -> [id, name, type, parents, children]
     end,
     format_table(TableType, Entries, SortBy, SortOrder, Fields, [
@@ -522,6 +522,7 @@ format_table(TableType, Entries, SortBy, SortOrder, Fields, ExtraSpecs) ->
 -spec field_specs(table_type()) -> [field_spec()].
 field_specs(users) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
+    {last_activity, last_activity, 16, fun(Doc) -> user_connections:get_last_activity(Doc#document.key) end},
     {full_name, text, 25, fun(Doc) -> Doc#document.value#od_user.full_name end},
     {username, text, 20, fun(Doc) ->
         case Doc#document.value#od_user.username of
@@ -529,10 +530,18 @@ field_specs(users) -> [
             Username -> Username
         end
     end},
-    {email, text, 30, fun(Doc) ->
-        case Doc#document.value#od_user.emails of
-            [] -> <<"-">>;
-            Emails -> hd(Emails)
+    {idp_and_email, text, 50, fun(Doc) ->
+        case {Doc#document.value#od_user.linked_accounts, Doc#document.value#od_user.emails} of
+            {[], []} ->
+                <<"basic_auth / <no-email>">>;
+            {[], [Email | _]} ->
+                <<"basic_auth / ", Email/binary>>;
+            {[#linked_account{idp = IdP, emails = []} | _], []} ->
+                <<(atom_to_binary(IdP, utf8))/binary, " / <no-email>">>;
+            {[#linked_account{idp = IdP, emails = []} | _], [Email | _]} ->
+                <<(atom_to_binary(IdP, utf8))/binary, " / ", Email/binary>>;
+            {[#linked_account{idp = IdP, emails = [Email | _]} | _], _} ->
+                <<(atom_to_binary(IdP, utf8))/binary, " / ", Email/binary>>
         end
     end},
     {groups, direct_and_eff, 9, fun(#document{value = User}) ->
@@ -595,7 +604,7 @@ field_specs(shares) -> [
 ];
 field_specs(providers) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
-    {online, {boolean, "online", "-"}, 6, fun(Doc) -> provider_connections:is_online(Doc#document.key) end},
+    {last_activity, last_activity, 16, fun(Doc) -> provider_connections:get_last_activity(Doc#document.key) end},
     {version, text, 14, fun(Doc) ->
         {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, Doc#document.key),
         Version
@@ -728,7 +737,7 @@ format_row(RowValues, FieldSpecs) ->
 
 
 %% @private
--spec format_value(data_type(), value()) -> string().
+-spec format_value(data_type(), value()) -> string() | binary().
 format_value(text, Value) ->
     str_utils:format("~ts", [Value]);
 format_value(integer, Value) ->
@@ -741,6 +750,13 @@ format_value({boolean, TrueStr, FalseStr}, Value) ->
 format_value(creation_date, Value) ->
     {{Year, Month, Day}, _} = time_utils:epoch_to_datetime(Value),
     str_utils:format("~4..0B-~2..0B-~2..0B", [Year, Month, Day]);
+format_value(last_activity, now) ->
+    <<"✓ online"/utf8>>;
+format_value(last_activity, 0) ->
+    <<"✕ unknown"/utf8>>;
+format_value(last_activity, Value) ->
+    {{Year, Month, Day}, {Hour, Minute, _}} = time_utils:epoch_to_datetime(Value),
+    str_utils:format("~4..0B-~2..0B-~2..0B ~2..0B:~2..0B", [Year, Month, Day, Hour, Minute]);
 format_value(byte_size, Value) ->
     str_utils:format_byte_size(Value);
 format_value(direct_and_eff, {Direct, Effective}) ->
