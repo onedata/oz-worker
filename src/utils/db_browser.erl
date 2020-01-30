@@ -735,8 +735,11 @@ field_specs(storages) -> [
     {eff_users, integer, 9, fun(Doc) -> maps:size(Doc#document.value#od_storage.eff_users) end},
     {eff_groups, integer, 10, fun(Doc) -> maps:size(Doc#document.value#od_storage.eff_groups) end},
     {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_storage.creation_time end},
-    {qos_params, text, 40, fun(#document{value = #od_storage{qos_parameters = QosParameters}}) ->
-        str_utils:join_binary(maps:values(QosParameters), <<" | ">>)
+    {qos_params, text, 55, fun(#document{value = #od_storage{qos_parameters = QosParameters}}) ->
+        KeyValuePairs = lists:map(fun({Key, Value}) ->
+            str_utils:format_bin("~ts=~ts", [Key, Value])
+        end, maps:to_list(QosParameters)),
+        str_utils:join_binary(KeyValuePairs, <<", ">>)
     end}
 ].
 

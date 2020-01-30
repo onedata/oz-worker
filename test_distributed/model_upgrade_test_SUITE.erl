@@ -1781,6 +1781,7 @@ get_record(od_provider, 5) -> {od_provider,
     <<"name">>,
     undefined,
     undefined,
+
     false,
     <<"redirection_point">>,
     undefined,
@@ -1803,10 +1804,39 @@ get_record(od_provider, 5) -> {od_provider,
 
     true
 };
-get_record(od_provider, 6) -> #od_provider{
+get_record(od_provider, 6) -> {od_provider,
+    <<"name">>,
+    undefined,
+    undefined,
+
+    false,
+    <<"redirection_point">>,
+    undefined,
+
+    -93.2341,
+    17,
+
+    #{
+        <<"space1">> => 0,
+        <<"space2">> => 0,
+        <<"space3">> => 0,
+        <<"space4">> => 0
+    },
+
+    #{},
+    #{},
+    #{},
+
+    ?DUMMY_TIMESTAMP,
+    0,
+
+    true
+};
+get_record(od_provider, 7) -> #od_provider{
     name = <<"name">>,
     admin_email = undefined,
     root_token = undefined,
+
     subdomain_delegation = false,
     domain = <<"redirection_point">>,
     subdomain = undefined,
@@ -1824,6 +1854,7 @@ get_record(od_provider, 6) -> #od_provider{
 
     eff_users = #{},
     eff_groups = #{},
+    eff_spaces = #{},
     eff_harvesters = #{},
 
     creation_time = ?DUMMY_TIMESTAMP,

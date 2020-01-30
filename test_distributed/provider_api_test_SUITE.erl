@@ -2743,7 +2743,7 @@ start_gs_connection(Config, ProviderToken) ->
     process_flag(trap_exit, true),
     {ok, ClientPid, _} = ?assertMatch({ok, _, #gs_resp_handshake{identity = ?SUB(?ONEPROVIDER, _)}}, gs_client:start_link(
         oz_test_utils:graph_sync_url(Config, provider),
-        {macaroon, ProviderToken, []},
+        {token, ProviderToken},
         oz_test_utils:get_gs_supported_proto_versions(Config),
         fun(_) -> ok end,
         [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
