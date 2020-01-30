@@ -27,6 +27,8 @@
 
 -export([mock_geo_db_entry_for_all_ips/3, unmock_geo_db_entry_for_all_ips/0]).
 
+-export([mock_handle_proxy/0, unmock_handle_proxy/0]).
+
 -export([mock_harvester_plugins/0, mock_harvester_plugins/1]).
 -export([unmock_harvester_plugins/0, unmock_harvester_plugins/1]).
 
@@ -122,6 +124,15 @@ mock_geo_db_entry_for_all_ips(Asn, Country, Regions) ->
 -spec unmock_geo_db_entry_for_all_ips() -> ok.
 unmock_geo_db_entry_for_all_ips() ->
     ok = test_utils:mock_unload(ozt:get_nodes(), ip_utils).
+
+
+-spec mock_handle_proxy() -> ok.
+mock_handle_proxy() ->
+    oz_test_utils:mock_handle_proxy(ozt:get_test_config()).
+
+-spec unmock_handle_proxy() -> ok.
+unmock_handle_proxy() ->
+    oz_test_utils:unmock_handle_proxy(ozt:get_test_config()).
 
 
 -spec mock_harvester_plugins() -> ok.

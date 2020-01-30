@@ -434,7 +434,24 @@ get_gui_plugin_config_test(Config) ->
             )
         }
     },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)),
+
+    % Test that anyone can get gui plugin config from public harvester
+    oz_test_utils:update_harvester(Config, H1, #{<<"public">> => true}),
+
+    GetPublicDataApiTestSpec1 = ApiTestSpec#api_test_spec{
+        client_spec = #client_spec{
+            correct = [
+                root,
+                nobody,
+                {admin, [?OZ_HARVESTERS_VIEW]},
+                {user, U1},
+                {user, U2},
+                {user, NonAdmin}
+            ]
+        }
+    },
+    ?assert(api_test_utils:run_tests(Config, GetPublicDataApiTestSpec1)).
 
 
 update_test(Config) ->

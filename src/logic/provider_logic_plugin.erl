@@ -67,6 +67,7 @@ operation_supported(create, instance, private) -> true;
 operation_supported(create, instance_dev, private) -> true;
 operation_supported(create, support, private) -> true;
 operation_supported(create, check_my_ports, private) -> true;
+operation_supported(create, map_idp_user, private) -> true;
 operation_supported(create, map_idp_group, private) -> true;
 operation_supported(create, verify_provider_identity, private) -> true;
 operation_supported(create, {dns_txt_record, _}, private) -> true;
@@ -169,6 +170,11 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}
             Error
     end;
 
+create(#el_req{gri = #gri{aspect = map_idp_user}, data = Data}) ->
+    IdP = maps:get(<<"idp">>, Data),
+    UserId = maps:get(<<"userId">>, Data),
+    {ok, value, linked_accounts:gen_user_id(IdP, UserId)};
+
 create(#el_req{gri = #gri{aspect = map_idp_group}, data = Data}) ->
     IdP = maps:get(<<"idp">>, Data),
     GroupId = maps:get(<<"groupId">>, Data),
@@ -222,7 +228,7 @@ get(#el_req{gri = #gri{id = Id, aspect = instance, scope = protected}}, Provider
     {ok, #{
         <<"name">> => Name, <<"domain">> => Domain,
         <<"latitude">> => Latitude, <<"longitude">> => Longitude,
-        <<"online">> => provider_connection:is_online(Id),
+        <<"online">> => provider_connections:is_online(Id),
         <<"creationTime">> => CreationTime
     }};
 get(#el_req{gri = #gri{aspect = instance, scope = shared}}, Provider) ->
@@ -359,18 +365,10 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
 
     ?info("Provider '~ts' has been deregistered (~s)", [Name, ProviderId]),
 
-    % Force disconnect the provider (if connected)
-    case provider_connection:get_connection_ref(ProviderId) of
-        {ok, ConnRef} ->
-            spawn(fun() ->
-                % Make sure client receives message of successful deletion before connection termination
-                timer:sleep(5000),
-                gs_server:terminate_connection(ConnRef)
-            end),
-            ok;
-        _ ->
-            ok
-    end;
+    % Force disconnect the provider (if connected), but with a delay to allow
+    % some time for the provider to receive the response to deletion request.
+    timer:apply_after(10000, provider_connections, close_all, [ProviderId]),
+    ok;
 
 %% @TODO VFS-5856 deprecated, included for backward compatibility
 %% Used by providers, that do not keep storages in onezone
@@ -430,6 +428,9 @@ exists(#el_req{gri = #gri{id = Id}}, #od_provider{}) ->
 authorize(#el_req{operation = create, gri = #gri{aspect = check_my_ports}}, _) ->
     true;
 
+authorize(#el_req{operation = create, gri = #gri{aspect = map_idp_user}}, _) ->
+    true;
+
 authorize(#el_req{operation = create, gri = #gri{aspect = map_idp_group}}, _) ->
     true;
 
@@ -446,7 +447,7 @@ authorize(Req = #el_req{operation = create, gri = #gri{aspect = support}}, _) ->
     auth_by_self(Req);
 
 authorize(Req = #el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_membership(Req);
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(#el_req{operation = get, gri = #gri{aspect = {check_my_ip, _}}}, _) ->
     true;
@@ -455,9 +456,9 @@ authorize(#el_req{operation = get, gri = #gri{aspect = current_time}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = instance, scope = private}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_VIEW);
 
-authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, scope = protected}}, Provider) ->
+authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = ProvId, aspect = instance, scope = protected}}, Provider) ->
     case {Req#el_req.auth, Req#el_req.auth_hint} of
         {?USER(UserId), ?THROUGH_USER(UserId)} ->
             % User's membership in this provider is checked in 'exists'
@@ -470,9 +471,9 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             % Groups's membership in this provider is checked in 'exists'
             group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_VIEW);
 
-        {?PROVIDER(ProvId), ?THROUGH_SPACE(SpaceId)} ->
+        {?PROVIDER(ClientProviderId), ?THROUGH_SPACE(SpaceId)} ->
             % Space's support by subject provider is checked in 'exists'
-            provider_logic:supports_space(ProvId, SpaceId);
+            provider_logic:supports_space(ClientProviderId, SpaceId);
 
         {?USER(UserId), ?THROUGH_SPACE(SpaceId)} ->
             % Space's support by this provider is checked in 'exists'
@@ -483,7 +484,9 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             true;
 
         {?USER(UserId), _} ->
-            auth_by_membership(UserId, Provider) orelse auth_by_cluster_membership(Req);
+            ClusterId = ProvId,
+            provider_logic:has_eff_user(Provider, UserId) orelse
+                cluster_logic:has_eff_user(ClusterId, UserId);
 
         _ ->
             % Access to private data also allows access to protected data
@@ -501,31 +504,31 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = ProviderId, aspec
     end;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_users}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_user_membership, UserId}}}, _) ->
     true;
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_user_membership, _}}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_groups}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {eff_group_membership, GroupId}}}, _) ->
-    group_logic:has_eff_user(GroupId, UserId) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_VIEW) orelse group_logic:has_eff_user(GroupId, UserId);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = {eff_group_membership, _}}}, _) ->
-    auth_by_self(Req);
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_harvesters}}, _) ->
-    auth_by_self(Req);
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = spaces}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = eff_spaces}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(#el_req{auth = ?USER(UserId), operation = get, gri = #gri{aspect = {user_spaces, UserId}}}, _) ->
     true;
@@ -534,22 +537,22 @@ authorize(#el_req{auth = ?USER(UserId), operation = get, gri = #gri{aspect = {gr
     group_logic:has_eff_privilege(GroupId, UserId, ?GROUP_VIEW);
 
 authorize(Req = #el_req{operation = get, gri = #gri{aspect = domain_config}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_VIEW);
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_VIEW);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = instance}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = {space, _}}}, _) ->
     auth_by_self(Req);
 
 authorize(Req = #el_req{operation = update, gri = #gri{aspect = domain_config}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = instance}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_DELETE);
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_DELETE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {dns_txt_record, _}}}, _) ->
-    auth_by_self(Req) orelse auth_by_cluster_privilege(Req, ?CLUSTER_UPDATE);
+    auth_by_self_or_cluster_privilege(Req, ?CLUSTER_UPDATE);
 
 authorize(Req = #el_req{operation = delete, gri = #gri{aspect = {space, _}}}, _) ->
     auth_by_self(Req);
@@ -670,6 +673,13 @@ validate(#el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}) 
 validate(#el_req{operation = create, gri = #gri{aspect = check_my_ports}}) -> #{
 };
 
+validate(#el_req{operation = create, gri = #gri{aspect = map_idp_user}}) -> #{
+    required => #{
+        <<"idp">> => {atom, {exists, fun auth_config:idp_exists/1}},
+        <<"userId">> => {binary, non_empty}
+    }
+};
+
 validate(#el_req{operation = create, gri = #gri{aspect = map_idp_group}}) -> #{
     required => #{
         <<"idp">> => {atom, {exists, fun entitlement_mapping:enabled/1}},
@@ -730,25 +740,6 @@ validate(#el_req{operation = update, gri = #gri{aspect = domain_config}, data = 
 %%% Internal functions
 %%%===================================================================
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Returns if given user is supported by the provider represented by entity.
-%% ProviderId is either given explicitly or derived from entity logic request.
-%% @end
-%%--------------------------------------------------------------------
--spec auth_by_membership(od_user:id(), od_provider:record()) ->
-    boolean().
-auth_by_membership(UserId, Provider) ->
-    provider_logic:has_eff_user(Provider, UserId).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Returns true if request client is the same as provider id in GRI.
-%% @end
-%%--------------------------------------------------------------------
 -spec auth_by_self(entity_logic:req()) -> boolean().
 auth_by_self(#el_req{auth = ?PROVIDER(ProvId), gri = #gri{id = ProvId}}) ->
     true;
@@ -756,34 +747,13 @@ auth_by_self(_) ->
     false.
 
 
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Returns true if request client is a member of the provider's cluster.
-%% @end
-%%--------------------------------------------------------------------
--spec auth_by_cluster_membership(entity_logic:req()) -> boolean().
-auth_by_cluster_membership(#el_req{auth = ?USER(UserId), gri = #gri{id = ProviderId}}) ->
-    ClusterId = ProviderId,
-    cluster_logic:has_eff_user(ClusterId, UserId);
-auth_by_cluster_membership(_) ->
-    false.
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Returns true if request client is a member of the provider's cluster and
-%% has given privilege.
-%% @end
-%%--------------------------------------------------------------------
--spec auth_by_cluster_privilege(entity_logic:req(), privileges:cluster_privilege()) ->
+-spec auth_by_self_or_cluster_privilege(entity_logic:req(), privileges:cluster_privilege()) ->
     boolean().
-auth_by_cluster_privilege(#el_req{auth = ?USER(UserId), gri = #gri{id = ProviderId}}, Privilege) ->
-    ClusterId = ProviderId,
+auth_by_self_or_cluster_privilege(#el_req{auth = ?USER(UserId), gri = #gri{id = ProvId}}, Privilege) ->
+    ClusterId = ProvId,
     cluster_logic:has_eff_privilege(ClusterId, UserId, Privilege);
-auth_by_cluster_privilege(_, _) ->
-    false.
+auth_by_self_or_cluster_privilege(Req, _) ->
+    auth_by_self(Req).
 
 
 %%--------------------------------------------------------------------

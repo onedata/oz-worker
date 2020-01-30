@@ -56,6 +56,11 @@ create_response(#gri{aspect = provider_registration_token}, _, value, Token) ->
 create_response(#gri{aspect = check_my_ports}, _, value, Value) ->
     rest_translator:ok_body_reply(Value);
 
+create_response(#gri{aspect = map_idp_user}, _, value, UserId) ->
+    rest_translator:ok_body_reply(#{
+        <<"userId">> => UserId
+    });
+
 create_response(#gri{aspect = map_idp_group}, _, value, GroupId) ->
     rest_translator:ok_body_reply(#{
         <<"groupId">> => GroupId

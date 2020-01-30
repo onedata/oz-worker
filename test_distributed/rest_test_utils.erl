@@ -121,7 +121,6 @@ check_rest_call(Config, ArgsMap) ->
 
         URL = str_utils:join_binary([ReqURL | ReqPath]),
         ReqAuth = maps:get(auth, RequestMap, undefined),
-        Now = oz_test_utils:cluster_time_seconds(Config),
         HeadersPlusAuth = case ReqAuth of
             undefined ->
                 ReqHeaders;

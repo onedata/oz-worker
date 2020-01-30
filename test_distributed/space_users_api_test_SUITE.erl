@@ -332,13 +332,17 @@ list_users_test(Config) ->
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
     ExpUsers = [U1, U2, U3],
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+
     ApiTestSpec = #api_test_spec{
         client_spec = #client_spec{
             correct = [
                 root,
                 {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]},
                 {user, U2},
-                {user, U3}
+                {user, U3},
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -385,6 +389,9 @@ get_user_test(Config) ->
     % Shared data about creator should be available even if he is not longer in the space
     oz_test_utils:space_remove_user(Config, Space, Creator),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space_by_provider(Config, P1, Space),
+
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     lists:foreach(fun({SubjectUser, ExpFullName, ExpUsername}) ->
@@ -398,7 +405,8 @@ get_user_test(Config) ->
                     root,
                     {admin, [?OZ_USERS_VIEW]},
                     {user, SubjectUser},
-                    {user, MemberWithViewPrivs}
+                    {user, MemberWithViewPrivs},
+                    {provider, P1, P1Token}
                 ] ++ case SubjectUser of
                     % Every member of the space should be able to see the creator details
                     Creator -> [{user, MemberWithoutViewPrivs}];
@@ -471,6 +479,9 @@ get_user_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:create_user(Config),
     {ok, U3} = oz_test_utils:space_add_user(Config, S1, U3),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+
     AllPrivs = privileges:space_privileges(),
     InitialPrivs = privileges:space_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
@@ -487,7 +498,8 @@ get_user_privileges_test(Config) ->
                 {admin, [?OZ_SPACES_VIEW_PRIVILEGES]},
                 {user, U2},
                 % user can always see his own privileges
-                {user, U3}
+                {user, U3},
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -580,6 +592,8 @@ list_eff_users_test(Config) ->
         S1, _Groups, [{U3, _}, {U4, _}, {U5, _}, {U6, _}], {U1, U2, NonAdmin}
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     ExpUsers = [U1, U2, U3, U4, U5, U6],
     ApiTestSpec = #api_test_spec{
@@ -587,7 +601,8 @@ list_eff_users_test(Config) ->
             correct = [
                 root,
                 {user, U2},
-                {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]}
+                {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]},
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -629,6 +644,9 @@ get_eff_user_test(Config) ->
         S1, _Groups, EffUsers, {U1, U2, NonAdmin}
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+
     lists:foreach(
         fun({UserId, UserDetails}) ->
 
@@ -637,7 +655,8 @@ get_eff_user_test(Config) ->
                     correct = [
                         root,
                         {admin, [?OZ_USERS_VIEW]},
-                        {user, U2}
+                        {user, U2},
+                        {provider, P1, P1Token}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
@@ -736,6 +755,9 @@ get_eff_user_privileges_test(Config) ->
     {ok, U3} = oz_test_utils:group_add_user(Config, G3, U3),
     {ok, U3} = oz_test_utils:group_add_user(Config, G2, U3),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+
     oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     AllPrivs = privileges:space_privileges(),
@@ -766,7 +788,8 @@ get_eff_user_privileges_test(Config) ->
                 {admin, [?OZ_SPACES_VIEW_PRIVILEGES]},
                 {user, U2},
                 % user can always see his own privileges
-                {user, U3}
+                {user, U3},
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -828,6 +851,11 @@ get_eff_user_membership_intermediaries(Config) ->
     {ok, S2} = oz_test_utils:create_space(Config, ?USER(U1), ?SPACE_NAME1),
     {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S2),
+    oz_test_utils:support_space_by_provider(Config, P1, S3),
+
     oz_test_utils:space_add_user(Config, S1, U1),
     oz_test_utils:space_add_user(Config, S3, U2),
     oz_test_utils:space_set_user_privileges(Config, S3, U2, [], [?SPACE_VIEW]),
@@ -874,7 +902,8 @@ get_eff_user_membership_intermediaries(Config) ->
             client_spec = #client_spec{
                 correct = [
                     root,
-                    {admin, [?OZ_SPACES_VIEW]}
+                    {admin, [?OZ_SPACES_VIEW]},
+                    {provider, P1, P1Token}
                 ] ++ CorrectUserClients,
                 unauthorized = [nobody],
                 forbidden = [{user, NonAdmin}, {user, U1}, {user, U2}] -- CorrectUserClients

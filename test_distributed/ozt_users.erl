@@ -17,7 +17,7 @@
 -include("ozt.hrl").
 
 %% API
--export([create/0]).
+-export([create/0, create/1]).
 -export([create_admin/0, create_admin/1]).
 -export([create_group_for/1]).
 -export([create_space_for/1]).
@@ -33,7 +33,11 @@
 
 -spec create() -> od_user:id().
 create() ->
-    {ok, UserId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, create, [?ROOT])),
+    create(#{}).
+
+-spec create(entity_logic:data()) -> od_user:id().
+create(Data) ->
+    {ok, UserId} = ?assertMatch({ok, _}, ozt:rpc(user_logic, create, [?ROOT, Data])),
     UserId.
 
 
