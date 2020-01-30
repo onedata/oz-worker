@@ -523,7 +523,7 @@ format_table(TableType, Entries, SortBy, SortOrder, Fields, ExtraSpecs) ->
 field_specs(users) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
     {last_activity, last_activity, 16, fun(Doc) -> user_connections:get_last_activity(Doc#document.key) end},
-    {full_name, text, 25, fun(Doc) -> Doc#document.value#od_user.full_name end},
+    {full_name, text, 28, fun(Doc) -> Doc#document.value#od_user.full_name end},
     {username, text, 20, fun(Doc) ->
         case Doc#document.value#od_user.username of
             undefined -> <<"-">>;
@@ -556,7 +556,7 @@ field_specs(users) -> [
 ];
 field_specs(groups) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
-    {name, text, 25, fun(Doc) -> Doc#document.value#od_group.name end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_group.name end},
     {type, text, 12, fun(Doc) -> Doc#document.value#od_group.type end},
     {parents, direct_and_eff, 9, fun(#document{value = Group}) ->
         {length(Group#od_group.parents), maps:size(Group#od_group.eff_parents)}
@@ -578,7 +578,7 @@ field_specs(groups) -> [
 ];
 field_specs(spaces) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
-    {name, text, 25, fun(Doc) -> Doc#document.value#od_space.name end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_space.name end},
     {users, direct_and_eff, 9, fun(#document{value = Space}) ->
         {maps:size(Space#od_space.users), maps:size(Space#od_space.eff_users)}
     end},
@@ -598,7 +598,7 @@ field_specs(spaces) -> [
 ];
 field_specs(shares) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
-    {name, text, 25, fun(Doc) -> Doc#document.value#od_share.name end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_share.name end},
     {space, text, 38, fun(Doc) -> Doc#document.value#od_share.space end},
     {handle, text, 38, fun(Doc) -> Doc#document.value#od_share.handle end}
 ];
@@ -609,7 +609,7 @@ field_specs(providers) -> [
         {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, Doc#document.key),
         Version
     end},
-    {name, text, 25, fun(Doc) -> Doc#document.value#od_provider.name end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_provider.name end},
     {domain, text, 40, fun(Doc) -> Doc#document.value#od_provider.domain end},
     {spaces, integer, 6, fun(Doc) -> maps:size(Doc#document.value#od_provider.spaces) end},
     {support, byte_size, 11, fun(Doc) -> lists:sum(maps:values(Doc#document.value#od_provider.spaces)) end},
@@ -620,7 +620,7 @@ field_specs(providers) -> [
 field_specs(clusters) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
     {type, text, 11, fun(Doc) -> Doc#document.value#od_cluster.type end},
-    {name, text, 25, fun(Doc) -> case Doc#document.value#od_cluster.type of
+    {name, text, 28, fun(Doc) -> case Doc#document.value#od_cluster.type of
         ?ONEZONE -> <<"@ ", (?TO_BIN(oz_worker:get_name()))/binary>>;
         ?ONEPROVIDER -> element(2, {ok, _} = provider_logic:get_name(?ROOT, Doc#document.key))
     end end},
@@ -634,7 +634,7 @@ field_specs(clusters) -> [
 ];
 field_specs(handle_services) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
-    {name, text, 25, fun(Doc) -> Doc#document.value#od_handle_service.name end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_handle_service.name end},
     {proxy_endpoint, text, 40, fun(Doc) -> Doc#document.value#od_handle_service.proxy_endpoint end},
     {handles, integer, 7, fun(#document{value = HService}) ->
         length(HService#od_handle_service.handles)
@@ -662,7 +662,7 @@ field_specs(handles) -> [
 ];
 field_specs(harvesters) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
-    {name, text, 25, fun(Doc) -> Doc#document.value#od_harvester.name end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_harvester.name end},
     {endpoint, text, 45, fun(Doc) -> Doc#document.value#od_harvester.endpoint end},
     {access, {boolean, "public", "private"}, 10, fun(Doc) -> Doc#document.value#od_harvester.public end},
     {spaces, integer, 6, fun(#document{value = Harvester}) ->
@@ -737,7 +737,7 @@ format_row(RowValues, FieldSpecs) ->
 
 
 %% @private
--spec format_value(data_type(), value()) -> string() | binary().
+-spec format_value(data_type(), value()) -> string().
 format_value(text, Value) ->
     str_utils:format("~ts", [Value]);
 format_value(integer, Value) ->
@@ -751,9 +751,9 @@ format_value(creation_date, Value) ->
     {{Year, Month, Day}, _} = time_utils:epoch_to_datetime(Value),
     str_utils:format("~4..0B-~2..0B-~2..0B", [Year, Month, Day]);
 format_value(last_activity, now) ->
-    <<"✓ online"/utf8>>;
+    str_utils:format("~ts", [<<"✓ online"/utf8>>]);
 format_value(last_activity, 0) ->
-    <<"✕ unknown"/utf8>>;
+    str_utils:format("~ts", [<<"✕ unknown"/utf8>>]);
 format_value(last_activity, Value) ->
     {{Year, Month, Day}, {Hour, Minute, _}} = time_utils:epoch_to_datetime(Value),
     str_utils:format("~4..0B-~2..0B-~2..0B ~2..0B:~2..0B", [Year, Month, Day, Hour, Minute]);
