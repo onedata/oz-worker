@@ -159,11 +159,16 @@ init() ->
 %% Deletes session by Id and performs required cleanup.
 %% @end
 %%--------------------------------------------------------------------
--spec delete_user_session(id(), od_user:id(), GracePeriod :: undefined | non_neg_integer(),
+-spec delete_user_session(id(), od_user:id(), GracePeriod :: undefined | time_utils:millis(),
     ClearExpiredUserSessions :: boolean()) -> ok | {error, term()}.
 delete_user_session(SessionId, UserId, GracePeriod, false = _ClearExpiredUserSessions) ->
-    % Terminate all user connections related to this session
-    user_connections:clear(SessionId, GracePeriod),
+    % Terminate all user connections related to this session - grace period allows
+    % some time for messages to flush.
+    GracePeriodMillis = case GracePeriod of
+        undefined -> 0;
+        Millis when is_integer(Millis) -> GracePeriod
+    end,
+    timer:apply_after(GracePeriodMillis, user_connections, close_all, [UserId, SessionId]),
     od_user:remove_session(UserId, SessionId);
 
 delete_user_session(SessionId, UserId, GracePeriod, true = _ClearExpiredUserSessions) ->
@@ -177,7 +182,7 @@ delete_user_session(SessionId, UserId, GracePeriod, true = _ClearExpiredUserSess
 %% Deletes expired sessions of given user.
 %% @end
 %%--------------------------------------------------------------------
--spec clear_expired_sessions(od_user:id(), GracePeriod :: undefined | non_neg_integer()) ->
+-spec clear_expired_sessions(od_user:id(), GracePeriod :: undefined | time_utils:millis()) ->
     ok | {error, term()}.
 clear_expired_sessions(UserId, GracePeriod) ->
     {ok, ActiveUserSessions} = od_user:get_all_sessions(UserId),

@@ -64,6 +64,7 @@
 
     check_my_ports_test/1,
     check_my_ip_test/1,
+    map_user_test/1,
     map_group_test/1,
     update_subdomain_test/1,
     update_domain_test/1,
@@ -71,7 +72,9 @@
     get_domain_config_test/1,
     get_own_domain_config_test/1,
     get_current_time_test/1,
-    verify_provider_identity_test/1
+    verify_provider_identity_test/1,
+
+    last_activity_tracking/1
 ]).
 
 all() ->
@@ -102,6 +105,7 @@ all() ->
 
         check_my_ports_test,
         check_my_ip_test,
+        map_user_test,
         map_group_test,
         update_subdomain_test,
         update_domain_test,
@@ -109,7 +113,9 @@ all() ->
         get_domain_config_test,
         get_own_domain_config_test,
         get_current_time_test,
-        verify_provider_identity_test
+        verify_provider_identity_test,
+
+        last_activity_tracking
     ]).
 
 %%%===================================================================
@@ -1972,7 +1978,64 @@ check_my_ip_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
+map_user_test(Config) ->
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
+    {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
+        Config, ?PROVIDER_NAME1
+    ),
+
+    oz_test_utils:overwrite_auth_config(Config, #{
+        openidConfig => #{
+            enabled => true
+        },
+        supportedIdps => [
+            {?DUMMY_IDP, #{}}
+        ]
+    }),
+
+    SubjectId = str_utils:rand_hex(20),
+    LegacyUserId = datastore_key:build_adjacent(<<"">>, str_utils:format_bin("~ts:~s", [?DUMMY_IDP, SubjectId])),
+    ModernUserId = datastore_key:new_from_digest([atom_to_binary(?DUMMY_IDP, utf8), SubjectId]),
+
+    RunTest = fun(ExpUserId) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    {user, NonAdmin},
+                    {provider, P1, P1Macaroon},
+                    nobody,
+                    root
+                ]
+            },
+            rest_spec = #rest_spec{
+                method = post,
+                path = <<"/provider/public/map_idp_user">>,
+                expected_code = ?HTTP_200_OK,
+                expected_body = #{<<"userId">> => ExpUserId}
+            },
+            data_spec = #data_spec{
+                required = [<<"idp">>, <<"userId">>],
+                correct_values = #{
+                    <<"idp">> => [atom_to_binary(?DUMMY_IDP, utf8)],
+                    <<"userId">> => [SubjectId]
+                },
+                bad_values = [
+                    {<<"idp">>, bad_idp_name, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"idp">>)}
+                ]
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end,
+    % If a legacy user exist, the idp account should map to legacy key, otherwise to a new one
+    RunTest(ModernUserId),
+    oz_test_utils:call_oz(Config, user_logic, create, [?ROOT, LegacyUserId, #{}]),
+    RunTest(LegacyUserId),
+    oz_test_utils:delete_user(Config, LegacyUserId),
+    RunTest(ModernUserId).
+
+
 map_group_test(Config) ->
+    {ok, NonAdmin} = oz_test_utils:create_user(Config),
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
     ),
@@ -2004,41 +2067,49 @@ map_group_test(Config) ->
     }),
 
     RawEntitlement = <<"my-unit/my-team/my-subteam">>,
-    ExpIdPEntitlement = #idp_entitlement{
-        idp = ?DUMMY_IDP,
-        privileges = member,
-        path = [
-            #idp_group{type = unit, name = <<"my-unit">>, privileges = member},
-            #idp_group{type = team, name = <<"my-team">>, privileges = member},
-            #idp_group{type = team, name = <<"my-subteam">>, privileges = member}
-        ]
-    },
-    ExpGroupId = entitlement_mapping:gen_group_id(ExpIdPEntitlement),
+    EncodedGroupPath = [<<"ut:my-unit">>, <<"tm:my-team">>, <<"tm:my-subteam">>],
+    LegacyGroupId = datastore_key:build_adjacent(<<"">>, str_utils:join_binary(EncodedGroupPath, <<"/">>)),
+    ModernGroupId = datastore_key:new_from_digest(EncodedGroupPath),
 
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [
-                {provider, P1, P1Macaroon}
-            ]
-        },
-        rest_spec = #rest_spec{
-            method = post,
-            path = <<"/provider/public/map_idp_group">>,
-            expected_code = ?HTTP_200_OK,
-            expected_body = #{<<"groupId">> => ExpGroupId}
-        },
-        data_spec = #data_spec{
-            required = [<<"idp">>, <<"groupId">>],
-            correct_values = #{
-                <<"idp">> => [atom_to_binary(?DUMMY_IDP, utf8)],
-                <<"groupId">> => [RawEntitlement]
+    RunTest = fun(ExpGroupId) ->
+        ApiTestSpec = #api_test_spec{
+            client_spec = #client_spec{
+                correct = [
+                    {user, NonAdmin},
+                    {provider, P1, P1Macaroon},
+                    nobody,
+                    root
+                ]
             },
-            bad_values = [
-                {<<"idp">>, bad_idp_name, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"idp">>)}
-            ]
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
+            rest_spec = #rest_spec{
+                method = post,
+                path = <<"/provider/public/map_idp_group">>,
+                expected_code = ?HTTP_200_OK,
+                expected_body = #{<<"groupId">> => ExpGroupId}
+            },
+            data_spec = #data_spec{
+                required = [<<"idp">>, <<"groupId">>],
+                correct_values = #{
+                    <<"idp">> => [atom_to_binary(?DUMMY_IDP, utf8)],
+                    <<"groupId">> => [RawEntitlement]
+                },
+                bad_values = [
+                    {<<"idp">>, bad_idp_name, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"idp">>)}
+                ]
+            }
+        },
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
+    end,
+    % If a legacy group exist, the entitlement should map to legacy key, otherwise to a new one
+    RunTest(ModernGroupId),
+    oz_test_utils:call_oz(Config, group_logic, ensure_entitlement_group, [LegacyGroupId, <<"my-subteam">>, team]),
+    RunTest(LegacyGroupId),
+    oz_test_utils:call_oz(Config, od_group, update, [LegacyGroupId, fun(Group) ->
+        {ok, Group#od_group{protected = false}}
+    end]),
+    oz_test_utils:delete_group(Config, LegacyGroupId),
+    RunTest(ModernGroupId).
+
 
 
 update_subdomain_test(Config) ->
@@ -2163,7 +2234,6 @@ update_domain_test(Config) ->
         <<"subdomainDelegation">> => true
     },
     OZDomain = oz_test_utils:oz_domain(Config),
-    Nodes = ?config(oz_worker_nodes, Config),
 
     {ok, {P2, P2Macaroon}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME2
@@ -2556,6 +2626,34 @@ verify_provider_identity_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
 
 
+last_activity_tracking(Config) ->
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config, ?UNIQUE_STRING),
+    ?assertEqual(0, oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId])),
+
+    ClientPid1 = start_gs_connection(Config, ProviderToken),
+    ?assertEqual(now, oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId])),
+    ClientPid2 = start_gs_connection(Config, ProviderToken),
+    ?assertEqual(now, oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId])),
+    exit(ClientPid1, kill),
+    oz_test_utils:simulate_time_passing(Config, 54),
+    exit(ClientPid2, kill),
+    TimestampAlpha = oz_test_utils:get_mocked_time(Config),
+    ?assertMatch(
+        TimestampAlpha,
+        oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId]),
+        60
+    ),
+    oz_test_utils:simulate_time_passing(Config, 22),
+    ClientPid3 = start_gs_connection(Config, ProviderToken),
+    ?assertEqual(now, oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId])),
+    exit(ClientPid3, kill),
+    TimestampBeta = oz_test_utils:get_mocked_time(Config),
+    ?assertMatch(
+        TimestampBeta,
+        oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId]),
+        60
+    ).
+
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
@@ -2594,6 +2692,9 @@ init_per_testcase(check_my_ports_test, Config) ->
 init_per_testcase(list_eff_harvesters_test, Config) ->
     oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
     init_per_testcase(default, Config);
+init_per_testcase(last_activity_tracking, Config) ->
+    oz_test_utils:mock_time(Config),
+    init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
     Config.
 
@@ -2605,6 +2706,9 @@ end_per_testcase(check_my_ports_test, Config) ->
 end_per_testcase(list_eff_harvesters_test, Config) ->
     oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
     end_per_testcase(default, Config);
+end_per_testcase(last_activity_tracking, Config) ->
+    oz_test_utils:unmock_time(Config),
+    end_per_testcase(default, Config);
 end_per_testcase(_, Config) ->
     oz_test_utils:set_env(Config, require_token_for_provider_registration, false),
     oz_test_utils:set_env(Config, subdomain_delegation_supported, true),
@@ -2614,7 +2718,6 @@ end_per_testcase(_, Config) ->
 %%%===================================================================
 %%% Helper functions
 %%%===================================================================
-
 
 create_2_providers_and_5_supported_spaces(Config) ->
     {ok, {P1, P1Macaroon}} = oz_test_utils:create_provider(
@@ -2654,3 +2757,16 @@ new_cluster_member_with_privs(Config, ProviderId, ToGrant, ToRevoke) ->
         Config, ClusterId, NewMember, ToGrant, ToRevoke
     ),
     NewMember.
+
+
+start_gs_connection(Config, ProviderToken) ->
+    % Prevent exiting GS connections from killing the test master
+    process_flag(trap_exit, true),
+    {ok, ClientPid, _} = ?assertMatch({ok, _, #gs_resp_handshake{identity = ?SUB(?ONEPROVIDER, _)}}, gs_client:start_link(
+        oz_test_utils:graph_sync_url(Config, provider),
+        {macaroon, ProviderToken, []},
+        oz_test_utils:get_gs_supported_proto_versions(Config),
+        fun(_) -> ok end,
+        [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
+    )),
+    ClientPid.

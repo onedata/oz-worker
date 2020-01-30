@@ -126,11 +126,8 @@ create_test(Config) ->
                 _ ->
                     ?assert(onedata_passwords:verify(Password, User#od_user.password_hash))
             end,
+            oz_test_utils:delete_user(Config, UserId),
             true
-        end,
-
-        EnvTearDownFun = fun(_) ->
-            oz_test_utils:delete_all_entities(Config)
         end,
 
         ApiTestSpec = #api_test_spec{
@@ -186,7 +183,7 @@ create_test(Config) ->
                 bad_values = ?BAD_VALUES_FULL_NAME(?ERROR_BAD_VALUE_FULL_NAME)
             }
         },
-        ?assert(api_test_utils:run_tests(Config, ApiTestSpec, undefined, EnvTearDownFun, undefined))
+        ?assert(api_test_utils:run_tests(Config, ApiTestSpec))
     end, TestCases).
 
 

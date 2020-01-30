@@ -658,13 +658,13 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             % Group's membership in provider is checked in 'exists'
             group_logic:has_eff_provider(Group, ProviderId);
 
-        {?PROVIDER(_ProviderId), ?THROUGH_PROVIDER(_OtherProviderId)} ->
-            false;
-
         {?USER(ClientUserId), ?THROUGH_PROVIDER(ProviderId)} ->
             % Group's membership in provider is checked in 'exists'
             ClusterId = ProviderId,
             cluster_logic:has_eff_privilege(ClusterId, ClientUserId, ?CLUSTER_VIEW);
+
+        {?PROVIDER(_ProviderId), ?THROUGH_PROVIDER(_OtherProviderId)} ->
+            false;
 
         {?USER(ClientUserId), _} ->
             auth_by_membership(ClientUserId, Group);

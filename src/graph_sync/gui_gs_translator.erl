@@ -531,7 +531,7 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Prov
         <<"cluster">> => gs_protocol:gri_to_string(#gri{
             type = od_cluster, id = ClusterId, aspect = instance, scope = auto
         }),
-        <<"online">> => provider_connection:is_online(Id),
+        <<"online">> => provider_connections:is_online(Id),
         <<"spaceList">> => gs_protocol:gri_to_string(GRI#gri{aspect = {user_spaces, UserId}, scope = private}),
         <<"info">> => #{
             <<"creationTime">> => CreationTime

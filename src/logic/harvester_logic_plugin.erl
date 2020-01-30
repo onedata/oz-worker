@@ -840,6 +840,9 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
         % Access to protected data also allows access to public data
     authorize(Req#el_req{gri = GRI#gri{scope = protected}}, Harvester);
 
+authorize(Req = #el_req{operation = get, gri = #gri{aspect = gui_plugin_config}}, Harvester) ->
+    Harvester#od_harvester.public orelse auth_by_privilege(Req, Harvester, ?HARVESTER_VIEW);
+
 authorize(#el_req{operation = get, auth = ?USER(UserId), gri = #gri{aspect = {user_privileges, UserId}}}, _) ->
     true;
 

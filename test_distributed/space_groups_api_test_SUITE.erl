@@ -945,6 +945,8 @@ get_eff_group_membership_intermediaries(Config) ->
     oz_test_utils:space_add_group(Config, S3, G4),
     oz_test_utils:space_set_group_privileges(Config, S3, G4, [], [?SPACE_VIEW]),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     % {SpaceId, SubjectUser, CorrectUsers, ExpIntermediariesRaw}
     ExpectedMembershipIntermediaries = [
         {S1, UserGroup, [U1], ordsets:from_list([

@@ -239,7 +239,7 @@ validate_correct_login_base(Config, TestMode) ->
     )),
 
     ExpSubjectId = <<"abxdef1x2x3x4x">>,  % {replace, "c", "x", "id"}
-    ExpUserId = linked_accounts:gen_user_id(?DUMMY_IDP, ExpSubjectId),
+    ExpUserId = gen_user_id(Config, ?DUMMY_IDP, ExpSubjectId),
     ExpFullName = <<"John Doe Jr">>,
     ExpUsername = <<"jodoe">>,
     ExpEmails = [<<"john.doe@my.org">>],
@@ -260,22 +260,22 @@ validate_correct_login_base(Config, TestMode) ->
         <<"roles">> => [<<"role1">>, <<"role2">>, <<"role3">>]
     },
 
-    Group1 = entitlement_mapping:gen_group_id(#idp_entitlement{idp = ?DUMMY_IDP, path = [
+    Group1 = gen_group_id(Config, #idp_entitlement{idp = ?DUMMY_IDP, path = [
         #idp_group{name = <<"My-VO">>, type = organization},
         #idp_group{name = <<"a:some">>, type = unit},
         #idp_group{name = <<"01">>, type = team}
     ]}),
-    Group2 = entitlement_mapping:gen_group_id(#idp_entitlement{idp = ?DUMMY_IDP, path = [
+    Group2 = gen_group_id(Config, #idp_entitlement{idp = ?DUMMY_IDP, path = [
         #idp_group{name = <<"My-VO">>, type = organization},
         #idp_group{name = <<"b:entitlements">>, type = unit},
         #idp_group{name = <<"02">>, type = team}
     ]}),
-    Group3 = entitlement_mapping:gen_group_id(#idp_entitlement{idp = ?DUMMY_IDP, path = [
+    Group3 = gen_group_id(Config, #idp_entitlement{idp = ?DUMMY_IDP, path = [
         #idp_group{name = <<"My-VO">>, type = organization},
         #idp_group{name = <<"c:idk">>, type = unit},
         #idp_group{name = <<"03">>, type = team}
     ]}),
-    Group4 = entitlement_mapping:gen_group_id(#idp_entitlement{idp = ?DUMMY_IDP, path = [
+    Group4 = gen_group_id(Config, #idp_entitlement{idp = ?DUMMY_IDP, path = [
         #idp_group{name = <<"My-VO">>, type = organization},
         #idp_group{name = <<"d:admins">>, type = unit},
         #idp_group{name = <<"04">>, type = team}
@@ -379,7 +379,7 @@ authority_delegation(Config) ->
         Config, OidcSpec, Url, #{<<"sub">> => SubjectId}
     )),
 
-    ExpUserId = linked_accounts:gen_user_id(?DUMMY_IDP, SubjectId),
+    ExpUserId = gen_user_id(Config, ?DUMMY_IDP, SubjectId),
 
     DelegationWorksSpec = fun(Success, AuthType) -> #{
         request => #{
@@ -435,7 +435,7 @@ offline_access(Config) ->
         offlineAccess => false
     }}]),
     simulate_login_flow(Config, ?DUMMY_IDP, false, false, OidcSpec, #{<<"sub">> => SubjectId}),
-    UserId = linked_accounts:gen_user_id(?DUMMY_IDP, SubjectId),
+    UserId = gen_user_id(Config, ?DUMMY_IDP, SubjectId),
     ?assertMatch(?ERROR_BAD_VALUE_NOT_ALLOWED(<<"idp">>, []), ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % The user does not have any access/refresh token cached -> not found
@@ -493,7 +493,7 @@ offline_access_internals(Config) ->
             refresh_token = <<"rt1">>
         }]
     ),
-    ?assertMatch(UserId, linked_accounts:gen_user_id(?DUMMY_IDP, SubjectId)),
+    ?assertMatch(UserId, gen_user_id(Config, ?DUMMY_IDP, SubjectId)),
     ?assertMatch({ok, {<<"at1">>, 1000}}, ?ACQUIRE_IDP_ACCESS_TOKEN(UserId, ?DUMMY_IDP)),
 
     % Access token should be refreshed only when the RefreshThreshold is reached
@@ -613,7 +613,7 @@ link_account(Config) ->
     ]),
 
     % Log in using the first IdP
-    ExpFirstUserId = linked_accounts:gen_user_id(?FIRST_IDP, FirstSubjectId),
+    ExpFirstUserId = gen_user_id(Config, ?FIRST_IDP, FirstSubjectId),
     ?assertMatch(
         {ok, ExpFirstUserId, _},
         simulate_login_flow(Config, ?FIRST_IDP, false, false, OidcSpec, #{
@@ -933,6 +933,14 @@ bad_custom_data(Config, TestMode) ->
 %%%===================================================================
 %%% Auxiliary functions
 %%%===================================================================
+
+gen_user_id(Config, IdP, SubjectId) ->
+    oz_test_utils:call_oz(Config, linked_accounts, gen_user_id, [IdP, SubjectId]).
+
+
+gen_group_id(Config, IdPEntitlement) ->
+    oz_test_utils:call_oz(Config, entitlement_mapping, gen_group_id, [IdPEntitlement]).
+
 
 % Sets up DUMMY_IDP with default config, but overwrites auth.config with a modified
 % version to introduce differences - ScrewingUpFun is used to spoil the config.

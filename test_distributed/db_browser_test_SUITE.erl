@@ -15,6 +15,7 @@
 -include("entity_logic.hrl").
 -include("api_test_utils.hrl").
 -include("registered_names.hrl").
+-include("datastore/oz_datastore_models.hrl").
 -include_lib("ctool/include/test/test_utils.hrl").
 -include_lib("ctool/include/logging.hrl").
 -include_lib("ctool/include/test/assertions.hrl").
@@ -72,16 +73,20 @@ end_per_suite(_Config) ->
     <<"Amazing">>, <<"Competent">>, <<"Ecstatic">>, <<"Flamboyant">>,
     <<"Hopeful">>, <<"Jolly">>, <<"Lucid">>, <<"Naughty">>,
     <<"Pedantic">>, <<"Quirky">>, <<"Romantic">>, <<"Silly">>,
-    <<"Thirsty">>, <<"Vigilant">>, <<"Wonderful">>, <<"Zealous">>
+    <<"Thirsty">>, <<"Vigilant">>, <<"Wonderful">>, <<"Zealous">>,
+    <<"πęß"/utf8>>
 ]).
 -define(NAMES_B, [
     <<"Archimedes">>, <<"Banach">>, <<"Dijkstra">>, <<"Fermat">>,
     <<"Hamilton">>, <<"Kepler">>, <<"Matsumoto">>, <<"Nobel">>,
     <<"Panini">>, <<"Roentgen">>, <<"Satoshi">>, <<"Tesla">>,
-    <<"Villani">>, <<"Wozniak">>, <<"Yonath">>, <<"Zhukovsky">>
+    <<"Villani">>, <<"Wozniak">>, <<"Yonath">>, <<"Zhukovsky">>,
+    <<"źµł"/utf8>>
 ]).
 
 -define(GEN_NAME(), <<(utils:random_element(?NAMES_A))/binary, " ", (utils:random_element(?NAMES_B))/binary>>).
+
+-define(EMAIL_DOMAINS, [<<"example.com">>, <<"mail.com">>, <<"email.org">>, <<"inbox.org">>]).
 
 -record(environment, {
     users = [] :: [od_user:id()],
@@ -119,10 +124,38 @@ set_up_environment(Config) ->
 set_up_users(Config, Environment) ->
     Environment#environment{
         users = lists:map(fun(_) ->
+            Name = ?GEN_NAME(),
             {ok, User} = oz_test_utils:create_user(Config, #{
-                <<"fullName">> => ?GEN_NAME(), <<"username">> => str_utils:rand_hex(4)
+                <<"fullName">> => Name, <<"username">> => str_utils:rand_hex(4)
             }),
             simulate_random_delay(Config),
+            Emails = ?RAND_SUBLIST(lists:map(fun(Domain) ->
+                str_utils:format_bin("~s@~s", [string:replace(string:lowercase(Name), " ", ".", all), Domain])
+            end, ?EMAIL_DOMAINS)),
+            LinkedAccounts = case rand:uniform(5) of
+                1 ->
+                    [];
+                _ ->
+                    IdP = utils:random_element([aai_org, sso_com, firstIdP, anotherIdP]),
+                    [#linked_account{idp = IdP, emails = ?RAND_SUBLIST(Emails)}]
+            end,
+            oz_test_utils:call_oz(Config, od_user, update, [User, fun(UserRecord) ->
+                {ok, UserRecord#od_user{emails = Emails, linked_accounts = LinkedAccounts}}
+            end]),
+            % Simulate graph sync connections of some users
+            case rand:uniform(8) of
+                1 ->
+                    ok;
+                _ ->
+                    simulate_random_delay(Config),
+                    oz_test_utils:call_oz(Config, user_connections, add, [User, <<"sess-id">>, self()]),
+                    case rand:uniform(4) of
+                        1 ->
+                            ok;
+                        _ ->
+                            oz_test_utils:call_oz(Config, user_connections, remove, [User, <<"sess-id">>, self()])
+                    end
+            end,
             case rand:uniform(5) of
                 1 ->
                     Privs = ?RAND_SUBLIST(privileges:oz_privileges()),
@@ -208,6 +241,20 @@ set_up_providers_and_clusters(Config, Environment = #environment{users = Users, 
             end,
             oz_test_utils:support_space(Config, Provider, Space, SupportSize)
         end, ?RAND_SUBLIST(Spaces, ?MEMBERS_COUNT)),
+        % Simulate graph sync connections of some providers
+        case rand:uniform(8) of
+            1 ->
+                ok;
+            _ ->
+                simulate_random_delay(Config),
+                oz_test_utils:call_oz(Config, provider_connections, add, [Provider, self()]),
+                case rand:uniform(4) of
+                    1 ->
+                        ok;
+                    _ ->
+                        oz_test_utils:call_oz(Config, provider_connections, remove, [Provider, self()])
+                end
+        end,
         Provider
     end, lists:seq(1, ?ENTITY_COUNT)),
     generate_members(Config, od_cluster, ?ONEZONE_CLUSTER_ID, od_user, Users),
@@ -301,7 +348,7 @@ db_browser_test(Config) ->
     try
         db_browser_test_unsafe(Config)
     catch Type:Reason ->
-        ct:pal("db_browser test failed with ~w:~w~nStacktrace: ~s", [
+        ct:pal("db_browser test failed with ~w:~w~nStacktrace: ~ts", [
             Type, Reason, lager:pr_stacktrace(erlang:get_stacktrace())
         ]),
         error(test_failed)
@@ -313,7 +360,27 @@ db_browser_test_unsafe(Config) ->
     AllCollections = oz_test_utils:call_oz(Config, db_browser, all_collections, []),
     lists:foreach(fun(Collection) ->
         print_collection(Config, Env, Collection)
-    end, [help | AllCollections]).
+    end, [help | AllCollections]),
+
+    % Check that script API for db_browser.sh works as expected
+    TmpPath = oz_test_utils:call_oz(Config, mochitemp, mkdtemp, []),
+    OutputFile = filename:join(TmpPath, "dump.txt"),
+    oz_test_utils:call_oz(Config, db_browser, call_from_script, [OutputFile, "users username desc"]),
+    ExpectedResult = str_utils:unicode_list_to_binary(oz_test_utils:call_oz(
+        Config, db_browser, format, [users, username, desc])
+    ),
+    {ok, OutputFileContent} = oz_test_utils:call_oz(Config, file, read_file, [OutputFile]),
+    ?assertEqual(OutputFileContent, ExpectedResult),
+
+    % Check that error handling and help works the same for internal use and the script
+    oz_test_utils:call_oz(Config, db_browser, call_from_script, [OutputFile, "sdf &SD F^sadf6asDF5asd"]),
+    ExpectedResult2 = str_utils:unicode_list_to_binary(oz_test_utils:call_oz(
+        Config, db_browser, format, ['sdf', '&SD', 'F^sadf6asDF5asd'])
+    ),
+    {ok, OutputFileContent2} = oz_test_utils:call_oz(Config, file, read_file, [OutputFile]),
+    % The stacktrace at the beginning of the output is different - check if the
+    % usage help is the same.
+    ?assertEqual(string:find(OutputFileContent2, "Usage"), string:find(ExpectedResult2, "Usage")).
 
 
 print_collection(Config, Env, Collection) ->
@@ -344,7 +411,7 @@ print_collection(Config, Env, Collection) ->
     case string:find(Result, "\n0 entries in total") of
         nomatch ->
             % Okay, dump the results to logs so that they can be examined
-            ct:pal("~w:~n~s", [Args, oz_test_utils:call_oz(Config, db_browser, format, Args)]);
+            ct:pal("~w:~n~ts", [Args, oz_test_utils:call_oz(Config, db_browser, format, Args)]);
         _ ->
             % Repeat until collection that have at least one entry is found
             print_collection(Config, Env, Collection)
