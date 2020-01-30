@@ -65,10 +65,10 @@ get_all(ProviderId) ->
 
 -spec get_last_activity(od_provider:id()) -> now | time_utils:seconds().
 get_last_activity(ProviderId) ->
-    case datastore_model:get(?CTX, ProviderId) of
-        {ok, #document{value = #provider_connections{connections = C}}} when length(C) > 0 ->
+    case is_online(ProviderId) of
+        true ->
             now;
-        _ ->
+        false ->
             case od_provider:get(ProviderId) of
                 {ok, #document{value = #od_provider{last_activity = LastActivity}}} ->
                     LastActivity;
@@ -83,16 +83,18 @@ is_online(ProviderId) ->
     get_all(ProviderId) /= [].
 
 
+%%--------------------------------------------------------------------
+%% @doc
+%% Closes all connections of given provider. Closing the connections fires
+%% on_terminate events, which result in calls to remove/2 function.
+%% @end
+%%--------------------------------------------------------------------
 -spec close_all(od_provider:id()) -> ok.
 close_all(ProviderId) ->
-    case datastore_model:get(?CTX, ProviderId) of
-        {ok, #document{value = #provider_connections{connections = Connections}}} ->
-            lists:foreach(fun(ConnRef) ->
-                gs_server:terminate_connection(ConnRef)
-            end, Connections);
-        Error = {error, _} ->
-            Error
-    end.
+    Connections = get_all(ProviderId),
+    lists:foreach(fun(Connection) ->
+        gs_server:terminate_connection(Connection)
+    end, Connections).
 
 %%%===================================================================
 %%% Internal functions

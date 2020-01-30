@@ -168,7 +168,7 @@ delete_user_session(SessionId, UserId, GracePeriod, false = _ClearExpiredUserSes
         undefined -> 0;
         Millis when is_integer(Millis) -> GracePeriod
     end,
-    timer:apply_after(GracePeriodMillis, user_connections, clear, [UserId, SessionId]),
+    timer:apply_after(GracePeriodMillis, user_connections, close_all, [UserId, SessionId]),
     od_user:remove_session(UserId, SessionId);
 
 delete_user_session(SessionId, UserId, GracePeriod, true = _ClearExpiredUserSessions) ->
