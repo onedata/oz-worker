@@ -68,10 +68,13 @@ get_last_activity(ProviderId) ->
     case datastore_model:get(?CTX, ProviderId) of
         {ok, #document{value = #provider_connections{connections = C}}} when length(C) > 0 ->
             now;
-        {ok, #document{value = #provider_connections{last_activity = LastActivity}}} ->
-            LastActivity;
-        {error, _} ->
-            0
+        _ ->
+            case od_provider:get(ProviderId) of
+                {ok, #document{value = #od_provider{last_activity = LastActivity}}} ->
+                    LastActivity;
+                _ ->
+                    0
+            end
     end.
 
 
@@ -101,16 +104,17 @@ close_all(ProviderId) ->
 update(ProviderId, ConnectionsDiff) ->
     Diff = fun(Record = #provider_connections{connections = Connections}) ->
         {ok, Record#provider_connections{
-            connections = ConnectionsDiff(Connections),
-            last_activity = time_utils:cluster_time_seconds()
+            connections = ConnectionsDiff(Connections)
         }}
     end,
     Default = #provider_connections{
-        connections = ConnectionsDiff([]),
-        last_activity = time_utils:cluster_time_seconds()
+        connections = ConnectionsDiff([])
     },
     case datastore_model:update(?CTX, ProviderId, Diff, Default) of
         {ok, #document{value = #provider_connections{connections = Connections}}} ->
+            {ok, _} = od_provider:update(ProviderId, fun(Provider) ->
+                {ok, Provider#od_provider{last_activity = time_utils:cluster_time_seconds()}}
+            end),
             {ok, length(Connections)};
         {error, _} = Error ->
             Error

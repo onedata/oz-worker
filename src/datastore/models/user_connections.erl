@@ -72,10 +72,13 @@ get_last_activity(UserId) ->
     case datastore_model:get(?CTX, UserId) of
         {ok, #document{value = #user_connections{connections_per_session = C}}} when map_size(C) > 0 ->
             now;
-        {ok, #document{value = #user_connections{last_activity = LastActivity}}} ->
-            LastActivity;
-        {error, _} ->
-            0
+        _ ->
+            case od_user:get(UserId) of
+                {ok, #document{value = #od_user{last_activity = LastActivity}}} ->
+                    LastActivity;
+                _ ->
+                    0
+            end
     end.
 
 
@@ -97,17 +100,20 @@ clear(UserId, SessionId) ->
 update(UserId, ConnectionsDiff) ->
     Diff = fun(Record = #user_connections{connections_per_session = ConnectionsPerSession}) ->
         {ok, Record#user_connections{
-            connections_per_session = ConnectionsDiff(ConnectionsPerSession),
-            last_activity = time_utils:cluster_time_seconds()
+            connections_per_session = ConnectionsDiff(ConnectionsPerSession)
         }}
     end,
     Default = #user_connections{
-        connections_per_session = ConnectionsDiff(#{}),
-        last_activity = time_utils:cluster_time_seconds()
+        connections_per_session = ConnectionsDiff(#{})
     },
     case datastore_model:update(?CTX, UserId, Diff, Default) of
-        {ok, _} -> ok;
-        {error, _} = Error -> Error
+        {ok, _} ->
+            {ok, _} = od_user:update(UserId, fun(User) ->
+                {ok, User#od_user{last_activity = time_utils:cluster_time_seconds()}}
+            end),
+            ok;
+        {error, _} = Error ->
+            Error
     end.
 
 %%%===================================================================

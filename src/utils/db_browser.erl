@@ -737,7 +737,7 @@ format_row(RowValues, FieldSpecs) ->
 
 
 %% @private
--spec format_value(data_type(), value()) -> string() | binary.
+-spec format_value(data_type(), value()) -> string() | binary().
 format_value(text, Value) ->
     str_utils:format("~ts", [Value]);
 format_value(integer, Value) ->
@@ -752,6 +752,8 @@ format_value(creation_date, Value) ->
     str_utils:format("~4..0B-~2..0B-~2..0B", [Year, Month, Day]);
 format_value(last_activity, now) ->
     <<"✓ online"/utf8>>;
+format_value(last_activity, 0) ->
+    <<"✕ unknown"/utf8>>;
 format_value(last_activity, Value) ->
     {{Year, Month, Day}, {Hour, Minute, _}} = time_utils:epoch_to_datetime(Value),
     str_utils:format("~4..0B-~2..0B-~2..0B ~2..0B:~2..0B", [Year, Month, Day, Hour, Minute]);

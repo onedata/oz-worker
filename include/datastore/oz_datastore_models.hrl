@@ -160,6 +160,7 @@
     eff_clusters = #{} :: entity_graph:eff_relations(od_cluster:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    last_activity = 0 :: time_utils:seconds(),
 
     % Marks that the record's effective relations are not up to date.
     top_down_dirty = true :: boolean()
@@ -279,6 +280,7 @@
     eff_harvesters = #{} :: entity_graph:eff_relations(od_harvester:id()),
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
+    last_activity = 0 :: time_utils:seconds(),
 
     % Marks that the record's effective relations are not up to date.
     bottom_up_dirty = true :: boolean()
@@ -429,14 +431,12 @@
 
 %% Stores information about active provider connections
 -record(provider_connections, {
-    connections = [] :: [gs_server:conn_ref()],
-    last_activity = time_utils:cluster_time_seconds() :: time_utils:seconds()
+    connections = [] :: [gs_server:conn_ref()]
 }).
 
 %% Stores information about active user connections per session id
 -record(user_connections, {
-    connections_per_session = #{} :: #{session:id() => gs_server:conn_ref()},
-    last_activity = time_utils:cluster_time_seconds() :: time_utils:seconds()
+    connections_per_session = #{} :: #{session:id() => gs_server:conn_ref()}
 }).
 
 % Token used to match together OIDC/SAML requests and responses and protect
