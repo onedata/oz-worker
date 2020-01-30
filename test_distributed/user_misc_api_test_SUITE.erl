@@ -97,7 +97,6 @@ create_test(Config) ->
 
     lists:foreach(fun({FullName, Username, Password}) ->
 
-
         ExpFullName = case FullName of
             default_value -> ?DEFAULT_FULL_NAME;
             _ -> FullName

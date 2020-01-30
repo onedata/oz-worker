@@ -143,7 +143,7 @@ get_ctx() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    6.
+    7.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -199,8 +199,9 @@ get_record_struct(4) ->
     % effective relations (as intermediaries computing logic has changed).
     get_record_struct(3);
 get_record_struct(5) ->
-    % * new field - creation_time
-    % * new field - eff harvesters
+    % Changes:
+    %   * new field - creation_time
+    %   * new field - eff harvesters
     {record, [
         {name, string},
         {admin_email, string},
@@ -224,6 +225,32 @@ get_record_struct(5) ->
         {bottom_up_dirty, boolean}
     ]};
 get_record_struct(6) ->
+    % Changes:
+    %   * new field - last_activity
+    {record, [
+        {name, string},
+        {admin_email, string},
+        {root_macaroon, string},
+
+        {subdomain_delegation, boolean},
+        {domain, string},
+        {subdomain, string},
+
+        {latitude, float},
+        {longitude, float},
+
+        {spaces, #{string => integer}},
+
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {last_activity, integer}, % new field
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(7) ->
     % * root_macaroon renamed to root_token
     % * renamed field - spaces -> legacy_spaces
     % * new field - storages
@@ -249,6 +276,7 @@ get_record_struct(6) ->
         {eff_harvesters, #{string => [{atom, string}]}},
 
         {creation_time, integer},
+        {last_activity, integer},
 
         {bottom_up_dirty, boolean}
     ]}.
@@ -422,16 +450,61 @@ upgrade_record(5, Provider) ->
 
         Spaces,
 
+        EffUsers,
+        EffGroups,
+        EffHarvesters,
+
+        CreationTime,
+
+        BottomUpDirty
+    } = Provider,
+    {6, {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+        EffHarvesters,
+
+        CreationTime,
+        0,
+
+        BottomUpDirty
+    }};
+upgrade_record(6, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
         _EffUsers,
         _EffGroups,
         _EffHarvesters,
 
         CreationTime,
+        LastActivity,
 
         _BottomUpDirty
     } = Provider,
     %% Eff relations are recalculated during cluster upgrade procedure
-    {6, #od_provider{
+    {7, #od_provider{
         name = Name,
         admin_email = AdminEmail,
         root_token = RootMacaroon,
@@ -451,6 +524,7 @@ upgrade_record(5, Provider) ->
         eff_spaces = #{},
 
         creation_time = CreationTime,
+        last_activity = LastActivity,
 
         bottom_up_dirty = true
     }}.

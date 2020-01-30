@@ -250,7 +250,7 @@ get_all_sessions(UserId) ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    12.
+    13.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -620,6 +620,57 @@ get_record_struct(12) ->
         {eff_clusters, #{string => [{atom, string}]}},
 
         {creation_time, integer},
+
+        {top_down_dirty, boolean}
+    ]};
+get_record_struct(13) ->
+    % Changes:
+    %   * new field - last_activity
+    {record, [
+        {full_name, string},
+        {username, string},
+        {basic_auth_enabled, boolean},
+        {password_hash, binary},
+        {emails, [string]},
+
+        {linked_accounts, [{record, [
+            {idp, atom},
+            {subject_id, string},
+            {full_name, string},
+            {username, string},
+            {emails, [string]},
+            {entitlements, [string]},
+            {custom, {custom, {json_utils, encode, decode}}},
+            {access_token, {string, integer}},
+            {refresh_token, string}
+        ]}]},
+        {entitlements, [{string, atom}]},
+
+        {active_sessions, [string]},
+
+        {client_tokens, [string]},
+        {space_aliases, #{string => string}},
+
+        {oz_privileges, [atom]},
+        {eff_oz_privileges, [atom]},
+
+        {groups, [string]},
+        {spaces, [string]},
+        {handle_services, [string]},
+        {handles, [string]},
+        {harvesters, [string]},
+        {clusters, [string]},
+
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_spaces, #{string => [{atom, string}]}},
+        {eff_providers, #{string => [{atom, string}]}},
+        {eff_handle_services, #{string => [{atom, string}]}},
+        {eff_handles, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+        {eff_clusters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {last_activity, integer}, % new field
 
         {top_down_dirty, boolean}
     ]}.
@@ -1445,7 +1496,82 @@ upgrade_record(11, User) ->
 
         TopDownDirty
     } = User,
-    {12, #od_user{
+    {12, {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        ActiveSessions,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+
+        TopDownDirty
+    }};
+upgrade_record(12, User) ->
+    {od_user,
+        FullName,
+        Username,
+        BasicAuthEnabled,
+        PasswordHash,
+        Emails,
+
+        LinkedAccounts,
+        Entitlements,
+
+        ActiveSessions,
+
+        ClientTokens,
+        SpaceAliases,
+
+        OzPrivileges,
+        EffOzPrivileges,
+
+        Groups,
+        Spaces,
+        HandleServices,
+        Handles,
+        Harvesters,
+        Clusters,
+
+        EffGroups,
+        EffSpaces,
+        EffProviders,
+        EffHandleServices,
+        EffHandles,
+        EffHarvesters,
+        EffClusters,
+
+        CreationTime,
+
+        TopDownDirty
+    } = User,
+    {13, #od_user{
         full_name = FullName,
         username = Username,
         basic_auth_enabled = BasicAuthEnabled,
@@ -1479,6 +1605,7 @@ upgrade_record(11, User) ->
         eff_clusters = EffClusters,
 
         creation_time = CreationTime,
+        last_activity = 0,
 
         top_down_dirty = TopDownDirty
     }}.

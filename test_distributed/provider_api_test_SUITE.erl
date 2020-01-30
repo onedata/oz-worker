@@ -72,7 +72,9 @@
     get_domain_config_test/1,
     get_own_domain_config_test/1,
     get_current_time_test/1,
-    verify_provider_identity_test/1
+    verify_provider_identity_test/1,
+
+    last_activity_tracking/1
 ]).
 
 all() ->
@@ -111,7 +113,9 @@ all() ->
         get_domain_config_test,
         get_own_domain_config_test,
         get_current_time_test,
-        verify_provider_identity_test
+        verify_provider_identity_test,
+
+        last_activity_tracking
     ]).
 
 %%%===================================================================
@@ -2607,6 +2611,34 @@ verify_provider_identity_test(Config) ->
     ?assert(api_test_utils:run_tests(Config, ApiTestSpec2)).
 
 
+last_activity_tracking(Config) ->
+    {ok, {ProviderId, ProviderToken}} = oz_test_utils:create_provider(Config, ?UNIQUE_STRING),
+    ?assertEqual(0, oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId])),
+
+    ClientPid1 = start_gs_connection(Config, ProviderToken),
+    ?assertEqual(now, oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId])),
+    ClientPid2 = start_gs_connection(Config, ProviderToken),
+    ?assertEqual(now, oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId])),
+    exit(ClientPid1, kill),
+    oz_test_utils:simulate_time_passing(Config, 54),
+    exit(ClientPid2, kill),
+    TimestampAlpha = oz_test_utils:get_mocked_time(Config),
+    ?assertMatch(
+        TimestampAlpha,
+        oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId]),
+        60
+    ),
+    oz_test_utils:simulate_time_passing(Config, 22),
+    ClientPid3 = start_gs_connection(Config, ProviderToken),
+    ?assertEqual(now, oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId])),
+    exit(ClientPid3, kill),
+    TimestampBeta = oz_test_utils:get_mocked_time(Config),
+    ?assertMatch(
+        TimestampBeta,
+        oz_test_utils:call_oz(Config, provider_connections, get_last_activity, [ProviderId]),
+        60
+    ).
+
 %%%===================================================================
 %%% Setup/teardown functions
 %%%===================================================================
@@ -2645,6 +2677,9 @@ init_per_testcase(check_my_ports_test, Config) ->
 init_per_testcase(list_eff_harvesters_test, Config) ->
     oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
     init_per_testcase(default, Config);
+init_per_testcase(last_activity_tracking, Config) ->
+    oz_test_utils:mock_time(Config),
+    init_per_testcase(default, Config);
 init_per_testcase(_, Config) ->
     Config.
 
@@ -2656,6 +2691,9 @@ end_per_testcase(check_my_ports_test, Config) ->
 end_per_testcase(list_eff_harvesters_test, Config) ->
     oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
     end_per_testcase(default, Config);
+end_per_testcase(last_activity_tracking, Config) ->
+    oz_test_utils:unmock_time(Config),
+    end_per_testcase(default, Config);
 end_per_testcase(_, Config) ->
     oz_test_utils:set_env(Config, require_token_for_provider_registration, false),
     oz_test_utils:set_env(Config, subdomain_delegation_supported, true),
@@ -2665,7 +2703,6 @@ end_per_testcase(_, Config) ->
 %%%===================================================================
 %%% Helper functions
 %%%===================================================================
-
 
 create_2_providers_and_5_supported_spaces(Config) ->
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
@@ -2699,3 +2736,16 @@ new_cluster_member_with_privs(Config, ProviderId, ToGrant, ToRevoke) ->
         Config, ClusterId, NewMember, ToGrant, ToRevoke
     ),
     NewMember.
+
+
+start_gs_connection(Config, ProviderToken) ->
+    % Prevent exiting GS connections from killing the test master
+    process_flag(trap_exit, true),
+    {ok, ClientPid, _} = ?assertMatch({ok, _, #gs_resp_handshake{identity = ?SUB(?ONEPROVIDER, _)}}, gs_client:start_link(
+        oz_test_utils:graph_sync_url(Config, provider),
+        {macaroon, ProviderToken, []},
+        oz_test_utils:get_gs_supported_proto_versions(Config),
+        fun(_) -> ok end,
+        [{cacerts, oz_test_utils:gui_ca_certs(Config)}]
+    )),
+    ClientPid.
