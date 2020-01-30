@@ -21,7 +21,7 @@
     remove/3,
     get_all/2,
     get_last_activity/1,
-    clear/2
+    close_all/2
 ]).
 
 %% datastore_model callbacks
@@ -82,13 +82,19 @@ get_last_activity(UserId) ->
     end.
 
 
--spec clear(od_user:id(), session:id()) -> ok | {error, term()}.
-clear(UserId, SessionId) ->
+%%--------------------------------------------------------------------
+%% @doc
+%% Closes all connections of given user within a specific session. Closing the
+%% connections fires on_terminate events, which result in calls to remove/3
+%% function.
+%% @end
+%%--------------------------------------------------------------------
+-spec close_all(od_user:id(), session:id()) -> ok.
+close_all(UserId, SessionId) ->
     Connections = get_all(UserId, SessionId),
     lists:foreach(fun(Connection) ->
         gs_server:terminate_connection(Connection)
-    end, Connections),
-    datastore_model:delete(?CTX, SessionId).
+    end, Connections).
 
 %%%===================================================================
 %%% Internal functions
