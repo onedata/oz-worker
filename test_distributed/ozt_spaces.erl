@@ -17,9 +17,10 @@
 -include("ozt.hrl").
 
 %% API
--export([create/0]).
+-export([create/0, create/1]).
 -export([add_user/2, add_user/3]).
 -export([create_support_token/2]).
+-export([create_share/2]).
 -export([get_user_privileges/2, get_group_privileges/2]).
 -export([delete/1]).
 -export([minimum_support_size/0]).
@@ -30,9 +31,12 @@
 
 -spec create() -> od_space:id().
 create() ->
-    {ok, SpaceId} = ?assertMatch({ok, _}, ozt:rpc(space_logic, create, [
-        ?ROOT, #{<<"name">> => ?UNIQUE_STRING}
-    ])),
+    create(?UNIQUE_STRING).
+
+
+-spec create(od_space:name()) -> od_space:id().
+create(Name) ->
+    {ok, SpaceId} = ?assertMatch({ok, _}, ozt:rpc(space_logic, create, [?ROOT, #{<<"name">> => Name}])),
     SpaceId.
 
 
@@ -49,6 +53,14 @@ add_user(SpaceId, UserId, Privileges) ->
 -spec create_support_token(od_space:id(), od_user:id()) -> tokens:token().
 create_support_token(SpaceId, UserId) ->
     ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?SUPPORT_SPACE, SpaceId)).
+
+
+-spec create_share(od_space:id(), od_share:name()) -> od_share:id().
+create_share(SpaceId, Name) ->
+    {ok, ShareId} = ?assertMatch({ok, _}, ozt:rpc(share_logic, create, [
+        ?ROOT, str_utils:rand_hex(16), Name, ?ROOT_FILE_ID, SpaceId
+    ])),
+    ShareId.
 
 
 -spec get_user_privileges(od_space:id(), od_user:id()) -> [privileges:space_privilege()].

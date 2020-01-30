@@ -34,7 +34,6 @@
     delete/2
 ]).
 -export([
-    get_name/2,
     get_eff_users/2, get_eff_user/3,
     get_eff_user_membership_intermediaries/3,
     get_eff_groups/2, get_eff_group/3,

@@ -22,7 +22,7 @@
 -type entries() :: all | [gri:entity_id()].
 % Basic table types - all collections reuse these tables to display the data
 -type table_type() :: users | groups | spaces | shares | providers | clusters
-| handle_services | handles | harvesters.
+| handle_services | handles | harvesters | storages.
 % Id of a column in displayed table, also used as display name
 -type column_id() :: atom().
 % Number of the column, counting from the left, starting with 1
@@ -59,6 +59,7 @@
 -export([handle_services/0]).
 -export([handles/0]).
 -export([harvesters/0]).
+-export([storages/0]).
 
 -export([pr/1, pr/2, pr/3]).
 -export([format/1, format/2, format/3]).
@@ -96,6 +97,9 @@ handles() -> pr(handles).
 
 -spec harvesters() -> ok.
 harvesters() -> pr(harvesters).
+
+-spec storages() -> ok.
+storages() -> pr(storages).
 
 
 %%--------------------------------------------------------------------
@@ -186,7 +190,7 @@ print_help() ->
 
 -spec all_collections() -> [collection()].
 all_collections() -> [
-    users, groups, spaces, shares, providers, clusters, handle_services, handles, harvesters,
+    users, groups, spaces, shares, providers, clusters, handle_services, handles, harvesters, storages,
 
     {user_groups, <<"user_id">>}, {user_spaces, <<"user_id">>},
     {user_providers, <<"user_id">>}, {user_clusters, <<"user_id">>},
@@ -201,10 +205,11 @@ all_collections() -> [
 
     {space_users, <<"space_id">>}, {space_groups, <<"space_id">>},
     {space_shares, <<"space_id">>}, {space_providers, <<"space_id">>},
-    {space_harvesters, <<"space_id">>},
+    {space_harvesters, <<"space_id">>}, {space_storages, <<"space_id">>},
 
     {provider_users, <<"provider_id">>}, {provider_groups, <<"provider_id">>},
-    {provider_spaces, <<"provider_id">>}, {provider_harvesters, <<"provider_id">>},
+    {provider_spaces, <<"provider_id">>}, {provider_storages, <<"provider_id">>},
+    {provider_harvesters, <<"provider_id">>},
 
     {cluster_users, <<"cluster_id">>}, {cluster_groups, <<"cluster_id">>},
 
@@ -215,7 +220,10 @@ all_collections() -> [
     {handle_users, <<"handle_id">>}, {handle_groups, <<"handle_id">>},
 
     {harvester_users, <<"harvester_id">>}, {harvester_groups, <<"harvester_id">>},
-    {harvester_spaces, <<"harvester_id">>}, {harvester_providers, <<"harvester_id">>}
+    {harvester_spaces, <<"harvester_id">>}, {harvester_providers, <<"harvester_id">>},
+
+    {storage_users, <<"storage_id">>}, {storage_groups, <<"storage_id">>},
+    {storage_spaces, <<"storage_id">>}, {storage_harvesters, <<"storage_id">>}
 ].
 
 %%%===================================================================
@@ -369,6 +377,12 @@ format_collection({space_harvesters, SpaceId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_space{harvesters = Harvesters}}} = od_space:get(SpaceId),
     format_table(harvesters, Harvesters, SortBy, SortOrder);
 
+format_collection({space_storages, SpaceId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_space{storages = Storages}}} = od_space:get(SpaceId),
+    format_table(storages, maps:keys(Storages), SortBy, SortOrder, all, [
+        {support, byte_size, 11, fun(Doc) -> maps:get(SpaceId, Doc#document.value#od_storage.spaces) end}
+    ]);
+
 
 format_collection({provider_users, ProviderId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_provider{eff_users = EffUsers}}} = od_provider:get(ProviderId),
@@ -380,7 +394,7 @@ format_collection({provider_groups, ProviderId}, SortBy, SortOrder) ->
 
 format_collection({provider_spaces, ProviderId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_provider{eff_spaces = EffSpaces}}} = od_provider:get(ProviderId),
-    format_table(spaces, maps:keys(EffSpaces), SortBy, SortOrder, [id, name, users, groups, providers], [
+    format_table(spaces, maps:keys(EffSpaces), SortBy, SortOrder, [id, name, users, groups, providers, storages], [
         {granted_support, byte_size, 15, fun(#document{key = SpaceId}) ->
             {Support, _} = maps:get(SpaceId, EffSpaces),
             Support
@@ -389,6 +403,10 @@ format_collection({provider_spaces, ProviderId}, SortBy, SortOrder) ->
             lists:foldl(fun({Support, _}, AccSum) -> AccSum + Support end, 0, maps:values(Space#od_space.eff_providers))
         end}
     ]);
+
+format_collection({provider_storages, ProviderId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_provider{storages = Storages}}} = od_provider:get(ProviderId),
+    format_table(storages, Storages, SortBy, SortOrder);
 
 format_collection({provider_harvesters, ProviderId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_provider{eff_harvesters = Harvesters}}} = od_provider:get(ProviderId),
@@ -440,7 +458,29 @@ format_collection({harvester_spaces, HarvesterId}, SortBy, SortOrder) ->
 
 format_collection({harvester_providers, HarvesterId}, SortBy, SortOrder) ->
     {ok, #document{value = #od_harvester{eff_providers = Providers}}} = od_harvester:get(HarvesterId),
-    format_table(providers, maps:keys(Providers), SortBy, SortOrder).
+    format_table(providers, maps:keys(Providers), SortBy, SortOrder);
+
+
+format_collection({storage_users, StorageId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_storage{eff_users = EffUsers}}} = od_storage:get(StorageId),
+    format_table(users, maps:keys(EffUsers), SortBy, SortOrder);
+
+format_collection({storage_groups, StorageId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_storage{eff_groups = EffGroups}}} = od_storage:get(StorageId),
+    format_table(groups, maps:keys(EffGroups), SortBy, SortOrder);
+
+format_collection({storage_spaces, StorageId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_storage{spaces = Spaces}}} = od_storage:get(StorageId),
+    format_table(spaces, maps:keys(Spaces), SortBy, SortOrder, [id, name, users, groups, providers, storages], [
+        {granted_support, byte_size, 15, fun(#document{key = SpaceId}) -> maps:get(SpaceId, Spaces) end},
+        {total_support, byte_size, 13, fun(#document{value = Space}) ->
+            lists:sum(maps:values(Space#od_space.storages))
+        end}
+    ]);
+
+format_collection({storage_harvesters, StorageId}, SortBy, SortOrder) ->
+    {ok, #document{value = #od_storage{eff_harvesters = Harvesters}}} = od_storage:get(StorageId),
+    format_table(harvesters, maps:keys(Harvesters), SortBy, SortOrder).
 
 
 %% @private
@@ -527,7 +567,7 @@ format_table(TableType, Entries, SortBy, SortOrder, Fields, ExtraSpecs) ->
 field_specs(users) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
     {last_activity, last_activity, 16, fun(Doc) -> user_connections:get_last_activity(Doc#document.key) end},
-    {full_name, text, 25, fun(Doc) -> Doc#document.value#od_user.full_name end},
+    {full_name, text, 28, fun(Doc) -> Doc#document.value#od_user.full_name end},
     {username, text, 20, fun(Doc) ->
         case Doc#document.value#od_user.username of
             undefined -> <<"-">>;
@@ -560,7 +600,7 @@ field_specs(users) -> [
 ];
 field_specs(groups) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
-    {name, text, 25, fun(Doc) -> Doc#document.value#od_group.name end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_group.name end},
     {type, text, 12, fun(Doc) -> Doc#document.value#od_group.type end},
     {parents, direct_and_eff, 9, fun(#document{value = Group}) ->
         {length(Group#od_group.parents), maps:size(Group#od_group.eff_parents)}
@@ -582,7 +622,7 @@ field_specs(groups) -> [
 ];
 field_specs(spaces) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
-    {name, text, 25, fun(Doc) -> Doc#document.value#od_space.name end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_space.name end},
     {users, direct_and_eff, 9, fun(#document{value = Space}) ->
         {maps:size(Space#od_space.users), maps:size(Space#od_space.eff_users)}
     end},
@@ -595,6 +635,9 @@ field_specs(spaces) -> [
     {providers, integer, 11, fun(#document{value = Space}) ->
         maps:size(Space#od_space.eff_providers)
     end},
+    {storages, integer, 10, fun(#document{value = Space}) ->
+        maps:size(Space#od_space.storages)
+    end},
     {support, byte_size, 11, fun(#document{value = #od_space{eff_providers = EffProviders}}) ->
         lists:foldl(fun({Support, _}, AccSum) -> AccSum + Support end, 0, maps:values(EffProviders))
     end},
@@ -602,7 +645,7 @@ field_specs(spaces) -> [
 ];
 field_specs(shares) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
-    {name, text, 25, fun(Doc) -> Doc#document.value#od_share.name end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_share.name end},
     {space, text, 38, fun(Doc) -> Doc#document.value#od_share.space end},
     {handle, text, 38, fun(Doc) -> Doc#document.value#od_share.handle end}
 ];
@@ -613,7 +656,7 @@ field_specs(providers) -> [
         {ok, Version} = cluster_logic:get_worker_release_version(?ROOT, Doc#document.key),
         Version
     end},
-    {name, text, 25, fun(Doc) -> Doc#document.value#od_provider.name end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_provider.name end},
     {domain, text, 40, fun(Doc) -> Doc#document.value#od_provider.domain end},
     {spaces, integer, 6, fun(Doc) -> maps:size(Doc#document.value#od_provider.eff_spaces) end},
     {support, byte_size, 11, fun(#document{value = #od_provider{eff_spaces = EffSpaces}}) ->
@@ -626,7 +669,7 @@ field_specs(providers) -> [
 field_specs(clusters) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
     {type, text, 11, fun(Doc) -> Doc#document.value#od_cluster.type end},
-    {name, text, 25, fun(Doc) -> case Doc#document.value#od_cluster.type of
+    {name, text, 28, fun(Doc) -> case Doc#document.value#od_cluster.type of
         ?ONEZONE -> <<"@ ", (?TO_BIN(oz_worker:get_name()))/binary>>;
         ?ONEPROVIDER -> element(2, {ok, _} = provider_logic:get_name(?ROOT, Doc#document.key))
     end end},
@@ -640,7 +683,7 @@ field_specs(clusters) -> [
 ];
 field_specs(handle_services) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
-    {name, text, 25, fun(Doc) -> Doc#document.value#od_handle_service.name end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_handle_service.name end},
     {proxy_endpoint, text, 40, fun(Doc) -> Doc#document.value#od_handle_service.proxy_endpoint end},
     {handles, integer, 7, fun(#document{value = HService}) ->
         length(HService#od_handle_service.handles)
@@ -668,7 +711,7 @@ field_specs(handles) -> [
 ];
 field_specs(harvesters) -> [
     {id, text, 38, fun(Doc) -> Doc#document.key end},
-    {name, text, 25, fun(Doc) -> Doc#document.value#od_harvester.name end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_harvester.name end},
     {endpoint, text, 45, fun(Doc) -> Doc#document.value#od_harvester.endpoint end},
     {access, {boolean, "public", "private"}, 10, fun(Doc) -> Doc#document.value#od_harvester.public end},
     {spaces, integer, 6, fun(#document{value = Harvester}) ->
@@ -682,6 +725,19 @@ field_specs(harvesters) -> [
     end},
     {eff_providers, integer, 13, fun(Doc) -> maps:size(Doc#document.value#od_harvester.eff_providers) end},
     {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_harvester.creation_time end}
+];
+field_specs(storages) -> [
+    {id, text, 38, fun(Doc) -> Doc#document.key end},
+    {name, text, 28, fun(Doc) -> Doc#document.value#od_storage.name end},
+    {provider, text, 38, fun(Doc) -> Doc#document.value#od_storage.provider end},
+    {spaces, integer, 6, fun(Doc) -> maps:size(Doc#document.value#od_storage.spaces) end},
+    {support, byte_size, 11, fun(Doc) -> lists:sum(maps:values(Doc#document.value#od_storage.spaces)) end},
+    {eff_users, integer, 9, fun(Doc) -> maps:size(Doc#document.value#od_storage.eff_users) end},
+    {eff_groups, integer, 10, fun(Doc) -> maps:size(Doc#document.value#od_storage.eff_groups) end},
+    {created, creation_date, 10, fun(Doc) -> Doc#document.value#od_storage.creation_time end},
+    {qos_params, text, 40, fun(#document{value = #od_storage{qos_parameters = QosParameters}}) ->
+        str_utils:join_binary(maps:values(QosParameters), <<" | ">>)
+    end}
 ].
 
 
@@ -843,4 +899,5 @@ module(providers) -> od_provider;
 module(clusters) -> od_cluster;
 module(handle_services) -> od_handle_service;
 module(handles) -> od_handle;
-module(harvesters) -> od_harvester.
+module(harvesters) -> od_harvester;
+module(storages) -> od_storage.

@@ -17,7 +17,8 @@
 -include("ozt.hrl").
 
 %% API
--export([create/0]).
+-export([create/0, create/1]).
+-export([create_handle/2]).
 
 %%%===================================================================
 %%% API
@@ -29,3 +30,17 @@ create() ->
         ?ROOT, ?DOI_SERVICE
     ])),
     HServiceId.
+
+
+-spec create(od_handle_service:name()) -> od_handle_service:id().
+create(Name) ->
+    Data = ?DOI_SERVICE,
+    {ok, HServiceId} = ?assertMatch({ok, _}, ozt:rpc(handle_service_logic, create, [
+        ?ROOT, Data#{<<"name">> => Name}
+    ])),
+    HServiceId.
+
+
+create_handle(HServiceId, ShareId) ->
+    {ok, HandleId} = ?assertMatch({ok, _}, ozt:rpc(handle_logic, create, [?ROOT, ?HANDLE(HServiceId, ShareId)])),
+    HandleId.

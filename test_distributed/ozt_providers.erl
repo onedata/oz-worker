@@ -16,8 +16,8 @@
 
 -include("ozt.hrl").
 
--define(PROVIDER_DATA(UserId, RegistrationToken), #{
-    <<"name">> => <<"of-user-", UserId/binary>>,
+-define(PROVIDER_DATA(Name, RegistrationToken), #{
+    <<"name">> => Name,
     <<"adminEmail">> => <<"admin@oneprovider.example.com">>,
     <<"domain">> => <<"oneprovider.example.com">>,
     <<"subdomainDelegation">> => false,
@@ -28,11 +28,12 @@
 
 %% API
 -export([create/0]).
--export([create_for_admin_user/1, create_as_support_for_user/1]).
+-export([create_for_admin_user/1, create_for_admin_user/2]).
+-export([create_as_support_for_user/1]).
 -export([create_as_support_for_space/1]).
 -export([get_root_token/1]).
--export([ensure_storage/2]).
--export([support_space/2, support_space_using_token/4]).
+-export([create_storage/3, ensure_storage/2]).
+-export([support_space/2, support_space/4, support_space_using_token/4]).
 -export([delete/1]).
 
 %%%===================================================================
@@ -47,9 +48,14 @@ create() ->
 
 -spec create_for_admin_user(od_user:id()) -> od_provider:id().
 create_for_admin_user(UserId) ->
+    create_for_admin_user(UserId, <<"of-user-", UserId/binary>>).
+
+
+-spec create_for_admin_user(od_user:id(), od_provider:name()) -> od_provider:id().
+create_for_admin_user(UserId, Name) ->
     RegToken = ozt_tokens:create(temporary, ?SUB(user, UserId), ?INVITE_TOKEN(?REGISTER_ONEPROVIDER, UserId)),
     {ok, {ProviderId, _}} = ?assertMatch({ok, _}, ozt:rpc(provider_logic, create, [
-        ?NOBODY, ?PROVIDER_DATA(UserId, RegToken)
+        ?NOBODY, ?PROVIDER_DATA(Name, RegToken)
     ])),
     ProviderId.
 
@@ -77,6 +83,14 @@ get_root_token(ProviderId) ->
         ?ROOT, ProviderId, ?PROVIDER_ROOT_TOKEN_NAME
     ])),
     Token.
+
+
+-spec create_storage(od_provider:id(), od_storage:name(), od_storage:qos_parameters()) -> ok.
+create_storage(ProviderId, Name, QosParameters) ->
+    {ok, StorageId} = ?assertMatch({ok, _}, ozt:rpc(storage_logic, create, [
+        ?PROVIDER(ProviderId), datastore_key:new(), #{<<"name">> => Name, <<"qos_parameters">> => QosParameters}
+    ])),
+    StorageId.
 
 
 -spec ensure_storage(od_provider:id(), od_storage:id()) -> ok.

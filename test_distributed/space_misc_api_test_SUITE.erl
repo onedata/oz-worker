@@ -535,6 +535,8 @@ get_share_test(Config) ->
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config),
     oz_test_utils:support_space_by_provider(Config, P1, S1),
 
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
+
     ShareName = <<"Share">>,
     ShareId = ?UNIQUE_STRING,
     {ok, ShareId} = oz_test_utils:create_share(

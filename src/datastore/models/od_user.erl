@@ -536,7 +536,7 @@ get_record_struct(11) ->
             {username, string},
             {emails, [string]},
             {entitlements, [string]},
-            {custom, {custom, {json_utils, encode, decode}}},
+            {custom, {custom, json, {json_utils, encode, decode}}},
             {access_token, {string, integer}},
             {refresh_token, string}
         ]}]},
@@ -590,7 +590,7 @@ get_record_struct(12) ->
             {username, string},
             {emails, [string]},
             {entitlements, [string]},
-            {custom, {custom, {json_utils, encode, decode}}},
+            {custom, {custom, json, {json_utils, encode, decode}}},
             {access_token, {string, integer}},
             {refresh_token, string}
         ]}]},
