@@ -110,7 +110,6 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
         username = Username,
         emails = Emails,
         linked_accounts = LinkedAccounts,
-        default_space = DefaultSpace,
         space_aliases = SpaceAliases
     } = User,
     #{
@@ -118,7 +117,6 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
         <<"username">> => utils:undefined_to_null(Username),
         <<"emails">> => Emails,
         <<"linkedAccounts">> => linked_accounts:to_maps(LinkedAccounts, luma_payload),
-        <<"defaultSpaceId">> => utils:undefined_to_null(DefaultSpace),
         <<"spaceAliases">> => SpaceAliases,
 
         <<"effectiveGroups">> => entity_graph:get_relations(effective, top_down, od_group, User),
@@ -126,7 +124,8 @@ translate_resource(_, #gri{type = od_user, aspect = instance, scope = private}, 
         <<"effectiveHandles">> => entity_graph:get_relations(effective, top_down, od_handle, User),
         <<"effectiveHandleServices">> => entity_graph:get_relations(effective, top_down, od_handle_service, User),
 
-        %% @TODO VFS-4506 deprecated fields, included for backward compatibility
+        % TODO VFS-4506 deprecated fields, included for backward compatibility
+        <<"defaultSpaceId">> => null,
         <<"name">> => FullName,
         <<"login">> => utils:undefined_to_null(Username),
         <<"alias">> => utils:undefined_to_null(Username),
@@ -290,7 +289,7 @@ translate_resource(_, #gri{type = od_provider, id = Id, aspect = instance, scope
         <<"latitude">> => Latitude,
         <<"longitude">> => Longitude,
 
-        <<"online">> => provider_connection:is_online(Id),
+        <<"online">> => provider_connections:is_online(Id),
 
         <<"storages">> => entity_graph:get_relations(direct, bottom_up, od_storage, Provider),
         %% @TODO VFS-5554 Deprecated, included for backward compatibility

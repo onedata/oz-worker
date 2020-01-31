@@ -584,7 +584,7 @@ terminate_provider_graphsync_channel(Config, ProviderId, ClientPid) ->
     gs_client:kill(ClientPid),
     ?assertMatch(
         false,
-        oz_test_utils:call_oz(Config, provider_connection, is_online, [ProviderId]),
+        oz_test_utils:call_oz(Config, provider_connections, is_online, [ProviderId]),
         60
     ).
 

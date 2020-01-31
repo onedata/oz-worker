@@ -66,9 +66,7 @@ fetch_entity(#gri{id = UserId}) ->
 operation_supported(create, instance, private) -> true;
 %% @TODO VFS-5846 old client tokens API kept for backward compatibility
 operation_supported(create, client_tokens, private) -> true;
-operation_supported(create, default_space, private) -> true;
 operation_supported(create, {space_alias, _}, private) -> true;
-operation_supported(create, default_provider, private) -> true;
 operation_supported(create, {idp_access_token, _}, private) -> true;
 operation_supported(create, provider_registration_token, private) -> true;
 
@@ -86,9 +84,7 @@ operation_supported(get, client_tokens, private) -> true;
 operation_supported(get, {client_token, _}, private) -> true;
 operation_supported(get, linked_accounts, private) -> true;
 operation_supported(get, {linked_account, _}, private) -> true;
-operation_supported(get, default_space, private) -> true;
 operation_supported(get, {space_alias, _}, private) -> true;
-operation_supported(get, default_provider, private) -> true;
 
 operation_supported(get, groups, private) -> true;
 operation_supported(get, eff_groups, private) -> true;
@@ -120,9 +116,7 @@ operation_supported(delete, oz_privileges, private) -> true;
 
 %% @TODO VFS-5846 old client tokens API kept for backward compatibility
 operation_supported(delete, {client_token, _}, private) -> true;
-operation_supported(delete, default_space, private) -> true;
 operation_supported(delete, {space_alias, _}, private) -> true;
-operation_supported(delete, default_provider, private) -> true;
 
 operation_supported(delete, {group, _}, private) -> true;
 operation_supported(delete, {space, _}, private) -> true;
@@ -217,24 +211,10 @@ create(#el_req{gri = #gri{id = UserId, aspect = client_tokens} = GRI}) ->
 
 
 
-create(Req = #el_req{gri = #gri{id = UserId, aspect = default_space}}) ->
-    SpaceId = maps:get(<<"spaceId">>, Req#el_req.data),
-    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
-        {ok, User#od_user{default_space = SpaceId}}
-    end),
-    ok;
-
 create(Req = #el_req{gri = #gri{id = UserId, aspect = {space_alias, SpaceId}}}) ->
     Alias = maps:get(<<"alias">>, Req#el_req.data),
     {ok, _} = od_user:update(UserId, fun(#od_user{space_aliases = Aliases} = User) ->
         {ok, User#od_user{space_aliases = maps:put(SpaceId, Alias, Aliases)}}
-    end),
-    ok;
-
-create(#el_req{gri = #gri{id = UserId, aspect = default_provider}, data = Data}) ->
-    ProviderId = maps:get(<<"providerId">>, Data),
-    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
-        {ok, User#od_user{default_provider = ProviderId}}
     end),
     ok;
 
@@ -320,12 +300,8 @@ get(#el_req{gri = #gri{aspect = linked_accounts}}, User) ->
 get(#el_req{gri = #gri{aspect = {linked_account, UserId}}}, User) ->
     {ok, find_linked_account(UserId, User#od_user.linked_accounts)};
 
-get(#el_req{gri = #gri{aspect = default_space}}, User) ->
-    {ok, User#od_user.default_space};
 get(#el_req{gri = #gri{aspect = {space_alias, SpaceId}}}, User) ->
     {ok, maps:get(SpaceId, User#od_user.space_aliases)};
-get(#el_req{gri = #gri{aspect = default_provider}}, User) ->
-    {ok, User#od_user.default_provider};
 
 get(#el_req{gri = #gri{aspect = groups}}, User) ->
     {ok, entity_graph:get_relations(direct, top_down, od_group, User)};
@@ -462,21 +438,9 @@ delete(#el_req{gri = #gri{id = UserId, aspect = {client_token, Serialized}}}) ->
     {ok, #token{id = TokenId}} = tokens:deserialize(Serialized),
     token_logic:delete_named_token(?USER(UserId), TokenId);
 
-delete(#el_req{gri = #gri{id = UserId, aspect = default_space}}) ->
-    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
-        {ok, User#od_user{default_space = undefined}}
-    end),
-    ok;
-
 delete(#el_req{gri = #gri{id = UserId, aspect = {space_alias, SpaceId}}}) ->
     {ok, _} = od_user:update(UserId, fun(#od_user{space_aliases = Aliases} = User) ->
         {ok, User#od_user{space_aliases = maps:remove(SpaceId, Aliases)}}
-    end),
-    ok;
-
-delete(#el_req{gri = #gri{id = UserId, aspect = default_provider}}) ->
-    {ok, _} = od_user:update(UserId, fun(User = #od_user{}) ->
-        {ok, User#od_user{default_provider = undefined}}
     end),
     ok;
 
@@ -532,7 +496,7 @@ exists(Req = #el_req{gri = #gri{aspect = instance, scope = protected}}, User) ->
             true
     end;
 
-exists(Req = #el_req{gri = #gri{id = UserId, aspect = instance, scope = shared}}, User) ->
+exists(Req = #el_req{gri = GRI = #gri{id = UserId, aspect = instance, scope = shared}}, User) ->
     case Req#el_req.auth_hint of
         ?THROUGH_GROUP(GroupId) ->
             user_logic:has_eff_group(User, GroupId) orelse begin
@@ -564,8 +528,8 @@ exists(Req = #el_req{gri = #gri{id = UserId, aspect = instance, scope = shared}}
                 {true, {Cluster, _}} = cluster_logic_plugin:fetch_entity(#gri{id = ClusterId}),
                 Cluster#od_cluster.creator =:= ?SUB(user, UserId)
             end;
-        undefined ->
-            true
+        _ ->
+            exists(Req#el_req{gri = GRI#gri{scope = protected}}, User)
     end;
 
 %% @TODO VFS-5846 old client tokens API kept for backward compatibility
@@ -576,14 +540,8 @@ exists(#el_req{gri = #gri{aspect = {client_token, Serialized}}}, _User) ->
 exists(#el_req{gri = #gri{aspect = {linked_account, SubId}}}, User) ->
     find_linked_account(SubId, User#od_user.linked_accounts) /= undefined;
 
-exists(#el_req{gri = #gri{aspect = default_space}}, User) ->
-    undefined =/= User#od_user.default_space;
-
 exists(#el_req{gri = #gri{aspect = {space_alias, SpaceId}}}, User) ->
     maps:is_key(SpaceId, User#od_user.space_aliases);
-
-exists(#el_req{gri = #gri{aspect = default_provider}}, User) ->
-    undefined =/= User#od_user.default_provider;
 
 exists(#el_req{gri = #gri{aspect = {group, GroupId}}}, User) ->
     entity_graph:has_relation(direct, top_down, od_group, GroupId, User);
@@ -678,6 +636,10 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{id = UserId, aspect = 
                 space_logic:has_eff_user(Space, ClientUserId) andalso
                     Space#od_space.creator =:= ?SUB(user, UserId)
             end;
+
+        {?PROVIDER(ProviderId), ?THROUGH_SPACE(SpaceId)} ->
+            % UserId's membership in space is checked in 'exists'
+            space_logic:is_supported_by_provider(SpaceId, ProviderId);
 
         {?USER(ClientUserId), ?THROUGH_HANDLE_SERVICE(HServiceId)} ->
             {true, {HService, _}} = handle_service_logic_plugin:fetch_entity(#gri{id = HServiceId}),
@@ -844,15 +806,6 @@ validate(#el_req{operation = create, gri = #gri{aspect = instance}, data = Data}
 validate(#el_req{operation = create, gri = #gri{aspect = client_tokens}}) -> #{
 };
 
-validate(#el_req{operation = create, gri = #gri{id = UserId, aspect = default_space}}) ->
-    #{
-        required => #{
-            <<"spaceId">> => {binary, {exists, fun(SpaceId) ->
-                space_logic:has_eff_user(SpaceId, UserId)
-            end}}
-        }
-    };
-
 validate(#el_req{operation = create, gri = #gri{id = UserId, aspect = {space_alias, SpaceId}}}) ->
     #{
         required => #{
@@ -861,15 +814,6 @@ validate(#el_req{operation = create, gri = #gri{id = UserId, aspect = {space_ali
                     space_logic:has_eff_user(SpId, UserId)
                 end}},
             <<"alias">> => {binary, non_empty}
-        }
-    };
-
-validate(#el_req{operation = create, gri = #gri{id = UserId, aspect = default_provider}}) ->
-    #{
-        required => #{
-            <<"providerId">> => {binary, {exists, fun(ProviderId) ->
-                provider_logic:has_eff_user(ProviderId, UserId)
-            end}}
         }
     };
 

@@ -17,12 +17,25 @@
 -include("ozt.hrl").
 
 %% API
+-export([create/1]).
+-export([add_space/2]).
 -export([get_user_privileges/2, get_group_privileges/2]).
 -export([delete/1]).
 
 %%%===================================================================
 %%% API
 %%%===================================================================
+
+-spec create(od_harvester:name()) -> od_harvester:id().
+create(Name) ->
+    {ok, HarvesterId} = ?assertMatch({ok, _}, ozt:rpc(harvester_logic, create, [?ROOT, ?HARVESTER_CREATE_DATA(Name)])),
+    HarvesterId.
+
+
+add_space(HarvesterId, SpaceId) ->
+    ?assertMatch({ok, _}, ozt:rpc(harvester_logic, add_space, [?ROOT, HarvesterId, SpaceId])),
+    ok.
+
 
 -spec get_user_privileges(od_harvester:id(), od_user:id()) -> [privileges:harvester_privilege()].
 get_user_privileges(HarvesterId, UserId) ->

@@ -203,14 +203,21 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_provider, id = undefined, aspect = current_time}
     }},
-    %% Maps external IdP group id into internal group id in OneZone
+    %% Map IdP user to Onezone user
+    %% This operation does not require any specific privileges.
+    {<<"/provider/public/map_idp_user">>, #rest_req{
+        method = 'POST',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_provider, id = undefined, aspect = map_idp_user}
+    }},
+    %% Map IdP group to Onezone group
     %% This operation does not require any specific privileges.
     {<<"/provider/public/map_idp_group">>, #rest_req{
         method = 'POST',
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_provider, id = undefined, aspect = map_idp_group}
     }},
-    %% Verifies the identity of given provider
+    %% Verify the identity of given provider
     %% This operation does not require any specific privileges.
     {<<"/provider/public/verify_provider_identity">>, #rest_req{
         method = 'POST',

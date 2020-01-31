@@ -410,6 +410,9 @@ list_groups_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+
     ExpGroups = lists:map(
         fun(_) ->
             {ok, GroupId} = oz_test_utils:create_group(
@@ -425,7 +428,8 @@ list_groups_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]},
-                {user, U2}
+                {user, U2},
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -459,6 +463,9 @@ get_group_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+
     {ok, G1} = oz_test_utils:create_group(
         Config, ?ROOT,
         #{<<"name">> => ?GROUP_NAME1, <<"type">> => ?GROUP_TYPE1}
@@ -470,7 +477,8 @@ get_group_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_GROUPS_VIEW]},
-                {user, U2}
+                {user, U2},
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -532,6 +540,9 @@ get_group_privileges_test(Config) ->
     {ok, G1} = oz_test_utils:create_group(Config, ?USER(U3), ?GROUP_NAME1),
     {ok, G1} = oz_test_utils:space_add_group(Config, S1, G1),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+
     AllPrivs = privileges:space_privileges(),
     InitialPrivs = privileges:space_member(),
     InitialPrivsBin = [atom_to_binary(Priv, utf8) || Priv <- InitialPrivs],
@@ -546,7 +557,8 @@ get_group_privileges_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SPACES_VIEW_PRIVILEGES]},
-                {user, U2}
+                {user, U2},
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -644,6 +656,8 @@ list_eff_groups_test(Config) ->
         _EffUsers, {U1, U2, NonAdmin}
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
 
     ExpGroups = [G1, G2, G3, G4, G5, G6],
     ApiTestSpec = #api_test_spec{
@@ -651,7 +665,8 @@ list_eff_groups_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SPACES_LIST_RELATIONSHIPS]},
-                {user, U2}
+                {user, U2},
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -693,6 +708,9 @@ get_eff_group_test(Config) ->
         S1, EffGroups, _EffUsers, {U1, U2, NonAdmin}
     } = api_test_scenarios:create_space_eff_users_env(Config),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+
     lists:foreach(
         fun({GroupId, GroupDetails}) ->
             GroupDetailsBinary = GroupDetails#{
@@ -705,7 +723,8 @@ get_eff_group_test(Config) ->
                     correct = [
                         root,
                         {admin, [?OZ_GROUPS_VIEW]},
-                        {user, U2}
+                        {user, U2},
+                        {provider, P1, P1Token}
                     ],
                     unauthorized = [nobody],
                     forbidden = [
@@ -781,6 +800,9 @@ get_eff_group_privileges_test(Config) ->
     ),
     {ok, NonAdmin} = oz_test_utils:create_user(Config),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+
     % User whose eff privileges will be changing during test run and as such
     % should not be listed in client spec (he will sometimes has privilege
     % to get user privileges and sometimes not)
@@ -826,7 +848,8 @@ get_eff_group_privileges_test(Config) ->
             correct = [
                 root,
                 {admin, [?OZ_SPACES_VIEW_PRIVILEGES]},
-                {user, U2}
+                {user, U2},
+                {provider, P1, P1Token}
             ],
             unauthorized = [nobody],
             forbidden = [
@@ -891,6 +914,11 @@ get_eff_group_membership_intermediaries(Config) ->
     {ok, S2} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
     {ok, S3} = oz_test_utils:create_space(Config, ?ROOT, ?SPACE_NAME1),
 
+    {ok, {P1, P1Token}} = oz_test_utils:create_provider(Config, ?PROVIDER_NAME1),
+    oz_test_utils:support_space_by_provider(Config, P1, S1),
+    oz_test_utils:support_space_by_provider(Config, P1, S2),
+    oz_test_utils:support_space_by_provider(Config, P1, S3),
+
     oz_test_utils:group_add_user(Config, G4, U2),
 
     oz_test_utils:space_add_user(Config, S1, U1),
@@ -911,6 +939,8 @@ get_eff_group_membership_intermediaries(Config) ->
     oz_test_utils:space_add_group(Config, S3, G3),
     oz_test_utils:space_add_group(Config, S3, G4),
     oz_test_utils:space_set_group_privileges(Config, S3, G4, [], [?SPACE_VIEW]),
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     % {SpaceId, SubjectUser, CorrectUsers, ExpIntermediariesRaw}
     ExpectedMembershipIntermediaries = [
@@ -966,7 +996,8 @@ get_eff_group_membership_intermediaries(Config) ->
             client_spec = #client_spec{
                 correct = [
                     root,
-                    {admin, [?OZ_SPACES_VIEW]}
+                    {admin, [?OZ_SPACES_VIEW]},
+                    {provider, P1, P1Token}
                 ] ++ CorrectUserClients,
                 unauthorized = [nobody],
                 forbidden = [{user, NonAdmin}, {user, U1}, {user, U2}] -- CorrectUserClients

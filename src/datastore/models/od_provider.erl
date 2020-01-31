@@ -17,7 +17,7 @@
 
 %% API
 -export([create/1, save/1, get/1, exists/1, update/2, force_delete/1, list/0]).
--export([to_string/1, print_summary/0, print_summary/1]).
+-export([to_string/1]).
 -export([entity_logic_plugin/0]).
 -export([get_ctx/0]).
 
@@ -121,63 +121,6 @@ to_string(ProviderId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Prints all provider records to the console in a nicely-formatted manner.
-%% Sorts the records in a default manner.
-%% @end
-%%--------------------------------------------------------------------
--spec print_summary() -> ok.
-print_summary() ->
-    print_summary(name).
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Prints all provider records to the console in a nicely-formatted manner.
-%% Sorts the records by given attribute (specified by name or position).
-%% @end
-%%--------------------------------------------------------------------
--spec print_summary(id | status | name | domain | version | spaces | support | users | groups | pos_integer()) -> ok.
-print_summary(id) -> print_summary(1);
-print_summary(status) -> print_summary(2);
-print_summary(name) -> print_summary(3);
-print_summary(domain) -> print_summary(4);
-print_summary(version) -> print_summary(5);
-print_summary(spaces) -> print_summary(6);
-print_summary(support) -> print_summary(7);
-print_summary(users) -> print_summary(8);
-print_summary(groups) -> print_summary(9);
-print_summary(SortPos) when is_integer(SortPos) ->
-    {ok, Providers} = list(),
-    ProviderAttrs = lists:map(fun(#document{key = Id, value = P}) ->
-        {ok, #od_cluster{worker_version = {Version, _, _}}} = cluster_logic:get(?ROOT, Id),
-        TotalSupport = lists:foldl(fun({Support, _}, TotalSupport) ->
-            TotalSupport + Support
-        end, 0, maps:values(P#od_provider.eff_spaces)),
-        {
-            Id,
-            case provider_connection:is_online(Id) of true -> "online"; false -> "-" end,
-            P#od_provider.name,
-            P#od_provider.domain,
-            Version,
-            maps:size(P#od_provider.eff_spaces),
-            TotalSupport,
-            maps:size(P#od_provider.eff_users),
-            maps:size(P#od_provider.eff_groups)
-        }
-    end, Providers),
-    Sorted = lists:keysort(SortPos, ProviderAttrs),
-    io:format("------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
-    io:format("Id                                           Status   Name                      Domain                              Version      Spaces   Tot. support   Eff users   Eff groups~n"),
-    io:format("------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
-    lists:foreach(fun({Id, Status, Name, Domain, Version, Spaces, Support, EffUsers, EffGroups}) ->
-        io:format("~-44s ~-8s ~-25ts ~-35ts ~-12s ~-8B ~-14s ~-11B ~-12B~n", [
-            Id, Status, Name, Domain, Version, Spaces, str_utils:format_byte_size(Support), EffUsers, EffGroups
-        ])
-    end, Sorted),
-    io:format("------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------~n"),
-    io:format("~B providers in total~n", [length(Sorted)]).
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Returns the entity logic plugin module that handles model logic.
 %% @end
 %%--------------------------------------------------------------------
@@ -200,7 +143,7 @@ get_ctx() ->
 %%--------------------------------------------------------------------
 -spec get_record_version() -> datastore_model:record_version().
 get_record_version() ->
-    6.
+    7.
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -256,8 +199,9 @@ get_record_struct(4) ->
     % effective relations (as intermediaries computing logic has changed).
     get_record_struct(3);
 get_record_struct(5) ->
-    % * new field - creation_time
-    % * new field - eff harvesters
+    % Changes:
+    %   * new field - creation_time
+    %   * new field - eff harvesters
     {record, [
         {name, string},
         {admin_email, string},
@@ -281,6 +225,32 @@ get_record_struct(5) ->
         {bottom_up_dirty, boolean}
     ]};
 get_record_struct(6) ->
+    % Changes:
+    %   * new field - last_activity
+    {record, [
+        {name, string},
+        {admin_email, string},
+        {root_macaroon, string},
+
+        {subdomain_delegation, boolean},
+        {domain, string},
+        {subdomain, string},
+
+        {latitude, float},
+        {longitude, float},
+
+        {spaces, #{string => integer}},
+
+        {eff_users, #{string => [{atom, string}]}},
+        {eff_groups, #{string => [{atom, string}]}},
+        {eff_harvesters, #{string => [{atom, string}]}},
+
+        {creation_time, integer},
+        {last_activity, integer}, % new field
+
+        {bottom_up_dirty, boolean}
+    ]};
+get_record_struct(7) ->
     % * root_macaroon renamed to root_token
     % * renamed field - spaces -> legacy_spaces
     % * new field - storages
@@ -306,6 +276,7 @@ get_record_struct(6) ->
         {eff_harvesters, #{string => [{atom, string}]}},
 
         {creation_time, integer},
+        {last_activity, integer},
 
         {bottom_up_dirty, boolean}
     ]}.
@@ -479,16 +450,61 @@ upgrade_record(5, Provider) ->
 
         Spaces,
 
+        EffUsers,
+        EffGroups,
+        EffHarvesters,
+
+        CreationTime,
+
+        BottomUpDirty
+    } = Provider,
+    {6, {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
+        EffUsers,
+        EffGroups,
+        EffHarvesters,
+
+        CreationTime,
+        0,
+
+        BottomUpDirty
+    }};
+upgrade_record(6, Provider) ->
+    {od_provider,
+        Name,
+        AdminEmail,
+        RootMacaroon,
+        SubdomainDelegation,
+        Domain,
+        Subdomain,
+
+        Latitude,
+        Longitude,
+
+        Spaces,
+
         _EffUsers,
         _EffGroups,
         _EffHarvesters,
 
         CreationTime,
+        LastActivity,
 
         _BottomUpDirty
     } = Provider,
     %% Eff relations are recalculated during cluster upgrade procedure
-    {6, #od_provider{
+    {7, #od_provider{
         name = Name,
         admin_email = AdminEmail,
         root_token = RootMacaroon,
@@ -508,6 +524,7 @@ upgrade_record(5, Provider) ->
         eff_spaces = #{},
 
         creation_time = CreationTime,
+        last_activity = LastActivity,
 
         bottom_up_dirty = true
     }}.

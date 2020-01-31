@@ -169,7 +169,7 @@ external_access_token_test(Config) ->
     PrefixFun = ?config(prefix_fun, Config),
 
     UserIdFun = fun(IdP) ->
-        linked_accounts:gen_user_id(IdP, UserSubjectIdFun(IdP))
+        oz_test_utils:call_oz(Config, linked_accounts, gen_user_id, [IdP, UserSubjectIdFun(IdP)])
     end,
 
     XAuthTokenFun = fun(IdP) ->

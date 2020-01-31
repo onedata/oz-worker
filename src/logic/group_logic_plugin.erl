@@ -655,13 +655,13 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
             % Group's membership in provider is checked in 'exists'
             true;
 
-        {?PROVIDER(_ProviderId), ?THROUGH_PROVIDER(_OtherProviderId)} ->
-            false;
-
         {?USER(ClientUserId), ?THROUGH_PROVIDER(ProviderId)} ->
             % Group's membership in provider is checked in 'exists'
             ClusterId = ProviderId,
             cluster_logic:has_eff_privilege(ClusterId, ClientUserId, ?CLUSTER_VIEW);
+
+        {?PROVIDER(_ProviderId), ?THROUGH_PROVIDER(_OtherProviderId)} ->
+            false;
 
         {?USER(ClientUserId), _} ->
             auth_by_membership(ClientUserId, Group);
@@ -680,6 +680,10 @@ authorize(Req = #el_req{operation = get, gri = GRI = #gri{aspect = instance, sco
         {?USER(ClientUserId), ?THROUGH_SPACE(SpaceId)} ->
             % Group's membership in space is checked in 'exists'
             space_logic:has_eff_privilege(SpaceId, ClientUserId, ?SPACE_VIEW);
+
+        {?PROVIDER(ProviderId), ?THROUGH_SPACE(SpaceId)} ->
+            % Group's membership in space is checked in 'exists'
+            space_logic:is_supported_by_provider(SpaceId, ProviderId);
 
         {?USER(ClientUserId), ?THROUGH_HANDLE_SERVICE(HServiceId)} ->
             % Group's membership in handle_service is checked in 'exists'

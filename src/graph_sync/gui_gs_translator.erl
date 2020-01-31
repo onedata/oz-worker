@@ -129,9 +129,7 @@ translate_user(GRI = #gri{type = od_user, id = UserId, aspect = instance, scope 
         basic_auth_enabled = BasicAuthEnabled,
         password_hash = PasswordHash,
         full_name = FullName,
-        username = Username,
-        default_space = DefaultSpace,
-        default_provider = DefaultProvider
+        username = Username
     } = User,
     #{
         <<"scope">> => <<"private">>,
@@ -139,8 +137,6 @@ translate_user(GRI = #gri{type = od_user, id = UserId, aspect = instance, scope 
         <<"hasPassword">> => PasswordHash /= undefined,
         <<"fullName">> => FullName,
         <<"username">> => utils:undefined_to_null(Username),
-        <<"defaultSpaceId">> => utils:undefined_to_null(DefaultSpace),
-        <<"defaultProviderId">> => utils:undefined_to_null(DefaultProvider),
         <<"tokenList">> => gri:serialize(#gri{type = od_token, id = undefined, aspect = {user_named_tokens, UserId}}),
         <<"linkedAccountList">> => gri:serialize(GRI#gri{aspect = linked_accounts, scope = private}),
         <<"groupList">> => gri:serialize(GRI#gri{aspect = eff_groups, scope = private}),
@@ -540,7 +536,7 @@ translate_provider(GRI = #gri{id = Id, aspect = instance, scope = private}, Prov
         <<"cluster">> => gri:serialize(#gri{
             type = od_cluster, id = ClusterId, aspect = instance, scope = auto
         }),
-        <<"online">> => provider_connection:is_online(Id),
+        <<"online">> => provider_connections:is_online(Id),
         <<"spaceList">> => gri:serialize(GRI#gri{aspect = {user_spaces, UserId}, scope = private}),
         <<"info">> => #{
             <<"creationTime">> => CreationTime

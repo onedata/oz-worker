@@ -222,7 +222,7 @@ choose_provider_for_public_view(ShareId) ->
         {undefined, undefined} ->
             Result;
         {ChosenProviderId, _} ->
-            case provider_connection:is_online(ChosenProviderId) of
+            case provider_connections:is_online(ChosenProviderId) of
                 true ->
                     Result;
                 false ->
@@ -239,7 +239,7 @@ choose_provider_for_space(SpaceId) ->
     {ok, Providers} = space_logic:get_eff_providers(?ROOT, SpaceId),
     <<OzWorkerMajorVersion:6/binary, _/binary>> = oz_worker:get_release_version(),
     EligibleProviders = lists:filtermap(fun(ProviderId) ->
-        case provider_connection:is_online(ProviderId) of
+        case provider_connections:is_online(ProviderId) of
             false ->
                 false;
             true ->
