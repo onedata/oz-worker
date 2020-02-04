@@ -96,7 +96,7 @@ set_user_password(Auth, UserId, NewPassword) ->
 
 
 -spec create_user(aai:auth(), Data :: map()) ->
-    {ok, od_user:id()} | {error, term()}.
+    {ok, od_user:id()} | errors:error().
 create_user(Auth, Data) ->
     user_logic:create(Auth, Data).
 
