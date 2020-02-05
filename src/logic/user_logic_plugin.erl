@@ -425,6 +425,7 @@ update(#el_req{gri = #gri{id = UserId, aspect = oz_privileges}, data = Data}) ->
 -spec delete(entity_logic:req()) -> entity_logic:delete_result().
 delete(#el_req{gri = #gri{id = UserId, aspect = instance}}) ->
     % Invalidate client tokens
+    temporary_token_secret:clear(?SUB(user, UserId)),
     token_logic:delete_all_user_named_tokens(?USER(UserId), UserId),
     entity_graph:delete_with_relations(od_user, UserId);
 

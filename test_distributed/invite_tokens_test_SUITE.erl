@@ -897,7 +897,7 @@ check_bad_token_scenarios(Tc = #testcase{token_type = ?INVITE_TOKEN(InviteTokenT
         id = <<"123123123123">>,
         subject = ?SUB(user, <<"123">>),
         type = ?INVITE_TOKEN(InviteTokenType, TargetEntityId),
-        persistent = false
+        persistence = {temporary, 1}
     }, <<"secret">>, []),
 
     lists:foreach(fun(EligibleConsumerType) ->
@@ -1331,7 +1331,7 @@ check_temporary_token_revocation(Tc = #testcase{token_type = TokenType}) ->
         ozt_tokens:revoke_all_temporary_tokens(EligibleSubject),
         lists:foreach(fun(Token) ->
             Consumer = create_consumer_with_privs_to_consume(Tc, random_eligible),
-            ?assertMatch(?ERROR_TOKEN_INVALID, consume_token(Tc, Consumer, Token))
+            ?assertMatch(?ERROR_TOKEN_REVOKED, consume_token(Tc, Consumer, Token))
         end, [TokenAlpha, TokenBeta, TokenGamma])
     end, Tc#testcase.eligible_to_invite).
 

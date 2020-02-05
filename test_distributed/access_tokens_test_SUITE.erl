@@ -338,16 +338,38 @@ check_bad_token_scenarios(RequestSpec) ->
     ])),
 
     lists:foreach(fun(EligibleSubject) ->
-        ForgedToken = tokens:construct(#token{
+        Prototype = #token{
             onezone_domain = ozt:get_domain(),
             id = <<"123123123123">>,
             subject = EligibleSubject,
             type = ?ACCESS_TOKEN,
-            persistent = false
-        }, <<"secret">>, []),
+            persistence = named
+        },
+
+        ForgedTokenAlpha = tokens:construct(Prototype, <<"secret">>, []),
         ?assertEqual(
             ?ERROR_TOKEN_INVALID,
-            make_request_with_random_context(RequestSpec, EligibleSubject, {token, ForgedToken})
+            make_request_with_random_context(RequestSpec, EligibleSubject, {token, ForgedTokenAlpha})
+        ),
+
+        {ok, CurrentGeneration} = case EligibleSubject of
+            ?SUB(user, UserId) -> ozt:rpc(token_logic, get_user_temporary_token_generation, [?ROOT, UserId]);
+            ?SUB(?ONEPROVIDER, PrId) -> ozt:rpc(token_logic, get_provider_temporary_token_generation, [?ROOT, PrId])
+        end,
+        % If the token generation is different than actual subject's token generation,
+        % it is considered revoked. This error might be confusing in regard to forged
+        % tokens, but useful for subjects with good intentions.
+        ForgedTokenBeta = tokens:construct(Prototype#token{persistence = {temporary, 857346}}, <<"secret">>, []),
+        ?assertEqual(
+            ?ERROR_TOKEN_REVOKED,
+            make_request_with_random_context(RequestSpec, EligibleSubject, {token, ForgedTokenBeta})
+        ),
+
+        % If the generation is the same, forged token is considered invalid.
+        ForgedTokenGamma = tokens:construct(Prototype#token{persistence = {temporary, CurrentGeneration}}, <<"secret">>, []),
+        ?assertEqual(
+            ?ERROR_TOKEN_INVALID,
+            make_request_with_random_context(RequestSpec, EligibleSubject, {token, ForgedTokenGamma})
         )
     end, RequestSpec#request_spec.eligible_subjects).
 
@@ -423,7 +445,7 @@ check_temporary_token_revocation(RequestSpec) ->
         ClientAuth = gen_client_auth(EligibleSubject, temporary),
         ?assertMatch(ok, make_request_with_random_context(RequestSpec, EligibleSubject, ClientAuth)),
         ozt_tokens:revoke_all_temporary_tokens(EligibleSubject),
-        ?assertMatch(?ERROR_TOKEN_INVALID, make_request_with_random_context(RequestSpec, EligibleSubject, ClientAuth))
+        ?assertMatch(?ERROR_TOKEN_REVOKED, make_request_with_random_context(RequestSpec, EligibleSubject, ClientAuth))
     end, RequestSpec#request_spec.eligible_subjects).
 
 

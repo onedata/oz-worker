@@ -349,6 +349,7 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     }, _}} = fetch_entity(#gri{aspect = instance, id = ProviderId}),
 
     % Invalidate client tokens
+    temporary_token_secret:clear(?SUB(?ONEPROVIDER, ProviderId)),
     token_logic:delete_all_provider_named_tokens(?PROVIDER(ProviderId), ProviderId),
 
     lists:foreach(fun(HarvesterId) ->

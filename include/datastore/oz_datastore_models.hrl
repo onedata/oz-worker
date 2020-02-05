@@ -485,7 +485,8 @@
 %% Record that stores a shared token secret for temporary tokens of given
 %% subject (user or provider).
 -record(temporary_token_secret, {
-    secret :: tokens:secret()
+    secret :: tokens:secret(),
+    generation :: tokens:temporary_token_generation()
 }).
 
 %% @todo VFS-5554 This record is deprecated, kept for backward compatibility

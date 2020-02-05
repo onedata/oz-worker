@@ -79,6 +79,9 @@ create_response(#gri{aspect = {provider_temporary_token, _}}, _, value, Token) -
 %% @end
 %%--------------------------------------------------------------------
 -spec get_response(entity_logic:gri(), Resource :: term()) -> #rest_resp{}.
+get_response(#gri{type = temporary_token_secret, scope = shared}, Generation) ->
+    rest_translator:ok_body_reply(#{<<"generation">> => Generation});
+
 get_response(#gri{id = undefined, aspect = list}, Tokens) ->
     tokens_reply(Tokens);
 get_response(#gri{id = undefined, aspect = {user_named_tokens, _}}, Tokens) ->
@@ -86,8 +89,10 @@ get_response(#gri{id = undefined, aspect = {user_named_tokens, _}}, Tokens) ->
 get_response(#gri{id = undefined, aspect = {provider_named_tokens, _}}, Tokens) ->
     tokens_reply(Tokens);
 
-get_response(#gri{aspect = instance}, TokenData) ->
+get_response(#gri{aspect = instance, scope = private}, TokenData) ->
     named_token_reply(TokenData);
+get_response(#gri{aspect = instance, scope = shared}, #{<<"revoked">> := Revoked}) ->
+    rest_translator:ok_body_reply(#{<<"revoked">> => Revoked});
 get_response(#gri{aspect = {user_named_token, _}}, TokenData) ->
     named_token_reply(TokenData);
 get_response(#gri{aspect = {provider_named_token, _}}, TokenData) ->

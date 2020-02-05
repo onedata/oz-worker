@@ -399,10 +399,10 @@ gui_tokens_are_invalidated_upon_temporary_token_secret_change(Config) ->
 
     % Make sure that this works for the tested user
     oz_test_utils:call_oz(Config, temporary_token_secret, regenerate, [?SUB(user, UserId)]),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token2, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token3, ?OPW_AUD(ProviderId))),
-    ?assertMatch(?ERROR_TOKEN_INVALID, verify_token(Config, Token4, ?OPP_AUD(ProviderId))).
+    ?assertMatch(?ERROR_TOKEN_REVOKED, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_TOKEN_REVOKED, verify_token(Config, Token2, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
+    ?assertMatch(?ERROR_TOKEN_REVOKED, verify_token(Config, Token3, ?OPW_AUD(ProviderId))),
+    ?assertMatch(?ERROR_TOKEN_REVOKED, verify_token(Config, Token4, ?OPP_AUD(ProviderId))).
 
 
 gui_tokens_are_invalidated_when_user_is_deleted(Config) ->

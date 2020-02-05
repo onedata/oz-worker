@@ -363,16 +363,23 @@ resolve_audience_for_rest_interface(Req) ->
 %%--------------------------------------------------------------------
 -spec verify_token_auth(tokens:token(), aai:auth_ctx(), [caveats:type()]) ->
     {ok, aai:auth()} | errors:error().
-verify_token_auth(Token = #token{persistent = false, subject = Subject}, AuthCtx, SupportedCaveats) ->
+verify_token_auth(Token = #token{persistence = {temporary, Generation}, subject = Subject}, AuthCtx, SupportedCaveats) ->
     % This check is not required in case of named tokens, which are deleted
     % alongside the user / provider.
     case subject_exists(Subject) of
         false ->
             ?ERROR_TOKEN_INVALID;
         true ->
-            verify_token_auth(Token, AuthCtx, SupportedCaveats, temporary_token_secret:get(Subject))
+            case temporary_token_secret:get(Subject) of
+                {Secret, Generation} ->
+                    temporary_token_secret:get(Subject),
+                    verify_token_auth(Token, AuthCtx, SupportedCaveats, Secret);
+                {_, _} ->
+                    % Token generation is different than current user's secret generation
+                    ?ERROR_TOKEN_REVOKED
+            end
     end;
-verify_token_auth(Token = #token{persistent = true}, AuthCtx, SupportedCaveats) ->
+verify_token_auth(Token = #token{persistence = named}, AuthCtx, SupportedCaveats) ->
     case od_token:get(Token#token.id) of
         {ok, #document{value = #od_token{revoked = true}}} ->
             ?ERROR_TOKEN_REVOKED;
