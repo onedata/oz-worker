@@ -303,10 +303,10 @@ delete(#el_req{gri = #gri{id = undefined, aspect = {provider_named_tokens, Provi
     end, ProviderTokens);
 
 delete(#el_req{gri = #gri{aspect = {user_temporary_tokens, UserId}}}) ->
-    temporary_token_secret:regenerate(?SUB(user, UserId));
+    temporary_token_secret:regenerate_for_subject(?SUB(user, UserId));
 
 delete(#el_req{gri = #gri{aspect = {provider_temporary_tokens, PrId}}}) ->
-    temporary_token_secret:regenerate(?SUB(?ONEPROVIDER, PrId)).
+    temporary_token_secret:regenerate_for_subject(?SUB(?ONEPROVIDER, PrId)).
 
 
 %%--------------------------------------------------------------------
@@ -593,7 +593,7 @@ create_temporary_token(Subject, Data) ->
     end,
     IsTtlAllowed orelse throw(?ERROR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTTL)),
 
-    {Secret, Generation} = temporary_token_secret:get(Subject),
+    {Secret, Generation} = temporary_token_secret:get_for_subject(Subject),
     Prototype = #token{
         onezone_domain = oz_worker:get_domain(),
         id = datastore_key:new(),

@@ -10,6 +10,10 @@
 %%% belonging to given subject (user or provider).
 %%% The secret can be regenerated, in such case all existing
 %%% temporary tokens of the subject become invalid.
+%%%
+%%% Apart from above, this module implements entity logic plugin behaviour and
+%%% handles entity logic operations corresponding to temporary_token_secret
+%%% model - fetching the temporary token generation and subscribing for changes.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(temporary_token_secret).
@@ -27,7 +31,7 @@
 }).
 
 %% API
--export([get/1, regenerate/1, clear/1, key_to_subject/1]).
+-export([get_for_subject/1, regenerate_for_subject/1, delete_for_subject/1, key_to_subject/1]).
 
 %% datastore_model callbacks
 -export([get_record_struct/1]).
@@ -48,8 +52,8 @@
 %% Retrieves the shared token secret for given subject.
 %% @end
 %%--------------------------------------------------------------------
--spec get(aai:subject()) -> {tokens:secret(), tokens:temporary_token_generation()}.
-get(Subject) ->
+-spec get_for_subject(aai:subject()) -> {tokens:secret(), tokens:temporary_token_generation()}.
+get_for_subject(Subject) ->
     Key = subject_to_key(Subject),
     {ok, #document{value = Record}} = case datastore_model:get(?CTX, Key) of
         {error, not_found} ->
@@ -67,8 +71,8 @@ get(Subject) ->
 %% Causes all existing temporary tokens of given subject to be invalidated.
 %% @end
 %%--------------------------------------------------------------------
--spec regenerate(aai:subject()) -> ok.
-regenerate(Subject) ->
+-spec regenerate_for_subject(aai:subject()) -> ok.
+regenerate_for_subject(Subject) ->
     Diff = fun(#temporary_token_secret{generation = Generation}) ->
         {ok, #temporary_token_secret{
             secret = tokens:generate_secret(),
@@ -86,8 +90,15 @@ regenerate(Subject) ->
         [aai:subject_to_printable(Subject)]
     ).
 
--spec clear(aai:subject()) -> ok.
-clear(Subject) ->
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Completely deletes the shared temporary token secret for given subject.
+%% Intended for cleanup when the subject is deleted from the system.
+%% @end
+%%--------------------------------------------------------------------
+-spec delete_for_subject(aai:subject()) -> ok.
+delete_for_subject(Subject) ->
     datastore_model:delete(?CTX, subject_to_key(Subject)).
 
 
@@ -111,7 +122,7 @@ init_secret_for_subject(Subject) ->
     critical_section:run({create_secret, Subject}, fun() ->
         % Make sure the secret wasn't initialized by another process
         case datastore_model:get(?CTX, subject_to_key(Subject)) of
-            {error, not_found} -> regenerate(Subject);
+            {error, not_found} -> regenerate_for_subject(Subject);
             {ok, _} -> ok
         end
     end).
@@ -164,7 +175,7 @@ fetch_entity(#gri{id = SubjectId, aspect = Aspect, scope = shared}) ->
         provider -> ?SUB(?ONEPROVIDER, SubjectId)
     end,
     try
-        {_, Generation} = ?MODULE:get(Subject),
+        {_, Generation} = ?MODULE:get_for_subject(Subject),
         {true, {Generation, Generation}}
     catch _:_ ->
         ?ERROR_NOT_FOUND

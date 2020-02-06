@@ -356,10 +356,11 @@ check_bad_token_scenarios(RequestSpec) ->
             ?SUB(user, UserId) -> ozt:rpc(token_logic, get_user_temporary_token_generation, [?ROOT, UserId]);
             ?SUB(?ONEPROVIDER, PrId) -> ozt:rpc(token_logic, get_provider_temporary_token_generation, [?ROOT, PrId])
         end,
-        % If the token generation is different than actual subject's token generation,
+
+        % If the token generation is older than actual subject's token generation,
         % it is considered revoked. This error might be confusing in regard to forged
         % tokens, but useful for subjects with good intentions.
-        ForgedTokenBeta = tokens:construct(Prototype#token{persistence = {temporary, 857346}}, <<"secret">>, []),
+        ForgedTokenBeta = tokens:construct(Prototype#token{persistence = {temporary, CurrentGeneration - 1}}, <<"secret">>, []),
         ?assertEqual(
             ?ERROR_TOKEN_REVOKED,
             make_request_with_random_context(RequestSpec, EligibleSubject, {token, ForgedTokenBeta})
@@ -370,6 +371,13 @@ check_bad_token_scenarios(RequestSpec) ->
         ?assertEqual(
             ?ERROR_TOKEN_INVALID,
             make_request_with_random_context(RequestSpec, EligibleSubject, {token, ForgedTokenGamma})
+        ),
+
+        % Future generation implies that the token must have been forged.
+        ForgedTokenDelta = tokens:construct(Prototype#token{persistence = {temporary, 857346}}, <<"secret">>, []),
+        ?assertEqual(
+            ?ERROR_TOKEN_INVALID,
+            make_request_with_random_context(RequestSpec, EligibleSubject, {token, ForgedTokenDelta})
         )
     end, RequestSpec#request_spec.eligible_subjects).
 

@@ -2039,10 +2039,12 @@ get_user_temporary_token_generation(BasicEnv, UserIdBinding, CorrectClientsBindi
     CorrectClients = [map_client(BasicEnv, C) || C <- CorrectClientsBindings],
     ForbiddenClients = all_clients(BasicEnv) -- CorrectClients,
 
-    ExpGeneration = rand:uniform(15),
+    {ok, CurrentGeneration} = ozt:rpc(token_logic, get_user_temporary_token_generation, [?ROOT, UserId]),
+    RevocationCount = rand:uniform(15),
     lists:foreach(fun(_) ->
         ozt_tokens:revoke_all_temporary_tokens(?SUB(user, UserId))
-    end, lists:seq(1, ExpGeneration)),
+    end, lists:seq(1, RevocationCount)),
+    ExpGeneration = CurrentGeneration + RevocationCount,
 
     ?assertMatch(
         #token{persistence = {temporary, ExpGeneration}},
@@ -2059,10 +2061,10 @@ get_user_temporary_token_generation(BasicEnv, UserIdBinding, CorrectClientsBindi
             correct = [
                 root,
                 {admin, [?OZ_TOKENS_MANAGE]} |
-                CorrectClients
+                replace_temporary_tokens_with_named_for_clients(CorrectClients)
             ],
             unauthorized = [nobody],
-            forbidden = ForbiddenClients
+            forbidden = replace_temporary_tokens_with_named_for_clients(ForbiddenClients)
         },
         logic_spec = #logic_spec{
             module = token_logic,
@@ -2106,10 +2108,12 @@ get_provider_temporary_token_generation(BasicEnv, ProviderIdBinding, CorrectClie
     CorrectClients = [map_client(BasicEnv, C) || C <- CorrectClientsBindings],
     ForbiddenClients = all_clients(BasicEnv) -- CorrectClients,
 
-    ExpGeneration = rand:uniform(15),
+    {ok, CurrentGeneration} = ozt:rpc(token_logic, get_provider_temporary_token_generation, [?ROOT, ProviderId]),
+    RevocationCount = rand:uniform(15),
     lists:foreach(fun(_) ->
         ozt_tokens:revoke_all_temporary_tokens(?SUB(?ONEPROVIDER, ProviderId))
-    end, lists:seq(1, ExpGeneration)),
+    end, lists:seq(1, RevocationCount)),
+    ExpGeneration = CurrentGeneration + RevocationCount,
 
     ?assertMatch(
         #token{persistence = {temporary, ExpGeneration}},
@@ -2126,14 +2130,14 @@ get_provider_temporary_token_generation(BasicEnv, ProviderIdBinding, CorrectClie
             correct = [
                 root,
                 {admin, [?OZ_TOKENS_MANAGE]} |
-                CorrectClients
+                replace_temporary_tokens_with_named_for_clients(CorrectClients)
             ],
             unauthorized = [nobody],
-            forbidden = ForbiddenClients
+            forbidden = replace_temporary_tokens_with_named_for_clients(ForbiddenClients)
         },
         logic_spec = #logic_spec{
             module = token_logic,
-            function = get_user_temporary_token_generation,
+            function = get_provider_temporary_token_generation,
             args = [auth, ProviderId],
             expected_result = ?OK_TERM(VerifyFun)
         },
@@ -2543,18 +2547,6 @@ revoke_all_user_temporary_tokens(BasicEnv, UserIdBinding) ->
     {user, UserId} = map_client(BasicEnv, UserIdBinding),
     SessionId = ozt_http:simulate_login(UserId),
 
-    % This test revokes users' temporary tokens, which are by default used
-    % by the test framework for REST calls. Force use of named tokens.
-    ReplaceTokensForUsers = fun(Clients) ->
-        lists:map(fun
-            ({user, UId}) ->
-                #named_token_data{token = UserNamedToken} = create_user_named_token(UId, ?ACCESS_TOKEN),
-                {user, UId, element(2, {ok, _} = tokens:serialize(UserNamedToken))};
-            (Other) ->
-                Other
-        end, Clients)
-    end,
-
     CorrectClients = [{user, UserId}],
     ForbiddenClients = all_clients(BasicEnv) -- CorrectClients,
 
@@ -2579,10 +2571,10 @@ revoke_all_user_temporary_tokens(BasicEnv, UserIdBinding) ->
                 {admin, [?OZ_TOKENS_MANAGE]} |
                 % Use a named token for authorizing the user as temporary tokens
                 % get deleted in this test
-                ReplaceTokensForUsers(CorrectClients)
+                replace_temporary_tokens_with_named_for_clients(CorrectClients)
             ],
             unauthorized = [nobody],
-            forbidden = ReplaceTokensForUsers(ForbiddenClients)
+            forbidden = replace_temporary_tokens_with_named_for_clients(ForbiddenClients)
         },
         logic_spec = #logic_spec{
             module = token_logic,
@@ -2600,7 +2592,7 @@ revoke_all_user_temporary_tokens(BasicEnv, UserIdBinding) ->
 
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
-            correct = [{user, UserId}]
+            correct = replace_temporary_tokens_with_named_for_clients([{user, UserId}])
         },
         logic_spec = undefined,
         rest_spec = RestSpec#rest_spec{
@@ -2618,18 +2610,6 @@ revoke_all_provider_temporary_tokens(_Config) ->
 
 revoke_all_provider_temporary_tokens(BasicEnv, ProviderIdBinding, CorrectClientsBindings) ->
     {provider, ProviderId} = map_client(BasicEnv, ProviderIdBinding),
-
-    % This test revokes providers' temporary tokens, which are by default used
-    % by the test framework for REST calls. Force use of named tokens.
-    ReplaceTokensForProviders = fun(Clients) ->
-        lists:map(fun
-            ({provider, PrId}) ->
-                ProviderRootToken = ozt_providers:get_root_token(PrId),
-                {provider, PrId, ozt_tokens:ensure_serialized(ProviderRootToken)};
-            (Other) ->
-                Other
-        end, Clients)
-    end,
 
     CorrectClients = [map_client(BasicEnv, C) || C <- CorrectClientsBindings],
     ForbiddenClients = all_clients(BasicEnv) -- CorrectClients,
@@ -2652,10 +2632,10 @@ revoke_all_provider_temporary_tokens(BasicEnv, ProviderIdBinding, CorrectClients
             correct = [
                 root,
                 {admin, [?OZ_TOKENS_MANAGE]} |
-                ReplaceTokensForProviders(CorrectClients)
+                replace_temporary_tokens_with_named_for_clients(CorrectClients)
             ],
             unauthorized = [nobody],
-            forbidden = ReplaceTokensForProviders(ForbiddenClients)
+            forbidden = replace_temporary_tokens_with_named_for_clients(ForbiddenClients)
         },
         logic_spec = #logic_spec{
             module = token_logic,
@@ -2673,7 +2653,7 @@ revoke_all_provider_temporary_tokens(BasicEnv, ProviderIdBinding, CorrectClients
 
     ApiTestSpec2 = ApiTestSpec#api_test_spec{
         client_spec = #client_spec{
-            correct = ReplaceTokensForProviders([{provider, ProviderId}])
+            correct = replace_temporary_tokens_with_named_for_clients([{provider, ProviderId}])
         },
         logic_spec = undefined,
         rest_spec = RestSpec#rest_spec{
@@ -2681,6 +2661,19 @@ revoke_all_provider_temporary_tokens(BasicEnv, ProviderIdBinding, CorrectClients
         }
     },
     ?assert(api_test_utils:run_tests(ozt:get_test_config(), ApiTestSpec2, EnvSetUpFun, undefined, VerifyEndFun)).
+
+
+% Required in tests that revoke temporary tokens during the testing procedure,
+% which are by default used by the test framework for REST calls.
+replace_temporary_tokens_with_named_for_clients(Clients) ->
+    lists:map(fun
+        ({provider, PrId}) ->
+            ProviderRootToken = ozt_providers:get_root_token(PrId),
+            {provider, PrId, ozt_tokens:ensure_serialized(ProviderRootToken)};
+        ({user, UId}) ->
+            #named_token_data{token = UserNamedToken} = create_user_named_token(UId, ?ACCESS_TOKEN),
+            {user, UId, element(2, {ok, _} = tokens:serialize(UserNamedToken))}
+    end, Clients).
 
 
 assert_temporary_revoked(IsRevoked, Token = #token{subject = Subject}) ->

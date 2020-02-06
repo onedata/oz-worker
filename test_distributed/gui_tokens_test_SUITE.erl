@@ -391,14 +391,14 @@ gui_tokens_are_invalidated_upon_temporary_token_secret_change(Config) ->
 
     % Temporary token secret is shared per subject, so regenerating the secret of
     % AnotherUser should not affect the tested user
-    oz_test_utils:call_oz(Config, temporary_token_secret, regenerate, [?SUB(user, AnotherUser)]),
+    oz_test_utils:call_oz(Config, temporary_token_secret, regenerate_for_subject, [?SUB(user, AnotherUser)]),
     ?assertMatch({true, _}, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
     ?assertMatch({true, _}, verify_token(Config, Token2, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
     ?assertMatch({true, _}, verify_token(Config, Token3, ?OPW_AUD(ProviderId))),
     ?assertMatch({true, _}, verify_token(Config, Token4, ?OPP_AUD(ProviderId))),
 
     % Make sure that this works for the tested user
-    oz_test_utils:call_oz(Config, temporary_token_secret, regenerate, [?SUB(user, UserId)]),
+    oz_test_utils:call_oz(Config, temporary_token_secret, regenerate_for_subject, [?SUB(user, UserId)]),
     ?assertMatch(?ERROR_TOKEN_REVOKED, verify_token(Config, Token1, ?OZW_AUD(?ONEZONE_CLUSTER_ID))),
     ?assertMatch(?ERROR_TOKEN_REVOKED, verify_token(Config, Token2, ?OZP_AUD(?ONEZONE_CLUSTER_ID))),
     ?assertMatch(?ERROR_TOKEN_REVOKED, verify_token(Config, Token3, ?OPW_AUD(ProviderId))),
