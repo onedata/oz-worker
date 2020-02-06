@@ -53,7 +53,6 @@
     remove_dns_txt_record/3
 ]).
 -export([
-    check_my_ports/2,
     get_current_time/1,
     verify_provider_identity/2, verify_provider_identity/3
 ]).
@@ -519,23 +518,6 @@ revoke_support(Auth, ProviderId, SpaceId) ->
         auth = Auth,
         gri = #gri{type = od_provider, id = ProviderId, aspect = {space, SpaceId}}
     }).
-
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Performs port check operation by requesting all specified URLs and returning
-%% whether the requests succeeded.
-%% @end
-%%--------------------------------------------------------------------
--spec check_my_ports(Auth :: aai:auth(), Data :: map()) ->
-    ok | errors:error().
-check_my_ports(Auth, Data) ->
-    ?CREATE_RETURN_DATA(entity_logic:handle(#el_req{
-        operation = create,
-        auth = Auth,
-        gri = #gri{type = od_provider, id = undefined, aspect = check_my_ports},
-        data = Data
-    })).
 
 
 %%--------------------------------------------------------------------

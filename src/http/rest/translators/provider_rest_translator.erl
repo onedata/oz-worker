@@ -53,9 +53,6 @@ create_response(#gri{aspect = provider_registration_token}, _, value, Token) ->
     {ok, Serialized} = tokens:serialize(Token),
     rest_translator:ok_body_reply(#{<<"token">> => Serialized});
 
-create_response(#gri{aspect = check_my_ports}, _, value, Value) ->
-    rest_translator:ok_body_reply(Value);
-
 create_response(#gri{aspect = map_idp_user}, _, value, UserId) ->
     rest_translator:ok_body_reply(#{
         <<"userId">> => UserId

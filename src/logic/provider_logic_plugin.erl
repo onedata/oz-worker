@@ -66,7 +66,6 @@ fetch_entity(#gri{id = ProviderId}) ->
 operation_supported(create, instance, private) -> true;
 operation_supported(create, instance_dev, private) -> true;
 operation_supported(create, support, private) -> true;
-operation_supported(create, check_my_ports, private) -> true;
 operation_supported(create, map_idp_user, private) -> true;
 operation_supported(create, map_idp_group, private) -> true;
 operation_supported(create, verify_provider_identity, private) -> true;
@@ -150,13 +149,6 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     NewGRI = #gri{type = od_space, id = SpaceId, aspect = instance, scope = protected},
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
     {ok, resource, {NewGRI, {SpaceData, Rev}}};
-
-create(Req = #el_req{gri = #gri{aspect = check_my_ports}}) ->
-    try
-        {ok, value, test_connection(Req#el_req.data)}
-    catch _:_ ->
-        ?ERROR_INTERNAL_SERVER_ERROR
-    end;
 
 create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}, data = Data}) ->
     case fetch_entity(#gri{id = ProviderId}) of
@@ -426,9 +418,6 @@ exists(#el_req{gri = #gri{id = Id}}, #od_provider{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
-authorize(#el_req{operation = create, gri = #gri{aspect = check_my_ports}}, _) ->
-    true;
-
 authorize(#el_req{operation = create, gri = #gri{aspect = map_idp_user}}, _) ->
     true;
 
@@ -670,9 +659,6 @@ validate(#el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}) 
             <<"ttl">> => {integer, {not_lower_than, 0}}
         }
     };
-
-validate(#el_req{operation = create, gri = #gri{aspect = check_my_ports}}) -> #{
-};
 
 validate(#el_req{operation = create, gri = #gri{aspect = map_idp_user}}) -> #{
     required => #{
