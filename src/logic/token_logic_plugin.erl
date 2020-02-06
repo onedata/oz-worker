@@ -149,7 +149,7 @@ create(#el_req{gri = #gri{id = undefined, aspect = examine}, data = Data}) ->
 create(#el_req{gri = #gri{id = undefined, aspect = confine}, data = Data}) ->
     Token = #token{type = Type, subject = Subject} = maps:get(<<"token">>, Data),
     Caveats = maps:get(<<"caveats">>, Data),
-    validate_subject_and_audience_caveats(Type, Subject, Caveats),
+    validate_subject_and_service_caveats(Type, Subject, Caveats),
     {ok, value, tokens:confine(Token, Caveats)};
 
 create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_access_token}, data = Data}) ->
@@ -198,13 +198,15 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_invite_to
 build_auth_ctx(Auth, Data) ->
     PeerIp = maps:get(<<"peerIp">>, Data, undefined),
     Interface = maps:get(<<"interface">>, Data, undefined),
+    Service = maps:get(<<"service">>, Data, undefined),
     DataAccessCaveatsPolicy = case maps:get(<<"allowDataAccessCaveats">>, Data, false) of
         true -> allow_data_access_caveats;
         false -> disallow_data_access_caveats
     end,
-    token_auth:build_auth_ctx(
-        Interface, PeerIp, aai:auth_to_audience(Auth), DataAccessCaveatsPolicy
-    ).
+    #auth_ctx{
+        ip = PeerIp, interface = Interface, service = Service,
+        consumer = Auth#auth.subject, data_access_caveats_policy = DataAccessCaveatsPolicy
+    }.
 
 
 %%--------------------------------------------------------------------
@@ -436,11 +438,13 @@ validate(#el_req{operation = create, gri = #gri{aspect = confine}}) ->
 validate(#el_req{operation = create, gri = #gri{aspect = verify_access_token}}) ->
     validate_verify_operation(#{
         <<"interface">> => {atom, cv_interface:valid_interfaces()},
+        <<"service">> => {service, any},
         <<"allowDataAccessCaveats">> => {boolean, any}
     });
 validate(#el_req{operation = create, gri = #gri{aspect = verify_identity_token}}) ->
     validate_verify_operation(#{
         <<"interface">> => {atom, cv_interface:valid_interfaces()},
+        <<"service">> => {service, any},
         <<"allowDataAccessCaveats">> => {boolean, any}
     });
 validate(#el_req{operation = create, gri = #gri{aspect = verify_invite_token}}) ->
@@ -558,7 +562,7 @@ create_named_token(Subject, Data) ->
     end,
     Type = maps:get(<<"type">>, Data, ?ACCESS_TOKEN),
     Caveats = maps:get(<<"caveats">>, Data, []),
-    validate_subject_and_audience_caveats(Type, Subject, Caveats),
+    validate_subject_and_service_caveats(Type, Subject, Caveats),
 
     CustomMetadata = maps:get(<<"customMetadata">>, Data, #{}),
     Secret = tokens:generate_secret(),
@@ -584,7 +588,7 @@ create_named_token(Subject, Data) ->
 create_temporary_token(Subject, Data) ->
     Type = maps:get(<<"type">>, Data, ?ACCESS_TOKEN),
     Caveats = maps:get(<<"caveats">>, Data, []),
-    validate_subject_and_audience_caveats(Type, Subject, Caveats),
+    validate_subject_and_service_caveats(Type, Subject, Caveats),
 
     MaxTTL = ?MAX_TEMPORARY_TOKEN_TTL,
     IsTtlAllowed = case infer_ttl(Caveats) of
@@ -606,17 +610,17 @@ create_temporary_token(Subject, Data) ->
 
 
 %% @private
--spec validate_subject_and_audience_caveats(tokens:type(), aai:subject(), [caveats:caveat()]) ->
+-spec validate_subject_and_service_caveats(tokens:type(), aai:subject(), [caveats:caveat()]) ->
     ok | no_return().
-validate_subject_and_audience_caveats(Type, Subject, Caveats) ->
-    lists:foreach(fun(#cv_audience{whitelist = Whitelist}) ->
-        lists:foreach(fun(Audience) ->
-           case token_auth:validate_subject_and_audience(Type, Subject, Audience) of
-               ok -> ok;
-               {error, _} = Error -> throw(Error)
-           end
+validate_subject_and_service_caveats(Type, Subject, Caveats) ->
+    lists:foreach(fun(#cv_service{whitelist = Whitelist}) ->
+        lists:foreach(fun(Service) ->
+            case token_auth:validate_subject_and_service(Type, Subject, Service) of
+                ok -> ok;
+                {error, _} = Error -> throw(Error)
+            end
         end, Whitelist)
-    end, caveats:filter([cv_audience], Caveats)).
+    end, caveats:filter([cv_service], Caveats)).
 
 
 %% @private

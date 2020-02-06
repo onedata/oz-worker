@@ -42,15 +42,14 @@
     entity_logic:create_result() | errors:error().
 consume(ConsumerAuth, Token, ExpectedType, ConsumeFun) ->
     PeerIp = ConsumerAuth#auth.peer_ip,
-    ConsumerAudience = aai:auth_to_audience(ConsumerAuth),
-    AuthCtx = token_auth:build_auth_ctx(undefined, PeerIp, ConsumerAudience),
+    ConsumerSubject = ConsumerAuth#auth.subject,
+    AuthCtx = #auth_ctx{ip = PeerIp, consumer = ConsumerSubject},
     case token_auth:verify_invite_token(Token, ExpectedType, AuthCtx) of
         {ok, _} -> ok;
         {error, _} = Err1 -> throw(Err1)
     end,
 
     #token{type = ?INVITE_TOKEN(InviteTokenType, _)} = Token,
-    ConsumerSubject = ConsumerAuth#auth.subject,
     is_valid_consumer(InviteTokenType, ConsumerSubject) orelse
         throw(?ERROR_INVITE_TOKEN_CONSUMER_INVALID(ConsumerSubject)),
 
@@ -81,7 +80,7 @@ ensure_valid_invitation(Subject, InviteTokenType, EntityId, custom_privileges) -
 %%%===================================================================
 
 %% @private
--spec is_valid_consumer(tokens:invite_token_type(), aai:subject()) -> boolean().
+-spec is_valid_consumer(tokens:invite_token_type(), aai:consumer_spec()) -> boolean().
 is_valid_consumer(?USER_JOIN_GROUP, ?SUB(user, _)) -> true;
 is_valid_consumer(?GROUP_JOIN_GROUP, ?SUB(user, _)) -> true;
 is_valid_consumer(?USER_JOIN_SPACE, ?SUB(user, _)) -> true;

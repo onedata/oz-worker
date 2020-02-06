@@ -133,10 +133,10 @@ check_rest_call(Config, ArgsMap) ->
                 maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(Token));
             {op_panel, ProviderId} ->
                 Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(?ONEPROVIDER, ProviderId)),
-                ServiceToken = tokens:build_service_access_token(?OP_PANEL, Token),
+                ServiceToken = tokens:build_oneprovider_access_token(?OP_PANEL, Token),
                 maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(ServiceToken));
             {op_panel, _, Token} ->
-                ServiceToken = tokens:build_service_access_token(?OP_PANEL, Token),
+                ServiceToken = tokens:build_oneprovider_access_token(?OP_PANEL, Token),
                 maps:merge(ReqHeaders, ?ACCESS_TOKEN_HEADER(ServiceToken));
             {user, UserId} ->
                 Token = oz_test_utils:acquire_temporary_token(Config, ?SUB(user, UserId)),

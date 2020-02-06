@@ -2528,7 +2528,11 @@ verify_provider_identity_test(Config) ->
         Config, time_utils, cluster_time_seconds, []
     ),
     TokenNoAuth = tokens:confine(
-        DeserializedToken, #cv_authorization_none{}
+        DeserializedToken, #cv_scope{scope = identity_token}
+    ),
+    %% @todo VFS-6098 deprecated, kept for backward compatibility
+    TokenDeprecatedCaveat = tokens:confine(
+        DeserializedToken, caveats:deserialize(<<"authorization = none">>)
     ),
     TokenNotExpired = tokens:confine(
         TokenNoAuth, #cv_time{valid_until = Timestamp + 100}
@@ -2537,6 +2541,7 @@ verify_provider_identity_test(Config) ->
         TokenNoAuth, #cv_time{valid_until = Timestamp - 200}
     ),
     {ok, TokenNoAuthBin} = tokens:serialize(TokenNoAuth),
+    {ok, TokenDeprecatedCaveatBin} = tokens:serialize(TokenDeprecatedCaveat),
     {ok, TokenNotExpiredBin} = tokens:serialize(TokenNotExpired),
     {ok, TokenExpiredBin} = tokens:serialize(TokenExpired),
 
@@ -2566,7 +2571,7 @@ verify_provider_identity_test(Config) ->
             ],
             correct_values = #{
                 <<"providerId">> => [P1],
-                <<"token">> => [TokenNoAuthBin, TokenNotExpiredBin]
+                <<"token">> => [TokenNoAuthBin, TokenDeprecatedCaveatBin, TokenNotExpiredBin]
             },
             bad_values = [
                 {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},

@@ -10,8 +10,8 @@
 %%% the system when access tokens are used to access arbitrarily chosen API
 %%% operations. Each test is repeated several times, and each time the request
 %%% context is randomized. Depending on the request context, different
-%%% combinations of subjects, audiences, token caveats and interfaces are
-%%% randomly generated and tested if they return the expected results.
+%%% combinations of subjects, services, consumers, token caveats and interfaces 
+%%% are randomly generated and tested if they return the expected results.
 %%% @end
 %%%-------------------------------------------------------------------
 -module(access_tokens_test_SUITE).
@@ -70,20 +70,18 @@
 
 -record(request_context, {
     subject :: aai:subject(),
-    % Denotes if the context concerns an audience token
-    is_audience_token :: boolean(),
+    token_purpose :: access_token | service_token | consumer_token,
     current_timestamp :: time_utils:seconds(),
     interface :: undefined | cv_interface:interface(),
     ip :: undefined | ip_utils:ip(),
     asn :: undefined | ip_utils:asn(),
     country :: undefined | ip_utils:country_code(),
     regions :: undefined | [ip_utils:region()],
-    audience :: aai:audience(),
-    data_access_caveats_policy :: data_access_caveats:policy(),
-    % Supporting provider that will be used to perform requests on behalf of
-    % the user on Oneprovider's GraphSync channel with auth_override.
-    % Applicable only if subject is a user.
-    provider_for_gs_with_auth_override :: not_applicable | od_provider:id()
+    service :: aai:service_spec(),
+    service_token = autogenerate :: autogenerate | tokens:token(),
+    consumer :: aai:consumer_spec(),
+    consumer_token = autogenerate :: autogenerate | tokens:token(),
+    data_access_caveats_policy :: data_access_caveats:policy()
 }).
 
 %% Test API
@@ -287,14 +285,15 @@ run_tests(RequestSpec) ->
 run_test_repeat(RequestSpec, RepeatNum) ->
     try
         check_bad_token_scenarios(RequestSpec),
-        check_bad_audience_when_creating_scenarios(RequestSpec),
-        check_bad_audience_when_consuming_scenarios(RequestSpec),
+        check_forbidden_service_when_creating_scenarios(RequestSpec),
+        check_forbidden_service_when_consuming_scenarios(RequestSpec),
         check_unauthorized_scenarios(RequestSpec),
         check_authorized_scenarios(RequestSpec),
         check_temporary_token_revocation(RequestSpec),
         check_named_token_revocation(RequestSpec),
         check_token_caveats_handling(RequestSpec),
-        check_audience_token_caveats_handling(RequestSpec),
+        check_service_token_caveats_handling(RequestSpec),
+        check_consumer_token_caveats_handling(RequestSpec),
         % This must be run with last repeat as it deletes the eligible subjects
         RepeatNum == ?TEST_REPEATS andalso check_subject_deleted_scenarios(RequestSpec),
         true
@@ -326,7 +325,7 @@ check_bad_token_scenarios(RequestSpec) ->
         make_request_with_random_context(RequestSpec, ?SUB(user, DummyUser), {token, InviteToken})
     ),
 
-    GuiAccessToken = ozt_tokens:create_gui_access_token(DummyUser, SessId, ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)),
+    GuiAccessToken = ozt_tokens:create_gui_access_token(DummyUser, SessId, ?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)),
     Error = ?assertMatch(
         {error, _},
         make_request_with_random_context(RequestSpec, ?SUB(user, DummyUser), {token, GuiAccessToken})
@@ -334,7 +333,7 @@ check_bad_token_scenarios(RequestSpec) ->
     % The error depends on the request context, which is randomized with every request
     ?assert(lists:member(Error, [
         ?ERROR_FORBIDDEN,
-        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_audience{whitelist = [?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)]})
+        ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_service{whitelist = [?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)]})
     ])),
 
     lists:foreach(fun(EligibleSubject) ->
@@ -382,41 +381,41 @@ check_bad_token_scenarios(RequestSpec) ->
     end, RequestSpec#request_spec.eligible_subjects).
 
 
-check_bad_audience_when_creating_scenarios(RequestSpec) ->
+check_forbidden_service_when_creating_scenarios(RequestSpec) ->
     lists:foreach(fun(Persistence) ->
         lists:foreach(fun(EligibleSubject) ->
-            lists:foreach(fun(ForbiddenAudience) ->
+            lists:foreach(fun(ForbiddenService) ->
                 ?assertEqual(
-                    ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(ForbiddenAudience),
+                    ?ERROR_TOKEN_SERVICE_FORBIDDEN(ForbiddenService),
                     ozt_tokens:try_create(Persistence, EligibleSubject, #{
                         <<"type">> => ?ACCESS_TOKEN,
-                        <<"caveats">> =>  [#cv_audience{whitelist = [ForbiddenAudience]}]
+                        <<"caveats">> =>  [#cv_service{whitelist = [ForbiddenService]}]
                     })
                 ),
                 Token = ozt_tokens:create(Persistence, EligibleSubject),
                 ?assertEqual(
-                    ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(ForbiddenAudience),
-                    ozt_tokens:confine(Token, [#cv_audience{whitelist = [ForbiddenAudience]}])
+                    ?ERROR_TOKEN_SERVICE_FORBIDDEN(ForbiddenService),
+                    ozt_tokens:confine(Token, [#cv_service{whitelist = [ForbiddenService]}])
                 )
-            end, gen_forbidden_audiences(EligibleSubject))
+            end, gen_forbidden_services(EligibleSubject))
         end, RequestSpec#request_spec.eligible_subjects)
     end, [named, temporary]).
 
 
-check_bad_audience_when_consuming_scenarios(RequestSpec) ->
+check_forbidden_service_when_consuming_scenarios(RequestSpec) ->
     lists:foreach(fun(Persistence) ->
         lists:foreach(fun(EligibleSubject) ->
             RequestContext = randomize_request_context(EligibleSubject),
-            lists:foreach(fun(ForbiddenAudience) ->
+            lists:foreach(fun(ForbiddenService) ->
                 ClientAuth = gen_client_auth(EligibleSubject, Persistence),
-                RequestContextWithAudience = RequestContext#request_context{
-                    audience = ForbiddenAudience
+                RequestContextWithService = RequestContext#request_context{
+                    service = ForbiddenService
                 },
-                ?assertEqual(
-                    ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(ForbiddenAudience),
-                    make_request(RequestSpec, RequestContextWithAudience, ClientAuth)
+                ?assertMatch(
+                    ?ERROR_TOKEN_SERVICE_FORBIDDEN(ForbiddenService),
+                    make_request(RequestSpec, RequestContextWithService, ClientAuth)
                 )
-            end, gen_forbidden_audiences(EligibleSubject))
+            end, gen_forbidden_services(EligibleSubject))
         end, RequestSpec#request_spec.eligible_subjects)
     end, [named, temporary]).
 
@@ -497,62 +496,96 @@ check_token_caveats_handling(RequestSpec) ->
     end, [named, temporary]).
 
 
-check_audience_token_caveats_handling(RequestSpec) ->
+check_service_token_caveats_handling(RequestSpec) ->
     lists:foreach(fun(Persistence) ->
         lists:foreach(fun(EligibleSubject) ->
-            lists:foreach(fun(_) ->
-                % Check only audiences that can present an audience token
-                EligibleAudienceTypes = eligible_audience_types(EligibleSubject),
-                ValidAudienceTokenHolders = EligibleAudienceTypes -- [?OZ_WORKER, ?OZ_PANEL],
-                Audience = set_up_audience(EligibleSubject, lists_utils:random_element(ValidAudienceTokenHolders)),
-                RequestContext = randomize_request_context(EligibleSubject, Audience),
-                ClientAuth = gen_client_auth(EligibleSubject, Persistence),
+            ValidServiceTokenHolders = eligible_service_types(EligibleSubject) -- [?OZ_WORKER, ?OZ_PANEL],
+            lists:foreach(fun(ServiceType) ->
+                lists:foreach(fun(_) ->
+                    % Check only services that can present an service token
+                    Service = set_up_service(EligibleSubject, ServiceType),
+                    RequestContext = randomize_request_context(EligibleSubject, Service, random),
+                    ClientAuth = gen_client_auth(EligibleSubject, Persistence),
 
-                % Audience tokens cannot have an audience and cannot allow data access caveats
-                AudienceRequestContext = RequestContext#request_context{
-                    subject = case Audience of
-                        ?AUD(user, UserId) -> ?SUB(user, UserId);
-                        ?AUD(?OP_WORKER, PrId) -> ?SUB(?ONEPROVIDER, PrId);
-                        ?AUD(?OP_PANEL, PrId) -> ?SUB(?ONEPROVIDER, PrId)
-                    end,
-                    is_audience_token = true,
-                    audience = undefined,
-                    data_access_caveats_policy = disallow_data_access_caveats,
-                    provider_for_gs_with_auth_override = not_applicable
-                },
-                RandCorrectCaveats = lists_utils:random_sublist(gen_correct_caveats(RequestSpec, AudienceRequestContext)),
-                RandUnverifiedCaveats = lists_utils:random_sublist(gen_unverified_caveats(RequestSpec, AudienceRequestContext)),
-                AudienceToken = create_audience_token_if_applicable(
-                    Audience, lists_utils:shuffle(RandCorrectCaveats ++ RandUnverifiedCaveats)
-                ),
-
-                AvailableRequestMethods = available_methods_for_ctx(RequestContext),
-                Result = case lists_utils:random_element(AvailableRequestMethods) of
-                    logic ->
-                        request_via_logic_with_audience_token(
-                            RequestSpec, RequestContext, ClientAuth, AudienceToken
-                        );
-                    rest ->
-                        request_via_rest_with_audience_token(
-                            RequestSpec, ClientAuth, AudienceToken
-                        );
-                    op_gs_with_override ->
-                        request_via_op_gs_with_override_and_audience_token(
-                            RequestSpec, RequestContext, ClientAuth, AudienceToken
-                        )
-                end,
-                case RandUnverifiedCaveats of
-                    [] ->
-                        ?assertMatch(ok, Result);
-                    _ ->
-                        ?assertMatch(?ERROR_BAD_AUDIENCE_TOKEN(?ERROR_TOKEN_CAVEAT_UNVERIFIED(_)), Result),
-                        ?ERROR_BAD_AUDIENCE_TOKEN(?ERROR_TOKEN_CAVEAT_UNVERIFIED(UnverifiedCaveat)) = Result,
-                        ?assert(lists:member(UnverifiedCaveat, RandUnverifiedCaveats))
-                end
-            end, lists:seq(1, ?CAVEAT_RANDOMIZATION_REPEATS))
+                    ServiceRequestContext = RequestContext#request_context{
+                        subject = case Service of
+                            ?SERVICE(?OP_WORKER, PrId) -> ?SUB(?ONEPROVIDER, ?OP_WORKER, PrId);
+                            ?SERVICE(?OP_PANEL, PrId) -> ?SUB(?ONEPROVIDER, ?OP_PANEL, PrId)
+                        end,
+                        % Identity tokens cannot have service caveats and cannot allow data access caveats
+                        token_purpose = service_token,
+                        service = undefined,
+                        service_token = undefined,
+                        consumer = undefined,
+                        consumer_token = undefined,
+                        interface = undefined,
+                        data_access_caveats_policy = disallow_data_access_caveats
+                    },
+                    RandCorrectCaveats = lists_utils:random_sublist(gen_correct_caveats(RequestSpec, ServiceRequestContext)),
+                    RandUnverifiedCaveats = lists_utils:random_sublist(gen_unverified_caveats(RequestSpec, ServiceRequestContext)),
+                    ServiceToken = create_service_token_if_applicable(
+                        Service, lists_utils:shuffle(RandCorrectCaveats ++ RandUnverifiedCaveats)
+                    ),
+                    RequestContextWithServiceToken = RequestContext#request_context{service_token = ServiceToken},
+                    Result = make_request(RequestSpec, RequestContextWithServiceToken, ClientAuth),
+                    case RandUnverifiedCaveats of
+                        [] ->
+                            ?assertMatch(ok, Result);
+                        _ ->
+                            % The service token may be used to init GS connection, in such
+                            % case the returned error will not be wrapped in ?ERROR_BAD_SERVICE_TOKEN
+                            TokenError = case Result of
+                                ?ERROR_BAD_SERVICE_TOKEN(Error) -> Error;
+                                Error -> Error
+                            end,
+                            ?assertMatch(?ERROR_TOKEN_CAVEAT_UNVERIFIED(_), TokenError),
+                            ?ERROR_TOKEN_CAVEAT_UNVERIFIED(UnverifiedCaveat) = TokenError,
+                            ?assert(lists:member(UnverifiedCaveat, RandUnverifiedCaveats))
+                    end
+                end, lists:seq(1, ?CAVEAT_RANDOMIZATION_REPEATS))
+            end, ValidServiceTokenHolders)
         end, RequestSpec#request_spec.eligible_subjects)
     end, [named, temporary]).
 
+
+check_consumer_token_caveats_handling(RequestSpec) ->
+    lists:foreach(fun(Persistence) ->
+        lists:foreach(fun(EligibleSubject) ->
+            lists:foreach(fun(ConsumerType) ->
+                lists:foreach(fun(_) ->
+                    Consumer = set_up_consumer(ConsumerType),
+                    RequestContext = randomize_request_context(EligibleSubject, random, Consumer),
+                    ClientAuth = gen_client_auth(EligibleSubject, Persistence),
+
+                    ConsumerRequestContext = RequestContext#request_context{
+                        % Identity tokens cannot have service caveats and cannot allow data access caveats
+                        subject = Consumer,
+                        token_purpose = consumer_token,
+                        service = undefined,
+                        service_token = undefined,
+                        consumer = undefined,
+                        consumer_token = undefined,
+                        data_access_caveats_policy = disallow_data_access_caveats
+                    },
+                    RandCorrectCaveats = lists_utils:random_sublist(gen_correct_caveats(RequestSpec, ConsumerRequestContext)),
+                    RandUnverifiedCaveats = lists_utils:random_sublist(gen_unverified_caveats(RequestSpec, ConsumerRequestContext)),
+                    ConsumerToken = create_consumer_token_if_applicable(
+                        Consumer, lists_utils:shuffle(RandCorrectCaveats ++ RandUnverifiedCaveats)
+                    ),
+                    RequestContextWithConsumerToken = RequestContext#request_context{consumer_token = ConsumerToken},
+                    Result = make_request(RequestSpec, RequestContextWithConsumerToken, ClientAuth),
+                    case RandUnverifiedCaveats of
+                        [] ->
+                            ?assertMatch(ok, Result);
+                        _ ->
+                            ?assertMatch(?ERROR_BAD_CONSUMER_TOKEN(?ERROR_TOKEN_CAVEAT_UNVERIFIED(_)), Result),
+                            ?ERROR_BAD_CONSUMER_TOKEN(?ERROR_TOKEN_CAVEAT_UNVERIFIED(UnverifiedCaveat)) = Result,
+                            ?assert(lists:member(UnverifiedCaveat, RandUnverifiedCaveats))
+                    end
+                end, lists:seq(1, ?CAVEAT_RANDOMIZATION_REPEATS))
+            end, valid_consumer_token_holders())
+        end, RequestSpec#request_spec.eligible_subjects)
+    end, [named, temporary]).
 
 
 check_subject_deleted_scenarios(RequestSpec) ->
@@ -576,9 +609,10 @@ check_subject_deleted_scenarios(RequestSpec) ->
 %%% Helper functions
 %%%===================================================================
 
-all_subject_types() -> [
-    user, ?ONEPROVIDER, nobody
-].
+all_subject_types() -> [user, ?ONEPROVIDER, nobody].
+
+
+valid_consumer_token_holders() -> [user, ?ONEPROVIDER].
 
 
 create_subject_by_type(nobody) ->
@@ -614,13 +648,13 @@ make_request(RequestSpec, RequestContext, ClientAuth) ->
 
 
 % Only some request methods can yield an auth context with specified IP,
-% interface, subject, audience and data access caveats policy:
+% interface, subject, service, consumer and data access caveats policy:
 %   * logic accepts any context as it is injected
 %   * oz-worker's REST and GraphSync endpoints automatically set the policy to
 %       disallow_data_access_caveats
-%   * Oneprovider can use the auth_override as user on the GraphSync channel to
-%       request authorization in requested context, providing arbitrary context:
-%       IP, interface, audience and data access caveats policy
+%   * op-worker and op-panel can use the auth_override as user on the GraphSync
+%       channel to request authorization in requested context, providing arbitrary
+%       context: IP, interface, consumer token and data access caveats policy
 %   * allow_data_access_caveats policy and oneclient interface can appear only
 %       on Oneprovider's GraphSync channel with auth_override
 %   * undefined IP address can only be achieved in logic calls
@@ -629,99 +663,124 @@ available_methods_for_ctx(RequestContext) ->
     PeerIp = RequestContext#request_context.ip,
     Interface = RequestContext#request_context.interface,
     ?SUB(SubjectType) = RequestContext#request_context.subject,
-    AudienceType = case RequestContext#request_context.audience of
+    ServiceType = case RequestContext#request_context.service of
         undefined -> undefined;
-        ?AUD(Type, _) -> Type
+        ?SERVICE(SType, _) -> SType
+    end,
+    ConsumerType = case RequestContext#request_context.consumer of
+        undefined -> undefined;
+        ?SUB(CType, _) -> CType
     end,
     DataAccessCaveatsPolicy = RequestContext#request_context.data_access_caveats_policy,
     case {PeerIp, Interface} of
         {undefined, _} -> [logic];
         {_, undefined} -> [logic];
-        {_, rest} -> methods_for_rest_ctx(SubjectType, AudienceType, DataAccessCaveatsPolicy);
-        {_, oneclient} -> methods_for_oneclient_ctx(SubjectType, AudienceType, DataAccessCaveatsPolicy);
-        {_, graphsync} -> methods_for_graphsync_ctx(SubjectType, AudienceType, DataAccessCaveatsPolicy)
+        {_, rest} -> methods_for_rest_ctx(SubjectType, ServiceType, ConsumerType, DataAccessCaveatsPolicy);
+        {_, oneclient} -> methods_for_oneclient_ctx(SubjectType, ServiceType, ConsumerType, DataAccessCaveatsPolicy);
+        {_, graphsync} -> methods_for_graphsync_ctx(SubjectType, ServiceType, ConsumerType, DataAccessCaveatsPolicy)
     end.
 
 
-methods_for_rest_ctx(_, ?OZ_PANEL, _) -> [logic];
-methods_for_rest_ctx(?ONEPROVIDER, _, allow_data_access_caveats) -> [logic];
-methods_for_rest_ctx(?ONEPROVIDER, _, disallow_data_access_caveats) -> [logic, rest];
-methods_for_rest_ctx(nobody, _, allow_data_access_caveats) -> [logic];
-methods_for_rest_ctx(nobody, _, disallow_data_access_caveats) -> [logic, rest];
-methods_for_rest_ctx(user, user, allow_data_access_caveats) -> [logic, op_gs_with_override];
-methods_for_rest_ctx(user, user, disallow_data_access_caveats) -> [logic, rest, op_gs_with_override];
-methods_for_rest_ctx(user, ?OP_WORKER, allow_data_access_caveats) -> [logic, op_gs_with_override];
-methods_for_rest_ctx(user, ?OP_WORKER, disallow_data_access_caveats) -> [logic, rest, op_gs_with_override];
-methods_for_rest_ctx(user, _, allow_data_access_caveats) -> [logic];
-methods_for_rest_ctx(user, _, disallow_data_access_caveats) -> [logic, rest].
+methods_for_rest_ctx(_, ?OZ_PANEL, _, _) -> [logic];
+methods_for_rest_ctx(_, ?OZ_WORKER, _, allow_data_access_caveats) -> [logic];
+methods_for_rest_ctx(_, ?OZ_WORKER, _, disallow_data_access_caveats) -> [logic, rest];
+methods_for_rest_ctx(_, undefined, _, allow_data_access_caveats) -> [logic];
+methods_for_rest_ctx(_, undefined, _, disallow_data_access_caveats) -> [logic, rest];
+methods_for_rest_ctx(nobody, _, _, disallow_data_access_caveats) -> [logic, rest];
+methods_for_rest_ctx(user, _, ?ONEPROVIDER, allow_data_access_caveats) -> [logic];
+methods_for_rest_ctx(user, _, ?ONEPROVIDER, disallow_data_access_caveats) -> [logic, rest];
+methods_for_rest_ctx(user, _, _, allow_data_access_caveats) -> [logic, op_gs_with_override];
+methods_for_rest_ctx(user, _, _, disallow_data_access_caveats) -> [logic, rest, op_gs_with_override];
+methods_for_rest_ctx(?ONEPROVIDER, ?OP_WORKER, _, disallow_data_access_caveats) -> [logic, rest];
+methods_for_rest_ctx(?ONEPROVIDER, ?OP_PANEL, _, disallow_data_access_caveats) -> [logic, rest];
+methods_for_rest_ctx(_, _, _, _) -> [logic].
 
 
-methods_for_oneclient_ctx(user, user, _) -> [logic, op_gs_with_override];
-methods_for_oneclient_ctx(user, ?OP_WORKER, _) -> [logic, op_gs_with_override];
-methods_for_oneclient_ctx(_, _, _) -> [logic].
+methods_for_oneclient_ctx(user, ?OP_WORKER, ?ONEPROVIDER, _) -> [logic];
+methods_for_oneclient_ctx(user, ?OP_WORKER, _, _) -> [logic, op_gs_with_override];
+methods_for_oneclient_ctx(_, _, _, _) -> [logic].
 
 
-methods_for_graphsync_ctx(_, undefined, allow_data_access_caveats) -> [logic];
-methods_for_graphsync_ctx(_, undefined, disallow_data_access_caveats) -> [logic, gs];
-methods_for_graphsync_ctx(_, ?OZ_WORKER, allow_data_access_caveats) -> [logic];
-methods_for_graphsync_ctx(_, ?OZ_WORKER, disallow_data_access_caveats) -> [logic, gs];
-methods_for_graphsync_ctx(user, user, _) -> [logic, op_gs_with_override];
-methods_for_graphsync_ctx(user, ?OP_WORKER, _) -> [logic, op_gs_with_override];
-methods_for_graphsync_ctx(_, _, _) -> [logic].
+methods_for_graphsync_ctx(_, ?OZ_PANEL, _, _) -> [logic];
+methods_for_graphsync_ctx(_, ?OZ_WORKER, undefined, disallow_data_access_caveats) -> [logic, gs];
+methods_for_graphsync_ctx(_, ?OZ_WORKER, _, _) -> [logic];
+methods_for_graphsync_ctx(_, undefined, undefined, disallow_data_access_caveats) -> [logic, gs];
+methods_for_graphsync_ctx(_, undefined, _, _) -> [logic];
+methods_for_graphsync_ctx(user, _, ?ONEPROVIDER, _) -> [logic];
+methods_for_graphsync_ctx(user, _, _, _) -> [logic, op_gs_with_override];
+methods_for_graphsync_ctx(_, _, _, _) -> [logic].
 
 
-request_via_logic(RequestSpec, RequestContext, ClientAuth) ->
-    AuthenticateResult = case ClientAuth of
-        nobody ->
-            {true, ?NOBODY};
-        {token, Token} ->
-            AuthCtx = ozt_tokens:build_auth_ctx([
-                RequestContext#request_context.interface,
-                RequestContext#request_context.ip,
-                RequestContext#request_context.audience,
-                RequestContext#request_context.data_access_caveats_policy
-            ]),
-            ozt_tokens:authenticate(Token, AuthCtx)
-    end,
+% Logic takes an #auth{} record that is a result of verifying the access and
+% optionally service/consumer tokens. This code first verifies all tokens and
+% upon success, calls the logic function with resulting #auth{}.
+request_via_logic(RequestSpec, Rc, ClientAuth) ->
+    try
+        case get_service_token_for_request(Rc) of
+            undefined ->
+                ok;
+            ServiceToken ->
+                ServiceAuthCtx = #auth_ctx{
+                    ip = Rc#request_context.ip,
+                    interface = Rc#request_context.interface
+                },
+                case ozt_tokens:verify_service_token(ServiceToken, ServiceAuthCtx) of
+                    {ok, Service} ->
+                        ?assertEqual(Service, Rc#request_context.service);
+                    {error, _} = Err1 ->
+                        throw(Err1)
+                end
+        end,
 
-    case AuthenticateResult of
-        {error, _} = Error ->
-            Error;
-        {true, Auth} ->
-            {Module, Function, Args} = RequestSpec#request_spec.logic_call_args,
-            ArgsWithAuth = lists:map(fun
-                (auth) -> Auth;
-                (Arg) -> Arg
-            end, Args),
-            check_success(ozt:rpc(Module, Function, ArgsWithAuth))
+        case get_consumer_token_for_request(Rc) of
+            undefined ->
+                ok;
+            ConsumerToken ->
+                ConsumerAuthCtx = #auth_ctx{
+                    ip = Rc#request_context.ip,
+                    interface = Rc#request_context.interface
+                },
+                case ozt_tokens:verify_consumer_token(ConsumerToken, ConsumerAuthCtx) of
+                    {ok, Consumer} ->
+                        ?assertEqual(Consumer, Rc#request_context.consumer);
+                    {error, _} = Err2 ->
+                        throw(Err2)
+                end
+        end,
+
+        Auth = case ClientAuth of
+            nobody ->
+                ?NOBODY;
+            {token, Token} ->
+                AuthCtx = #auth_ctx{
+                    ip = Rc#request_context.ip,
+                    interface = Rc#request_context.interface,
+                    service = Rc#request_context.service,
+                    consumer = Rc#request_context.consumer,
+                    data_access_caveats_policy = Rc#request_context.data_access_caveats_policy
+                },
+                case ozt_tokens:authenticate(Token, AuthCtx) of
+                    {true, A} ->
+                        A;
+                    {error, _} = Err3 ->
+                        throw(Err3)
+                end
+        end,
+        {Module, Function, Args} = RequestSpec#request_spec.logic_call_args,
+        ArgsWithAuth = lists:map(fun
+            (auth) -> Auth;
+            (Arg) -> Arg
+        end, Args),
+        check_success(ozt:rpc(Module, Function, ArgsWithAuth))
+    catch
+        throw:{error, _} = Error -> Error
     end.
 
-request_via_logic_with_audience_token(RequestSpec, RequestContext, ClientAuth, AudienceToken) ->
-    case AudienceToken of
-        undefined ->
-            request_via_logic(RequestSpec, RequestContext, ClientAuth);
-        _ ->
-            AuthCtx = ozt_tokens:build_auth_ctx([
-                RequestContext#request_context.interface,
-                RequestContext#request_context.ip
-            ]),
-            case ozt_tokens:verify_audience_token(AudienceToken, AuthCtx) of
-                {ok, Audience} ->
-                    ?assertEqual(Audience, RequestContext#request_context.audience),
-                    request_via_logic(RequestSpec, RequestContext, ClientAuth);
-                {error, _} = Error ->
-                    Error
-            end
-    end.
 
-
-request_via_rest(RequestSpec, RequestContext, ClientAuth) ->
-    AudienceToken = create_audience_token_if_applicable(RequestContext#request_context.audience),
-    request_via_rest_with_audience_token(RequestSpec, ClientAuth, AudienceToken).
-
-request_via_rest_with_audience_token(RequestSpec, ClientAuth, AudienceToken) ->
-    #request_spec{rest_call_args = {Method, UrnTokens, DataJson}} = RequestSpec,
-    check_success(ozt_http:rest_call(ClientAuth, AudienceToken, Method, UrnTokens, DataJson)).
+request_via_rest(#request_spec{rest_call_args = {Method, UrnTokens, DataJson}}, RequestContext, ClientAuth) ->
+    ServiceToken = get_service_token_for_request(RequestContext),
+    ConsumerToken = get_consumer_token_for_request(RequestContext),
+    check_success(ozt_http:rest_call(ClientAuth, ServiceToken, ConsumerToken, Method, UrnTokens, DataJson)).
 
 
 request_via_gs(RequestSpec, RequestContext, ClientAuth) ->
@@ -747,20 +806,15 @@ request_via_gs(RequestSpec, Endpoint, ClientAuth, AuthOverride) ->
     check_success(ozt_gs:connect_and_request(Endpoint, ClientAuth, Req)).
 
 request_via_op_gs_with_override(RequestSpec, RequestContext, ClientAuth) ->
-    AudienceToken = case create_audience_token_if_applicable(RequestContext#request_context.audience) of
-        undefined -> undefined;
-        Token -> ozt_tokens:ensure_serialized(Token)
-    end,
-    request_via_op_gs_with_override_and_audience_token(RequestSpec, RequestContext, ClientAuth, AudienceToken).
-
-request_via_op_gs_with_override_and_audience_token(RequestSpec, RequestContext, ClientAuth, AudienceToken) ->
-    ProviderId = RequestContext#request_context.provider_for_gs_with_auth_override,
-    OneproviderToken = ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, ProviderId)),
+    OneproviderToken = get_service_token_for_request(RequestContext),
     AuthOverride = #auth_override{
         client_auth = ozt_gs:normalize_client_auth(ClientAuth),
         interface = RequestContext#request_context.interface,
         peer_ip = RequestContext#request_context.ip,
-        audience_token = AudienceToken,
+        consumer_token = case get_consumer_token_for_request(RequestContext) of
+            undefined -> undefined;
+            Token -> ozt_tokens:ensure_serialized(Token)
+        end,
         data_access_caveats_policy = RequestContext#request_context.data_access_caveats_policy
     },
     request_via_gs(RequestSpec, oneprovider, {token, OneproviderToken}, AuthOverride).
@@ -771,30 +825,58 @@ check_success({ok, _}) -> ok;
 check_success({error, _} = Error) -> Error.
 
 
-create_audience_token_if_applicable(Subject) ->
-    create_audience_token_if_applicable(Subject, []).
+get_service_token_for_request(#request_context{service = undefined}) ->
+    undefined;
+get_service_token_for_request(#request_context{service = Service, service_token = autogenerate}) ->
+    create_service_token_if_applicable(Service);
+get_service_token_for_request(#request_context{service = _, service_token = ServiceToken}) ->
+    ServiceToken.
 
-create_audience_token_if_applicable(?AUD(user, UserId), Caveats) ->
+
+get_consumer_token_for_request(#request_context{consumer = undefined}) ->
+    undefined;
+get_consumer_token_for_request(#request_context{consumer = Consumer, consumer_token = autogenerate}) ->
+    create_consumer_token_if_applicable(Consumer);
+get_consumer_token_for_request(#request_context{consumer = _, consumer_token = ConsumerToken}) ->
+    ConsumerToken.
+
+
+create_service_token_if_applicable(Subject) ->
+    create_service_token_if_applicable(Subject, []).
+
+create_service_token_if_applicable(?SERVICE(?OP_WORKER, PrId), Caveats) ->
+    ProviderToken = ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, PrId), ?ACCESS_TOKEN, Caveats),
+    tokens:build_oneprovider_access_token(?OP_WORKER, ozt_tokens:ensure_serialized(ProviderToken));
+create_service_token_if_applicable(?SERVICE(?OP_PANEL, PrId), Caveats) ->
+    ProviderToken = ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, PrId), ?ACCESS_TOKEN, Caveats),
+    tokens:build_oneprovider_access_token(?OP_PANEL, ozt_tokens:ensure_serialized(ProviderToken));
+create_service_token_if_applicable(_, _) ->
+    undefined.
+
+
+create_consumer_token_if_applicable(Subject) ->
+    create_consumer_token_if_applicable(Subject, []).
+
+create_consumer_token_if_applicable(?SUB(user, UserId), Caveats) ->
     UserToken = ozt_tokens:create(temporary, ?SUB(user, UserId), ?ACCESS_TOKEN, Caveats),
     ozt_tokens:ensure_serialized(UserToken);
-create_audience_token_if_applicable(?AUD(?OP_WORKER, PrId), Caveats) ->
+create_consumer_token_if_applicable(?SUB(?ONEPROVIDER, Subtype, PrId), Caveats) ->
     ProviderToken = ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, PrId), ?ACCESS_TOKEN, Caveats),
-    tokens:build_service_access_token(?OP_WORKER, ozt_tokens:ensure_serialized(ProviderToken));
-create_audience_token_if_applicable(?AUD(?OP_PANEL, PrId), Caveats) ->
-    ProviderToken = ozt_tokens:create(temporary, ?SUB(?ONEPROVIDER, PrId), ?ACCESS_TOKEN, Caveats),
-    tokens:build_service_access_token(?OP_PANEL, ozt_tokens:ensure_serialized(ProviderToken));
-create_audience_token_if_applicable(_, _) ->
+    Serialized = ozt_tokens:ensure_serialized(ProviderToken),
+    case Subtype of
+        ?OP_WORKER -> tokens:build_oneprovider_access_token(?OP_WORKER, Serialized);
+        ?OP_PANEL -> tokens:build_oneprovider_access_token(?OP_PANEL, Serialized);
+        undefined -> Serialized
+    end;
+create_consumer_token_if_applicable(_, _) ->
     undefined.
 
 
 randomize_request_context(Subject) ->
-    Audience = case rand:uniform(2) of
-        1 -> undefined;
-        2 -> set_up_audience(Subject, lists_utils:random_element(eligible_audience_types(Subject)))
-    end,
-    randomize_request_context(Subject, Audience).
+    randomize_request_context(Subject, random, random).
 
-randomize_request_context(Subject, Audience) ->
+% Service and Consumer can be 'random' or given explicitly
+randomize_request_context(Subject, Service, Consumer) ->
     % ~ 1/5 of test repeats should have undefined IP
     IP = lists_utils:random_element([undefined, ?PEER_IP, ?PEER_IP, ?PEER_IP, ?PEER_IP]),
     Asn = case IP of
@@ -809,23 +891,31 @@ randomize_request_context(Subject, Audience) ->
         undefined -> ok;
         _ -> ozt_mocks:mock_geo_db_entry_for_all_ips(Asn, Country, Regions)
     end,
+    ResolvedService = case Service of
+        random ->
+            case rand:uniform(2) of
+                1 -> undefined;
+                2 -> set_up_service(Subject, lists_utils:random_element(eligible_service_types(Subject)))
+            end;
+        _ ->
+            Service
+    end,
+    ResolvedConsumer = case Consumer of
+        random ->
+            case rand:uniform(2) of
+                1 -> undefined;
+                2 -> set_up_consumer(lists_utils:random_element(valid_consumer_token_holders()))
+            end;
+        _ ->
+            Consumer
+    end,
     DataAccessCaveatsPolicy = lists_utils:random_element([
         % ~ 1/4 of test repeats should allow data access caveats
         disallow_data_access_caveats, disallow_data_access_caveats, disallow_data_access_caveats,
         allow_data_access_caveats
     ]),
-    ProviderForGsWithAuthOverride = case Subject of
-        ?SUB(user, UserId) ->
-            case ozt_users:get_eff_providers(UserId) of
-                [] -> ozt_providers:create_as_support_for_user(UserId);
-                [ProviderId | _] -> ProviderId
-            end;
-        _ ->
-            not_applicable
-    end,
-    OneclientInterfaceEligible = case Audience of
-        ?AUD(user, _) -> true;
-        ?AUD(?OP_WORKER, _) -> true;
+    OneclientInterfaceEligible = case ResolvedService of
+        ?SERVICE(?OP_WORKER, _) -> true;
         _ -> false
     end,
     EligibleInterfaces = case OneclientInterfaceEligible of
@@ -834,74 +924,89 @@ randomize_request_context(Subject, Audience) ->
     end,
     #request_context{
         subject = Subject,
-        is_audience_token = false,
+        token_purpose = access_token,
         current_timestamp = ozt:cluster_time_seconds(),
         interface = lists_utils:random_element([undefined | EligibleInterfaces]),
         ip = IP,
         asn = Asn,
         country = Country,
         regions = Regions,
-        audience = Audience,
-        data_access_caveats_policy = DataAccessCaveatsPolicy,
-        provider_for_gs_with_auth_override = ProviderForGsWithAuthOverride
+        service = ResolvedService,
+        consumer = ResolvedConsumer,
+        data_access_caveats_policy = DataAccessCaveatsPolicy
     }.
 
 
-eligible_audience_types(?SUB(nobody)) ->
-    [user, ?OZ_WORKER];
-eligible_audience_types(?SUB(user)) ->
-    [user, ?OZ_WORKER, ?OZ_PANEL, ?OP_WORKER, ?OP_PANEL];
-eligible_audience_types(?SUB(?ONEPROVIDER)) ->
-    [user, ?OZ_WORKER, ?OP_WORKER].
+eligible_service_types(?SUB(user)) ->
+    [?OZ_WORKER, ?OZ_PANEL, ?OP_WORKER, ?OP_PANEL];
+eligible_service_types(_) ->
+    [?OZ_WORKER].
 
 
-% Substantiate an audience of given type. If needed, create required relations
-% between the subject and the audience.
-set_up_audience(_Subject, undefined) ->
+% Substantiate a service of given type. If needed, create required relations
+% between the subject and the service.
+set_up_service(_Subject, undefined) ->
     undefined;
-set_up_audience(_Subject, user) ->
-    ?AUD(user, ozt_users:create());
-set_up_audience(_Subject, ?OZ_WORKER) ->
-    ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID);
-set_up_audience(?SUB(user, UserId), ?OZ_PANEL) ->
+set_up_service(_Subject, ?OZ_WORKER) ->
+    ?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID);
+set_up_service(?SUB(user, UserId), ?OZ_PANEL) ->
     ozt_clusters:ensure_member(?ONEZONE_CLUSTER_ID, UserId),
-    ?AUD(?OZ_PANEL, ?ONEZONE_CLUSTER_ID);
-set_up_audience(?SUB(user, UserId), ?OP_WORKER) ->
+    ?SERVICE(?OZ_PANEL, ?ONEZONE_CLUSTER_ID);
+set_up_service(?SUB(user, UserId), ?OP_WORKER) ->
     ProviderId = ozt_providers:create_as_support_for_user(UserId),
-    ?AUD(?OP_WORKER, ProviderId);
-set_up_audience(?SUB(?ONEPROVIDER), ?OP_WORKER) ->
+    ?SERVICE(?OP_WORKER, ProviderId);
+set_up_service(?SUB(?ONEPROVIDER), ?OP_WORKER) ->
     OtherProviderId = ozt_providers:create(),
-    ?AUD(?OP_WORKER, OtherProviderId);
-set_up_audience(?SUB(user, UserId), ?OP_PANEL) ->
+    ?SERVICE(?OP_WORKER, OtherProviderId);
+set_up_service(?SUB(user, UserId), ?OP_PANEL) ->
     ProviderId = ozt_providers:create_for_admin_user(UserId),
-    ?AUD(?OP_PANEL, ProviderId).
+    ?SERVICE(?OP_PANEL, ProviderId).
+
+
+% Substantiate a consumer of given type.
+set_up_consumer(nobody) ->
+    undefined;
+set_up_consumer(user) ->
+    ?SUB(user, ozt_users:create());
+set_up_consumer(?ONEPROVIDER) ->
+    ?SUB(?ONEPROVIDER, ozt_providers:create()).
 
 
 gen_correct_caveats(RequestSpec, RC) -> lists:flatten([
     #cv_time{valid_until = RC#request_context.current_timestamp + 10},
-    case RC#request_context.audience of
-        undefined -> [];
-        _ -> gen_correct_audience_caveat(RC)
-    end,
     case RC#request_context.ip of
         undefined -> [];
         _ -> gen_correct_ip_based_caveats(RC)
     end,
-    case RC#request_context.interface of
-        undefined ->
+    case RC#request_context.service of
+        undefined -> [];
+        _ -> gen_correct_service_caveat(RC)
+    end,
+    case RC#request_context.consumer of
+        undefined -> [];
+        _ -> gen_correct_consumer_caveat(RC)
+    end,
+    case RC#request_context.token_purpose of
+        consumer_token -> #cv_scope{scope = identity_token};
+        _ -> []
+    end,
+    case {RC#request_context.token_purpose, RC#request_context.interface} of
+        {service_token, _} ->
             [];
-        oneclient ->
+        {_, undefined} ->
+            [];
+        {_, oneclient} ->
             % oneclient interface caveat causes API limitations
             case RequestSpec#request_spec.available_with_data_access_caveats of
                 false -> [];
                 true -> #cv_interface{interface = oneclient}
             end;
-        Interface ->
+        {_, Interface} ->
             #cv_interface{interface = Interface}
     end,
-    case RC#request_context.is_audience_token of
-        true -> []; % Audience tokens cannot have API caveats
-        false -> gen_correct_api_caveat(RequestSpec)
+    case RC#request_context.token_purpose of
+        access_token -> gen_correct_api_caveat(RequestSpec);
+        _ -> [] % Service and consumer (identity) tokens cannot have API caveats
     end,
     gen_correct_data_access_caveats(RequestSpec, RC)
 ]).
@@ -909,8 +1014,11 @@ gen_correct_caveats(RequestSpec, RC) -> lists:flatten([
 
 gen_unverified_caveats(RequestSpec, RC) -> lists:flatten([
     #cv_time{valid_until = RC#request_context.current_timestamp - 1},
-    #cv_authorization_none{},
-    gen_unverified_audience_caveat(RC),
+    case gen_unverified_service_caveat(RC) of
+        undefined -> [];
+        ServiceCaveat -> ServiceCaveat
+    end,
+    gen_unverified_consumer_caveat(RC),
     case RC#request_context.ip of
         undefined ->
             {Country, Regions} = lists_utils:random_element(?GEO_EXAMPLES),
@@ -922,6 +1030,10 @@ gen_unverified_caveats(RequestSpec, RC) -> lists:flatten([
             });
         _ ->
             gen_unverified_ip_based_caveats(RC)
+    end,
+    case RC#request_context.token_purpose of
+        access_token -> #cv_scope{scope = identity_token};
+        _ -> []
     end,
     #cv_interface{interface = lists_utils:random_element(case RC#request_context.interface of
         undefined ->
@@ -935,72 +1047,107 @@ gen_unverified_caveats(RequestSpec, RC) -> lists:flatten([
         Interface ->
             cv_interface:valid_interfaces() -- [Interface]
     end)},
-    case RC#request_context.is_audience_token of
-        true -> gen_correct_api_caveat(RequestSpec); % Audience tokens cannot have API caveats
-        false -> gen_unverified_api_caveat(RequestSpec)
+    case RC#request_context.token_purpose of
+        access_token -> gen_unverified_api_caveat(RequestSpec);
+        _ -> gen_correct_api_caveat(RequestSpec) % Identity tokens cannot have API caveats
     end,
     gen_unverified_data_access_caveats(RequestSpec, RC)
 ]).
 
 
-gen_correct_audience_caveat(RequestContext) ->
-    CorrectAudiences = gen_correct_audiences(RequestContext),
-    UnverifiedAudiences = gen_unverified_audiences(RequestContext),
-    #cv_audience{whitelist = lists_utils:shuffle(lists:flatten([
-        lists_utils:random_sublist(CorrectAudiences, 1, all),
-        lists_utils:random_sublist(UnverifiedAudiences)
+gen_correct_service_caveat(Rc) ->
+    CorrectServices = gen_correct_services(Rc),
+    UnverifiedServices = gen_unverified_services(Rc),
+    #cv_service{whitelist = lists_utils:shuffle(lists:flatten([
+        lists_utils:random_sublist(CorrectServices, 1, all),
+        lists_utils:random_sublist(UnverifiedServices)
     ]))}.
 
-gen_unverified_audience_caveat(Rc) ->
-    UnverifiedAudiences = gen_unverified_audiences(Rc),
-    #cv_audience{whitelist = lists_utils:shuffle(
-        lists_utils:random_sublist(UnverifiedAudiences, 1, all)
-    )}.
+gen_unverified_service_caveat(Rc) ->
+    case gen_unverified_services(Rc) of
+        [] ->
+            undefined;
+        UnverifiedServices ->
+            #cv_service{whitelist = lists_utils:random_sublist(UnverifiedServices, 1, all)}
+    end.
 
-gen_correct_audiences(#request_context{audience = ?AUD(user, UserId)}) ->
-    GroupId = ozt_users:create_group_for(UserId),
+
+gen_correct_services(#request_context{service = ?SERVICE(Type, Id)}) ->
     [
-        ?AUD(user, UserId),
-        ?AUD(user, <<"*">>),
-        ?AUD(group, GroupId),
-        ?AUD(group, <<"*">>)
-    ];
-gen_correct_audiences(#request_context{audience = ?AUD(Type, Id)}) ->
-    [
-        ?AUD(Type, Id),
-        ?AUD(Type, <<"*">>)
+        ?SERVICE(Type, Id),
+        ?SERVICE(Type, <<"*">>)
     ].
 
-gen_unverified_audiences(#request_context{subject = Subject, audience = RequestAudience}) ->
-    EligibleTypes = eligible_audience_types(Subject),
-    UnverifiedTypes = case RequestAudience of
-        undefined -> EligibleTypes -- [?OZ_WORKER]; % If not specified, audience defaults to OZ_WORKER
-        ?AUD(Type, _) -> EligibleTypes -- [Type]
+gen_unverified_services(#request_context{subject = Subject, service = RequestService}) ->
+    EligibleTypes = eligible_service_types(Subject),
+    UnverifiedTypes = case RequestService of
+        undefined -> EligibleTypes -- [?OZ_WORKER]; % If not specified, service defaults to OZ_WORKER
+        ?SERVICE(Type, _) -> EligibleTypes -- [Type]
     end,
-    GroupId = ozt_groups:create(),
-    [?AUD(group, GroupId)] ++ lists:map(fun(AudienceType) ->
-        Audience = set_up_audience(Subject, AudienceType),
+    lists:map(fun(ServiceType) ->
+        Service = set_up_service(Subject, ServiceType),
         case rand:uniform(2) of
-            1 -> Audience;
-            2 -> Audience#audience{id = <<"*">>}
+            1 -> Service;
+            2 -> Service#service_spec{id = <<"*">>}
         end
     end, UnverifiedTypes).
 
 
-gen_forbidden_audiences(?SUB(user, UserId)) ->
+gen_forbidden_services(?SUB(user, UserId)) ->
     ProviderId = ozt_providers:create(),
     ozt_clusters:ensure_not_a_member(?ONEZONE_CLUSTER_ID, UserId),
     [
-        ?AUD(?OZ_PANEL, ?ONEZONE_CLUSTER_ID),
-        ?AUD(?OP_WORKER, ProviderId),
-        ?AUD(?OP_PANEL, ProviderId)
+        ?SERVICE(?OZ_PANEL, ?ONEZONE_CLUSTER_ID),
+        ?SERVICE(?OP_WORKER, ProviderId),
+        ?SERVICE(?OP_PANEL, ProviderId)
     ];
-gen_forbidden_audiences(?SUB(?ONEPROVIDER)) ->
+gen_forbidden_services(?SUB(?ONEPROVIDER)) ->
     OtherProviderId = ozt_providers:create(),
     [
-        ?AUD(?OZ_PANEL, ?ONEZONE_CLUSTER_ID),
-        ?AUD(?OP_PANEL, OtherProviderId)
+        ?SERVICE(?OZ_PANEL, ?ONEZONE_CLUSTER_ID),
+        ?SERVICE(?OP_PANEL, OtherProviderId)
     ].
+
+
+gen_correct_consumer_caveat(RequestContext) ->
+    CorrectConsumers = gen_correct_consumers(RequestContext),
+    UnverifiedConsumers = gen_unverified_consumers(RequestContext),
+    #cv_consumer{whitelist = lists_utils:shuffle(lists:flatten([
+        lists_utils:random_sublist(CorrectConsumers, 1, all),
+        lists_utils:random_sublist(UnverifiedConsumers)
+    ]))}.
+
+gen_unverified_consumer_caveat(Rc) ->
+    UnverifiedConsumers = gen_unverified_consumers(Rc),
+    #cv_consumer{whitelist = lists_utils:random_sublist(UnverifiedConsumers, 1, all)}.
+
+gen_correct_consumers(#request_context{consumer = ?SUB(user, UserId)}) ->
+    GroupId = ozt_users:create_group_for(UserId),
+    [
+        ?SUB(user, UserId),
+        ?SUB(user, <<"*">>),
+        ?SUB(group, GroupId),
+        ?SUB(group, <<"*">>)
+    ];
+gen_correct_consumers(#request_context{consumer = ?SUB(Type, Id)}) ->
+    [
+        ?SUB(Type, Id),
+        ?SUB(Type, <<"*">>)
+    ].
+
+gen_unverified_consumers(#request_context{consumer = RequestConsumer}) ->
+    ValidConsumerTypes = valid_consumer_token_holders(),
+    UnverifiedTypes = case RequestConsumer of
+        undefined -> ValidConsumerTypes;
+        ?SUB(Type, _) -> ValidConsumerTypes -- [Type]
+    end,
+    lists:map(fun(ConsumerType) ->
+        Consumer = set_up_consumer(ConsumerType),
+        case rand:uniform(2) of
+            1 -> Consumer;
+            2 -> Consumer#subject{id = <<"*">>}
+        end
+    end, UnverifiedTypes).
 
 
 gen_correct_ip_based_caveats(RC) -> [
@@ -1046,9 +1193,9 @@ gen_unverified_api_caveat(#request_spec{operation = Operation, gri = GRI}) ->
     #cv_api{whitelist = lists_utils:shuffle(Unverified)}.
 
 gen_correct_api_matchspec(Operation, #gri{type = Type, id = Id, aspect = Aspect, scope = Scope}) ->
-    ServiceSpec = lists_utils:random_element([all, ?OZ_WORKER]),
-    OperationSpec = lists_utils:random_element([all, Operation]),
-    {ServiceSpec, OperationSpec, #gri_pattern{
+    ServicePattern = lists_utils:random_element([all, ?OZ_WORKER]),
+    OperationPattern = lists_utils:random_element([all, Operation]),
+    {ServicePattern, OperationPattern, #gri_pattern{
         type = lists_utils:random_element([Type, '*']),
         id = lists_utils:random_element([Id, '*']),
         aspect = lists_utils:random_element([Aspect] ++ case Aspect of
@@ -1061,16 +1208,16 @@ gen_correct_api_matchspec(Operation, #gri{type = Type, id = Id, aspect = Aspect,
 gen_unverified_api_matchspec(Operation, GRI = #gri{type = Type, aspect = Aspect, scope = Scope}) ->
     % Randomize which fields should be unverified (at least one)
     UnverifiedFields = lists_utils:random_sublist([service, operation, type, id, aspect, scope], 1, all),
-    {CorrectServiceSpec, CorrectOperationSpec, CorrectGriPattern} = gen_correct_api_matchspec(Operation, GRI),
+    {CorrectServicePattern, CorrectOperationPattern, CorrectGriPattern} = gen_correct_api_matchspec(Operation, GRI),
 
-    ServiceSpec = case lists:member(service, UnverifiedFields) of
+    ServicePattern = case lists:member(service, UnverifiedFields) of
         true -> lists_utils:random_element([?OZ_PANEL, ?OP_WORKER, ?OP_PANEL]);
-        false -> CorrectServiceSpec
+        false -> CorrectServicePattern
     end,
 
-    OperationSpec = case lists:member(operation, UnverifiedFields) of
+    OperationPattern = case lists:member(operation, UnverifiedFields) of
         true -> lists_utils:random_element([create, get, update, delete] -- [Operation]);
-        false -> CorrectOperationSpec
+        false -> CorrectOperationPattern
     end,
 
     GriPattern = #gri_pattern{
@@ -1091,7 +1238,7 @@ gen_unverified_api_matchspec(Operation, GRI = #gri{type = Type, aspect = Aspect,
             false -> CorrectGriPattern#gri_pattern.scope
         end
     },
-    {ServiceSpec, OperationSpec, GriPattern}.
+    {ServicePattern, OperationPattern, GriPattern}.
 
 
 gen_correct_data_access_caveats(RequestSpec, RequestContext) ->

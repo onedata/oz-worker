@@ -57,7 +57,7 @@
 
 -type type_validator() :: any | atom | list_of_atoms | binary |
 list_of_binaries | integer | float | json | token | invite_token | token_type |
-caveats | boolean | ipv4_address | list_of_ipv4_addresses.
+caveats | service | boolean | ipv4_address | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
 fun((term()) -> boolean()) |
@@ -856,6 +856,14 @@ check_type(caveats, Key, Caveats) ->
         end, Caveats)
     catch
         throw:{error, _} = Error -> throw(Error);
+        _:_ -> throw(?ERROR_BAD_DATA(Key))
+    end;
+check_type(service, _Key, Service = ?SERVICE(_, _)) ->
+    Service;
+check_type(service, Key, SerializedService) ->
+    try
+        aai:deserialize_service(SerializedService)
+    catch
         _:_ -> throw(?ERROR_BAD_DATA(Key))
     end;
 check_type(ipv4_address, _Key, undefined) ->

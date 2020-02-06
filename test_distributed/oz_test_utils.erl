@@ -261,7 +261,7 @@
 ]).
 -export([
     assert_invite_token_usage_limit_reached/3,
-    build_auth_ctx/2, authenticate_by_token/2, authenticate_by_token/3
+    authenticate_by_token/2, authenticate_by_token/3
 ]).
 -export([
     delete_all_entities/1,
@@ -2904,16 +2904,6 @@ assert_invite_token_usage_limit_reached(Config, Expected, TokenId) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Builds the auth ctx object with given Args (see token_auth:build_auth_ctx/*).
-%% @end
-%%--------------------------------------------------------------------
--spec build_auth_ctx(Config :: term(), [term()]) -> aai:auth_ctx().
-build_auth_ctx(Config, Args) ->
-    call_oz(Config, token_auth, build_auth_ctx, Args).
-
-
-%%--------------------------------------------------------------------
-%% @doc
 %% Verifies the token and returns resulting auth object on success. Default
 %% auth_ctx is used, which will cause verification failure if any caveat that
 %% requires certain context is included in the token.
@@ -2922,8 +2912,7 @@ build_auth_ctx(Config, Args) ->
 -spec authenticate_by_token(Config :: term(), tokens:token() | tokens:serialized()) ->
     {true, aai:auth()} | errors:error().
 authenticate_by_token(Config, Token) ->
-    AuthCtx = build_auth_ctx(Config, [undefined]),
-    authenticate_by_token(Config, Token, AuthCtx).
+    authenticate_by_token(Config, Token, #auth_ctx{}).
 
 
 %%--------------------------------------------------------------------
