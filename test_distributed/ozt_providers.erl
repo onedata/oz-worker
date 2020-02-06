@@ -31,6 +31,7 @@
 -export([create_for_admin_user/1, create_for_admin_user/2]).
 -export([create_as_support_for_user/1]).
 -export([create_as_support_for_space/1]).
+-export([set_up_support_for_user/2]).
 -export([get_root_token/1]).
 -export([create_storage/3, ensure_storage/2]).
 -export([support_space/2, support_space/4, support_space_using_token/4]).
@@ -75,6 +76,12 @@ create_as_support_for_space(SpaceId) ->
     support_space(ProviderId, SpaceId),
     ozt:reconcile_entity_graph(),
     ProviderId.
+
+
+-spec set_up_support_for_user(od_provider:id(), od_user:id()) -> ok.
+set_up_support_for_user(ProviderId, UserId) ->
+    SpaceId = ozt_users:create_space_for(UserId),
+    support_space(ProviderId, SpaceId).
 
 
 -spec get_root_token(od_provider:id()) -> tokens:token().

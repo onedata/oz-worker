@@ -30,8 +30,10 @@
 -export([list/1]).
 -export([list_user_named_tokens/2, list_provider_named_tokens/2]).
 -export([get_named_token/2]).
+-export([get_named_token_status/2]).
 -export([get_user_named_token_by_name/3]).
 -export([get_provider_named_token_by_name/3]).
+-export([get_user_temporary_token_generation/2, get_provider_temporary_token_generation/2]).
 -export([exists/1]).
 -export([update_named_token/3]).
 -export([delete_named_token/2]).
@@ -211,6 +213,17 @@ get_named_token(Auth, TokenId) ->
     }).
 
 
+%% @doc Returns if the token is currently revoked
+-spec get_named_token_status(aai:auth(), tokens:id()) ->
+    {ok, entity_logic:data()} | errors:error().
+get_named_token_status(Auth, TokenId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_token, id = TokenId, aspect = instance, scope = shared}
+    }).
+
+
 -spec get_user_named_token_by_name(aai:auth(), od_user:id(), od_token:name()) ->
     {ok, entity_logic:data()} | errors:error().
 get_user_named_token_by_name(Auth, UserId, TokenName) ->
@@ -228,6 +241,26 @@ get_provider_named_token_by_name(Auth, ProviderId, TokenName) ->
         operation = get,
         auth = Auth,
         gri = #gri{type = od_token, id = TokenName, aspect = {provider_named_token, ProviderId}}
+    }).
+
+
+-spec get_user_temporary_token_generation(aai:auth(), od_user:id()) ->
+    {ok, entity_logic:data()} | errors:error().
+get_user_temporary_token_generation(Auth, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = temporary_token_secret, id = UserId, aspect = user, scope = shared}
+    }).
+
+
+-spec get_provider_temporary_token_generation(aai:auth(), od_provider:id()) ->
+    {ok, entity_logic:data()} | errors:error().
+get_provider_temporary_token_generation(Auth, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = temporary_token_secret, id = ProviderId, aspect = provider, scope = shared}
     }).
 
 

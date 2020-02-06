@@ -68,7 +68,7 @@ named_token_to_token(TokenId, NamedToken) ->
         id = TokenId,
         subject = Subject,
         type = Type,
-        persistent = true
+        persistence = named
     },
     tokens:construct(Prototype, Secret, Caveats).
 

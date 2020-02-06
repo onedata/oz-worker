@@ -388,6 +388,12 @@ translate_resource(_, #gri{type = od_storage, aspect = instance, scope = shared}
         <<"qos_parameters">> => QosParams
     };
 
+translate_resource(_, #gri{type = od_token, aspect = instance, scope = shared}, #{<<"revoked">> := Revoked}) ->
+    #{<<"revoked">> => Revoked};
+
+translate_resource(_, #gri{type = temporary_token_secret, scope = shared}, Generation) ->
+    #{<<"generation">> => Generation};
+
 translate_resource(ProtocolVersion, GRI, Data) ->
     ?error("Cannot translate graph sync get result for:~n
     ProtocolVersion: ~p~n

@@ -54,11 +54,12 @@ get_seq() ->
 %% Sets last successfully processed sequence number to given value.
 %% @end
 %%--------------------------------------------------------------------
--spec set_seq(couchbase_changes:seq()) -> {ok, doc()} | {error, term()}.
+-spec set_seq(couchbase_changes:seq()) -> ok.
 set_seq(Seq) ->
-    datastore_model:save(?CTX, #document{
+    {ok, _} = datastore_model:save(?CTX, #document{
         key = ?GLOBAL_STATE_KEY, value = #gs_server_state{seq = Seq}
-    }).
+    }),
+    ok.
 
 
 %%%===================================================================

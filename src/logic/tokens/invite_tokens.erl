@@ -116,13 +116,13 @@ is_valid_target_id(_, _) -> false.
 %% @private
 -spec consume_internal(tokens:token(), consume_fun()) ->
     entity_logic:create_result() | errors:error().
-consume_internal(#token{persistent = false} = Token, ConsumeFun) ->
+consume_internal(#token{persistence = {temporary, _}} = Token, ConsumeFun) ->
     #token{subject = Subject, type = ?INVITE_TOKEN(InviteTokenType, EntityId)} = Token,
     % Temporary tokens cannot carry any privileges
     ensure_valid_invitation(Subject, InviteTokenType, EntityId, default_privileges),
     ConsumeFun(EntityId, token_metadata:default_invite_privileges(InviteTokenType));
 
-consume_internal(#token{persistent = true} = Token, ConsumeFun) ->
+consume_internal(#token{persistence = named} = Token, ConsumeFun) ->
     % Named tokens must be consumed in a critical section to avoid
     % race conditions with multi-use tokens.
     critical_section:run({invite_token, Token#token.id}, fun() ->

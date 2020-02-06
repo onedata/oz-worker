@@ -81,6 +81,7 @@ operation_supported(get, list, private) -> true;
 operation_supported(get, {user_named_tokens, _}, private) -> true;
 operation_supported(get, {provider_named_tokens, _}, private) -> true;
 operation_supported(get, instance, private) -> true;
+operation_supported(get, instance, shared) -> true;
 operation_supported(get, {user_named_token, _}, private) -> true;
 operation_supported(get, {provider_named_token, _}, private) -> true;
 
@@ -104,6 +105,7 @@ operation_supported(_, _, _) -> false.
 -spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
     boolean().
 is_subscribable(instance, private) -> true;
+is_subscribable(instance, shared) -> true;
 is_subscribable({user_named_token, _}, private) -> true;
 is_subscribable({user_named_tokens, _}, private) -> true;
 is_subscribable(_, _) -> false.
@@ -129,15 +131,15 @@ create(#el_req{gri = #gri{id = undefined, aspect = {provider_temporary_token, Pr
 create(#el_req{gri = #gri{id = undefined, aspect = examine}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
     #token{
-        onezone_domain = OnezoneDomain, id = Id, persistent = Persistent,
+        onezone_domain = OnezoneDomain, id = Id, persistence = Persistence,
         subject = Subject, type = Type
     } = Token,
     {ok, value, #{
         <<"onezoneDomain">> => OnezoneDomain,
         <<"id">> => Id,
-        <<"persistence">> => case Persistent of
-            true -> <<"named">>;
-            false -> <<"temporary">>
+        <<"persistence">> => case Persistence of
+            named -> <<"named">>;
+            {temporary, _} -> <<"temporary">>
         end,
         <<"subject">> => Subject,
         <<"type">> => Type,
@@ -226,8 +228,11 @@ get(#el_req{gri = #gri{aspect = {provider_named_tokens, ProviderId}}}, _) ->
     {_Names, Ids} = lists:unzip(Tokens),
     {ok, Ids};
 
-get(#el_req{gri = #gri{aspect = instance, id = TokenId}}, NamedToken) ->
+get(#el_req{gri = #gri{aspect = instance, id = TokenId, scope = private}}, NamedToken) ->
     {ok, to_token_data(TokenId, NamedToken)};
+
+get(#el_req{gri = #gri{aspect = instance, scope = shared}}, NamedToken) ->
+    {ok, #{<<"revoked">> => NamedToken#od_token.revoked}};
 
 get(#el_req{gri = #gri{aspect = {user_named_token, UserId}, id = TokenName}}, _) ->
     case token_names:lookup(?SUB(user, UserId), TokenName) of
@@ -298,10 +303,10 @@ delete(#el_req{gri = #gri{id = undefined, aspect = {provider_named_tokens, Provi
     end, ProviderTokens);
 
 delete(#el_req{gri = #gri{aspect = {user_temporary_tokens, UserId}}}) ->
-    temporary_token_secret:regenerate(?SUB(user, UserId));
+    temporary_token_secret:regenerate_for_subject(?SUB(user, UserId));
 
 delete(#el_req{gri = #gri{aspect = {provider_temporary_tokens, PrId}}}) ->
-    temporary_token_secret:regenerate(?SUB(?ONEPROVIDER, PrId)).
+    temporary_token_secret:regenerate_for_subject(?SUB(?ONEPROVIDER, PrId)).
 
 
 %%--------------------------------------------------------------------
@@ -366,12 +371,26 @@ authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {provider_temporary_
     cluster_logic:has_eff_privilege(PrId, UserId, ?CLUSTER_UPDATE);
 
 % When a token is referenced by its id, check if token's subject matches the auth
-authorize(#el_req{auth = Auth, gri = #gri{aspect = instance}}, #od_token{subject = TokenSubject}) ->
+authorize(#el_req{auth = Auth, gri = #gri{aspect = instance, scope = private}}, #od_token{subject = TokenSubject}) ->
     case {Auth, TokenSubject} of
         {#auth{subject = ?SUB(SubType, SubId)}, ?SUB(SubType, SubId)} ->
             true;
         {?USER(UserId), ?SUB(?ONEPROVIDER, ProviderId)} ->
             cluster_logic:has_eff_privilege(ProviderId, UserId, ?CLUSTER_UPDATE);
+        _ ->
+            false
+    end;
+
+authorize(#el_req{auth = Auth, gri = #gri{aspect = instance, scope = shared}}, #od_token{subject = TokenSubject}) ->
+    case {Auth, TokenSubject} of
+        {?PROVIDER(ProviderId), ?SUB(user, UserId)} ->
+            user_logic:has_eff_provider(UserId, ProviderId);
+        {?USER(UserId), ?SUB(user, UserId)} ->
+            true;
+        {?PROVIDER(ProviderId), ?SUB(?ONEPROVIDER, ProviderId)} ->
+            true;
+        {?USER(UserId), ?SUB(?ONEPROVIDER, ProviderId)} ->
+            cluster_logic:has_eff_user(ProviderId, UserId);
         _ ->
             false
     end;
@@ -574,13 +593,13 @@ create_temporary_token(Subject, Data) ->
     end,
     IsTtlAllowed orelse throw(?ERROR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTTL)),
 
-    Secret = temporary_token_secret:get(Subject),
+    {Secret, Generation} = temporary_token_secret:get_for_subject(Subject),
     Prototype = #token{
         onezone_domain = oz_worker:get_domain(),
         id = datastore_key:new(),
         subject = Subject,
         type = Type,
-        persistent = false
+        persistence = {temporary, Generation}
     },
     Token = tokens:construct(Prototype, Secret, Caveats),
     {ok, value, Token}.

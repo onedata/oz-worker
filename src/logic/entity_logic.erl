@@ -30,12 +30,15 @@
 -type req() :: #el_req{}.
 -type el_plugin() :: module().
 -type operation() :: gs_protocol:operation().
--type entity_id() :: undefined | od_user:id() | od_group:id() | od_space:id() |
-od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id() | od_cluster:id() | od_storage:id().
--type entity_type() :: od_user | od_group | od_space | od_share | od_provider |
-od_handle_service | od_handle | od_harvester | od_cluster | od_storage | oz_privileges.
+-type entity_id() :: undefined | od_user:id() | od_group:id() | od_space:id()
+| od_share:id() | od_provider:id() | od_handle_service:id() | od_handle:id()
+| od_cluster:id() | od_storage:id().
+-type entity_type() :: od_user | od_group | od_space | od_share | od_provider
+| od_handle_service | od_handle | od_harvester | od_cluster | od_storage
+| oz_privileges | temporary_token_secret.
 -type entity() :: undefined | #od_user{} | #od_group{} | #od_space{} |
-#od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{} | #od_harvester{} | #od_cluster{} | #od_storage{}.
+#od_share{} | #od_provider{} | #od_handle_service{} | #od_handle{}
+| #od_harvester{} | #od_cluster{} | #od_storage{} | #temporary_token_secret{}.
 -type revision() :: gs_protocol:revision().
 -type versioned_entity() :: gs_protocol:versioned_entity().
 -type aspect() :: gs_protocol:aspect().
