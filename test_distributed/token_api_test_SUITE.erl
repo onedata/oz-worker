@@ -922,6 +922,7 @@ confine_base(AllClients, Token, InitialCaveats, CaveatsToAdd) ->
     peer_ip = any :: any | undefined | ip_utils:ip(),
     interface = any :: any | undefined | cv_interface:interface(),
     service = any :: any | undefined | aai:service_spec(),
+    consumer = any :: any | undefined | aai:consumer_spec(),
     allow_data_access_caveats = any :: any | undefined | boolean()
 }).
 verify_access_or_identity_token(_Config) ->
@@ -972,21 +973,20 @@ verify_access_or_identity_token(_Config) ->
         #cv_time{valid_until = ozt:cluster_time_seconds() + 1800},
         #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]}
     ]),
-    OneproviderClients = [{op_panel, Provider}, {provider, Provider}],
     verify_access_or_identity_token_base(
-        access, OneproviderClients, TokenGamma, #verify_ctx{},
+        access, AllClients, TokenGamma, #verify_ctx{consumer = ?SUB(?ONEPROVIDER, Provider)},
         true, {?SUB(user, ProviderAdmin), 1800}
     ),
     verify_access_or_identity_token_base(
-        identity, OneproviderClients, TokenGamma, #verify_ctx{allow_data_access_caveats = false},
+        identity, AllClients, TokenGamma, #verify_ctx{consumer = ?SUB(?ONEPROVIDER, Provider), allow_data_access_caveats = false},
         true, {?SUB(user, ProviderAdmin), 1800}
     ),
     verify_access_or_identity_token_base(
-        access, AllClients -- OneproviderClients, TokenGamma, #verify_ctx{},
+        access, AllClients, TokenGamma, #verify_ctx{},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]})
     ),
     verify_access_or_identity_token_base(
-        identity, AllClients -- OneproviderClients, TokenGamma, #verify_ctx{},
+        identity, AllClients, TokenGamma, #verify_ctx{},
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]})
     ),
 
@@ -1130,6 +1130,7 @@ verify_access_or_identity_token_base(AccessOrIdentity, AllClients, Token, Verify
         peer_ip = PeerIp,
         interface = Interface,
         service = Service,
+        consumer = Consumer,
         allow_data_access_caveats = AllowDataAccessCaveats
     } = VerifyData,
     ?assert(api_test_utils:run_tests(ozt:get_test_config(), #api_test_spec{
@@ -1180,8 +1181,9 @@ verify_access_or_identity_token_base(AccessOrIdentity, AllClients, Token, Verify
             end
         },
         data_spec = #data_spec{
-            % Peer IP, interface and allowDataAccessCaveats flag can be required
-            % to verify a token, but generally they are optional in the API.
+            % Peer IP, interface, service, consumer and allowDataAccessCaveats
+            % flag can be required to verify a token, but generally they are
+            % optional in the API.
             required = lists:flatten([
                 <<"token">>,
                 case PeerIp of
@@ -1194,10 +1196,16 @@ verify_access_or_identity_token_base(AccessOrIdentity, AllClients, Token, Verify
                     undefined -> [];
                     _ -> [<<"interface">>]
                 end,
-                case Service of
+                case {AccessOrIdentity, Service} of
+                    {identity, _} -> [];
+                    {access, any} -> [];
+                    {access, undefined} -> [];
+                    {access, _} -> [<<"service">>]
+                end,
+                case Consumer of
                     any -> [];
                     undefined -> [];
-                    _ -> [<<"service">>]
+                    _ -> [<<"consumer">>]
                 end,
                 case AllowDataAccessCaveats of
                     any -> [];
@@ -1216,8 +1224,14 @@ verify_access_or_identity_token_base(AccessOrIdentity, AllClients, Token, Verify
                     undefined -> [];
                     _ -> []
                 end,
-                case Service of
-                    any -> [<<"service">>];
+                case {AccessOrIdentity, Service} of
+                    {identity, _} -> [];
+                    {access, any} -> [<<"service">>];
+                    {access, undefined} -> [];
+                    {access, _} -> []
+                end,
+                case Consumer of
+                    any -> [<<"consumer">>];
                     undefined -> [];
                     _ -> []
                 end,
@@ -1239,10 +1253,16 @@ verify_access_or_identity_token_base(AccessOrIdentity, AllClients, Token, Verify
                     undefined -> [];
                     _ -> [Interface]
                 end,
-                <<"service">> => case Service of
-                    any -> [aai:serialize_service(?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID))];
+                <<"service">> => case {AccessOrIdentity, Service} of
+                    {identity, _} -> [];
+                    {access, any} -> [aai:serialize_service(?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID))];
+                    {access, undefined} -> [];
+                    {access, _} -> [aai:serialize_service(Service)]
+                end,
+                <<"consumer">> => case Consumer of
+                    any -> [aai:serialize_subject(?SUB(?ONEPROVIDER, <<"prov-id">>))];
                     undefined -> [];
-                    _ -> [aai:serialize_service(Service)]
+                    _ -> [aai:serialize_subject(Consumer)]
                 end,
                 <<"allowDataAccessCaveats">> => case AllowDataAccessCaveats of
                     any -> [true, false];
@@ -1250,7 +1270,7 @@ verify_access_or_identity_token_base(AccessOrIdentity, AllClients, Token, Verify
                     _ -> [AllowDataAccessCaveats]
                 end
             },
-            bad_values = [
+            bad_values = lists:flatten([
                 {<<"token">>, <<"1234">>, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
                 {<<"token">>, 1234, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
                 {<<"token">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_TOKEN(<<"token">>, ?ERROR_BAD_TOKEN)},
@@ -1260,12 +1280,19 @@ verify_access_or_identity_token_base(AccessOrIdentity, AllClients, Token, Verify
                 {<<"interface">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_ATOM(<<"interface">>)},
                 {<<"interface">>, <<"graphSync">>,
                     ?ERROR_BAD_VALUE_NOT_ALLOWED(<<"interface">>, cv_interface:valid_interfaces())},
-                {<<"service">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_DATA(<<"service">>)},
-                {<<"service">>, <<"graphSync">>, ?ERROR_BAD_DATA(<<"service">>)},
+                case AccessOrIdentity of
+                    identity -> [];
+                    access -> [
+                        {<<"service">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_DATA(<<"service">>)},
+                        {<<"service">>, <<"graphSync">>, ?ERROR_BAD_DATA(<<"service">>)}
+                    ]
+                end,
+                {<<"consumer">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_DATA(<<"consumer">>)},
+                {<<"consumer">>, <<"graphSync">>, ?ERROR_BAD_DATA(<<"consumer">>)},
                 {<<"allowDataAccessCaveats">>, <<"1234">>, ?ERROR_BAD_VALUE_BOOLEAN(<<"allowDataAccessCaveats">>)},
                 {<<"allowDataAccessCaveats">>, 1234, ?ERROR_BAD_VALUE_BOOLEAN(<<"allowDataAccessCaveats">>)},
                 {<<"allowDataAccessCaveats">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_BOOLEAN(<<"allowDataAccessCaveats">>)}
-            ]
+            ])
         }
     })).
 
@@ -1280,30 +1307,27 @@ verify_invite_token(_Config) ->
     ozt_providers:support_space(Provider, Space),
     ozt:reconcile_entity_graph(),
 
-    ProviderClient = {provider, Provider},
-    % Only space support token can be consumed by a provider, so this will be
-    % a typical list of allowed clients
-    AllClientsButProvider = [
+    AllClients = [
         nobody,
         root,
+        {provider, Provider},
         {user, User},
         {user, ProviderAdmin}
     ],
-    AllClients = [ProviderClient | AllClientsButProvider],
 
     TokenAlpha = create_user_temporary_token(User, ?INVITE_TOKEN(?USER_JOIN_SPACE, Space), [
         #cv_time{valid_until = ozt:cluster_time_seconds() + 3600}
     ]),
     verify_invite_token_base(
-        AllClients, TokenAlpha, undefined, any,
+        AllClients, TokenAlpha, any, undefined, any,
         true, {?SUB(user, User), 3600}
     ),
     verify_invite_token_base(
-        AllClients, TokenAlpha, undefined, ?USER_JOIN_SPACE,
+        AllClients, TokenAlpha, undefined, any, ?USER_JOIN_SPACE,
         true, {?SUB(user, User), 3600}
     ),
     verify_invite_token_base(
-        AllClients, TokenAlpha, undefined, ?GROUP_JOIN_SPACE,
+        AllClients, TokenAlpha, any, any, ?GROUP_JOIN_SPACE,
         false, ?ERROR_NOT_AN_INVITE_TOKEN(?GROUP_JOIN_SPACE, ?INVITE_TOKEN(?USER_JOIN_SPACE, Space))
     ),
 
@@ -1313,11 +1337,11 @@ verify_invite_token(_Config) ->
         ]
     ),
     verify_invite_token_base(
-        AllClients, TokenBeta, undefined, any,
+        AllClients, TokenBeta, undefined, undefined, any,
         true, {?SUB(?ONEPROVIDER, Provider), 2700}
     ),
     verify_invite_token_base(
-        AllClients, TokenBeta, undefined, ?GROUP_JOIN_CLUSTER,
+        AllClients, TokenBeta, any, any, ?GROUP_JOIN_CLUSTER,
         true, {?SUB(?ONEPROVIDER, Provider), 2700}
     ),
 
@@ -1326,11 +1350,11 @@ verify_invite_token(_Config) ->
         #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]}
     ]),
     verify_invite_token_base(
-        [ProviderClient], TokenGamma, undefined, ?SUPPORT_SPACE,
+        AllClients, TokenGamma, undefined, ?SUB(?ONEPROVIDER, Provider), ?SUPPORT_SPACE,
         true, {?SUB(user, User), 1200}
     ),
     verify_invite_token_base(
-        AllClientsButProvider, TokenGamma, undefined, any,
+        AllClients, TokenGamma, any, undefined, any,
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_consumer{whitelist = [?SUB(?ONEPROVIDER, Provider)]})
     ),
 
@@ -1340,40 +1364,39 @@ verify_invite_token(_Config) ->
         ]
     ),
     verify_invite_token_base(
-        AllClients, TokenDelta, undefined, any, false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(
-            #cv_time{valid_until = ozt:cluster_time_seconds() - 1}
-        )
+        AllClients, TokenDelta, undefined, any, any,
+        false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_time{valid_until = ozt:cluster_time_seconds() - 1})
     ),
 
     TokenLambda = create_user_temporary_token(User, ?INVITE_TOKEN(?USER_JOIN_GROUP, Group), [
         #cv_ip{whitelist = [{{134, 93, 0, 0}, 16}]}
     ]),
     verify_invite_token_base(
-        AllClients, TokenLambda, undefined, any,
+        AllClients, TokenLambda, any, any, any,
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_ip{whitelist = [{{134, 93, 0, 0}, 16}]})
     ),
     verify_invite_token_base(
-        AllClients, TokenLambda, <<"133.93.1.182">>, ?USER_JOIN_GROUP,
+        AllClients, TokenLambda, <<"133.93.1.182">>, any, ?USER_JOIN_GROUP,
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_ip{whitelist = [{{134, 93, 0, 0}, 16}]})
     ),
     verify_invite_token_base(
-        AllClients, TokenLambda, <<"134.93.7.18">>, any,
+        AllClients, TokenLambda, <<"134.93.7.18">>, any, any,
         true, {?SUB(user, User), ?DEFAULT_TEMP_CAVEAT_TTL}
     ),
     verify_invite_token_base(
-        AllClients, TokenLambda, <<"134.93.1.182">>, ?USER_JOIN_GROUP,
+        AllClients, TokenLambda, <<"134.93.1.182">>, any, ?USER_JOIN_GROUP,
         true, {?SUB(user, User), ?DEFAULT_TEMP_CAVEAT_TTL}
     ),
 
     TokenSigma = create_user_temporary_token(ProviderAdmin, ?GUI_ACCESS_TOKEN(SessionId)),
     verify_invite_token_base(
-        AllClients, TokenSigma, undefined, any,
+        AllClients, TokenSigma, undefined, any, any,
         false, ?ERROR_NOT_AN_INVITE_TOKEN(any, ?GUI_ACCESS_TOKEN(SessionId))
     ),
 
     TokenTheta = create_user_temporary_token(User, ?ACCESS_TOKEN),
     verify_invite_token_base(
-        AllClients, TokenTheta, undefined, ?SPACE_JOIN_HARVESTER,
+        AllClients, TokenTheta, any, undefined, ?SPACE_JOIN_HARVESTER,
         false, ?ERROR_NOT_AN_INVITE_TOKEN(?SPACE_JOIN_HARVESTER, ?ACCESS_TOKEN)
     ),
 
@@ -1383,12 +1406,12 @@ verify_invite_token(_Config) ->
         ]
     ),
     verify_invite_token_base(
-        AllClients, TokenOmega, undefined, any,
+        AllClients, TokenOmega, undefined, any, any,
         false, ?ERROR_TOKEN_CAVEAT_UNVERIFIED(#cv_scope{scope = identity_token})
     ).
 
 
-verify_invite_token_base(AllClients, Token, PeerIp, ExpType, ShouldSucceed, ExpResult) ->
+verify_invite_token_base(AllClients, Token, PeerIp, Consumer, ExpType, ShouldSucceed, ExpResult) ->
     ?assert(api_test_utils:run_tests(ozt:get_test_config(), #api_test_spec{
         client_spec = #client_spec{
             correct = AllClients,
@@ -1436,14 +1459,41 @@ verify_invite_token_base(AllClients, Token, PeerIp, ExpType, ShouldSucceed, ExpR
                 <<"token">>,
                 % Do not include expected type in the request in case of 'any'
                 case ExpType of any -> []; _ -> <<"expectedInviteTokenType">> end,
-                case PeerIp of undefined -> []; _ -> [<<"peerIp">>] end
+                case PeerIp of
+                    any -> [];
+                    undefined -> [];
+                    _ -> [<<"peerIp">>]
+                end,
+                case Consumer of
+                    any -> [];
+                    undefined -> [];
+                    _ -> [<<"consumer">>]
+                end
             ]),
             optional = lists:flatten([
-                case PeerIp of undefined -> [<<"peerIp">>]; _ -> [] end
+                case PeerIp of
+                    any -> [<<"peerIp">>];
+                    undefined -> [];
+                    _ -> []
+                end,
+                case Consumer of
+                    any -> [<<"consumer">>];
+                    undefined -> [];
+                    _ -> []
+                end
             ]),
             correct_values = #{
                 <<"token">> => [ozt_tokens:ensure_serialized(Token)],
-                <<"peerIp">> => [utils:undefined_to_null(PeerIp)],
+                <<"peerIp">> => case PeerIp of
+                    any -> [<<"1.2.3.4">>, <<"5.6.7.8">>];
+                    undefined -> [];
+                    _ -> [utils:undefined_to_null(PeerIp)]
+                end,
+                <<"consumer">> => case Consumer of
+                    any -> [aai:serialize_subject(?SUB(user, <<"user-id">>))];
+                    undefined -> [];
+                    _ -> [aai:serialize_subject(Consumer)]
+                end,
                 <<"expectedInviteTokenType">> => case ExpType of
                     any -> [];
                     _ -> [tokens:invite_token_type_to_str(ExpType)]
@@ -1456,6 +1506,8 @@ verify_invite_token_base(AllClients, Token, PeerIp, ExpType, ShouldSucceed, ExpR
                 {<<"peerIp">>, <<"1234.6.78.19">>, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
                 {<<"peerIp">>, 1234, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
                 {<<"peerIp">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_VALUE_IPV4_ADDRESS(<<"peerIp">>)},
+                {<<"consumer">>, #{<<"a">> => <<"b">>}, ?ERROR_BAD_DATA(<<"consumer">>)},
+                {<<"consumer">>, <<"graphSync">>, ?ERROR_BAD_DATA(<<"consumer">>)},
                 {<<"expectedInviteTokenType">>, <<"userJoinUser">>,
                     ?ERROR_BAD_VALUE_INVITE_TOKEN_TYPE(<<"expectedInviteTokenType">>)},
                 {<<"expectedInviteTokenType">>, 1234,

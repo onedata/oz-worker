@@ -57,7 +57,7 @@
 
 -type type_validator() :: any | atom | list_of_atoms | binary |
 list_of_binaries | integer | float | json | token | invite_token | token_type |
-caveats | service | boolean | ipv4_address | list_of_ipv4_addresses.
+caveats | service | consumer | boolean | ipv4_address | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
 fun((term()) -> boolean()) |
@@ -616,22 +616,22 @@ ensure_valid(#state{req = #el_req{gri = #gri{aspect = Aspect}, data = Data} = Re
     % any key is missing or cannot be validated.
     Data2 = lists:foldl(
         fun(Key, DataAcc) ->
-            case transform_and_check_value(Key, DataAcc, Required) of
+            case transform_and_check_value(Key, DataWithAspect, Required) of
                 false ->
                     throw(?ERROR_MISSING_REQUIRED_VALUE(Key));
-                {true, NewData} ->
-                    NewData
+                {true, SanitizedData} ->
+                    maps:merge(DataAcc, SanitizedData)
             end
-        end, DataWithAspect, maps:keys(Required)),
+        end, #{}, maps:keys(Required)),
     % Now, optional parameters. Transform the data if needed, fail when
     % any of the keys exists in the data but cannot be validated.
     Data3 = lists:foldl(
         fun(Key, DataAcc) ->
-            case transform_and_check_value(Key, DataAcc, Optional) of
+            case transform_and_check_value(Key, DataWithAspect, Optional) of
                 false ->
                     DataAcc;
-                {true, NewData} ->
-                    NewData
+                {true, SanitizedData} ->
+                    maps:merge(DataAcc, SanitizedData)
             end
         end, Data2, maps:keys(Optional)),
     % Finally, "at least one" parameters. Transform the data if needed, fail
@@ -639,11 +639,11 @@ ensure_valid(#state{req = #el_req{gri = #gri{aspect = Aspect}, data = Data} = Re
     % be validated.
     {Data4, HasAtLeastOne} = lists:foldl(
         fun(Key, {DataAcc, HasAtLeastOneAcc}) ->
-            case transform_and_check_value(Key, DataAcc, AtLeastOne) of
+            case transform_and_check_value(Key, DataWithAspect, AtLeastOne) of
                 false ->
                     {DataAcc, HasAtLeastOneAcc};
-                {true, NewData} ->
-                    {NewData, true}
+                {true, SanitizedData} ->
+                    {maps:merge(DataAcc, SanitizedData), true}
             end
         end, {Data3, false}, maps:keys(AtLeastOne)),
     case {length(maps:keys(AtLeastOne)), HasAtLeastOne} of
@@ -654,8 +654,7 @@ ensure_valid(#state{req = #el_req{gri = #gri{aspect = Aspect}, data = Data} = Re
         {_, false} ->
             throw(?ERROR_MISSING_AT_LEAST_ONE_VALUE(maps:keys(AtLeastOne)))
     end,
-    % Remove 'aspect' key from data as it is no longer needed
-    State#state{req = Req#el_req{data = maps:remove(aspect, Data4)}}.
+    State#state{req = Req#el_req{data = Data4}}.
 
 
 %%--------------------------------------------------------------------
@@ -679,7 +678,7 @@ transform_and_check_value({aspect, Key}, Data, Validator) ->
     % Ignore the returned value - the check will throw in case the value is
     % not valid
     transform_and_check_value(TypeRule, ValueRule, Key, Value),
-    {true, Data};
+    {true, #{}};
 transform_and_check_value(Key, Data, Validator) ->
     case maps:find(Key, Data) of
         error ->
@@ -687,7 +686,7 @@ transform_and_check_value(Key, Data, Validator) ->
         {ok, Value} ->
             {TypeRule, ValueRule} = maps:get(Key, Validator),
             NewValue = transform_and_check_value(TypeRule, ValueRule, Key, Value),
-            {true, Data#{Key => NewValue}}
+            {true, #{Key => NewValue}}
     end.
 
 
@@ -863,6 +862,14 @@ check_type(service, _Key, Service = ?SERVICE(_, _)) ->
 check_type(service, Key, SerializedService) ->
     try
         aai:deserialize_service(SerializedService)
+    catch
+        _:_ -> throw(?ERROR_BAD_DATA(Key))
+    end;
+check_type(consumer, _Key, Consumer = ?SUB(_, _)) ->
+    Consumer;
+check_type(consumer, Key, SerializedConsumer) ->
+    try
+        aai:deserialize_subject(SerializedConsumer)
     catch
         _:_ -> throw(?ERROR_BAD_DATA(Key))
     end;
