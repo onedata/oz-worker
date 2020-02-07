@@ -746,53 +746,6 @@ auth_by_self_or_cluster_privilege(Req, _) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Tests connection to given urls.
-%% @end
-%% @equiv test_connection/2
-%%--------------------------------------------------------------------
--spec test_connection(#{ServiceName :: binary() => Url :: binary()}) ->
-    #{ServiceName :: binary() => Status :: ok | error}.
-test_connection(Map) ->
-    test_connection(maps:to_list(Map), #{}).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Tests connection to given urls.
-%% @end
-%%--------------------------------------------------------------------
--spec test_connection([{ServiceName :: binary(), Url :: binary()}], Result) ->
-    Result when Result :: #{Url :: binary() => Status :: ok | error}.
-test_connection([], Acc) ->
-    Acc;
-test_connection([{<<"undefined">>, <<Url/binary>>} | Rest], Acc) ->
-    Opts = [{ssl_options, [{secure, false}]}],
-    ConnStatus = case http_client:get(Url, #{}, <<>>, Opts) of
-        {ok, 200, _, _} ->
-            ok;
-        _ ->
-            error
-    end,
-    test_connection(Rest, Acc#{Url => ConnStatus});
-test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
-    Opts = [{ssl_options, [{secure, false}]}],
-    ConnStatus = case http_client:get(Url, #{}, <<>>, Opts) of
-        {ok, 200, _, ServiceName} ->
-            ok;
-        Error ->
-            ?debug("Checking connection to ~p failed with error: ~n~p",
-                [Url, Error]),
-            error
-    end,
-    test_connection(Rest, Acc#{Url => ConnStatus});
-test_connection([{Key, _} | _], _) ->
-    throw(?ERROR_BAD_DATA(Key)).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
 %% Sets the domain of a provider, ensuring the domain is not used
 %% by another provider.
 %% @end
