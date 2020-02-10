@@ -430,7 +430,7 @@ gui_package_verification_works(Config) ->
     {OpGuiPackage, _OpIndexContent} = oz_test_utils:create_dummy_gui_package(),
     {ok, OpGuiHash} = gui:package_hash(OpGuiPackage),
 
-    ExpError = json_utils:encode(gs_protocol_errors:error_to_json(1, ?ERROR_GUI_PACKAGE_UNVERIFIED)),
+    ExpError = json_utils:encode(gs_protocol_errors:error_to_json(1, ?ERROR_GUI_PACKAGE_UNVERIFIED(OpGuiHash))),
 
     % GUI hash is not whitelisted
     ?assertMatch({ok, 400, _, ExpError}, perform_upload(
@@ -480,8 +480,10 @@ gui_package_verification_works(Config) ->
     {HrvGuiPackage1, _HrvIndexContent1} = oz_test_utils:create_dummy_gui_package(),
     {ok, HrvGuiHash1} = gui:package_hash(HrvGuiPackage1),
 
+    ExpError2 = json_utils:encode(gs_protocol_errors:error_to_json(1, ?ERROR_GUI_PACKAGE_UNVERIFIED(HrvGuiHash1))),
+
     % GUI hash is not whitelisted
-    ?assertMatch({ok, 400, _, ExpError}, perform_upload(
+    ?assertMatch({ok, 400, _, ExpError2}, perform_upload(
         Config, <<"hrv">>, HarvesterId, HrvGuiPackage1, #{<<"x-auth-token">> => GuiToken}
     )),
 
@@ -503,8 +505,11 @@ gui_package_verification_works(Config) ->
 
     % Unknown hash should not be accepted
     {HrvGuiPackage2, _HrvIndexContent2} = oz_test_utils:create_dummy_gui_package(),
+    {ok, HrvGuiHash2} = gui:package_hash(HrvGuiPackage2),
 
-    ?assertMatch({ok, 400, _, ExpError}, perform_upload(
+    ExpError3 = json_utils:encode(gs_protocol_errors:error_to_json(1, ?ERROR_GUI_PACKAGE_UNVERIFIED(HrvGuiHash2))),
+
+    ?assertMatch({ok, 400, _, ExpError3}, perform_upload(
         Config, <<"hrv">>, HarvesterId, HrvGuiPackage2, #{<<"x-auth-token">> => GuiToken}
     )),
 
@@ -515,7 +520,7 @@ gui_package_verification_works(Config) ->
     )),
 
     % It should not work for other services
-    ?assertMatch({ok, 400, _, ExpError}, perform_upload(
+    ?assertMatch({ok, 400, _, ExpError3}, perform_upload(
         Config, <<"onp">>, ClusterId, HrvGuiPackage2, #{<<"macaroon">> => ProviderMacaroon}
     )),
 
