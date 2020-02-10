@@ -80,7 +80,7 @@
 %%--------------------------------------------------------------------
 -spec deploy_package(onedata:gui(), onedata:release_version(), file:name_all()) ->
     {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE |
-    ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED.
+    ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED(binary()).
 deploy_package(GuiType, ReleaseVsn, PackagePath) ->
     deploy_package(GuiType, ReleaseVsn, PackagePath, true).
 
@@ -94,7 +94,7 @@ deploy_package(GuiType, ReleaseVsn, PackagePath) ->
 %%--------------------------------------------------------------------
 -spec deploy_package(onedata:gui(), onedata:release_version(), file:name_all(), VerifyGuiHash :: boolean()) ->
     {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE |
-    ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED.
+    ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED(binary()).
 deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
     case gui:read_package(PackagePath) of
         {ok, _, PackageBin} ->
@@ -104,7 +104,7 @@ deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
                     ensure_package(GuiType, PackageBin, GuiHash),
                     {ok, GuiHash};
                 false ->
-                    ?ERROR_GUI_PACKAGE_UNVERIFIED
+                    ?ERROR_GUI_PACKAGE_UNVERIFIED(GuiHash)
             end;
         {error, _} = Error ->
             Error
