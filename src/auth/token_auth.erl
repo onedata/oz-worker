@@ -266,7 +266,7 @@ validate_subject_and_service(?INVITE_TOKEN(_, _), _, _) ->
 %% @private
 %% @doc
 %% Determines if the service is allowed for specific subject in an access token,
-%% n other words if the service can use subject's tokens on its behalf.
+%% in other words if the service can use subject's tokens on their behalf.
 %% @end
 %%--------------------------------------------------------------------
 -spec is_service_allowed(aai:subject(), aai:service_spec()) -> boolean().

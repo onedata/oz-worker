@@ -70,7 +70,7 @@
 
 -record(request_context, {
     subject :: aai:subject(),
-    token_purpose :: access_token | service_token | consumer_token,
+    scope :: unlimited | identity_token,
     current_timestamp :: time_utils:seconds(),
     interface :: undefined | cv_interface:interface(),
     ip :: undefined | ip_utils:ip(),
@@ -513,7 +513,7 @@ check_service_token_caveats_handling(RequestSpec) ->
                             ?SERVICE(?OP_PANEL, PrId) -> ?SUB(?ONEPROVIDER, ?OP_PANEL, PrId)
                         end,
                         % Identity tokens cannot have service caveats and cannot allow data access caveats
-                        token_purpose = service_token,
+                        scope = identity_token,
                         service = undefined,
                         service_token = undefined,
                         consumer = undefined,
@@ -527,7 +527,12 @@ check_service_token_caveats_handling(RequestSpec) ->
                         Service, lists_utils:shuffle(RandCorrectCaveats ++ RandUnverifiedCaveats)
                     ),
                     RequestContextWithServiceToken = RequestContext#request_context{service_token = ServiceToken},
-                    Result = make_request(RequestSpec, RequestContextWithServiceToken, ClientAuth),
+                    % Service tokens are not supported in GraphSync - the service is
+                    % inferred from the channel owner, after the owner connects with
+                    % a regular access token. Use only logic and REST methods.
+                    % Cases with service caveats via GraphSync are tested in
+                    % 'check_token_caveats_handling'.
+                    Result = make_request(RequestSpec, RequestContextWithServiceToken, ClientAuth, [logic, rest]),
                     case RandUnverifiedCaveats of
                         [] ->
                             ?assertMatch(ok, Result);
@@ -560,7 +565,7 @@ check_consumer_token_caveats_handling(RequestSpec) ->
                     ConsumerRequestContext = RequestContext#request_context{
                         % Identity tokens cannot have service caveats and cannot allow data access caveats
                         subject = Consumer,
-                        token_purpose = consumer_token,
+                        scope = identity_token,
                         service = undefined,
                         service_token = undefined,
                         consumer = undefined,
@@ -638,8 +643,12 @@ make_request_with_random_context(RequestSpec, Subject, ClientAuth) ->
 
 
 make_request(RequestSpec, RequestContext, ClientAuth) ->
-    AvailableRequestMethods = available_methods_for_ctx(RequestContext),
-    case lists_utils:random_element(AvailableRequestMethods) of
+    make_request(RequestSpec, RequestContext, ClientAuth, [logic, rest, gs, op_gs_with_override]).
+
+
+make_request(RequestSpec, RequestContext, ClientAuth, CompatibleMethods) ->
+    AvailableMethods = lists_utils:intersect(CompatibleMethods, available_methods_for_ctx(RequestContext)),
+    case lists_utils:random_element(AvailableMethods) of
         logic -> request_via_logic(RequestSpec, RequestContext, ClientAuth);
         rest -> request_via_rest(RequestSpec, RequestContext, ClientAuth);
         gs -> request_via_gs(RequestSpec, RequestContext, ClientAuth);
@@ -924,7 +933,7 @@ randomize_request_context(Subject, Service, Consumer) ->
     end,
     #request_context{
         subject = Subject,
-        token_purpose = access_token,
+        scope = unlimited,
         current_timestamp = ozt:cluster_time_seconds(),
         interface = lists_utils:random_element([undefined | EligibleInterfaces]),
         ip = IP,
@@ -986,26 +995,24 @@ gen_correct_caveats(RequestSpec, RC) -> lists:flatten([
         undefined -> [];
         _ -> gen_correct_consumer_caveat(RC)
     end,
-    case RC#request_context.token_purpose of
-        consumer_token -> #cv_scope{scope = identity_token};
-        _ -> []
+    case RC#request_context.scope of
+        unlimited -> [];
+        _ -> #cv_scope{scope = identity_token}
     end,
-    case {RC#request_context.token_purpose, RC#request_context.interface} of
-        {service_token, _} ->
+    case RC#request_context.interface of
+        undefined ->
             [];
-        {_, undefined} ->
-            [];
-        {_, oneclient} ->
+        oneclient ->
             % oneclient interface caveat causes API limitations
             case RequestSpec#request_spec.available_with_data_access_caveats of
                 false -> [];
                 true -> #cv_interface{interface = oneclient}
             end;
-        {_, Interface} ->
+        Interface ->
             #cv_interface{interface = Interface}
     end,
-    case RC#request_context.token_purpose of
-        access_token -> gen_correct_api_caveat(RequestSpec);
+    case RC#request_context.scope of
+        unlimited -> gen_correct_api_caveat(RequestSpec);
         _ -> [] % Service and consumer (identity) tokens cannot have API caveats
     end,
     gen_correct_data_access_caveats(RequestSpec, RC)
@@ -1031,8 +1038,8 @@ gen_unverified_caveats(RequestSpec, RC) -> lists:flatten([
         _ ->
             gen_unverified_ip_based_caveats(RC)
     end,
-    case RC#request_context.token_purpose of
-        access_token -> #cv_scope{scope = identity_token};
+    case RC#request_context.scope of
+        unlimited -> #cv_scope{scope = identity_token};
         _ -> []
     end,
     #cv_interface{interface = lists_utils:random_element(case RC#request_context.interface of
@@ -1047,8 +1054,8 @@ gen_unverified_caveats(RequestSpec, RC) -> lists:flatten([
         Interface ->
             cv_interface:valid_interfaces() -- [Interface]
     end)},
-    case RC#request_context.token_purpose of
-        access_token -> gen_unverified_api_caveat(RequestSpec);
+    case RC#request_context.scope of
+        unlimited -> gen_unverified_api_caveat(RequestSpec);
         _ -> gen_correct_api_caveat(RequestSpec) % Identity tokens cannot have API caveats
     end,
     gen_unverified_data_access_caveats(RequestSpec, RC)
