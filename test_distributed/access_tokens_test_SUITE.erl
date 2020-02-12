@@ -1045,10 +1045,10 @@ gen_unverified_caveats(RequestSpec, RC) -> lists:flatten([
         undefined ->
             cv_interface:valid_interfaces();
         oneclient ->
-            % oneclient interface caveat causes API limitations
-            case RequestSpec#request_spec.available_with_data_access_caveats of
-                false -> cv_interface:valid_interfaces();
-                true -> cv_interface:valid_interfaces() -- [oneclient]
+            case {RC#request_context.scope, RequestSpec#request_spec.available_with_data_access_caveats} of
+                % oneclient interface caveat causes API limitations, but only for access tokens
+                {unlimited, false} -> cv_interface:valid_interfaces();
+                _ -> cv_interface:valid_interfaces() -- [oneclient]
             end;
         Interface ->
             cv_interface:valid_interfaces() -- [Interface]
