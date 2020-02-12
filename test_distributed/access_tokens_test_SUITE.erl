@@ -518,7 +518,6 @@ check_service_token_caveats_handling(RequestSpec) ->
                         service_token = undefined,
                         consumer = undefined,
                         consumer_token = undefined,
-                        interface = undefined,
                         data_access_caveats_policy = disallow_data_access_caveats
                     },
                     RandCorrectCaveats = lists_utils:random_sublist(gen_correct_caveats(RequestSpec, ServiceRequestContext)),
