@@ -1653,43 +1653,46 @@ get_record(od_share, 3) -> {
     % Returns two records:
     %   ExpAfterUpgrade - expected value after upgrade from previous version
     %   NextIteration - different record that will be upgraded to the next version
-    #od_share{
-        name = <<"name">>,
-        public_url = <<"public_url">>,
-        space = <<"parent_space_id">>,
-        handle = <<"handle_id">>,
-        root_file = <<"root_file_id">>,
+    {od_share,
+        <<"name">>,
+        <<"public_url">>,
+        <<"parent_space_id">>,
+        <<"handle_id">>,
+        <<"root_file_id">>,
 
-        creation_time = ?DUMMY_TIMESTAMP,
-        creator = undefined
+        ?DUMMY_TIMESTAMP,
+        undefined
     },
-    #od_share{
-        name = <<"name">>,
-        public_url = <<"public_url">>,
-        space = <<"parent_space_id">>,
-        handle = <<"handle_id">>,
-        root_file = <<"root_file_id">>,
+    {od_share,
+        <<"name">>,
+        <<"public_url">>,
+        <<"parent_space_id">>,
+        <<"handle_id">>,
+        <<"root_file_id">>,
 
-        creation_time = ?DUMMY_TIMESTAMP,
-        creator = {client, root, <<"">>}
+        ?DUMMY_TIMESTAMP,
+        {client, root, <<"">>}
     }
 };
-get_record(od_share, 4) -> #od_share{
-    name = <<"name">>,
-    public_url = <<"public_url">>,
-    space = <<"parent_space_id">>,
-    handle = <<"handle_id">>,
-    root_file = <<"root_file_id">>,
+get_record(od_share, 4) -> {od_share,
+    <<"name">>,
+    <<"public_url">>,
+    <<"parent_space_id">>,
+    <<"handle_id">>,
+    <<"root_file_id">>,
 
-    creation_time = ?DUMMY_TIMESTAMP,
-    creator = {subject, root, undefined}
+    ?DUMMY_TIMESTAMP,
+    {subject, root, undefined}
 };
 get_record(od_share, 5) -> #od_share{
     name = <<"name">>,
     public_url = <<"public_url">>,
+
     space = <<"parent_space_id">>,
     handle = <<"handle_id">>,
+
     root_file = <<"root_file_id">>,
+    file_type = dir,
 
     creation_time = ?DUMMY_TIMESTAMP,
     creator = ?SUB(root)

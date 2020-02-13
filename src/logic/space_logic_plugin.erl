@@ -134,6 +134,7 @@ is_subscribable({group_privileges, _}, private) -> true;
 is_subscribable({eff_group_privileges, _}, private) -> true;
 is_subscribable({eff_group_membership, _}, private) -> true;
 is_subscribable(eff_providers, private) -> true;
+is_subscribable(shares, private) -> true;
 is_subscribable(harvesters, private) -> true;
 is_subscribable(_, _) -> false.
 
@@ -306,7 +307,7 @@ get(#el_req{gri = #gri{aspect = instance, scope = protected}}, Space) ->
         <<"providers">> => entity_graph:get_relations_with_attrs(effective, top_down, od_provider, Space),
         <<"creationTime">> => CreationTime,
         <<"creator">> => Creator,
-        <<"sharedDirectories">> => length(Shares)
+        <<"sharesCount">> => length(Shares)
     }};
 
 get(#el_req{gri = #gri{aspect = users}}, Space) ->

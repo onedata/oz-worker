@@ -5,13 +5,14 @@
 %% cited in 'LICENSE.txt'.
 %% @end
 %% ===================================================================
-%% @doc This file contains the application description.
+%% @doc This file contains the oz-worker application description.
 %% @end
 %% ===================================================================
 
 {application, oz_worker, [
-    {description, "OneZone worker node."},
-    {vsn, "19.02.1"},
+    {description, "Onezone worker node."},
+    % @todo bumped to denote compatibility-breaking changes, adjust when releasing
+    {vsn, "20.02.0-beta1"},
     {registered, [oz_worker_sup]},
     {applications, [
         kernel,

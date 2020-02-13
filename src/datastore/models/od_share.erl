@@ -197,13 +197,16 @@ get_record_struct(4) ->
         ]}}
     ]};
 get_record_struct(5) ->
+    % new field - file_type
     % creator field - nested #subject{} record and encoding changed
     {record, [
         {name, string},
         {public_url, string},
         {space, string},
         {handle, string},
+
         {root_file, string},
+        {file_type, atom},
 
         {creation_time, integer},
         % nested #subject{} record was extended and is now encoded as string
@@ -292,15 +295,18 @@ upgrade_record(4, Share) ->
         RootFileId,
 
         CreationTime,
-        Creator
+        Subject
     } = Share,
     {5, #od_share{
         name = Name,
         public_url = PublicUrl,
+
         space = SpaceId,
         handle = HandleId,
+
         root_file = RootFileId,
+        file_type = dir,
 
         creation_time = CreationTime,
-        creator = upgrade_common:upgrade_subject_record(Creator)
+        creator = upgrade_common:upgrade_subject_record(Subject)
     }}.

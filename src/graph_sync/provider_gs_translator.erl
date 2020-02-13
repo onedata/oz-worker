@@ -236,24 +236,28 @@ translate_resource(_, #gri{type = od_share, aspect = instance, scope = private},
         public_url = PublicUrl,
         space = SpaceId,
         handle = HandleId,
-        root_file = RootFileId
+        root_file = RootFileId,
+        file_type = FileType
     } = Share,
     #{
         <<"name">> => Name,
         <<"publicUrl">> => PublicUrl,
         <<"spaceId">> => SpaceId,
         <<"handleId">> => utils:undefined_to_null(HandleId),
-        <<"rootFileId">> => RootFileId
+        <<"rootFileId">> => RootFileId,
+        <<"fileType">> => FileType
     };
 
 translate_resource(_, #gri{type = od_share, aspect = instance, scope = public}, ShareData) ->
     #{
         <<"name">> := Name, <<"publicUrl">> := PublicUrl,
-        <<"rootFileId">> := RootFileId, <<"handleId">> := HandleId
+        <<"handleId">> := HandleId,
+        <<"rootFileId">> := RootFileId, <<"fileType">> := FileType
     } = ShareData,
     #{
         <<"name">> => Name, <<"publicUrl">> => PublicUrl,
-        <<"rootFileId">> => RootFileId, <<"handleId">> => HandleId
+        <<"handleId">> => HandleId,
+        <<"rootFileId">> => RootFileId, <<"fileType">> => FileType
     };
 
 

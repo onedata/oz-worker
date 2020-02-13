@@ -251,7 +251,9 @@
     % Direct relations to other entities
     space = undefined :: undefined | od_space:id(),
     handle = undefined :: undefined | od_handle:id(),
+
     root_file = undefined :: undefined | binary(),
+    file_type = dir :: file | dir,
 
     creation_time = time_utils:system_time_seconds() :: entity_logic:creation_time(),
     creator = undefined :: undefined | aai:subject()
