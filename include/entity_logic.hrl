@@ -19,6 +19,8 @@
 
 -define(SELF_INTERMEDIARY, <<"self">>).
 
+-define(INFINITY, <<"infinity">>).
+
 % Record expressing entity logic request
 -record(el_req, {
     auth = ?NOBODY :: aai:auth(),

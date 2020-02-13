@@ -55,7 +55,6 @@
 -define(USAGE_LIMIT_KEY, <<"usageLimit">>).
 % the usage count of an invite token (how many times it has been consumed)
 -define(USAGE_COUNT_KEY, <<"usageCount">>).
--define(INF_USAGE_LIMIT, <<"infinity">>).
 
 -export([build/3, update_custom_metadata/2]).
 -export([inspect_requested_privileges/2]).
@@ -92,7 +91,7 @@ build(?INVITE_TOKEN(InviteTokenType, _), CustomMetadata, Data) ->
     BasicMetadata = basic_metadata(CustomMetadata),
     BasicMetadata#{
         ?PRIVILEGES_KEY => serialize_privileges(Privileges),
-        ?USAGE_LIMIT_KEY => maps:get(?USAGE_LIMIT_KEY, Data, ?INF_USAGE_LIMIT),
+        ?USAGE_LIMIT_KEY => maps:get(?USAGE_LIMIT_KEY, Data, ?INFINITY),
         ?USAGE_COUNT_KEY => 0
     }.
 
@@ -152,8 +151,8 @@ inspect_carried_privileges(InviteTokenType, Metadata) ->
 -spec is_usage_limit_reached(metadata()) -> boolean().
 is_usage_limit_reached(Metadata) ->
     UsageCount = maps:get(?USAGE_COUNT_KEY, Metadata, 0),
-    case maps:get(?USAGE_LIMIT_KEY, Metadata, ?INF_USAGE_LIMIT) of
-        ?INF_USAGE_LIMIT ->
+    case maps:get(?USAGE_LIMIT_KEY, Metadata, ?INFINITY) of
+        ?INFINITY ->
             false;
         UsageLimit when is_integer(UsageLimit) ->
             UsageCount >= UsageLimit
@@ -177,7 +176,7 @@ increment_usage_count(Metadata) ->
     #{Key :: binary() => {entity_logic:type_validator(), entity_logic:value_validator()}}.
 optional_invite_token_parameters(InviteTokenType) ->
     maps:merge(
-        #{?USAGE_LIMIT_KEY => {integer, {not_lower_than, 1}}},
+        #{?USAGE_LIMIT_KEY => {integer_or_infinity, {not_lower_than, 1}}},
         case allowed_invite_privileges(InviteTokenType) of
             undefined -> #{};
             Privileges -> #{?PRIVILEGES_KEY => {list_of_atoms, Privileges}}

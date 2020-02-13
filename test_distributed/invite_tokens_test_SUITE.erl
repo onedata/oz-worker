@@ -15,6 +15,7 @@
 
 -include("registered_names.hrl").
 -include("api_test_utils.hrl").
+-include("entity_logic.hrl").
 -include_lib("ctool/include/errors.hrl").
 -include_lib("ctool/include/aai/aai.hrl").
 -include_lib("ctool/include/privileges.hrl").
@@ -1241,16 +1242,24 @@ check_multi_use_named_token(Tc = #testcase{token_type = TokenType}) ->
         MultiUseToken = ozt_tokens:create(named, EligibleSubject, #{
             <<"type">> => TokenType, <<"usageLimit">> => UsageLimit
         }),
-
-        Consumers = lists:map(fun(_) ->
+        ConsumersOfMultiUseToken = lists:map(fun(_) ->
             create_consumer_with_privs_to_consume(Tc, random_eligible)
         end, lists:seq(1, UsageLimit)),
         utils:pforeach(fun(Consumer) ->
             ?assertMatch({ok, _}, consume_token(Tc, Consumer, MultiUseToken))
-        end, Consumers),
-
+        end, ConsumersOfMultiUseToken),
         ConsumerGamma = create_consumer_with_privs_to_consume(Tc, random_eligible),
-        ?assertMatch(?ERROR_INVITE_TOKEN_USAGE_LIMIT_REACHED, consume_token(Tc, ConsumerGamma, MultiUseToken))
+        ?assertMatch(?ERROR_INVITE_TOKEN_USAGE_LIMIT_REACHED, consume_token(Tc, ConsumerGamma, MultiUseToken)),
+
+        InfiniteUseToken = ozt_tokens:create(named, EligibleSubject, #{
+            <<"type">> => TokenType, <<"usageLimit">> => ?INFINITY
+        }),
+        ConsumersOfInfiniteUseToken = lists:map(fun(_) ->
+            create_consumer_with_privs_to_consume(Tc, random_eligible)
+        end, lists:seq(1, 50)),
+        utils:pforeach(fun(Consumer) ->
+            ?assertMatch({ok, _}, consume_token(Tc, Consumer, InfiniteUseToken))
+        end, ConsumersOfInfiniteUseToken)
     end, Tc#testcase.eligible_to_invite).
 
 
