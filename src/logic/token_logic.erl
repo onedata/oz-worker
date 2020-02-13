@@ -156,15 +156,15 @@ create_provider_temporary_token(Auth, ProviderId, Data) ->
     })).
 
 
--spec create_gui_access_token(aai:auth(), od_user:id(), session:id(), aai:audience()) ->
+-spec create_gui_access_token(aai:auth(), od_user:id(), session:id(), aai:service_spec()) ->
     {ok, {tokens:token(), time_utils:seconds()}} | errors:error().
-create_gui_access_token(Auth, UserId, SessionId, Audience) ->
+create_gui_access_token(Auth, UserId, SessionId, Service) ->
     Ttl = ?GUI_TOKEN_TTL,
     Result = create_user_temporary_token(Auth, UserId, #{
         <<"type">> => ?GUI_ACCESS_TOKEN(SessionId),
         <<"caveats">> => [
             #cv_time{valid_until = time_utils:cluster_time_seconds() + Ttl},
-            #cv_audience{whitelist = [Audience]}
+            #cv_service{whitelist = [Service]}
             % @TODO VFS-5913 Add interface caveat when it is fully supported by Onepanel
         ]
     }),

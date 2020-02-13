@@ -189,13 +189,6 @@ routes() -> [
         produces = [<<"application/json">>],
         b_gri = #b_gri{type = od_provider, id = undefined, aspect = {check_my_ip, ?CLIENT_IP}}
     }},
-    %% Check ports availability
-    %% This operation does not require any specific privileges.
-    {<<"/provider/public/check_my_ports">>, #rest_req{
-        method = 'POST',
-        produces = [<<"application/json">>],
-        b_gri = #b_gri{type = od_provider, id = undefined, aspect = check_my_ports}
-    }},
     %% Show current clock time
     %% This operation does not require any specific privileges.
     {<<"/provider/public/get_current_time">>, #rest_req{

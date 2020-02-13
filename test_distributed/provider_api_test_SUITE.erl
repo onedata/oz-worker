@@ -62,7 +62,6 @@
     legacy_update_support_size_test/1,
     legacy_revoke_support_test/1,
 
-    check_my_ports_test/1,
     check_my_ip_test/1,
     map_user_test/1,
     map_group_test/1,
@@ -103,7 +102,6 @@ all() ->
         legacy_update_support_size_test,
         legacy_revoke_support_test,
 
-        check_my_ports_test,
         check_my_ip_test,
         map_user_test,
         map_group_test,
@@ -1865,58 +1863,6 @@ legacy_revoke_support_test(Config) ->
     )).
 
 
-check_my_ports_test(Config) ->
-    {ok, {P1, P1Token}} = oz_test_utils:create_provider(
-        Config, ?PROVIDER_NAME1
-    ),
-    CorrectData = #{
-        <<"undefined">> => <<"http://url1.com">>,
-        <<"service1">> => <<"http://service1.com">>,
-        <<"service2">> => <<"http://service2.com">>,
-        <<"service3">> => <<"http://service3.com">>
-    },
-    RequiredKeys = maps:keys(CorrectData),
-    ExpectedBody = #{
-        <<"http://url1.com">> => ok,
-        <<"http://service1.com">> => ok,
-        <<"http://service2.com">> => error,
-        <<"http://service3.com">> => error
-    },
-
-    % http_client is mocked in init_per_testcase to return proper values.
-    ApiTestSpec = #api_test_spec{
-        client_spec = #client_spec{
-            correct = [root, nobody, {provider, P1, P1Token}]
-        },
-        rest_spec = #rest_spec{
-            method = post,
-            path = <<"/provider/public/check_my_ports">>,
-            expected_code = ?HTTP_200_OK,
-            % Convert atoms to binaries in expected body for REST
-            expected_body = maps:map(fun(_, ValAtom) ->
-                atom_to_binary(ValAtom, utf8)
-            end, ExpectedBody)
-        },
-        logic_spec = #logic_spec{
-            module = provider_logic,
-            function = check_my_ports,
-            args = [auth, data],
-            expected_result = ?OK_TERM(fun(Result) ->
-                Result =:= ExpectedBody
-            end)
-        },
-        % TODO gs
-        data_spec = #data_spec{
-            required = RequiredKeys,
-            correct_values = maps:map(
-                fun(_, Val) ->
-                    [Val]
-                end, CorrectData)
-        }
-    },
-    ?assert(api_test_utils:run_tests(Config, ApiTestSpec)).
-
-
 check_my_ip_test(Config) ->
     {ok, {P1, P1Token}} = oz_test_utils:create_provider(
         Config, ?PROVIDER_NAME1
@@ -2528,7 +2474,11 @@ verify_provider_identity_test(Config) ->
         Config, time_utils, cluster_time_seconds, []
     ),
     TokenNoAuth = tokens:confine(
-        DeserializedToken, #cv_authorization_none{}
+        DeserializedToken, #cv_scope{scope = identity_token}
+    ),
+    %% @todo VFS-6098 deprecated, kept for backward compatibility
+    TokenDeprecatedCaveat = tokens:confine(
+        DeserializedToken, caveats:deserialize(<<"authorization = none">>)
     ),
     TokenNotExpired = tokens:confine(
         TokenNoAuth, #cv_time{valid_until = Timestamp + 100}
@@ -2537,6 +2487,7 @@ verify_provider_identity_test(Config) ->
         TokenNoAuth, #cv_time{valid_until = Timestamp - 200}
     ),
     {ok, TokenNoAuthBin} = tokens:serialize(TokenNoAuth),
+    {ok, TokenDeprecatedCaveatBin} = tokens:serialize(TokenDeprecatedCaveat),
     {ok, TokenNotExpiredBin} = tokens:serialize(TokenNotExpired),
     {ok, TokenExpiredBin} = tokens:serialize(TokenExpired),
 
@@ -2566,7 +2517,7 @@ verify_provider_identity_test(Config) ->
             ],
             correct_values = #{
                 <<"providerId">> => [P1],
-                <<"token">> => [TokenNoAuthBin, TokenNotExpiredBin]
+                <<"token">> => [TokenNoAuthBin, TokenDeprecatedCaveatBin, TokenNotExpiredBin]
             },
             bad_values = [
                 {<<"providerId">>, <<"">>, ?ERROR_BAD_VALUE_ID_NOT_FOUND(<<"providerId">>)},
@@ -2655,25 +2606,6 @@ end_per_suite(_Config) ->
     ssl:stop().
 
 
-init_per_testcase(check_my_ports_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    ok = test_utils:mock_new(Nodes, http_client, [passthrough]),
-    ok = test_utils:mock_expect(Nodes, http_client, get,
-        fun(Url, Headers, Body, Options) ->
-            case Url of
-                <<"http://url1.com">> ->
-                    {ok, 200, [], <<"whatever body">>};
-                <<"http://service1.com">> ->
-                    {ok, 200, [], <<"service1">>};
-                <<"http://service2.com">> ->
-                    {ok, 200, [], <<"body not matching service name">>};
-                <<"http://service3.com">> ->
-                    {ok, 304, [], <<"">>};
-                _ ->
-                    meck:passthrough([Url, Headers, Body, Options])
-            end
-        end),
-    init_per_testcase(default, Config);
 init_per_testcase(list_eff_harvesters_test, Config) ->
     oz_test_utils:mock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
     init_per_testcase(default, Config);
@@ -2684,10 +2616,6 @@ init_per_testcase(_, Config) ->
     Config.
 
 
-end_per_testcase(check_my_ports_test, Config) ->
-    Nodes = ?config(oz_worker_nodes, Config),
-    test_utils:mock_unload(Nodes, http_client),
-    end_per_testcase(default, Config);
 end_per_testcase(list_eff_harvesters_test, Config) ->
     oz_test_utils:unmock_harvester_plugins(Config, ?HARVESTER_MOCK_PLUGIN),
     end_per_testcase(default, Config);

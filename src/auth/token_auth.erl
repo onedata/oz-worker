@@ -17,78 +17,19 @@
 -include_lib("ctool/include/logging.hrl").
 
 %% API
--export([build_auth_ctx/1, build_auth_ctx/2, build_auth_ctx/3, build_auth_ctx/4]).
 -export([authenticate/2]).
 -export([authenticate_for_rest_interface/1]).
 -export([verify_access_token/2]).
 -export([verify_identity_token/2]).
 -export([verify_invite_token/3]).
--export([verify_audience_token/2]).
+-export([verify_service_token/2]).
+-export([verify_consumer_token/2]).
 -export([group_membership_checker/2]).
--export([validate_subject_and_audience/3]).
-
--define(SUPPORTED_ACCESS_TOKEN_CAVEATS, [
-    cv_time, cv_audience,
-    cv_ip, cv_asn, cv_country, cv_region,
-    cv_interface, cv_api,
-    cv_data_readonly, cv_data_path, cv_data_objectid
-]).
--define(SUPPORTED_IDENTITY_TOKEN_CAVEATS, [
-    cv_authorization_none | ?SUPPORTED_ACCESS_TOKEN_CAVEATS
-]).
--define(SUPPORTED_AUDIENCE_TOKEN_CAVEATS, [
-    cv_time,
-    cv_ip, cv_asn, cv_country, cv_region,
-    cv_interface
-]).
--define(SUPPORTED_INVITE_TOKEN_CAVEATS, [
-    cv_time, cv_audience, cv_ip, cv_asn, cv_country, cv_region
-]).
+-export([validate_subject_and_service/3]).
 
 %%%===================================================================
 %%% API functions
 %%%===================================================================
-
-%%--------------------------------------------------------------------
-%% @doc
-%% Build an auth_ctx object based on provided parameters. The resulting AuthCtx
-%% object must be passed to token verification functions in this module.
-%% @end
-%%--------------------------------------------------------------------
--spec build_auth_ctx(undefined | cv_interface:interface()) ->
-    aai:auth_ctx().
-build_auth_ctx(Interface) ->
-    build_auth_ctx(Interface, undefined).
-
--spec build_auth_ctx(undefined | cv_interface:interface(), undefined | ip_utils:ip()) ->
-    aai:auth_ctx().
-build_auth_ctx(Interface, PeerIp) ->
-    build_auth_ctx(Interface, PeerIp, undefined).
-
--spec build_auth_ctx(undefined | cv_interface:interface(), undefined | ip_utils:ip(),
-    undefined | aai:audience()) ->
-    aai:auth_ctx().
-build_auth_ctx(Interface, PeerIp, Audience) ->
-    build_auth_ctx(Interface, PeerIp, Audience, disallow_data_access_caveats).
-
--spec build_auth_ctx(undefined | cv_interface:interface(), undefined | ip_utils:ip(),
-    undefined | aai:audience(), data_access_caveats:policy()) ->
-    aai:auth_ctx().
-build_auth_ctx(Interface, PeerIp, Audience, DataAccessCaveatsPolicy) ->
-    #auth_ctx{
-        current_timestamp = time_utils:cluster_time_seconds(),
-        ip = PeerIp,
-        interface = Interface,
-        % This Onezone is the default audience if it was not specified
-        % (being the service that consumes the token).
-        audience = case Audience of
-            undefined -> ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID);
-            _ -> Audience
-        end,
-        data_access_caveats_policy = DataAccessCaveatsPolicy,
-        group_membership_checker = fun group_membership_checker/2
-    }.
-
 
 %%--------------------------------------------------------------------
 %% @doc
@@ -150,13 +91,14 @@ authenticate_for_rest_interface(Req) when is_map(Req) ->
 -spec authenticate_for_rest_interface(cowboy_req:req(), tokens:token()) ->
     {true, aai:auth()} | errors:error().
 authenticate_for_rest_interface(Req, Token) ->
-    case resolve_audience_for_rest_interface(Req) of
-        {ok, Audience} ->
+    case {resolve_service_for_rest_interface(Req), resolve_consumer_for_rest_interface(Req) }of
+        {{error, _} = Error, _} ->
+            Error;
+        {_, {error, _} = Error} ->
+            Error;
+        {{ok, Service}, {ok, Consumer}} ->
             {PeerIp, _} = cowboy_req:peer(Req),
-            AuthCtx = build_auth_ctx(rest, PeerIp, Audience),
-            authenticate(Token, AuthCtx);
-        {error, _} = Error ->
-            Error
+            authenticate(Token, #auth_ctx{ip = PeerIp, interface = rest, service = Service, consumer = Consumer})
     end.
 
 
@@ -169,16 +111,11 @@ authenticate_for_rest_interface(Req, Token) ->
 -spec verify_access_token(tokens:token(), aai:auth_ctx()) ->
     {ok, aai:auth()} | errors:error().
 verify_access_token(Token, AuthCtx) ->
-    verify_access_token(Token, AuthCtx, ?SUPPORTED_ACCESS_TOKEN_CAVEATS).
-
--spec verify_access_token(tokens:token(), aai:auth_ctx(), [caveats:type()]) ->
-    {ok, aai:auth()} | errors:error().
-verify_access_token(Token, AuthCtx, SupportedCaveats) ->
     case Token#token.type of
         ?ACCESS_TOKEN ->
-            verify_token_auth(Token, AuthCtx, SupportedCaveats);
+            verify_token(Token, AuthCtx);
         ?GUI_ACCESS_TOKEN(_) ->
-            verify_token_auth(Token, AuthCtx, SupportedCaveats);
+            verify_token(Token, AuthCtx);
         ReceivedTokenType ->
             ?ERROR_NOT_AN_ACCESS_TOKEN(ReceivedTokenType)
     end.
@@ -188,14 +125,14 @@ verify_access_token(Token, AuthCtx, SupportedCaveats) ->
 %% @doc
 %% Verifies the identity carried by a token - verifies the token itself and
 %% returns the token's subject. Identity token is essentially an access token
-%% that can have the cv_authorization_none caveat (which nullifies the
+%% that can have the cv_scope = identity_token caveat (which nullifies the
 %% authorization carried by the token).
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_identity_token(tokens:token(), aai:auth_ctx()) ->
     {ok, {aai:subject(), [caveats:caveat()]}} | errors:error().
 verify_identity_token(Token, AuthCtx) ->
-    case verify_access_token(Token, AuthCtx, ?SUPPORTED_IDENTITY_TOKEN_CAVEATS) of
+    case verify_access_token(Token, AuthCtx#auth_ctx{scope = identity_token}) of
         {ok, #auth{subject = Subject, caveats = Caveats}} ->
             {ok, {Subject, Caveats}};
         {error, _} = Error ->
@@ -208,7 +145,6 @@ verify_identity_token(Token, AuthCtx) ->
 %% Verifies an invite token and checks against given expected invite token type
 %% ('any' keyword can be used for any invite token). If it's valid, returns the
 %% auth carried by that token (auth object).
-%% Audience is represented by the invite token consumer.
 %% @end
 %%--------------------------------------------------------------------
 -spec verify_invite_token(tokens:token(), any | tokens:invite_token_type(), aai:auth_ctx()) ->
@@ -216,7 +152,7 @@ verify_identity_token(Token, AuthCtx) ->
 verify_invite_token(Token = #token{type = ReceivedType}, ExpectedType, AuthCtx) ->
     case tokens:is_invite_token(Token, ExpectedType) of
         true ->
-            verify_token_auth(Token, AuthCtx, ?SUPPORTED_INVITE_TOKEN_CAVEATS);
+            verify_token(Token, AuthCtx);
         false ->
             ?ERROR_NOT_AN_INVITE_TOKEN(ExpectedType, ReceivedType)
     end.
@@ -224,29 +160,59 @@ verify_invite_token(Token = #token{type = ReceivedType}, ExpectedType, AuthCtx) 
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Verifies an audience token and returns the audience upon success.
-%% The audience token is a regular access token put in a proper header and sent
+%% Verifies a service token and returns the service upon success.
+%% The service token is a regular access token put in a proper header and sent
 %% along with the subject's access token, however it allows less caveats than
-%% a typical access token. It is used to prove the identity of requesting party,
-%% which may be required to satisfy an audience caveat of the subject's access
+%% a typical access token. It is used to prove the identity of token bearer,
+%% which may be required to satisfy a service caveat of the subject's access
 %% token.
 %% @end
 %%--------------------------------------------------------------------
--spec verify_audience_token(tokens:token() | tokens:serialized(), aai:auth_ctx()) ->
-    {ok, aai:audience()} | errors:error().
-verify_audience_token(SerializedAudienceToken, AuthCtx) when is_binary(SerializedAudienceToken) ->
-    case tokens:deserialize(SerializedAudienceToken) of
-        {ok, AudienceToken} ->
-            verify_audience_token(AudienceToken, AuthCtx);
+-spec verify_service_token(tokens:token() | tokens:serialized(), aai:auth_ctx()) ->
+    {ok, aai:service_spec()} | errors:error().
+verify_service_token(SerializedServiceToken, AuthCtx) when is_binary(SerializedServiceToken) ->
+    case tokens:deserialize(SerializedServiceToken) of
+        {ok, ServiceToken} ->
+            verify_service_token(ServiceToken, AuthCtx);
         {error, _} = Error ->
-            ?ERROR_BAD_AUDIENCE_TOKEN(Error)
+            ?ERROR_BAD_SERVICE_TOKEN(Error)
     end;
-verify_audience_token(AudienceToken, AuthCtx) ->
-    case verify_access_token(AudienceToken, AuthCtx, ?SUPPORTED_AUDIENCE_TOKEN_CAVEATS) of
-        {ok, Auth} ->
-            {ok, aai:auth_to_audience(Auth)};
+verify_service_token(ServiceToken, AuthCtx) ->
+    case verify_identity_token(ServiceToken, AuthCtx) of
+        {ok, {?SUB(?ONEPROVIDER, OpServiceType, ProviderId), _}} ->
+            {ok, ?SERVICE(OpServiceType, ProviderId)};
+        {ok, _} ->
+            ?ERROR_BAD_SERVICE_TOKEN(?ERROR_TOKEN_INVALID);
         {error, _} = Err2 ->
-            ?ERROR_BAD_AUDIENCE_TOKEN(Err2)
+            ?ERROR_BAD_SERVICE_TOKEN(Err2)
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @doc
+%% Verifies a consumer token and returns the consumer upon success.
+%% The consumer token is a regular access token put in a proper header and sent
+%% along with the subject's access token, however it allows less caveats than
+%% a typical access token. It is used to prove the identity of token bearer,
+%% which may be required to satisfy a consumer caveat of the subject's access
+%% token.
+%% @end
+%%--------------------------------------------------------------------
+-spec verify_consumer_token(tokens:token() | tokens:serialized(), aai:auth_ctx()) ->
+    {ok, aai:subject()} | errors:error().
+verify_consumer_token(SerializedConsumerToken, AuthCtx) when is_binary(SerializedConsumerToken) ->
+    case tokens:deserialize(SerializedConsumerToken) of
+        {ok, ConsumerToken} ->
+            verify_consumer_token(ConsumerToken, AuthCtx);
+        {error, _} = Error ->
+            ?ERROR_BAD_CONSUMER_TOKEN(Error)
+    end;
+verify_consumer_token(ConsumerToken, AuthCtx) ->
+    case verify_identity_token(ConsumerToken, AuthCtx) of
+        {ok, {Subject, _}} ->
+            {ok, Subject};
+        {error, _} = Err2 ->
+            ?ERROR_BAD_CONSUMER_TOKEN(Err2)
     end.
 
 
@@ -255,11 +221,11 @@ verify_audience_token(AudienceToken, AuthCtx) ->
 %% Used as callback during caveat verification (provided in #auth_ctx{}).
 %% @end
 %%--------------------------------------------------------------------
--spec group_membership_checker(aai:audience(), od_group:id()) -> boolean().
-group_membership_checker(?AUD(user, UserId), <<"*">>) ->
+-spec group_membership_checker(aai:subject(), od_group:id()) -> boolean().
+group_membership_checker(?SUB(user, UserId), <<"*">>) ->
     {ok, Groups} = user_logic:get_groups(?ROOT, UserId),
     length(Groups) > 0;
-group_membership_checker(?AUD(user, UserId), GroupId) ->
+group_membership_checker(?SUB(user, UserId), GroupId) ->
     group_logic:has_eff_user(GroupId, UserId);
 group_membership_checker(_, _) ->
     false.
@@ -267,31 +233,29 @@ group_membership_checker(_, _) ->
 
 %%--------------------------------------------------------------------
 %% @doc
-%% Checks if the subject and audience are compatible with each other and
+%% Checks if the subject and service are compatible with each other and
 %% valid for given token type.
 %% @end
 %%--------------------------------------------------------------------
--spec validate_subject_and_audience(tokens:type(), aai:subject(), aai:audience()) ->
+-spec validate_subject_and_service(tokens:type(), aai:subject(), aai:service_spec()) ->
     ok | errors:error().
-validate_subject_and_audience(?GUI_ACCESS_TOKEN(SessId), ?SUB(user, UserId) = Subject, Audience) ->
-    case {session:belongs_to_user(SessId, UserId), is_valid_access_token_audience(Subject, Audience)} of
+validate_subject_and_service(?GUI_ACCESS_TOKEN(SessId), ?SUB(user, UserId) = Subject, Service) ->
+    case {session:belongs_to_user(SessId, UserId), is_service_allowed(Subject, Service)} of
         {true, true} -> ok;
         {false, _} -> ?ERROR_TOKEN_SESSION_INVALID;
-        {_, false} -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience)
+        {_, false} -> ?ERROR_TOKEN_SERVICE_FORBIDDEN(Service)
     end;
-validate_subject_and_audience(?GUI_ACCESS_TOKEN(_), _, _) ->
+validate_subject_and_service(?GUI_ACCESS_TOKEN(_), _, _) ->
     % Only user subject is allowed in gui access tokens
     ?ERROR_TOKEN_SUBJECT_INVALID;
-validate_subject_and_audience(?ACCESS_TOKEN, Subject, Audience) ->
-    case is_valid_access_token_audience(Subject, Audience) of
+validate_subject_and_service(?ACCESS_TOKEN, Subject, Service) ->
+    case is_service_allowed(Subject, Service) of
         true -> ok;
-        false -> ?ERROR_TOKEN_AUDIENCE_FORBIDDEN(Audience)
+        false -> ?ERROR_TOKEN_SERVICE_FORBIDDEN(Service)
     end;
-validate_subject_and_audience(?INVITE_TOKEN(_, _), _, _) ->
-    % Invite tokens do not require additional checks. Audience (consumer) can
-    % be anything as the idea of invite tokens is that one can pass them to
-    % anyone. During actual consumption, there is an additional check if the
-    % consuming subject can perform such operation.
+validate_subject_and_service(?INVITE_TOKEN(_, _), _, _) ->
+    % Invite tokens do not require additional checks as they do not support the
+    % service caveat.
     ok.
 
 %%%===================================================================
@@ -301,56 +265,69 @@ validate_subject_and_audience(?INVITE_TOKEN(_, _), _, _) ->
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Determines if the audience is allowed for specific subject in an access token.
+%% Determines if the service is allowed for specific subject in an access token,
+%% in other words if the service can use subject's tokens on their behalf.
 %% @end
 %%--------------------------------------------------------------------
--spec is_valid_access_token_audience(aai:subject(), aai:audience()) -> boolean().
-is_valid_access_token_audience(?SUB(nobody), _) ->
-    false; % Audience is not applicable in case of nobody (unauthenticated client)
+-spec is_service_allowed(aai:subject(), aai:service_spec()) -> boolean().
+is_service_allowed(?SUB(nobody), _) ->
+    false; % Service is not applicable in case of nobody (unauthenticated client)
 
-is_valid_access_token_audience(_Subject, ?AUD(user, _)) ->
-    true; % User / provider can grant his authorization to any user
-is_valid_access_token_audience(_Subject, ?AUD(group, _)) ->
-    true; % User / provider can grant his authorization to any group
-is_valid_access_token_audience(_Subject, ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)) ->
+is_service_allowed(_Subject, ?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)) ->
     true; % Any user / provider can generate a token for Onezone
-is_valid_access_token_audience(_Subject, ?AUD(?OZ_WORKER, <<"*">>)) ->
+is_service_allowed(_Subject, ?SERVICE(?OZ_WORKER, <<"*">>)) ->
     true;
 
-is_valid_access_token_audience(?SUB(user, _), ?AUD(_, <<"*">>)) ->
-    true; % Always allowed when audience id is a wildcard
-is_valid_access_token_audience(?SUB(user, UserId), ?AUD(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)) ->
+is_service_allowed(?SUB(user, _), ?SERVICE(_, <<"*">>)) ->
+    true; % Always allowed when service id is a wildcard
+is_service_allowed(?SUB(user, UserId), ?SERVICE(?OZ_PANEL, ?ONEZONE_CLUSTER_ID)) ->
     cluster_logic:has_eff_user(?ONEZONE_CLUSTER_ID, UserId);
-is_valid_access_token_audience(?SUB(user, UserId), ?AUD(?OP_WORKER, ProviderId)) ->
+is_service_allowed(?SUB(user, UserId), ?SERVICE(?OP_WORKER, ProviderId)) ->
     provider_logic:has_eff_user(ProviderId, UserId);
-is_valid_access_token_audience(?SUB(user, UserId), ?AUD(?OP_PANEL, ProviderId)) ->
+is_service_allowed(?SUB(user, UserId), ?SERVICE(?OP_PANEL, ProviderId)) ->
     cluster_logic:has_eff_user(ProviderId, UserId);
 
-is_valid_access_token_audience(?SUB(?ONEPROVIDER, _), ?AUD(?OP_WORKER, _)) ->
-    true; % Providers can grant their authorization to others (e.g. for identity check)
-
-is_valid_access_token_audience(_, _) ->
+is_service_allowed(_, _) ->
     false.
 
 
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
-%% Checks if an audience token is present in a HTTP (REST) request and if so,
-%% verifies it. Returns undefined audience if no token was provided, or the
-%% token verification result (see verify_audience_token/2).
+%% Checks if an service token is present in a HTTP (REST) request and if so,
+%% verifies it. Returns undefined service if no token was provided, or the
+%% token verification result (see verify_service_token/2).
 %% @end
 %%--------------------------------------------------------------------
--spec resolve_audience_for_rest_interface(cowboy_req:req()) ->
-    {ok, undefined | aai:audience()} | errors:error().
-resolve_audience_for_rest_interface(Req) ->
-    case tokens:parse_audience_token_header(Req) of
+-spec resolve_service_for_rest_interface(cowboy_req:req()) ->
+    {ok, undefined | aai:service_spec()} | errors:error().
+resolve_service_for_rest_interface(Req) ->
+    case tokens:parse_service_token_header(Req) of
         undefined ->
             {ok, undefined};
-        SerializedAudienceToken ->
+        Serialized ->
             {PeerIp, _} = cowboy_req:peer(Req),
-            AuthCtx = build_auth_ctx(rest, PeerIp),
-            verify_audience_token(SerializedAudienceToken, AuthCtx)
+            verify_service_token(Serialized, #auth_ctx{ip = PeerIp, interface = rest})
+    end.
+
+
+%%--------------------------------------------------------------------
+%% @private
+%% @doc
+%% Checks if an consumer token is present in a HTTP (REST) request and if so,
+%% verifies it. Returns undefined consumer if no token was provided, or the
+%% token verification result (see verify_consumer_token/2).
+%% @end
+%%--------------------------------------------------------------------
+-spec resolve_consumer_for_rest_interface(cowboy_req:req()) ->
+    {ok, undefined | aai:subject()} | errors:error().
+resolve_consumer_for_rest_interface(Req) ->
+    case tokens:parse_consumer_token_header(Req) of
+        undefined ->
+            {ok, undefined};
+        Serialized ->
+            {PeerIp, _} = cowboy_req:peer(Req),
+            verify_consumer_token(Serialized, #auth_ctx{ip = PeerIp, interface = rest})
     end.
 
 
@@ -361,9 +338,8 @@ resolve_audience_for_rest_interface(Req) ->
 %% the auth that it carries.
 %% @end
 %%--------------------------------------------------------------------
--spec verify_token_auth(tokens:token(), aai:auth_ctx(), [caveats:type()]) ->
-    {ok, aai:auth()} | errors:error().
-verify_token_auth(Token = #token{persistence = {temporary, TokenGen}, subject = Subject}, AuthCtx, SupportedCaveats) ->
+-spec verify_token(tokens:token(), aai:auth_ctx()) -> {ok, aai:auth()} | errors:error().
+verify_token(Token = #token{persistence = {temporary, TokenGen}, subject = Subject}, AuthCtx) ->
     % This check is not required in case of named tokens, which are deleted
     % alongside the user / provider.
     case subject_exists(Subject) of
@@ -372,7 +348,7 @@ verify_token_auth(Token = #token{persistence = {temporary, TokenGen}, subject = 
         true ->
             case temporary_token_secret:get_for_subject(Subject) of
                 {Secret, TokenGen} ->
-                    verify_token_auth(Token, AuthCtx, SupportedCaveats, Secret);
+                    verify_token(Token, AuthCtx, Secret);
                 {_, NewerGen} when NewerGen > TokenGen ->
                     % Most probably, the token has been revoked (or forged, in
                     % such case the error might be confusing for the forger).
@@ -382,7 +358,7 @@ verify_token_auth(Token = #token{persistence = {temporary, TokenGen}, subject = 
                     ?ERROR_TOKEN_INVALID
             end
     end;
-verify_token_auth(Token = #token{persistence = named}, AuthCtx, SupportedCaveats) ->
+verify_token(Token = #token{persistence = named}, AuthCtx) ->
     case od_token:get(Token#token.id) of
         {ok, #document{value = #od_token{revoked = true}}} ->
             ?ERROR_TOKEN_REVOKED;
@@ -391,11 +367,11 @@ verify_token_auth(Token = #token{persistence = named}, AuthCtx, SupportedCaveats
                 #token{version = 1} ->
                     % Legacy tokens do not include the subject - inject the one
                     % stored in named token record
-                    verify_token_auth(Token#token{subject = Subject}, AuthCtx, SupportedCaveats, Secret);
+                    verify_token(Token#token{subject = Subject}, AuthCtx, Secret);
                 #token{subject = ?SUB(SubType, _, SubId)} ->
                     % Double check that the token includes the same subject as
                     % the one stored in named token record (ignore subtype)
-                    verify_token_auth(Token, AuthCtx, SupportedCaveats, Secret);
+                    verify_token(Token, AuthCtx, Secret);
                 _ ->
                     % The subjects are different - the token is invalid
                     ?ERROR_TOKEN_INVALID
@@ -405,12 +381,21 @@ verify_token_auth(Token = #token{persistence = named}, AuthCtx, SupportedCaveats
     end.
 
 %% @private
--spec verify_token_auth(tokens:token(), aai:auth_ctx(), [caveats:type()], tokens:secret()) ->
+-spec verify_token(tokens:token(), aai:auth_ctx(), tokens:secret()) ->
     {ok, aai:auth()} | errors:error().
-verify_token_auth(Token = #token{type = TokenType}, AuthCtx, SupportedCaveats, Secret) ->
-    case tokens:verify(Token, Secret, AuthCtx, SupportedCaveats) of
+verify_token(Token = #token{type = TokenType}, AuthCtx, Secret) ->
+    Service = case AuthCtx#auth_ctx.service of
+        undefined -> ?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID);
+        Srv -> Srv
+    end,
+    CoalescedAuthCtx = AuthCtx#auth_ctx{
+        current_timestamp = time_utils:cluster_time_seconds(),
+        service = Service,
+        group_membership_checker = fun group_membership_checker/2
+    },
+    case tokens:verify(Token, Secret, CoalescedAuthCtx) of
         {ok, Auth = #auth{subject = Subject}} ->
-            case validate_subject_and_audience(TokenType, Subject, AuthCtx#auth_ctx.audience) of
+            case validate_subject_and_service(TokenType, Subject, Service) of
                 ok -> {ok, Auth};
                 {error, _} = Err1 -> Err1
             end;
