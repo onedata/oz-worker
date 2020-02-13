@@ -66,7 +66,6 @@ fetch_entity(#gri{id = ProviderId}) ->
 operation_supported(create, instance, private) -> true;
 operation_supported(create, instance_dev, private) -> true;
 operation_supported(create, support, private) -> true;
-operation_supported(create, check_my_ports, private) -> true;
 operation_supported(create, map_idp_user, private) -> true;
 operation_supported(create, map_idp_group, private) -> true;
 operation_supported(create, verify_provider_identity, private) -> true;
@@ -151,13 +150,6 @@ create(#el_req{gri = #gri{id = ProviderId, aspect = support}, data = Data}) ->
     {ok, SpaceData} = space_logic_plugin:get(#el_req{gri = NewGRI}, Space),
     {ok, resource, {NewGRI, {SpaceData, Rev}}};
 
-create(Req = #el_req{gri = #gri{aspect = check_my_ports}}) ->
-    try
-        {ok, value, test_connection(Req#el_req.data)}
-    catch _:_ ->
-        ?ERROR_INTERNAL_SERVER_ERROR
-    end;
-
 create(#el_req{gri = #gri{id = ProviderId, aspect = {dns_txt_record, RecordName}}, data = Data}) ->
     case fetch_entity(#gri{id = ProviderId}) of
         {true, {#od_provider{subdomain_delegation = true}, _}} ->
@@ -197,7 +189,7 @@ create(#el_req{auth = Auth, gri = #gri{aspect = verify_provider_identity}, data 
         {ok, M} -> M;
         error -> maps:get(<<"token">>, Data)
     end,
-    AuthCtx = token_auth:build_auth_ctx(undefined, Auth#auth.peer_ip, aai:auth_to_audience(Auth)),
+    AuthCtx = #auth_ctx{ip = Auth#auth.peer_ip, consumer = Auth#auth.subject},
     case token_auth:verify_identity_token(Token, AuthCtx) of
         {ok, {?SUB(?ONEPROVIDER, ProviderId), _}} -> ok;
         {ok, _} -> ?ERROR_TOKEN_INVALID;
@@ -349,6 +341,7 @@ delete(#el_req{gri = #gri{id = ProviderId, aspect = instance}}) ->
     }, _}} = fetch_entity(#gri{aspect = instance, id = ProviderId}),
 
     % Invalidate client tokens
+    temporary_token_secret:delete_for_subject(?SUB(?ONEPROVIDER, ProviderId)),
     token_logic:delete_all_provider_named_tokens(?PROVIDER(ProviderId), ProviderId),
 
     lists:foreach(fun(HarvesterId) ->
@@ -425,9 +418,6 @@ exists(#el_req{gri = #gri{id = Id}}, #od_provider{}) ->
 %% @end
 %%--------------------------------------------------------------------
 -spec authorize(entity_logic:req(), entity_logic:entity()) -> boolean().
-authorize(#el_req{operation = create, gri = #gri{aspect = check_my_ports}}, _) ->
-    true;
-
 authorize(#el_req{operation = create, gri = #gri{aspect = map_idp_user}}, _) ->
     true;
 
@@ -670,9 +660,6 @@ validate(#el_req{operation = create, gri = #gri{aspect = {dns_txt_record, _}}}) 
         }
     };
 
-validate(#el_req{operation = create, gri = #gri{aspect = check_my_ports}}) -> #{
-};
-
 validate(#el_req{operation = create, gri = #gri{aspect = map_idp_user}}) -> #{
     required => #{
         <<"idp">> => {atom, {exists, fun auth_config:idp_exists/1}},
@@ -754,53 +741,6 @@ auth_by_self_or_cluster_privilege(#el_req{auth = ?USER(UserId), gri = #gri{id = 
     cluster_logic:has_eff_privilege(ClusterId, UserId, Privilege);
 auth_by_self_or_cluster_privilege(Req, _) ->
     auth_by_self(Req).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Tests connection to given urls.
-%% @end
-%% @equiv test_connection/2
-%%--------------------------------------------------------------------
--spec test_connection(#{ServiceName :: binary() => Url :: binary()}) ->
-    #{ServiceName :: binary() => Status :: ok | error}.
-test_connection(Map) ->
-    test_connection(maps:to_list(Map), #{}).
-
-
-%%--------------------------------------------------------------------
-%% @private
-%% @doc
-%% Tests connection to given urls.
-%% @end
-%%--------------------------------------------------------------------
--spec test_connection([{ServiceName :: binary(), Url :: binary()}], Result) ->
-    Result when Result :: #{Url :: binary() => Status :: ok | error}.
-test_connection([], Acc) ->
-    Acc;
-test_connection([{<<"undefined">>, <<Url/binary>>} | Rest], Acc) ->
-    Opts = [{ssl_options, [{secure, false}]}],
-    ConnStatus = case http_client:get(Url, #{}, <<>>, Opts) of
-        {ok, 200, _, _} ->
-            ok;
-        _ ->
-            error
-    end,
-    test_connection(Rest, Acc#{Url => ConnStatus});
-test_connection([{<<ServiceName/binary>>, <<Url/binary>>} | Rest], Acc) ->
-    Opts = [{ssl_options, [{secure, false}]}],
-    ConnStatus = case http_client:get(Url, #{}, <<>>, Opts) of
-        {ok, 200, _, ServiceName} ->
-            ok;
-        Error ->
-            ?debug("Checking connection to ~p failed with error: ~n~p",
-                [Url, Error]),
-            error
-    end,
-    test_connection(Rest, Acc#{Url => ConnStatus});
-test_connection([{Key, _} | _], _) ->
-    throw(?ERROR_BAD_DATA(Key)).
 
 
 %%--------------------------------------------------------------------

@@ -229,6 +229,9 @@ translate_user(#gri{aspect = eff_clusters}, Clusters) ->
 %% @private
 -spec translate_group(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_group(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
+    Privileges;
+
 translate_group(#gri{id = GroupId, aspect = instance, scope = private}, Group) ->
     fun(?USER(UserId)) -> #{
         <<"name">> => Group#od_group.name,
@@ -366,6 +369,9 @@ translate_group(#gri{aspect = eff_harvesters}, Harvesters) ->
 %% @private
 -spec translate_space(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_space(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
+    Privileges;
+
 translate_space(#gri{id = SpaceId, aspect = instance, scope = private}, Space) ->
     #od_space{name = Name, shares = Shares} = Space,
     fun(?USER(UserId)) -> #{
@@ -638,6 +644,9 @@ translate_token(#gri{aspect = instance}, TokenData) ->
 %% @private
 -spec translate_harvester(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_harvester(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
+    Privileges;
+
 translate_harvester(#gri{id = HarvesterId, aspect = instance, scope = private}, Harvester) ->
     #od_harvester{
         name = Name, endpoint = Endpoint,
@@ -831,6 +840,9 @@ translate_harvester(#gri{aspect = {index_stats, _}}, IndexStats) ->
 %% @private
 -spec translate_cluster(gri:gri(), Data :: term()) ->
     gs_protocol:data() | fun((aai:auth()) -> gs_protocol:data()).
+translate_cluster(#gri{id = undefined, aspect = privileges, scope = private}, Privileges) ->
+    Privileges;
+
 translate_cluster(#gri{id = ClusterId, aspect = instance, scope = private}, Cluster) ->
     #od_cluster{
         type = Type,

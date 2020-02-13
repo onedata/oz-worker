@@ -72,12 +72,12 @@
     % (if applicable)
     admin_privilege_to_set_privileges :: undefined | privileges:oz_privilege(),
 
-    % List of subject types that are eligible to consume the token. If a tuple
-    % is given, it means that by default such subject is not eligible and
+    % List of consumer (subject) types that are eligible to consume the token. If
+    % a tuple is given, it means that by default such subject is not eligible and
     % requires additional setup to be eligible (e.g. add a user to group that is
     % being joined to an entity). The second element is the function used to
     % perform this setup.
-    eligible_consumer_types :: [aai:subject_type() | {aai:subject_type(), fun((aai:subject()) -> ok)}],
+    eligible_consumer_types :: [aai:subject_type() | {aai:subject_type(), fun((aai:consumer_spec()) -> ok)}],
     % Indicates if special privileges are required to be able to consume the
     % token (e.g. in a group that is being joined to some other entity).
     requires_privileges_to_consume :: boolean(),
@@ -96,7 +96,7 @@
     % Expected result when the token is used again after successful consumption
     % (assuming it is a multi-use token) - function that generates the expected
     % result based on consumer subject
-    expected_reuse_result_fun :: fun((Consumer :: aai:subject()) -> ok | errors:error())
+    expected_reuse_result_fun :: fun((aai:consumer_spec()) -> ok | errors:error())
 }).
 
 %% API
@@ -890,14 +890,14 @@ check_bad_token_scenarios(Tc = #testcase{token_type = ?INVITE_TOKEN(InviteTokenT
     SessId = ozt_http:simulate_login(DummyUser),
 
     AccessToken = ozt_tokens:create(named, ?SUB(?ONEPROVIDER, DummyProvider)),
-    GuiAccessToken = ozt_tokens:create_gui_access_token(DummyUser, SessId, ?AUD(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)),
+    GuiAccessToken = ozt_tokens:create_gui_access_token(DummyUser, SessId, ?SERVICE(?OZ_WORKER, ?ONEZONE_CLUSTER_ID)),
     BadToken = <<"not-a-token-definitely-I've-seen-one-I-would-know">>,
     ForgedToken = tokens:construct(#token{
         onezone_domain = ozt:get_domain(),
         id = <<"123123123123">>,
         subject = ?SUB(user, <<"123">>),
         type = ?INVITE_TOKEN(InviteTokenType, TargetEntityId),
-        persistent = false
+        persistence = {temporary, 1}
     }, <<"secret">>, []),
 
     lists:foreach(fun(EligibleConsumerType) ->
@@ -1331,7 +1331,7 @@ check_temporary_token_revocation(Tc = #testcase{token_type = TokenType}) ->
         ozt_tokens:revoke_all_temporary_tokens(EligibleSubject),
         lists:foreach(fun(Token) ->
             Consumer = create_consumer_with_privs_to_consume(Tc, random_eligible),
-            ?assertMatch(?ERROR_TOKEN_INVALID, consume_token(Tc, Consumer, Token))
+            ?assertMatch(?ERROR_TOKEN_REVOKED, consume_token(Tc, Consumer, Token))
         end, [TokenAlpha, TokenBeta, TokenGamma])
     end, Tc#testcase.eligible_to_invite).
 
@@ -1464,15 +1464,15 @@ gen_correct_caveats(Consumer) -> lists:flatten([
             Group = ozt_users:create_group_for(UserId),
             ozt:reconcile_entity_graph(),
             [
-                #cv_audience{whitelist = [?AUD(group, Group)]},
-                #cv_audience{whitelist = [?AUD(group, <<"*">>)]},
-                #cv_audience{whitelist = [?AUD(user, UserId)]},
-                #cv_audience{whitelist = [?AUD(user, <<"*">>)]}
+                #cv_consumer{whitelist = [?SUB(group, Group)]},
+                #cv_consumer{whitelist = [?SUB(group, <<"*">>)]},
+                #cv_consumer{whitelist = [?SUB(user, UserId)]},
+                #cv_consumer{whitelist = [?SUB(user, <<"*">>)]}
             ];
         ?SUB(?ONEPROVIDER, ProviderId) ->
             [
-                #cv_audience{whitelist = [?AUD(?OP_WORKER, ProviderId)]},
-                #cv_audience{whitelist = [?AUD(?OP_WORKER, <<"*">>)]}
+                #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, ProviderId)]},
+                #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, <<"*">>)]}
             ];
         ?SUB(nobody) ->
             []
@@ -1482,7 +1482,6 @@ gen_correct_caveats(Consumer) -> lists:flatten([
 
 gen_unverified_caveats(Consumer) -> lists:flatten([
     #cv_time{valid_until = ozt:cluster_time_seconds() - 1},
-    #cv_authorization_none{},
     #cv_ip{whitelist = [?INCORRECT_MASK_1]},
     #cv_ip{whitelist = [?INCORRECT_MASK_2]},
     #cv_asn{whitelist = [?INCORRECT_ASN]},
@@ -1490,27 +1489,28 @@ gen_unverified_caveats(Consumer) -> lists:flatten([
     #cv_country{type = blacklist, list = [?CLIENT_COUNTRY]},
     #cv_region{type = whitelist, list = ?INCORRECT_REGIONS},
     #cv_region{type = blacklist, list = ?CLIENT_REGIONS},
+    #cv_scope{scope = identity_token},
     case Consumer of
         ?SUB(user, _) ->
             [
-                #cv_audience{whitelist = [?AUD(user, <<"123">>)]},
-                #cv_audience{whitelist = [?AUD(group, <<"123">>)]},
-                #cv_audience{whitelist = [?AUD(?OP_WORKER, <<"*">>)]}
+                #cv_consumer{whitelist = [?SUB(user, <<"123">>)]},
+                #cv_consumer{whitelist = [?SUB(group, <<"123">>)]},
+                #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, <<"*">>)]}
             ];
         ?SUB(?ONEPROVIDER, _) ->
             [
-                #cv_audience{whitelist = [?AUD(user, <<"*">>)]},
-                #cv_audience{whitelist = [?AUD(group, <<"*">>)]},
-                #cv_audience{whitelist = [?AUD(?OP_WORKER, <<"123">>)]}
+                #cv_consumer{whitelist = [?SUB(user, <<"*">>)]},
+                #cv_consumer{whitelist = [?SUB(group, <<"*">>)]},
+                #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, <<"123">>)]}
             ];
         ?SUB(nobody) ->
             [
-                #cv_audience{whitelist = [?AUD(user, <<"123">>)]},
-                #cv_audience{whitelist = [?AUD(user, <<"*">>)]},
-                #cv_audience{whitelist = [?AUD(group, <<"123">>)]},
-                #cv_audience{whitelist = [?AUD(group, <<"*">>)]},
-                #cv_audience{whitelist = [?AUD(?OP_WORKER, <<"123">>)]},
-                #cv_audience{whitelist = [?AUD(?OP_WORKER, <<"*">>)]}
+                #cv_consumer{whitelist = [?SUB(user, <<"123">>)]},
+                #cv_consumer{whitelist = [?SUB(user, <<"*">>)]},
+                #cv_consumer{whitelist = [?SUB(group, <<"123">>)]},
+                #cv_consumer{whitelist = [?SUB(group, <<"*">>)]},
+                #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, <<"123">>)]},
+                #cv_consumer{whitelist = [?SUB(?ONEPROVIDER, <<"*">>)]}
             ]
     end,
     % Below caveats are not supported by invite tokens
@@ -1632,9 +1632,9 @@ ensure_privileges_to_invite(Tc = #testcase{requires_privileges_to_invite = true}
 
 
 create_consumer_by_type({SubjectType, MakeConsumerEligibleFun}) ->
-    Subject = create_consumer_by_type(SubjectType),
-    MakeConsumerEligibleFun(Subject),
-    Subject;
+    Consumer = create_consumer_by_type(SubjectType),
+    MakeConsumerEligibleFun(Consumer),
+    Consumer;
 create_consumer_by_type(nobody) ->
     ?SUB(nobody);
 create_consumer_by_type(user) ->

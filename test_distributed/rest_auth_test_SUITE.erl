@@ -260,17 +260,17 @@ gui_token_test(Config) ->
     {ok, {SessionId, _Cookie}} = oz_test_utils:log_in(Config, UserId),
 
     {ok, {GuiToken1, Ttl}} = oz_test_utils:call_oz(Config, token_logic, create_gui_access_token, [
-        ?USER(UserId), UserId, SessionId, ?AUD(?OP_WORKER, Provider1)
+        ?USER(UserId), UserId, SessionId, ?SERVICE(?OP_WORKER, Provider1)
     ]),
     {ok, SerializedGuiToken1} = tokens:serialize(GuiToken1),
 
     {ok, {GuiToken2, Ttl}} = oz_test_utils:call_oz(Config, token_logic, create_gui_access_token, [
-        ?USER(UserId), UserId, SessionId, ?AUD(?OP_PANEL, Provider1)
+        ?USER(UserId), UserId, SessionId, ?SERVICE(?OP_PANEL, Provider1)
     ]),
     {ok, SerializedGuiToken2} = tokens:serialize(GuiToken2),
 
-    Provider1AudToken = tokens:build_service_access_token(?OP_WORKER, Provider1Token),
-    Provider2AudToken = tokens:build_service_access_token(?OP_PANEL, Provider2Token),
+    Provider1AudToken = tokens:build_oneprovider_access_token(?OP_WORKER, Provider1Token),
+    Provider2AudToken = tokens:build_oneprovider_access_token(?OP_PANEL, Provider2Token),
 
     ?assert(rest_test_utils:check_rest_call(Config, #{
         request => #{
@@ -278,11 +278,11 @@ gui_token_test(Config) ->
             path => <<"/user">>,
             headers => #{
                 ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
-                ?HDR_X_ONEDATA_AUDIENCE_TOKEN => Provider1AudToken
+                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1AudToken
             }
         },
         expect => #{
-            code => 200, % correct audience
+            code => 200, % correct service
             body => {contains, #{<<"fullName">> => <<"U1">>}}
         }
     })),
@@ -293,11 +293,25 @@ gui_token_test(Config) ->
             path => <<"/user">>,
             headers => #{
                 ?HDR_AUTHORIZATION => <<"Bearer ", SerializedGuiToken2/binary>>,
-                ?HDR_X_ONEDATA_AUDIENCE_TOKEN => Provider2AudToken
+                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider2AudToken
             }
         },
         expect => #{
-            code => 401 % invalid audience
+            code => 401 % invalid service
+        }
+    })),
+
+    ?assert(rest_test_utils:check_rest_call(Config, #{
+        request => #{
+            method => get,
+            path => <<"/user">>,
+            headers => #{
+                ?HDR_AUTHORIZATION => <<"Bearer ", SerializedGuiToken2/binary>>,
+                ?HDR_X_ONEDATA_SERVICE_TOKEN => SerializedGuiToken1
+            }
+        },
+        expect => #{
+            code => 401 % bad service token
         }
     })),
 
@@ -310,7 +324,7 @@ gui_token_test(Config) ->
             }
         },
         expect => #{
-            code => 401 % missing audience token
+            code => 401 % missing service token
         }
     })),
 
@@ -322,7 +336,7 @@ gui_token_test(Config) ->
             path => <<"/user">>,
             headers => #{
                 ?HDR_X_AUTH_TOKEN => SerializedGuiToken1,
-                ?HDR_X_ONEDATA_AUDIENCE_TOKEN => Provider1AudToken
+                ?HDR_X_ONEDATA_SERVICE_TOKEN => Provider1AudToken
             }
         },
         expect => #{

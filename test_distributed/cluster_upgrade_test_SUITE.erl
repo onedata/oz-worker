@@ -248,7 +248,7 @@ create_n_legacy_client_tokens(Config, UserId, Count) ->
             version = 1,
             onezone_domain = oz_test_utils:oz_domain(Config),
             id = TokenId,
-            persistent = true,
+            persistence = named,
             type = ?ACCESS_TOKEN,
             macaroon = Confined
         },
@@ -270,7 +270,7 @@ create_legacy_provider(Config) ->
         version = 1,
         onezone_domain = oz_test_utils:oz_domain(Config),
         id = RootTokenId,
-        persistent = true,
+        persistence = named,
         type = ?ACCESS_TOKEN
     },
     RootToken = tokens:construct(Prototype, Secret, []),

@@ -81,6 +81,7 @@ operation_supported(get, list, private) -> true;
 operation_supported(get, {user_named_tokens, _}, private) -> true;
 operation_supported(get, {provider_named_tokens, _}, private) -> true;
 operation_supported(get, instance, private) -> true;
+operation_supported(get, instance, shared) -> true;
 operation_supported(get, {user_named_token, _}, private) -> true;
 operation_supported(get, {provider_named_token, _}, private) -> true;
 
@@ -104,6 +105,7 @@ operation_supported(_, _, _) -> false.
 -spec is_subscribable(entity_logic:aspect(), entity_logic:scope()) ->
     boolean().
 is_subscribable(instance, private) -> true;
+is_subscribable(instance, shared) -> true;
 is_subscribable({user_named_token, _}, private) -> true;
 is_subscribable({user_named_tokens, _}, private) -> true;
 is_subscribable(_, _) -> false.
@@ -129,15 +131,15 @@ create(#el_req{gri = #gri{id = undefined, aspect = {provider_temporary_token, Pr
 create(#el_req{gri = #gri{id = undefined, aspect = examine}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
     #token{
-        onezone_domain = OnezoneDomain, id = Id, persistent = Persistent,
+        onezone_domain = OnezoneDomain, id = Id, persistence = Persistence,
         subject = Subject, type = Type
     } = Token,
     {ok, value, #{
         <<"onezoneDomain">> => OnezoneDomain,
         <<"id">> => Id,
-        <<"persistence">> => case Persistent of
-            true -> <<"named">>;
-            false -> <<"temporary">>
+        <<"persistence">> => case Persistence of
+            named -> <<"named">>;
+            {temporary, _} -> <<"temporary">>
         end,
         <<"subject">> => Subject,
         <<"type">> => Type,
@@ -147,12 +149,12 @@ create(#el_req{gri = #gri{id = undefined, aspect = examine}, data = Data}) ->
 create(#el_req{gri = #gri{id = undefined, aspect = confine}, data = Data}) ->
     Token = #token{type = Type, subject = Subject} = maps:get(<<"token">>, Data),
     Caveats = maps:get(<<"caveats">>, Data),
-    validate_subject_and_audience_caveats(Type, Subject, Caveats),
+    validate_subject_and_service_caveats(Type, Subject, Caveats),
     {ok, value, tokens:confine(Token, Caveats)};
 
-create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_access_token}, data = Data}) ->
+create(#el_req{gri = #gri{id = undefined, aspect = verify_access_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
-    AuthCtx = build_auth_ctx(Auth, Data),
+    AuthCtx = build_auth_ctx(Data),
     case token_auth:verify_access_token(Token, AuthCtx) of
         {ok, #auth{subject = Subject, caveats = Caveats}} ->
             {ok, value, #{
@@ -163,9 +165,9 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_access_to
             Error
     end;
 
-create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_identity_token}, data = Data}) ->
+create(#el_req{gri = #gri{id = undefined, aspect = verify_identity_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
-    AuthCtx = build_auth_ctx(Auth, Data),
+    AuthCtx = build_auth_ctx(Data),
     case token_auth:verify_identity_token(Token, AuthCtx) of
         {ok, {Subject, Caveats}} ->
             {ok, value, #{
@@ -176,10 +178,10 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_identity_
             Error
     end;
 
-create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_invite_token}, data = Data}) ->
+create(#el_req{gri = #gri{id = undefined, aspect = verify_invite_token}, data = Data}) ->
     Token = maps:get(<<"token">>, Data),
     ExpType = maps:get(<<"expectedInviteTokenType">>, Data, any),
-    AuthCtx = build_auth_ctx(Auth, Data),
+    AuthCtx = build_auth_ctx(Data),
     case token_auth:verify_invite_token(Token, ExpType, AuthCtx) of
         {ok, #auth{subject = Subject, caveats = Caveats}} ->
             {ok, value, #{
@@ -192,17 +194,20 @@ create(#el_req{auth = Auth, gri = #gri{id = undefined, aspect = verify_invite_to
 
 
 %% @private
--spec build_auth_ctx(aai:auth(), entity_logic:data()) -> aai:auth_ctx().
-build_auth_ctx(Auth, Data) ->
-    PeerIp = maps:get(<<"peerIp">>, Data, undefined),
-    Interface = maps:get(<<"interface">>, Data, undefined),
+-spec build_auth_ctx(entity_logic:data()) -> aai:auth_ctx().
+build_auth_ctx(Data) ->
+    PeerIp = utils:null_to_undefined(maps:get(<<"peerIp">>, Data, undefined)),
+    Interface = utils:null_to_undefined(maps:get(<<"interface">>, Data, undefined)),
+    Service = utils:null_to_undefined(maps:get(<<"service">>, Data, undefined)),
+    Consumer = utils:null_to_undefined(maps:get(<<"consumer">>, Data, undefined)),
     DataAccessCaveatsPolicy = case maps:get(<<"allowDataAccessCaveats">>, Data, false) of
         true -> allow_data_access_caveats;
         false -> disallow_data_access_caveats
     end,
-    token_auth:build_auth_ctx(
-        Interface, PeerIp, aai:auth_to_audience(Auth), DataAccessCaveatsPolicy
-    ).
+    #auth_ctx{
+        ip = PeerIp, interface = Interface, service = Service,
+        consumer = Consumer, data_access_caveats_policy = DataAccessCaveatsPolicy
+    }.
 
 
 %%--------------------------------------------------------------------
@@ -226,8 +231,11 @@ get(#el_req{gri = #gri{aspect = {provider_named_tokens, ProviderId}}}, _) ->
     {_Names, Ids} = lists:unzip(Tokens),
     {ok, Ids};
 
-get(#el_req{gri = #gri{aspect = instance, id = TokenId}}, NamedToken) ->
+get(#el_req{gri = #gri{aspect = instance, id = TokenId, scope = private}}, NamedToken) ->
     {ok, to_token_data(TokenId, NamedToken)};
+
+get(#el_req{gri = #gri{aspect = instance, scope = shared}}, NamedToken) ->
+    {ok, #{<<"revoked">> => NamedToken#od_token.revoked}};
 
 get(#el_req{gri = #gri{aspect = {user_named_token, UserId}, id = TokenName}}, _) ->
     case token_names:lookup(?SUB(user, UserId), TokenName) of
@@ -298,10 +306,10 @@ delete(#el_req{gri = #gri{id = undefined, aspect = {provider_named_tokens, Provi
     end, ProviderTokens);
 
 delete(#el_req{gri = #gri{aspect = {user_temporary_tokens, UserId}}}) ->
-    temporary_token_secret:regenerate(?SUB(user, UserId));
+    temporary_token_secret:regenerate_for_subject(?SUB(user, UserId));
 
 delete(#el_req{gri = #gri{aspect = {provider_temporary_tokens, PrId}}}) ->
-    temporary_token_secret:regenerate(?SUB(?ONEPROVIDER, PrId)).
+    temporary_token_secret:regenerate_for_subject(?SUB(?ONEPROVIDER, PrId)).
 
 
 %%--------------------------------------------------------------------
@@ -366,12 +374,26 @@ authorize(#el_req{auth = ?USER(UserId), gri = #gri{aspect = {provider_temporary_
     cluster_logic:has_eff_privilege(PrId, UserId, ?CLUSTER_UPDATE);
 
 % When a token is referenced by its id, check if token's subject matches the auth
-authorize(#el_req{auth = Auth, gri = #gri{aspect = instance}}, #od_token{subject = TokenSubject}) ->
+authorize(#el_req{auth = Auth, gri = #gri{aspect = instance, scope = private}}, #od_token{subject = TokenSubject}) ->
     case {Auth, TokenSubject} of
         {#auth{subject = ?SUB(SubType, SubId)}, ?SUB(SubType, SubId)} ->
             true;
         {?USER(UserId), ?SUB(?ONEPROVIDER, ProviderId)} ->
             cluster_logic:has_eff_privilege(ProviderId, UserId, ?CLUSTER_UPDATE);
+        _ ->
+            false
+    end;
+
+authorize(#el_req{auth = Auth, gri = #gri{aspect = instance, scope = shared}}, #od_token{subject = TokenSubject}) ->
+    case {Auth, TokenSubject} of
+        {?PROVIDER(ProviderId), ?SUB(user, UserId)} ->
+            user_logic:has_eff_provider(UserId, ProviderId);
+        {?USER(UserId), ?SUB(user, UserId)} ->
+            true;
+        {?PROVIDER(ProviderId), ?SUB(?ONEPROVIDER, ProviderId)} ->
+            true;
+        {?USER(UserId), ?SUB(?ONEPROVIDER, ProviderId)} ->
+            cluster_logic:has_eff_user(ProviderId, UserId);
         _ ->
             false
     end;
@@ -417,6 +439,7 @@ validate(#el_req{operation = create, gri = #gri{aspect = confine}}) ->
 validate(#el_req{operation = create, gri = #gri{aspect = verify_access_token}}) ->
     validate_verify_operation(#{
         <<"interface">> => {atom, cv_interface:valid_interfaces()},
+        <<"service">> => {service, any},
         <<"allowDataAccessCaveats">> => {boolean, any}
     });
 validate(#el_req{operation = create, gri = #gri{aspect = verify_identity_token}}) ->
@@ -458,7 +481,8 @@ validate_verify_operation(OptionalParams) -> #{
         <<"token">> => {token, any}
     },
     optional => OptionalParams#{
-        <<"peerIp">> => {ipv4_address, any}
+        <<"peerIp">> => {ipv4_address, any},
+        <<"consumer">> => {consumer, any}
     }
 }.
 
@@ -539,7 +563,7 @@ create_named_token(Subject, Data) ->
     end,
     Type = maps:get(<<"type">>, Data, ?ACCESS_TOKEN),
     Caveats = maps:get(<<"caveats">>, Data, []),
-    validate_subject_and_audience_caveats(Type, Subject, Caveats),
+    validate_subject_and_service_caveats(Type, Subject, Caveats),
 
     CustomMetadata = maps:get(<<"customMetadata">>, Data, #{}),
     Secret = tokens:generate_secret(),
@@ -565,7 +589,7 @@ create_named_token(Subject, Data) ->
 create_temporary_token(Subject, Data) ->
     Type = maps:get(<<"type">>, Data, ?ACCESS_TOKEN),
     Caveats = maps:get(<<"caveats">>, Data, []),
-    validate_subject_and_audience_caveats(Type, Subject, Caveats),
+    validate_subject_and_service_caveats(Type, Subject, Caveats),
 
     MaxTTL = ?MAX_TEMPORARY_TOKEN_TTL,
     IsTtlAllowed = case infer_ttl(Caveats) of
@@ -574,30 +598,30 @@ create_temporary_token(Subject, Data) ->
     end,
     IsTtlAllowed orelse throw(?ERROR_TOKEN_TIME_CAVEAT_REQUIRED(MaxTTL)),
 
-    Secret = temporary_token_secret:get(Subject),
+    {Secret, Generation} = temporary_token_secret:get_for_subject(Subject),
     Prototype = #token{
         onezone_domain = oz_worker:get_domain(),
         id = datastore_key:new(),
         subject = Subject,
         type = Type,
-        persistent = false
+        persistence = {temporary, Generation}
     },
     Token = tokens:construct(Prototype, Secret, Caveats),
     {ok, value, Token}.
 
 
 %% @private
--spec validate_subject_and_audience_caveats(tokens:type(), aai:subject(), [caveats:caveat()]) ->
+-spec validate_subject_and_service_caveats(tokens:type(), aai:subject(), [caveats:caveat()]) ->
     ok | no_return().
-validate_subject_and_audience_caveats(Type, Subject, Caveats) ->
-    lists:foreach(fun(#cv_audience{whitelist = Whitelist}) ->
-        lists:foreach(fun(Audience) ->
-           case token_auth:validate_subject_and_audience(Type, Subject, Audience) of
-               ok -> ok;
-               {error, _} = Error -> throw(Error)
-           end
+validate_subject_and_service_caveats(Type, Subject, Caveats) ->
+    lists:foreach(fun(#cv_service{whitelist = Whitelist}) ->
+        lists:foreach(fun(Service) ->
+            case token_auth:validate_subject_and_service(Type, Subject, Service) of
+                ok -> ok;
+                {error, _} = Error -> throw(Error)
+            end
         end, Whitelist)
-    end, caveats:filter([cv_audience], Caveats)).
+    end, caveats:filter([cv_service], Caveats)).
 
 
 %% @private

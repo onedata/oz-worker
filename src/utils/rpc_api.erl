@@ -19,7 +19,7 @@
 
 -export([apply/2]).
 -export([
-    authenticate_by_token/4,
+    authenticate_by_token/2,
     get_protected_provider_data/2, deploy_static_gui_package/4,
     update_cluster_version_info/4, set_user_password/3, create_user/2,
     add_user_to_group/3, list_users/1, user_exists/1, username_exists/1,
@@ -60,11 +60,9 @@ apply(Function, Args) ->
 %%% Exposed functions
 %%%===================================================================
 
--spec authenticate_by_token(tokens:serialized() | tokens:token(),
-    undefined | cv_interface:interface(), undefined | ip_utils:ip(),
-    undefined | aai:audience()) -> {true, aai:auth()} | {error, term()}.
-authenticate_by_token(Token, Interface, PeerIp, Audience)  ->
-    AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, Audience),
+-spec authenticate_by_token(tokens:serialized() | tokens:token(), aai:auth_ctx()) ->
+    {true, aai:auth()} | {error, term()}.
+authenticate_by_token(Token, AuthCtx) ->
     token_auth:authenticate(Token, AuthCtx).
 
 
@@ -77,7 +75,7 @@ get_protected_provider_data(Auth, ProviderId) ->
 -spec deploy_static_gui_package(onedata:gui(), onedata:release_version(),
     file:name_all(), VerifyGuiHash :: boolean()) ->
     {ok, onedata:gui_hash()} | ?ERROR_BAD_GUI_PACKAGE |
-    ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED.
+    ?ERROR_GUI_PACKAGE_TOO_LARGE | ?ERROR_GUI_PACKAGE_UNVERIFIED(onedata:gui_hash()).
 deploy_static_gui_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash) ->
     gui_static:deploy_package(GuiType, ReleaseVsn, PackagePath, VerifyGuiHash).
 
@@ -96,7 +94,7 @@ set_user_password(Auth, UserId, NewPassword) ->
 
 
 -spec create_user(aai:auth(), Data :: map()) ->
-    {ok, od_user:id()} | {error, term()}.
+    {ok, od_user:id()} | errors:error().
 create_user(Auth, Data) ->
     user_logic:create(Auth, Data).
 

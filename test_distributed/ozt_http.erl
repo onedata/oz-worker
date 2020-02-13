@@ -17,12 +17,13 @@
 
 -include("ozt.hrl").
 
--type audience_token() :: undefined | tokens:token() | tokens:serialized().
+-type service_token() :: undefined | tokens:token() | tokens:serialized().
+-type consumer_token() :: undefined | tokens:token() | tokens:serialized().
 -type urn_tokens() :: binary() | [binary()].
 
 %% API
 -export([simulate_login/1]).
--export([rest_call/3, rest_call/4, rest_call/5]).
+-export([rest_call/3, rest_call/4, rest_call/6]).
 -export([build_url/1, build_url/2]).
 -export([ssl_opts/0, get_ca_certs/0]).
 
@@ -48,26 +49,32 @@ simulate_login(UserId) ->
 rest_call(ClientAuth, Method, UrnTokens) ->
     rest_call(ClientAuth, Method, UrnTokens, #{}).
 
--spec rest_call(gs_protocol:client_auth(), audience_token(), http_client:method(), urn_tokens()) ->
+-spec rest_call(gs_protocol:client_auth(), service_token(), http_client:method(), urn_tokens()) ->
     {ok, json_utils:json_term()} | errors:error().
 rest_call(ClientAuth, Method, UrnTokens, DataJson) ->
-    rest_call(ClientAuth, undefined, Method, UrnTokens, DataJson).
+    rest_call(ClientAuth, undefined, undefined, Method, UrnTokens, DataJson).
 
--spec rest_call(gs_protocol:client_auth(), audience_token(), http_client:method(),
-    urn_tokens(), json_utils:json_term()) ->
+-spec rest_call(gs_protocol:client_auth(), service_token(), consumer_token(),
+    http_client:method(), urn_tokens(), json_utils:json_term()) ->
     {ok, json_utils:json_term()} | errors:error().
-rest_call(ClientAuth, AudienceToken, Method, UrnTokens, DataJson) ->
+rest_call(ClientAuth, ServiceToken, ConsumerToken, Method, UrnTokens, DataJson) ->
     Url = build_rest_url(UrnTokens),
-    AuthHeader = case ClientAuth of
-        undefined -> #{};
-        nobody -> #{};
-        {token, Token} -> tokens:build_access_token_header(ozt_tokens:ensure_serialized(Token))
-    end,
-    AudienceHeader = case AudienceToken of
-        undefined -> #{};
-        AudToken -> tokens:build_audience_token_header(ozt_tokens:ensure_serialized(AudToken))
-    end,
-    Headers = maps:merge(AuthHeader#{?HDR_CONTENT_TYPE => <<"application/json">>}, AudienceHeader),
+    Headers = maps_utils:merge([
+        #{?HDR_CONTENT_TYPE => <<"application/json">>},
+        case ClientAuth of
+            undefined -> #{};
+            nobody -> #{};
+            {token, Token} -> tokens:access_token_header(ozt_tokens:ensure_serialized(Token))
+        end,
+        case ServiceToken of
+            undefined -> #{};
+            _ -> tokens:service_token_header(ozt_tokens:ensure_serialized(ServiceToken))
+        end,
+        case ConsumerToken of
+            undefined -> #{};
+            _ -> tokens:consumer_token_header(ozt_tokens:ensure_serialized(ConsumerToken))
+        end
+    ]),
     Opts = [
         {ssl_options, ssl_opts()},
         {connect_timeout, timer:seconds(30)},

@@ -48,8 +48,7 @@ verify_handshake_auth(undefined, PeerIp) ->
 verify_handshake_auth(nobody, PeerIp) ->
     {ok, #auth{subject = ?SUB(nobody), peer_ip = PeerIp}};
 verify_handshake_auth({token, Token}, PeerIp) ->
-    AuthCtx = token_auth:build_auth_ctx(graphsync, PeerIp),
-    case token_auth:authenticate(Token, AuthCtx) of
+    case token_auth:authenticate(Token, #auth_ctx{ip = PeerIp, interface = graphsync}) of
         {true, Auth} -> {ok, Auth};
         {error, _} = Error -> Error
     end.
@@ -132,46 +131,47 @@ client_disconnected(_, _) ->
 %%--------------------------------------------------------------------
 -spec verify_auth_override(aai:auth(), gs_protocol:auth_override()) ->
     {ok, aai:auth()} | errors:error().
-verify_auth_override(?PROVIDER(ProviderId), #auth_override{client_auth = {token, Token}} = AuthOverride) ->
+verify_auth_override(?PROVIDER(_), #auth_override{client_auth = nobody}) ->
+    {ok, ?NOBODY};
+verify_auth_override(?PROVIDER(ProviderId) = Auth, #auth_override{client_auth = {token, Token}} = AuthOverride) ->
     #auth_override{
         peer_ip = PeerIp,
         interface = Interface,
-        audience_token = AudienceToken,
+        consumer_token = ConsumerToken,
         data_access_caveats_policy = DataAccessCaveatsPolicy
     } = AuthOverride,
 
-    % If no audience token is given, audience defaults to the provider (GS channel owner)
-    ResolvedAudience = case AudienceToken of
-        undefined ->
-            {ok, ?AUD(?OP_WORKER, ProviderId)};
-        SerializedAudienceToken ->
-            AudienceAuthCtx = token_auth:build_auth_ctx(Interface, PeerIp),
-            token_auth:verify_audience_token(SerializedAudienceToken, AudienceAuthCtx)
+    Service = case Auth of
+        #auth{subject = ?SUB(?ONEPROVIDER, ?OP_PANEL, ProviderId)} ->
+            ?SERVICE(?OP_PANEL, ProviderId);
+        _ ->
+            ?SERVICE(?OP_WORKER, ProviderId)
     end,
 
-    case ResolvedAudience of
-        {ok, Audience} ->
-            AuthCtx = token_auth:build_auth_ctx(Interface, PeerIp, Audience, DataAccessCaveatsPolicy),
+    ResolvedConsumer = case ConsumerToken of
+        undefined ->
+            {ok, undefined};
+        SerializedConsumerToken ->
+            ConsumerAuthCtx = #auth_ctx{ip = PeerIp, interface = Interface},
+            token_auth:verify_consumer_token(SerializedConsumerToken, ConsumerAuthCtx)
+    end,
+
+    case ResolvedConsumer of
+        {ok, Consumer} ->
+            AuthCtx = #auth_ctx{
+                ip = PeerIp, interface = Interface, service = Service,
+                consumer = Consumer, data_access_caveats_policy = DataAccessCaveatsPolicy
+            },
             case token_auth:authenticate(Token, AuthCtx) of
-                {true, OverridenAuth = ?USER(UserId)} ->
-                    % Provided token is valid; allow only user tokens and check
-                    % that the GS channel owning provider actually supports the user
-                    case provider_logic:has_eff_user(ProviderId, UserId) of
-                        true -> {ok, OverridenAuth};
-                        false -> ?ERROR_UNAUTHORIZED
-                    end;
-                {true, _} ->
-                    ?ERROR_UNAUTHORIZED;
-                {error, _} = Err1 ->
-                    Err1
+                {true, ?USER = UserAuth} -> {ok, UserAuth};
+                {true, _} -> ?ERROR_FORBIDDEN;
+                {error, _} = Err1 -> Err1
             end;
         {error, _} = Err2 ->
             Err2
     end;
-verify_auth_override(?PROVIDER(_), #auth_override{client_auth = nobody}) ->
-    {ok, ?NOBODY};
 verify_auth_override(_, _) ->
-    ?ERROR_UNAUTHORIZED.
+    ?ERROR_FORBIDDEN.
 
 
 %%--------------------------------------------------------------------
@@ -304,5 +304,6 @@ is_type_supported(#gri{type = od_handle_service}) -> true;
 is_type_supported(#gri{type = od_handle}) -> true;
 is_type_supported(#gri{type = od_cluster}) -> true;
 is_type_supported(#gri{type = od_harvester}) -> true;
+is_type_supported(#gri{type = temporary_token_secret}) -> true;
 is_type_supported(#gri{type = oz_worker}) -> true;
 is_type_supported(#gri{type = _}) -> false.

@@ -66,11 +66,10 @@ handle(<<"POST">>, Req) ->
                 end,
 
                 SessionId = gui_session:get_session_id(Cookie),
-                Audience = ?AUD(Service, ClusterId),
                 cowboy_req:reply(
                     ?HTTP_200_OK,
                     #{?HDR_CONTENT_TYPE => <<"application/json">>},
-                    generate_gui_token(SessionId, Audience),
+                    generate_gui_token(SessionId, ?SERVICE(Service, ClusterId)),
                     Req2
                 )
             catch
@@ -87,10 +86,10 @@ handle(<<"POST">>, Req) ->
 %%%===================================================================
 
 %% @private
--spec generate_gui_token(session:id(), aai:audience()) -> binary() | no_return().
-generate_gui_token(SessionId, Audience) ->
+-spec generate_gui_token(session:id(), aai:service_spec()) -> binary() | no_return().
+generate_gui_token(SessionId, Service) ->
     {ok, UserId} = session:get_user_id(SessionId),
-    case token_logic:create_gui_access_token(?USER(UserId), UserId, SessionId, Audience) of
+    case token_logic:create_gui_access_token(?USER(UserId), UserId, SessionId, Service) of
         {error, _} = Error ->
             throw(Error);
         {ok, {Token, Ttl}} ->

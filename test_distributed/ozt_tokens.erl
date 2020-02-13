@@ -20,9 +20,8 @@
 -export([create/1, create/2, create/3, create/4]).
 -export([try_create/3, try_create/4]).
 -export([create_gui_access_token/3]).
--export([build_auth_ctx/1]).
 -export([authenticate/1, authenticate/2]).
--export([verify_audience_token/2]).
+-export([verify_service_token/2, verify_consumer_token/2]).
 -export([verify/1]).
 -export([confine/2]).
 -export([toggle_revoked/2]).
@@ -85,24 +84,18 @@ try_create(Auth, temporary, ?SUB(?ONEPROVIDER, ProviderId), Data) ->
     }]).
 
 
--spec create_gui_access_token(od_user:id(), session:id(), aai:audience()) -> tokens:token().
-create_gui_access_token(UserId, SessionId, Audience) ->
+-spec create_gui_access_token(od_user:id(), session:id(), aai:service_spec()) -> tokens:token().
+create_gui_access_token(UserId, SessionId, Service) ->
     {ok, {GuiAccessToken, _}} = ?assertMatch({ok, _}, ozt:rpc(token_logic, create_gui_access_token, [
-        ?USER(UserId), UserId, SessionId, Audience
+        ?USER(UserId), UserId, SessionId, Service
     ])),
     GuiAccessToken.
-
-
-% See token_auth:build_auth_ctx for args
--spec build_auth_ctx([term()]) -> aai:auth_ctx().
-build_auth_ctx(Args) ->
-    ozt:rpc(token_auth, build_auth_ctx, Args).
 
 
 -spec authenticate(tokens:token() | tokens:serialized()) ->
     {true, aai:auth()} | errors:error().
 authenticate(Token) ->
-    authenticate(Token, build_auth_ctx([undefined])).
+    authenticate(Token, #auth_ctx{}).
 
 -spec authenticate(tokens:token() | tokens:serialized(), aai:auth_ctx()) ->
     {true, aai:auth()} | errors:error().
@@ -110,10 +103,16 @@ authenticate(Token, AuthCtx) ->
     ozt:rpc(token_auth, authenticate, [Token, AuthCtx]).
 
 
--spec verify_audience_token(tokens:token() | tokens:serialized(), aai:auth_ctx()) ->
-    {ok, aai:audience()} | errors:error().
-verify_audience_token(Token, AuthCtx) ->
-    ozt:rpc(token_auth, verify_audience_token, [Token, AuthCtx]).
+-spec verify_service_token(tokens:token() | tokens:serialized(), aai:auth_ctx()) ->
+    {ok, aai:service_spec()} | errors:error().
+verify_service_token(Token, AuthCtx) ->
+    ozt:rpc(token_auth, verify_service_token, [Token, AuthCtx]).
+
+
+-spec verify_consumer_token(tokens:token() | tokens:serialized(), aai:auth_ctx()) ->
+    {ok, aai:consumer_spec()} | errors:error().
+verify_consumer_token(Token, AuthCtx) ->
+    ozt:rpc(token_auth, verify_consumer_token, [Token, AuthCtx]).
 
 
 -spec verify(tokens:token()) -> {ok, entity_logic:data()} | errors:error().

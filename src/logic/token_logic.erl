@@ -30,8 +30,10 @@
 -export([list/1]).
 -export([list_user_named_tokens/2, list_provider_named_tokens/2]).
 -export([get_named_token/2]).
+-export([get_named_token_status/2]).
 -export([get_user_named_token_by_name/3]).
 -export([get_provider_named_token_by_name/3]).
+-export([get_user_temporary_token_generation/2, get_provider_temporary_token_generation/2]).
 -export([exists/1]).
 -export([update_named_token/3]).
 -export([delete_named_token/2]).
@@ -154,15 +156,15 @@ create_provider_temporary_token(Auth, ProviderId, Data) ->
     })).
 
 
--spec create_gui_access_token(aai:auth(), od_user:id(), session:id(), aai:audience()) ->
+-spec create_gui_access_token(aai:auth(), od_user:id(), session:id(), aai:service_spec()) ->
     {ok, {tokens:token(), time_utils:seconds()}} | errors:error().
-create_gui_access_token(Auth, UserId, SessionId, Audience) ->
+create_gui_access_token(Auth, UserId, SessionId, Service) ->
     Ttl = ?GUI_TOKEN_TTL,
     Result = create_user_temporary_token(Auth, UserId, #{
         <<"type">> => ?GUI_ACCESS_TOKEN(SessionId),
         <<"caveats">> => [
             #cv_time{valid_until = time_utils:cluster_time_seconds() + Ttl},
-            #cv_audience{whitelist = [Audience]}
+            #cv_service{whitelist = [Service]}
             % @TODO VFS-5913 Add interface caveat when it is fully supported by Onepanel
         ]
     }),
@@ -211,6 +213,17 @@ get_named_token(Auth, TokenId) ->
     }).
 
 
+%% @doc Returns if the token is currently revoked
+-spec get_named_token_status(aai:auth(), tokens:id()) ->
+    {ok, entity_logic:data()} | errors:error().
+get_named_token_status(Auth, TokenId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = od_token, id = TokenId, aspect = instance, scope = shared}
+    }).
+
+
 -spec get_user_named_token_by_name(aai:auth(), od_user:id(), od_token:name()) ->
     {ok, entity_logic:data()} | errors:error().
 get_user_named_token_by_name(Auth, UserId, TokenName) ->
@@ -228,6 +241,26 @@ get_provider_named_token_by_name(Auth, ProviderId, TokenName) ->
         operation = get,
         auth = Auth,
         gri = #gri{type = od_token, id = TokenName, aspect = {provider_named_token, ProviderId}}
+    }).
+
+
+-spec get_user_temporary_token_generation(aai:auth(), od_user:id()) ->
+    {ok, entity_logic:data()} | errors:error().
+get_user_temporary_token_generation(Auth, UserId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = temporary_token_secret, id = UserId, aspect = user, scope = shared}
+    }).
+
+
+-spec get_provider_temporary_token_generation(aai:auth(), od_provider:id()) ->
+    {ok, entity_logic:data()} | errors:error().
+get_provider_temporary_token_generation(Auth, ProviderId) ->
+    entity_logic:handle(#el_req{
+        operation = get,
+        auth = Auth,
+        gri = #gri{type = temporary_token_secret, id = ProviderId, aspect = provider, scope = shared}
     }).
 
 

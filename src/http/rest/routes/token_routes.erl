@@ -88,12 +88,27 @@ routes() -> [
         method = 'PATCH',
         b_gri = #b_gri{type = od_token, id = ?BINDING(id), aspect = instance}
     }},
+    %% Get named token status
+    %% This operation requires one of the following privileges:
+    %% - oz_tokens_manage
+    {<<"/tokens/named/:id/status">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = od_token, id = ?BINDING(id), aspect = instance, scope = shared}
+    }},
     %% Create temporary token for a user
     %% This operation requires one of the following privileges:
     %% - oz_tokens_manage
     {<<"/users/:id/tokens/temporary">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_token, id = undefined, aspect = {user_temporary_token, ?BINDING(id)}}
+    }},
+    %% Get temporary token generation of a user
+    %% This operation does not require any specific privileges.
+    {<<"/users/:id/tokens/temporary">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = temporary_token_secret, id = ?BINDING(id), aspect = user, scope = shared}
     }},
     %% Revoke all temporary tokens of a user
     %% This operation requires one of the following privileges:
@@ -139,6 +154,13 @@ routes() -> [
         method = 'POST',
         b_gri = #b_gri{type = od_token, id = undefined, aspect = {user_temporary_token, ?CLIENT_ID}}
     }},
+    %% Get temporary token generation of current user
+    %% This operation does not require any specific privileges.
+    {<<"/user/tokens/temporary">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = temporary_token_secret, id = ?CLIENT_ID, aspect = user, scope = shared}
+    }},
     %% Revoke all temporary tokens of current user
     %% This operation does not require any specific privileges.
     {<<"/user/tokens/temporary">>, #rest_req{
@@ -179,6 +201,13 @@ routes() -> [
     {<<"/providers/:id/tokens/temporary">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_token, id = undefined, aspect = {provider_temporary_token, ?BINDING(id)}}
+    }},
+    %% Get temporary token generation of a provider
+    %% This operation does not require any specific privileges.
+    {<<"/providers/:id/tokens/temporary">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = temporary_token_secret, id = ?BINDING(id), aspect = provider, scope = shared}
     }},
     %% Revoke all temporary tokens of a provider
     %% This operation requires one of the following privileges:
@@ -223,6 +252,13 @@ routes() -> [
     {<<"/provider/tokens/temporary">>, #rest_req{
         method = 'POST',
         b_gri = #b_gri{type = od_token, id = undefined, aspect = {provider_temporary_token, ?CLIENT_ID}}
+    }},
+    %% Get temporary token generation of current provider
+    %% This operation does not require any specific privileges.
+    {<<"/provider/tokens/temporary">>, #rest_req{
+        method = 'GET',
+        produces = [<<"application/json">>],
+        b_gri = #b_gri{type = temporary_token_secret, id = ?CLIENT_ID, aspect = provider, scope = shared}
     }},
     %% Revoke all temporary tokens of current provider
     %% This operation does not require any specific privileges.

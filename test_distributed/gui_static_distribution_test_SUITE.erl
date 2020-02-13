@@ -459,7 +459,7 @@ gui_package_verification_works(Config) ->
     {ok, OpGuiHash} = gui:package_hash(OpGuiPackage),
 
     % GUI hash is not whitelisted
-    ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED, perform_upload(
+    ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED(OpGuiHash), perform_upload(
         Config, <<"opw">>, ClusterId, OpGuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
 
@@ -479,7 +479,7 @@ gui_package_verification_works(Config) ->
     )),
 
     % Make sure that only packages for op-worker with such hash are accepted
-    ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED, perform_upload(
+    ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED(OpGuiHash), perform_upload(
         Config, <<"onp">>, ClusterId, OpGuiPackage, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
 
@@ -507,7 +507,7 @@ gui_package_verification_works(Config) ->
     {ok, HrvGuiHash1} = gui:package_hash(HrvGuiPackage1),
 
     % GUI hash is not whitelisted
-    ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED, perform_upload(
+    ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED(HrvGuiHash1), perform_upload(
         Config, <<"hrv">>, HarvesterId, HrvGuiPackage1, #{?HDR_X_AUTH_TOKEN => GuiToken}
     )),
 
@@ -529,8 +529,9 @@ gui_package_verification_works(Config) ->
 
     % Unknown hash should not be accepted
     {HrvGuiPackage2, _HrvIndexContent2} = oz_test_utils:create_dummy_gui_package(),
+    {ok, HrvGuiHash2} = gui:package_hash(HrvGuiPackage2),
 
-    ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED, perform_upload(
+    ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED(HrvGuiHash2), perform_upload(
         Config, <<"hrv">>, HarvesterId, HrvGuiPackage2, #{?HDR_X_AUTH_TOKEN => GuiToken}
     )),
 
@@ -541,7 +542,7 @@ gui_package_verification_works(Config) ->
     )),
 
     % It should not work for other services
-    ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED, perform_upload(
+    ?assertMatch(?ERROR_GUI_PACKAGE_UNVERIFIED(HrvGuiHash2), perform_upload(
         Config, <<"onp">>, ClusterId, HrvGuiPackage2, #{?HDR_X_AUTH_TOKEN => ProviderToken}
     )),
 
