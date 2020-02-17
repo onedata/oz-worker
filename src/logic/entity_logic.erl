@@ -55,9 +55,10 @@
 -type update_result() :: gs_protocol:graph_update_result().
 -type result() :: create_result() | get_result() | update_result() | delete_result().
 
--type type_validator() :: any | atom | list_of_atoms | binary |
-list_of_binaries | integer | float | json | token | invite_token | token_type |
-caveats | service | consumer | boolean | ipv4_address | list_of_ipv4_addresses.
+-type type_validator() :: any | atom | list_of_atoms | binary
+| list_of_binaries | integer | integer_or_infinity | float | json
+| token | invite_token | token_type | caveats
+| service | consumer | boolean | ipv4_address | list_of_ipv4_addresses.
 
 -type value_validator() :: any | non_empty |
 fun((term()) -> boolean()) |
@@ -782,6 +783,10 @@ check_type(integer, _Key, Int) when is_integer(Int) ->
     Int;
 check_type(integer, Key, _) ->
     throw(?ERROR_BAD_VALUE_INTEGER(Key));
+check_type(integer_or_infinity, _Key, ?INFINITY) ->
+    ?INFINITY;
+check_type(integer_or_infinity, Key, Value) ->
+    check_type(integer, Key, Value);
 check_type(float, Key, Bin) when is_binary(Bin) ->
     try
         binary_to_float(Bin)
@@ -918,6 +923,8 @@ check_value(json, non_empty, Key, Map) when map_size(Map) == 0 ->
     throw(?ERROR_BAD_VALUE_EMPTY(Key));
 check_value(_, non_empty, _Key, Value) ->
     Value;
+check_value(_, {not_lower_than, _Threshold}, _Key, ?INFINITY) ->
+    ?INFINITY;
 check_value(_, {not_lower_than, Threshold}, Key, Value) ->
     case Value >= Threshold of
         true ->
@@ -925,6 +932,8 @@ check_value(_, {not_lower_than, Threshold}, Key, Value) ->
         false ->
             throw(?ERROR_BAD_VALUE_TOO_LOW(Key, Threshold))
     end;
+check_value(_, {not_greater_than, Threshold}, Key, ?INFINITY) ->
+    throw(?ERROR_BAD_VALUE_TOO_HIGH(Key, Threshold));
 check_value(_, {not_greater_than, Threshold}, Key, Value) ->
     case Value =< Threshold of
         true ->
