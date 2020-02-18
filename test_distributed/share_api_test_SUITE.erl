@@ -507,10 +507,10 @@ choose_provider_for_public_view_test(Config) ->
     end, AllProviders),
 
     Connections = #{
-        GammaLegacy => start_provider_graphsync_channel(Config, GammaToken),
-        DeltaLegacy => start_provider_graphsync_channel(Config, DeltaToken),
-        SigmaUpToDate => start_provider_graphsync_channel(Config, SigmaToken),
-        OmegaUpToDate => start_provider_graphsync_channel(Config, OmegaToken)
+        GammaLegacy => start_provider_graphsync_channel(Config, GammaLegacy, GammaToken),
+        DeltaLegacy => start_provider_graphsync_channel(Config, DeltaLegacy, DeltaToken),
+        SigmaUpToDate => start_provider_graphsync_channel(Config, SigmaUpToDate, SigmaToken),
+        OmegaUpToDate => start_provider_graphsync_channel(Config, OmegaUpToDate, OmegaToken)
     },
 
     ShareId = str_utils:rand_hex(16),
@@ -521,6 +521,8 @@ choose_provider_for_public_view_test(Config) ->
     ChooseProvider = fun() -> oz_test_utils:call_oz(
         Config, share_logic, choose_provider_for_public_view, [ShareId]
     ) end,
+
+    oz_test_utils:ensure_entity_graph_is_up_to_date(Config),
 
     % One of the up to date providers should be chosen
     {ChosenProviderId, ChosenProviderVersion} = ChooseProvider(),
@@ -546,7 +548,7 @@ choose_provider_for_public_view_test(Config) ->
     % (after the cache expiration)
     terminate_provider_graphsync_channel(Config, LegacyProviderId, maps:get(LegacyProviderId, Connections)),
     NewConnections = Connections#{
-        SigmaUpToDate => start_provider_graphsync_channel(Config, SigmaToken)
+        SigmaUpToDate => start_provider_graphsync_channel(Config, SigmaUpToDate, SigmaToken)
     },
     ?assertEqual({SigmaUpToDate, ProviderVersion(SigmaUpToDate)}, ChooseProvider(), 60),
 
@@ -558,8 +560,8 @@ choose_provider_for_public_view_test(Config) ->
     ?assertEqual({undefined, undefined}, ChooseProvider()),
 
     % After some providers go online again and the cache expires, they should be picked again
-    start_provider_graphsync_channel(Config, DeltaToken),
-    start_provider_graphsync_channel(Config, OmegaToken),
+    start_provider_graphsync_channel(Config, DeltaLegacy, DeltaToken),
+    start_provider_graphsync_channel(Config, OmegaUpToDate, OmegaToken),
     ?assertEqual({OmegaUpToDate, ProviderVersion(OmegaUpToDate)}, ChooseProvider(), 60).
 
 
@@ -571,11 +573,16 @@ update_provider_version(Config, ProviderId, Version) ->
     ])).
 
 
-start_provider_graphsync_channel(Config, ProviderToken) ->
+start_provider_graphsync_channel(Config, ProviderId, ProviderToken) ->
     Url = oz_test_utils:graph_sync_url(Config, provider),
     SSlOpts = [{secure, only_verify_peercert}, {cacerts, oz_test_utils:gui_ca_certs(Config)}],
     {ok, GsClient, _} = gs_client:start_link(
         Url, {token, ProviderToken}, ?SUPPORTED_PROTO_VERSIONS, fun(_) -> ok end, SSlOpts
+    ),
+    ?assertMatch(
+        true,
+        oz_test_utils:call_oz(Config, provider_connections, is_online, [ProviderId]),
+        60
     ),
     GsClient.
 
